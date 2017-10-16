@@ -1,8 +1,58 @@
-from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime, ForeignKey, ForeignKeyConstraint
+from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime, ForeignKey, ForeignKeyConstraint, Table
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
 Base = declarative_base()
+
+MasterCalibVisitJoin = Table('MasterCalibVisitJoin', Base.metadata,
+    Column('visit_begin', Integer, nullable=False),
+    Column('visit_end', Integer, nullable=False),
+    Column('physical_filter_name', String, nullable=False),
+    Column('visit_number', String, nullable=False),
+    Column('camera_name', String, nullable=False),
+    ForeignKeyConstraint(['visit_begin', 'visit_end', 'physical_filter_name', 'camera_name'], ['MasterCalib.visit_begin', 'MasterCalib.visit_end', 'MasterCalib.physical_filter_name', 'MasterCalib.camera_name']),
+    ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
+)
+
+SensorPatchJoin = Table('SensorPatchJoin', Base.metadata,
+    Column('visit_number', Integer, nullable=False),
+    Column('physical_sensor_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('tract_number', Integer, nullable=False),
+    Column('patch_index', Integer, nullable=False),
+    Column('skymap_name', String, nullable=False),
+    ForeignKeyConstraint(['visit_number', 'physical_sensor_number', 'camera_name'], ['ObservedSensor.visit_number', 'ObservedSensor.physical_sensor_number', 'ObservedSensor.camera_name']),
+    ForeignKeyConstraint(['tract_number', 'patch_index', 'skymap_name'], ['Patch.tract_number', 'Patch.patch_index', 'Patch.skymap_name'])
+)
+
+SensorTractJoin = Table('SensorTractJoin', Base.metadata,
+    Column('visit_number', Integer, nullable=False),
+    Column('physical_sensor_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('tract_number', Integer, nullable=False),
+    Column('skymap_name', String, nullable=False),
+    ForeignKeyConstraint(['visit_number', 'physical_sensor_number', 'camera_name'], ['ObservedSensor.visit_number', 'ObservedSensor.physical_sensor_number', 'ObservedSensor.camera_name']),
+    ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Patch.tract_number', 'Patch.skymap_name'])
+)
+
+VisitPatchJoin = Table('VisitPatchJoin', Base.metadata,
+    Column('visit_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('tract_number', Integer, nullable=False),
+    Column('patch_index', Integer, nullable=False),
+    Column('skymap_name', String, nullable=False),
+    ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
+    ForeignKeyConstraint(['tract_number', 'patch_index', 'skymap_name'], ['Patch.tract_number', 'Patch.patch_index', 'Patch.skymap_name'])
+)
+
+VisitTractJoin = Table('VisitTractJoin', Base.metadata,
+    Column('visit_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('tract_number', Integer, nullable=False),
+    Column('skymap_name', String, nullable=False),
+    ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
+    ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Tract.tract_number', 'Tract.skymap_name'])
+)
 
 class Dataset(Base):
     __tablename__ = 'Dataset'
@@ -95,6 +145,15 @@ class PhysicalSensor(Base):
     camera_name = Column(String, ForeignKey('Camera.camera_name'), nullable=False)
     group = Column(String)
     purpose = Column(String)
+    patches = relationship(
+        "Patch",
+        secondary=SensorPatchJoin,
+        back_populates="physical_sensors")
+    tracts = relationship(
+        "PhysicalSensor",
+        secondary=SensorTractJoin,
+        back_populates="physical_sensors")
+
 
 class Visit(Base):
     __tablename__ = 'Visit'
@@ -104,6 +163,18 @@ class Visit(Base):
     obs_begin = Column(DateTime)
     obs_end = Column(DateTime)
     region = Column(LargeBinary)
+    master_calibs = relationship(
+        "Visit",
+        secondary=MasterCalibVisitJoin,
+        back_populates="visits")
+    patches = relationship(
+        "Patch",
+        secondary=VisitPatchJoin,
+        back_populates="visits")
+    tracts = relationship(
+        "Tract",
+        secondary=VisitTractJoin,
+        back_populates="visits")
 
 class ObservedSensor(Base):
     __tablename__ = 'ObservedSensor'
@@ -128,6 +199,10 @@ class MasterCalib(Base):
     physical_filter_name = Column(String, nullable=False)
     camera_name	= Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
     ForeignKeyConstraint(['physical_filter_name', 'camera_name'], ['PhysicalFilter.physical_filter_name', 'PhysicalFilter.camera_name'])
+    visits = relationship(
+        "Visit",
+        secondary=MasterCalibVisitJoin,
+        back_populates="master_calibs")
 
 class SkyMap(Base):
     __tablename__ = 'SkyMap'
@@ -140,6 +215,14 @@ class Tract(Base):
     tract_number = Column(Integer, primary_key=True, nullable=False)
     skymap_name	= Column(String, ForeignKey('SkyMap.skymap_name'), primary_key=True, nullable=False)
     region = Column(LargeBinary)
+    physical_sensors = relationship(
+        "PhysicalSensor",
+        secondary=SensorTractJoin,
+        back_populates="tracts")
+    visits = relationship(
+        "Visit",
+        secondary=VisitTractJoin,
+        back_populates="tracts")
 
 class Patch(Base):
     __tablename__ = 'Patch'
@@ -148,7 +231,14 @@ class Patch(Base):
     skymap_name = Column(String, ForeignKey('SkyMap.skymap_name'), primary_key=True, nullable=False)
     region = Column(LargeBinary)
     ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Tract.tract_number', 'Tract.skymap_name'])
-
+    physical_sensors = relationship(
+        "PhysicalSensor",
+        secondary=SensorPatchJoin,
+        back_populates="patches")
+    visits = relationship(
+        "Visit",
+        secondary=VisitPatchJoin,
+        back_populates="patches")
 
 from sqlalchemy import create_engine
 engine = create_engine('sqlite:///:memory:')
