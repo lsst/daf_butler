@@ -54,6 +54,70 @@ VisitTractJoin = Table('VisitTractJoin', Base.metadata,
     ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Tract.tract_number', 'Tract.skymap_name'])
 )
 
+PhysicalFilterDatasetJoins = Table('PhysicalFilterDatasetJoins', Base.metadata,
+    Column('physical_filter_name', String, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['physical_filter_name', 'camera_name'], ['PhysicalFilter.physical_filter_name', 'PhysicalFilter.camera_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
+PhysicalSensorDatasetJoin = Table('PhysicalSensorDatasetJoin', Base.metadata,
+    Column('physical_sensor_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['physical_sensor_number', 'camera_name'], ['PhysicalSensor.physical_sensor_number', 'PhysicalSensor.camera_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
+VisitDatasetJoin = Table('VisitDatasetJoin', Base.metadata,
+    Column('visit_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
+SnapDatasetJoin = Table('SnapDatasetJoin', Base.metadata,
+    Column('snap_index', Integer, nullable=False),
+    Column('visit_number', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['snap_index', 'visit_number', 'camera_name'], ['Snap.snap_index', 'Snap.visit_number', 'Snap.camera_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
+AbstractFilterDatasetJoin = Table('AbstractFilterDatasetJoin', Base.metadata,
+    Column('abstract_filter_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['abstract_filter_name'], ['AbstractFilter.abstract_filter_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
+TractDatasetJoin = Table('TractDatasetJoin', Base.metadata,
+    Column('tract_number', Integer, nullable=False),
+    Column('skymap_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Tract.tract_number', 'Tract.skymap_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
+PatchDatasetJoin = Table('PatchDatasetJoin', Base.metadata,
+    Column('patch_index', Integer, nullable=False),
+    Column('tract_number', Integer, nullable=False),
+    Column('skymap_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['patch_index', 'tract_number', 'skymap_name'], ['Patch.patch_index', 'Patch.tract_number', 'Patch.skymap_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
 class Dataset(Base):
     __tablename__ = 'Dataset'
     dataset_id = Column(Integer, primary_key=True, nullable=False)
@@ -65,6 +129,30 @@ class Dataset(Base):
     producer_id = Column(Integer)
     ForeignKeyConstraint(['run_id', 'registry_id'], ['Run.run_id', 'Run.registry_id'])
     ForeignKeyConstraint(['producer_id', 'registry_id'], ['Quantum.producer_id', 'Quantum.registry_id'])
+    physical_sensors = relationship(
+        "PhysicalSensor",
+        secondary=PhysicalSensorDatasetJoin,
+        backref="datasets")
+    visits = relationship(
+        "Visits",
+        secondary=VisitDatasetJoin,
+        backref="datasets")
+    snaps = relationship(
+        "Snaps",
+        secondary=SnapDatasetJoin,
+        backref="datasets")
+    abstract_filters = relationship(
+        "AbstractFilters",
+        secondary=AbstractFilterDatasetJoin,
+        backref="datasets")
+    tracts = relationship(
+        "Tracts",
+        secondary=TractDatasetJoin,
+        backref="datasets")
+    patches = relationship(
+        "Patches",
+        secondary=PatchDatasetJoin,
+        backref="datasets")
 
 class DatasetComposition(Base):
     __tablename__ = 'DatasetComposition'
@@ -154,7 +242,6 @@ class PhysicalSensor(Base):
         secondary=SensorTractJoin,
         back_populates="physical_sensors")
 
-
 class Visit(Base):
     __tablename__ = 'Visit'
     visit_number = Column(Integer, primary_key=True, nullable=False)
@@ -239,6 +326,7 @@ class Patch(Base):
         "Visit",
         secondary=VisitPatchJoin,
         back_populates="patches")
+
 
 from sqlalchemy import create_engine
 engine = create_engine('sqlite:///:memory:')
