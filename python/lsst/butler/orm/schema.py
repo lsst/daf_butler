@@ -2,8 +2,6 @@ from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime, 
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
-__all__ = ['Base', 'Dataset']
-
 Base = declarative_base()
 
 SensorPatchJoin = Table('SensorPatchJoin', Base.metadata,

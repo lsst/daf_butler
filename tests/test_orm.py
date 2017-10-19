@@ -25,7 +25,7 @@ import unittest
 from sqlalchemy import create_engine, LargeBinary
 from sqlalchemy.orm import sessionmaker
 
-from lsst.butler.orm.schema import Base, Dataset, Run, DatasetType
+from lsst.butler.orm.schema import Base, Dataset, Run, DatasetType, Quantum
 
 class SchemaTestCase(unittest.TestCase):
     """A test case for the ORM schema."""
@@ -93,3 +93,21 @@ class SchemaTestCase(unittest.TestCase):
         self.assertEquals(datasetOut.run_id, self.run_id)
         self.assertEquals(datasetOut.producer_id, producer_id)
         
+    def testQuantum(self):
+        quantum_id = 0
+        task = "TestTask"
+
+        session = self.sessionmaker()
+        quantum = Quantum(quantum_id=quantum_id,
+                            registry_id=self.registry_id,
+                            run_id=self.run_id,
+                            task=task)
+        session.add(quantum)
+        session.commit()
+
+        quantumOut = session.query(Quantum).filter_by(quantum_id=quantum_id).first()
+        self.assertEquals(quantumOut.quantum_id, quantum_id)
+        self.assertEquals(quantumOut.registry_id, self.registry_id)
+        self.assertEquals(quantumOut.run_id, self.run_id)
+        self.assertEquals(quantumOut.task, task)
+
