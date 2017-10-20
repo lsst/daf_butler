@@ -1,0 +1,5 @@
+*.pyc
+version.py
+tests/
+.cache
+tests/.tests
