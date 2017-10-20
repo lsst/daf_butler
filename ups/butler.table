@@ -1,4 +1,5 @@
 setupRequired(sphgeom)
+setupRequired(sqlalchemy)
 setupRequired(numpy)
 setupRequired(scons)
 setupRequired(sconsUtils)
