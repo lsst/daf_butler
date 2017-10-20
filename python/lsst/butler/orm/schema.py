@@ -160,7 +160,6 @@ class DatasetType(Base):
     template = Column(String)
     storage_class = Column(String, nullable=False)
 
-
 class DatasetTypeUnits(Base):
     __tablename__ = 'DatasetTypeUnits'
     dataset_type_name = Column(String, ForeignKey('DatasetType.name'), primary_key=True, nullable=False)
