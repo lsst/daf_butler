@@ -31,12 +31,8 @@ class SchemaTestCase(unittest.TestCase):
     """A test case for the ORM schema."""
 
     def setUp(self):
-        self.registry_id = 0
-        self.run_id = 0
-        self.collection_tag = "default"
-        
         self.createDatabase()
-        self.createRun(self.run_id, self.collection_tag)
+        self.populateTables()
 
     def createDatabase(self):
         self.engine = create_engine('sqlite:///:memory:')
@@ -44,70 +40,76 @@ class SchemaTestCase(unittest.TestCase):
         self.sessionmaker.configure(bind=self.engine)
         Base.metadata.create_all(self.engine)
     
-    def createRun(self, run_id, collection_tag):
+    def populateTables(self):
+        self.registry_id = 0
+        self.run_id = 0
+        self.collection_tag = "default"
+        self.dataset_type_name = "calexp"
+        self.storage_class = "Exposure"
+        self.dataset_id = 0
+        self.unit_pack = bytes()
+        self.uri="http:://www.lsst.org/testdata/dataset-0"
+        self.producer_id = None
+        self.quantum_id = 0
+        self.task = "TestTask"
+
         session = self.sessionmaker()
-        run = Run(run_id=run_id, registry_id=self.registry_id, tag=collection_tag)
+
+        # Run
+        run = Run(run_id=self.run_id, registry_id=self.registry_id, tag=self.collection_tag)
         session.add(run)
+
+        # DatasetType
+        datasetType = DatasetType(name=self.dataset_type_name, storage_class=self.storage_class)
+        session.add(datasetType)
+
+        # Dataset
+        dataset = Dataset(dataset_id=self.dataset_id,
+                          registry_id=self.registry_id,
+                          dataset_type_name=self.dataset_type_name,
+                          unit_pack=self.unit_pack,
+                          uri=self.uri,
+                          run_id=self.run_id,
+                          producer_id=self.producer_id)
+        session.add(dataset)
+
+        # Quantum
+        quantum = Quantum(quantum_id=self.quantum_id,
+                          registry_id=self.registry_id,
+                          run_id=self.run_id,
+                          task=self.task)
+        session.add(quantum)
+        
         session.commit()
 
     def testRun(self):
         session = self.sessionmaker()
-        runOut = session.query(Run).filter_by(run_id=self.run_id).first()
-        self.assertEquals(runOut.run_id, self.run_id)
-        self.assertEquals(runOut.tag, self.collection_tag)
+        out = session.query(Run).filter_by(run_id=self.run_id).first()
+        self.assertEquals(out.run_id, self.run_id)
+        self.assertEquals(out.tag, self.collection_tag)
 
-    def testAddDataset(self):
-        dataset_id = 0
-        dataset_type_name = "calexp"
-        unit_pack = bytes()
-        uri="http:://www.lsst.org/testdata/dataset-0"
-        producer_id = None
-        
+    def testDatasetType(self):
         session = self.sessionmaker()
-        
-        storage_class = "Exposure"
-        datasetType = DatasetType(name=dataset_type_name, storage_class=storage_class)
-        session.add(datasetType)
+        out = session.query(DatasetType).filter_by(name=self.dataset_type_name).first()
+        self.assertEquals(out.name, self.dataset_type_name)
+        self.assertEquals(out.storage_class, self.storage_class)
 
-        dataset = Dataset(dataset_id=dataset_id,
-                          registry_id=self.registry_id,
-                          dataset_type_name=dataset_type_name,
-                          unit_pack=unit_pack,
-                          uri=uri,
-                          run_id=self.run_id,
-                          producer_id=producer_id)
-        session.add(dataset)
-
-        session.commit()
-
-        datasetTypeOut = session.query(DatasetType).filter_by(name=dataset_type_name).first()
-        self.assertEquals(datasetTypeOut.name, dataset_type_name)
-        self.assertEquals(datasetTypeOut.storage_class, storage_class)
-
-        datasetOut = session.query(Dataset).filter_by(dataset_id=dataset_id).first()
-        self.assertEquals(datasetOut.dataset_id, dataset_id)
-        self.assertEquals(datasetOut.registry_id, self.registry_id)
-        self.assertEquals(datasetOut.dataset_type_name, dataset_type_name)
-        self.assertEquals(datasetOut.unit_pack, unit_pack)
-        self.assertEquals(datasetOut.uri, uri)
-        self.assertEquals(datasetOut.run_id, self.run_id)
-        self.assertEquals(datasetOut.producer_id, producer_id)
+    def testDataset(self):
+        session = self.sessionmaker()
+        out = session.query(Dataset).filter_by(dataset_id=self.dataset_id).first()
+        self.assertEquals(out.dataset_id, self.dataset_id)
+        self.assertEquals(out.registry_id, self.registry_id)
+        self.assertEquals(out.dataset_type_name, self.dataset_type_name)
+        self.assertEquals(out.unit_pack, self.unit_pack)
+        self.assertEquals(out.uri, self.uri)
+        self.assertEquals(out.run_id, self.run_id)
+        self.assertEquals(out.producer_id, self.producer_id)
         
     def testQuantum(self):
-        quantum_id = 0
-        task = "TestTask"
-
         session = self.sessionmaker()
-        quantum = Quantum(quantum_id=quantum_id,
-                            registry_id=self.registry_id,
-                            run_id=self.run_id,
-                            task=task)
-        session.add(quantum)
-        session.commit()
-
-        quantumOut = session.query(Quantum).filter_by(quantum_id=quantum_id).first()
-        self.assertEquals(quantumOut.quantum_id, quantum_id)
+        quantumOut = session.query(Quantum).filter_by(quantum_id=self.quantum_id).first()
+        self.assertEquals(quantumOut.quantum_id, self.quantum_id)
         self.assertEquals(quantumOut.registry_id, self.registry_id)
         self.assertEquals(quantumOut.run_id, self.run_id)
-        self.assertEquals(quantumOut.task, task)
+        self.assertEquals(quantumOut.task, self.task)
 
