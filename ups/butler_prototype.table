@@ -1,0 +1,6 @@
+setupRequired(sphgeom)
+setupRequired(numpy)
+setupRequired(scons)
+setupRequired(sconsUtils)
+
+envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
