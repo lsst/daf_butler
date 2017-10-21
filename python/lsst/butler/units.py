@@ -112,6 +112,9 @@ class Camera(DataUnit):
     def makePhysicalFilters(self):
         raise NotImplementedError("pure virtual")
 
+    def __repr__(self):
+        return "{'Camera': '%s'}" % self.name
+
 
 class AbstractFilter(DataUnit):
 
@@ -134,6 +137,9 @@ class AbstractFilter(DataUnit):
     @property
     def pkey(self):
         return (self.value,)
+
+    def __repr__(self):
+        return "{'AbstractFilter': '%s'}" % self.name
 
 
 class PhysicalFilter(DataUnit):
@@ -169,6 +175,12 @@ class PhysicalFilter(DataUnit):
     @property
     def pkey(self):
         return (self.camera.value, self.value)
+
+    def __repr__(self):
+        return (
+            "{'PhysicalFilter': '%s', 'Camera': '%s'}"
+            % (self.name, self.camera.name)
+        )
 
 
 class PhysicalSensor(DataUnit):
@@ -216,6 +228,12 @@ class PhysicalSensor(DataUnit):
     @property
     def pkey(self):
         return (self.camera.value, self.value)
+
+    def __repr__(self):
+        return (
+            "{'PhysicalSensor': %d, 'Camera': '%s'}"
+            % (self.number, self.camera.name)
+        )
 
 
 class Visit(DataUnit):
@@ -266,6 +284,12 @@ class Visit(DataUnit):
     def pkey(self):
         return (self.camera.value, self.value)
 
+    def __repr__(self):
+        return (
+            "{'Visit': %d, 'Camera': '%s'}"
+            % (self.number, self.camera.name)
+        )
+
 
 class ObservedSensor(DataUnit):
 
@@ -301,6 +325,12 @@ class ObservedSensor(DataUnit):
     @property
     def pkey(self):
         return (self.camera.value, self.viist.value, self.physical.value)
+
+    def __repr__(self):
+        return (
+            "{'Visit': %d, 'PhysicalSensor': %d, 'Camera': '%s'}"
+            % (self.number, self.physical.number, self.camera.name)
+        )
 
 
 class Snap(DataUnit):
@@ -343,6 +373,11 @@ class Snap(DataUnit):
     def pkey(self):
         return (self.camera.value, self.visit.value, self.value)
 
+    def __repr__(self):
+        return (
+            "{'Snap': %d, 'Visit': %d, 'Camera': '%s'}"
+            % (self.index, self.visit.number, self.camera.name)
+        )
 
 
 class VisitRange(DataUnit):
@@ -379,6 +414,12 @@ class VisitRange(DataUnit):
     def pkey(self):
         return (self.camera.value,) + self.value
 
+    def __repr__(self):
+        return (
+            "{'VisitRange': (%d, %d), 'Camera': '%s'}"
+            % (self.visitBegin, self.visitEnd, self.camera.name)
+        )
+
 
 class SkyMap(DataUnit):
 
@@ -409,6 +450,8 @@ class SkyMap(DataUnit):
     def deserialize(cls, name, blob):
         raise NotImplementedError("pure virtual")
 
+    def __repr__(self):
+        return ("{'SkyMap': '%s'}" % self.name)
 
 
 class Tract(DataUnit):
@@ -439,6 +482,12 @@ class Tract(DataUnit):
     @property
     def pkey(self):
         return (self.skymap.value, self.value)
+
+    def __repr__(self):
+        return (
+            "{'Tract': %d, 'SkyMap': '%s'}"
+            % (self.number, self.skymap.name)
+        )
 
 
 class Patch(DataUnit):
@@ -487,3 +536,9 @@ class Patch(DataUnit):
     @property
     def pkey(self):
         return (self.skymap.value, self.tract.value, self.value)
+
+    def __repr__(self):
+        return (
+            "{'Patch': %d, 'Tract': %d, 'SkyMap': '%s'}"
+            % (self.index, self.tract.number, self.skymap.name)
+        )
