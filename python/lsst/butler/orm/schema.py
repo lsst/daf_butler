@@ -112,7 +112,7 @@ class Dataset(Base):
     __tablename__ = 'Dataset'
     dataset_id = Column(Integer, primary_key=True, nullable=False)
     registry_id = Column(Integer, primary_key=True, nullable=False)
-    dataset_type_name = Column(Integer, ForeignKey('DatasetType.name'), nullable=False)
+    dataset_type_name = Column(Integer, ForeignKey('DatasetType.dataset_type_name'), nullable=False)
     unit_pack = Column(LargeBinary, nullable=False)
     uri = Column(String)
     run_id = Column(Integer, nullable=False)
@@ -156,14 +156,14 @@ class DatasetComposition(Base):
 
 class DatasetType(Base):
     __tablename__ = 'DatasetType'
-    name = Column(String, primary_key=True, nullable=False)
+    dataset_type_name = Column(String, primary_key=True, nullable=False)
     template = Column(String)
     storage_class = Column(String, nullable=False)
 
 class DatasetTypeUnits(Base):
     __tablename__ = 'DatasetTypeUnits'
-    dataset_type_name = Column(String, ForeignKey('DatasetType.name'), primary_key=True, nullable=False)
-    unit_name = Column(String, nullable=False)
+    dataset_type_name = Column(String, ForeignKey('DatasetType.dataset_type_name'), primary_key=True, nullable=False)
+    unit_name = Column(String, primary_key=True, nullable=False)
 
 class DatasetCollections(Base):
     __tablename__ = 'DatasetCollections'
