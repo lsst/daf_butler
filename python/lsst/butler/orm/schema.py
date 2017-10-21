@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime, ForeignKey, ForeignKeyConstraint, Table
+from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime, Float, ForeignKey, ForeignKeyConstraint, Table
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -228,8 +228,8 @@ class Visit(Base):
     visit_number = Column(Integer, primary_key=True, nullable=False)
     camera_name = Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
     physical_filter_name = Column(String, ForeignKey('PhysicalFilter.physical_filter_name'), nullable=False)
-    obs_begin = Column(DateTime)
-    obs_end = Column(DateTime)
+    obs_begin = Column(DateTime, nullable=False)
+    exposure_time = Column(Float, nullable=False)
     region = Column(LargeBinary)
     patches = relationship(
         "Patch",
@@ -261,7 +261,7 @@ class Snap(Base):
     snap_index = Column(Integer, primary_key=True, nullable=False)
     camera_name	= Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
     obs_begin = Column(DateTime, nullable=False)
-    obs_end	= Column(DateTime, nullable=False)
+    exposure_time = Column(Float, nullable=False)
     ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name'])
 
 class SkyMap(Base):
