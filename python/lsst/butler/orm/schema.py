@@ -81,6 +81,16 @@ SnapDatasetJoin = Table('SnapDatasetJoin', Base.metadata,
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
 
+VisitRangeDatasetJoin = Table('VisitRangeDatasetJoin', Base.metadata,
+    Column('visit_begin', Integer, nullable=False),
+    Column('visit_end', Integer, nullable=False),
+    Column('camera_name', String, nullable=False),
+    Column('dataset_id', Integer, nullable=False),
+    Column('registry_id', Integer, nullable=False),
+    ForeignKeyConstraint(['visit_begin', 'visit_end', 'camera_name'], ['VisitRange.visit_begin', 'VisitRange.visit_end', 'VisitRange.camera_name']),
+    ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
+)
+
 AbstractFilterDatasetJoin = Table('AbstractFilterDatasetJoin', Base.metadata,
     Column('abstract_filter_name', String, nullable=False),
     Column('dataset_id', Integer, nullable=False),
@@ -263,6 +273,12 @@ class Snap(Base):
     obs_begin = Column(DateTime, nullable=False)
     exposure_time = Column(Float, nullable=False)
     ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name'])
+
+class VisitRange(Base):
+    __tablename__ = 'VisitRange'
+    visit_begin = Column(Integer, primary_key=True, nullable=False)
+    visit_end = Column(Integer, primary_key=True, nullable=False)
+    camera_name = Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
 
 class SkyMap(Base):
     __tablename__ = 'SkyMap'
