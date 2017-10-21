@@ -410,35 +410,6 @@ class SkyMap(DataUnit):
         raise NotImplementedError("pure virtual")
 
 
-class Tract(DataUnit):
-
-    dependencies = (SkyMap,)
-
-    __slots__ = ("_skymap", "_number", "region")
-
-    def __init__(self, skymap, number, region=None):
-        assert isinstance(skymap, SkyMap)
-        self._skymap = skymap
-        assert isinstance(number, int)
-        self._number = number
-        self.region = region
-
-    @property
-    def skymap(self):
-        return self._skymap
-
-    @property
-    def number(self):
-        return self._number
-
-    @property
-    def value(self):
-        return self.number
-
-    @property
-    def pkey(self):
-        return (self.skymap.value, self.value)
-
 
 class Tract(DataUnit):
 
