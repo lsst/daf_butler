@@ -213,7 +213,7 @@ class PhysicalFilter(Base):
     __tablename__ = 'PhysicalFilter'
     physical_filter_name = Column(String, primary_key=True, nullable=False)
     camera_name = Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
-    abstract_filter_name = ForeignKey('AbstractFilter.abstract_filter_name'), Column(String)
+    abstract_filter_name = Column(String, ForeignKey('AbstractFilter.abstract_filter_name'), nullable=True)
 
 class PhysicalSensor(Base):
     __tablename__ = 'PhysicalSensor'
@@ -259,7 +259,7 @@ class Snap(Base):
     __tablename__ = 'Snap'
     visit_number = Column(Integer, primary_key=True, nullable=False)
     snap_index = Column(Integer, primary_key=True, nullable=False)
-    camera_name	= Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
+    camera_name = Column(String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False)
     obs_begin = Column(DateTime, nullable=False)
     exposure_time = Column(Float, nullable=False)
     ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name'])
