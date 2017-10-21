@@ -344,17 +344,16 @@ class Snap(DataUnit):
         return (self.camera.value, self.visit.value, self.value)
 
 
-class MasterCalib(DataUnit):
 
-    dependencies = (Camera, PhysicalFilter)
+class VisitRange(DataUnit):
 
-    __slots__ = ("_camera", "_filter", "_visitBegin", "_visitEnd")
+    dependencies = (Camera,)
 
-    def __init__(self, camera, filter, visitBegin, visitEnd):
+    __slots__ = ("_camera", "_visitBegin", "_visitEnd")
+
+    def __init__(self, camera, visitBegin, visitEnd):
         assert isinstance(camera, Camera)
         self._camera = camera
-        assert isinstance(filter, PhysicalFilter) or filter is None
-        self._filter = filter
         assert isinstance(visitBegin, int)
         self._visitBegin = visitBegin
         assert isinstance(visitEnd, int) or visitEnd is None
@@ -363,10 +362,6 @@ class MasterCalib(DataUnit):
     @property
     def camera(self):
         return self._camera
-
-    @property
-    def filter(self):
-        return self._filter
 
     @property
     def visitBegin(self):
@@ -378,7 +373,7 @@ class MasterCalib(DataUnit):
 
     @property
     def value(self):
-        return (self.visitBegin, self.visitEnd, self.filter)
+        return (self.visitBegin, self.visitEnd)
 
     @property
     def pkey(self):
