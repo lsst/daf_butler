@@ -1,13 +1,13 @@
 from sqlalchemy import create_engine, LargeBinary
 from sqlalchemy.orm import sessionmaker
 
-from lsst.butler.orm.schema import Base
+from lsst.butler.schema import metadata
 
 def createDatabase(dbname):
     engine = create_engine(dbname)
     maker = sessionmaker()
     maker.configure(bind=engine)
-    Base.metadata.create_all(engine)
+    metadata.create_all(engine)
 
 if __name__ == '__main__':
     import argparse

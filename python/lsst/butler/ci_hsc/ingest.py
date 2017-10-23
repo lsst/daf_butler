@@ -9,7 +9,7 @@ from sqlalchemy.orm import sessionmaker
 
 from . import hsc
 from .. import units
-from ..orm.schema import Base
+from ..schema import metadata
 
 
 CASTERS = {
@@ -30,7 +30,7 @@ def createTables(filename):
     engine = create_engine("sqlite:///{}".format(filename))
     maker = sessionmaker()
     maker.configure(bind=engine)
-    Base.metadata.create_all(engine)
+    metadata.create_all(engine)
     maker.close_all()
 
 
