@@ -26,12 +26,10 @@ DATA_ROOT = os.path.join(
 )
 
 
-def createTables(filename):
-    engine = create_engine("sqlite:///{}".format(filename))
+def createTables(engine, filename):
     maker = sessionmaker()
     maker.configure(bind=engine)
     metadata.create_all(engine)
-    maker.close_all()
 
 
 def loadTable(db, name, placeholder="?", extra=None):
@@ -51,7 +49,8 @@ def loadTable(db, name, placeholder="?", extra=None):
     def sanitize(record):
         return tuple(caster(val) for caster, val in zip(casters, record))
 
-    db.executemany(sql, (sanitize(r) for r in array))
+    for r in array:
+        db.execute(sql, sanitize(r))
 
 
 def run(filename=None, create=True, skipCamera=False, verbose=False):
@@ -75,13 +74,17 @@ def run(filename=None, create=True, skipCamera=False, verbose=False):
     verbose: bool
         If True, echo all database queries to stdout.
     """
-    if not filename:
-        filename = os.path.join(DATA_ROOT, "ci_hsc.sqlite3")
-    if create:
-        if os.path.exists(filename):
+    if filename is None or filename == ":memory:":
+        engine = create_engine("sqlite://")
+        if not create:
+            raise RuntimeError("Must use create=True for :memory: database.")
+    else:
+        if create and os.path.exists(filename):
             os.remove(filename)
-        createTables(filename)
-    db = sqlite3.connect(filename)
+        engine = create_engine("sqlite:///{}".format(filename))
+    if create:
+        createTables(engine, filename)
+    db = engine.connect()
     if verbose:
         db.set_trace_callback(print)
     db.execute("INSERT INTO Run (run_id, registry_id, tag) VALUES (0, 1, 'ingest')")
@@ -105,7 +108,7 @@ def run(filename=None, create=True, skipCamera=False, verbose=False):
     loadTable(db, "VisitRange")
     loadTable(db, "VisitRangeDatasetJoin")
     loadTable(db, "PhysicalSensorDatasetJoin")
-    db.commit()
+    return db
 
 if __name__ == "__main__":
     run()
