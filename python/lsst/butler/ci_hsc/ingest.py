@@ -100,7 +100,7 @@ def run(filename=None, create=True, skipCamera=False, verbose=False):
     loadTable(db, "Visit")
     loadTable(db, "Snap")
     loadTable(db, "ObservedSensor")
-    loadTable(db, "VisitDatasetJoin")
+    loadTable(db, "SnapDatasetJoin")
     loadTable(db, "PhysicalSensorDatasetJoin")
     loadTable(db, "VisitRange")
     loadTable(db, "VisitRangeDatasetJoin")
