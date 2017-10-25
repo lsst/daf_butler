@@ -105,10 +105,29 @@ def run(filename=None, create=True, skipCamera=False, verbose=False):
     loadTable(db, "ObservedSensor")
     loadTable(db, "SnapDatasetJoin")
     loadTable(db, "PhysicalSensorDatasetJoin")
+    loadTable(db, "PhysicalFilterDatasetJoin")
     loadTable(db, "VisitRange")
     loadTable(db, "VisitRangeDatasetJoin")
-    loadTable(db, "PhysicalSensorDatasetJoin")
+    db.execute(
+        """
+        CREATE VIEW VisitRangeJoin AS
+        SELECT
+            VisitRange.camera_name AS camera_name,
+            VisitRange.visit_begin AS visit_begin,
+            VisitRange.visit_end AS visit_end,
+            Visit.visit_number AS visit_number
+        FROM
+            VisitRange INNER JOIN VISIT ON
+                VisitRange.camera_name = Visit.camera_name
+                AND
+                VisitRange.visit_begin <= Visit.visit_number
+                AND
+                VisitRange.visit_end > Visit.visit_number OR VisitRange.visit_end < 0
+        """
+    )
     return db
 
 if __name__ == "__main__":
-    run()
+    import sys
+    filename = sys.argv[1]
+    run(filename)
