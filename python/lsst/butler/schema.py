@@ -187,8 +187,8 @@ VisitTractJoin = Table('VisitTractJoin', metadata,
 PhysicalFilterDatasetJoin = Table('PhysicalFilterDatasetJoin', metadata,
     Column('physical_filter_name', String, nullable=False),
     Column('camera_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['physical_filter_name', 'camera_name'], ['PhysicalFilter.physical_filter_name', 'PhysicalFilter.camera_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
@@ -196,8 +196,8 @@ PhysicalFilterDatasetJoin = Table('PhysicalFilterDatasetJoin', metadata,
 PhysicalSensorDatasetJoin = Table('PhysicalSensorDatasetJoin', metadata,
     Column('physical_sensor_number', Integer, nullable=False),
     Column('camera_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['physical_sensor_number', 'camera_name'], ['PhysicalSensor.physical_sensor_number', 'PhysicalSensor.camera_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
@@ -205,8 +205,8 @@ PhysicalSensorDatasetJoin = Table('PhysicalSensorDatasetJoin', metadata,
 VisitDatasetJoin = Table('VisitDatasetJoin', metadata,
     Column('visit_number', Integer, nullable=False),
     Column('camera_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
@@ -215,8 +215,8 @@ SnapDatasetJoin = Table('SnapDatasetJoin', metadata,
     Column('snap_index', Integer, nullable=False),
     Column('visit_number', Integer, nullable=False),
     Column('camera_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['snap_index', 'visit_number', 'camera_name'], ['Snap.snap_index', 'Snap.visit_number', 'Snap.camera_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
@@ -225,16 +225,16 @@ VisitRangeDatasetJoin = Table('VisitRangeDatasetJoin', metadata,
     Column('visit_begin', Integer, nullable=False),
     Column('visit_end', Integer, nullable=False),
     Column('camera_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['visit_begin', 'visit_end', 'camera_name'], ['VisitRange.visit_begin', 'VisitRange.visit_end', 'VisitRange.camera_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
 
 AbstractFilterDatasetJoin = Table('AbstractFilterDatasetJoin', metadata,
     Column('abstract_filter_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['abstract_filter_name'], ['AbstractFilter.abstract_filter_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
@@ -242,8 +242,8 @@ AbstractFilterDatasetJoin = Table('AbstractFilterDatasetJoin', metadata,
 TractDatasetJoin = Table('TractDatasetJoin', metadata,
     Column('tract_number', Integer, nullable=False),
     Column('skymap_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Tract.tract_number', 'Tract.skymap_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
@@ -252,8 +252,8 @@ PatchDatasetJoin = Table('PatchDatasetJoin', metadata,
     Column('patch_index', Integer, nullable=False),
     Column('tract_number', Integer, nullable=False),
     Column('skymap_name', String, nullable=False),
-    Column('dataset_id', Integer, nullable=False),
-    Column('registry_id', Integer, nullable=False),
+    Column('dataset_id', Integer, nullable=False, primary_key=True),
+    Column('registry_id', Integer, nullable=False, primary_key=True),
     ForeignKeyConstraint(['patch_index', 'tract_number', 'skymap_name'], ['Patch.patch_index', 'Patch.tract_number', 'Patch.skymap_name']),
     ForeignKeyConstraint(['dataset_id', 'registry_id'], ['Dataset.dataset_id', 'Dataset.registry_id'])
 )
