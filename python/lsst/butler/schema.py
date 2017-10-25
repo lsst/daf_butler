@@ -184,7 +184,7 @@ VisitTractJoin = Table('VisitTractJoin', metadata,
     ForeignKeyConstraint(['tract_number', 'skymap_name'], ['Tract.tract_number', 'Tract.skymap_name'])
 )
 
-PhysicalFilterDatasetJoins = Table('PhysicalFilterDatasetJoins', metadata,
+PhysicalFilterDatasetJoin = Table('PhysicalFilterDatasetJoin', metadata,
     Column('physical_filter_name', String, nullable=False),
     Column('camera_name', String, nullable=False),
     Column('dataset_id', Integer, nullable=False),
