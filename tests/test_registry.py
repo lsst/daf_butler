@@ -1,8 +1,8 @@
-# 
+#
 # LSST Data Management System
 #
 # Copyright 2008-2017  AURA/LSST.
-# 
+#
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
 #
@@ -10,14 +10,14 @@
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
-# You should have received a copy of the LSST License Statement and 
-# the GNU General Public License along with this program.  If not, 
+#
+# You should have received a copy of the LSST License Statement and
+# the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
@@ -53,7 +53,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         """Make a minimal Registry, populated with ObservedSensor (and all dependent DataUnits)
         for the specified *cameraName*, *filters* and *visitNumbers*.
         """
-        visitDuration = 30. # seconds
+        visitDuration = 30.  # seconds
 
         camera = Camera(cameraName)
         registry.addDataUnit(camera)
@@ -104,9 +104,12 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         units['Camera'] = Camera(name, module)
         units['AbstractFilter'] = AbstractFilter(filterName)
         units['PhysicalFilter'] = PhysicalFilter(units['AbstractFilter'], units['Camera'], "DummyCam_i")
-        units['PhysicalSensor'] = PhysicalSensor(units['Camera'], physicalSensorNumber, physicalSensorName, group, purpose)
-        units['Visit'] = Visit(units['Camera'], visitNumber, units['PhysicalFilter'], obsBegin, exposureTime, region)
-        units['ObservedSensor'] = ObservedSensor(units['Camera'], units['Visit'], units['PhysicalSensor'], region)
+        units['PhysicalSensor'] = PhysicalSensor(
+            units['Camera'], physicalSensorNumber, physicalSensorName, group, purpose)
+        units['Visit'] = Visit(units['Camera'], visitNumber, units['PhysicalFilter'],
+                               obsBegin, exposureTime, region)
+        units['ObservedSensor'] = ObservedSensor(
+            units['Camera'], units['Visit'], units['PhysicalSensor'], region)
         units['Snap'] = Snap(units['Camera'], units['Visit'], snapIndex, obsBegin, exposureTime)
         units['SkyMap'] = SkyMap(skymapName, skymapModule)
         units['Tract'] = Tract(units['SkyMap'], tractNumber, region)
@@ -142,7 +145,8 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         tag = "test_collection"
         datasetTypeName = "test_dataset"
         uri = "http://ls.st/mydummy"
-        units = self._makeDatasetUnits(cameraName="DummyCam", abstractFilterName="i", physicalFilterName="dummy_i")
+        units = self._makeDatasetUnits(
+            cameraName="DummyCam", abstractFilterName="i", physicalFilterName="dummy_i")
 
         registry = Registry()
         run = registry.makeRun(tag)
@@ -150,10 +154,11 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
             registry.addDataUnit(unit)
 
         # DatasetType takes a tuple of DataUnit types (classes)
-        datasetType = DatasetType(name=datasetTypeName, template=None, units=(type(unit) for unit in units), storageClass=Image)
+        datasetType = DatasetType(name=datasetTypeName, template=None, units=(type(unit)
+                                                                              for unit in units), storageClass=Image)
         registry.registerDatasetType(datasetType)
         # DatasetRef takes a dictionary of name : DataUnit instances
-        datasetRef = DatasetRef(datasetType, {unit.__class__.__name__ : unit for unit in units})
+        datasetRef = DatasetRef(datasetType, {unit.__class__.__name__: unit for unit in units})
         datasetHandle = registry.addDataset(datasetRef, uri, components=None, run=run, producer=None)
         # Should not be able to add the same DatasetRef twice
         with self.assertRaises(ValueError):
@@ -165,7 +170,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         # Querying with other DataUnits should return None
         camera2 = Camera("some_other_camera")
         registry.addDataUnit(camera2)
-        units2 = {unit.__class__.__name__ : unit for unit in units}
+        units2 = {unit.__class__.__name__: unit for unit in units}
         units2['Camera'] = camera2
         datasetRef2 = DatasetRef(datasetType, units2)
         self.assertIsNone(registry.find(tag, datasetRef2))
@@ -225,12 +230,14 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         cameraName = "dummycam"
         visitNumbers = (0, 1)
         registry = Registry()
-        run, datasetType = self._populateMinimalRegistry(registry, cameraName=cameraName, visitNumbers=visitNumbers)
+        run, datasetType = self._populateMinimalRegistry(
+            registry, cameraName=cameraName, visitNumbers=visitNumbers)
         quantum = Quantum(run)
         registry.addQuantum(quantum)
         handles = []
         for visitNumber in visitNumbers:
-            datasetLabel = DatasetLabel(datasetType.name, Camera=cameraName, AbstractFilter='i', PhysicalFilter='dummycam_i', PhysicalSensor=2, Visit=visitNumber)
+            datasetLabel = DatasetLabel(datasetType.name, Camera=cameraName, AbstractFilter='i',
+                                        PhysicalFilter='dummycam_i', PhysicalSensor=2, Visit=visitNumber)
             datasetRef = registry.expand(datasetLabel)
             datasetHandle = registry.addDataset(datasetRef, uri="", components=None, run=run, producer=None)
             quantum.addPredictedInput(datasetHandle)
@@ -246,7 +253,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
     def testFindDataUnit(self):
         registry = Registry()
         units = self._makeDataUnits()
-        unitValues = {unitTypeName : unitInstance.value for unitTypeName, unitInstance in units.items()}
+        unitValues = {unitTypeName: unitInstance.value for unitTypeName, unitInstance in units.items()}
         for _, unitInstance in units.items():
             registry.addDataUnit(unitInstance)
             self.assertEqual(registry.findDataUnit(type(unitInstance), unitValues), unitInstance)
@@ -262,7 +269,8 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         for unit in units.values():
             registry.addDataUnit(unit)
         # DatasetLabel takes name=pkey kwargs, where name is the name of the DataUnit type
-        label = DatasetLabel(name, **{unitTypeName : unitInstance.value for unitTypeName, unitInstance in units.items()})
+        label = DatasetLabel(
+            name, **{unitTypeName: unitInstance.value for unitTypeName, unitInstance in units.items()})
         ref = registry.expand(label)
         self.assertIsInstance(ref, DatasetRef)
         self.assertEqual(ref.name, label.name)
@@ -296,7 +304,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
 
     def testImport_(self):
         # Not yet implemented in prototype
-       pass
+        pass
 
     def testTransfer(self):
         # Not yet implemented in prototype
@@ -314,4 +322,3 @@ def setup_module(module):
 if __name__ == "__main__":
     lsst.utils.tests.init()
     unittest.main()
-
