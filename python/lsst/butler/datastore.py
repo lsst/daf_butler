@@ -21,7 +21,61 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+from abc import ABCMeta, abstractmethod
 from .storageClass import StorageClass
+
+
+class FileDescriptor:
+    def __init__(self, path, type=None, parameters=None):
+        self.path = path
+        self.type = type
+        self.parameters = parameters
+
+
+class Formatter(object, metaclass=ABCMeta):
+    @abstractmethod
+    def read(self, fileDescriptor):
+        raise NotImplementedError("Type does not support reading")
+
+    @abstractmethod
+    def write(self, inMemoryDataset, fileDescriptor):
+        raise NotImplementedError("Type does not support writing")
+
+
+class FormatterFactory:
+    def __init__(self):
+        self._registry = {}
+
+    def getFormatter(self, storageClass, datasetType=None):
+        if datasetType:
+            try:
+                return self._formatterRegistry[self._getName(datasetTypeName)]
+            except KeyError:
+                pass
+        return self._formatterRegistry[self._getName(storageClass)]
+
+    def registerFormatter(self, type, formatter):
+        """Register a Formatter.
+
+        Parameters
+        ----------
+        type : string or StorageClass or DatasetType instance
+
+        formatter : Formatter subclass (not an instance)
+        """
+        assert issubclass(formatter, Formatter)
+        self._registry[self._getName(type)] = formatter
+
+    @staticmethod
+    def _getName(typeOrName):
+        if isinstance(typeOrName, basestring):
+            return typeOrName
+        elif isinstance(typeOrName, DatasetType):
+            return typeOrName.name
+        elif isinstance(typeOrName, StorageClass):
+            return typeOrName.name
+        else:
+            raise ValueError("Cannot extract name from type")
 
 
 class Datastore:
@@ -29,12 +83,16 @@ class Datastore:
     """
 
     def __init__(self):
+        """Construct a POSIX Datastore.
+        """
         pass
 
-    def get(uri, parameters=None):
+    def get(self, uri, storageClass, parameters=None):
         """Load an :ref:`InMemoryDataset` from the store.
 
         :param str uri: a :ref:`URI` that specifies the location of the stored :ref:`Dataset`.
+
+        :param StorageClass storageClass: the :ref:`StorageClass` associated with the :ref:`DatasetType`.
 
         :param dict parameters: :ref:`StorageClass`-specific parameters that specify a slice of the :ref:`Dataset` to be loaded.
 
@@ -42,7 +100,7 @@ class Datastore:
         """
         pass
 
-    def put(inMemoryDataset, storageClass, path, typeName=None):
+    def put(self, inMemoryDataset, storageClass, path, typeName=None):
         """Write a :ref:`InMemoryDataset` with a given :ref:`StorageClass` to the store.
 
         :param inMemoryDataset: the :ref:`InMemoryDataset` to store.
@@ -51,20 +109,20 @@ class Datastore:
 
         :param str path: A :ref:`Path` that provides a hint that the :ref:`Datastore` may use as (part of) the :ref:`URI`.
 
-        :param str typeName: The :ref:`DatasetType` name, which may be used by the :ref:`Datastore` to override the default serialization format for the :ref:`StorageClass`.
+        :param str typeName: The :ref:`DatasetType` name, which may be used by this :ref:`Datastore` to override the default serialization format for the :ref:`StorageClass`.
 
         :returns: the :py:class:`str` :ref:`URI` and a dictionary of :ref:`URIs <URI>` for the :ref:`Dataset's <Dataset>` components.  The latter will be empty (or None?) if the :ref:`Dataset` is not a composite.
         """
         pass
 
-    def remove(uri):
+    def remove(self, uri):
         """Indicate to the Datastore that a :ref:`Dataset` can be removed.
 
         Some Datastores may implement this method as a silent no-op to disable :ref:`Dataset` deletion through standard interfaces.
         """
         pass
 
-    def transfer(inputDatastore, inputUri, storageClass, path, typeName=None):
+    def transfer(self, inputDatastore, inputUri, storageClass, path, typeName=None):
         """Retrieve a :ref:`Dataset` with a given :ref:`URI` from an input :ref:`Datastore`,
         and store the result in this :ref:`Datastore`.
 

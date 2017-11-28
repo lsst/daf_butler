@@ -24,6 +24,7 @@
 import unittest
 
 import lsst.utils.tests
+
 from lsst.butler.datastore import Datastore
 
 
