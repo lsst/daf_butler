@@ -27,6 +27,7 @@ from abc import ABCMeta, abstractmethod
 from .storageClass import StorageClass
 from .datasets import DatasetType
 
+from lsst.daf.persistence.safeFileIo import safeMakeDir
 import lsst.afw.table
 
 
@@ -127,11 +128,13 @@ class Datastore:
     """Basic POSIX filesystem backed Datastore.
     """
 
-    def __init__(self, root="./"):
+    def __init__(self, root="./", create=False):
         """Construct a POSIX Datastore.
         """
         if not os.path.isdir(root):
-            raise ValueError("No valid root at: {0}".format(root))
+            if not create:
+                raise ValueError("No valid root at: {0}".format(root))
+            safeMakeDir(root)
         self.root = root
         self.locationFactory = LocationFactory(self.root)
         self.formatterFactory = FormatterFactory()
@@ -197,4 +200,6 @@ class Datastore:
 
         :returns: the :py:class:`str` :ref:`URI` and a dictionary of :ref:`URIs <URI>` for the :ref:`Dataset's <Dataset>` components.  The latter will be empty (or None?) if the :ref:`Dataset` is not a composite.
         """
-        pass
+        assert inputDatastore is not self  # unless we want it for renames?
+        inMemoryDataset = inputDatastore.get(inputUri, storageClass)
+        return self.put(inMemoryDataset, storageClass, path, typeName)

@@ -78,8 +78,14 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.remove(uri)
 
     def testTransfer(self):
-        # Not yet implemented in prototype
-        pass
+        path = "tester.fits"
+        inputDatastore = Datastore("test_input_datastore", create=True)
+        outputDatastore = Datastore("test_output_datastore", create=True)
+        storageClass = SourceCatalog
+        inputUri = inputDatastore.put(self.catalog, storageClass, path)
+        outputUri = outputDatastore.transfer(inputDatastore, inputUri, storageClass, path)
+        outCatalog = outputDatastore.get(outputUri, storageClass)
+        self._assertCatalogEqual(self.catalog, outCatalog)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
