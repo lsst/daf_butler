@@ -61,8 +61,21 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
-        # Not yet implemented in prototype
-        pass
+        datastore = Datastore()
+        # Put
+        storageClass = SourceCatalog
+        uri = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        # Get
+        out = datastore.get(uri, storageClass=storageClass, parameters=None)
+        self._assertCatalogEqual(self.catalog, out)
+        # Remove
+        datastore.remove(uri)
+        # Get should now fail
+        with self.assertRaises(ValueError):
+            datastore.get(uri, storageClass=storageClass, parameters=None)
+        # Can only delete once
+        with self.assertRaises(ValueError):
+            datastore.remove(uri)
 
     def testTransfer(self):
         # Not yet implemented in prototype

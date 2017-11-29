@@ -176,7 +176,10 @@ class Datastore:
 
         Some Datastores may implement this method as a silent no-op to disable :ref:`Dataset` deletion through standard interfaces.
         """
-        pass
+        location = self.locationFactory.fromUri(uri)
+        if not os.path.exists(location.path):
+            raise ValueError("No such file: {0}".format(location.uri))
+        os.remove(location.path)
 
     def transfer(self, inputDatastore, inputUri, storageClass, path, typeName=None):
         """Retrieve a :ref:`Dataset` with a given :ref:`URI` from an input :ref:`Datastore`,
