@@ -21,28 +21,44 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+import os
 import unittest
 
 import lsst.utils.tests
+import lsst.afw.table
 
 from lsst.butler.datastore import Datastore
+from lsst.butler.storageClass import SourceCatalog
 
 
 class DatastoreTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
-        pass
+        testDir = os.path.dirname(__file__)
+        catalogPath = os.path.join(testDir, "data", "basic", "source_catalog.fits")
+        self.catalog = lsst.afw.table.SourceCatalog.readFits(catalogPath)
+
+    def _assertCatalogEqual(self, inputCatalog, outputCatalog):
+        self.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
 
     def testConstructor(self):
         datastore = Datastore()
 
-    def testGet(self):
-        # Not yet implemented in prototype
-        pass
-
-    def testPut(self):
-        # Not yet implemented in prototype
-        pass
+    def testBasicPutGet(self):
+        datastore = Datastore()
+        # Put
+        storageClass = SourceCatalog
+        uri = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        # Get
+        out = datastore.get(uri, storageClass=storageClass, parameters=None)
+        self._assertCatalogEqual(self.catalog, out)
+        # These should raise
+        with self.assertRaises(ValueError):
+            # non-existing file
+            datastore.get(uri="file:///non_existing.fits", storageClass=storageClass, parameters=None)
+        with self.assertRaises(ValueError):
+            # invalid storage class
+            datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
         # Not yet implemented in prototype

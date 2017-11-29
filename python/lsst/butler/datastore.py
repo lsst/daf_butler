@@ -21,13 +21,47 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+import os
+import urllib
 from abc import ABCMeta, abstractmethod
 from .storageClass import StorageClass
+from .datasets import DatasetType
+
+import lsst.afw.table
+
+
+class Location:
+    __slots__ = ("_datastoreRoot", "_uri")
+
+    def __init__(self, datastoreRoot, uri):
+        self._datastoreRoot = datastoreRoot
+        self._uri = urllib.parse.urlparse(uri)
+
+    @property
+    def uri(self):
+        return self._uri.geturl()
+
+    @property
+    def path(self):
+        return os.path.join(self._datastoreRoot, self._uri.path.lstrip("/"))
+
+
+class LocationFactory:
+    def __init__(self, datastoreRoot):
+        self._datastoreRoot = datastoreRoot
+
+    def fromUri(self, uri):
+        return Location(self._datastoreRoot, uri)
+
+    def fromPath(self, path):
+        uri = urllib.parse.urljoin("file://", path)
+        return self.fromUri(uri)
 
 
 class FileDescriptor:
-    def __init__(self, path, type=None, parameters=None):
-        self.path = path
+    def __init__(self, location, type=None, parameters=None):
+        assert isinstance(location, Location)
+        self.location = location
         self.type = type
         self.parameters = parameters
 
@@ -42,6 +76,17 @@ class Formatter(object, metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing")
 
 
+class FitsCatalogFormatter(Formatter):
+    def read(self, fileDescriptor):
+        assert isinstance(fileDescriptor, FileDescriptor)
+        return fileDescriptor.type.readFits(fileDescriptor.location.path)
+
+    def write(self, inMemoryDataset, fileDescriptor):
+        assert isinstance(fileDescriptor, FileDescriptor)
+        inMemoryDataset.writeFits(fileDescriptor.location.path)
+        return fileDescriptor.location.uri
+
+
 class FormatterFactory:
     def __init__(self):
         self._registry = {}
@@ -49,10 +94,10 @@ class FormatterFactory:
     def getFormatter(self, storageClass, datasetType=None):
         if datasetType:
             try:
-                return self._formatterRegistry[self._getName(datasetTypeName)]
+                return self._registry[self._getName(datasetTypeName)]()
             except KeyError:
                 pass
-        return self._formatterRegistry[self._getName(storageClass)]
+        return self._registry[self._getName(storageClass)]()
 
     def registerFormatter(self, type, formatter):
         """Register a Formatter.
@@ -68,11 +113,11 @@ class FormatterFactory:
 
     @staticmethod
     def _getName(typeOrName):
-        if isinstance(typeOrName, basestring):
+        if isinstance(typeOrName, str):
             return typeOrName
         elif isinstance(typeOrName, DatasetType):
             return typeOrName.name
-        elif isinstance(typeOrName, StorageClass):
+        elif issubclass(typeOrName, StorageClass):
             return typeOrName.name
         else:
             raise ValueError("Cannot extract name from type")
@@ -82,10 +127,15 @@ class Datastore:
     """Basic POSIX filesystem backed Datastore.
     """
 
-    def __init__(self):
+    def __init__(self, root="./"):
         """Construct a POSIX Datastore.
         """
-        pass
+        if not os.path.isdir(root):
+            raise ValueError("No valid root at: {0}".format(root))
+        self.root = root
+        self.locationFactory = LocationFactory(self.root)
+        self.formatterFactory = FormatterFactory()
+        self.formatterFactory.registerFormatter("SourceCatalog", FitsCatalogFormatter)
 
     def get(self, uri, storageClass, parameters=None):
         """Load an :ref:`InMemoryDataset` from the store.
@@ -98,7 +148,11 @@ class Datastore:
 
         :returns: an :ref:`InMemoryDataset` or slice thereof.
         """
-        pass
+        formatter = self.formatterFactory.getFormatter(storageClass)
+        location = self.locationFactory.fromUri(uri)
+        if not os.path.exists(location.path):
+            raise ValueError("No such file: {0}".format(location.uri))
+        return formatter.read(FileDescriptor(location, storageClass.type))
 
     def put(self, inMemoryDataset, storageClass, path, typeName=None):
         """Write a :ref:`InMemoryDataset` with a given :ref:`StorageClass` to the store.
@@ -113,7 +167,9 @@ class Datastore:
 
         :returns: the :py:class:`str` :ref:`URI` and a dictionary of :ref:`URIs <URI>` for the :ref:`Dataset's <Dataset>` components.  The latter will be empty (or None?) if the :ref:`Dataset` is not a composite.
         """
-        pass
+        formatter = self.formatterFactory.getFormatter(storageClass)
+        location = self.locationFactory.fromPath(path)
+        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.type))
 
     def remove(self, uri):
         """Indicate to the Datastore that a :ref:`Dataset` can be removed.
