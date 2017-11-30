@@ -23,7 +23,8 @@
 
 from .location import Location
 
-class FileDescriptor:
+
+class FileDescriptor(object):
     """Describes a particular file.
 
     Attributes

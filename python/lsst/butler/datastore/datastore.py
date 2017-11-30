@@ -23,6 +23,7 @@
 
 from abc import ABCMeta, abstractmethod
 
+
 class Datastore(metaclass=ABCMeta):
     """Datastore interface.
     """

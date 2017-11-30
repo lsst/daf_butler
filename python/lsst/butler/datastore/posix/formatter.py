@@ -26,6 +26,7 @@ from abc import ABCMeta, abstractmethod
 from ...storageClass import StorageClass
 from ...datasets import DatasetType
 
+
 class Formatter(object, metaclass=ABCMeta):
     """Interface for reading and writing `Dataset`s with a particular `StorageClass`.
     """
@@ -69,7 +70,7 @@ class Formatter(object, metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing")
 
 
-class FormatterFactory:
+class FormatterFactory(object):
     """Factory for `Formatter` instances.
     """
 

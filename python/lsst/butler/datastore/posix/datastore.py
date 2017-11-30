@@ -35,6 +35,7 @@ from .fileDescriptor import FileDescriptor
 from .formatter import FormatterFactory
 from .fitsCatalogFormatter import FitsCatalogFormatter
 
+
 class PosixDatastore(Datastore):
     """Basic POSIX filesystem backed Datastore.
     """

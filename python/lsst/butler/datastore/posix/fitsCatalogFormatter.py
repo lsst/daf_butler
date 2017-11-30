@@ -24,6 +24,7 @@
 from .formatter import Formatter
 from .fileDescriptor import FileDescriptor
 
+
 class FitsCatalogFormatter(Formatter):
     """Interface for reading and writing catalogs to and from FITS files.
     """

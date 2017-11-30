@@ -24,7 +24,8 @@
 import os
 import urllib
 
-class Location:
+
+class Location(object):
     """Identifies a location in the `Datastore`.
 
     Attributes
@@ -54,7 +55,7 @@ class Location:
         return os.path.join(self._datastoreRoot, self._uri.path.lstrip("/"))
 
 
-class LocationFactory:
+class LocationFactory(object):
     """Factory for `Location` instances.
     """
 
@@ -75,7 +76,7 @@ class LocationFactory:
         ----------
         uri : `str`
             A valid Universal Resource Identifier.
-        
+
         Returns
         location : `Location`
             The equivalent `Location`.
@@ -89,7 +90,7 @@ class LocationFactory:
         ----------
         path : `str`
             A standard POSIX path, relative to the `Datastore` root.
-        
+
         Returns
         location : `Location`
             The equivalent `Location`.
