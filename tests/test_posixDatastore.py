@@ -27,11 +27,11 @@ import unittest
 import lsst.utils.tests
 import lsst.afw.table
 
-from lsst.butler.datastore import Datastore
+from lsst.butler.posixDatastore import PosixDatastore
 from lsst.butler.storageClass import SourceCatalog
 
 
-class DatastoreTestCase(lsst.utils.tests.TestCase):
+class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
         testDir = os.path.dirname(__file__)
@@ -42,10 +42,10 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
 
     def testConstructor(self):
-        datastore = Datastore()
+        datastore = PosixDatastore()
 
     def testBasicPutGet(self):
-        datastore = Datastore()
+        datastore = PosixDatastore()
         # Put
         storageClass = SourceCatalog
         uri, _ = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
@@ -61,7 +61,7 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
-        datastore = Datastore()
+        datastore = PosixDatastore()
         # Put
         storageClass = SourceCatalog
         uri, _ = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
@@ -79,12 +79,12 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
 
     def testTransfer(self):
         path = "tester.fits"
-        inputDatastore = Datastore("test_input_datastore", create=True)
-        outputDatastore = Datastore("test_output_datastore", create=True)
+        inputPosixDatastore = PosixDatastore("test_input_datastore", create=True)
+        outputPosixDatastore = PosixDatastore("test_output_datastore", create=True)
         storageClass = SourceCatalog
-        inputUri, _ = inputDatastore.put(self.catalog, storageClass, path)
-        outputUri, _ = outputDatastore.transfer(inputDatastore, inputUri, storageClass, path)
-        outCatalog = outputDatastore.get(outputUri, storageClass)
+        inputUri, _ = inputPosixDatastore.put(self.catalog, storageClass, path)
+        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
+        outCatalog = outputPosixDatastore.get(outputUri, storageClass)
         self._assertCatalogEqual(self.catalog, outCatalog)
 
 
