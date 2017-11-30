@@ -84,7 +84,7 @@ class PosixDatastore(Datastore):
         location = self.locationFactory.fromUri(uri)
         if not os.path.exists(location.path):
             raise ValueError("No such file: {0}".format(location.uri))
-        return formatter.read(FileDescriptor(location, storageClass.type))
+        return formatter.read(FileDescriptor(location, storageClass.type, parameters))
 
     def put(self, inMemoryDataset, storageClass, path, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
@@ -109,7 +109,7 @@ class PosixDatastore(Datastore):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        formatter = self.formatterFactory.getFormatter(storageClass)
+        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
         location = self.locationFactory.fromPath(path)
         return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.type))
 
