@@ -48,7 +48,7 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
         datastore = Datastore()
         # Put
         storageClass = SourceCatalog
-        uri = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        uri, _ = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
         # Get
         out = datastore.get(uri, storageClass=storageClass, parameters=None)
         self._assertCatalogEqual(self.catalog, out)
@@ -64,7 +64,7 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
         datastore = Datastore()
         # Put
         storageClass = SourceCatalog
-        uri = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        uri, _ = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
         # Get
         out = datastore.get(uri, storageClass=storageClass, parameters=None)
         self._assertCatalogEqual(self.catalog, out)
@@ -82,8 +82,8 @@ class DatastoreTestCase(lsst.utils.tests.TestCase):
         inputDatastore = Datastore("test_input_datastore", create=True)
         outputDatastore = Datastore("test_output_datastore", create=True)
         storageClass = SourceCatalog
-        inputUri = inputDatastore.put(self.catalog, storageClass, path)
-        outputUri = outputDatastore.transfer(inputDatastore, inputUri, storageClass, path)
+        inputUri, _ = inputDatastore.put(self.catalog, storageClass, path)
+        outputUri, _ = outputDatastore.transfer(inputDatastore, inputUri, storageClass, path)
         outCatalog = outputDatastore.get(outputUri, storageClass)
         self._assertCatalogEqual(self.catalog, outCatalog)
 

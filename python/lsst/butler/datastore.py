@@ -224,7 +224,7 @@ class FitsCatalogFormatter(Formatter):
         """
         assert isinstance(fileDescriptor, FileDescriptor)
         inMemoryDataset.writeFits(fileDescriptor.location.path)
-        return fileDescriptor.location.uri
+        return fileDescriptor.location.uri, {}
 
 
 class FormatterFactory:
