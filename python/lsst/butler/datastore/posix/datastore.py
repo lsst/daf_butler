@@ -25,9 +25,9 @@ import os
 import urllib
 from abc import ABCMeta, abstractmethod
 
-from .datastore import Datastore
-from .storageClass import StorageClass
-from .datasets import DatasetType
+from ..datastore import Datastore
+from ...storageClass import StorageClass
+from ...datasets import DatasetType
 
 from lsst.daf.persistence.safeFileIo import safeMakeDir
 import lsst.afw.table
