@@ -21,7 +21,57 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-from abc import ABCMeta, abstractmethod
+import yaml
+from abc import ABCMeta, abstractmethod, abstractproperty
+
+
+class DatastoreConfig(metaclass=ABCMeta):
+    """Interface for Datastore configuration.
+    """
+    @abstractmethod
+    def load(self, stream):
+        """Load configuration from an input stream.
+
+        Parameters
+        ----------
+        stream : `file`
+            The file stream to load from (e.g. from `open()`).
+        """
+        raise NotImplementedError("Must be implemented by derived class.")
+
+    @abstractmethod
+    def dump(self, stream):
+        """Dump configuration to an output stream.
+
+        Parameters
+        stream : `file`
+            The file stream to dump to (e.g. from `open()`).
+        """
+        raise NotImplementedError("Must be implemented by derived class.")
+
+    @abstractmethod
+    def loadFromFile(self, filename):
+        """Load configuration from a file.
+
+        Parameters
+        ----------
+        filename : `str`
+            The file to load from.
+        """
+        with open(filename, 'r') as f:
+            self.load(f)
+
+    @abstractmethod
+    def dumpToFile(self, filename):
+        """Dump configuration to a file.
+
+        Parameters
+        ----------
+        filename : `str`
+            The file to dump to.
+        """
+        with open(filename, 'w') as f:
+            self.dump(f)
 
 
 class Datastore(metaclass=ABCMeta):

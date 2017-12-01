@@ -87,6 +87,11 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         outCatalog = outputPosixDatastore.get(outputUri, storageClass)
         self._assertCatalogEqual(self.catalog, outCatalog)
 
+    def testConfig(self):
+        datastore = PosixDatastore()
+        datastore.config.dumpToFile("posix_datastore_config.yaml")
+        datastore.config.loadFromFile("posix_datastore_config.yaml")
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

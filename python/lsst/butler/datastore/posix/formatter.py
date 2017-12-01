@@ -23,6 +23,8 @@
 
 from abc import ABCMeta, abstractmethod
 
+from lsst.daf.persistence import doImport
+
 from ...storageClass import StorageClass
 from ...datasets import DatasetType
 
@@ -92,10 +94,11 @@ class FormatterFactory(object):
         """
         if datasetType:
             try:
-                return self._registry[self._getName(datasetTypeName)]()
+                typeName = self._registry[self._getName(datasetTypeName)]()
             except KeyError:
                 pass
-        return self._registry[self._getName(storageClass)]()
+        typeName = self._registry[self._getName(storageClass)]
+        return self._getInstanceOf(typeName)
 
     def registerFormatter(self, type, formatter):
         """Register a Formatter.
@@ -107,7 +110,8 @@ class FormatterFactory(object):
         formatter : `Formatter` subclass (not an instance)
             The `Formatter` to use for reading and writing `Dataset`s of this type.
         """
-        assert issubclass(formatter, Formatter)
+        #assert issubclass(formatter, Formatter)
+        assert isinstance(formatter, str)
         self._registry[self._getName(type)] = formatter
 
     @staticmethod
@@ -122,3 +126,8 @@ class FormatterFactory(object):
             return typeOrName.name
         else:
             raise ValueError("Cannot extract name from type")
+
+    @staticmethod
+    def _getInstanceOf(typeName):
+        cls = doImport(typeName)
+        return cls()
