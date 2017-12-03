@@ -135,7 +135,7 @@ class DatasetHandle(DatasetRef):
         self._predictedConsumers.update(ref.predictedConsumers)
         self._actualConsumers.update(ref.actualConsumers)
         self._uri = uri
-        self._components = MappingProxyType(components) if components else None
+        self._components = MappingProxyType(components)
         self._run = run
 
     @property
