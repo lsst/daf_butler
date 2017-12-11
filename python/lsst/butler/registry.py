@@ -390,7 +390,7 @@ class Registry:
                 registryId = row[DatasetTable.c.registry_id]
                 uri = row[DatasetTable.c.uri]
                 runId = row[DatasetTable.c.run_id]
-                components = {}
+                components = None
                 run = self.getRun((runId, registryId))
                 return DatasetHandle(datasetId, registryId, datasetRef, uri, components, run)
             elif len(result) == 0:

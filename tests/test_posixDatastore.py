@@ -93,6 +93,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
+        catalog = datasetsHelper.makeExampleCatalog()
         datastore = PosixDatastore()
         # Put
         storageClass = SourceCatalog
@@ -110,11 +111,12 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.remove(uri)
 
     def testTransfer(self):
+        catalog = datasetsHelper.makeExampleCatalog()
         path = "tester.fits"
         inputPosixDatastore = PosixDatastore("test_input_datastore", create=True)
         outputPosixDatastore = PosixDatastore("test_output_datastore", create=True)
         storageClass = SourceCatalog
-        inputUri, _ = inputPosixDatastore.put(self.catalog, storageClass, path)
+        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
         catalogOut = outputPosixDatastore.get(outputUri, storageClass)
         datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
