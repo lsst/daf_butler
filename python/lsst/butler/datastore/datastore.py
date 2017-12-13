@@ -23,60 +23,29 @@
 
 import yaml
 from abc import ABCMeta, abstractmethod, abstractproperty
+from ..config import Config
 
-
-class DatastoreConfig(metaclass=ABCMeta):
-    """Interface for Datastore configuration.
-    """
-    @abstractmethod
-    def load(self, stream):
-        """Load configuration from an input stream.
-
-        Parameters
-        ----------
-        stream : `file`
-            The file stream to load from (e.g. from `open()`).
-        """
-        raise NotImplementedError("Must be implemented by derived class.")
-
-    @abstractmethod
-    def dump(self, stream):
-        """Dump configuration to an output stream.
-
-        Parameters
-        stream : `file`
-            The file stream to dump to (e.g. from `open()`).
-        """
-        raise NotImplementedError("Must be implemented by derived class.")
-
-    @abstractmethod
-    def loadFromFile(self, filename):
-        """Load configuration from a file.
-
-        Parameters
-        ----------
-        filename : `str`
-            The file to load from.
-        """
-        with open(filename, 'r') as f:
-            self.load(f)
-
-    @abstractmethod
-    def dumpToFile(self, filename):
-        """Dump configuration to a file.
-
-        Parameters
-        ----------
-        filename : `str`
-            The file to dump to.
-        """
-        with open(filename, 'w') as f:
-            self.dump(f)
-
+class DatastoreConfig(Config):
+    pass
 
 class Datastore(metaclass=ABCMeta):
     """Datastore interface.
     """
+    @staticmethod
+    def fromConfig(config):
+        from lsst.daf.persistence import doImport
+        cls = doImport(config['datastore.cls'])
+        return cls(config=config)
+    
+    def __init__(self, config):
+        """Constructor
+
+        Parameters
+        ----------
+        config : `DatastoreConfig` or `str`
+            Load configuration
+        """
+        self.config = DatastoreConfig(config)['datastore']
 
     @abstractmethod
     def get(self, uri, storageClass, parameters=None):

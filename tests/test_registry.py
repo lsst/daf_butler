@@ -21,6 +21,7 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+import os
 import unittest
 import datetime
 from collections import OrderedDict
@@ -37,8 +38,8 @@ from lsst.butler.storageClass import Image
 class RegistryTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
-        # Use fixed, but non-default, registryId for testing
-        self.registryId = 10
+        self.testDir = os.path.dirname(__file__)
+        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
 
     def _makeDatasetType(self, name="dummy", template=None, units=(Camera, ), storageClass=Image):
         return DatasetType(name, template, units, storageClass)
@@ -118,8 +119,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         return units
 
     def testConstructor(self):
-        registry = Registry(id=self.registryId)
-        self.assertEqual(registry.id, self.registryId)
+        registry = Registry(self.configFile)
         from sqlalchemy.engine import Engine
         self.assertIsInstance(registry.engine, Engine)
 
@@ -127,7 +127,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         validDatasetType = self._makeDatasetType()
         invalidDatasetType = None
 
-        registry = Registry()
+        registry = Registry(self.configFile)
         registry.registerDatasetType(validDatasetType)
         with self.assertRaises(AssertionError):
             registry.registerDatasetType(invalidDatasetType)
@@ -135,7 +135,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
     def testGetDatasetType(self):
         inDatasetType = self._makeDatasetType()
 
-        registry = Registry()
+        registry = Registry(self.configFile)
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(inDatasetType.name)
         self.assertEqual(inDatasetType, outDatasetType)
@@ -148,7 +148,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         units = self._makeDatasetUnits(
             cameraName="DummyCam", abstractFilterName="i", physicalFilterName="dummy_i")
 
-        registry = Registry()
+        registry = Registry(self.configFile)
         run = registry.makeRun(tag)
         for unit in units:
             registry.addDataUnit(unit)
@@ -183,7 +183,8 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(datasetHandle, DatasetHandle)
 
         registry.associate(newTag, (datasetHandle, ))
-        self.assertEqual(registry.find(newTag, datasetRef), datasetHandle)
+        tmp = registry.find(newTag, datasetRef)
+        self.assertEqual(tmp, datasetHandle)
 
         registry.disassociate(newTag, (datasetHandle, ), remove=False)
         self.assertIsNone(registry.find(newTag, datasetRef))
@@ -193,7 +194,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
 
     def testMakeRun(self):
         tag = "testing"
-        registry = Registry()
+        registry = Registry(self.configFile)
         run = registry.makeRun(tag)
         self.assertIsInstance(run, Run)
         self.assertEqual(run.tag, tag)
@@ -205,21 +206,19 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
     def testGetRun(self):
         tag1 = "testing1"
         tag2 = "testing2"
-        registry = Registry()
+        registry = Registry(self.configFile)
         run1 = registry.makeRun(tag1)
         run2 = registry.makeRun(tag2)
         self.assertNotEqual(run1, run2)
-        self.assertEqual(registry.getRun(run1.pkey), run1)
-        self.assertEqual(registry.getRun(run2.pkey), run2)
-        self.assertIsNone(registry.getRun((run2.pkey[0], run2.pkey[1]+1)))
-        self.assertIsNone(registry.getRun((run2.pkey[0]+1, run2.pkey[1])))
+        self.assertEqual(registry.getRun(tag1), run1)
+        self.assertEqual(registry.getRun(tag2), run2)
+        self.assertIsNone(registry.getRun("noexist"))
 
     def testAddQuantum(self):
-        registry = Registry(id=self.registryId)
+        registry = Registry(self.configFile)
         run = registry.makeRun("testing")
         quantum = Quantum(run)
         registry.addQuantum(quantum)
-        self.assertEqual(quantum.pkey, (0, self.registryId))
         # Adding a quantum with a fully specified pkey should fail
         with self.assertRaises(AssertionError):
             registry.addQuantum(quantum)
@@ -229,7 +228,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
     def testMarkInputUsed(self):
         cameraName = "dummycam"
         visitNumbers = (0, 1)
-        registry = Registry()
+        registry = Registry(self.configFile)
         run, datasetType = self._populateMinimalRegistry(
             registry, cameraName=cameraName, visitNumbers=visitNumbers)
         quantum = Quantum(run)
@@ -246,12 +245,12 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
             registry.markInputUsed(quantum, handle)
 
     def testAddDataUnit(self):
-        registry = Registry()
+        registry = Registry(self.configFile)
         for _, unit in self._makeDataUnits().items():
             registry.addDataUnit(unit)
 
     def testFindDataUnit(self):
-        registry = Registry()
+        registry = Registry(self.configFile)
         units = self._makeDataUnits()
         unitValues = {unitTypeName: unitInstance.value for unitTypeName, unitInstance in units.items()}
         for _, unitInstance in units.items():
@@ -263,7 +262,7 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         units = self._makeDataUnits()
         # DatasetType takes a sequence of DataUnit types
         datasetType = self._makeDatasetType(units=(type(unit) for unit in units.values()))
-        registry = Registry()
+        registry = Registry(self.configFile)
         registry.registerDatasetType(datasetType)
         # Register units (in dependency order)
         for unit in units.values():
