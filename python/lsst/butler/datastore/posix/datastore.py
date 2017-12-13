@@ -22,8 +22,6 @@
 #
 
 import os
-import urllib
-from abc import ABCMeta, abstractmethod
 
 from lsst.daf.persistence.safeFileIo import safeMakeDir
 
@@ -113,13 +111,13 @@ class PosixDatastore(Datastore):
         Parameters
         ----------
         root : `str`
-            Root directory.
+            Root location.
         create : `bool`
-            Create root directory if it does not exist.
+            Create root location if it does not exist.
 
         Raises
         ------
-        `ValueError` : If root directory does not exist and `create` is `False`.
+        `ValueError` : If root location does not exist and `create` is `False`.
         """
         if not os.path.isdir(root):
             if not create:
@@ -200,7 +198,7 @@ class PosixDatastore(Datastore):
         """
         location = self.locationFactory.fromUri(uri)
         if not os.path.exists(location.path):
-            raise ValueError("No such file: {0}".format(location.uri))
+            raise FileNotFoundError("No such file: {0}".format(location.uri))
         os.remove(location.path)
 
     def transfer(self, inputDatastore, inputUri, storageClass, path, typeName=None):

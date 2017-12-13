@@ -94,25 +94,30 @@ class FormatterFactory(object):
         """
         if datasetType:
             try:
-                typeName = self._registry[self._getName(datasetTypeName)]()
+                typeName = self._registry[self._getName(datasetType)]()
             except KeyError:
                 pass
         typeName = self._registry[self._getName(storageClass)]
         return self._getInstanceOf(typeName)
 
-    def registerFormatter(self, type, formatter):
+    def registerFormatter(self, type_, formatter):
         """Register a Formatter.
 
         Parameters
         ----------
         type : `str` or `StorageClass` or `DatasetType`
             Type for which this formatter is to be used.
-        formatter : `Formatter` subclass (not an instance)
-            The `Formatter` to use for reading and writing `Dataset`s of this type.
+        formatter : `str`
+            Identifies a `Formatter` subclass to use for reading and writing `Dataset`s of this type.
+
+        Raises
+        ------
+        e : `ValueError`
+            If formatter does not name a valid formatter type.
         """
-        #assert issubclass(formatter, Formatter)
-        assert isinstance(formatter, str)
-        self._registry[self._getName(type)] = formatter
+        if not self._isValidFormatterStr(formatter):
+            raise ValueError("Not a valid Formatter: {0}".format(formatter))
+        self._registry[self._getName(type_)] = formatter
 
     @staticmethod
     def _getName(typeOrName):
@@ -120,9 +125,7 @@ class FormatterFactory(object):
         """
         if isinstance(typeOrName, str):
             return typeOrName
-        elif isinstance(typeOrName, DatasetType):
-            return typeOrName.name
-        elif issubclass(typeOrName, StorageClass):
+        elif hasattr(typeOrName, 'name'):
             return typeOrName.name
         else:
             raise ValueError("Cannot extract name from type")
@@ -131,3 +134,11 @@ class FormatterFactory(object):
     def _getInstanceOf(typeName):
         cls = doImport(typeName)
         return cls()
+
+    @staticmethod
+    def _isValidFormatterStr(formatter):
+        try:
+            f = FormatterFactory._getInstanceOf(formatter)
+            return isinstance(f, Formatter)
+        except ImportError:
+            return False

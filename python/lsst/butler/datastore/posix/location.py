@@ -65,7 +65,7 @@ class LocationFactory(object):
         Parameters
         ----------
         datastoreRoot : `str`
-            Root directory of the `Datastore` in the filesystem.
+            Root location of the `Datastore` in the filesystem.
         """
         self._datastoreRoot = datastoreRoot
 

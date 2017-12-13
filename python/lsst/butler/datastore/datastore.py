@@ -135,6 +135,11 @@ class Datastore(metaclass=ABCMeta):
 
         .. note::
             Some Datastores may implement this method as a silent no-op to disable `Dataset` deletion through standard interfaces.
+        
+        Raises
+        ------
+        e : `FileNotFoundError`
+            When `Dataset` does not exist.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
