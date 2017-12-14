@@ -1,0 +1,11 @@
+run: "ingest"
+datastore:
+  cls: 'lsst.butler.datastore.PosixDatastore'
+  root: './butler_test_repository'
+  create: true
+  formatters:
+    SourceCatalog: "lsst.butler.datastore.posix.fitsCatalogFormatter.FitsCatalogFormatter"
+registry:
+  cls: 'lsst.butler.registry.Registry'
+  dbname: 'sqlite:///:memory:'
+  id: 0

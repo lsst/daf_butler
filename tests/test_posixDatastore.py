@@ -27,7 +27,7 @@ import unittest
 import lsst.utils.tests
 import lsst.afw.table
 
-from lsst.butler.datastore import PosixDatastore
+from lsst.butler.datastore import PosixDatastore, DatastoreConfig
 from lsst.butler.storageClass import SourceCatalog
 
 import datasetsHelper
@@ -36,10 +36,8 @@ import datasetsHelper
 class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
-<<<<<<< HEAD
-        testDir = os.path.dirname(__file__)
-        catalogPath = os.path.join(testDir, "data", "basic", "source_catalog.fits")
-        self.catalog = lsst.afw.table.SourceCatalog.readFits(catalogPath)
+        self.testDir = os.path.dirname(__file__)
+        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
 
     def _assertCatalogEqual(self, inputCatalog, outputCatalog):
         self.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
@@ -68,16 +66,13 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         self.assertFloatsAlmostEqual(
             inputRecord.getShapeErr()[2, 2],
             outputRecord.getShapeErr()[2, 2], rtol=1e-6)
-=======
-        pass
->>>>>>> Minimal functional Butler.
-
+        
     def testConstructor(self):
-        datastore = PosixDatastore()
+        datastore = PosixDatastore(config=self.configFile)
 
     def testBasicPutGet(self):
         catalog = datasetsHelper.makeExampleCatalog()
-        datastore = PosixDatastore("./butler_repository", create=True)
+        datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = SourceCatalog
         uri, _ = datastore.put(catalog, storageClass=storageClass, path="tester.fits", typeName=None)
@@ -93,7 +88,8 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
-        datastore = PosixDatastore()
+        catalog = datasetsHelper.makeExampleCatalog()
+        datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = SourceCatalog
         uri, _ = datastore.put(catalog, storageClass=storageClass, path="tester.fits", typeName=None)
@@ -110,20 +106,20 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.remove(uri)
 
     def testTransfer(self):
+        catalog = datasetsHelper.makeExampleCatalog()
         path = "tester.fits"
-        inputPosixDatastore = PosixDatastore("test_input_datastore", create=True)
-        outputPosixDatastore = PosixDatastore("test_output_datastore", create=True)
+        inputConfig = DatastoreConfig(self.configFile)
+        inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
+        inputPosixDatastore = PosixDatastore(config=inputConfig)
+        outputConfig = inputConfig.copy()
+        outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
+        outputPosixDatastore = PosixDatastore(config=outputConfig)
         storageClass = SourceCatalog
-        inputUri, _ = inputPosixDatastore.put(self.catalog, storageClass, path)
+        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
         catalogOut = outputPosixDatastore.get(outputUri, storageClass)
         datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
-
-    def testConfig(self):
-        datastore = PosixDatastore()
-        datastore.config.dumpToFile("posix_datastore_config.yaml")
-        datastore.config.loadFromFile("posix_datastore_config.yaml")
-
+        
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

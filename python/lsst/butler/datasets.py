@@ -26,6 +26,10 @@ from .utils import slotValuesAreEqual, slotValuesToHash
 from .storageClass import StorageClass
 from .units import DataUnitTypeSet
 
+def _safeMakeMappingProxyType(data):
+    if data is None:
+        data = {}
+    return MappingProxyType(data)
 
 class DatasetType:
 
@@ -113,11 +117,11 @@ class DatasetRef(DatasetLabel):
 
     @property
     def predictedConsumers(self):
-        return MappingProxyType(self._predictedConsumers)
+        return _safeMakeMappingProxyType(self._predictedConsumers)
 
     @property
     def actualConsumers(self):
-        return MappingProxyType(self._actualConsumers)
+        return _safeMakeMappingProxyType(self._actualConsumers)
 
     def makePath(self, run, template=None):
         raise NotImplementedError("TODO")
@@ -135,7 +139,7 @@ class DatasetHandle(DatasetRef):
         self._predictedConsumers.update(ref.predictedConsumers)
         self._actualConsumers.update(ref.actualConsumers)
         self._uri = uri
-        self._components = MappingProxyType(components)
+        self._components = _safeMakeMappingProxyType(components)
         self._run = run
 
     @property

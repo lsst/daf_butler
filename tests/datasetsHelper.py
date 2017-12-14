@@ -34,5 +34,30 @@ def makeExampleCatalog():
     return lsst.afw.table.SourceCatalog.readFits(catalogPath)
 
 
-def assertCatalogEqual(testObj, inputCatalog, outputCatalog):
-    testObj.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
+def assertCatalogEqual(self, inputCatalog, outputCatalog):
+    self.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
+    inputTable = inputCatalog.getTable()
+    inputRecord = inputCatalog[0]
+    outputTable = outputCatalog.getTable()
+    outputRecord = outputCatalog[0]
+    self.assertEqual(inputTable.getPsfFluxDefinition(), outputTable.getPsfFluxDefinition())
+    self.assertEqual(inputRecord.getPsfFlux(), outputRecord.getPsfFlux())
+    self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
+    self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())        
+    self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
+    self.assertFloatsAlmostEqual(
+        inputRecord.getCentroidErr()[0, 0],
+        outputRecord.getCentroidErr()[0, 0], rtol=1e-6)
+    self.assertFloatsAlmostEqual(
+        inputRecord.getCentroidErr()[1, 1],
+        outputRecord.getCentroidErr()[1, 1], rtol=1e-6)
+    self.assertEqual(inputTable.getShapeDefinition(), outputTable.getShapeDefinition())
+    self.assertFloatsAlmostEqual(
+        inputRecord.getShapeErr()[0, 0],
+        outputRecord.getShapeErr()[0, 0], rtol=1e-6)
+    self.assertFloatsAlmostEqual(
+        inputRecord.getShapeErr()[1, 1],
+        outputRecord.getShapeErr()[1, 1], rtol=1e-6)
+    self.assertFloatsAlmostEqual(
+        inputRecord.getShapeErr()[2, 2],
+        outputRecord.getShapeErr()[2, 2], rtol=1e-6)

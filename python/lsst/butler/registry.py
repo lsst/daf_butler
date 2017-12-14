@@ -24,23 +24,35 @@
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select, and_, exists
 
+from lsst.daf.persistence import doImport
+
 from .schema import metadata, DatasetTypeTable, RunTable, QuantumTable, DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
 from .datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
 from .run import Run
 from .quantum import Quantum
 from .units import DataUnit, DataUnitTypeSet
 from .storageClass import StorageClass
+from .config import Config
 
+class RegistryConfig(Config):
+    pass
 
 class Registry:
     """Basic SQL backed registry.
     """
 
-    def __init__(self, dbname='sqlite:///:memory:', id=0):
-        self.engine = create_engine(dbname)
-        self.id = id
+    def __init__(self, config):
+        self.config = RegistryConfig(config)['registry']
+        self.engine = create_engine(self.config['dbname'])
+        self.id = self.config['id']
 
         metadata.create_all(self.engine)
+
+    @staticmethod
+    def fromConfig(config):
+        
+        cls = doImport(config['registry.cls'])
+        return cls(config=config)
 
     def registerDatasetType(self, datasetType):
         """
@@ -239,14 +251,26 @@ class Registry:
             connection.execute(RunTable.update().where(and_(RunTable.c.run_id == run.runId, RunTable.c.registry_id == run.registryId)).values(
                 environment_id = run.environmentId, pipeline_id = run.pipelineId))
 
-    def getRun(self, pkey):
+    def getRun(self, tag=None, id=None):
         """
-        Get a :ref:`Run` corresponding to it's primary key
+        Get a :ref:`Run` corresponding to it's tag or id
+
+        Parameters
+        ----------
+        tag : `str`
+            Collection tag
+        id : `int`, optional
+            If given, lookup by id instead and ignore `tag`.
         """
-        runId, registryId = pkey
+        if tag is None and id is None:
+            raise ValueError("Either tag or id needs to be given")
         with self.engine.begin() as connection:
-            result = connection.execute(RunTable.select().where(
-                and_(RunTable.c.run_id == runId, RunTable.c.registry_id == registryId))).fetchone()
+            if id is not None:
+                result = connection.execute(RunTable.select().where(
+                    and_(RunTable.c.run_id == id, RunTable.c.registry_id == self.id))).fetchone()
+            else:
+                result = connection.execute(RunTable.select().where(
+                    and_(RunTable.c.tag == tag, RunTable.c.registry_id == self.id))).fetchone()
 
             if result:
                 runId = result[RunTable.c.run_id]
@@ -255,7 +279,7 @@ class Registry:
                 environmentId = result[RunTable.c.environment_id]
                 pipelineId = result[RunTable.c.pipeline_id]
 
-                return Run(runId, registryId, tag, environmentId, pipelineId)
+                return Run(runId, self.id, tag, environmentId, pipelineId)
             else:
                 return None
 
@@ -390,8 +414,8 @@ class Registry:
                 registryId = row[DatasetTable.c.registry_id]
                 uri = row[DatasetTable.c.uri]
                 runId = row[DatasetTable.c.run_id]
-                components = {}
-                run = self.getRun((runId, registryId))
+                components = None
+                run = self.getRun(id=runId)
                 return DatasetHandle(datasetId, registryId, datasetRef, uri, components, run)
             elif len(result) == 0:
                 return None
