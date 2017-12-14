@@ -22,6 +22,9 @@
 #
 
 import yaml
+
+from lsst.daf.persistence import doImport
+
 from abc import ABCMeta, abstractmethod, abstractproperty
 from ..config import Config
 
@@ -33,7 +36,6 @@ class Datastore(metaclass=ABCMeta):
     """
     @staticmethod
     def fromConfig(config):
-        from lsst.daf.persistence import doImport
         cls = doImport(config['datastore.cls'])
         return cls(config=config)
     

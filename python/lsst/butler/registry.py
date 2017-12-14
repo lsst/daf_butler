@@ -24,6 +24,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select, and_, exists
 
+from lsst.daf.persistence import doImport
+
 from .schema import metadata, DatasetTypeTable, RunTable, QuantumTable, DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
 from .datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
 from .run import Run
@@ -48,7 +50,7 @@ class Registry:
 
     @staticmethod
     def fromConfig(config):
-        from lsst.daf.persistence import doImport
+        
         cls = doImport(config['registry.cls'])
         return cls(config=config)
 

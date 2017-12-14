@@ -27,6 +27,7 @@ import os
 import sys
 import warnings
 import yaml
+import pprint
 
 import lsst.utils
 
@@ -50,7 +51,7 @@ class Config(_ConfigBase):
     """Config implements a datatype that is used by Butler for configuration parameters.
     It is essentially a dict with key/value pairs, including nested dicts (as values). In fact, it can be
     initialized with a dict. The only caveat is that keys may NOT contain dots ('.'). This is explained next:
-    Config extends the dict api so that hierarchical values may be accessed with dot-delimited notiation.
+    Config extends the dict api so that hierarchical values may be accessed with dot-delimited notation.
     That is, foo.getValue('a.b.c') is the same as foo['a']['b']['c'] is the same as foo['a.b.c'], and either
     of these syntaxes may be used.
 
@@ -59,10 +60,16 @@ class Config(_ConfigBase):
     """
 
     def __init__(self, other=None):
-        """Initialize the Config. Other can be used to initialize the Config in a variety of ways:
-        other (string) Treated as a path to a config file on disk. Must end with '.paf' or '.yaml'.
-        other (Config) Copies the other Config's values into this one.
-        other (dict) Copies the values from the dict into this Config.
+        """Initialize the Config. Other can be used to initialize the Config in a variety of ways.
+
+        Parameters
+        ----------
+        other: `str` or `Config` or `dict`
+            Other source of configuration, can be:
+            
+            - (`str`) Treated as a path to a config file on disk. Must end with '.yaml'.
+            - (`Config`) Copies the other Config's values into this one.
+            - (`dict`) Copies the values from the dict into this Config.
         """
         collections.UserDict.__init__(self)
 
@@ -77,29 +84,31 @@ class Config(_ConfigBase):
             # if other is a string, assume it is a file path.
             self.__initFromFile(other)
         else:
-            # if the config specified by other could not be loaded raise a runtime error.
+            # if the config specified by other could not be recognized raise a runtime error.
             raise RuntimeError("A Config could not be loaded from other:%s" % other)
 
     def ppprint(self):
         """helper function for debugging, prints a config out in a readable way in the debugger.
 
         use: pdb> print myConfigObject.pprint()
-        :return: a prettyprint formatted string representing the config
+
+        Returns
+        -------
+        s: `str`
+            A prettyprint formatted string representing the config
         """
-        import pprint
         return pprint.pformat(self.data, indent=2, width=1)
 
     def __repr__(self):
         return self.data.__repr__()
 
     def __initFromFile(self, path):
-        """Load a file from path. If path is a list, will pick one to use, according to order specified
-        by extensionPreference.
+        """Load a file from path.
 
-        :param path: string or list of strings, to a persisted config file.
-        :param extensionPreference: the order in which to try to open files. Will use the first one that
-        succeeds.
-        :return:
+        Parameters
+        ----------
+        path: `str`
+            To a persisted config file.
         """
         config = None
         if path.endswith('yaml'):
@@ -110,8 +119,10 @@ class Config(_ConfigBase):
     def __initFromYamlFile(self, path):
         """Opens a file at a given path and attempts to load it in from yaml.
 
-        :param path:
-        :return:
+        Parameters
+        ----------
+        path: `str`
+            To a persisted config file in YAML format.
         """
         with open(path, 'r') as f:
             self.__initFromYaml(f)
@@ -119,11 +130,17 @@ class Config(_ConfigBase):
     def __initFromYaml(self, stream):
         """Loads a YAML config from any readable stream that contains one.
 
-        :param stream:
-        :return:
+        Parameters
+        ----------
+        stream
+            To a persisted config file in YAML format.
+
+        Raises
+        ------
+        e: `yaml.YAMLError`
+            If there is an error loading the file.
         """
-        # will raise yaml.YAMLError if there is an error loading the file.
-        self.data = yaml.load(stream)
+        self.data = yaml.safe_load(stream)
         return self
 
     def __getitem__(self, name):
@@ -140,54 +157,31 @@ class Config(_ConfigBase):
         return data
 
     def __setitem__(self, name, value):
+        keys = name.split('.')
+        last = keys.pop()
         if isinstance(value, collections.Mapping):
-            keys = name.split('.')
             d = {}
             cur = d
-            for key in keys[0:-1]:
+            for key in keys:
                 cur[key] = {}
                 cur = cur[key]
-            cur[keys[-1]] = value
+            cur[last] = value
             self.update(d)
         data = self.data
-        keys = name.split('.')
-        for key in keys[0:-1]:
+        for key in keys:
             data = data.setdefault(key, {})
-        data[keys[-1]] = value
+        data[last] = value
 
     def __contains__(self, key):
         d = self.data
         keys = key.split('.')
-        for k in keys[0:-1]:
+        last = keys.pop()
+        for k in keys:
             if k in d:
                 d = d[k]
             else:
                 return False
-        return keys[-1] in d
-
-    @staticmethod
-    def defaultConfigFile(productName, fileName, relativePath=None):
-        """Get the path to a default config file.
-
-        Determines a directory for the product specified by productName. Then Concatenates
-        productDir/relativePath/fileName (or productDir/fileName if relativePath is None) to find the path
-        to the default Config file
-
-        @param productName (string) The name of the product that the default config is installed as part of
-        @param fileName (string) The name of the config file. Can also include a path to the file relative to
-                                 the directory where the product is installed.
-        @param relativePath (string) The relative path from the directior where the product is installed to
-                                     the location where the file (or the path to the file) is found. If None
-                                     (default), the fileName argument is relative to the installation
-                                     directory.
-        """
-        basePath = lsst.utils.getPackageDir(productName)
-        if not basePath:
-            raise RuntimeError("No product installed for productName: %s" % basePath)
-        if relativePath is not None:
-            basePath = os.path.join(basePath, relativePath)
-        fullFilePath = os.path.join(basePath, fileName)
-        return fullFilePath
+        return last in d
 
     def update(self, other):
         """Like dict.update, but will add or modify keys in nested dicts, instead of overwriting the nested
@@ -197,8 +191,13 @@ class Config(_ConfigBase):
         foo = {'a': {'b': 1}}
         foo.update({'a': {'c': 2}})
 
-        If foo is a dict, then after the update foo == {'a': {'c': 2}}
-        But if foo is a Config, then after the update foo == {'a': {'b': 1, 'c': 2}}
+        Parameters
+        ----------
+        other: `dict` or `Config`
+            Source of configuration:
+        
+            - If foo is a dict, then after the update foo == {'a': {'c': 2}}
+            - But if foo is a Config, then after the update foo == {'a': {'b': 1, 'c': 2}}
         """
         def doUpdate(d, u):
             for k, v in u.items():
@@ -217,8 +216,10 @@ class Config(_ConfigBase):
         """Like Config.update, but will add keys & values from other that DO NOT EXIST in self. Keys and
         values that already exist in self will NOT be overwritten.
 
-        :param other:
-        :return:
+        Parameters
+        ----------
+        other: `dict` or `Config`
+            Source of configuration:
         """
         otherCopy = copy.deepcopy(other)
         otherCopy.update(self)
@@ -246,8 +247,10 @@ class Config(_ConfigBase):
     def asArray(self, name):
         """Get a value as an array. May contain one or more elements.
 
-        :param key:
-        :return:
+        Parameters
+        ----------
+        name: `str`
+            Key
         """
         val = self.get(name)
         if isinstance(val, str):
@@ -292,8 +295,10 @@ class Config(_ConfigBase):
     def dump(self, output):
         """Writes the config to a yaml stream.
 
-        :param stream:
-        :return:
+        Parameters
+        ----------
+        output
+            The YAML stream to use for output.
         """
         # First a set of known keys is handled and written to the stream in a specific order for readability.
         # After the expected/ordered keys are weritten to the stream the remainder of the keys are written to
@@ -313,8 +318,10 @@ class Config(_ConfigBase):
     def dumpToFile(self, path):
         """Writes the config to a file.
 
-        :param path:
-        :return:
+        Parameters
+        ----------
+        path: `str`
+            Path to the file to use for output.
         """
         with open(path, 'w') as f:
             self.dump(f)
