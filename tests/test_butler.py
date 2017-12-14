@@ -21,6 +21,7 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+import os
 import unittest
 import datetime
 
@@ -39,7 +40,8 @@ import datasetsHelper
 class ButlerTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
-        pass
+        self.testDir = os.path.dirname(__file__)
+        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
 
     def _populateMinimalRegistry(self, registry, cameraName='dummycam', filters=('g', 'r', 'i', 'z', 'y'), visitNumbers=range(2)):
         """Make a minimal Registry, populated with ObservedSensor (and all dependent DataUnits)
@@ -66,25 +68,20 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
                     registry.addDataUnit(unit)
                 obsBegin += datetime.timedelta(seconds=visitDuration)
 
-        run = registry.makeRun("testing")
         datasetType = DatasetType("testdst", template=None, units=(
             ObservedSensor, ), storageClass=SourceCatalog)
         registry.registerDatasetType(datasetType)
 
-        return run, datasetType
+        return datasetType
 
     def testBasicPutAndGet(self):
-        registry = Registry()
-        datastore = PosixDatastore(root="./butler_test_repository", create=True)
-        collectionTag = "mycollection"
         cameraName = "dummycam"
         visitNumber = 0
-        run, datasetType = self._populateMinimalRegistry(
-            registry, cameraName=cameraName, visitNumbers=(visitNumber, ))
-        butlerConfig = ButlerConfig(run=run)
-        butler = Butler(butlerConfig, datastore, registry)
+
+        butler = Butler(config=self.configFile)
+        datasetType = self._populateMinimalRegistry(butler.registry, cameraName=cameraName, visitNumbers=(visitNumber, ))
         datasetLabel = DatasetLabel(datasetType.name, Camera=cameraName, AbstractFilter='i',
-                                    PhysicalFilter='dummycam_i', PhysicalSensor=0, Visit=visitNumber)
+                            PhysicalFilter='dummycam_i', PhysicalSensor=0, Visit=visitNumber)
         catalog = datasetsHelper.makeExampleCatalog()
 
         # Put
