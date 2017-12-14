@@ -22,7 +22,7 @@
 #
 
 from sqlalchemy import create_engine
-from sqlalchemy.sql import select, and_
+from sqlalchemy.sql import select, and_, exists
 
 from .schema import metadata, DatasetTypeTable, RunTable, QuantumTable, DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
 from .datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
@@ -182,6 +182,7 @@ class Registry:
 
         ``tag`` and ``handle`` combinations that are not currently associated are silently ignored.
         """
+        deletedDatasets = []
         with self.engine.begin() as connection:
             for handle in handles:
                 connection.execute(DatasetCollectionsTable.delete().where(and_(
@@ -190,8 +191,22 @@ class Registry:
                     DatasetCollectionsTable.c.registry_id == handle.registryId
                 )))
 
-            if remove:
-                raise NotImplementedError
+                if remove:
+                    if not connection.execute(select([exists().where(and_(
+                            DatasetCollectionsTable.c.dataset_id == handle.datasetId,
+                            DatasetCollectionsTable.c.registry_id == handle.registryId
+                        ))])).scalar():
+
+                        connection.execute(DatasetTable.delete().where(and_(
+                            DatasetTable.c.dataset_id == handle.datasetId,
+                            DatasetTable.c.registry_id == handle.registryId
+                        )))
+
+                        deletedDatasets.append(handle)
+                    else:
+                        # Dataset is still in use
+                        pass
+        return deletedDatasets
 
     def makeRun(self, tag):
         """
@@ -375,7 +390,7 @@ class Registry:
                 registryId = row[DatasetTable.c.registry_id]
                 uri = row[DatasetTable.c.uri]
                 runId = row[DatasetTable.c.run_id]
-                components = None
+                components = {}
                 run = self.getRun((runId, registryId))
                 return DatasetHandle(datasetId, registryId, datasetRef, uri, components, run)
             elif len(result) == 0:
