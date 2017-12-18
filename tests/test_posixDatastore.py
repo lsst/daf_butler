@@ -30,6 +30,8 @@ import lsst.afw.table
 from lsst.butler.datastore import PosixDatastore
 from lsst.butler.storageClass import SourceCatalog
 
+import datasetsHelper
+
 
 class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
 
@@ -70,13 +72,14 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         datastore = PosixDatastore()
 
     def testBasicPutGet(self):
-        datastore = PosixDatastore()
+        catalog = datasetsHelper.makeExampleCatalog()
+        datastore = PosixDatastore("./butler_repository", create=True)
         # Put
         storageClass = SourceCatalog
-        uri, _ = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        uri, _ = datastore.put(catalog, storageClass=storageClass, path="tester.fits", typeName=None)
         # Get
-        out = datastore.get(uri, storageClass=storageClass, parameters=None)
-        self._assertCatalogEqual(self.catalog, out)
+        catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
         # These should raise
         with self.assertRaises(ValueError):
             # non-existing file
@@ -86,13 +89,14 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
+        catalog = datasetsHelper.makeExampleCatalog()
         datastore = PosixDatastore()
         # Put
         storageClass = SourceCatalog
-        uri, _ = datastore.put(self.catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        uri, _ = datastore.put(catalog, storageClass=storageClass, path="tester.fits", typeName=None)
         # Get
-        out = datastore.get(uri, storageClass=storageClass, parameters=None)
-        self._assertCatalogEqual(self.catalog, out)
+        catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
         # Remove
         datastore.remove(uri)
         # Get should now fail
@@ -103,14 +107,15 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.remove(uri)
 
     def testTransfer(self):
+        catalog = datasetsHelper.makeExampleCatalog()
         path = "tester.fits"
         inputPosixDatastore = PosixDatastore("test_input_datastore", create=True)
         outputPosixDatastore = PosixDatastore("test_output_datastore", create=True)
         storageClass = SourceCatalog
-        inputUri, _ = inputPosixDatastore.put(self.catalog, storageClass, path)
+        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
-        outCatalog = outputPosixDatastore.get(outputUri, storageClass)
-        self._assertCatalogEqual(self.catalog, outCatalog)
+        catalogOut = outputPosixDatastore.get(outputUri, storageClass)
+        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
 
     def testConfig(self):
         datastore = PosixDatastore()

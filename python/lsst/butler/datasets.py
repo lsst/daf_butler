@@ -26,6 +26,10 @@ from .utils import slotValuesAreEqual, slotValuesToHash
 from .storageClass import StorageClass
 from .units import DataUnitTypeSet
 
+def _safeMakeMappingProxyType(data):
+    if data is None:
+        data = {}
+    return MappingProxyType(data)
 
 class DatasetType:
     """A named category of Datasets that defines how they are organized, related, and stored.
@@ -176,8 +180,8 @@ class DatasetRef(DatasetLabel):
         Read-only; update via `Quantum.addPredictedInput()`.
         May be an empty list if no provenance information is available.
         """
-        return MappingProxyType(self._predictedConsumers)
-
+        return _safeMakeMappingProxyType(self._predictedConsumers)
+        
     @property
     def actualConsumers(self):
         """A sequence of `Quantum` instances that list this `Dataset` in their `actualInputs` attributes.
@@ -185,7 +189,7 @@ class DatasetRef(DatasetLabel):
         Read-only; update via `Registry.markInputUsed()`.
         May be an empty list if no provenance information is available.
         """
-        return MappingProxyType(self._actualConsumers)
+        return _safeMakeMappingProxyType(self._actualConsumers)
 
     def makePath(self, run, template=None):
         """Construct the path part of a URI by filling in template with the Collection tag and the values in the units tuple.
@@ -218,7 +222,7 @@ class DatasetHandle(DatasetRef):
         self._predictedConsumers.update(ref.predictedConsumers)
         self._actualConsumers.update(ref.actualConsumers)
         self._uri = uri
-        self._components = MappingProxyType(components) if components else None
+        self._components = _safeMakeMappingProxyType(components)
         self._run = run
 
     @property
