@@ -35,104 +35,33 @@ from .fitsCatalogFormatter import FitsCatalogFormatter
 
 import yaml
 
-
-class PosixDatastoreConfig(DatastoreConfig):
-    """Holds configuration for a PosixDatastore.
-    """
-
-    class Data(yaml.YAMLObject):
-        """Internal datastructure to hold configuration data.
-        """
-
-        yaml_tag = u'!PosixDatastoreConfig'
-
-        def __init__(self):
-            self.formatters = {}
-
-    def __init__(self):
-        self._data = PosixDatastoreConfig.Data()
-        self._loadDefaultConfiguration()
-
-    def load(self, stream):
-        """Load configuration from an input stream.
-
-        Parameters
-        ----------
-        stream : `file`
-            The file stream to load from (e.g. from `open()`).
-        """
-        self._data = yaml.load(stream)
-
-    def dump(self, stream):
-        """Dump configuration to an output stream.
-
-        Parameters
-        stream : `file`
-            The file stream to dump to (e.g. from `open()`).
-        """
-        return yaml.dump(self._data, stream)
-
-    def loadFromFile(self, filename):
-        """Load configuration from a file.
-
-        Parameters
-        ----------
-        filename : `str`
-            The file to load from.
-        """
-        super().loadFromFile(filename)
-
-    def dumpToFile(self, filename):
-        """Dump configuration to a file.
-
-        Parameters
-        ----------
-        filename : `str`
-            The file to dump to.
-        """
-        super().dumpToFile(filename)
-
-    @property
-    def formatters(self):
-        return self._data.formatters
-
-    def _loadDefaultConfiguration(self):
-        self._data.formatters = {
-            "SourceCatalog": "lsst.butler.datastore.posix.fitsCatalogFormatter.FitsCatalogFormatter"}
-
-
 class PosixDatastore(Datastore):
     """Basic POSIX filesystem backed Datastore.
     """
 
-    def __init__(self, root="./", create=False, configFile=None):
+    def __init__(self, config):
         """Construct a Datastore backed by a POSIX filesystem.
 
         Parameters
         ----------
-        root : `str`
-            Root location.
-        create : `bool`
-            Create root location if it does not exist.
+        config : `DatastoreConfig` or `str`
+            Configuration.
 
         Raises
         ------
         `ValueError` : If root location does not exist and `create` is `False`.
         """
-        if not os.path.isdir(root):
-            if not create:
-                raise ValueError("No valid root at: {0}".format(root))
-            safeMakeDir(root)
-        self.root = root
+        super().__init__(config)
+        self.root = self.config['root']
+        if not os.path.isdir(self.root):
+            if not 'create' in self.config or not self.config['create']:
+                raise ValueError("No valid root at: {0}".format(self.root))
+            safeMakeDir(self.root)
 
         self.locationFactory = LocationFactory(self.root)
 
-        self.config = PosixDatastoreConfig()
-        if configFile:
-            self.config.loadFromFile(configFile)
-
         self.formatterFactory = FormatterFactory()
-        for storageClass, formatter in self.config.formatters.items():
+        for storageClass, formatter in self.config['formatters'].items():
             self.formatterFactory.registerFormatter(storageClass, formatter)
 
     def get(self, uri, storageClass, parameters=None):

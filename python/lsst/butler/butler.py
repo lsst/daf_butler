@@ -21,81 +21,52 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+from .config import Config
 from .datastore import Datastore
 from .registry import Registry
 from .datasets import DatasetLabel, DatasetHandle
 
 
-class ButlerConfig(object):
-    """Contains the configuration for a `Butler`.
-
-    Attributes
-    ----------
-    collection : `CollectionTag`
-        The input collection.
-    run : `Run`
-        The run used for all outputs.
-        May be ``None`` to construct a read-only Butler.
-        The `Run`s `CollectionTag` is always used as the input collection when a `Run` is provided.
-    templates : `dict`
-        Maps `DatasetType` names to path templates, used to override `DatasetType.template` as obtained from the `Registry` when present.
+class ButlerConfig(Config):
+    """Contains the configuration for a `Butler`
     """
-
-    def __init__(self, collection=None, run=None, templates=None):
-        """Constructor.
-
-        Parameters
-        ----------
-        collection : `CollectionTag`
-            The input collection.
-        run : `Run`
-            The run used for all outputs.
-            May be ``None`` to construct a read-only Butler.
-            The `Run`s `CollectionTag` is always used as the input collection when a `Run` is provided.
-        templates : `dict`
-            Maps `DatasetType` names to path templates, used to override `DatasetType.template` as obtained from the `Registry` when present.
-        """
-        assert collection or run
-        self.run = run
-        if run:
-            self.collection = run.tag
-        else:
-            self.collection = collection
-        self.templates = templates
-
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.validate()
+    
+    def validate(self):
+        for k in ['run', 'datastore.cls', 'registry.cls']:
+            if k not in self:
+                raise ValueError("Missing ButlerConfig parameter: {0}".format(k))
 
 class Butler(object):
     """Main entry point for the data access system.
 
     Attributes
     ----------
-    config : `ButlerConfiguration`
-        Configuration.
+    config : `str` or `ButlerConfiguration`
+        (filename to) configuration.
     datastore : `Datastore`
         Datastore to use for storage.
     registry : `Registry`
         Registry to use for lookups.
     """
 
-    def __init__(self, config, datastore, registry):
+    def __init__(self, config):
         """Constructor.
 
         Parameters
         ----------
         config : `ButlerConfiguration`
             Configuration.
-        datastore : `Datastore`
-            Datastore to use for storage.
-        registry : `Registry`
-            Registry to use for lookups.
         """
-        assert isinstance(config, ButlerConfig)
-        assert isinstance(datastore, Datastore)
-        assert isinstance(registry, Registry)
-        self.config = config
-        self.datastore = datastore
-        self.registry = registry
-
+        self.config = ButlerConfig(config)
+        self.datastore = Datastore.fromConfig(self.config)
+        self.registry = Registry.fromConfig(self.config)
+        self.run = self.registry.getRun(self.config['run'])
+        if self.run is None:
+            self.run = self.registry.makeRun(self.config['run'])
+        
     def getDirect(self, handle, parameters=None):
         """Load a `Dataset` or a slice thereof from a `DatasetHandle`.
 
@@ -136,7 +107,7 @@ class Butler(object):
             The requested `Dataset`.
         """
         assert isinstance(label, DatasetLabel)
-        handle = self.registry.find(self.config.collection, label)
+        handle = self.registry.find(self.run.tag, label)
         if handle:
             return self.getDirect(handle, parameters)
         else:
@@ -153,7 +124,7 @@ class Butler(object):
             The `Dataset` to store.
         producer : `Quantum`
             Identifies the producer of this `Dataset`.  May be ``None`` for some `Registries`.
-            ``producer.run`` must match ``self.config.run``.
+            ``producer.run`` must match ``self.config['run']``.
 
         Returns
         -------
@@ -161,7 +132,7 @@ class Butler(object):
             A handle that identifies the registered (and stored) dataset.
         """
         ref = self.registry.expand(label)
-        run = self.config.run
+        run = self.run
         assert(producer is None or run == producer.run)
         # template = self.config.templates.get(ref.type.name, None)
         # path = ref.makePath(run, template)
@@ -179,7 +150,7 @@ class Butler(object):
         ref : `DatasetRef`
             The `Dataset` that is a true dependency of ``quantum``.
         """
-        handle = self.registry.find(self.config.collection, ref)
+        handle = self.registry.find(self.run.tag, ref)
         self.registry.markInputUsed(handle, quantum)
 
     def unlink(self, *labels):
@@ -191,7 +162,7 @@ class Butler(object):
         labels : [`DatasetLabel`]
             List of labels for `Dataset`s to unlink.
         """
-        handles = [self.registry.find(self.config.collection, label)
+        handles = [self.registry.find(self.run.tag, label)
                    for label in labels]
-        for handle in self.registry.disassociate(self.config.collection, handles, remove=True):
+        for handle in self.registry.disassociate(self.run.tag, handles, remove=True):
             self.datastore.remove(handle.uri)
