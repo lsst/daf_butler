@@ -191,13 +191,15 @@ class DatasetRef(DatasetLabel):
         """
         return _safeMakeMappingProxyType(self._actualConsumers)
 
-    def makePath(self, run, template=None):
-        """Construct the path part of a URI by filling in template with the Collection tag and the values in the units tuple.
+    def makeStorageHint(self, run, template=None):
+        """Construct a storage hint by filling in template with the Collection tag and the values in the units tuple.
 
-        This is often just a storage hint since the `Datastore` will likely have to deviate from the provided path (in the case of an object-store for instance).
-        Although a `Dataset` may belong to multiple Collections, only the first Collection it is added to is used in its path.
+        Although a `Dataset` may belong to multiple Collections, only the one corresponding to its `Run` is used.
         """
-        raise NotImplementedError("TODO")
+        if template is None:
+            template = self.type.template
+        units = {unit.__class__.__name__: unit.value for unit in self.units}
+        return template.format(DatasetType=self.type.name, Run=run.tag, **units)
 
 
 class DatasetHandle(DatasetRef):
