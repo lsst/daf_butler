@@ -134,10 +134,8 @@ class Butler(object):
         ref = self.registry.expand(label)
         run = self.run
         assert(producer is None or run == producer.run)
-        # template = self.config.templates.get(ref.type.name, None)
-        # path = ref.makePath(run, template)
-        path = "temp.fits"  # TODO: Implement this!
-        uri, components = self.datastore.put(inMemoryDataset, ref.type.storageClass, path, ref.type.name)
+        storageHint = ref.makeStorageHint(run)
+        uri, components = self.datastore.put(inMemoryDataset, ref.type.storageClass, storageHint, ref.type.name)
         return self.registry.addDataset(ref, uri, components, producer=producer, run=run)
 
     def markInputUsed(self, quantum, ref):

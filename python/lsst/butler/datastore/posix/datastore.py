@@ -112,6 +112,9 @@ class PosixDatastore(Datastore):
         """
         formatter = self.formatterFactory.getFormatter(storageClass, typeName)
         location = self.locationFactory.fromPath(path)
+        storageDir = os.path.dirname(location.path)
+        if not os.path.isdir(storageDir):
+            safeMakeDir(storageDir)
         return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.type))
 
     def remove(self, uri):

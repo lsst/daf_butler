@@ -68,7 +68,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
                     registry.addDataUnit(unit)
                 obsBegin += datetime.timedelta(seconds=visitDuration)
 
-        datasetType = DatasetType("testdst", template=None, units=(
+        datasetType = DatasetType("testdst", template="{DatasetType}/{Camera}/{PhysicalSensor}/test.fits", units=(
             ObservedSensor, ), storageClass=SourceCatalog)
         registry.registerDatasetType(datasetType)
 
