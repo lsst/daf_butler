@@ -87,7 +87,7 @@ def run(filename=None, create=True, skipCamera=False, verbose=False):
     db = engine.connect()
     if verbose:
         db.set_trace_callback(print)
-    db.execute("INSERT INTO Run (run_id, registry_id, tag) VALUES (0, 1, 'ingest')")
+    db.execute("INSERT INTO Run (run_id, registry_id, collection) VALUES (0, 1, 'ingest')")
     loadTable(db, "DatasetType")
     loadTable(db, "DatasetTypeUnits")
     loadTable(db, "Dataset", extra={"unit_hash": "''"})

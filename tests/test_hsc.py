@@ -30,7 +30,7 @@ class TestDataTestCase(unittest.TestCase):
     """A test case for the ci_hsc Registry test data."""
 
     def setUp(self):
-        self.db = lsst.butler.ci_hsc.ingest.run("bla.db", create=True)
+        self.db = lsst.butler.ci_hsc.ingest.run(":memory:", create=True)
 
     def tearDown(self):
         self.db.close()

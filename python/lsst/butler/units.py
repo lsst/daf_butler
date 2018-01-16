@@ -52,7 +52,7 @@ class DataUnit(metaclass=DataUnitMeta):
 
     def invariantHash(self):
         """
-        Compute a hash that is invariant accross Python sessions, and hence can be stored in a database.
+        Compute a hash that is invariant across Python sessions, and hence can be stored in a database.
         """
         return sha512(b''.join(str(v).encode('utf-8') for v in self.pkey)).digest()
 
@@ -154,7 +154,7 @@ class DataUnitTypeSet(tuple):
 
     def invariantHash(self, values):
         """
-        Compute a hash that is invariant accross Python sessions, and hence can be stored in a database.
+        Compute a hash that is invariant across Python sessions, and hence can be stored in a database.
         """
         return sha512(b''.join(unit.invariantHash() for unit in values)).digest()
 

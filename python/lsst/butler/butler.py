@@ -107,7 +107,7 @@ class Butler(object):
             The requested `Dataset`.
         """
         assert isinstance(label, DatasetLabel)
-        handle = self.registry.find(self.run.tag, label)
+        handle = self.registry.find(self.run.collection, label)
         if handle:
             return self.getDirect(handle, parameters)
         else:
@@ -148,7 +148,7 @@ class Butler(object):
         ref : `DatasetRef`
             The `Dataset` that is a true dependency of ``quantum``.
         """
-        handle = self.registry.find(self.run.tag, ref)
+        handle = self.registry.find(self.run.collection, ref)
         self.registry.markInputUsed(handle, quantum)
 
     def unlink(self, *labels):
@@ -160,7 +160,7 @@ class Butler(object):
         labels : [`DatasetLabel`]
             List of labels for `Dataset`s to unlink.
         """
-        handles = [self.registry.find(self.run.tag, label)
+        handles = [self.registry.find(self.run.collection, label)
                    for label in labels]
-        for handle in self.registry.disassociate(self.run.tag, handles, remove=True):
+        for handle in self.registry.disassociate(self.run.collection, handles, remove=True):
             self.datastore.remove(handle.uri)
