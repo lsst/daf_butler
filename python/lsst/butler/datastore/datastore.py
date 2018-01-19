@@ -70,7 +70,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def put(self, inMemoryDataset, storageClass, path, typeName=None):
+    def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
 
         Parameters
@@ -79,8 +79,8 @@ class Datastore(metaclass=ABCMeta):
             The `Dataset` to store.
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
-        path : `str`
-            A `Path` that provides a hint that the `Datastore` may use as (part of) the URI.
+        storageHint : `str`
+            Provides a hint that the `Datastore` may use as (part of) the URI.
         typeName : `str`
             The `DatasetType` name, which may be used by this `Datastore` to override the
             default serialization format for the `StorageClass`.
@@ -115,7 +115,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def transfer(self, inputDatastore, inputUri, storageClass, path, typeName=None):
+    def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
         and store the result in this `Datastore`.
 
@@ -127,8 +127,8 @@ class Datastore(metaclass=ABCMeta):
             The `URI` of the `Dataset` in the input `Datastore`.
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
-        path : `str`
-            A `Path` that provides a hint that this `Datastore` may use as [part of] the `URI`.
+        storageHint : `str`
+            Provides a hint that this `Datastore` may use as [part of] the `URI`.
         typeName : `str`
             The `DatasetType` name, which may be used by this `Datastore` to override the default serialization format for the `StorageClass`.
 

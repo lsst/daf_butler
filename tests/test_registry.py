@@ -142,14 +142,14 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(registry.getDatasetType('some_invalid_name'))
 
     def testAddDataset(self):
-        tag = "test_collection"
+        collection = "test_collection"
         datasetTypeName = "test_dataset"
         uri = "http://ls.st/mydummy"
         units = self._makeDatasetUnits(
             cameraName="DummyCam", abstractFilterName="i", physicalFilterName="dummy_i")
 
         registry = Registry(self.configFile)
-        run = registry.makeRun(tag)
+        run = registry.makeRun(collection)
         for unit in units:
             registry.addDataUnit(unit)
 
@@ -163,55 +163,55 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         # Should not be able to add the same DatasetRef twice
         with self.assertRaises(ValueError):
             registry.addDataset(datasetRef, uri, components=None, run=run, producer=None)
-        datasetHandleOut = registry.find(tag, datasetRef)
+        datasetHandleOut = registry.find(collection, datasetRef)
         self.assertEqual(datasetHandleOut, datasetHandle)
-        # Querying with other tag should return None
-        self.assertIsNone(registry.find("unknown_tag", datasetRef))
+        # Querying with other collection should return None
+        self.assertIsNone(registry.find("unknown_collection", datasetRef))
         # Querying with other DataUnits should return None
         camera2 = Camera("some_other_camera")
         registry.addDataUnit(camera2)
         units2 = {unit.__class__.__name__: unit for unit in units}
         units2['Camera'] = camera2
         datasetRef2 = DatasetRef(datasetType, units2)
-        self.assertIsNone(registry.find(tag, datasetRef2))
+        self.assertIsNone(registry.find(collection, datasetRef2))
 
-        self._testAssociations(registry, datasetRef, tag)
+        self._testAssociations(registry, datasetRef, collection)
 
-    def _testAssociations(self, registry, datasetRef, originalTag):
-        newTag = "some_new_tag"
-        datasetHandle = registry.find(originalTag, datasetRef)
+    def _testAssociations(self, registry, datasetRef, originalCollection):
+        newCollection = "some_new_collection"
+        datasetHandle = registry.find(originalCollection, datasetRef)
         self.assertIsInstance(datasetHandle, DatasetHandle)
 
-        registry.associate(newTag, (datasetHandle, ))
-        tmp = registry.find(newTag, datasetRef)
+        registry.associate(newCollection, (datasetHandle, ))
+        tmp = registry.find(newCollection, datasetRef)
         self.assertEqual(tmp, datasetHandle)
 
-        registry.disassociate(newTag, (datasetHandle, ), remove=False)
-        self.assertIsNone(registry.find(newTag, datasetRef))
+        registry.disassociate(newCollection, (datasetHandle, ), remove=False)
+        self.assertIsNone(registry.find(newCollection, datasetRef))
 
-        # Should still be associated with its original tag
-        self.assertEqual(registry.find(originalTag, datasetRef), datasetHandle)
+        # Should still be associated with its original collection
+        self.assertEqual(registry.find(originalCollection, datasetRef), datasetHandle)
 
     def testMakeRun(self):
-        tag = "testing"
+        collection = "testing"
         registry = Registry(self.configFile)
-        run = registry.makeRun(tag)
+        run = registry.makeRun(collection)
         self.assertIsInstance(run, Run)
-        self.assertEqual(run.tag, tag)
+        self.assertEqual(run.collection, collection)
 
     def testUpdateRun(self):
         # Not yet implemented in prototype
         pass
 
     def testGetRun(self):
-        tag1 = "testing1"
-        tag2 = "testing2"
+        collection1 = "testing1"
+        collection2 = "testing2"
         registry = Registry(self.configFile)
-        run1 = registry.makeRun(tag1)
-        run2 = registry.makeRun(tag2)
+        run1 = registry.makeRun(collection1)
+        run2 = registry.makeRun(collection2)
         self.assertNotEqual(run1, run2)
-        self.assertEqual(registry.getRun(tag1), run1)
-        self.assertEqual(registry.getRun(tag2), run2)
+        self.assertEqual(registry.getRun(collection1), run1)
+        self.assertEqual(registry.getRun(collection2), run2)
         self.assertIsNone(registry.getRun("noexist"))
 
     def testAddQuantum(self):

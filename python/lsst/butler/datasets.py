@@ -192,14 +192,14 @@ class DatasetRef(DatasetLabel):
         return _safeMakeMappingProxyType(self._actualConsumers)
 
     def makeStorageHint(self, run, template=None):
-        """Construct a storage hint by filling in template with the Collection tag and the values in the units tuple.
+        """Construct a storage hint by filling in template with the Collection collection and the values in the units tuple.
 
         Although a `Dataset` may belong to multiple Collections, only the one corresponding to its `Run` is used.
         """
         if template is None:
             template = self.type.template
         units = {unit.__class__.__name__: unit.value for unit in self.units}
-        return template.format(DatasetType=self.type.name, Run=run.tag, **units)
+        return template.format(DatasetType=self.type.name, Run=run.collection, **units)
 
 
 class DatasetHandle(DatasetRef):

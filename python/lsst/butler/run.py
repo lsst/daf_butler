@@ -32,16 +32,16 @@ class Run:
         cls._currentId += 1
         return cls._currentId
 
-    __slots__ = ("_runId", "_registryId", "_tag", "_environmentId", "_pipelineId")
+    __slots__ = ("_runId", "_registryId", "_collection", "_environment", "_pipeline")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
-    def __init__(self, runId, registryId, tag, environmentId, pipelineId):
+    def __init__(self, runId, registryId, collection, environment, pipeline):
         self._runId = runId
         self._registryId = registryId
-        self._tag = tag
-        self._environmentId = environmentId
-        self._pipelineId = pipelineId
+        self._collection = collection
+        self._environment = environment
+        self._pipeline = pipeline
 
     @property
     def pkey(self):
@@ -56,13 +56,13 @@ class Run:
         return self._registryId
 
     @property
-    def tag(self):
-        return self._tag
+    def collection(self):
+        return self._collection
 
     @property
-    def environmentId(self):
-        return self._environmentId
+    def environment(self):
+        return self._environment
 
     @property
-    def pipelineId(self):
-        return self._pipelineId
+    def pipeline(self):
+        return self._pipeline

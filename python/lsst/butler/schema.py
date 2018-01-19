@@ -68,7 +68,7 @@ DatasetTypeUnitsTable = \
 
 DatasetCollectionsTable = \
     Table('DatasetCollections', metadata,
-          Column('tag', String, primary_key=True, nullable=False),
+          Column('collection', String, primary_key=True, nullable=False),
           Column('dataset_id', Integer, primary_key=True, nullable=False),
           Column('registry_id', Integer, primary_key=True, nullable=False),
           ForeignKeyConstraint(['dataset_id', 'registry_id'], [
@@ -79,7 +79,7 @@ RunTable = \
     Table('Run', metadata,
           Column('run_id', Integer, primary_key=True, nullable=False),
           Column('registry_id', Integer, primary_key=True, nullable=False),
-          Column('tag', String),
+          Column('collection', String),
           Column('environment_id', Integer),
           Column('pipeline_id', Integer),
           ForeignKeyConstraint(['environment_id', 'registry_id'], [
@@ -122,7 +122,7 @@ AbstractFilterTable = \
 CameraTable = \
     Table('Camera', metadata,
           Column('camera_name', String, primary_key=True, nullable=False),
-          Column('module', String, primary_key=True, nullable=False)
+          Column('module', String, nullable=False)
           )
 
 PhysicalFilterTable = \
@@ -137,8 +137,8 @@ PhysicalFilterTable = \
 PhysicalSensorTable = \
     Table('PhysicalSensor', metadata,
           Column('physical_sensor_number', String, primary_key=True, nullable=False),
-          Column('name', String, primary_key=True, nullable=False),
-          Column('camera_name', String, ForeignKey('Camera.camera_name'), nullable=False),
+          Column('name', String),
+          Column('camera_name', String, ForeignKey('Camera.camera_name'), primary_key=True, nullable=False),
           Column('group', String),
           Column('purpose', String)
           )
@@ -163,8 +163,10 @@ ObservedSensorTable = \
               'PhysicalSensor.physical_sensor_number'), primary_key=True, nullable=False),
           Column('camera_name', String, ForeignKey(
               'Camera.camera_name'), primary_key=True, nullable=False),
-          Column('region', LargeBinary)
-          )
+          Column('region', LargeBinary),
+          ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
+          ForeignKeyConstraint(['physical_sensor_number', 'camera_name'], ['PhysicalSensor.physical_sensor_number', 'PhysicalSensor.camera_name'])
+    )
 
 SnapTable = \
     Table('Snap', metadata,

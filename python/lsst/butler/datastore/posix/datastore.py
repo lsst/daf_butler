@@ -87,7 +87,7 @@ class PosixDatastore(Datastore):
             raise ValueError("No such file: {0}".format(location.uri))
         return formatter.read(FileDescriptor(location, storageClass.type, parameters))
 
-    def put(self, inMemoryDataset, storageClass, path, typeName=None):
+    def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
 
         Parameters
@@ -96,8 +96,8 @@ class PosixDatastore(Datastore):
             The `Dataset` to store.
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
-        path : `str`
-            A `Path` that provides a hint that the `Datastore` may use as (part of) the URI.
+        storageHint : `str`
+            Provides a hint that the `Datastore` may use as (part of) the URI.
         typeName : `str`
             The `DatasetType` name, which may be used by this `Datastore` to override the
             default serialization format for the `StorageClass`.
@@ -111,7 +111,7 @@ class PosixDatastore(Datastore):
             The latter will be empty if the `Dataset` is not a composite.
         """
         formatter = self.formatterFactory.getFormatter(storageClass, typeName)
-        location = self.locationFactory.fromPath(path)
+        location = self.locationFactory.fromPath(storageHint)
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
             safeMakeDir(storageDir)
@@ -133,7 +133,7 @@ class PosixDatastore(Datastore):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
         os.remove(location.path)
 
-    def transfer(self, inputDatastore, inputUri, storageClass, path, typeName=None):
+    def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
         and store the result in this `Datastore`.
 
@@ -145,8 +145,8 @@ class PosixDatastore(Datastore):
             The `URI` of the `Dataset` in the input `Datastore`.
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
-        path : `str`
-            A `Path` that provides a hint that this `Datastore` may use as [part of] the `URI`.
+        storageHint : `str`
+            Provides a hint that this `Datastore` may use as [part of] the `URI`.
         typeName : `str`
             The `DatasetType` name, which may be used by this `Datastore` to override the default serialization format for the `StorageClass`.
 
@@ -160,4 +160,4 @@ class PosixDatastore(Datastore):
         """
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(inputUri, storageClass)
-        return self.put(inMemoryDataset, storageClass, path, typeName)
+        return self.put(inMemoryDataset, storageClass, storageHint, typeName)

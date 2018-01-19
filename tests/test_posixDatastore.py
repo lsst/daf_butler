@@ -75,7 +75,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = SourceCatalog
-        uri, _ = datastore.put(catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
@@ -92,7 +92,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = SourceCatalog
-        uri, _ = datastore.put(catalog, storageClass=storageClass, path="tester.fits", typeName=None)
+        uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)

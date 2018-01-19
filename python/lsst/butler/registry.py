@@ -155,7 +155,7 @@ class Registry:
         assert isinstance(run, Run)
         assert producer is None or isinstance(producer, Quantum)
 
-        if self.find(run.tag, ref) is not None:
+        if self.find(run.collection, ref) is not None:
             raise ValueError("dupplicate dataset {0}".format(str(ref)))
 
         datasetId = DatasetRef.getNewId()
@@ -186,16 +186,16 @@ class Registry:
             if components:
                 raise NotImplementedError
 
-        self.associate(run.tag, datasetHandle)
+        self.associate(run.collection, datasetHandle)
 
         return datasetHandle
 
-    def associate(self, tag, handles):
+    def associate(self, collection, handles):
         """Add existing `Dataset`s to a Collection, possibly creating the Collection in the process.
 
         Parameters
         ----------
-        tag: `str`
+        collection: `str`
             Indicates the Collection the `Dataset`s should be associated with.
         handles: `[DatasetHandle]`
             A `list` of `DatasetHandle` instances that already exist in this `Registry`.
@@ -204,18 +204,18 @@ class Registry:
             handles = (handles, )
         with self.engine.begin() as connection:
             connection.execute(DatasetCollectionsTable.insert(),
-                               [{'tag': tag, 'dataset_id': handle.datasetId, 'registry_id': handle.registryId}
+                               [{'collection': collection, 'dataset_id': handle.datasetId, 'registry_id': handle.registryId}
                                    for handle in handles]
                                )
 
-    def disassociate(self, tag, handles, remove=True):
+    def disassociate(self, collection, handles, remove=True):
         """Remove existing `Dataset`s from a Collection.
 
-        ``tag`` and ``handle`` combinations that are not currently associated are silently ignored.
+        ``collection`` and ``handle`` combinations that are not currently associated are silently ignored.
 
         Parameters
         ----------
-        tag: `str`
+        collection: `str`
             The Collection the `Dataset`s should no longer be associated with.
         handles: `[DatasetHandle]`
             A `list` of `DatasetHandle` instances that already exist in this `Registry`.
@@ -232,7 +232,7 @@ class Registry:
         with self.engine.begin() as connection:
             for handle in handles:
                 connection.execute(DatasetCollectionsTable.delete().where(and_(
-                    DatasetCollectionsTable.c.tag == tag,
+                    DatasetCollectionsTable.c.collection == collection,
                     DatasetCollectionsTable.c.dataset_id == handle.datasetId,
                     DatasetCollectionsTable.c.registry_id == handle.registryId
                 )))
@@ -254,28 +254,28 @@ class Registry:
                         pass
         return deletedDatasets
 
-    def makeRun(self, tag):
+    def makeRun(self, collection):
         """Create a new `Run` in the `Registry` and return it.
 
         Parameters
         ----------
-        tag: `str`
-            The Collection tag used to identify all inputs and outputs of the `Run`.
+        collection: `str`
+            The Collection collection used to identify all inputs and outputs of the `Run`.
 
         Returns
         -------
         run: `Run`
             A new `Run` instance.
         """
-        run = Run(runId=Run.getNewId(), registryId=self.id, tag=tag, environmentId=None, pipelineId=None)
+        run = Run(runId=Run.getNewId(), registryId=self.id, collection=collection, environment=None, pipeline=None)
 
         with self.engine.begin() as connection:
             insert = RunTable.insert().values(
                 run_id=run.runId,
                 registry_id=run.registryId,
-                tag=run.tag,
-                environment_id=run.environmentId,
-                pipeline_id=run.pipelineId
+                collection=run.collection,
+                environment_id=run.environment,
+                pipeline_id=run.pipeline
             )
             connection.execute(insert)
 
@@ -291,39 +291,39 @@ class Registry:
             The `Run` to update with the new values filled in.
         """
         with self.engine.begin() as connection:
-            # TODO: should it also update the tag?
+            # TODO: should it also update the collection?
             connection.execute(RunTable.update().where(and_(RunTable.c.run_id == run.runId, RunTable.c.registry_id == run.registryId)).values(
-                environment_id = run.environmentId, pipeline_id = run.pipelineId))
+                environment_id = run.environment, pipeline_id = run.pipeline))
 
-    def getRun(self, tag=None, id=None):
+    def getRun(self, collection=None, id=None):
         """
-        Get a :ref:`Run` corresponding to it's tag or id
+        Get a :ref:`Run` corresponding to it's collection or id
 
         Parameters
         ----------
-        tag : `str`
-            Collection tag
+        collection : `str`
+            Collection collection
         id : `int`, optional
-            If given, lookup by id instead and ignore `tag`.
+            If given, lookup by id instead and ignore `collection`.
         """
-        if tag is None and id is None:
-            raise ValueError("Either tag or id needs to be given")
+        if collection is None and id is None:
+            raise ValueError("Either collection or id needs to be given")
         with self.engine.begin() as connection:
             if id is not None:
                 result = connection.execute(RunTable.select().where(
                     and_(RunTable.c.run_id == id, RunTable.c.registry_id == self.id))).fetchone()
             else:
                 result = connection.execute(RunTable.select().where(
-                    and_(RunTable.c.tag == tag, RunTable.c.registry_id == self.id))).fetchone()
+                    and_(RunTable.c.collection == collection, RunTable.c.registry_id == self.id))).fetchone()
 
             if result:
                 runId = result[RunTable.c.run_id]
                 registryId = result[RunTable.c.registry_id]
-                tag = result[RunTable.c.tag]
-                environmentId = result[RunTable.c.environment_id]
-                pipelineId = result[RunTable.c.pipeline_id]
+                collection = result[RunTable.c.collection]
+                environment = result[RunTable.c.environment_id]
+                pipeline = result[RunTable.c.pipeline_id]
 
-                return Run(runId, self.id, tag, environmentId, pipelineId)
+                return Run(runId, self.id, collection, environment, pipeline)
             else:
                 return None
 
@@ -455,7 +455,7 @@ class Registry:
 
         return DatasetRef(datasetType, dataUnits)
 
-    def find(self, tag, label):
+    def find(self, collection, label):
         """Look up the location of the `Dataset` associated with the given `DatasetLabel`.
 
         This can be used to obtain the URI that permits the `Dataset` to be read from a `Datastore`.
@@ -463,7 +463,7 @@ class Registry:
 
         Parameters
         ----------
-        tag: `str`
+        collection: `str`
             Identifies the Collection to search.
         label: `DatasetLabel`
             Identifies the `Dataset`.
@@ -479,7 +479,7 @@ class Registry:
 
         with self.engine.begin() as connection:
             s = select([DatasetTable]).select_from(DatasetTable.join(DatasetCollectionsTable)).where(
-                and_(DatasetTable.c.unit_hash == unitHash, DatasetCollectionsTable.c.tag == tag))
+                and_(DatasetTable.c.unit_hash == unitHash, DatasetCollectionsTable.c.collection == collection))
             result = connection.execute(s).fetchall()
 
             if len(result) == 1:
@@ -496,12 +496,12 @@ class Registry:
             else:
                 raise NotImplementedError("Cannot handle collisions")
 
-    def subset(self, tag, expr, datasetTypes):
+    def subset(self, collection, expr, datasetTypes):
         """Create a new `Collection` by subsetting an existing one.
 
         Parameters
         ----------
-        tag: `str`
+        collection: `str`
             Indicates the input Collection to subset.
         expr: `str`
             An expression that limits the `DataUnit`s and (indirectly) `Dataset`s in the subset.
@@ -510,12 +510,12 @@ class Registry:
 
         Returns
         -------
-        tag: `str`
-            The newly created collection tag.
+        collection: `str`
+            The newly created collection.
         """
         raise NotImplementedError
 
-    def merge(self, outputTag, inputTags):
+    def merge(self, outputCollection, inputCollections):
         """Create a new Collection from a series of existing ones.
 
         Entries earlier in the list will be used in preference to later entries when both contain
@@ -523,20 +523,20 @@ class Registry:
 
         Parameters
         ----------
-        outputTag: `str`
-            tag to use for the new Collection.
-        inputTags: `[str]`
+        outputCollection: `str`
+            collection to use for the new Collection.
+        inputCollections: `[str]`
             A `list` of Collections to combine.
         """
         raise NotImplementedError
 
-    def makeDataGraph(self, tags, expr, neededDatasetTypes, futureDatasetTypes):
+    def makeDataGraph(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of `DatasetType`s and return a `QuantumGraph`.
 
         Parameters
         ----------
-        tags: `[str]`
-            An ordered `list` of tags indicating the Collections to search for `Dataset`s.
+        collections: `[str]`
+            An ordered `list` of collections indicating the Collections to search for `Dataset`s.
         expr: `str`
             An expression that limits the `DataUnit`s and (indirectly) the `Dataset`s returned.
         neededDatasetTypes: `[DatasetType]`
@@ -585,21 +585,21 @@ class Registry:
         """
         raise NotImplementedError
 
-    def import_(self, tables, tag):
+    def import_(self, tables, collection):
         """Import (previously exported) contents into the (possibly empty) `Registry`.
 
         Parameters
         ----------
         ts: `TableSet`
             Contains the previously exported content.
-        tag: `str`
-            An additional Collection tag assigned to the newly imported `Dataset`s.
+        collection: `str`
+            An additional Collection collection assigned to the newly imported `Dataset`s.
         """
         raise NotImplementedError
 
-    def transfer(self, src, expr, tag):
+    def transfer(self, src, expr, collection):
         """Transfer contents from a source `Registry`, limited to those reachable from the `Dataset`s
-        identified by the expression `expr`, into this `Registry` and tag them with a Collection.
+        identified by the expression `expr`, into this `Registry` and collection them with a Collection.
 
         Parameters
         ----------
@@ -607,7 +607,7 @@ class Registry:
             The source `Registry`.
         expr: `str`
             An expression that limits the `DataUnit`s and (indirectly) the `Dataset`s transferred.
-        tag: `str`
-            An additional Collection tag assigned to the newly imported `Dataset`s.
+        collection: `str`
+            An additional Collection collection assigned to the newly imported `Dataset`s.
         """
-        self.import_(src.export(expr), tag)
+        self.import_(src.export(expr), collection)
