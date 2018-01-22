@@ -21,49 +21,35 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-import os
-
-from lsst.daf.persistence.safeFileIo import safeMakeDir
-
-from ..datastore import DatastoreConfig, Datastore
-from ...storageClass import StorageClass
-from ...datasets import DatasetType
-from .location import Location, LocationFactory
-from .fileDescriptor import FileDescriptor
-from .formatter import FormatterFactory
-from .fitsCatalogFormatter import FitsCatalogFormatter
-
 import yaml
 
-class PosixDatastore(Datastore):
-    """Basic POSIX filesystem backed Datastore.
-    """
+from lsst.daf.persistence import doImport
 
+from abc import ABCMeta, abstractmethod, abstractproperty
+from .config import Config
+
+class DatastoreConfig(Config):
+    pass
+
+class Datastore(metaclass=ABCMeta):
+    """Datastore interface.
+    """
+    @staticmethod
+    def fromConfig(config):
+        cls = doImport(config['datastore.cls'])
+        return cls(config=config)
+    
     def __init__(self, config):
-        """Construct a Datastore backed by a POSIX filesystem.
+        """Constructor
 
         Parameters
         ----------
         config : `DatastoreConfig` or `str`
-            Configuration.
-
-        Raises
-        ------
-        `ValueError` : If root location does not exist and `create` is `False`.
+            Load configuration
         """
-        super().__init__(config)
-        self.root = self.config['root']
-        if not os.path.isdir(self.root):
-            if not 'create' in self.config or not self.config['create']:
-                raise ValueError("No valid root at: {0}".format(self.root))
-            safeMakeDir(self.root)
+        self.config = DatastoreConfig(config)['datastore']
 
-        self.locationFactory = LocationFactory(self.root)
-
-        self.formatterFactory = FormatterFactory()
-        for storageClass, formatter in self.config['formatters'].items():
-            self.formatterFactory.registerFormatter(storageClass, formatter)
-
+    @abstractmethod
     def get(self, uri, storageClass, parameters=None):
         """Load an `InMemoryDataset` from the store.
 
@@ -81,12 +67,9 @@ class PosixDatastore(Datastore):
         inMemoryDataset : `InMemoryDataset`
             Requested `Dataset` or slice thereof as an `InMemoryDataset`.
         """
-        formatter = self.formatterFactory.getFormatter(storageClass)
-        location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.path):
-            raise ValueError("No such file: {0}".format(location.uri))
-        return formatter.read(FileDescriptor(location, storageClass.type, parameters))
+        raise NotImplementedError("Must be implemented by subclass")
 
+    @abstractmethod
     def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
 
@@ -110,13 +93,9 @@ class PosixDatastore(Datastore):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
-        location = self.locationFactory.fromPath(storageHint)
-        storageDir = os.path.dirname(location.path)
-        if not os.path.isdir(storageDir):
-            safeMakeDir(storageDir)
-        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.type))
+        raise NotImplementedError("Must be implemented by subclass")
 
+    @abstractmethod
     def remove(self, uri):
         """Indicate to the Datastore that a `Dataset` can be removed.
 
@@ -127,12 +106,15 @@ class PosixDatastore(Datastore):
 
         .. note::
             Some Datastores may implement this method as a silent no-op to disable `Dataset` deletion through standard interfaces.
+        
+        Raises
+        ------
+        e : `FileNotFoundError`
+            When `Dataset` does not exist.
         """
-        location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.path):
-            raise FileNotFoundError("No such file: {0}".format(location.uri))
-        os.remove(location.path)
+        raise NotImplementedError("Must be implemented by subclass")
 
+    @abstractmethod
     def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
         and store the result in this `Datastore`.
@@ -158,6 +140,4 @@ class PosixDatastore(Datastore):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        assert inputDatastore is not self  # unless we want it for renames?
-        inMemoryDataset = inputDatastore.get(inputUri, storageClass)
-        return self.put(inMemoryDataset, storageClass, storageHint, typeName)
+        raise NotImplementedError("Must be implemented by subclass")

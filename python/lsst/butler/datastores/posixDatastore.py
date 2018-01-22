@@ -21,35 +21,49 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+import os
+
+from lsst.daf.persistence.safeFileIo import safeMakeDir
+
+from lsst.butler.core.datastore import DatastoreConfig, Datastore
+from lsst.butler.core.storageClass import StorageClass
+from lsst.butler.core.datasets import DatasetType
+from lsst.butler.core.location import Location, LocationFactory
+from lsst.butler.core.fileDescriptor import FileDescriptor
+from lsst.butler.core.formatter import FormatterFactory
+from lsst.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
+
 import yaml
 
-from lsst.daf.persistence import doImport
-
-from abc import ABCMeta, abstractmethod, abstractproperty
-from ..config import Config
-
-class DatastoreConfig(Config):
-    pass
-
-class Datastore(metaclass=ABCMeta):
-    """Datastore interface.
+class PosixDatastore(Datastore):
+    """Basic POSIX filesystem backed Datastore.
     """
-    @staticmethod
-    def fromConfig(config):
-        cls = doImport(config['datastore.cls'])
-        return cls(config=config)
-    
+
     def __init__(self, config):
-        """Constructor
+        """Construct a Datastore backed by a POSIX filesystem.
 
         Parameters
         ----------
         config : `DatastoreConfig` or `str`
-            Load configuration
-        """
-        self.config = DatastoreConfig(config)['datastore']
+            Configuration.
 
-    @abstractmethod
+        Raises
+        ------
+        `ValueError` : If root location does not exist and `create` is `False`.
+        """
+        super().__init__(config)
+        self.root = self.config['root']
+        if not os.path.isdir(self.root):
+            if not 'create' in self.config or not self.config['create']:
+                raise ValueError("No valid root at: {0}".format(self.root))
+            safeMakeDir(self.root)
+
+        self.locationFactory = LocationFactory(self.root)
+
+        self.formatterFactory = FormatterFactory()
+        for storageClass, formatter in self.config['formatters'].items():
+            self.formatterFactory.registerFormatter(storageClass, formatter)
+
     def get(self, uri, storageClass, parameters=None):
         """Load an `InMemoryDataset` from the store.
 
@@ -67,9 +81,12 @@ class Datastore(metaclass=ABCMeta):
         inMemoryDataset : `InMemoryDataset`
             Requested `Dataset` or slice thereof as an `InMemoryDataset`.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        formatter = self.formatterFactory.getFormatter(storageClass)
+        location = self.locationFactory.fromUri(uri)
+        if not os.path.exists(location.path):
+            raise ValueError("No such file: {0}".format(location.uri))
+        return formatter.read(FileDescriptor(location, storageClass.type, parameters))
 
-    @abstractmethod
     def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
 
@@ -93,9 +110,13 @@ class Datastore(metaclass=ABCMeta):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
+        location = self.locationFactory.fromPath(storageHint)
+        storageDir = os.path.dirname(location.path)
+        if not os.path.isdir(storageDir):
+            safeMakeDir(storageDir)
+        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.type))
 
-    @abstractmethod
     def remove(self, uri):
         """Indicate to the Datastore that a `Dataset` can be removed.
 
@@ -106,15 +127,12 @@ class Datastore(metaclass=ABCMeta):
 
         .. note::
             Some Datastores may implement this method as a silent no-op to disable `Dataset` deletion through standard interfaces.
-        
-        Raises
-        ------
-        e : `FileNotFoundError`
-            When `Dataset` does not exist.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        location = self.locationFactory.fromUri(uri)
+        if not os.path.exists(location.path):
+            raise FileNotFoundError("No such file: {0}".format(location.uri))
+        os.remove(location.path)
 
-    @abstractmethod
     def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
         and store the result in this `Datastore`.
@@ -140,4 +158,6 @@ class Datastore(metaclass=ABCMeta):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        assert inputDatastore is not self  # unless we want it for renames?
+        inMemoryDataset = inputDatastore.get(inputUri, storageClass)
+        return self.put(inMemoryDataset, storageClass, storageHint, typeName)

@@ -21,10 +21,10 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-from .config import Config
-from .datastore import Datastore
-from .registry import Registry
-from .datasets import DatasetLabel, DatasetHandle
+from .core.config import Config
+from .core.datastore import Datastore
+from .core.registry import Registry
+from .core.datasets import DatasetLabel, DatasetHandle
 
 
 class ButlerConfig(Config):

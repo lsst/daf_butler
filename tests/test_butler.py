@@ -27,12 +27,12 @@ import datetime
 
 import lsst.utils.tests
 from lsst.butler.butler import ButlerConfig, Butler
-from lsst.butler.registry import Registry
-from lsst.butler.datastore import PosixDatastore
+from lsst.butler.core.registry import Registry
+from lsst.butler.datastores.posixDatastore import PosixDatastore
 
-from lsst.butler.datasets import DatasetType, DatasetLabel
-from lsst.butler.units import Camera, AbstractFilter, PhysicalFilter, PhysicalSensor, Visit, ObservedSensor
-from lsst.butler.storageClass import SourceCatalog
+from lsst.butler.core.datasets import DatasetType, DatasetLabel
+from lsst.butler.core.units import Camera, AbstractFilter, PhysicalFilter, PhysicalSensor, Visit, ObservedSensor
+from lsst.butler.core.storageClass import SourceCatalog
 
 import datasetsHelper
 

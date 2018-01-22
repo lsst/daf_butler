@@ -25,8 +25,8 @@ from abc import ABCMeta, abstractmethod
 
 from lsst.daf.persistence import doImport
 
-from ...storageClass import StorageClass
-from ...datasets import DatasetType
+from .storageClass import StorageClass
+from .datasets import DatasetType
 
 
 class Formatter(object, metaclass=ABCMeta):
