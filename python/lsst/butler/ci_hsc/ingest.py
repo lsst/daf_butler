@@ -8,8 +8,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from . import hsc
-from .. import units
-from ..schema import metadata
+from lsst.butler.core import units
+from lsst.butler.core.schema import metadata
 
 
 CASTERS = {

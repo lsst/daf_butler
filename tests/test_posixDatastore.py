@@ -27,8 +27,8 @@ import unittest
 import lsst.utils.tests
 import lsst.afw.table
 
-from lsst.butler.datastore import PosixDatastore, DatastoreConfig
-from lsst.butler.storageClass import SourceCatalog
+from lsst.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from lsst.butler.core.storageClass import SourceCatalog
 
 import datasetsHelper
 

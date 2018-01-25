@@ -27,12 +27,12 @@ import datetime
 from collections import OrderedDict
 
 import lsst.utils.tests
-from lsst.butler.registry import Registry
-from lsst.butler.datasets import DatasetType, DatasetRef, DatasetLabel, DatasetHandle
-from lsst.butler.run import Run
-from lsst.butler.quantum import Quantum
-from lsst.butler.units import DataUnitTypeSet, Camera, AbstractFilter, PhysicalFilter, PhysicalSensor, Visit, ObservedSensor, Snap, VisitRange, SkyMap, Tract, Patch
-from lsst.butler.storageClass import Image
+from lsst.butler.registries.sqlRegistry import SqlRegistry as Registry
+from lsst.butler.core.datasets import DatasetType, DatasetRef, DatasetLabel, DatasetHandle
+from lsst.butler.core.run import Run
+from lsst.butler.core.quantum import Quantum
+from lsst.butler.core.units import DataUnitTypeSet, Camera, AbstractFilter, PhysicalFilter, PhysicalSensor, Visit, ObservedSensor, Snap, VisitRange, SkyMap, Tract, Patch
+from lsst.butler.core.storageClass import Image
 
 
 class RegistryTestCase(lsst.utils.tests.TestCase):

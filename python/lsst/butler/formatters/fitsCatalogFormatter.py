@@ -21,8 +21,8 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-from .formatter import Formatter
-from .fileDescriptor import FileDescriptor
+from lsst.butler.core.formatter import Formatter
+from lsst.butler.core.fileDescriptor import FileDescriptor
 
 
 class FitsCatalogFormatter(Formatter):

@@ -3,7 +3,7 @@ import os
 
 import numpy as np
 
-from ..units import Camera, PhysicalSensor, PhysicalFilter, AbstractFilter
+from lsst.butler.core.units import Camera, PhysicalSensor, PhysicalFilter, AbstractFilter
 
 
 class HyperSuprimeCam(Camera):
