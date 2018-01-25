@@ -8,8 +8,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from . import hsc
-from lsst.butler.core import units
-from lsst.butler.core.schema import metadata
+from lsst.daf.butler.core import units
+from lsst.daf.butler.core.schema import metadata
 
 
 CASTERS = {
@@ -22,7 +22,7 @@ CASTERS = {
 
 DATA_ROOT = os.path.join(
     os.path.split(__file__)[0],
-    "../../../../tests/data/ci_hsc"
+    "../../../../../tests/data/ci_hsc"
 )
 
 
