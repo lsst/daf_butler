@@ -21,6 +21,7 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+import lsst.afw.table
 
 class StorageClassMeta(type):
 
@@ -70,3 +71,9 @@ class Exposure(StorageClass):
 
 class Catalog(StorageClass):
     name = "Catalog"
+    type = None  # Catalog is abstract (I think)
+
+
+class SourceCatalog(StorageClass):
+    name = "SourceCatalog"
+    type = lsst.afw.table.SourceCatalog
