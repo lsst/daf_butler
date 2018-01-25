@@ -3,6 +3,7 @@ setupRequired(sqlalchemy)
 setupRequired(numpy)
 setupRequired(scons)
 setupRequired(sconsUtils)
+setupRequired(afw)
 
 envPrepend(LD_LIBRARY_PATH, ${PRODUCT_DIR}/lib)
 envPrepend(DYLD_LIBRARY_PATH, ${PRODUCT_DIR}/lib)
