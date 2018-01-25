@@ -25,13 +25,13 @@ import os
 
 from lsst.daf.persistence.safeFileIo import safeMakeDir
 
-from lsst.butler.core.datastore import DatastoreConfig, Datastore
-from lsst.butler.core.storageClass import StorageClass
-from lsst.butler.core.datasets import DatasetType
-from lsst.butler.core.location import Location, LocationFactory
-from lsst.butler.core.fileDescriptor import FileDescriptor
-from lsst.butler.core.formatter import FormatterFactory
-from lsst.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
+from lsst.daf.butler.core.datastore import DatastoreConfig, Datastore
+from lsst.daf.butler.core.storageClass import StorageClass
+from lsst.daf.butler.core.datasets import DatasetType
+from lsst.daf.butler.core.location import Location, LocationFactory
+from lsst.daf.butler.core.fileDescriptor import FileDescriptor
+from lsst.daf.butler.core.formatter import FormatterFactory
+from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
 
 import yaml
 

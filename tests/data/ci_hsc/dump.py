@@ -17,7 +17,7 @@ from lsst.utils import getPackageDir
 from lsst.daf.base import DateTime
 from lsst.sphgeom import ConvexPolygon
 from lsst.daf.persistence import Butler
-from lsst.butler.regions import makeBoxWcsRegion
+from lsst.daf.butler.regions import makeBoxWcsRegion
 
 
 DATA_ROOT = os.path.split(__file__)[0]

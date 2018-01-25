@@ -2,3 +2,9 @@
 version.py
 .cache
 tests/.tests
+tests/test_input_datastore/
+tests/test_output_datastore/
+.sconf_temp/
+.sconsign.dblite
+config.log
+ups/*.cfgc

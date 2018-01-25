@@ -26,13 +26,13 @@ from sqlalchemy.sql import select, and_, exists
 
 from lsst.daf.persistence import doImport
 
-from lsst.butler.core.schema import metadata, DatasetTypeTable, RunTable, QuantumTable, DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
-from lsst.butler.core.datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
-from lsst.butler.core.run import Run
-from lsst.butler.core.quantum import Quantum
-from lsst.butler.core.units import DataUnit, DataUnitTypeSet
-from lsst.butler.core.storageClass import StorageClass
-from lsst.butler.core.registry import RegistryConfig, Registry
+from lsst.daf.butler.core.schema import metadata, DatasetTypeTable, RunTable, QuantumTable, DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
+from lsst.daf.butler.core.datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
+from lsst.daf.butler.core.run import Run
+from lsst.daf.butler.core.quantum import Quantum
+from lsst.daf.butler.core.units import DataUnit, DataUnitTypeSet
+from lsst.daf.butler.core.storageClass import StorageClass
+from lsst.daf.butler.core.registry import RegistryConfig, Registry
 
 class SqlRegistryConfig(RegistryConfig):
     pass

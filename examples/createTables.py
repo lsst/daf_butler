@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine, LargeBinary
 from sqlalchemy.orm import sessionmaker
 
-from lsst.butler.schema import metadata
+from lsst.daf.butler.schema import metadata
 
 
 def createDatabase(dbname):
