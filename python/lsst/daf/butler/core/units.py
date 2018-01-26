@@ -34,7 +34,7 @@ class DataUnitMeta(type):
     Metaclass for DataUnit, keeps track of all subclasses to enable
     construction by name.
     """
-    def __init__(cls, name, bases, dct):
+    def __init__(cls, name, bases, dct):  # noqa N805
         if not hasattr(cls, '_subclasses'):
             # this is the base class.
             cls._subclasses = {}
@@ -224,7 +224,7 @@ class Camera(DataUnit):
         return "{'Camera': '%s'}" % self.name
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 CameraTable.insert().values(
                     camera_name = self.name,
@@ -235,7 +235,7 @@ class Camera(DataUnit):
     @staticmethod
     def find(values, connection):
         cameraName = values['Camera']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = CameraTable.select().where(CameraTable.c.camera_name == cameraName)
             result = connection.execute(s).fetchone()
             return Camera(result['camera_name'], result['module'])
@@ -273,7 +273,7 @@ class AbstractFilter(DataUnit):
         return "{'AbstractFilter': '%s'}" % self.name
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 AbstractFilterTable.insert().values(
                     abstract_filter_name = self.name
@@ -283,7 +283,7 @@ class AbstractFilter(DataUnit):
     @staticmethod
     def find(values, connection):
         abstractFilterName = values['AbstractFilter']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = AbstractFilterTable.select().where(AbstractFilterTable.c.abstract_filter_name ==
                                                    abstractFilterName)
             result = connection.execute(s).fetchone()
@@ -338,7 +338,7 @@ class PhysicalFilter(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 PhysicalFilterTable.insert().values(
                     physical_filter_name = self.name,
@@ -349,14 +349,14 @@ class PhysicalFilter(DataUnit):
 
     @staticmethod
     def find(values, connection):
-        cameraName = values['Camera']
+        # cameraName = values['Camera']
         physicalFilterName = values['PhysicalFilter']
-        with connection.begin() as transaction:
+        with connection.begin():
             # First check if PhysicalFilter, specified by combined key, exists
-            s = select([PhysicalFilterTable.c.abstract_filter_name]).where(and_(
-                PhysicalFilterTable.c.camera_name == cameraName,
-                PhysicalFilterTable.c.physical_filter_name == physicalFilterName))
-            abstractFilterName = connection.execute(s).scalar()
+            # s = select([PhysicalFilterTable.c.abstract_filter_name]).where(and_(
+            #    PhysicalFilterTable.c.camera_name == cameraName,
+            #    PhysicalFilterTable.c.physical_filter_name == physicalFilterName))
+            # abstractFilterName = connection.execute(s).scalar()
             # Then load its components and construct the object
             abstractFilter = AbstractFilter.find(values, connection)
             camera = Camera.find(values, connection)
@@ -423,7 +423,7 @@ class PhysicalSensor(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 PhysicalSensorTable.insert().values(
                     camera_name = self.camera.name,
@@ -439,7 +439,7 @@ class PhysicalSensor(DataUnit):
         cameraName = values['Camera']
         physicalSensorNumber = values['PhysicalSensor']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             # First check if PhysicalSensor, specified by combined key, exists
             s = select([PhysicalSensorTable.c.name, PhysicalSensorTable.c.group,
                         PhysicalSensorTable.c.purpose]).where(
@@ -519,7 +519,7 @@ class Visit(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 VisitTable.insert().values(
                     visit_number = self.number,
@@ -536,12 +536,11 @@ class Visit(DataUnit):
         cameraName = values['Camera']
         visitNumber = values['Visit']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             s = VisitTable.select().where(and_(VisitTable.c.camera_name == cameraName,
                                                VisitTable.c.visit_number == visitNumber))
             result = connection.execute(s).fetchone()
 
-            physicalFilterName = result[VisitTable.c.physical_filter_name]
             obsBegin = result[VisitTable.c.obs_begin]
             exposureTime = result[VisitTable.c.exposure_time]
             region = result[VisitTable.c.region]
@@ -601,7 +600,7 @@ class ObservedSensor(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 ObservedSensorTable.insert().values(
                     visit_number = self.visit.number,
@@ -617,7 +616,7 @@ class ObservedSensor(DataUnit):
         visitNumber = values['Visit']
         physicalSensorNumber = values['PhysicalSensor']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             s = ObservedSensorTable.select().where(and_(ObservedSensorTable.c.camera_name == cameraName,
                                                         ObservedSensorTable.c.visit_number ==
                                                         visitNumber,
@@ -625,7 +624,6 @@ class ObservedSensor(DataUnit):
                                                         physicalSensorNumber))
             result = connection.execute(s).fetchone()
 
-            physical_sensor_number = result[ObservedSensorTable.c.physical_sensor_number]
             region = result[ObservedSensorTable.c.region]
 
             # Read child DataUnits
@@ -697,7 +695,7 @@ class Snap(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 SnapTable.insert().values(
                     visit_number = self.visit.number,
@@ -714,7 +712,7 @@ class Snap(DataUnit):
         visitNumber = values['Visit']
         snapIndex = values['Snap']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             s = SnapTable.select().where(and_(SnapTable.c.camera_name == cameraName,
                                               SnapTable.c.visit_number == visitNumber,
                                               SnapTable.c.snap_index == snapIndex))
@@ -744,7 +742,7 @@ class VisitRange(DataUnit):
         self._visitEnd = visitEnd
 
     def __hash__(self):
-        return hash((_camera, _visitBegin, _visitEnd))
+        return hash((self._camera, self._visitBegin, self._visitEnd))
 
     def __eq__(self, other):
         return self._camera == other.camera and self._visitBegin == other._visitBegin and \
@@ -777,7 +775,7 @@ class VisitRange(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 VisitRangeTable.insert().values(
                     visit_begin = self.visitBegin,
@@ -791,7 +789,7 @@ class VisitRange(DataUnit):
         cameraName = values['Camera']
         visitBegin, visitEnd = values['VisitRange']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             result = connection.execute(select([exists().where(and_(
                 VisitRangeTable.c.camera_name == cameraName,
                 VisitRangeTable.c.visit_begin == visitBegin,
@@ -848,7 +846,7 @@ class SkyMap(DataUnit):
         return ("{'SkyMap': '%s'}" % self.name)
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 SkyMapTable.insert().values(
                     skymap_name = self.name,
@@ -860,7 +858,7 @@ class SkyMap(DataUnit):
     @staticmethod
     def find(values, connection):
         skymapName = values['SkyMap']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = SkyMapTable.select().where(SkyMapTable.c.skymap_name == skymapName)
             result = connection.execute(s).fetchone()
             return SkyMap(result['skymap_name'], result['module'])
@@ -908,7 +906,7 @@ class Tract(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 TractTable.insert().values(
                     tract_number = self.number,
@@ -921,7 +919,7 @@ class Tract(DataUnit):
     def find(values, connection):
         skymapName = values['SkyMap']
         tractNumber = values['Tract']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = TractTable.select().where(and_(TractTable.c.skymap_name == skymapName,
                                                TractTable.c.tract_number == tractNumber))
             result = connection.execute(s).fetchone()
@@ -992,7 +990,7 @@ class Patch(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 PatchTable.insert().values(
                     patch_index = self.index,
@@ -1009,7 +1007,7 @@ class Patch(DataUnit):
         skymapName = values['SkyMap']
         tractNumber = values['Tract']
         patchIndex = values['Patch']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = PatchTable.select().where(and_(PatchTable.c.skymap_name == skymapName,
                                                PatchTable.c.patch_index == patchIndex,
                                                PatchTable.c.tract_number == tractNumber))

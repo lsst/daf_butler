@@ -158,8 +158,6 @@ class SqlRegistry(Registry):
         if self.find(run.collection, ref) is not None:
             raise ValueError("dupplicate dataset {0}".format(str(ref)))
 
-        datasetId = DatasetRef.getNewId()
-
         datasetHandle = DatasetHandle(
             datasetId=DatasetRef.getNewId(),
             registryId=self.id,
@@ -326,7 +324,6 @@ class SqlRegistry(Registry):
 
             if result:
                 runId = result[RunTable.c.run_id]
-                registryId = result[RunTable.c.registry_id]
                 collection = result[RunTable.c.collection]
                 environment = result[RunTable.c.environment_id]
                 pipeline = result[RunTable.c.pipeline_id]
