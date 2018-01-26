@@ -23,6 +23,7 @@
 
 import lsst.afw.table
 
+
 class StorageClassMeta(type):
 
     def __init__(self, name, bases, dct):

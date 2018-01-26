@@ -1,13 +1,12 @@
 
 import os
-import sqlite3
 
 import numpy as np
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from . import hsc
+from . import hsc  # noqa F401
 from lsst.daf.butler.core import units
 from lsst.daf.butler.core.schema import metadata
 

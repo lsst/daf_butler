@@ -48,7 +48,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(inputTable.getPsfFluxDefinition(), outputTable.getPsfFluxDefinition())
         self.assertEqual(inputRecord.getPsfFlux(), outputRecord.getPsfFlux())
         self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
-        self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())        
+        self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())
         self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
         self.assertFloatsAlmostEqual(
             inputRecord.getCentroidErr()[0, 0],
@@ -66,9 +66,10 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         self.assertFloatsAlmostEqual(
             inputRecord.getShapeErr()[2, 2],
             outputRecord.getShapeErr()[2, 2], rtol=1e-6)
-        
+
     def testConstructor(self):
         datastore = PosixDatastore(config=self.configFile)
+        self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         catalog = datasetsHelper.makeExampleCatalog()
@@ -119,7 +120,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
         catalogOut = outputPosixDatastore.get(outputUri, storageClass)
         datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
-        
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

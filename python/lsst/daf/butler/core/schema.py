@@ -21,7 +21,8 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime, Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
+from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
+    Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
 
 metadata = MetaData()
 
@@ -165,8 +166,9 @@ ObservedSensorTable = \
               'Camera.camera_name'), primary_key=True, nullable=False),
           Column('region', LargeBinary),
           ForeignKeyConstraint(['visit_number', 'camera_name'], ['Visit.visit_number', 'Visit.camera_name']),
-          ForeignKeyConstraint(['physical_sensor_number', 'camera_name'], ['PhysicalSensor.physical_sensor_number', 'PhysicalSensor.camera_name'])
-    )
+          ForeignKeyConstraint(['physical_sensor_number', 'camera_name'],
+                               ['PhysicalSensor.physical_sensor_number', 'PhysicalSensor.camera_name'])
+          )
 
 SnapTable = \
     Table('Snap', metadata,
@@ -225,7 +227,8 @@ SensorPatchJoinTable = \
           Column('patch_index', Integer, nullable=False),
           Column('skymap_name', String, nullable=False),
           ForeignKeyConstraint(['visit_number', 'physical_sensor_number', 'camera_name'], [
-              'ObservedSensor.visit_number', 'ObservedSensor.physical_sensor_number', 'ObservedSensor.camera_name']),
+              'ObservedSensor.visit_number', 'ObservedSensor.physical_sensor_number',
+              'ObservedSensor.camera_name']),
           ForeignKeyConstraint(['tract_number', 'patch_index', 'skymap_name'], [
               'Patch.tract_number', 'Patch.patch_index', 'Patch.skymap_name'])
           )
@@ -238,7 +241,8 @@ SensorTractJoinTable = \
           Column('tract_number', Integer, nullable=False),
           Column('skymap_name', String, nullable=False),
           ForeignKeyConstraint(['visit_number', 'physical_sensor_number', 'camera_name'], [
-              'ObservedSensor.visit_number', 'ObservedSensor.physical_sensor_number', 'ObservedSensor.camera_name']),
+              'ObservedSensor.visit_number', 'ObservedSensor.physical_sensor_number',
+              'ObservedSensor.camera_name']),
           ForeignKeyConstraint(['tract_number', 'skymap_name'], [
               'Tract.tract_number', 'Tract.skymap_name'])
           )

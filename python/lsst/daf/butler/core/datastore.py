@@ -21,15 +21,15 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-import yaml
-
 from lsst.daf.persistence import doImport
 
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from .config import Config
+
 
 class DatastoreConfig(Config):
     pass
+
 
 class Datastore(metaclass=ABCMeta):
     """Datastore interface.
@@ -38,7 +38,7 @@ class Datastore(metaclass=ABCMeta):
     def fromConfig(config):
         cls = doImport(config['datastore.cls'])
         return cls(config=config)
-    
+
     def __init__(self, config):
         """Constructor
 
@@ -56,11 +56,13 @@ class Datastore(metaclass=ABCMeta):
         Parameters
         ----------
         uri : `str`
-            a Universal Resource Identifier that specifies the location of the stored `Dataset`.
+            a Universal Resource Identifier that specifies the location of the
+            stored `Dataset`.
         storageClass : `StorageClass`
             the `StorageClass` associated with the `DatasetType`.
         parameters : `dict`
-            `StorageClass`-specific parameters that specify a slice of the `Dataset` to be loaded.
+            `StorageClass`-specific parameters that specify a slice of the
+            `Dataset` to be loaded.
 
         Returns
         -------
@@ -82,12 +84,12 @@ class Datastore(metaclass=ABCMeta):
         storageHint : `str`
             Provides a hint that the `Datastore` may use as (part of) the URI.
         typeName : `str`
-            The `DatasetType` name, which may be used by this `Datastore` to override the
-            default serialization format for the `StorageClass`.
+            The `DatasetType` name, which may be used by this `Datastore` to
+            override the default serialization format for the `StorageClass`.
 
         Returns
         -------
-        uri : `str` 
+        uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
             A dictionary of URIs for the `Dataset`' components.
@@ -102,11 +104,13 @@ class Datastore(metaclass=ABCMeta):
         Parameters
         ----------
         uri : `str`
-            a Universal Resource Identifier that specifies the location of the stored `Dataset`.
+            a Universal Resource Identifier that specifies the location of the
+            stored `Dataset`.
 
         .. note::
-            Some Datastores may implement this method as a silent no-op to disable `Dataset` deletion through standard interfaces.
-        
+            Some Datastores may implement this method as a silent no-op to
+            disable `Dataset` deletion through standard interfaces.
+
         Raises
         ------
         e : `FileNotFoundError`
@@ -128,13 +132,16 @@ class Datastore(metaclass=ABCMeta):
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
         storageHint : `str`
-            Provides a hint that this `Datastore` may use as [part of] the `URI`.
+            Provides a hint that this `Datastore` may use as [part of] the
+            `URI`.
         typeName : `str`
-            The `DatasetType` name, which may be used by this `Datastore` to override the default serialization format for the `StorageClass`.
+            The `DatasetType` name, which may be used by this `Datastore`
+            to override the default serialization format for the
+            `StorageClass`.
 
         Returns
         -------
-        uri : `str` 
+        uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
             A dictionary of URIs for the `Dataset`' components.

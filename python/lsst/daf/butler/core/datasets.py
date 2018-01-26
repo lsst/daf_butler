@@ -26,17 +26,22 @@ from .utils import slotValuesAreEqual, slotValuesToHash
 from .storageClass import StorageClass
 from .units import DataUnitTypeSet
 
+
 def _safeMakeMappingProxyType(data):
     if data is None:
         data = {}
     return MappingProxyType(data)
 
+
 class DatasetType:
-    """A named category of Datasets that defines how they are organized, related, and stored.
+    """A named category of Datasets that defines how they are organized,
+    related, and stored.
 
     A concrete, final class whose instances represent `DatasetType`s.
-    `DatasetType` instances may be constructed without a `Registry`, but they must be registered
-    via `Registry.registerDatasetType()` before corresponding `Datasets` may be added.
+    `DatasetType` instances may be constructed without a `Registry`,
+    but they must be registered
+    via `Registry.registerDatasetType()` before corresponding `Datasets`
+    may be added.
     `DatasetType` instances are immutable.
     """
 
@@ -46,28 +51,33 @@ class DatasetType:
 
     @property
     def name(self):
-        """A string name for the `Dataset`; must correspond to the same `DatasetType` across all Registries.
+        """A string name for the `Dataset`; must correspond to the same
+        `DatasetType` across all Registries.
         """
         return self._name
 
     @property
     def template(self):
-        """A string with `str.format`-style replacement patterns that can be used to create a path from a `Run`
+        """A string with `str.format`-style replacement patterns that can be
+        used to create a path from a `Run`
         (and optionally its associated Collection) and a `DatasetRef`.
 
-        May be `None` to indicate a read-only `Dataset` or one whose templates must be provided at a higher level.
+        May be `None` to indicate a read-only `Dataset` or one whose templates
+        must be provided at a higher level.
         """
         return self._template
 
     @property
     def units(self):
-        """A `DataUnitTypeSet` that defines the `DatasetRef`s corresponding to this `DatasetType`.
+        """A `DataUnitTypeSet` that defines the `DatasetRef`s corresponding
+        to this `DatasetType`.
         """
         return self._units
 
     @property
     def storageClass(self):
-        """A `StorageClass` subclass (not instance) that defines how this `DatasetType` is persisted.
+        """A `StorageClass` subclass (not instance) that defines how this
+        `DatasetType` is persisted.
         """
         return self._storageClass
 
@@ -110,10 +120,11 @@ class DatasetLabel:
 class DatasetRef(DatasetLabel):
     """Reference to a `Dataset` in a `Registry`.
 
-    As opposed to a `DatasetLabel`, `DatasetRef` holds actual `DataUnit` instances
-    (instead of just their names and primary-key values).
+    As opposed to a `DatasetLabel`, `DatasetRef` holds actual `DataUnit`
+    instances (instead of just their names and primary-key values).
     They can typically only be constructed by calling `Registry.expand`.
-    In contrast to `DatasetLabel`s a `DatasetRef` may point to a `Dataset`s that currently do not yet exist
+    In contrast to `DatasetLabel`s a `DatasetRef` may point to a `Dataset`s
+    that currently do not yet exist
     (e.g. because it is a predicted input for provenance).
     """
 
@@ -125,21 +136,24 @@ class DatasetRef(DatasetLabel):
         """Generate a new Dataset ID number.
 
         ..todo::
-            This is a temporary workaround that will probably disapear in the future,
-            when a solution is found to the problem of autoincrement compound primary keys in SQLite.
+            This is a temporary workaround that will probably disapear in
+            the future, when a solution is found to the problem of
+            autoincrement compound primary keys in SQLite.
         """
         cls._currentId += 1
         return cls._currentId
 
     def __init__(self, type, units):
-        """Construct a DatasetRef from a DatasetType and a complete tuple of DataUnits.
+        """Construct a DatasetRef from a DatasetType and a complete tuple
+        of DataUnits.
 
         Parameters
         ----------
         type: `DatasetType`
             The `DatasetType` for this `Dataset`.
         units: `dict`
-            Dictionary where the keys are `DataUnit` names and the values are `DataUnit` instances.
+            Dictionary where the keys are `DataUnit` names and the values are
+            `DataUnit` instances.
         """
         units = type.units.conform(units)
         super().__init__(
@@ -154,21 +168,25 @@ class DatasetRef(DatasetLabel):
 
     @property
     def type(self):
-        """The `DatasetType` associated with the `Dataset` the `DatasetRef` points to.
+        """The `DatasetType` associated with the `Dataset` the `DatasetRef`
+        points to.
         """
         return self._type
 
     @property
     def units(self):
-        """A `tuple` of `DataUnit` instances that label the `DatasetRef` within a Collection.
+        """A `tuple` of `DataUnit` instances that label the `DatasetRef`
+        within a Collection.
         """
         return self._units
 
     @property
     def producer(self):
-        """The `Quantum` instance that produced (or will produce) the `Dataset`.
+        """The `Quantum` instance that produced (or will produce) the
+        `Dataset`.
 
-        Read-only; update via `Registry.addDataset()`, `QuantumGraph.addDataset()`, or `Butler.put()`.
+        Read-only; update via `Registry.addDataset()`,
+        `QuantumGraph.addDataset()`, or `Butler.put()`.
         May be `None` if no provenance information is available.
         """
         return self._producer
@@ -181,10 +199,11 @@ class DatasetRef(DatasetLabel):
         May be an empty list if no provenance information is available.
         """
         return _safeMakeMappingProxyType(self._predictedConsumers)
-        
+
     @property
     def actualConsumers(self):
-        """A sequence of `Quantum` instances that list this `Dataset` in their `actualInputs` attributes.
+        """A sequence of `Quantum` instances that list this `Dataset` in their
+        `actualInputs` attributes.
 
         Read-only; update via `Registry.markInputUsed()`.
         May be an empty list if no provenance information is available.
@@ -192,9 +211,11 @@ class DatasetRef(DatasetLabel):
         return _safeMakeMappingProxyType(self._actualConsumers)
 
     def makeStorageHint(self, run, template=None):
-        """Construct a storage hint by filling in template with the Collection collection and the values in the units tuple.
+        """Construct a storage hint by filling in template with the Collection
+        collection and the values in the units tuple.
 
-        Although a `Dataset` may belong to multiple Collections, only the one corresponding to its `Run` is used.
+        Although a `Dataset` may belong to multiple Collections, only the one
+        corresponding to its `Run` is used.
         """
         if template is None:
             template = self.type.template
@@ -205,9 +226,11 @@ class DatasetRef(DatasetLabel):
 class DatasetHandle(DatasetRef):
     """Handle to a stored `Dataset` in a `Registry`.
 
-    As opposed to a `DatasetLabel`, and like a `DatasetRef`, `DatasetHandle` holds actual `DataUnit` instances
+    As opposed to a `DatasetLabel`, and like a `DatasetRef`, `DatasetHandle`
+    holds actual `DataUnit` instances
     (instead of just their names and primary-key values).
-    In contrast to `DatasetRef`s a `DatasetHandle` only ever points to a `Dataset` that has been stored in a `Datastore`.
+    In contrast to `DatasetRef`s a `DatasetHandle` only ever points to a
+    `Dataset` that has been stored in a `Datastore`.
     """
 
     __slots__ = ("_datasetId", "_registryId", "_uri", "_components", "_run")
@@ -247,7 +270,8 @@ class DatasetHandle(DatasetRef):
 
     @property
     def components(self):
-        """A `dict` holding `DatasetHandle` instances that correspond to this `Dataset`s named components.
+        """A `dict` holding `DatasetHandle` instances that correspond to this
+        `Dataset`s named components.
 
         Empty if the `Dataset` is not a composite.
         """

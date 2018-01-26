@@ -26,12 +26,11 @@ import unittest
 import datetime
 
 import lsst.utils.tests
-from lsst.daf.butler.butler import ButlerConfig, Butler
-from lsst.daf.butler.core.registry import Registry
-from lsst.daf.butler.datastores.posixDatastore import PosixDatastore
+from lsst.daf.butler.butler import Butler
 
 from lsst.daf.butler.core.datasets import DatasetType, DatasetLabel
-from lsst.daf.butler.core.units import Camera, AbstractFilter, PhysicalFilter, PhysicalSensor, Visit, ObservedSensor
+from lsst.daf.butler.core.units import Camera, AbstractFilter, PhysicalFilter, \
+    PhysicalSensor, Visit, ObservedSensor
 from lsst.daf.butler.core.storageClass import SourceCatalog
 
 import datasetsHelper
@@ -43,7 +42,8 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
 
-    def _populateMinimalRegistry(self, registry, cameraName='dummycam', filters=('g', 'r', 'i', 'z', 'y'), visitNumbers=range(2)):
+    def _populateMinimalRegistry(self, registry, cameraName='dummycam',
+                                 filters=('g', 'r', 'i', 'z', 'y'), visitNumbers=range(2)):
         """Make a minimal Registry, populated with ObservedSensor (and all dependent DataUnits)
         for the specified *cameraName*, *filters* and *visitNumbers*.
         """
@@ -68,8 +68,8 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
                     registry.addDataUnit(unit)
                 obsBegin += datetime.timedelta(seconds=visitDuration)
 
-        datasetType = DatasetType("testdst", template="{DatasetType}/{Camera}/{PhysicalSensor}/test.fits", units=(
-            ObservedSensor, ), storageClass=SourceCatalog)
+        datasetType = DatasetType("testdst", template="{DatasetType}/{Camera}/{PhysicalSensor}/test.fits",
+                                  units=(ObservedSensor, ), storageClass=SourceCatalog)
         registry.registerDatasetType(datasetType)
 
         return datasetType
@@ -79,9 +79,10 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         visitNumber = 0
 
         butler = Butler(config=self.configFile)
-        datasetType = self._populateMinimalRegistry(butler.registry, cameraName=cameraName, visitNumbers=(visitNumber, ))
+        datasetType = self._populateMinimalRegistry(butler.registry, cameraName=cameraName,
+                                                    visitNumbers=(visitNumber, ))
         datasetLabel = DatasetLabel(datasetType.name, Camera=cameraName, AbstractFilter='i',
-                            PhysicalFilter='dummycam_i', PhysicalSensor=0, Visit=visitNumber)
+                                    PhysicalFilter='dummycam_i', PhysicalSensor=0, Visit=visitNumber)
         catalog = datasetsHelper.makeExampleCatalog()
 
         # Put

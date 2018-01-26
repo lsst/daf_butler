@@ -31,7 +31,8 @@ from lsst.daf.butler.registries.sqlRegistry import SqlRegistry as Registry
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef, DatasetLabel, DatasetHandle
 from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.quantum import Quantum
-from lsst.daf.butler.core.units import DataUnitTypeSet, Camera, AbstractFilter, PhysicalFilter, PhysicalSensor, Visit, ObservedSensor, Snap, VisitRange, SkyMap, Tract, Patch
+from lsst.daf.butler.core.units import Camera, AbstractFilter, \
+    PhysicalFilter, PhysicalSensor, Visit, ObservedSensor, Snap, SkyMap, Tract, Patch
 from lsst.daf.butler.core.storageClass import Image
 
 
@@ -50,9 +51,11 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
         physicalFilter = PhysicalFilter(abstractFilter, camera, physicalFilterName)
         return (camera, abstractFilter, physicalFilter)
 
-    def _populateMinimalRegistry(self, registry, cameraName='dummycam', filters=('g', 'r', 'i', 'z', 'y'), visitNumbers=range(2)):
-        """Make a minimal Registry, populated with ObservedSensor (and all dependent DataUnits)
-        for the specified *cameraName*, *filters* and *visitNumbers*.
+    def _populateMinimalRegistry(self, registry, cameraName='dummycam', filters=('g', 'r', 'i', 'z', 'y'),
+                                 visitNumbers=range(2)):
+        """Make a minimal Registry, populated with ObservedSensor (and all
+        dependent DataUnits) for the specified *cameraName*, *filters* and
+        *visitNumbers*.
         """
         visitDuration = 30.  # seconds
 
@@ -154,8 +157,9 @@ class RegistryTestCase(lsst.utils.tests.TestCase):
             registry.addDataUnit(unit)
 
         # DatasetType takes a tuple of DataUnit types (classes)
-        datasetType = DatasetType(name=datasetTypeName, template=None, units=(type(unit)
-                                                                              for unit in units), storageClass=Image)
+        datasetType = DatasetType(name=datasetTypeName,
+                                  template=None, units=(type(unit) for unit in units),
+                                  storageClass=Image)
         registry.registerDatasetType(datasetType)
         # DatasetRef takes a dictionary of name : DataUnit instances
         datasetRef = DatasetRef(datasetType, {unit.__class__.__name__: unit for unit in units})

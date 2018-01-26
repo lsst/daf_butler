@@ -32,7 +32,8 @@ def allSlots(self):
 
 def slotValuesAreEqual(self, other):
     """
-    Test for equality by the contents of all slots, including those of its parents.
+    Test for equality by the contents of all slots, including those of its
+    parents.
     """
     return all((getattr(self, slot) == getattr(other, slot) for slot in allSlots(self)))
 

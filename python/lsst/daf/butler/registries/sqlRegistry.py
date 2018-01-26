@@ -24,9 +24,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select, and_, exists
 
-from lsst.daf.persistence import doImport
-
-from lsst.daf.butler.core.schema import metadata, DatasetTypeTable, RunTable, QuantumTable, DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
+from lsst.daf.butler.core.schema import metadata, DatasetTypeTable, RunTable, QuantumTable, \
+    DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
 from lsst.daf.butler.core.datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
 from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.quantum import Quantum
@@ -34,8 +33,10 @@ from lsst.daf.butler.core.units import DataUnit, DataUnitTypeSet
 from lsst.daf.butler.core.storageClass import StorageClass
 from lsst.daf.butler.core.registry import RegistryConfig, Registry
 
+
 class SqlRegistryConfig(RegistryConfig):
     pass
+
 
 class SqlRegistry(Registry):
     """Basic SQL backed registry.
@@ -75,7 +76,8 @@ class SqlRegistry(Registry):
             connection.execute(insert)
 
             connection.execute(DatasetTypeUnitsTable.insert(), [
-                               {'dataset_type_name': datasetType.name, 'unit_name': unit.__name__} for unit in datasetType.units])
+                               {'dataset_type_name': datasetType.name,
+                                'unit_name': unit.__name__} for unit in datasetType.units])
 
     def getDatasetType(self, name):
         """Get the `DatasetType`.
@@ -95,7 +97,8 @@ class SqlRegistry(Registry):
         with self.engine.begin() as connection:
             # DataUnits
             units = []
-            for result in connection.execute(select([DatasetTypeUnitsTable]).where(DatasetTypeUnitsTable.c.dataset_type_name == name)).fetchall():
+            for result in connection.execute(select([DatasetTypeUnitsTable]).where(
+                    DatasetTypeUnitsTable.c.dataset_type_name == name)).fetchall():
                 units.append(DataUnit.getType(result[DatasetTypeUnitsTable.c.unit_name]))
 
             # DatasetType
@@ -114,25 +117,27 @@ class SqlRegistry(Registry):
     def addDataset(self, ref, uri, components, run, producer=None):
         """Add a `Dataset` to a Collection.
 
-        This always adds a new `Dataset`; to associate an existing `Dataset` with
-        a new `Collection`, use `associate`.
+        This always adds a new `Dataset`; to associate an existing `Dataset`
+        with a new `Collection`, use `associate`.
 
         Parameters
         ----------
         ref: `DatasetRef`
             Identifies the `Dataset` and contains its `DatasetType`.
         uri: `str`
-            The URI that has been associated with the `Dataset` by a `Datastore`.
+            The URI that has been associated with the `Dataset` by a
+            `Datastore`.
         components: `dict`
-            If the `Dataset` is a composite, a ``{name : URI}`` dictionary of its named
-            components and storage locations.
+            If the `Dataset` is a composite, a ``{name : URI}`` dictionary
+            of its named components and storage locations.
         run: `Run`
-            The `Run` instance that produced the Dataset.  Ignored if ``producer`` is passed
-            (`producer.run` is then used instead).  A Run must be provided by one of the two arguments.
+            The `Run` instance that produced the Dataset.  Ignored if
+            ``producer`` is passed (`producer.run` is then used instead).
+            A Run must be provided by one of the two arguments.
         producer: `Quantum`
-            Unit of work that produced the Dataset.  May be ``None`` to store no
-            provenance information, but if present the `Quantum` must already have
-            been added to the Registry.
+            Unit of work that produced the Dataset.  May be ``None`` to
+            store no provenance information, but if present the `Quantum`
+            must already have been added to the Registry.
 
         Returns
         -------
@@ -142,7 +147,8 @@ class SqlRegistry(Registry):
         Raises
         ------
         e: `Exception`
-            If a `Dataset` with the given `DatasetRef` already exists in the given Collection.
+            If a `Dataset` with the given `DatasetRef` already exists in
+            the given Collection.
         """
         assert isinstance(ref, DatasetRef)
         assert isinstance(uri, str)
@@ -151,8 +157,6 @@ class SqlRegistry(Registry):
 
         if self.find(run.collection, ref) is not None:
             raise ValueError("dupplicate dataset {0}".format(str(ref)))
-
-        datasetId = DatasetRef.getNewId()
 
         datasetHandle = DatasetHandle(
             datasetId=DatasetRef.getNewId(),
@@ -185,42 +189,48 @@ class SqlRegistry(Registry):
         return datasetHandle
 
     def associate(self, collection, handles):
-        """Add existing `Dataset`s to a Collection, possibly creating the Collection in the process.
+        """Add existing `Dataset`s to a Collection, possibly creating the
+        Collection in the process.
 
         Parameters
         ----------
         collection: `str`
             Indicates the Collection the `Dataset`s should be associated with.
         handles: `[DatasetHandle]`
-            A `list` of `DatasetHandle` instances that already exist in this `Registry`.
+            A `list` of `DatasetHandle` instances that already exist in this
+            `Registry`.
         """
         if isinstance(handles, DatasetHandle):
             handles = (handles, )
         with self.engine.begin() as connection:
             connection.execute(DatasetCollectionsTable.insert(),
-                               [{'collection': collection, 'dataset_id': handle.datasetId, 'registry_id': handle.registryId}
+                               [{'collection': collection, 'dataset_id': handle.datasetId,
+                                 'registry_id': handle.registryId}
                                    for handle in handles]
                                )
 
     def disassociate(self, collection, handles, remove=True):
         """Remove existing `Dataset`s from a Collection.
 
-        ``collection`` and ``handle`` combinations that are not currently associated are silently ignored.
+        ``collection`` and ``handle`` combinations that are not currently
+        associated are silently ignored.
 
         Parameters
         ----------
         collection: `str`
             The Collection the `Dataset`s should no longer be associated with.
         handles: `[DatasetHandle]`
-            A `list` of `DatasetHandle` instances that already exist in this `Registry`.
+            A `list` of `DatasetHandle` instances that already exist in this
+            `Registry`.
         remove: `bool`
-            If `True`, remove `Dataset`s from the `Registry` if they are not associated with
-            any Collection (including via any composites).
+            If `True`, remove `Dataset`s from the `Registry` if they are not
+            associated with any Collection (including via any composites).
 
         Returns
         -------
         removed: `[DatasetHandle]`
-            If `remove` is `True`, the `list` of `DatasetHandle`s that were removed.
+            If `remove` is `True`, the `list` of `DatasetHandle`s that were
+            removed.
         """
         deletedDatasets = []
         with self.engine.begin() as connection:
@@ -234,8 +244,7 @@ class SqlRegistry(Registry):
                 if remove:
                     if not connection.execute(select([exists().where(and_(
                             DatasetCollectionsTable.c.dataset_id == handle.datasetId,
-                            DatasetCollectionsTable.c.registry_id == handle.registryId
-                        ))])).scalar():
+                            DatasetCollectionsTable.c.registry_id == handle.registryId))])).scalar():
 
                         connection.execute(DatasetTable.delete().where(and_(
                             DatasetTable.c.dataset_id == handle.datasetId,
@@ -254,14 +263,16 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection: `str`
-            The Collection collection used to identify all inputs and outputs of the `Run`.
+            The Collection collection used to identify all inputs and
+            outputs of the `Run`.
 
         Returns
         -------
         run: `Run`
             A new `Run` instance.
         """
-        run = Run(runId=Run.getNewId(), registryId=self.id, collection=collection, environment=None, pipeline=None)
+        run = Run(runId=Run.getNewId(), registryId=self.id, collection=collection,
+                  environment=None, pipeline=None)
 
         with self.engine.begin() as connection:
             insert = RunTable.insert().values(
@@ -286,7 +297,8 @@ class SqlRegistry(Registry):
         """
         with self.engine.begin() as connection:
             # TODO: should it also update the collection?
-            connection.execute(RunTable.update().where(and_(RunTable.c.run_id == run.runId, RunTable.c.registry_id == run.registryId)).values(
+            connection.execute(RunTable.update().where(and_(RunTable.c.run_id == run.runId,
+                                                            RunTable.c.registry_id == run.registryId)).values(
                 environment_id = run.environment, pipeline_id = run.pipeline))
 
     def getRun(self, collection=None, id=None):
@@ -312,7 +324,6 @@ class SqlRegistry(Registry):
 
             if result:
                 runId = result[RunTable.c.run_id]
-                registryId = result[RunTable.c.registry_id]
                 collection = result[RunTable.c.collection]
                 environment = result[RunTable.c.environment_id]
                 pipeline = result[RunTable.c.pipeline_id]
@@ -328,9 +339,11 @@ class SqlRegistry(Registry):
         ----------
         quantum: `Quantum`
             Instance to add to the `Registry`.
-            The given `Quantum` must not already be present in the `Registry` (or any other), therefore its:
+            The given `Quantum` must not already be present in the `Registry`
+            (or any other), therefore its:
             - `pkey` attribute must be `None`.
-            - `predictedInputs` attribute must be fully populated with `DatasetHandle`s, and its.
+            - `predictedInputs` attribute must be fully populated with
+              `DatasetHandle`s, and its.
             - `actualInputs` and `outputs` will be ignored.
         """
         assert isinstance(quantum, Quantum)
@@ -357,9 +370,11 @@ class SqlRegistry(Registry):
                      'actual': False} for handle in inputs])
 
     def markInputUsed(self, quantum, handle):
-        """Record the given `DatasetHandle` as an actual (not just predicted) input of the given `Quantum`.
+        """Record the given `DatasetHandle` as an actual (not just predicted)
+        input of the given `Quantum`.
 
-        This updates both the `Registry`'s `Quantum` table and the Python `Quantum.actualInputs` attribute.
+        This updates both the `Registry`'s `Quantum` table and the Python
+        `Quantum.actualInputs` attribute.
 
         Parameters
         ----------
@@ -450,10 +465,12 @@ class SqlRegistry(Registry):
         return DatasetRef(datasetType, dataUnits)
 
     def find(self, collection, label):
-        """Look up the location of the `Dataset` associated with the given `DatasetLabel`.
+        """Look up the location of the `Dataset` associated with the given
+        `DatasetLabel`.
 
-        This can be used to obtain the URI that permits the `Dataset` to be read from a `Datastore`.
-        Is a simple pass-through if `label` is already a `DatasetHandle`.
+        This can be used to obtain the URI that permits the `Dataset`
+        to be read from a `Datastore`. Is a simple pass-through if `label`
+        is already a `DatasetHandle`.
 
         Parameters
         ----------
@@ -465,7 +482,8 @@ class SqlRegistry(Registry):
         Returns
         -------
         handle: `DatasetHandle`
-            A handle to the `Dataset`, or `None` if no matching `Dataset` was found.
+            A handle to the `Dataset`, or `None` if no matching
+            `Dataset` was found.
         """
         datasetRef = self.expand(label)
 
@@ -473,7 +491,8 @@ class SqlRegistry(Registry):
 
         with self.engine.begin() as connection:
             s = select([DatasetTable]).select_from(DatasetTable.join(DatasetCollectionsTable)).where(
-                and_(DatasetTable.c.unit_hash == unitHash, DatasetCollectionsTable.c.collection == collection))
+                and_(DatasetTable.c.unit_hash == unitHash,
+                     DatasetCollectionsTable.c.collection == collection))
             result = connection.execute(s).fetchall()
 
             if len(result) == 1:
@@ -498,9 +517,11 @@ class SqlRegistry(Registry):
         collection: `str`
             Indicates the input Collection to subset.
         expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly) `Dataset`s in the subset.
+            An expression that limits the `DataUnit`s and (indirectly)
+            `Dataset`s in the subset.
         datasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances should be included in the subset.
+            The `list` of `DatasetType`s whose instances should be
+            included in the subset.
 
         Returns
         -------
@@ -512,8 +533,8 @@ class SqlRegistry(Registry):
     def merge(self, outputCollection, inputCollections):
         """Create a new Collection from a series of existing ones.
 
-        Entries earlier in the list will be used in preference to later entries when both contain
-        `Dataset`s with the same `DatasetRef`.
+        Entries earlier in the list will be used in preference to later
+        entries when both contain `Dataset`s with the same `DatasetRef`.
 
         Parameters
         ----------
@@ -525,34 +546,42 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def makeDataGraph(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
-        """Evaluate a filter expression and lists of `DatasetType`s and return a `QuantumGraph`.
+        """Evaluate a filter expression and lists of `DatasetType`s and
+        return a `QuantumGraph`.
 
         Parameters
         ----------
         collections: `[str]`
-            An ordered `list` of collections indicating the Collections to search for `Dataset`s.
+            An ordered `list` of collections indicating the Collections
+            to search for `Dataset`s.
         expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly) the `Dataset`s returned.
+            An expression that limits the `DataUnit`s and (indirectly) the
+            `Dataset`s returned.
         neededDatasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances should be included in the graph and limit its extent.
+            The `list` of `DatasetType`s whose instances should be included
+            in the graph and limit its extent.
         futureDatasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances may be added to the graph later,
-            which requires that their `DataUnit` types must be present in the graph.
+            The `list` of `DatasetType`s whose instances may be added to
+            the graph later, which requires that their `DataUnit` types must
+            be present in the graph.
 
         Returns
         -------
         graph: `QuantumGraph`
-            A `QuantumGraph` instance with a `QuantumGraph.units` attribute that is not `None`.
+            A `QuantumGraph` instance with a `QuantumGraph.units` attribute
+            that is not `None`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     def makeProvenanceGraph(self, expr, types=None):
-        """Make a `QuantumGraph` that contains the full provenance of all `Dataset`s matching an expression.
+        """Make a `QuantumGraph` that contains the full provenance of all
+        `Dataset`s matching an expression.
 
         Parameters
         ----------
         expr: `str`
-            An expression (SQL query that evaluates to a list of `Dataset` primary keys) that selects the `Dataset`s.
+            An expression (SQL query that evaluates to a list of `Dataset`
+            primary keys) that selects the `Dataset`s.
 
         Returns
         -------
@@ -562,46 +591,54 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def export(self, expr):
-        """Export contents of the `Registry`, limited to those reachable from the `Dataset`s identified
-        by the expression `expr`, into a `TableSet` format such that it can be imported into a different database.
+        """Export contents of the `Registry`, limited to those reachable
+        from the `Dataset`s identified by the expression `expr`, into a
+        `TableSet` format such that it can be imported into a different
+        database.
 
         Parameters
         ----------
         expr: `str`
-            An expression (SQL query that evaluates to a list of `Dataset` primary keys) that selects the `Datasets,
-            or a `QuantumGraph` that can be similarly interpreted.
+            An expression (SQL query that evaluates to a list of `Dataset`
+            primary keys) that selects the `Datasets, or a `QuantumGraph` that
+            can be similarly interpreted.
 
         Returns
         -------
         ts: `TableSet`
-            Containing all rows, from all tables in the `Registry` that are reachable from
-            the selected `Dataset`s.
+            Containing all rows, from all tables in the `Registry` that
+            are reachable from the selected `Dataset`s.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     def import_(self, tables, collection):
-        """Import (previously exported) contents into the (possibly empty) `Registry`.
+        """Import (previously exported) contents into the (possibly empty)
+        `Registry`.
 
         Parameters
         ----------
         ts: `TableSet`
             Contains the previously exported content.
         collection: `str`
-            An additional Collection collection assigned to the newly imported `Dataset`s.
+            An additional Collection collection assigned to the newly
+            imported `Dataset`s.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     def transfer(self, src, expr, collection):
-        """Transfer contents from a source `Registry`, limited to those reachable from the `Dataset`s
-        identified by the expression `expr`, into this `Registry` and collection them with a Collection.
+        """Transfer contents from a source `Registry`, limited to those
+        reachable from the `Dataset`s identified by the expression `expr`,
+        into this `Registry` and collection them with a Collection.
 
         Parameters
         ----------
         src: `Registry`
             The source `Registry`.
         expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly) the `Dataset`s transferred.
+            An expression that limits the `DataUnit`s and (indirectly) the
+            `Dataset`s transferred.
         collection: `str`
-            An additional Collection collection assigned to the newly imported `Dataset`s.
+            An additional Collection collection assigned to the newly
+            imported `Dataset`s.
         """
         self.import_(src.export(expr), collection)

@@ -42,7 +42,8 @@ class FitsCatalogFormatter(Formatter):
         -------
         inMemoryDataset : `Catalog`
             The requested `Catalog`.
-            The actual returned type will be a derived class (e.g. `SourceCatalog` or `ExposureCatalog`).
+            The actual returned type will be a derived class
+            (e.g. `SourceCatalog` or `ExposureCatalog`).
         """
         assert isinstance(fileDescriptor, FileDescriptor)
         return fileDescriptor.type.readFits(fileDescriptor.location.path)
@@ -60,7 +61,7 @@ class FitsCatalogFormatter(Formatter):
 
         Returns
         -------
-        uri : `str` 
+        uri : `str`
             The `URI` where the primary `Catalog` is stored.
         components : `dict`, optional
             A dictionary of URIs for the `Catalog`' components.

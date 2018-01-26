@@ -32,7 +32,8 @@ class FileDescriptor(object):
     location : `Location`
         Storage location.
     type : `cls`
-        Type the object will have after reading in Python (typically `StorageClass.type`).
+        Type the object will have after reading in Python (typically
+        `StorageClass.type`).
     parameters : `dict`
         Additional parameters that can be used for reading and writing.
     """
@@ -47,7 +48,8 @@ class FileDescriptor(object):
         location : `Location`
             Storage location.
         type : `cls`
-            Type the object will have after reading in Python (typically `StorageClass.type`).
+            Type the object will have after reading in Python (typically
+            `StorageClass.type`).
         parameters : `dict`
             Additional parameters that can be used for reading and writing.
         """

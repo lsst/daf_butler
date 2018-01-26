@@ -23,16 +23,12 @@
 
 import collections
 import copy
-import os
-import sys
-import warnings
 import yaml
 import pprint
 
-import lsst.utils
-
 from yaml.representer import Representer
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
+
 
 # UserDict and yaml have defined metaclasses and Python 3 does not allow multiple
 # inheritance of classes with distinct metaclasses. We therefore have to
@@ -66,7 +62,7 @@ class Config(_ConfigBase):
         ----------
         other: `str` or `Config` or `dict`
             Other source of configuration, can be:
-            
+
             - (`str`) Treated as a path to a config file on disk. Must end with '.yaml'.
             - (`Config`) Copies the other Config's values into this one.
             - (`dict`) Copies the values from the dict into this Config.
@@ -110,7 +106,6 @@ class Config(_ConfigBase):
         path: `str`
             To a persisted config file.
         """
-        config = None
         if path.endswith('yaml'):
             self.__initFromYamlFile(path)
         else:
@@ -195,7 +190,7 @@ class Config(_ConfigBase):
         ----------
         other: `dict` or `Config`
             Source of configuration:
-        
+
             - If foo is a dict, then after the update foo == {'a': {'c': 2}}
             - But if foo is a Config, then after the update foo == {'a': {'b': 1, 'c': 2}}
         """

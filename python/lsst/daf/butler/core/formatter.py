@@ -25,12 +25,10 @@ from abc import ABCMeta, abstractmethod
 
 from lsst.daf.persistence import doImport
 
-from .storageClass import StorageClass
-from .datasets import DatasetType
-
 
 class Formatter(object, metaclass=ABCMeta):
-    """Interface for reading and writing `Dataset`s with a particular `StorageClass`.
+    """Interface for reading and writing `Dataset`s with a particular
+    `StorageClass`.
     """
     @abstractmethod
     def read(self, fileDescriptor):
@@ -63,7 +61,7 @@ class Formatter(object, metaclass=ABCMeta):
 
         Returns
         -------
-        uri : `str` 
+        uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
             A dictionary of URIs for the `Dataset`' components.

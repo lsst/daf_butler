@@ -25,14 +25,16 @@ from collections import OrderedDict
 from hashlib import sha512
 from datetime import datetime  # placeholder while prototyping
 from sqlalchemy.sql import select, and_, exists
-from .schema import CameraTable, AbstractFilterTable, PhysicalFilterTable, PhysicalSensorTable, VisitTable, ObservedSensorTable, SnapTable, VisitRangeTable, SkyMapTable, TractTable, PatchTable
+from .schema import CameraTable, AbstractFilterTable, PhysicalFilterTable, PhysicalSensorTable, \
+    VisitTable, ObservedSensorTable, SnapTable, VisitRangeTable, SkyMapTable, TractTable, PatchTable
 
 
 class DataUnitMeta(type):
     """
-    Metaclass for DataUnit, keeps track of all subclasses to enable construction by name.
+    Metaclass for DataUnit, keeps track of all subclasses to enable
+    construction by name.
     """
-    def __init__(cls, name, bases, dct):
+    def __init__(cls, name, bases, dct):  # noqa N805
         if not hasattr(cls, '_subclasses'):
             # this is the base class.
             cls._subclasses = {}
@@ -52,7 +54,8 @@ class DataUnit(metaclass=DataUnitMeta):
 
     def invariantHash(self):
         """
-        Compute a hash that is invariant across Python sessions, and hence can be stored in a database.
+        Compute a hash that is invariant across Python sessions, and hence
+        can be stored in a database.
         """
         return sha512(b''.join(str(v).encode('utf-8') for v in self.pkey)).digest()
 
@@ -73,8 +76,8 @@ class DataUnit(metaclass=DataUnitMeta):
 
 def _buildGraph(unitTypes):
     """
-    Recursively obtain all dependencies and add them to a single top-level dict
-    representing all unique nodes in the graph.
+    Recursively obtain all dependencies and add them to a single top-level
+    dict representing all unique nodes in the graph.
     """
     nodes = {c.__name__: c for c in unitTypes}
 
@@ -91,12 +94,12 @@ def _buildGraph(unitTypes):
 def _sortTopological(unitTypes):
     """
     Standard DFS-based topological sort, but first recursively add
-    all dependencies to the graph dictionary and visit them in lexographically
-    sorted order to have deterministic output ordering.
+    all dependencies to the graph dictionary and visit them in
+    lexographically sorted order to have deterministic output ordering.
 
-    TODO: This surely can be done more efficiently (now effectively does DFS twice
-    and does a sort), but it is tricky due to the required deterministic output ordering
-    regardless of input.
+    TODO: This surely can be done more efficiently (now effectively does
+    DFS twice and does a sort), but it is tricky due to the required
+    deterministic output ordering regardless of input.
     """
     graph = _buildGraph(unitTypes)
     sortedGraph = OrderedDict()
@@ -154,12 +157,14 @@ class DataUnitTypeSet(tuple):
 
     def invariantHash(self, values):
         """
-        Compute a hash that is invariant across Python sessions, and hence can be stored in a database.
+        Compute a hash that is invariant across Python sessions, and hence
+        can be stored in a database.
         """
         return sha512(b''.join(unit.invariantHash() for unit in values)).digest()
 
     def expand(self, findfunc, values):
-        """Construct a dictionary of DataUnit instances from a dictionary of DataUnit primary key values.
+        """Construct a dictionary of DataUnit instances from a dictionary
+        of DataUnit primary key values.
         """
         result = {}
         for unitType in self:
@@ -167,7 +172,8 @@ class DataUnitTypeSet(tuple):
         return result
 
     def conform(self, units):
-        """Convert a sequence or dictionary of DataUnits to a tuple conforming to the ordering of this DataUnitTypeSet.
+        """Convert a sequence or dictionary of DataUnits to a tuple
+        conforming to the ordering of this DataUnitTypeSet.
         """
         if not isinstance(units, dict):
             units = {unit.__class__.__name__: unit for unit in units}
@@ -218,7 +224,7 @@ class Camera(DataUnit):
         return "{'Camera': '%s'}" % self.name
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 CameraTable.insert().values(
                     camera_name = self.name,
@@ -229,7 +235,7 @@ class Camera(DataUnit):
     @staticmethod
     def find(values, connection):
         cameraName = values['Camera']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = CameraTable.select().where(CameraTable.c.camera_name == cameraName)
             result = connection.execute(s).fetchone()
             return Camera(result['camera_name'], result['module'])
@@ -267,7 +273,7 @@ class AbstractFilter(DataUnit):
         return "{'AbstractFilter': '%s'}" % self.name
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 AbstractFilterTable.insert().values(
                     abstract_filter_name = self.name
@@ -277,8 +283,9 @@ class AbstractFilter(DataUnit):
     @staticmethod
     def find(values, connection):
         abstractFilterName = values['AbstractFilter']
-        with connection.begin() as transaction:
-            s = AbstractFilterTable.select().where(AbstractFilterTable.c.abstract_filter_name == abstractFilterName)
+        with connection.begin():
+            s = AbstractFilterTable.select().where(AbstractFilterTable.c.abstract_filter_name ==
+                                                   abstractFilterName)
             result = connection.execute(s).fetchone()
             return AbstractFilter(result['abstract_filter_name'])
 
@@ -301,7 +308,8 @@ class PhysicalFilter(DataUnit):
         return hash((self._abstract, self._camera, self._name))
 
     def __eq__(self, other):
-        return self._abstract == other._abstract and self._camera == other._camera and self._name == other._name
+        return self._abstract == other._abstract and self._camera == other._camera and \
+            self._name == other._name
 
     @property
     def abstract(self):
@@ -330,7 +338,7 @@ class PhysicalFilter(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 PhysicalFilterTable.insert().values(
                     physical_filter_name = self.name,
@@ -341,13 +349,14 @@ class PhysicalFilter(DataUnit):
 
     @staticmethod
     def find(values, connection):
-        cameraName = values['Camera']
+        # cameraName = values['Camera']
         physicalFilterName = values['PhysicalFilter']
-        with connection.begin() as transaction:
+        with connection.begin():
             # First check if PhysicalFilter, specified by combined key, exists
-            s = select([PhysicalFilterTable.c.abstract_filter_name]).where(and_(
-                PhysicalFilterTable.c.camera_name == cameraName, PhysicalFilterTable.c.physical_filter_name == physicalFilterName))
-            abstractFilterName = connection.execute(s).scalar()
+            # s = select([PhysicalFilterTable.c.abstract_filter_name]).where(and_(
+            #    PhysicalFilterTable.c.camera_name == cameraName,
+            #    PhysicalFilterTable.c.physical_filter_name == physicalFilterName))
+            # abstractFilterName = connection.execute(s).scalar()
             # Then load its components and construct the object
             abstractFilter = AbstractFilter.find(values, connection)
             camera = Camera.find(values, connection)
@@ -376,7 +385,8 @@ class PhysicalSensor(DataUnit):
         return hash((self._camera, self._number, self._name, self._group, self._purpose))
 
     def __eq__(self, other):
-        return self._camera == other._camera and self._number == other._number and self._group == other._group and self._purpose == other._purpose
+        return self._camera == other._camera and self._number == other._number and \
+            self._group == other._group and self._purpose == other._purpose
 
     @property
     def camera(self):
@@ -413,7 +423,7 @@ class PhysicalSensor(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 PhysicalSensorTable.insert().values(
                     camera_name = self.camera.name,
@@ -429,10 +439,13 @@ class PhysicalSensor(DataUnit):
         cameraName = values['Camera']
         physicalSensorNumber = values['PhysicalSensor']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             # First check if PhysicalSensor, specified by combined key, exists
-            s = select([PhysicalSensorTable.c.name, PhysicalSensorTable.c.group, PhysicalSensorTable.c.purpose]).where(and_(
-                PhysicalSensorTable.c.camera_name == cameraName, PhysicalSensorTable.c.physical_sensor_number == physicalSensorNumber))
+            s = select([PhysicalSensorTable.c.name, PhysicalSensorTable.c.group,
+                        PhysicalSensorTable.c.purpose]).where(
+                            and_(
+                                PhysicalSensorTable.c.camera_name == cameraName,
+                                PhysicalSensorTable.c.physical_sensor_number == physicalSensorNumber))
             result = connection.execute(s).first()
             name = result[PhysicalSensorTable.c.name]
             group = result[PhysicalSensorTable.c.group]
@@ -463,10 +476,13 @@ class Visit(DataUnit):
         self.region = region
 
     def __hash__(self):
-        return hash((self._camera, self._filter, self._number, self._obsBegin, self._exposureTime, self.region))
+        return hash((self._camera, self._filter, self._number, self._obsBegin,
+                     self._exposureTime, self.region))
 
     def __eq__(self, other):
-        return self._camera == other._camera and self._filter == other._filter and self._number == other._number and self._obsBegin == other._obsBegin and self._exposureTime == other._exposureTime and self.region == other.region
+        return self._camera == other._camera and self._filter == other._filter and \
+            self._number == other._number and self._obsBegin == other._obsBegin and \
+            self._exposureTime == other._exposureTime and self.region == other.region
 
     @property
     def camera(self):
@@ -503,7 +519,7 @@ class Visit(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 VisitTable.insert().values(
                     visit_number = self.number,
@@ -520,11 +536,11 @@ class Visit(DataUnit):
         cameraName = values['Camera']
         visitNumber = values['Visit']
 
-        with connection.begin() as transaction:
-            s = VisitTable.select().where(and_(VisitTable.c.camera_name == cameraName, VisitTable.c.visit_number == visitNumber))
+        with connection.begin():
+            s = VisitTable.select().where(and_(VisitTable.c.camera_name == cameraName,
+                                               VisitTable.c.visit_number == visitNumber))
             result = connection.execute(s).fetchone()
 
-            physicalFilterName = result[VisitTable.c.physical_filter_name]
             obsBegin = result[VisitTable.c.obs_begin]
             exposureTime = result[VisitTable.c.exposure_time]
             region = result[VisitTable.c.region]
@@ -552,7 +568,7 @@ class ObservedSensor(DataUnit):
         self.region = region
 
     def __hash__(self):
-        return hash((_camera, _visit, region))
+        return hash((self._camera, self._visit, self.region))
 
     def __eq__(self, other):
         return self._camera == other._camera and self._visit == other._visit and self.region == other.region
@@ -584,7 +600,7 @@ class ObservedSensor(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 ObservedSensorTable.insert().values(
                     visit_number = self.visit.number,
@@ -600,12 +616,14 @@ class ObservedSensor(DataUnit):
         visitNumber = values['Visit']
         physicalSensorNumber = values['PhysicalSensor']
 
-        with connection.begin() as transaction:
-            s = ObservedSensorTable.select().where(and_(ObservedSensorTable.c.camera_name == cameraName, ObservedSensorTable.c.visit_number ==
-                                                        visitNumber, ObservedSensorTable.c.physical_sensor_number == physicalSensorNumber))
+        with connection.begin():
+            s = ObservedSensorTable.select().where(and_(ObservedSensorTable.c.camera_name == cameraName,
+                                                        ObservedSensorTable.c.visit_number ==
+                                                        visitNumber,
+                                                        ObservedSensorTable.c.physical_sensor_number ==
+                                                        physicalSensorNumber))
             result = connection.execute(s).fetchone()
 
-            physical_sensor_number = result[ObservedSensorTable.c.physical_sensor_number]
             region = result[ObservedSensorTable.c.region]
 
             # Read child DataUnits
@@ -638,7 +656,9 @@ class Snap(DataUnit):
         return hash((self._camera, self._visit, self._index, self._obsBegin, self._exposureTime))
 
     def __eq__(self, other):
-        return self._camera == other._camera and self._visit == other._visit and self._index == other._index and self._obsBegin == other._obsBegin and self._exposureTime == other._exposureTime
+        return self._camera == other._camera and self._visit == other._visit and \
+            self._index == other._index and self._obsBegin == other._obsBegin and \
+            self._exposureTime == other._exposureTime
 
     @property
     def camera(self):
@@ -675,7 +695,7 @@ class Snap(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 SnapTable.insert().values(
                     visit_number = self.visit.number,
@@ -692,9 +712,10 @@ class Snap(DataUnit):
         visitNumber = values['Visit']
         snapIndex = values['Snap']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             s = SnapTable.select().where(and_(SnapTable.c.camera_name == cameraName,
-                                              SnapTable.c.visit_number == visitNumber, SnapTable.c.snap_index == snapIndex))
+                                              SnapTable.c.visit_number == visitNumber,
+                                              SnapTable.c.snap_index == snapIndex))
             result = connection.execute(s).fetchone()
 
             obsBegin = result[SnapTable.c.obs_begin]
@@ -721,10 +742,11 @@ class VisitRange(DataUnit):
         self._visitEnd = visitEnd
 
     def __hash__(self):
-        return hash((_camera, _visitBegin, _visitEnd))
+        return hash((self._camera, self._visitBegin, self._visitEnd))
 
     def __eq__(self, other):
-        return self._camera == other.camera and self._visitBegin == other._visitBegin and self._visitEnd == other._visitEnd
+        return self._camera == other.camera and self._visitBegin == other._visitBegin and \
+            self._visitEnd == other._visitEnd
 
     @property
     def camera(self):
@@ -753,7 +775,7 @@ class VisitRange(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 VisitRangeTable.insert().values(
                     visit_begin = self.visitBegin,
@@ -767,9 +789,11 @@ class VisitRange(DataUnit):
         cameraName = values['Camera']
         visitBegin, visitEnd = values['VisitRange']
 
-        with connection.begin() as transaction:
+        with connection.begin():
             result = connection.execute(select([exists().where(and_(
-                VisitRangeTable.c.camera_name == cameraName, VisitRangeTable.c.visit_begin == visitBegin, VisitRangeTable.c.visit_end == visitEnd))]))
+                VisitRangeTable.c.camera_name == cameraName,
+                VisitRangeTable.c.visit_begin == visitBegin,
+                VisitRangeTable.c.visit_end == visitEnd))]))
             if result.scalar():
                 camera = Camera.find(values, connection)
                 return VisitRange(camera, visitBegin, visitEnd)
@@ -790,7 +814,7 @@ class SkyMap(DataUnit):
         self._module = module
 
     def __hash__(self):
-        return hash((_name, _module))
+        return hash((self._name, self._module))
 
     def __eq__(self, other):
         return self._name == other._name and self._module == other._module
@@ -822,7 +846,7 @@ class SkyMap(DataUnit):
         return ("{'SkyMap': '%s'}" % self.name)
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 SkyMapTable.insert().values(
                     skymap_name = self.name,
@@ -834,7 +858,7 @@ class SkyMap(DataUnit):
     @staticmethod
     def find(values, connection):
         skymapName = values['SkyMap']
-        with connection.begin() as transaction:
+        with connection.begin():
             s = SkyMapTable.select().where(SkyMapTable.c.skymap_name == skymapName)
             result = connection.execute(s).fetchone()
             return SkyMap(result['skymap_name'], result['module'])
@@ -854,7 +878,7 @@ class Tract(DataUnit):
         self.region = region
 
     def __hash__(self):
-        return hash((_skymap, _number, region))
+        return hash((self._skymap, self._number, self.region))
 
     def __eq__(self, other):
         return self._skymap == other._skymap and self._number == other._number and self.region == other.region
@@ -882,7 +906,7 @@ class Tract(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 TractTable.insert().values(
                     tract_number = self.number,
@@ -895,8 +919,9 @@ class Tract(DataUnit):
     def find(values, connection):
         skymapName = values['SkyMap']
         tractNumber = values['Tract']
-        with connection.begin() as transaction:
-            s = TractTable.select().where(and_(TractTable.c.skymap_name == skymapName, TractTable.c.tract_number == tractNumber))
+        with connection.begin():
+            s = TractTable.select().where(and_(TractTable.c.skymap_name == skymapName,
+                                               TractTable.c.tract_number == tractNumber))
             result = connection.execute(s).fetchone()
             region = result[TractTable.c.region]
             skymap = SkyMap.find(values, connection)
@@ -923,10 +948,12 @@ class Patch(DataUnit):
         self.region = region
 
     def __hash__(self):
-        return hash((_skymap, _tract, _index, _cellX, _cellY, region))
+        return hash((self._skymap, self._tract, self._index, self._cellX, self._cellY, self.region))
 
     def __eq__(self, other):
-        return self._skymap == other._skymap and self._tract == other._tract and self._index == other._index and self._cellX == other._cellX and self._cellY == other._cellY and self.region == other.region
+        return self._skymap == other._skymap and self._tract == other._tract and \
+            self._index == other._index and self._cellX == other._cellX and \
+            self._cellY == other._cellY and self.region == other.region
 
     @property
     def skymap(self):
@@ -963,7 +990,7 @@ class Patch(DataUnit):
         )
 
     def insert(self, connection):
-        with connection.begin() as transaction:
+        with connection.begin():
             connection.execute(
                 PatchTable.insert().values(
                     patch_index = self.index,
@@ -980,9 +1007,10 @@ class Patch(DataUnit):
         skymapName = values['SkyMap']
         tractNumber = values['Tract']
         patchIndex = values['Patch']
-        with connection.begin() as transaction:
-            s = PatchTable.select().where(and_(PatchTable.c.skymap_name == skymapName, PatchTable.c.patch_index ==
-                                               patchIndex, PatchTable.c.tract_number == tractNumber))
+        with connection.begin():
+            s = PatchTable.select().where(and_(PatchTable.c.skymap_name == skymapName,
+                                               PatchTable.c.patch_index == patchIndex,
+                                               PatchTable.c.tract_number == tractNumber))
             result = connection.execute(s).fetchone()
             cellX = result[PatchTable.c.cell_x]
             cellY = result[PatchTable.c.cell_y]
