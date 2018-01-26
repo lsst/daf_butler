@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -20,8 +20,6 @@
 # the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
-
-from .location import Location
 
 
 class FileDescriptor(object):
@@ -53,7 +51,6 @@ class FileDescriptor(object):
         parameters : `dict`
             Additional parameters that can be used for reading and writing.
         """
-        assert isinstance(location, Location)
         self.location = location
         self.type = type
         self.parameters = parameters

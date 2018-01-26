@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -24,7 +24,6 @@
 from .core.config import Config
 from .core.datastore import Datastore
 from .core.registry import Registry
-from .core.datasets import DatasetLabel, DatasetHandle
 
 
 class ButlerConfig(Config):
@@ -68,15 +67,15 @@ class Butler(object):
         if self.run is None:
             self.run = self.registry.makeRun(self.config['run'])
 
-    def getDirect(self, handle, parameters=None):
-        """Load a `Dataset` or a slice thereof from a `DatasetHandle`.
+    def getDirect(self, ref, parameters=None):
+        """Load a `Dataset` or a slice thereof from a `DatasetRef`.
 
         Unlike `Butler.get`, this method allows `Datasets` outside the Butler's `Collection` to be read as
-        long as the `DatasetHandle` that identifies them can be obtained separately.
+        long as the `DatasetRef` that identifies them can be obtained separately.
 
         Parameters
         ----------
-        handle : `DatasetHandle`
+        ref : `DatasetRef`
             A pointer to the `Dataset` to load.
         parameters : `dict`
             `StorageClass`-specific parameters that can be used to obtain a slice of the `Dataset`.
@@ -86,19 +85,18 @@ class Butler(object):
         inMemoryDataset : `InMemoryDataset`
             The requested `Dataset`.
         """
-        assert isinstance(handle, DatasetHandle)
-        parent = self.datastore.get(handle.uri, handle.type.storageClass, parameters) if handle.uri else None
-        children = {name: self.datastore.get(childHandle, parameters)
-                    for name, childHandle in handle.components.items()}
-        return handle.type.storageClass.assemble(parent, children)
+        parent = self.datastore.get(ref.uri, ref.datasetType.storageClass, parameters) if ref.uri else None
+        children = {name: self.datastore.get(childRef, parameters)
+                    for name, childRef in ref.components.items()}
+        return ref.datasetType.storageClass.assemble(parent, children)
 
-    def get(self, label, parameters=None):
+    def get(self, ref, parameters=None):
         """Load a `Dataset` or a slice thereof from the Butler's `Collection`.
 
         Parameters
         ----------
-        label : `DatasetLabel`
-            Identifies the `Dataset` to retrieve.
+        ref : `DatasetRef`
+            The `Dataset` to retrieve.
         parameters : `dict`
             A dictionary of `StorageClass`-specific parameters that can be
             used to obtain a slice of the `Dataset`.
@@ -108,37 +106,36 @@ class Butler(object):
         dataset : `InMemoryDataset`
             The requested `Dataset`.
         """
-        assert isinstance(label, DatasetLabel)
-        handle = self.registry.find(self.run.collection, label)
-        if handle:
-            return self.getDirect(handle, parameters)
+        ref = self.registry.find(self.run.collection, ref)
+        if ref:
+            return self.getDirect(ref, parameters)
         else:
             return None  # No Dataset found
 
-    def put(self, label, inMemoryDataset, producer=None):
+    def put(self, ref, inMemoryDataset, producer=None):
         """Write a `Dataset`.
 
         Parameters
         ----------
-        label : `DatasetLabel`
-            Identifies the `Dataset` being stored.
+        ref : `DatasetRef`
+            The `Dataset` being stored.
         inMemoryDataset : `InMemoryDataset`
             The `Dataset` to store.
         producer : `Quantum`
-            Identifies the producer of this `Dataset`.  May be ``None`` for some `Registries`.
+            The producer of this `Dataset`.  May be ``None`` for some `Registries`.
             ``producer.run`` must match ``self.config['run']``.
 
         Returns
         -------
-        datasetHandle : `DatasetHandle`
-            A handle that identifies the registered (and stored) dataset.
+        datasetRef : `DatasetRef`
+            The registered (and stored) dataset.
         """
-        ref = self.registry.expand(label)
+        ref = self.registry.expand(ref)
         run = self.run
         assert(producer is None or run == producer.run)
         storageHint = ref.makeStorageHint(run)
-        uri, components = self.datastore.put(inMemoryDataset, ref.type.storageClass,
-                                             storageHint, ref.type.name)
+        uri, components = self.datastore.put(inMemoryDataset, ref.datasetType.storageClass,
+                                             storageHint, ref.datasetType.name)
         return self.registry.addDataset(ref, uri, components, producer=producer, run=run)
 
     def markInputUsed(self, quantum, ref):
@@ -151,19 +148,18 @@ class Butler(object):
         ref : `DatasetRef`
             The `Dataset` that is a true dependency of ``quantum``.
         """
-        handle = self.registry.find(self.run.collection, ref)
-        self.registry.markInputUsed(handle, quantum)
+        ref = self.registry.find(self.run.collection, ref)
+        self.registry.markInputUsed(ref, quantum)
 
-    def unlink(self, *labels):
-        """Remove the `Dataset`s associated with the given `DatasetLabel`s from the Butler's `Collection`,
+    def unlink(self, *refs):
+        """Remove the `Dataset`s associated with the given `DatasetRef`s from the Butler's `Collection`,
         and signal that they may be deleted from storage if they are not referenced by any other `Collection`.
 
         Parameters
         ----------
-        labels : [`DatasetLabel`]
-            List of labels for `Dataset`s to unlink.
+        refs : [`DatasetRef`]
+            List of refs for `Dataset`s to unlink.
         """
-        handles = [self.registry.find(self.run.collection, label)
-                   for label in labels]
-        for handle in self.registry.disassociate(self.run.collection, handles, remove=True):
-            self.datastore.remove(handle.uri)
+        refs = [self.registry.find(self.run.collection, ref) for ref in refs]
+        for ref in self.registry.disassociate(self.run.collection, refs, remove=True):
+            self.datastore.remove(ref.uri)

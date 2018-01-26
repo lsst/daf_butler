@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -21,17 +21,7 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-from sqlalchemy import create_engine
-from sqlalchemy.sql import select, and_, exists
-
-from lsst.daf.butler.core.schema import metadata, DatasetTypeTable, RunTable, QuantumTable, \
-    DatasetTable, DatasetCollectionsTable, DatasetConsumersTable, DatasetTypeUnitsTable
-from lsst.daf.butler.core.datasets import DatasetType, DatasetHandle, DatasetRef, DatasetLabel
-from lsst.daf.butler.core.run import Run
-from lsst.daf.butler.core.quantum import Quantum
-from lsst.daf.butler.core.units import DataUnit, DataUnitTypeSet
-from lsst.daf.butler.core.storageClass import StorageClass
-from lsst.daf.butler.core.registry import RegistryConfig, Registry
+from ..core import RegistryConfig, Registry
 
 
 class SqlRegistryConfig(RegistryConfig):
@@ -39,45 +29,29 @@ class SqlRegistryConfig(RegistryConfig):
 
 
 class SqlRegistry(Registry):
-    """Basic SQL backed registry.
-
-    Attributes
-    ----------
-    id: `int`
-        Unique identifier for this `Registry`.
-    engine: `sqlalchemy.Enigine`
-        Connects to a backend database.
+    """Registry backed by a SQL database.
     """
 
     def __init__(self, config):
-        self.config = RegistryConfig(config)['registry']
-        self.engine = create_engine(self.config['dbname'])
-        self.id = self.config['id']
+        """Constructor
 
-        metadata.create_all(self.engine)
+        Parameters
+        ----------
+        config : `SqlRegistryConfig` or `str`
+            Load configuration
+        """
+        self.config = SqlRegistryConfig(config)['SqlRegistry']
 
     def registerDatasetType(self, datasetType):
         """
-        Add a new :ref:`DatasetType` to the Registry.
+        Add a new :ref:`DatasetType` to the SqlRegistry.
 
         Parameters
         ----------
         datasetType: `DatasetType`
             The `DatasetType` to be added.
         """
-        assert isinstance(datasetType, DatasetType)
-
-        with self.engine.begin() as connection:
-            insert = DatasetTypeTable.insert().values(
-                dataset_type_name = datasetType.name,
-                template = datasetType.template,
-                storage_class = datasetType.storageClass.name
-            )
-            connection.execute(insert)
-
-            connection.execute(DatasetTypeUnitsTable.insert(), [
-                               {'dataset_type_name': datasetType.name,
-                                'unit_name': unit.__name__} for unit in datasetType.units])
+        raise NotImplementedError("Must be implemented by subclass")
 
     def getDatasetType(self, name):
         """Get the `DatasetType`.
@@ -92,33 +66,13 @@ class SqlRegistry(Registry):
         type: `DatasetType`
             The `DatasetType` associated with the given name.
         """
-        assert isinstance(name, str)
-
-        with self.engine.begin() as connection:
-            # DataUnits
-            units = []
-            for result in connection.execute(select([DatasetTypeUnitsTable]).where(
-                    DatasetTypeUnitsTable.c.dataset_type_name == name)).fetchall():
-                units.append(DataUnit.getType(result[DatasetTypeUnitsTable.c.unit_name]))
-
-            # DatasetType
-            result = connection.execute(select([DatasetTypeTable]).where(
-                DatasetTypeTable.c.dataset_type_name == name)).fetchone()
-            if result:
-                return DatasetType(
-                    name = result[DatasetTypeTable.c.dataset_type_name],
-                    template = result[DatasetTypeTable.c.template],
-                    units = DataUnitTypeSet(units),
-                    storageClass = StorageClass.subclasses[result[DatasetTypeTable.c.storage_class]]
-                )
-            else:
-                return None
+        raise NotImplementedError("Must be implemented by subclass")
 
     def addDataset(self, ref, uri, components, run, producer=None):
         """Add a `Dataset` to a Collection.
 
-        This always adds a new `Dataset`; to associate an existing `Dataset`
-        with a new `Collection`, use `associate`.
+        This always adds a new `Dataset`; to associate an existing `Dataset` with
+        a new `Collection`, use `associate`.
 
         Parameters
         ----------
@@ -128,67 +82,31 @@ class SqlRegistry(Registry):
             The URI that has been associated with the `Dataset` by a
             `Datastore`.
         components: `dict`
-            If the `Dataset` is a composite, a ``{name : URI}`` dictionary
-            of its named components and storage locations.
+            If the `Dataset` is a composite, a ``{name : URI}`` dictionary of
+            its named components and storage locations.
         run: `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
             A Run must be provided by one of the two arguments.
         producer: `Quantum`
-            Unit of work that produced the Dataset.  May be ``None`` to
-            store no provenance information, but if present the `Quantum`
-            must already have been added to the Registry.
+            Unit of work that produced the Dataset.  May be ``None`` to store
+            no provenance information, but if present the `Quantum` must
+            already have been added to the SqlRegistry.
 
         Returns
         -------
-        handle: `DatasetHandle`
-            A newly-created `DatasetHandle` instance.
+        ref: `DatasetRef`
+            A newly-created `DatasetRef` instance.
 
         Raises
         ------
         e: `Exception`
-            If a `Dataset` with the given `DatasetRef` already exists in
-            the given Collection.
+            If a `Dataset` with the given `DatasetRef` already exists in the
+            given Collection.
         """
-        assert isinstance(ref, DatasetRef)
-        assert isinstance(uri, str)
-        assert isinstance(run, Run)
-        assert producer is None or isinstance(producer, Quantum)
+        raise NotImplementedError("Must be implemented by subclass")
 
-        if self.find(run.collection, ref) is not None:
-            raise ValueError("dupplicate dataset {0}".format(str(ref)))
-
-        datasetHandle = DatasetHandle(
-            datasetId=DatasetRef.getNewId(),
-            registryId=self.id,
-            ref=ref,
-            uri=uri,
-            components=components,
-            run=run,
-        )
-
-        unitHash = datasetHandle.type.units.invariantHash(datasetHandle.units)
-
-        with self.engine.begin() as connection:
-            insert = DatasetTable.insert().values(
-                dataset_id = datasetHandle.datasetId,
-                registry_id = datasetHandle.registryId,
-                dataset_type_name = datasetHandle.type.name,
-                unit_hash = unitHash,
-                uri = datasetHandle.uri,
-                run_id = datasetHandle.run.runId,
-                producer_id = datasetHandle.producer.quantumId if datasetHandle.producer else None
-            )
-            connection.execute(insert)
-
-            if components:
-                raise NotImplementedError
-
-        self.associate(run.collection, datasetHandle)
-
-        return datasetHandle
-
-    def associate(self, collection, handles):
+    def associate(self, collection, refs):
         """Add existing `Dataset`s to a Collection, possibly creating the
         Collection in the process.
 
@@ -196,110 +114,64 @@ class SqlRegistry(Registry):
         ----------
         collection: `str`
             Indicates the Collection the `Dataset`s should be associated with.
-        handles: `[DatasetHandle]`
-            A `list` of `DatasetHandle` instances that already exist in this
-            `Registry`.
+        refs: `[DatasetRef]`
+            A `list` of `DatasetRef` instances that already exist in this
+            `SqlRegistry`.
         """
-        if isinstance(handles, DatasetHandle):
-            handles = (handles, )
-        with self.engine.begin() as connection:
-            connection.execute(DatasetCollectionsTable.insert(),
-                               [{'collection': collection, 'dataset_id': handle.datasetId,
-                                 'registry_id': handle.registryId}
-                                   for handle in handles]
-                               )
+        raise NotImplementedError("Must be implemented by subclass")
 
-    def disassociate(self, collection, handles, remove=True):
+    def disassociate(self, collection, refs, remove=True):
         """Remove existing `Dataset`s from a Collection.
 
-        ``collection`` and ``handle`` combinations that are not currently
+        ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
 
         Parameters
         ----------
         collection: `str`
             The Collection the `Dataset`s should no longer be associated with.
-        handles: `[DatasetHandle]`
-            A `list` of `DatasetHandle` instances that already exist in this
-            `Registry`.
+        refs: `[DatasetRef]`
+            A `list` of `DatasetRef` instances that already exist in this
+            `SqlRegistry`.
         remove: `bool`
-            If `True`, remove `Dataset`s from the `Registry` if they are not
+            If `True`, remove `Dataset`s from the `SqlRegistry` if they are not
             associated with any Collection (including via any composites).
 
         Returns
         -------
-        removed: `[DatasetHandle]`
-            If `remove` is `True`, the `list` of `DatasetHandle`s that were
+        removed: `[DatasetRef]`
+            If `remove` is `True`, the `list` of `DatasetRef`s that were
             removed.
         """
-        deletedDatasets = []
-        with self.engine.begin() as connection:
-            for handle in handles:
-                connection.execute(DatasetCollectionsTable.delete().where(and_(
-                    DatasetCollectionsTable.c.collection == collection,
-                    DatasetCollectionsTable.c.dataset_id == handle.datasetId,
-                    DatasetCollectionsTable.c.registry_id == handle.registryId
-                )))
-
-                if remove:
-                    if not connection.execute(select([exists().where(and_(
-                            DatasetCollectionsTable.c.dataset_id == handle.datasetId,
-                            DatasetCollectionsTable.c.registry_id == handle.registryId))])).scalar():
-
-                        connection.execute(DatasetTable.delete().where(and_(
-                            DatasetTable.c.dataset_id == handle.datasetId,
-                            DatasetTable.c.registry_id == handle.registryId
-                        )))
-
-                        deletedDatasets.append(handle)
-                    else:
-                        # Dataset is still in use
-                        pass
-        return deletedDatasets
+        raise NotImplementedError("Must be implemented by subclass")
 
     def makeRun(self, collection):
-        """Create a new `Run` in the `Registry` and return it.
+        """Create a new `Run` in the `SqlRegistry` and return it.
 
         Parameters
         ----------
         collection: `str`
-            The Collection collection used to identify all inputs and
-            outputs of the `Run`.
+            The Collection collection used to identify all inputs and outputs
+            of the `Run`.
 
         Returns
         -------
         run: `Run`
             A new `Run` instance.
         """
-        run = Run(runId=Run.getNewId(), registryId=self.id, collection=collection,
-                  environment=None, pipeline=None)
-
-        with self.engine.begin() as connection:
-            insert = RunTable.insert().values(
-                run_id=run.runId,
-                registry_id=run.registryId,
-                collection=run.collection,
-                environment_id=run.environment,
-                pipeline_id=run.pipeline
-            )
-            connection.execute(insert)
-
-        return run
+        raise NotImplementedError("Must be implemented by subclass")
 
     def updateRun(self, run):
-        """Update the `environment` and/or `pipeline` of the given `Run` in the database,
-        given the `DatasetHandle` attributes of the input `Run`.
+        """Update the `environment` and/or `pipeline` of the given `Run`
+        in the database, given the `DatasetRef` attributes of the input
+        `Run`.
 
         Parameters
         ----------
         run: `Run`
             The `Run` to update with the new values filled in.
         """
-        with self.engine.begin() as connection:
-            # TODO: should it also update the collection?
-            connection.execute(RunTable.update().where(and_(RunTable.c.run_id == run.runId,
-                                                            RunTable.c.registry_id == run.registryId)).values(
-                environment_id = run.environment, pipeline_id = run.pipeline))
+        raise NotImplementedError("Must be implemented by subclass")
 
     def getRun(self, collection=None, id=None):
         """
@@ -312,97 +184,48 @@ class SqlRegistry(Registry):
         id : `int`, optional
             If given, lookup by id instead and ignore `collection`.
         """
-        if collection is None and id is None:
-            raise ValueError("Either collection or id needs to be given")
-        with self.engine.begin() as connection:
-            if id is not None:
-                result = connection.execute(RunTable.select().where(
-                    and_(RunTable.c.run_id == id, RunTable.c.registry_id == self.id))).fetchone()
-            else:
-                result = connection.execute(RunTable.select().where(
-                    and_(RunTable.c.collection == collection, RunTable.c.registry_id == self.id))).fetchone()
-
-            if result:
-                runId = result[RunTable.c.run_id]
-                collection = result[RunTable.c.collection]
-                environment = result[RunTable.c.environment_id]
-                pipeline = result[RunTable.c.pipeline_id]
-
-                return Run(runId, self.id, collection, environment, pipeline)
-            else:
-                return None
+        raise NotImplementedError("Must be implemented by subclass")
 
     def addQuantum(self, quantum):
-        """Add a new `Quantum` to the `Registry`.
+        """Add a new `Quantum` to the `SqlRegistry`.
 
         Parameters
         ----------
         quantum: `Quantum`
-            Instance to add to the `Registry`.
-            The given `Quantum` must not already be present in the `Registry`
+            Instance to add to the `SqlRegistry`.
+            The given `Quantum` must not already be present in the `SqlRegistry`
             (or any other), therefore its:
             - `pkey` attribute must be `None`.
             - `predictedInputs` attribute must be fully populated with
-              `DatasetHandle`s, and its.
+               `DatasetRef`s, and its.
             - `actualInputs` and `outputs` will be ignored.
         """
-        assert isinstance(quantum, Quantum)
-        assert quantum.pkey is None
+        raise NotImplementedError("Must be implemented by subclass")
 
-        quantum._quantumId = Quantum.getNewId()
-        quantum._registryId = self.id
-
-        with self.engine.begin() as connection:
-            insert = QuantumTable.insert().values(
-                quantum_id = quantum.quantumId,
-                registry_id = quantum.registryId,
-                run_id = quantum.run.runId,
-                task = quantum.task
-            )
-            connection.execute(insert)
-
-            for inputs in quantum.predictedInputs.values():
-                connection.execute(DatasetConsumersTable.insert(), [
-                    {'quantum_id': quantum.quantumId,
-                     'quantum_registry_id': quantum.registryId,
-                     'dataset_id': handle.datasetId,
-                     'dataset_registry_id': handle.registryId,
-                     'actual': False} for handle in inputs])
-
-    def markInputUsed(self, quantum, handle):
-        """Record the given `DatasetHandle` as an actual (not just predicted)
+    def markInputUsed(self, quantum, ref):
+        """Record the given `DatasetRef` as an actual (not just predicted)
         input of the given `Quantum`.
 
-        This updates both the `Registry`'s `Quantum` table and the Python
-        `Quantum.actualInputs` attribute.
+        This updates both the `SqlRegistry`'s `Quantum` table and the Python `Quantum.actualInputs` attribute.
 
         Parameters
         ----------
         quantum: `Quantum`
             Producer to update.
             Will be updated in this call.
-        handle: `DatasetHandle`
+        ref: `DatasetRef`
             To set as actually used input.
 
         Raises
         ------
         e: `Exception`
-            If `handle` is not already in the predicted inputs list.
+            If `ref` is not already in the predicted inputs list.
         """
-        assert isinstance(quantum, Quantum)
-        assert isinstance(handle, DatasetHandle)
-
-        with self.engine.begin() as connection:
-            update = DatasetConsumersTable.update().where(and_(
-                DatasetConsumersTable.c.quantum_id == quantum.quantumId,
-                DatasetConsumersTable.c.quantum_registry_id == quantum.registryId,
-                DatasetConsumersTable.c.dataset_id == handle.datasetId,
-                DatasetConsumersTable.c.dataset_registry_id == handle.registryId
-            )).values(actual=True)
-            connection.execute(update)
+        raise NotImplementedError("Must be implemented by subclass")
 
     def addDataUnit(self, unit, replace=False):
-        """Add a new `DataUnit`, optionally replacing an existing one (for updates).
+        """Add a new `DataUnit`, optionally replacing an existing one
+        (for updates).
 
         unit: `DataUnit`
             The `DataUnit` to add or replace.
@@ -410,13 +233,7 @@ class SqlRegistry(Registry):
             If `True`, replace any matching `DataUnit` that already exists
             (updating its non-unique fields) instead of raising an exception.
         """
-        assert isinstance(unit, DataUnit)
-
-        if replace:
-            raise NotImplementedError
-
-        with self.engine.begin() as connection:
-            unit.insert(connection)
+        raise NotImplementedError("Must be implemented by subclass")
 
     def findDataUnit(self, cls, values):
         """Return a `DataUnit` given a dictionary of values.
@@ -432,82 +249,45 @@ class SqlRegistry(Registry):
         -------
         unit: `DataUnit`
             Instance of type `cls`, or `None` if no matching unit is found.
-
-        See Also
-        --------
-        `DataUnitMap.findDataUnit` : Find a `DataUnit` in a `DataUnitTypeMap`.
         """
-        with self.engine.begin() as connection:
-            return cls.find(values, connection)
+        raise NotImplementedError("Must be implemented by subclass")
 
-    def expand(self, label):
-        """Expand a `DatasetLabel`, returning an equivalent `DatasetRef`.
-
-        Is a simple pass-through if `label` is already a `DatasetRef`.
+    def expand(self, ref):
+        """Expand a `DatasetRef`.
 
         Parameters
         ----------
-        label: `DatasetLabel`
-            The `DatasetLabel` to expand.
+        ref: `DatasetRef`
+            The `DatasetRef` to expand.
 
         Returns
         -------
         ref: `DatasetRef`
-            The label expanded as a reference.
+            The expanded reference.
         """
-        assert isinstance(label, DatasetLabel)
-        if isinstance(label, DatasetRef):
-            return label
+        raise NotImplementedError("Must be implemented by subclass")
 
-        datasetType = self.getDatasetType(label.name)
-        dataUnits = datasetType.units.expand(self.findDataUnit, label.units)
-
-        return DatasetRef(datasetType, dataUnits)
-
-    def find(self, collection, label):
+    def find(self, collection, ref):
         """Look up the location of the `Dataset` associated with the given
-        `DatasetLabel`.
+        `DatasetRef`.
 
-        This can be used to obtain the URI that permits the `Dataset`
-        to be read from a `Datastore`. Is a simple pass-through if `label`
-        is already a `DatasetHandle`.
+        This can be used to obtain the URI that permits the `Dataset` to be
+        read from a `Datastore`.
 
         Parameters
         ----------
         collection: `str`
             Identifies the Collection to search.
-        label: `DatasetLabel`
+        ref: `DatasetRef`
             Identifies the `Dataset`.
 
         Returns
         -------
-        handle: `DatasetHandle`
-            A handle to the `Dataset`, or `None` if no matching
-            `Dataset` was found.
+        ref: `DatasetRef`
+            A ref to the `Dataset`, or `None` if no matching `Dataset`
+            was found.
         """
-        datasetRef = self.expand(label)
-
-        unitHash = datasetRef.type.units.invariantHash(datasetRef.units)
-
-        with self.engine.begin() as connection:
-            s = select([DatasetTable]).select_from(DatasetTable.join(DatasetCollectionsTable)).where(
-                and_(DatasetTable.c.unit_hash == unitHash,
-                     DatasetCollectionsTable.c.collection == collection))
-            result = connection.execute(s).fetchall()
-
-            if len(result) == 1:
-                row = result[0]
-                datasetId = row[DatasetTable.c.dataset_id]
-                registryId = row[DatasetTable.c.registry_id]
-                uri = row[DatasetTable.c.uri]
-                runId = row[DatasetTable.c.run_id]
-                components = None
-                run = self.getRun(id=runId)
-                return DatasetHandle(datasetId, registryId, datasetRef, uri, components, run)
-            elif len(result) == 0:
-                return None
-            else:
-                raise NotImplementedError("Cannot handle collisions")
+        raise NotImplementedError("Must be implemented by subclass")
 
     def subset(self, collection, expr, datasetTypes):
         """Create a new `Collection` by subsetting an existing one.
@@ -520,8 +300,8 @@ class SqlRegistry(Registry):
             An expression that limits the `DataUnit`s and (indirectly)
             `Dataset`s in the subset.
         datasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances should be
-            included in the subset.
+            The `list` of `DatasetType`s whose instances should be included
+            in the subset.
 
         Returns
         -------
@@ -534,7 +314,8 @@ class SqlRegistry(Registry):
         """Create a new Collection from a series of existing ones.
 
         Entries earlier in the list will be used in preference to later
-        entries when both contain `Dataset`s with the same `DatasetRef`.
+        entries when both contain
+        `Dataset`s with the same `DatasetRef`.
 
         Parameters
         ----------
@@ -552,8 +333,8 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collections: `[str]`
-            An ordered `list` of collections indicating the Collections
-            to search for `Dataset`s.
+            An ordered `list` of collections indicating the Collections to
+            search for `Dataset`s.
         expr: `str`
             An expression that limits the `DataUnit`s and (indirectly) the
             `Dataset`s returned.
@@ -561,9 +342,9 @@ class SqlRegistry(Registry):
             The `list` of `DatasetType`s whose instances should be included
             in the graph and limit its extent.
         futureDatasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances may be added to
-            the graph later, which requires that their `DataUnit` types must
-            be present in the graph.
+            The `list` of `DatasetType`s whose instances may be added to the
+            graph later, which requires that their `DataUnit` types must be
+            present in the graph.
 
         Returns
         -------
@@ -591,29 +372,28 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def export(self, expr):
-        """Export contents of the `Registry`, limited to those reachable
-        from the `Dataset`s identified by the expression `expr`, into a
-        `TableSet` format such that it can be imported into a different
-        database.
+        """Export contents of the `SqlRegistry`, limited to those reachable from
+        the `Dataset`s identified by the expression `expr`, into a `TableSet`
+        format such that it can be imported into a different database.
 
         Parameters
         ----------
         expr: `str`
             An expression (SQL query that evaluates to a list of `Dataset`
-            primary keys) that selects the `Datasets, or a `QuantumGraph` that
-            can be similarly interpreted.
+            primary keys) that selects the `Datasets, or a `QuantumGraph`
+            that can be similarly interpreted.
 
         Returns
         -------
         ts: `TableSet`
-            Containing all rows, from all tables in the `Registry` that
+            Containing all rows, from all tables in the `SqlRegistry` that
             are reachable from the selected `Dataset`s.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     def import_(self, tables, collection):
         """Import (previously exported) contents into the (possibly empty)
-        `Registry`.
+        `SqlRegistry`.
 
         Parameters
         ----------
@@ -626,17 +406,17 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def transfer(self, src, expr, collection):
-        """Transfer contents from a source `Registry`, limited to those
+        """Transfer contents from a source `SqlRegistry`, limited to those
         reachable from the `Dataset`s identified by the expression `expr`,
-        into this `Registry` and collection them with a Collection.
+        into this `SqlRegistry` and collection them with a Collection.
 
         Parameters
         ----------
-        src: `Registry`
-            The source `Registry`.
+        src: `SqlRegistry`
+            The source `SqlRegistry`.
         expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly) the
-            `Dataset`s transferred.
+            An expression that limits the `DataUnit`s and (indirectly)
+            the `Dataset`s transferred.
         collection: `str`
             An additional Collection collection assigned to the newly
             imported `Dataset`s.
