@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, LargeBinary
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from lsst.daf.butler.schema import metadata

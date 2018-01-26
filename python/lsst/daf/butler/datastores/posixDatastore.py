@@ -25,15 +25,12 @@ import os
 
 from lsst.daf.persistence.safeFileIo import safeMakeDir
 
-from lsst.daf.butler.core.datastore import DatastoreConfig, Datastore
-from lsst.daf.butler.core.storageClass import StorageClass
-from lsst.daf.butler.core.datasets import DatasetType
-from lsst.daf.butler.core.location import Location, LocationFactory
+from lsst.daf.butler.core.datastore import Datastore
+from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
+from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
-from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
 
-import yaml
 
 class PosixDatastore(Datastore):
     """Basic POSIX filesystem backed Datastore.
@@ -54,7 +51,7 @@ class PosixDatastore(Datastore):
         super().__init__(config)
         self.root = self.config['root']
         if not os.path.isdir(self.root):
-            if not 'create' in self.config or not self.config['create']:
+            if 'create' not in self.config or not self.config['create']:
                 raise ValueError("No valid root at: {0}".format(self.root))
             safeMakeDir(self.root)
 
@@ -70,11 +67,13 @@ class PosixDatastore(Datastore):
         Parameters
         ----------
         uri : `str`
-            a Universal Resource Identifier that specifies the location of the stored `Dataset`.
+            a Universal Resource Identifier that specifies the location of the
+            stored `Dataset`.
         storageClass : `StorageClass`
             the `StorageClass` associated with the `DatasetType`.
         parameters : `dict`
-            `StorageClass`-specific parameters that specify a slice of the `Dataset` to be loaded.
+            `StorageClass`-specific parameters that specify a slice of the
+            `Dataset` to be loaded.
 
         Returns
         -------
@@ -99,12 +98,12 @@ class PosixDatastore(Datastore):
         storageHint : `str`
             Provides a hint that the `Datastore` may use as (part of) the URI.
         typeName : `str`
-            The `DatasetType` name, which may be used by this `Datastore` to override the
-            default serialization format for the `StorageClass`.
+            The `DatasetType` name, which may be used by this `Datastore` to
+            override the default serialization format for the `StorageClass`.
 
         Returns
         -------
-        uri : `str` 
+        uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
             A dictionary of URIs for the `Dataset`' components.
@@ -123,10 +122,12 @@ class PosixDatastore(Datastore):
         Parameters
         ----------
         uri : `str`
-            a Universal Resource Identifier that specifies the location of the stored `Dataset`.
+            A Universal Resource Identifier that specifies the location of the
+            stored `Dataset`.
 
         .. note::
-            Some Datastores may implement this method as a silent no-op to disable `Dataset` deletion through standard interfaces.
+            Some Datastores may implement this method as a silent no-op to
+            disable `Dataset` deletion through standard interfaces.
         """
         location = self.locationFactory.fromUri(uri)
         if not os.path.exists(location.path):
@@ -146,13 +147,15 @@ class PosixDatastore(Datastore):
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
         storageHint : `str`
-            Provides a hint that this `Datastore` may use as [part of] the `URI`.
+            Provides a hint that this `Datastore` may use as [part of] the
+            `URI`.
         typeName : `str`
-            The `DatasetType` name, which may be used by this `Datastore` to override the default serialization format for the `StorageClass`.
+            The `DatasetType` name, which may be used by this `Datastore`
+            to override the default serialization format for the `StorageClass`.
 
         Returns
         -------
-        uri : `str` 
+        uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
             A dictionary of URIs for the `Dataset`' components.

@@ -43,7 +43,7 @@ def assertCatalogEqual(self, inputCatalog, outputCatalog):
     self.assertEqual(inputTable.getPsfFluxDefinition(), outputTable.getPsfFluxDefinition())
     self.assertEqual(inputRecord.getPsfFlux(), outputRecord.getPsfFlux())
     self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
-    self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())        
+    self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())
     self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
     self.assertFloatsAlmostEqual(
         inputRecord.getCentroidErr()[0, 0],

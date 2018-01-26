@@ -33,11 +33,12 @@ class ButlerConfig(Config):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.validate()
-    
+
     def validate(self):
         for k in ['run', 'datastore.cls', 'registry.cls']:
             if k not in self:
                 raise ValueError("Missing ButlerConfig parameter: {0}".format(k))
+
 
 class Butler(object):
     """Main entry point for the data access system.
@@ -66,7 +67,7 @@ class Butler(object):
         self.run = self.registry.getRun(self.config['run'])
         if self.run is None:
             self.run = self.registry.makeRun(self.config['run'])
-        
+
     def getDirect(self, handle, parameters=None):
         """Load a `Dataset` or a slice thereof from a `DatasetHandle`.
 
@@ -99,7 +100,8 @@ class Butler(object):
         label : `DatasetLabel`
             Identifies the `Dataset` to retrieve.
         parameters : `dict`
-            A dictionary of `StorageClass`-specific parameters that can be used to obtain a slice of the `Dataset`.
+            A dictionary of `StorageClass`-specific parameters that can be
+            used to obtain a slice of the `Dataset`.
 
         Returns
         -------
@@ -135,7 +137,8 @@ class Butler(object):
         run = self.run
         assert(producer is None or run == producer.run)
         storageHint = ref.makeStorageHint(run)
-        uri, components = self.datastore.put(inMemoryDataset, ref.type.storageClass, storageHint, ref.type.name)
+        uri, components = self.datastore.put(inMemoryDataset, ref.type.storageClass,
+                                             storageHint, ref.type.name)
         return self.registry.addDataset(ref, uri, components, producer=producer, run=run)
 
     def markInputUsed(self, quantum, ref):

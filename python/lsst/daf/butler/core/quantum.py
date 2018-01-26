@@ -87,26 +87,30 @@ class Quantum(object):
 
     @property
     def task(self):
-        """If the `Quantum` is associated with a `SuperTask`, this is the `SuperTask` instance that produced
-        and should execute this set of inputs and outputs. If not, a human-readable string identifier
-        for the operation. Some Registries may permit the value to be `None`, but are not required to in general.
+        """If the `Quantum` is associated with a `SuperTask`, this is the
+        `SuperTask` instance that produced and should execute this set of
+        inputs and outputs. If not, a human-readable string identifier
+        for the operation. Some Registries may permit the value to be
+        `None`, but are not required to in general.
         """
         return self._task
 
     @property
     def predictedInputs(self):
-        """A dictionary of input datasets that were expected to be used, with `DatasetType`
-        names as keys and a set of `DatasetRef` instances as values.
+        """A dictionary of input datasets that were expected to be used,
+        with `DatasetType` names as keys and a set of `DatasetRef` instances
+        as values.
 
-        Input `Datasets` that have already been stored may be `DatasetHandle`s, and in many contexts
-        may be guaranteed to be.
+        Input `Datasets` that have already been stored may be
+        `DatasetHandle`s, and in many contexts may be guaranteed to be.
         Read-only; update via `addPredictedInput()`.
         """
         return self._predictedInputs
 
     @property
     def actualInputs(self):
-        """A `dict` of input datasets that were actually used, with the same form as `predictedInputs`.
+        """A `dict` of input datasets that were actually used, with the same
+        form as `predictedInputs`.
 
         All returned sets must be subsets of those in `predictedInputs`.
 
@@ -117,8 +121,8 @@ class Quantum(object):
     def addPredictedInput(self, ref):
         """Add an input `DatasetRef` to the `Quantum`.
 
-        This does not automatically update a `Registry`; all `predictedInputs` must be present before a
-        `Registry.addQuantum()` is called.
+        This does not automatically update a `Registry`; all `predictedInputs`
+        must be present before a `Registry.addQuantum()` is called.
         """
         assert isinstance(ref, DatasetRef)
         datasetTypeName = ref.type.name
