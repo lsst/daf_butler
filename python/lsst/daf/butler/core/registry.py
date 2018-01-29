@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -73,7 +73,7 @@ class Registry(metaclass=ABCMeta):
 
         Returns
         -------
-        type: `DatasetType`
+        datasetType: `DatasetType`
             The `DatasetType` associated with the given name.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -106,8 +106,8 @@ class Registry(metaclass=ABCMeta):
 
         Returns
         -------
-        handle: `DatasetHandle`
-            A newly-created `DatasetHandle` instance.
+        ref: `DatasetRef`
+            A newly-created `DatasetRef` instance.
 
         Raises
         ------
@@ -118,7 +118,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def associate(self, collection, handles):
+    def associate(self, collection, refs):
         """Add existing `Dataset`s to a Collection, possibly creating the
         Collection in the process.
 
@@ -126,25 +126,25 @@ class Registry(metaclass=ABCMeta):
         ----------
         collection: `str`
             Indicates the Collection the `Dataset`s should be associated with.
-        handles: `[DatasetHandle]`
-            A `list` of `DatasetHandle` instances that already exist in this
+        refs: `[DatasetRef]`
+            A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def disassociate(self, collection, handles, remove=True):
+    def disassociate(self, collection, refs, remove=True):
         """Remove existing `Dataset`s from a Collection.
 
-        ``collection`` and ``handle`` combinations that are not currently
+        ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
 
         Parameters
         ----------
         collection: `str`
             The Collection the `Dataset`s should no longer be associated with.
-        handles: `[DatasetHandle]`
-            A `list` of `DatasetHandle` instances that already exist in this
+        refs: `[DatasetRef]`
+            A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
         remove: `bool`
             If `True`, remove `Dataset`s from the `Registry` if they are not
@@ -152,8 +152,8 @@ class Registry(metaclass=ABCMeta):
 
         Returns
         -------
-        removed: `[DatasetHandle]`
-            If `remove` is `True`, the `list` of `DatasetHandle`s that were
+        removed: `[DatasetRef]`
+            If `remove` is `True`, the `list` of `DatasetRef`s that were
             removed.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -178,7 +178,7 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def updateRun(self, run):
         """Update the `environment` and/or `pipeline` of the given `Run`
-        in the database, given the `DatasetHandle` attributes of the input
+        in the database, given the `DatasetRef` attributes of the input
         `Run`.
 
         Parameters
@@ -214,14 +214,14 @@ class Registry(metaclass=ABCMeta):
             (or any other), therefore its:
             - `pkey` attribute must be `None`.
             - `predictedInputs` attribute must be fully populated with
-               `DatasetHandle`s, and its.
+               `DatasetRef`s, and its.
             - `actualInputs` and `outputs` will be ignored.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def markInputUsed(self, quantum, handle):
-        """Record the given `DatasetHandle` as an actual (not just predicted)
+    def markInputUsed(self, quantum, ref):
+        """Record the given `DatasetRef` as an actual (not just predicted)
         input of the given `Quantum`.
 
         This updates both the `Registry`'s `Quantum` table and the Python `Quantum.actualInputs` attribute.
@@ -231,13 +231,13 @@ class Registry(metaclass=ABCMeta):
         quantum: `Quantum`
             Producer to update.
             Will be updated in this call.
-        handle: `DatasetHandle`
+        ref: `DatasetRef`
             To set as actually used input.
 
         Raises
         ------
         e: `Exception`
-            If `handle` is not already in the predicted inputs list.
+            If `ref` is not already in the predicted inputs list.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -269,51 +269,44 @@ class Registry(metaclass=ABCMeta):
         -------
         unit: `DataUnit`
             Instance of type `cls`, or `None` if no matching unit is found.
-
-        See Also
-        --------
-        `DataUnitMap.findDataUnit` : Find a `DataUnit` in a `DataUnitTypeMap`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def expand(self, label):
-        """Expand a `DatasetLabel`, returning an equivalent `DatasetRef`.
-
-        Is a simple pass-through if `label` is already a `DatasetRef`.
+    def expand(self, ref):
+        """Expand a `DatasetRef`.
 
         Parameters
         ----------
-        label: `DatasetLabel`
-            The `DatasetLabel` to expand.
+        ref: `DatasetRef`
+            The `DatasetRef` to expand.
 
         Returns
         -------
         ref: `DatasetRef`
-            The label expanded as a reference.
+            The expanded reference.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def find(self, collection, label):
+    def find(self, collection, ref):
         """Look up the location of the `Dataset` associated with the given
-        `DatasetLabel`.
+        `DatasetRef`.
 
         This can be used to obtain the URI that permits the `Dataset` to be
         read from a `Datastore`.
-        Is a simple pass-through if `label` is already a `DatasetHandle`.
 
         Parameters
         ----------
         collection: `str`
             Identifies the Collection to search.
-        label: `DatasetLabel`
+        ref: `DatasetRef`
             Identifies the `Dataset`.
 
         Returns
         -------
-        handle: `DatasetHandle`
-            A handle to the `Dataset`, or `None` if no matching `Dataset`
+        ref: `DatasetRef`
+            A ref to the `Dataset`, or `None` if no matching `Dataset`
             was found.
         """
         raise NotImplementedError("Must be implemented by subclass")

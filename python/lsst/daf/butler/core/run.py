@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -24,7 +24,7 @@
 from .utils import slotValuesAreEqual, slotValuesToHash
 
 
-class Run:
+class Run(object):
     _currentId = 0
 
     @classmethod

@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -20,9 +20,6 @@
 # the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
-
-from .datasets import DatasetRef
-from .run import Run
 
 
 class Quantum(object):
@@ -53,7 +50,6 @@ class Quantum(object):
 
         Parameters correspond directly to attributes.
         """
-        assert isinstance(run, Run)
         self._quantumId = quantumId
         self._registryId = registryId
         self._run = run
@@ -102,7 +98,7 @@ class Quantum(object):
         as values.
 
         Input `Datasets` that have already been stored may be
-        `DatasetHandle`s, and in many contexts may be guaranteed to be.
+        `DatasetRef`s, and in many contexts may be guaranteed to be.
         Read-only; update via `addPredictedInput()`.
         """
         return self._predictedInputs
@@ -124,7 +120,6 @@ class Quantum(object):
         This does not automatically update a `Registry`; all `predictedInputs`
         must be present before a `Registry.addQuantum()` is called.
         """
-        assert isinstance(ref, DatasetRef)
         datasetTypeName = ref.type.name
         if datasetTypeName not in self._actualInputs:
             self._predictedInputs[datasetTypeName] = [ref, ]

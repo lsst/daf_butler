@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2017  AURA/LSST.
+# Copyright 2008-2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -22,7 +22,6 @@
 #
 
 from lsst.daf.butler.core.formatter import Formatter
-from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 
 
 class FitsCatalogFormatter(Formatter):
@@ -45,7 +44,6 @@ class FitsCatalogFormatter(Formatter):
             The actual returned type will be a derived class
             (e.g. `SourceCatalog` or `ExposureCatalog`).
         """
-        assert isinstance(fileDescriptor, FileDescriptor)
         return fileDescriptor.type.readFits(fileDescriptor.location.path)
 
     def write(self, inMemoryDataset, fileDescriptor):
@@ -67,6 +65,5 @@ class FitsCatalogFormatter(Formatter):
             A dictionary of URIs for the `Catalog`' components.
             The latter will be empty if the `Catalog` is not a composite.
         """
-        assert isinstance(fileDescriptor, FileDescriptor)
         inMemoryDataset.writeFits(fileDescriptor.location.path)
         return fileDescriptor.location.uri, {}
