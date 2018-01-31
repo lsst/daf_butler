@@ -30,6 +30,7 @@ from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
 from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
+from lsst.daf.butler.core.storageClass import StorageClassFactory
 
 
 class PosixDatastore(Datastore):
@@ -56,10 +57,23 @@ class PosixDatastore(Datastore):
             safeMakeDir(self.root)
 
         self.locationFactory = LocationFactory(self.root)
-
+        self.storageClassFactory = StorageClassFactory()
         self.formatterFactory = FormatterFactory()
-        for storageClass, formatter in self.config['formatters'].items():
-            self.formatterFactory.registerFormatter(storageClass, formatter)
+
+        for name, info in self.config["storageClasses"].items():
+            # Create the storage class
+            components = None
+            if "components" in info:
+                components = {}
+                for cname, ctype in info["components"].items():
+                    components[cname] = self.storageClassFactory.getStorageClass(ctype)
+            self.storageClassFactory.registerStorageClass(name, info["type"], components)
+
+            # Create the formatter, indexed by the storage class
+            # Currently, we allow this to be optional because some storage classes
+            # are not yet defined fully.
+            if "formatter" in info:
+                self.formatterFactory.registerFormatter(name, info["formatter"])
 
     def get(self, uri, storageClass, parameters=None):
         """Load an `InMemoryDataset` from the store.

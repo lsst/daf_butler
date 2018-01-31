@@ -21,7 +21,9 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-import lsst.afw.table
+from lsst.daf.persistence import doImport
+
+from .mappingFactory import MappingFactory
 
 
 class StorageClassMeta(type):
@@ -43,38 +45,72 @@ class StorageClass(metaclass=StorageClassMeta):
         return parent
 
 
-class TablePersistable(StorageClass):
-    name = "TablePersistable"
+def makeNewStorageClass(name, pytype, components=None):
+    """Create a new Python class as a subclass of `StorageClass`.
+
+    parameters
+    ----------
+    name : `str`
+        Name to use for this class.
+    pytype : `type`
+        Python type (or name of type) to associate with the `StorageClass`
+    components : `dict`, optional
+        `dict` mapping name of a component to another `StorageClass`.
+
+    Returns
+    -------
+    newtype : `StorageClass`
+        Newly created Python type.
+    """
+    if isinstance(pytype, str):
+        # Special case Python native dict type for testing
+        if pytype == "dict":
+            pytype = dict
+        else:
+            pytype = doImport(pytype)
+    return type(name, (StorageClass,), {"name": name,
+                                        "type": pytype,
+                                        "components": components})
 
 
-class Image(StorageClass):
-    name = "Image"
+class StorageClassFactory(MappingFactory):
+    """Factory for `StorageClass` instances.
+    """
+    refType = StorageClass
 
+    def getStorageClass(self, storageClassName):
+        """Get a StorageClass instance associated with the supplied name.
 
-class Exposure(StorageClass):
-    name = "Exposure"
-    components = {
-        "image": Image,
-        "mask": Image,
-        "variance": Image,
-        "wcs": TablePersistable,
-        "psf": TablePersistable,
-        "photoCalib": TablePersistable,
-        "visitInfo": TablePersistable,
-        "apCorr": TablePersistable,
-        "coaddInputs": TablePersistable,
-    }
+        Parameter
+        ---------
+        storageClassName : `str`
+            Name of the storage class to retrieve.
 
-    @classmethod
-    def assemble(cls, parent, components):
-        raise NotImplementedError("TODO")
+        Returns
+        -------
+        instance : `StorageClass`
+            Instance of the correct `StorageClass`.
+        """
+        return self.getFromRegistry(storageClassName)
 
+    def registerStorageClass(self, storageClassName, pytype, components=None):
+        """Create a `StorageClass` subclass with the supplied properties
+        and associate it with the storageClassName in the registry.
 
-class Catalog(StorageClass):
-    name = "Catalog"
-    type = None  # Catalog is abstract (I think)
+        Parameters
+        ----------
+        storageClassName : `str`
+            Name of new storage class to be created.
+        pytype : `str` or Python class.
+            Python type to be associated with this storage class.
+        components : `dict`
+            Map of storageClassName to `storageClass` for components.
 
-
-class SourceCatalog(StorageClass):
-    name = "SourceCatalog"
-    type = lsst.afw.table.SourceCatalog
+        Raises
+        ------
+        e : `KeyError`
+            If a storage class has already been registered with
+            storageClassName.
+        """
+        newtype = makeNewStorageClass(storageClassName, pytype, components)
+        self.placeInRegistry(storageClassName, newtype)

@@ -3,8 +3,32 @@ datastore:
   cls: 'lsst.daf.butler.datastores.posixDatastore.PosixDatastore'
   root: './butler_test_repository'
   create: true
-  formatters:
-    SourceCatalog: "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+  storageClasses:
+    StructuredData:
+      # Data from a JSON or YAML file
+      type: "dict"
+      # formatter: "lsst.daf.butler.formatters.structuredDataFormatter.YAMLFormatter"
+    TablePersistable:
+      type: "lsst.afw.table"
+    Image:
+      type: "lsst.afw.image.MaskedImage"
+    Catalog:
+      type: "lsst.afw.table.BaseCatalog"
+    SourceCatalog:
+      type: "lsst.afw.table.SourceCatalog"
+      formatter: "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+    Exposure:
+      type: "lsst.afw.image.Exposure"
+      components:
+        image: "Image"
+        mask: "Image"
+        variance: "Image"
+        wcs: "TablePersistable"
+        psf: "TablePersistable"
+        photoCalib: "TablePersistable"
+        visitInfo: "TablePersistable"
+        apCorr: "TablePersistable"
+        coaddInputs: "TablePersistable"
 registry:
   cls: 'lsst.daf.butler.registries.sqlRegistry.SqlRegistry'
   dbname: 'sqlite:///:memory:'
