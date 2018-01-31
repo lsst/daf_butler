@@ -73,8 +73,7 @@ def doImport(pythonType):
         raise TypeError("Unhandled type of pythonType, val:%s" % pythonType)
     try:
         # import this pythonType dynamically
-        # pythonType is sometimes unicode with Python 2 and pybind11; this breaks the interpreter
-        pythonTypeTokenList = str(pythonType).split('.')
+        pythonTypeTokenList = pythonType.split('.')
         importClassString = pythonTypeTokenList.pop()
         importClassString = importClassString.strip()
         importPackage = ".".join(pythonTypeTokenList)
