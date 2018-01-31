@@ -23,7 +23,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from lsst.daf.persistence import doImport
+from lsst.daf.butler.core.utils import doImport
 
 from .config import Config
 
