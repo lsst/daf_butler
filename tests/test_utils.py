@@ -42,6 +42,9 @@ class ImportTestCase(unittest.TestCase):
         c = doImport("lsst.daf.butler")
         self.assertTrue(inspect.ismodule(c))
 
+        c = doImport("lsst.daf.butler.core.config.Config.ppprint")
+        self.assertTrue(inspect.isfunction(c))
+
         with self.assertRaises(AttributeError):
             doImport("lsst.daf.butler.nothere")
 
