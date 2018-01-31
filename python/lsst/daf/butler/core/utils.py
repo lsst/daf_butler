@@ -46,10 +46,32 @@ def slotValuesToHash(self):
 
 
 def doImport(pythonType):
-    """Import a python object given an importable string"""
+    """Import a python object given an importable string and return the
+    type object
+
+    Parameters
+    ----------
+    pythonType : `str`
+        String containing dot-separated path of a Python class, module,
+        or member function.
+
+    Returns
+    -------
+    type : `type`
+        Type object. Either a module or class or a function.
+
+    Raises
+    ------
+    e : `TypeError`
+        pythonType is not a `str`.
+    e : `ValueError`
+        pythonType can not be imported.
+    e : `AttributeError`
+        pythonType can be partially imported.
+    """
+    if not isinstance(pythonType, str):
+        raise TypeError("Unhandled type of pythonType, val:%s" % pythonType)
     try:
-        if not isinstance(pythonType, str):
-            raise TypeError("Unhandled type of pythonType, val:%s" % pythonType)
         # import this pythonType dynamically
         # pythonType is sometimes unicode with Python 2 and pybind11; this breaks the interpreter
         pythonTypeTokenList = str(pythonType).split('.')
