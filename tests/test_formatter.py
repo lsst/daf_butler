@@ -40,11 +40,14 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
         """
-        formatterName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+        formatterTypeName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
         storageClassName = "Image"
-        self.factory.registerFormatter(storageClassName, formatterName)
+        self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName)
         self.assertIsInstance(f, formatter.Formatter)
+        # Defer the import so that we ensure that the infrastructure loaded it on demand previously
+        from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
+        self.assertEqual(type(f), FitsCatalogFormatter)
 
         with self.assertRaises(ValueError):
             # Try to store something that is not a Formatter but is a class
@@ -55,7 +58,7 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
             self.factory.registerFormatter("NotFormatter", "lsst.daf.butler")
 
         with self.assertRaises(ValueError):
-            # Try to store something that is not a Formatter but does not exist
+            # Try to store something that is not a Formatter and does not exist
             self.factory.registerFormatter("NotFormatter", "lsst.daf.butler.x")
 
         with self.assertRaises(ValueError):
@@ -63,25 +66,31 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
             self.factory.registerFormatter("NotImportable", "not a thing")
 
         with self.assertRaises(KeyError):
+            f = self.factory.getFormatter("Missing", "AlsoMissing")
+
+        with self.assertRaises(KeyError):
             f = self.factory.getFormatter("Missing")
 
     def testRegistryWithStorageClass(self):
         """Test that the registry can be given a StorageClass object.
         """
-        formatterName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+        formatterTypeName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
         storageClassName = "TestClass"
         sc = storageClass.makeNewStorageClass(storageClassName, dict, None)
 
         # Store using an instance
-        self.factory.registerFormatter(sc(), formatterName)
+        self.factory.registerFormatter(sc(), formatterTypeName)
 
         # Retrieve using the class
         f = self.factory.getFormatter(sc)
         self.assertIsInstance(f, formatter.Formatter)
+        # Defer the import so that we ensure that the infrastructure loaded it on demand previously
+        from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
+        self.assertEqual(type(f), FitsCatalogFormatter)
 
         with self.assertRaises(ValueError):
             # Attempt to overwrite using the name as a simple str
-            self.factory.registerFormatter(storageClassName, formatterName)
+            self.factory.registerFormatter(storageClassName, formatterTypeName)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
