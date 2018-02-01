@@ -31,7 +31,7 @@ import lsst.daf.butler.core.storageClass as storageClass
 
 
 class PythonType:
-    """A dummy class to test the registory of Python types."""
+    """A dummy class to test the registry of Python types."""
     pass
 
 
