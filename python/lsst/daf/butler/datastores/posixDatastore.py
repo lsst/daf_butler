@@ -23,8 +23,7 @@
 
 import os
 
-from lsst.daf.persistence.safeFileIo import safeMakeDir
-
+from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.datastore import Datastore
 from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
 from lsst.daf.butler.core.location import LocationFactory
