@@ -88,7 +88,7 @@ class FormatterFactory:
             If given, look if an override has been specified for this `DatasetType` and,
             if so return that instead.
         """
-        return self._mappingFactory.getFromRegistry(storageClass, override=datasetType)
+        return self._mappingFactory.getFromRegistry(datasetType, storageClass)
 
     def registerFormatter(self, type_, formatter):
         """Register a Formatter.

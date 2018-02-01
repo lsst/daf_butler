@@ -45,31 +45,40 @@ class MappingFactory:
         self._registry = {}
         self.refType = refType
 
-    def getFromRegistry(self, targetClass, override=None):
+    def getFromRegistry(self, *targetClasses):
         """Get a new instance of the object stored in the registry.
 
         Parameters
         ----------
-        targetClass : `str` or object supporting `.name` attribute
-            Get item from registry associated with this target class, unless
-        override : `str` or object supporting `.name` attribute, optional
-            If given, look if an override has been specified for this and,
-            if so return that instead.
+        *targetClasses : `str` or objects supporting `.name` attribute
+            Each item is tested in turn until a match is found in the registry.
+            Items with `None` value are skipped.
 
         Returns
         -------
         instance : `object`
-            Instance of class stored in registry associated with the target.
+            Instance of class stored in registry associated with the first
+            matching target class.
+
+        Raises
+        ------
+        e : KeyError
+            None of the supplied target classes match an item in the registry.
         """
-        for t in (override, targetClass):
-            if t is not None:
+        attempts = []
+        for t in (targetClasses):
+            if t is None:
+                attempts.append(t)
+            else:
+                key = self._getName(t)
+                attempts.append(key)
                 try:
-                    typeName = self._registry[self._getName(t)]
+                    typeName = self._registry[key]
                 except KeyError:
                     pass
                 else:
                     return self._getInstanceOf(typeName)
-        raise KeyError("Unable to find item in registry with keys {} or {}".format(targetClass, override))
+        raise KeyError("Unable to find item in registry with keys: {}".format(attempts))
 
     def placeInRegistry(self, registryKey, typeName):
         """Register a class name with the associated type.
