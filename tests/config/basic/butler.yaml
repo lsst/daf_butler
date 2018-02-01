@@ -1,35 +1,35 @@
-run: "ingest"
+run: ingest
 datastore:
-  cls: 'lsst.daf.butler.datastores.posixDatastore.PosixDatastore'
-  root: './butler_test_repository'
+  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  root: ./butler_test_repository
   create: true
   storageClasses:
     StructuredData:
       # Data from a JSON or YAML file
-      type: "dict"
+      type: dict
       # formatter: "lsst.daf.butler.formatters.structuredDataFormatter.YAMLFormatter"
     TablePersistable:
-      type: "lsst.afw.table"
+      type: lsst.afw.table
     Image:
-      type: "lsst.afw.image.MaskedImage"
+      type: lsst.afw.image.MaskedImage
     Catalog:
-      type: "lsst.afw.table.BaseCatalog"
+      type: lsst.afw.table.BaseCatalog
     SourceCatalog:
-      type: "lsst.afw.table.SourceCatalog"
-      formatter: "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+      type: lsst.afw.table.SourceCatalog
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     Exposure:
-      type: "lsst.afw.image.Exposure"
+      type: lsst.afw.image.Exposure
       components:
-        image: "Image"
-        mask: "Image"
-        variance: "Image"
-        wcs: "TablePersistable"
-        psf: "TablePersistable"
-        photoCalib: "TablePersistable"
-        visitInfo: "TablePersistable"
-        apCorr: "TablePersistable"
-        coaddInputs: "TablePersistable"
+        image: Image
+        mask: Image
+        variance: Image
+        wcs: TablePersistable
+        psf: TablePersistable
+        photoCalib: TablePersistable
+        visitInfo: TablePersistable
+        apCorr: TablePersistable
+        coaddInputs: TablePersistable
 registry:
-  cls: 'lsst.daf.butler.registries.sqlRegistry.SqlRegistry'
+  cls: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
   dbname: 'sqlite:///:memory:'
   id: 0
