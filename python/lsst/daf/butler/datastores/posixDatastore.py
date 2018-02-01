@@ -97,7 +97,7 @@ class PosixDatastore(Datastore):
         location = self.locationFactory.fromUri(uri)
         if not os.path.exists(location.path):
             raise ValueError("No such file: {0}".format(location.uri))
-        return formatter.read(FileDescriptor(location, storageClass.type, parameters))
+        return formatter.read(FileDescriptor(location, storageClass.pytype, parameters))
 
     def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
@@ -127,7 +127,7 @@ class PosixDatastore(Datastore):
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
             safeMakeDir(storageDir)
-        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.type))
+        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.pytype))
 
     def remove(self, uri):
         """Indicate to the Datastore that a `Dataset` can be removed.

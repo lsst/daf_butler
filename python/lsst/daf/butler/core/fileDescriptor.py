@@ -25,32 +25,20 @@
 class FileDescriptor(object):
     """Describes a particular file.
 
-    Attributes
+    Parameters
     ----------
     location : `Location`
         Storage location.
     type : `cls`
         Type the object will have after reading in Python (typically
-        `StorageClass.type`).
+        `StorageClass.pytype`).
     parameters : `dict`
         Additional parameters that can be used for reading and writing.
     """
 
-    __slots__ = ('location', 'type', 'parameters')
+    __slots__ = ('location', 'pytype', 'parameters')
 
-    def __init__(self, location, type=None, parameters=None):
-        """Constructor
-
-        Parameters
-        ----------
-        location : `Location`
-            Storage location.
-        type : `cls`
-            Type the object will have after reading in Python (typically
-            `StorageClass.type`).
-        parameters : `dict`
-            Additional parameters that can be used for reading and writing.
-        """
+    def __init__(self, location, pytype=None, parameters=None):
         self.location = location
-        self.type = type
+        self.pytype = pytype
         self.parameters = parameters

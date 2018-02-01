@@ -49,7 +49,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
         self.assertIsNone(sc.components)
-        self.assertEqual(sc.type, dict)
+        self.assertEqual(sc.pytype, dict)
 
         # Check that this class is listed in the subclasses
         self.assertIn(className, newclass.subclasses)
@@ -58,7 +58,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         # type.
         newclass = storageClass.makeNewStorageClass("TestImage2",
                                                     "lsst.daf.butler.core.storageClass.StorageClassFactory")
-        self.assertIsInstance(newclass.type(), storageClass.StorageClassFactory)
+        self.assertIsInstance(newclass.pytype(), storageClass.StorageClassFactory)
 
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
@@ -70,7 +70,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
         self.assertIsNone(sc.components)
-        self.assertEqual(sc.type, PythonType)
+        self.assertEqual(sc.pytype, PythonType)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

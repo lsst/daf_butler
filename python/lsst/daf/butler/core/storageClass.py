@@ -35,6 +35,16 @@ class StorageClassMeta(type):
 
 
 class StorageClass(metaclass=StorageClassMeta):
+    """Class describing how a label maps to a particular Python type.
+
+    Attributes
+    ----------
+    name : `str`
+        Name associated with the StorageClass.
+    pytype : `type`
+        Python type associated with this name.
+
+    """
 
     subclasses = dict()
 
@@ -69,7 +79,7 @@ def makeNewStorageClass(name, pytype, components=None):
         else:
             pytype = doImport(pytype)
     return type(name, (StorageClass,), {"name": name,
-                                        "type": pytype,
+                                        "pytype": pytype,
                                         "components": components})
 
 
