@@ -1,5 +1,6 @@
 *.pyc
 version.py
+_build.*
 .cache
 tests/.tests
 tests/test_input_datastore/
@@ -8,3 +9,4 @@ tests/test_output_datastore/
 .sconsign.dblite
 config.log
 ups/*.cfgc
+pytest_session.txt

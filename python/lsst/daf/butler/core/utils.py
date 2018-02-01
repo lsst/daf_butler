@@ -43,3 +43,48 @@ def slotValuesToHash(self):
     Generate a hash from slot values.
     """
     return hash(tuple(getattr(self, slot) for slot in allSlots(self)))
+
+
+def doImport(pythonType):
+    """Import a python object given an importable string and return the
+    type object
+
+    Parameters
+    ----------
+    pythonType : `str`
+        String containing dot-separated path of a Python class, module,
+        or member function.
+
+    Returns
+    -------
+    type : `type`
+        Type object. Either a module or class or a function.
+
+    Raises
+    ------
+    e : `TypeError`
+        pythonType is not a `str`.
+    e : `ValueError`
+        pythonType can not be imported.
+    e : `AttributeError`
+        pythonType can be partially imported.
+    """
+    if not isinstance(pythonType, str):
+        raise TypeError("Unhandled type of pythonType, val:%s" % pythonType)
+    try:
+        # import this pythonType dynamically
+        pythonTypeTokenList = pythonType.split('.')
+        importClassString = pythonTypeTokenList.pop()
+        importClassString = importClassString.strip()
+        importPackage = ".".join(pythonTypeTokenList)
+        importType = __import__(importPackage, globals(), locals(), [importClassString], 0)
+        pythonType = getattr(importType, importClassString)
+        return pythonType
+    except ImportError:
+        pass
+    # maybe python type is a member function, in the form: path.to.object.Class.funcname
+    pythonTypeTokenList = pythonType.split('.')
+    importClassString = '.'.join(pythonTypeTokenList[0:-1])
+    importedClass = doImport(importClassString)
+    pythonType = getattr(importedClass, pythonTypeTokenList[-1])
+    return pythonType

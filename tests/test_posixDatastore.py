@@ -28,7 +28,6 @@ import lsst.utils.tests
 import lsst.afw.table
 
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
-from lsst.daf.butler.core.storageClass import SourceCatalog
 
 import datasetsHelper
 
@@ -75,7 +74,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         catalog = datasetsHelper.makeExampleCatalog()
         datastore = PosixDatastore(config=self.configFile)
         # Put
-        storageClass = SourceCatalog
+        storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
         uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
@@ -92,7 +91,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         catalog = datasetsHelper.makeExampleCatalog()
         datastore = PosixDatastore(config=self.configFile)
         # Put
-        storageClass = SourceCatalog
+        storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
         uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
@@ -115,7 +114,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         outputConfig = inputConfig.copy()
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig)
-        storageClass = SourceCatalog
+        storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("SourceCatalog")
         inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
         catalogOut = outputPosixDatastore.get(outputUri, storageClass)

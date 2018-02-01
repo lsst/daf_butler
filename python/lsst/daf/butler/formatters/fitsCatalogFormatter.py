@@ -44,7 +44,7 @@ class FitsCatalogFormatter(Formatter):
             The actual returned type will be a derived class
             (e.g. `SourceCatalog` or `ExposureCatalog`).
         """
-        return fileDescriptor.type.readFits(fileDescriptor.location.path)
+        return fileDescriptor.pytype.readFits(fileDescriptor.location.path)
 
     def write(self, inMemoryDataset, fileDescriptor):
         """Write a `Catalog` to a FITS file.

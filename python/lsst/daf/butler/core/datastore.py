@@ -21,7 +21,7 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
-from lsst.daf.persistence import doImport
+from lsst.daf.butler.core.utils import doImport
 
 from abc import ABCMeta, abstractmethod
 from .config import Config

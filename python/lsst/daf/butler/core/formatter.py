@@ -23,7 +23,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from lsst.daf.persistence import doImport
+from .mappingFactory import MappingFactory
 
 
 class Formatter(object, metaclass=ABCMeta):
@@ -70,14 +70,12 @@ class Formatter(object, metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing")
 
 
-class FormatterFactory(object):
+class FormatterFactory:
     """Factory for `Formatter` instances.
     """
 
     def __init__(self):
-        """Constructor.
-        """
-        self._registry = {}
+        self._mappingFactory = MappingFactory(Formatter)
 
     def getFormatter(self, storageClass, datasetType=None):
         """Get a new formatter instance.
@@ -86,24 +84,18 @@ class FormatterFactory(object):
         ----------
         storageClass : `StorageClass`
             Get `Formatter` associated with this `StorageClass`, unless.
-        datasetType : `DatasetType` or `str, optional
+        datasetType : `DatasetType` or `str`, optional
             If given, look if an override has been specified for this `DatasetType` and,
             if so return that instead.
         """
-        if datasetType:
-            try:
-                typeName = self._registry[self._getName(datasetType)]()
-            except KeyError:
-                pass
-        typeName = self._registry[self._getName(storageClass)]
-        return self._getInstanceOf(typeName)
+        return self._mappingFactory.getFromRegistry(datasetType, storageClass)
 
     def registerFormatter(self, type_, formatter):
         """Register a Formatter.
 
         Parameters
         ----------
-        type : `str` or `StorageClass` or `DatasetType`
+        type_ : `str` or `StorageClass` or `DatasetType`
             Type for which this formatter is to be used.
         formatter : `str`
             Identifies a `Formatter` subclass to use for reading and writing `Dataset`s of this type.
@@ -113,30 +105,4 @@ class FormatterFactory(object):
         e : `ValueError`
             If formatter does not name a valid formatter type.
         """
-        if not self._isValidFormatterStr(formatter):
-            raise ValueError("Not a valid Formatter: {0}".format(formatter))
-        self._registry[self._getName(type_)] = formatter
-
-    @staticmethod
-    def _getName(typeOrName):
-        """Extract name of `DatasetType` or `StorageClass` as string.
-        """
-        if isinstance(typeOrName, str):
-            return typeOrName
-        elif hasattr(typeOrName, 'name'):
-            return typeOrName.name
-        else:
-            raise ValueError("Cannot extract name from type")
-
-    @staticmethod
-    def _getInstanceOf(typeName):
-        cls = doImport(typeName)
-        return cls()
-
-    @staticmethod
-    def _isValidFormatterStr(formatter):
-        try:
-            f = FormatterFactory._getInstanceOf(formatter)
-            return isinstance(f, Formatter)
-        except ImportError:
-            return False
+        self._mappingFactory.placeInRegistry(type_, formatter)
