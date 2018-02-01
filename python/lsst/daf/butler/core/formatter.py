@@ -70,10 +70,12 @@ class Formatter(object, metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing")
 
 
-class FormatterFactory(MappingFactory):
+class FormatterFactory:
     """Factory for `Formatter` instances.
     """
-    refType = Formatter
+
+    def __init__(self):
+        self._mappingFactory = MappingFactory(Formatter)
 
     def getFormatter(self, storageClass, datasetType=None):
         """Get a new formatter instance.
@@ -86,7 +88,7 @@ class FormatterFactory(MappingFactory):
             If given, look if an override has been specified for this `DatasetType` and,
             if so return that instead.
         """
-        return self.getFromRegistry(storageClass, override=datasetType)
+        return self._mappingFactory.getFromRegistry(storageClass, override=datasetType)
 
     def registerFormatter(self, type_, formatter):
         """Register a Formatter.
@@ -103,4 +105,4 @@ class FormatterFactory(MappingFactory):
         e : `ValueError`
             If formatter does not name a valid formatter type.
         """
-        self.placeInRegistry(type_, formatter)
+        self._mappingFactory.placeInRegistry(type_, formatter)

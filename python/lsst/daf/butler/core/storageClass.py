@@ -73,10 +73,12 @@ def makeNewStorageClass(name, pytype, components=None):
                                         "components": components})
 
 
-class StorageClassFactory(MappingFactory):
+class StorageClassFactory:
     """Factory for `StorageClass` instances.
     """
-    refType = StorageClass
+
+    def __init__(self):
+        self._mappingFactory = MappingFactory(StorageClass)
 
     def getStorageClass(self, storageClassName):
         """Get a StorageClass instance associated with the supplied name.
@@ -91,7 +93,7 @@ class StorageClassFactory(MappingFactory):
         instance : `StorageClass`
             Instance of the correct `StorageClass`.
         """
-        return self.getFromRegistry(storageClassName)
+        return self._mappingFactory.getFromRegistry(storageClassName)
 
     def registerStorageClass(self, storageClassName, pytype, components=None):
         """Create a `StorageClass` subclass with the supplied properties
@@ -113,4 +115,4 @@ class StorageClassFactory(MappingFactory):
             storageClassName.
         """
         newtype = makeNewStorageClass(storageClassName, pytype, components)
-        self.placeInRegistry(storageClassName, newtype)
+        self._mappingFactory.placeInRegistry(storageClassName, newtype)

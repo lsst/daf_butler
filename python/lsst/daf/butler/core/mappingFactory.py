@@ -31,13 +31,19 @@ class MappingFactory:
     The class can be specified as an object, class or string.
     If the key is an object it is converted to a string by accessing
     a `name` attribute.
+
+    Parameters
+    ----------
+    refType : `type`
+        Python reference `type` to use to ensure that items stored in the
+        registry create instance objects of the correct class. Subclasses
+        of this type are allowed. Using `None` disables the check.
+
     """
 
-    refType = None
-    """Type of instances expected to be returned from factory."""
-
-    def __init__(self):
+    def __init__(self, refType):
         self._registry = {}
+        self.refType = refType
 
     def getFromRegistry(self, targetClass, override=None):
         """Get a new instance of the object stored in the registry.
@@ -68,7 +74,7 @@ class MappingFactory:
     def placeInRegistry(self, registryKey, typeName):
         """Register a class name with the associated type.
         The type name provided is validated against the reference
-        class, `refType`, if defined.
+        class, `refType` attribute, if defined.
 
         Parameters
         ----------
@@ -128,17 +134,16 @@ class MappingFactory:
             cls = typeOrName
         return cls()
 
-    @classmethod
-    def _isValidStr(cls, typeName):
-        """Validate that the class name provided does create instances of
-        objects that are of the expected type, as stored in the class
+    def _isValidStr(self, typeName):
+        """Validate that the class type name provided does create instances of
+        objects that are of the expected type, as stored in the
         `refType` attribute.
         """
-        if cls.refType is None:
+        if self.refType is None:
             return True
         try:
-            c = cls._getInstanceOf(typeName)
+            c = self._getInstanceOf(typeName)
         except (ImportError, TypeError, AttributeError):
             return False
         else:
-            return isinstance(c, cls.refType)
+            return isinstance(c, self.refType)
