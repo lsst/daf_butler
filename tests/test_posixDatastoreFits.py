@@ -32,7 +32,7 @@ from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreC
 import datasetsHelper
 
 
-class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
+class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
