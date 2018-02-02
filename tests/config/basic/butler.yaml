@@ -6,8 +6,9 @@ datastore:
   storageClasses:
     StructuredData:
       # Data from a JSON or YAML file
-      type: dict
-      # formatter: "lsst.daf.butler.formatters.structuredDataFormatter.YAMLFormatter"
+      # type: dict
+      type: examplePythonTypes.MetricsExample
+      formatter: exampleFormatters.MetricsExampleFormatter
     TablePersistable:
       type: lsst.afw.table
     Image:
