@@ -66,7 +66,16 @@ class PosixDatastore(Datastore):
                 components = {}
                 for cname, ctype in info["components"].items():
                     components[cname] = self.storageClassFactory.getStorageClass(ctype)
-            self.storageClassFactory.registerStorageClass(name, info["type"], components)
+
+            # Extract scalar items from dict that are needed for StorageClass Constructor
+            print(info)
+            scItems = {k: info[k] for k in ("pytype",) if k in info}
+            print(scItems)
+
+            # Fill in other items
+            scItems["components"] = components
+
+            self.storageClassFactory.registerStorageClass(name, scItems)
 
             # Create the formatter, indexed by the storage class
             # Currently, we allow this to be optional because some storage classes

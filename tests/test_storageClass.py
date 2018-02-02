@@ -44,12 +44,13 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
 
         This is critical for testing the factory functions."""
         className = "TestImage"
-        newclass = storageClass.makeNewStorageClass(className, dict, None)
+        newclass = storageClass.makeNewStorageClass(className, pytype=dict)
         sc = newclass()
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
         self.assertIsNone(sc.components)
         self.assertEqual(sc.pytype, dict)
+        self.assertEqual(newclass.pytype, dict)
 
         # Check that this class is listed in the subclasses
         self.assertIn(className, newclass.subclasses)
@@ -65,7 +66,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         in a registry."""
         className = "TestImage"
         factory = storageClass.StorageClassFactory()
-        factory.registerStorageClass(className, PythonType)
+        factory.registerStorageClass(className, {"pytype": PythonType})
         sc = factory.getStorageClass(className)
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
