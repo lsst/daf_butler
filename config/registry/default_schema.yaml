@@ -1,0 +1,720 @@
+registry:
+  schema:
+    version: 0
+    dataUnits:
+      Camera:
+        doc: >
+          A camera that defines a set of physical filters and sensors, and defines a
+          numbering system for its visits.
+        link:
+        - 
+          name: camera
+          type: string
+          foreign_key: Camera.camera
+        tables:
+          Camera:
+            doc: >
+              Definition table containing allowable values for e.g. Dataset.camera.
+            columns:
+            - 
+              name: camera
+              type: string
+              primary_key: true
+    
+      AbstractFilter:
+        doc: >
+          A filter that is not associated with a particular camera.  An abstract
+          filter can be used to relate similar physical filters, and is typically the
+          filter associated with coadds.
+        link:
+        - 
+          name: abstract_filter
+          type: string
+          foreign_key: AbstractFilter.abstract_filter
+        tables:
+          AbstractFilter:
+            doc: >
+              Definition table containing allowable values for e.g. Dataset.abstract_filter.
+            columns:
+            - 
+              name: abstract_filter
+              type: string
+              primary_key: true
+              doc: >
+                Name of the filter, typically a single letter (e.g. "r" or "i").
+    
+      PhysicalFilter:
+        dependencies:
+          required:
+          - Camera
+          optional:
+          - AbstractFilter
+        doc: >
+          A filter associated with a particular camera.  Physical filters are used to
+          identify datasets that can only be associated with a single observation.
+        link:
+        - 
+          name: physical_filter
+          type: string
+          foreign_key: PhysicalFilter.physical_filter
+        tables:
+          PhysicalFilter:
+            doc: >
+              Relationships between physical filters, cameras, and abstract filters.
+            columns:
+            - 
+              name: camera
+              type: string
+              primary_key: true
+            - 
+              name: physical_filter
+              type: string
+              primary_key: true
+            - 
+              name: abstract_filter
+              type: string
+            foreignKeys:
+            - 
+              src: camera
+              tgt: Camera.camera
+            - 
+              src: abstract_filter
+              tgt: AbstractFilter.abstract_filter
+    
+      Sensor:
+        dependencies:
+          required:
+          - Camera
+        doc: >
+          A sensor associated with a particular camera (not an observation of that
+          sensor; that requires specifying an exposure or visit as well).
+        link:
+        - 
+          name: sensor
+          type: string
+          foreign_key: Sensor.sensor
+        tables:
+          Sensor:
+            doc: >
+              Metadata and grouping information, allowing
+              sensors to be identified by something other than their numbers in user
+              expressions of what to process.
+            columns:
+            - 
+              name: camera
+              type: string
+              primary_key: true
+              nullable: false
+            - 
+              name: sensor
+              type: int
+              primary_key: true
+              nullable: false
+            - 
+              name: name
+              type: string
+              primary_key: true
+            - 
+              name: group
+              type: string
+            - 
+              name: purpose
+              type: string
+            foreignKeys:
+            - 
+              src: camera
+              tgt: Camera.camera
+    
+      Visit:
+        dependencies:
+          required:
+          - Camera
+          optional:
+          - PhysicalFilter
+        doc: >
+          A sequence of observations processed together, comprised of one or more
+          Exposures.
+        link:
+        - 
+          name: visit
+          type: int
+          foreign_key: Visit.visit
+        tables:
+          Visit:
+            doc: >
+              Visit metadata, allowing them to be identified by something other than their numbers.
+            columns:
+            - 
+              name: camera
+              type: string
+              primary_key: true
+              nullable: false
+            - 
+              name: visit
+              type: int
+              primary_key: true
+              nullable: false
+            - 
+              name: physical_filter
+              type: string
+              nullable: false
+            - 
+              name: datetime_begin
+              type: datetime
+              doc: >
+                This should be the same as the datetime_begin field of the first Exposure
+                associated with this Visit.
+            - 
+              name: exposure_time
+              type: float
+              doc: >
+                This should cover the full time from the start of the first Exposure to
+                the end of the last one.
+            - 
+              name: region
+              type: blob
+            foreignKeys:
+            - 
+              src: camera
+              tgt: Camera.camera
+            - 
+              src:
+              - camera
+              - physical_filter
+              tgt:
+              - PhysicalFilter.camera
+              - PhysicalFilter.physical_filter
+    
+      Exposure:
+        dependencies:
+          required:
+          - Camera
+          - Visit
+        doc: >
+          An observation associated with a particular camera.  All direct observations
+          are identified with an Exposure, but derived datasets that may be based on
+          more than one Exposure (e.g. multiple snaps) are typically identified with
+          Visits instead, even for cameras that don't have multiple Exposures per
+          Visit.
+        link:
+        - 
+          name: exposure
+          type: int
+          foreign_key: Exposure.exposure
+        tables:
+          Exposure:
+            doc: >
+              Exposure metadata and fields indicating the relationships to Visits.
+            columns:
+            - 
+              name: camera
+              type: string
+              primary_key: true
+              nullable: false
+            - 
+              name: exposure
+              type: int
+              primary_key: true
+              nullable: false
+            - 
+              name: visit
+              type: int
+              primary_key: true
+              doc: >
+                ID of the Visit this Exposure is associated with.  Science observations
+                should essentially always be associated with a visit, but calibration
+                observations may not be.
+            - 
+              name: snap
+              type: int
+              doc: >
+                If visit is not null, the index of this Exposure in the Visit, starting
+                from zero.
+            - 
+              name: datetime_begin
+              type: datetime
+            - 
+              name: exposure_time
+              type: float
+            foreignKeys:
+            - 
+              src: camera
+              tgt: Camera.camera
+            - 
+              src:
+              - camera
+              - visit
+              tgt:
+              - Visit.camera
+              - Visit.visit
+    
+      ExposureRange:
+        dependencies:
+          required:
+          - Camera
+        doc: >
+          An inclusive range of Exposures that may be open in either direction.  There
+          is no SQL representation; its fields (duplicated below) are all part of its
+          compound primary key and are hence just present in Dataset.
+        link:
+        - 
+          name: valid_first
+          type: int
+          doc: >
+            First exposure.id included (inclusive).  May be zero to indicate an open
+            interval.
+        - 
+          name: valid_last
+          type: int
+          doc: >
+            Last exposure.id included (inclusive).  May be max(int) to indicate an
+            open interval.
+    
+      SkyPix:
+        doc: >
+          A pixel in a hierarchical decomposition of the sky (e.g. HTM; I hope we can
+          pick one pixelization for all data products and spatial indexes, but don't
+          want to declare yet what it should be).  Unlike a tract or patch in a
+          SkyMap, SkyPix units do not overlap.  Has no SQL representation (even a
+          definition table is not necessary, given that the allowable values are just
+          a range of consecutive integers.
+        link:
+        - 
+          name: skypix
+          type: int
+          doc: >
+            Unique ID of a pixel in the hierarchical pixelization.
+      
+      SkyMap:
+        doc: >
+          A set of Tracts and Patches that subdivide the sky into rectangular regions
+          (with overlaps).
+        link:
+        - 
+          name: skymap
+          type: string
+          foreign_key: SkyMap.skymap
+        tables:
+          SkyMap:
+            doc: >
+              Definition table containing allowable values for e.g. Dataset.skymap.
+            columns:
+            - 
+              name: skymap
+              type: string
+              primary_key: true
+              nullable: false
+        
+      Tract:
+        dependencies:
+          required:
+          - SkyMap
+        doc: >
+          A rectangular region mapped to the sky with a single map projection,
+          associated with a particular SkyMap.
+        link:
+        - 
+          name: tract
+          type: int
+          foreign_key: Tract.tract
+        tables:
+          Tract:
+            doc: >
+              The spatial region for each tract.
+            columns:
+            - 
+              name: skymap
+              type: string
+              primary_key: true
+              nullable: false
+            - 
+              name: tract
+              type: int
+              primary_key: true
+              nullable: false
+            - 
+              name: region
+              type: blob
+            foreignKeys:
+            - 
+              src: skymap
+              tgt: SkyMap.skymap
+        
+      Patch:
+        dependencies:
+          required:
+          - SkyMap
+          - Tract
+        doc: >
+          A rectangular region within a tract.
+        link:
+        - 
+          name: patch
+          type: int
+          foreign_key: Patch.patch
+        tables:
+          Patch:
+            doc: >
+              Spatial region for each tract+patch combination and the patch's location
+              within the tract's grid.
+            columns:
+            - 
+              name: skymap
+              type: string
+              primary_key: true
+              nullable: false
+            - 
+              name: tract
+              type: int
+              primary_key: true
+              nullable: false
+            - 
+              name: patch
+              type: int
+              primary_key: true
+              nullable: false
+            - 
+              name: cell_x
+              type: int
+              nullable: false
+            - 
+              name: cell_y
+              type: int
+              nullable: false
+            - 
+              name: region
+              type: blob
+              nullable: false
+            foreignKeys:
+            - 
+              src: skymap
+              tgt: SkyMap.skymap
+            - 
+              src:
+              - skymap
+              - tract
+              tgt:
+              - Tract.skymap
+              - Tract.tract
+      
+      Label:
+        doc: >
+          An arbitrary string value.  There is no SQL representation or constraint on
+          the values a Label can take.
+        link:
+        - 
+          name: label
+          type: string
+
+    tables:
+      Datasets:
+        columns:
+        - 
+          name: dataset_id
+          type: int
+          primary_key: true
+          nullable: false
+          doc: >
+            Autoincrement
+        - 
+          name: registry_id
+          type: int
+          primary_key: true
+          nullable: false
+          doc: >
+            A different number for each dataset_id incrementer (usually each different
+            Registry).
+        - 
+          name: dataset_type_name
+          type: string
+          nullable: false
+        - 
+          name: uri
+          type: string
+        - 
+          name: run_id
+          type: int
+          nullable: false
+          doc: >
+            Link to the Run table.
+        - 
+          name: quantum_id
+          type: int
+          doc: >
+            Link to the Quantum table (only present for SuperTask-generated Datasets).
+        foreignKeys:
+        - 
+          src: dataset_type_name
+          tgt: DatasetType.dataset_type_name
+        - 
+          src:
+          - run_id
+          - registry_id
+          tgt:
+          - Run.run_id
+          - Run.registry_id
+        - 
+          src:
+          - quantum_id
+          - registry_id
+          tgt:
+          - Quantum.quantum_id
+          - Quantum.registry_id
+
+      DatasetComposition:
+        doc: >
+          Self-join table that relates components of a dataset to their parent.
+        columns:
+        - 
+          name: parent_dataset_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: parent_registry_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: component_dataset_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: component_registry_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: component_name
+          type: string
+          nullable: false
+        foreignKeys:
+        - 
+          src:
+          - parent_dataset_id
+          - parent_registry_id
+          tgt:
+          - Datasets.dataset_id
+          - Datasets.registry_id
+        - 
+          src:
+          - component_dataset_id
+          - component_registry_id
+          tgt:
+          - Datasets.dataset_id
+          - Datasets.registry_id
+    
+      DatasetType:
+        doc: >
+          Table containing the set of registered DatasetTypes and their
+          StorageClasses.
+        columns:
+        - 
+          name: dataset_type_name
+          type: string
+          primary_key: true
+          nullable: false
+        - 
+          name: storage_class
+          type: string
+          nullable: false
+    
+      DatasetTypeUnits:
+        doc: >
+          Definition table indicating which unit link fields in Dataset are non-NULL
+          for Datasets with this DatasetType.
+        columns:
+        - 
+          name: dataset_type_name
+          type: string
+          nullable: false
+        - 
+          name: unit_name
+          type: string
+          nullable: false
+        foreignKeys:
+        - 
+          src: dataset_type_name
+          tgt: DatasetType.dataset_type_name
+    
+      DatasetTypeMetadata:
+        doc: >
+          Definition table indicating which Metadata tables have entries for Datasets
+          with this DatasetType.
+        columns:
+        - 
+          name: dataset_type_name
+          type: string
+          nullable: false
+        - 
+          name: metadata_name
+          type: string
+          nullable: false
+        foreignKeys:
+        - 
+          src: dataset_type_name
+          tgt: DatasetType.dataset_type_name
+    
+      DatasetCollection:
+        columns:
+        - 
+          name: dataset_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: registry_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: collection
+          type: string
+          primary_key: true
+          nullable: false
+        foreignKeys:
+        - 
+          src:
+          - dataset_id
+          - registry_id
+          tgt:
+          - Datasets.dataset_id
+          - Datasets.registry_id
+      
+      Execution:
+        columns:
+        - 
+          name: execution_id
+          type: int
+          nullable: false
+        - 
+          name: registry_id
+          type: int
+          nullable: false
+        - 
+          name: start_time
+          type: datetime
+          nullable: false
+        - 
+          name: end_time
+          type: datetime
+          nullable: false
+        - 
+          name: host
+          type: string
+          nullable: false
+      
+      Run:
+        columns:
+        - 
+          name: run_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: execution_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: registry_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: collection
+          type: string
+          primary_key: true
+        - 
+          name: environment_id
+          type: int
+        - 
+          name: pipeline_id
+          type: int
+        foreignKeys:
+        - 
+          src:
+          - environment_id
+          - registry_id
+          tgt:
+          - Datasets.dataset_id
+          - Datasets.registry_id
+        - 
+          src:
+          - pipeline_id
+          - registry_id
+          tgt:
+          - Datasets.dataset_id
+          - Datasets.registry_id
+      
+      Quantum:
+        columns:
+        - 
+          name: quantum_id
+          type: int
+          primary_key: true
+          nullable: false  
+        - 
+          name: execution_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: registry_id
+          type: int
+          primary_key: true
+          nullable: false
+        - 
+          name: task
+          type: string
+        - 
+          name: run_id
+          type: int
+        foreignKeys:
+        - 
+          src:
+          - run_id
+          - registry_id
+          tgt:
+          - Run.execution_id
+          - Run.registry_id
+      
+      DatasetConsumers:
+        columns:
+        - 
+          name: quantum_id
+          type: int
+          nullable: false
+        - 
+          name: quantum_registry_id
+          type: int
+          nullable: false
+        - 
+          name: dataset_id
+          type: int
+          nullable: false
+        - 
+          name: dataset_registry_id
+          type: int
+          nullable: false
+        - 
+          name: actual
+          type: bool
+          nullable: false
+        foreignKeys:
+        - 
+          src:
+          - quantum_id
+          - quantum_registry_id
+          tgt:
+          - Quantum.execution_id
+          - Quantum.registry_id
+        - 
+          src:
+          - dataset_id
+          - dataset_registry_id
+          tgt:
+          - Datasets.dataset_id
+          - Datasets.registry_id      
+
