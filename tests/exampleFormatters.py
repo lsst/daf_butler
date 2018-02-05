@@ -45,6 +45,16 @@ class MetricsExampleFormatter(Formatter):
         """
         with open(fileDescriptor.location.path, "r") as fd:
             data = json.load(fd)
+
+        # see if a component is being requested and return just it
+        comp = fileDescriptor.location.fragment
+        if comp:
+            if comp in data:
+                # Easy for this example
+                return data[comp]
+            else:
+                raise ValueError("Requested component ({}) not found".format(comp))
+
         return fileDescriptor.pytype.makeFromDict(data)
 
     def write(self, inMemoryDataset, fileDescriptor):

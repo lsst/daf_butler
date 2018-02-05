@@ -66,6 +66,10 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertEqualMetrics(metrics, metricsOut)
 
+        # Get a component even though it was written without
+        summary = datastore.get("{}#{}".format(uri, "summary"), storageClass=storageClass)
+        self.assertEqual(summary, metricsOut.summary)
+
         # These should raise
         with self.assertRaises(ValueError):
             # non-existing file
@@ -73,6 +77,12 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         with self.assertRaises(ValueError):
             # invalid storage class
             datastore.get(uri="file:///non_existing.json", storageClass=object, parameters=None)
+        with self.assertRaises(ValueError):
+            # Missing component
+            datastore.get("{}#{}".format(uri, "missing"), storageClass=storageClass)
+        with self.assertRaises(TypeError):
+            # Retrieve component of mismatched type
+            datastore.get("{}#{}".format(uri, "data"), storageClass=storageClass)
 
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()

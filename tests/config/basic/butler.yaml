@@ -15,6 +15,13 @@ datastore:
       # type: dict
       pytype: examplePythonTypes.MetricsExample
       formatter: exampleFormatters.MetricsExampleFormatter
+      components:
+        # Components are those supported by get. We use the default formatter
+        # though, and not the formatters associated with the components.
+        summary: StructuredDataDict
+        output: StructuredDataDict
+        # Deliberately set this to the wrong type
+        data: StructuredDataDict
     StructuredComposite:
       pytype: examplePythonTypes.MetricsExampleC
       formatter: exampleFormatters.MetricsExampleFormatterC
