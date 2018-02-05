@@ -1,0 +1,1041 @@
+schema:
+  version: 0
+  tables:
+    - !Table
+      name: Datasets
+      columns:
+      - !Column
+        name: dataset_id
+        type: int
+        primary_key: true
+        nullable: false
+        doc: >
+          Autoincrement
+      - !Column
+        name: registry_id
+        type: int
+        primary_key: true
+        nullable: false
+        doc: >
+          A different number for each dataset_id incrementer (usually each different
+          Registry).
+      - !Column
+        name: dataset_type_name
+        type: string
+        nullable: false
+      - !Column
+        name: uri
+        type: string
+      - !Column
+        name: run_id
+        type: int
+        nullable: false
+        doc: >
+          Link to the Run table.
+      - !Column
+        name: quantum_id
+        type: int
+        doc: >
+          Link to the Quantum table (only present for SuperTask-generated Datasets).
+      - !Column
+        name: camera
+        type: string
+        doc: >
+          DataUnit. Link to the Camera table.
+      - !Column
+        name: abstract_filter
+        type: string
+        doc: >
+          DataUnit. Link to the AbstractFilter table.
+      - !Column
+        name: physical_filter
+        type: string
+        doc: >
+          DataUnit. Link to the PhysicalFilter table.  If non-NULL camera must be
+          non-NULL and abstract_filter must be non-NULL unless
+          Filter.abstract_filter is NULL.
+      - !Column
+        name: sensor
+        type: int
+        doc: >
+          DataUnit. Link to the Sensor table.  If non-NULL camera must be non-NULL.
+      - !Column
+        name: visit
+        type: int
+        doc: >
+          DataUnit. Link to the Visit table.  If non-NULL camera must be non-NULL
+          and physical_filter usually will be.
+      - !Column
+        name: exposure
+        type: int
+        doc: >
+          DataUnit.  Link to the Exposure table.  If non-NULL camera must be
+          non-NULL and physical_filter usually will be.
+      - !Column
+        name: valid_first
+        type: int
+        doc: >
+          DataUnit (ExposureRange).  Indicates the first exposure this Dataset may
+          be used with (inclusive).  Typically used for master calibration datasets.
+      - !Column
+        name: valid_last
+        type: int
+        doc: >
+          DataUnit (ExposureRange).  Indicates the last exposure this Dataset may be
+          used with (inclusive).  Typically used for master calibration datasets.
+      - !Column
+        name: skymap
+        type: string
+        doc: >
+          DataUnit.  Link to the SkyMap table.
+      - !Column
+        name: tract
+        type: int
+        doc: >
+          DataUnit.  Link to the Tract table.  If non-NULL skymap must be non-NULL.
+      - !Column
+        name: patch
+        type: int
+        doc: >
+          DataUnit.  Link to the Patch table.  If non-NULL skymap and tract must be
+          non-NULL.
+      - !Column
+        name: skypix
+        type: int
+        doc: >
+          DataUnit.  A unique index in a predefined (but TBD) hierarchical sky
+          pixelization.
+      - !Column
+        name: label
+        type: string
+        doc: >
+          Generic DataUnit that can take arbitrary values.  No associated table.
+          Should be NULL unless needed to distinguish between different Datasets
+          with this DatasetType.
+      constraints:
+      - !ForeignKeyConstraint
+        src: dataset_type_name
+        tgt: DatasetType.dataset_type_name
+      - !ForeignKeyConstraint
+        src:
+        - run_id
+        - registry_id
+        tgt:
+        - Run.run_id
+        - Run.registry_id
+      - !ForeignKeyConstraint
+        src:
+        - producer_id
+        - registry_id
+        tgt:
+        - Quantum.quantum_id
+        - Quantum.registry_id
+  
+    - !Table
+      name: DatasetComposition
+      doc: >
+        Self-join table that relates components of a dataset to their parent.
+      columns:
+      - !Column
+        name: parent_dataset_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: parent_registry_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: component_dataset_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: component_registry_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: component_name
+        type: string
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src:
+        - parent_dataset_id
+        - parent_registry_id
+        tgt:
+        - Dataset.dataset_id
+        - Dataset.registry_id
+      - !ForeignKeyConstraint
+        src:
+        - component_dataset_id
+        - component_registry_id
+        tgt:
+        - Dataset.dataset_id
+        - Dataset.registry_id
+  
+    - !Table
+      name: DatasetType
+      doc: >
+        Table containing the set of registered DatasetTypes and their
+        StorageClasses.
+      columns:
+      - !Column
+        name: dataset_type_name
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: storage_class
+        type: string
+        nullable: false
+  
+    - !Table
+      name: DatasetTypeUnits
+      doc: >
+        Definition table indicating which unit link fields in Dataset are non-NULL
+        for Datasets with this DatasetType.
+      columns:
+      - !Column
+        name: dataset_type_name
+        type: string
+        nullable: false
+      - !Column
+        name: unit_name
+        type: string
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: dataset_type_name
+        tgt: DatasetType.dataset_type_name
+  
+    - !Table
+      name: DatasetTypeMetadata
+      doc: >
+        Definition table indicating which Metadata tables have entries for Datasets
+        with this DatasetType.
+      columns:
+      - !Column
+        name: dataset_type_name
+        type: string
+        nullable: false
+      - !Column
+        name: metadata_name
+        type: string
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: dataset_type_name
+        tgt: DatasetType.dataset_type_name
+  
+    - !Table
+      name: AbstractFilter
+      doc: >
+        A filter that is not associated with a particular camera.  An abstract
+        filter can be used to relate similar physical filters, and is typically the
+        filter associated with coadds.  The SQL representation is a definition table
+        containing allowable values for e.g. Dataset.abstract_filter.
+      columns:
+      - !Column
+        name: name
+        type: string
+        primary_key: true
+        doc: >
+          Name of the filter, typically a single letter (e.g. "r" or "i").
+  
+    - !Table
+      name: Camera
+      doc: >
+        A camera that defines a set of physical filters and sensors, and defines a
+        numbering system for its visits.  The SQL representation is a definition
+        table containing allowable values for e.g. Dataset.camera.
+      columns:
+      - !Column
+        name: name
+        type: string
+        primary_key: true
+  
+    - !Table
+      name: PhysicalFilter
+      doc: >
+        A filter associated with a particular camera.  Physical filters are used to
+        identify datasets that can only be associated with a single observation.
+        The SQL representation is is a table describing the relationships between
+        physical filters, cameras, and abstract filters.
+      columns:
+      - !Column
+        name: camera
+        type: string
+        primary_key: true
+      - !Column
+        name: name
+        type: string
+        primary_key: true
+      - !Column
+        name: abstract
+        type: string
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera
+        tgt: Camera.name
+      - !ForeignKeyConstraint
+        src: abstract
+        tgt: AbstractFilter.name
+  
+    - !Table
+      name: Sensor
+      doc: >
+        A sensor associated with a particular camera (not an observation of that
+        sensor; that requires specifying an exposure or visit as well).  The SQL
+        representation is a table with metadata and grouping information, allowing
+        sensors to be identified by something other than their numbers in user
+        expressions of what to process.
+      columns:
+      - !Column
+        name: camera
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: name
+        type: string
+        primary_key: true
+      - !Column
+        name: group
+        type: string
+      - !Column
+        name: purpose
+        type: string
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera
+        tgt: Camera.name
+  
+    - !Table
+      name: Exposure
+      doc: >
+        An observation associated with a particular camera.  All direct observations
+        are identified with an Exposure, but derived datasets that may be based on
+        more than one Exposure (e.g. multiple snaps) are typically identified with
+        Visits instead, even for cameras that don't have multiple Exposures per
+        Visit.  The SQL representation is a table with Exposure metadata and fields
+        indicating the relationships to Visits.
+      columns:
+      - !Column
+        name: camera
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: visit
+        type: int
+        primary_key: true
+        doc: >
+          ID of the Visit this Exposure is associated with.  Science observations
+          should essentially always be associated with a visit, but calibration
+          observations may not be.
+      - !Column
+        name: snap
+        type: int
+        doc: >
+          If visit is not null, the index of this Exposure in the Visit, starting
+          from zero.
+      - !Column
+        name: datetime_begin
+        type: datetime
+      - !Column
+        name: exposure_time
+        type: float
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera
+        tgt: Camera.name
+      - !ForeignKeyConstraint
+        src:
+        - camera
+        - visit
+        tgt:
+        - Visit.camera
+        - Visit.visit
+  
+    - !Table
+      name: Label
+      doc: >
+        An arbitrary string value.  There is no SQL representation or constraint on
+        the values a Label can take.
+      columns:
+      - !Column
+        name: camera
+        type: string
+  
+    - !Table
+      name: ExposureRange
+      doc: >
+        An inclusive range of Exposures that may be open in either direction.  There
+        is no SQL representation; its fields (duplicated below) are all part of its
+        compound primary key and are hence just present in Dataset.
+      columns:
+      - !Column
+        name: camera
+        type: string
+      - !Column
+        name: valid_first
+        type: int
+        doc: >
+          First exposure.id included (inclusive).  May be zero to indicate an open
+          interval.
+      - !Column
+        name: valid_last
+        type: int
+        doc: >
+          Last exposure.id included (inclusive).  May be max(int) to indicate an
+          open interval.
+  
+    - !Table
+      name: Visit
+      doc: >
+        A sequence of observations processed together, comprised of one or more
+        Exposures.  The SQL representation is a table with Visit metadata, allowing
+        them to be identified by something other than their numbers.
+      columns:
+      - !Column
+        name: camera
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: physical_filter
+        type: string
+        nullabe: false
+      - !Column
+        name: datetime_begin
+        type: datetime
+        doc: >
+          This should be the same as the datetime_begin field of the first Exposure
+          associated with this Visit.
+      - !Column
+        name: exposure_time
+        type: float
+        doc: >
+          This should cover the full time from the start of the first Exposure to
+          the end of the last one.
+      - !Column
+        name: region
+        type: blob
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera
+        tgt: Camera.name
+      - !ForeignKeyConstraint
+        src:
+        - camera
+        - physical_filter
+        tgt:
+        - PhysicalFilter.camera
+        - name
+  
+    - !Table
+      name: SkyMap
+      doc: >
+        A set of Tracts and Patches that subdivide the sky into rectangular regions
+        (with overlaps).  The SQL representation is a definition table containing
+        allowable values for e.g. Dataset.skymap.
+      columns:
+      - !Column
+        name: name
+        type: string
+        primary_key: true
+        nullable: false
+    
+    - !Table
+      name: Tract
+      doc: >
+        A rectangular region mapped to the sky with a single map projection,
+        associated with a particular SkyMap.  The SQL representation is a table with
+        the spatial region for each tract.
+      columns:
+      - !Column
+        name: skymap
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: region
+        type: blob
+      constraints:
+      - !ForeignKeyConstraint
+        src: skymap
+        tgt: SkyMap.name
+    
+    - !Table
+      name: Patch
+      doc: >
+        A rectangular region within a tract.  The SQL representation is a table with
+        the spatial region for each tract+patch combination and the patch's location
+        within the tract's grid.
+      columns:
+      - !Column
+        name: skymap
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: tract
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: cell_x
+        type: int
+        nullable: false
+      - !Column
+        name: cell_y
+        type: int
+        nullable: false
+      - !Column
+        name: region
+        type: blob
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: skymap
+        tgt: SkyMap.name
+      - !ForeignKeyConstraint
+        src:
+        - skymap
+        - tract
+        tgt:
+        - Tract.skymap
+        - Tract.id
+    
+    - !Table
+      name: SkyPix
+      doc: >
+        A pixel in a hierarchical decomposition of the sky (e.g. HTM; I hope we can
+        pick one pixelization for all data products and spatial indexes, but don't
+        want to declare yet what it should be).  Unlike a tract or patch in a
+        SkyMap, SkyPix units do not overlap.  Has no SQL representation (even a
+        definition table is not necessary, given that the allowable values are just
+        a range of consecutive integers.
+      columns:
+      - !Column
+        name: id
+        type: int
+        doc: >
+          Unique ID of a pixel in the hierarchical pixelization.
+    
+    - !Table
+      name: VisitSensorJoin
+      doc: >
+        Provides spatial regions for visit+sensor combinations.
+      columns:
+      - !Column
+        name: camera
+        type: string
+        primary_key: true
+        nullable: false
+      - !Column
+        name: visit
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: sensor
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: region
+        type: blob
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera
+        tgt: Camera.name
+      - !ForeignKeyConstraint
+        src:
+        - camera
+        - visit
+        tgt:
+        - Visit.camera
+        - Visit.id
+      - !ForeignKeyConstraint
+        src:
+        - camera
+        - sensor
+        tgt:
+        - Sensor.camera
+        - Sensor.id
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+    
+    - !Table
+      name: VisitSelfJoin
+      doc: >
+        Relates observations made with one camera to those made at the same time
+        with another.  Might be implementable as a view.
+      columns:
+      - !Column
+        name: camera_name_1
+        type: string
+        nullable: false
+      - !Column
+        name: camera_name_2
+        type: string
+        nullable: false
+      - !Column
+        name: visit_number_1
+        type: int
+        nullable: false
+      - !Column
+        name: visit_number_2
+        type: int
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera_name_1 
+        tgt: Camera.camera_name_1
+      - !ForeignKeyConstraint
+        src: camera_name_2
+        tgt: Camera.camera_name_2
+      - !ForeignKeyConstraint
+        src:
+        - camera_name_1
+        - visit_number_1
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+      - !ForeignKeyConstraint
+        src:
+        - camera_name_2
+        - visit_number_2
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+    
+    - !Table
+      name: SensorPatchJoin
+      doc: >
+        Relates observations to skymap; needs to be implemented as a spatial join
+        view.
+      columns:
+      - !Column
+        name: camera_name
+        type: string
+        nullable: false
+      - !Column
+        name: visit_number
+        type: int
+        nullable: false
+      - !Column
+        name: physical_sensor_number
+        type: int
+        nullable: false
+      - !Column
+        name: skymap_name
+        type: string
+        nullable: false
+      - !Column
+        name: tract_number
+        type: int
+        nullable: false
+      - !Column
+        name: patch_index
+        type: int
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera_name
+        tgt: Camera.camera_name
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - physical_sensor_number
+        tgt:
+        - PhysicalSensor.camera_name
+        - PhysicalSensor.physical_sensor_number
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number
+        - physical_sensor_number
+        tgt:
+        - ObservedSensor.camera_name
+        - ObservedSensor.visit_number
+        - ObservedSensor.physical_sensor_number
+      - !ForeignKeyConstraint
+        src: skymap_name
+        tgt: SkyMap.skymap_name
+      - !ForeignKeyConstraint
+        src:
+        - skymap_name
+        - tract_number
+        tgt:
+        - Tract.skymap_name
+        - Tract.tract_number
+      - !ForeignKeyConstraint
+        src:
+        - skymap_name
+        - tract_number
+        - patch_index
+        tgt:
+        - Patch.skymap_name
+        - Patch.tract_number
+        - Patch.patch_index
+    
+    - !Table
+      name: VisitPatchJoin
+      doc: >
+        Relates observations to skymap; needs to be implemented as a spatial join
+        view.
+      columns:
+      - !Column
+        name: camera_name
+        type: string
+        nullable: false
+      - !Column
+        name: visit_number
+        type: int
+        nullable: false
+      - !Column
+        name: skymap_name
+        type: string
+        nullable: false
+      - !Column
+        name: tract_number
+        type: int
+        nullable: false
+      - !Column
+        name: patch_index
+        type: int
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera_name
+        tgt: Camera.camera_name
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+      - !ForeignKeyConstraint
+        src: skymap_name
+        tgt: SkyMap.skymap_name
+      - !ForeignKeyConstraint
+        src:
+        - skymap_name
+        - tract_number
+        tgt:
+        - Tract.skymap_name
+        - Tract.tract_number
+      - !ForeignKeyConstraint
+        src:
+        - skymap_name
+        - tract_number, patch_index
+        tgt:
+        - Patch.skymap_name
+        - Patch.tract_number, patch_index
+    
+    - !Table
+      name: SensorTractJoin
+      doc: >
+        Relates observations to skymap; needs to be implemented as a spatial join
+        view.
+      columns:
+      - !Column
+        name: camera_name
+        type: string
+        nullable: false
+      - !Column
+        name: visit_number
+        type: int
+        nullable: false
+      - !Column
+        name: physical_sensor_number
+        type: int
+        nullable: false
+      - !Column
+        name: skymap_name
+        type: string
+        nullable: false
+      - !Column
+        name: tract_number
+        type: int
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera_name
+        tgt: Camera.camera_name
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - physical_sensor_number
+        tgt:
+        - PhysicalSensor.camera_name
+        - PhysicalSensor.physical_sensor_number
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number, physical_sensor_number
+        tgt:
+        - ObservedSensor.camera_name
+        - ObservedSensor.visit_number, physical_sensor_number
+      - !ForeignKeyConstraint
+        src: skymap_name
+        tgt: SkyMap.skymap_name
+      - !ForeignKeyConstraint
+        src:
+        - skymap_name
+        - tract_number
+        tgt:
+        - Tract.skymap_name
+        - Tract.tract_number
+    
+    - !Table
+      name: VisitTractJoin
+      doc: >
+        Relates observations to skymap; needs to be implemented as a spatial join
+        view.
+      columns:
+      - !Column
+        name: camera_name
+        type: string
+        nullable: false
+      - !Column
+        name: visit_number
+        type: int
+        nullable: false
+      - !Column
+        name: skymap_name
+        type: string
+        nullable: false
+      - !Column
+        name: tract_number
+        type: int
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src: camera_name
+        tgt: Camera.camera_name
+      - !ForeignKeyConstraint
+        src:
+        - camera_name
+        - visit_number
+        tgt:
+        - Visit.camera_name
+        - Visit.visit_number
+      - !ForeignKeyConstraint
+        src: skymap_name
+        tgt: SkyMap.skymap_name
+      - !ForeignKeyConstraint
+        src:
+        - skymap_name
+        - tract_number
+        tgt:
+        - Tract.skymap_name
+        - Tract.tract_number
+    
+    - !Table
+      name: DatasetCollection
+      columns:
+      - !Column
+        name: dataset_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: registry_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: collection
+        type: string
+        primary_key: true
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src:
+        - dataset_id
+        - registry_id
+        tgt:
+        - Dataset.dataset_id
+        - Dataset.registry_id
+    
+    - !Table
+      name: Execution
+      columns:
+      - !Column
+        name: excution_id
+        type: int
+        nullable: false
+      - !Column
+        name: registry_id
+        type: int
+        nullable: false
+      - !Column
+        name: start_time
+        type: datetime
+        nullable: false
+      - !Column
+        name: end_time
+        type: datetime
+        nullable: false
+      - !Column
+        name: host
+        type: string
+        nullable: false
+    
+    - !Table
+      name: Run
+      columns:
+      - !Column
+        name: execution_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: registry_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: collection
+        type: string
+        primary_key: true
+      - !Column
+        name: environment_id
+        type: int
+      - !Column
+        name: pipeline_id
+        type: int
+      constraints:
+      - !ForeignKeyConstraint
+        src:
+        - environment_id
+        - registry_id
+        tgt:
+        - Dataset.dataset_id
+        - Dataset.registry_id
+      - !ForeignKeyConstraint
+        src:
+        - pipeline_id
+        - registry_id
+        tgt:
+        - Dataset.dataset_id
+        - Dataset.registry_id
+    
+    - !Table
+      name: Quantum
+      columns:
+      - !Column
+        name: execution_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: registry_id
+        type: int
+        primary_key: true
+        nullable: false
+      - !Column
+        name: task
+        type: string
+      - !Column
+        name: run_id
+        type: int
+      constraints:
+      - !ForeignKeyConstraint
+        src:
+        - run_id
+        - registry_id
+        tgt:
+        - Run.execution_id
+        - Run.registry_id
+    
+    - !Table
+      name: DatasetConsumers
+      columns:
+      - !Column
+        name: quantum_id
+        type: int
+        nullable: false
+      - !Column
+        name: quantum_registry_id
+        type: int
+        nullable: false
+      - !Column
+        name: dataset_id
+        type: int
+        nullable: false
+      - !Column
+        name: dataset_registry_id
+        type: int
+        nullable: false
+      - !Column
+        name: actual
+        type: bool
+        nullable: false
+      constraints:
+      - !ForeignKeyConstraint
+        src:
+        - quantum_id
+        - quantum_registry_id
+        tgt:
+        - Quantum.execution_id
+        - Quantum.registry_id
+      - !ForeignKeyConstraint
+        src:
+        - dataset_id
+        - dataset_registry_id
+        tgt:
+        - Dataset.dataset_id
+        - Dataset.dataset_registry_id
+    
