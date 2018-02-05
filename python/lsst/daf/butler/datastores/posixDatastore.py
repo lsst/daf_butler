@@ -112,7 +112,7 @@ class PosixDatastore(Datastore):
         try:
             result = formatter.read(FileDescriptor(location, storageClass.pytype, parameters))
         except Exception as e:
-            raise ValueError(e)
+            raise ValueError("Failure from formatter: {}".format(e))
 
         # Validate the returned data type matches the expected data type
         refType = storageClass.pytype
