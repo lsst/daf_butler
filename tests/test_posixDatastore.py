@@ -59,7 +59,9 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = datastore.storageClassFactory.getStorageClass("StructuredData")
-        uri, _ = datastore.put(metrics, storageClass=storageClass, storageHint="tester.json", typeName=None)
+        uri, comps = datastore.put(metrics, storageClass=storageClass, storageHint="tester.json",
+                                   typeName=None)
+
         # Get
         metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertEqualMetrics(metrics, metricsOut)
@@ -71,6 +73,24 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         with self.assertRaises(ValueError):
             # invalid storage class
             datastore.get(uri="file:///non_existing.json", storageClass=object, parameters=None)
+
+    def testCompositePutGet(self):
+        metrics = makeExampleMetrics()
+        datastore = PosixDatastore(config=self.configFile)
+        # Put
+        storageClass = datastore.storageClassFactory.getStorageClass("StructuredComposite")
+        uri, comps = datastore.put(metrics, storageClass=storageClass, storageHint="testerc.json",
+                                   typeName=None)
+        self.assertIsNone(uri)
+
+        # Read all the components into a dict
+        components = {}
+        for c, u in comps.items():
+            components[c] = datastore.get(u, storageClass=storageClass.components[c], parameters=None)
+
+        # combine them into a new metrics composite object
+        metricsOut = storageClass.assembler(components)
+        self.assertEqualMetrics(metrics, metricsOut)
 
     def testRemove(self):
         metrics = makeExampleMetrics()

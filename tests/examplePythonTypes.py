@@ -74,3 +74,59 @@ class MetricsExample:
         if "data" in exportDict:
             data = exportDict["data"]
         return cls(exportDict["summary"], exportDict["output"], data)
+
+
+class MetricsExampleC(MetricsExample):
+    """Version of `MetricsExample` that we treat as a composite.
+    """
+
+    @staticmethod
+    def assembleMetrics(exportDict):
+        """Construct an object from a dict of components.
+
+        Parameters
+        ----------
+        exportDict : `dict`
+            `dict` with keys "summary", "output", and (optionally) "data".
+
+        Returns
+        -------
+        metrics : `MetricsExample`
+            Newly constructed instance.
+        """
+        return MetricsExample.makeFromDict(exportDict)
+
+    def disassembleMetrics(self, storageClass):
+        """Disassemble a metrics object into components.
+
+        Parameters
+        ----------
+        storageClass : `StorageClass`
+            The storage class to be associated with the disassembly.
+
+        Returns
+        -------
+        components : `dict`
+            Individual components with keys matching the keys of the components
+            defined in `storageClass` and values being a tuple with the first
+            element the component and the second element the `StorageClass` of
+            the component.
+
+        Raises
+        ------
+        e : ValueError
+            A requested component can not be found.
+        """
+        requested = set(storageClass.components.keys())
+        components = {}
+        for c in list(requested):
+            # Remove from list
+            requested.remove(c)
+            sc = storageClass.components[c]
+            if hasattr(self, c):
+                components[c] = (getattr(self, c), sc)
+
+        if requested:
+            raise ValueError("There are unhandled components ({})".format(requested))
+
+        return components

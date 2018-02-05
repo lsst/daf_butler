@@ -54,6 +54,12 @@ class Location(object):
         """
         return os.path.join(self._datastoreRoot, self._uri.path.lstrip("/"))
 
+    @property
+    def fragment(self):
+        """URI fragment associated with this location.
+        """
+        return self._uri.fragment
+
 
 class LocationFactory(object):
     """Factory for `Location` instances.

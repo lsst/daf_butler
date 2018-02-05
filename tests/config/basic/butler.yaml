@@ -4,22 +4,37 @@ datastore:
   root: ./butler_test_repository
   create: true
   storageClasses:
+    StructuredDataDict:
+      pytype: dict
+      formatter: exampleFormatters.SimpleJSONFormatter
+    StructuredDataList:
+      pytype: list
+      formatter: exampleFormatters.SimpleJSONFormatter
     StructuredData:
       # Data from a JSON or YAML file
       # type: dict
-      type: examplePythonTypes.MetricsExample
+      pytype: examplePythonTypes.MetricsExample
       formatter: exampleFormatters.MetricsExampleFormatter
+    StructuredComposite:
+      pytype: examplePythonTypes.MetricsExampleC
+      formatter: exampleFormatters.MetricsExampleFormatterC
+      assembler: examplePythonTypes.MetricsExampleC.assembleMetrics
+      disassembler: examplePythonTypes.MetricsExampleC.disassembleMetrics
+      components:
+        summary: StructuredDataDict
+        output: StructuredDataDict
+        data: StructuredDataList
     TablePersistable:
-      type: lsst.afw.table
+      pytype: lsst.afw.table
     Image:
-      type: lsst.afw.image.MaskedImage
+      pytype: lsst.afw.image.MaskedImage
     Catalog:
-      type: lsst.afw.table.BaseCatalog
+      pytype: lsst.afw.table.BaseCatalog
     SourceCatalog:
-      type: lsst.afw.table.SourceCatalog
+      pytype: lsst.afw.table.SourceCatalog
       formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     Exposure:
-      type: lsst.afw.image.Exposure
+      pytype: lsst.afw.image.Exposure
       components:
         image: Image
         mask: Image

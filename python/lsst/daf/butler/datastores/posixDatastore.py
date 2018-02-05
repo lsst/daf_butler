@@ -68,9 +68,7 @@ class PosixDatastore(Datastore):
                     components[cname] = self.storageClassFactory.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for StorageClass Constructor
-            print(info)
-            scItems = {k: info[k] for k in ("pytype",) if k in info}
-            print(scItems)
+            scItems = {k: info[k] for k in ("pytype", "assembler", "disassembler") if k in info}
 
             # Fill in other items
             scItems["components"] = components
@@ -101,12 +99,19 @@ class PosixDatastore(Datastore):
         -------
         inMemoryDataset : `InMemoryDataset`
             Requested `Dataset` or slice thereof as an `InMemoryDataset`.
+
+        Raises
+        ------
+        e : ValueError
+            Requested URI can not be retrieved.
         """
         formatter = self.formatterFactory.getFormatter(storageClass)
         location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.path):
-            raise ValueError("No such file: {0}".format(location.uri))
-        return formatter.read(FileDescriptor(location, storageClass.pytype, parameters))
+        try:
+            result = formatter.read(FileDescriptor(location, storageClass.pytype, parameters))
+        except Exception as e:
+            raise ValueError(e)
+        return result
 
     def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
@@ -131,8 +136,23 @@ class PosixDatastore(Datastore):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
         location = self.locationFactory.fromPath(storageHint)
+
+        # Check to see if this storage class has a disassembler
+        if storageClass.disassembler is not None:
+            compUris = {}
+            components = storageClass.disassembler(inMemoryDataset, storageClass)
+            for comp, info in components.items():
+                compTypeName = typeName
+                if compTypeName is not None:
+                    compTypeName = "{}.{}".format(compTypeName, comp)
+                compUris[comp], _ = self.put(info[0], info[1], "{}#{}".format(storageHint, comp),
+                                             compTypeName)
+            return None, compUris
+
+        # Write a single component
+        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
+
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
             safeMakeDir(storageDir)
