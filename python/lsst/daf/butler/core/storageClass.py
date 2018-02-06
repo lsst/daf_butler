@@ -23,6 +23,8 @@
 
 """Support for Storage Classes."""
 
+import builtins
+
 from lsst.daf.butler.core.utils import doImport
 
 from .mappingFactory import MappingFactory
@@ -62,10 +64,8 @@ class StorageClassMeta(type):
         if not isinstance(cls._pytypeName, str):
             pytype = cls._pytypeName
             cls._pytypeName = cls._pytypeName.__name__
-        elif cls._pytypeName == "dict":
-            pytype = dict
-        elif cls._pytypeName == "list":
-            pytype = list
+        elif hasattr(builtins, cls._pytypeName):
+            pytype = getattr(builtins, cls._pytypeName)
         else:
             pytype = doImport(cls._pytypeName)
         cls._pytype = pytype
