@@ -29,7 +29,7 @@ from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
 from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
-from lsst.daf.butler.core.storageClass import StorageClassFactory
+from lsst.daf.butler.core.storageClass import StorageClassFactory, makeNewStorageClass
 
 
 class PosixDatastore(Datastore):
@@ -68,12 +68,14 @@ class PosixDatastore(Datastore):
                     components[cname] = self.storageClassFactory.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for StorageClass Constructor
-            scItems = {k: info[k] for k in ("pytype", "assembler", "disassembler") if k in info}
+            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler", "disassembler") if k in info}
 
             # Fill in other items
-            scItems["components"] = components
+            storageClassKwargs["components"] = components
 
-            self.storageClassFactory.registerStorageClass(name, scItems)
+            # Create the new storage class and register it
+            newStorageClass = makeNewStorageClass(name, **storageClassKwargs)
+            self.storageClassFactory.registerStorageClass(newStorageClass)
 
             # Create the formatter, indexed by the storage class
             # Currently, we allow this to be optional because some storage classes

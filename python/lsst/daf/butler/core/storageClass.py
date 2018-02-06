@@ -203,22 +203,16 @@ class StorageClassFactory:
         """
         return self._mappingFactory.getFromRegistry(storageClassName)
 
-    def registerStorageClass(self, storageClassName, classAttr):
-        """Create a `StorageClass` subclass with the supplied properties
-        and associate it with the storageClassName in the registry.
+    def registerStorageClass(self, storageClass):
+        """Store the `StorageClass` in the factory.
+
+        Will be indexed by `StorageClass.name` and will return instances
+        of the supplied `StorageClass`.
 
         Parameters
         ----------
-        storageClassName : `str`
-            Name of new storage class to be created.
-        classAttr : `dict`
-            Dict containing StorageClass parameters. Supported keys:
-            - pytype: `str`
-                Name of python type associated with this StorageClass
-            - assembler: `str`
-            - disassembler: `str`
-            - components: `dict`
-                Map of storageClassName to `storageClass` for components.
+        storageClass: `StorageClass`
+            Type of the Python `StorageClass` to register.
 
         Raises
         ------
@@ -226,5 +220,4 @@ class StorageClassFactory:
             If a storage class has already been registered with
             storageClassName.
         """
-        newtype = makeNewStorageClass(storageClassName, **classAttr)
-        self._mappingFactory.placeInRegistry(storageClassName, newtype)
+        self._mappingFactory.placeInRegistry(storageClass.name, storageClass)

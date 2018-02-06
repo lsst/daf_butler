@@ -66,7 +66,8 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         in a registry."""
         className = "TestImage"
         factory = storageClass.StorageClassFactory()
-        factory.registerStorageClass(className, {"pytype": PythonType})
+        newclass = storageClass.makeNewStorageClass(className, pytype=PythonType)
+        factory.registerStorageClass(newclass)
         sc = factory.getStorageClass(className)
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
