@@ -60,6 +60,12 @@ class Location(object):
         """
         return self._uri.fragment
 
+    def componentUri(self, componentName):
+        """Returns URI of the named component."""
+        parts = list(self._uri)
+        parts[5] = componentName
+        return urllib.parse.urlunparse(parts)
+
 
 class LocationFactory(object):
     """Factory for `Location` instances.

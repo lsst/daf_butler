@@ -80,9 +80,8 @@ class MetricsExampleFormatter(Formatter):
         with open(fileDescriptor.location.path, "w") as fd:
             json.dump(data, fd)
 
-        baseURI = fileDescriptor.location.uri
-
-        return baseURI, {c: "{}#{}".format(baseURI, c) for c in ("output", "data", "summary")}
+        return (fileDescriptor.location.uri,
+                {c: fileDescriptor.location.componentUri(c) for c in ("output", "data", "summary")})
 
 
 class SimpleJSONFormatter(Formatter):
