@@ -21,12 +21,27 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+"""Support for Storage Classes."""
+
 from lsst.daf.butler.core.utils import doImport
 
 from .mappingFactory import MappingFactory
 
 
 class StorageClassMeta(type):
+
+    """Metaclass used by `StorageClass`.
+
+    Implements lazy loading of class attributes, allowing datastores to
+    delay loading of external code until it is needed.
+
+    Attributes
+    ----------
+    pytype
+    assembler
+    disassembler
+
+    """
 
     # Caches of imported code objects.
     _pytype = None
@@ -40,6 +55,7 @@ class StorageClassMeta(type):
 
     @property
     def pytype(cls):  # noqa N805
+        """Python type associated with this `StorageClass`."""
         if cls._pytype is not None:
             return cls._pytype
         # Handle case where we did get a python type not string
@@ -57,6 +73,7 @@ class StorageClassMeta(type):
 
     @property
     def assembler(cls):  # noqa N805
+        """Function to use to assemble an object from components."""
         if cls._assembler is not None:
             return cls._assembler
         if cls._assemblerName is None:
@@ -66,6 +83,7 @@ class StorageClassMeta(type):
 
     @property
     def disassembler(cls):  # noqa N805
+        """Function to use to split an object into components."""
         if cls._disassembler is not None:
             return cls._disassembler
         if cls._disassemblerName is None:
@@ -130,7 +148,7 @@ class StorageClass(metaclass=StorageClassMeta):
 def makeNewStorageClass(name, pytype=None, components=None, assembler=None, disassembler=None):
     """Create a new Python class as a subclass of `StorageClass`.
 
-    parameters
+    Parameters
     ----------
     name : `str`
         Name to use for this class.
