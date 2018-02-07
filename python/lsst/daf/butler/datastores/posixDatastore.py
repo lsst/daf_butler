@@ -167,8 +167,8 @@ class PosixDatastore(Datastore):
                 compTypeName = typeName
                 if compTypeName is not None:
                     compTypeName = "{}.{}".format(compTypeName, comp)
-                compUris[comp], _ = self.put(info[0], info[1], location.componentUri(comp),
-                                             compTypeName)
+                compUris[comp], _ = self.put(info.component, info.storageClass,
+                                             location.componentUri(comp), compTypeName)
             return None, compUris
 
         # Write a single component

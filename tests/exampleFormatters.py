@@ -109,18 +109,3 @@ class SimpleJSONFormatter(Formatter):
         with open(self.getPath(fileDescriptor), "w") as fd:
             json.dump(inMemoryDataset, fd)
         return fileDescriptor.location.uri, {}
-
-
-class MetricsExampleFormatterC(Formatter):
-    """Example formatter for a composite."""
-
-    def read(self, fileDescriptor):
-        with open(fileDescriptor.location.path, "r") as fd:
-            data = json.load(fd)
-        return fileDescriptor.pytype.makeFromDict(data)
-
-    def write(self, inMemoryDataset, fileDescriptor):
-        data = inMemoryDataset.exportAsDict()
-        with open(fileDescriptor.location.path, "w") as fd:
-            json.dump(data, fd)
-        return fileDescriptor.location.uri, {}

@@ -23,10 +23,9 @@ datastore:
         # Deliberately set this to the wrong type
         data: StructuredDataDict
     StructuredComposite:
-      pytype: examplePythonTypes.MetricsExampleC
-      formatter: exampleFormatters.MetricsExampleFormatterC
-      assembler: examplePythonTypes.MetricsExampleC.assembleMetrics
-      disassembler: examplePythonTypes.MetricsExampleC.disassembleMetrics
+      pytype: examplePythonTypes.MetricsExample
+      assembler: lsst.daf.butler.core.composites.genericAssembler
+      disassembler: lsst.daf.butler.core.composites.genericDisassembler
       components:
         summary: StructuredDataDict
         output: StructuredDataDict
