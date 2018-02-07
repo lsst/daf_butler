@@ -144,6 +144,23 @@ class StorageClass(metaclass=StorageClassMeta):
     def assemble(cls, parent, components):
         return parent
 
+    @classmethod
+    def validateInstance(cls, instance):
+        """Check that the supplied instance has the expected Python type
+
+        Parameters
+        ----------
+        instance : `object`
+            Object to check.
+
+        Returns
+        -------
+        isOk : `bool`
+            True is the supplied instance object can be handled by this
+            `StorageClass`, False otherwise.
+        """
+        return isinstance(instance, cls.pytype)
+
 
 def makeNewStorageClass(name, pytype=None, components=None, assembler=None, disassembler=None):
     """Create a new Python class as a subclass of `StorageClass`.
