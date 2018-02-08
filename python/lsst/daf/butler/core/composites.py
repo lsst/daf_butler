@@ -43,6 +43,25 @@ class DatasetComponent:
         self.component = component
 
 
+def _attrNames(componentName, getter=True):
+    """Return list of suitable attribute names to attempt to use.
+
+    Parameters
+    ----------
+    componentName : `str`
+        Name of component/attribute to look for.
+    getter : `bool`
+        If true, return getters, else return setters.
+
+    Returns
+    -------
+    attrs : `tuple(str)`
+        Tuple of strings to attempt.
+    """
+    root = "get" if getter else "set"
+    return (componentName, "{}_{}".format(root, componentName), "{}{}".format(root, componentName.capitalize))
+
+
 def genericAssembler(storageClass, components, pytype=None):
     """Construct an object from components based on storageClass.
 
@@ -92,7 +111,7 @@ def genericAssembler(storageClass, components, pytype=None):
 
         failed = []
         for name, component in components.items():
-            for attr in (name, "set_" + name, "set" + name.capitalize()):
+            for attr in _attrNames(name, getter=False):
                 if hasattr(obj, attr):
                     setattr(obj, attr, component)
                     break
@@ -103,6 +122,55 @@ def genericAssembler(storageClass, components, pytype=None):
             raise ValueError("There are unhandled components ({})".format(failed))
 
     return obj
+
+
+def hasComponent(composite, componentName):
+    """Determine if it seems likely that the composite has the component.
+
+    Parameters
+    ----------
+    composite : `object`
+        Item to query for the component.
+    componentName : `str`
+        Name of component to retrieve.
+
+    Returns
+    -------
+    getter : `str`
+        Name of attribute to use with `getattr`. None if nothing suitable
+        was found.
+
+    """
+    for attr in _attrNames(componentName, getter=True):
+        if hasattr(composite, attr):
+            return attr
+    return None
+
+
+def genericGetter(composite, componentName):
+    """Attempt to retrieve component from composite object by heuristic.
+
+    Will attempt a direct attribute retrieval, or else getter methods of the
+    form "get_componentName" and "getComponentName".
+
+    Parameters
+    ----------
+    composite : `object`
+        Item to query for the component.
+    componentName : `str`
+        Name of component to retrieve.
+
+    Returns
+    -------
+    component : `object`
+        Component extracted from composite. None if nothing worked.
+    """
+    component = None
+    for attr in _attrNames(componentName, getter=True):
+        if hasattr(composite, attr):
+            component = getattr(composite, attr)
+            break
+    return component
 
 
 def genericDisassembler(composite, storageClass):
@@ -142,11 +210,7 @@ def genericDisassembler(composite, storageClass):
     for c in list(requested):
         # Try three different ways to get a value associated with the
         # component name.
-        component = None
-        for attr in (c, "get_" + c, "get" + c.capitalize()):
-            if hasattr(composite, attr):
-                component = getattr(composite, attr)
-                break
+        component = genericGetter(composite, c)
 
         # If we found a match store it in the results dict and remove
         # it from the list of components we are still looking for.
