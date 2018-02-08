@@ -129,20 +129,8 @@ class PosixDatastore(Datastore):
             raise ValueError("Failure from formatter: {}".format(e))
 
         # Validate the returned data type matches the expected data type
-        refType = storageClass.pytype
-
-        # Override with component but only if this storage class defines
-        # components if no components are defined this is a URI for a
-        # component itself
-        comp = location.fragment
-        scComps = storageClass.components
-        if comp and scComps is not None:
-            refType = None  # Clear it since this *is* a component
-            if comp in scComps:
-                refType = scComps[comp].pytype
-
-        if refType and not isinstance(result, refType):
-            raise TypeError("Got type {} from formatter but expected {}".format(type(result), refType))
+        if pytype and not isinstance(result, pytype):
+            raise TypeError("Got type {} from formatter but expected {}".format(type(result), pytype))
 
         return result
 
