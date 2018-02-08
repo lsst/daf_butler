@@ -26,7 +26,7 @@ from abc import ABCMeta, abstractmethod
 from .mappingFactory import MappingFactory
 
 
-class Formatter(object, metaclass=ABCMeta):
+class Formatter(metaclass=ABCMeta):
     """Interface for reading and writing `Dataset`s with a particular
     `StorageClass`.
     """
