@@ -43,7 +43,7 @@ class DatasetComponent:
         self.component = component
 
 
-def genericAssembler(storageClass, components):
+def genericAssembler(storageClass, components, pytype=None):
     """Construct an object from components based on storageClass.
 
     This generic implementation assumes that instances of objects
@@ -58,6 +58,9 @@ def genericAssembler(storageClass, components):
     components : `dict`
         Collection of components from which to assemble a new composite
         object. Keys correspond to composite names in the `StorageClass`.
+    pytype : `class`, optional
+        Override the type from the `storageClass` to use when assembling
+        the final object.
 
     Returns
     -------
@@ -69,7 +72,10 @@ def genericAssembler(storageClass, components):
     ValueError
         Some components could not be used to create the object.
     """
-    cls = storageClass.pytype
+    if pytype is not None:
+        cls = pytype
+    else:
+        cls = storageClass.pytype
 
     # Should we check that the storage class components match or are a superset
     # of the items described in the supplied components?
