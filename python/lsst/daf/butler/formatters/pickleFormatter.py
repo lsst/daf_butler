@@ -24,9 +24,8 @@
 """Formatter associated with Python pickled objects."""
 
 import pickle
-import collections
 
-from lsst.daf.butler.core.composites import genericGetter, hasComponent
+from lsst.daf.butler.core.composites import genericGetter, validComponents
 from lsst.daf.butler.core.formatter import Formatter
 
 
@@ -151,15 +150,8 @@ class PickleFormatter(Formatter):
         with open(self._getPath(fileDescriptor), "wb") as fd:
             pickle.dump(inMemoryDataset, fd, protocol=-1)
 
-        # The reference components come from the StorageClass when determining
-        # whether this object can be a composite.
-        sc = fileDescriptor.storageClass
-        comps = []
-        if sc is not None and sc.components:
-            for c in sc.components:
-                if (hasComponent(inMemoryDataset, c) is not None or
-                        (isinstance(inMemoryDataset, collections.Mapping) and c in inMemoryDataset)):
-                    comps.append(c)
+        # Get the list of valid components so we can build URIs
+        components = validComponents(inMemoryDataset, fileDescriptor.storageClass)
 
         return (fileDescriptor.location.uri,
-                {c: fileDescriptor.location.componentUri(c) for c in comps})
+                {c: fileDescriptor.location.componentUri(c) for c in components})

@@ -22,6 +22,8 @@
 
 """Support for reading and writing composite objects."""
 
+import collections
+
 
 class DatasetComponent:
 
@@ -122,6 +124,35 @@ def genericAssembler(storageClass, components, pytype=None):
             raise ValueError("There are unhandled components ({})".format(failed))
 
     return obj
+
+
+def validComponents(composite, storageClass):
+    """Extract requested components from a composite.
+
+    Parameters
+    ----------
+    composite : `object`
+        Composite from which to extract components.
+    storageClass : `StorageClass`
+        `StorageClass` associated with this composite object.
+        If None, it is assumed this is not to be treated as a composite.
+
+    Returns
+    -------
+    comps : `dict`
+        Non-None components extracted from the composite, indexed by the component
+        name as derived from the `StorageClass`.
+    """
+    components = {}
+    if storageClass is not None and storageClass.components:
+        for c in storageClass.components:
+            if isinstance(composite, collections.Mapping):
+                comp = composite[c]
+            else:
+                comp = genericGetter(composite, c)
+            if comp is not None:
+                components[c] = comp
+    return components
 
 
 def hasComponent(composite, componentName):
