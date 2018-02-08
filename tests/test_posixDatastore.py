@@ -66,7 +66,11 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertEqualMetrics(metrics, metricsOut)
 
-        # Get a component even though it was written without
+        # Get a component
+        summary = datastore.get(comps["output"], storageClass=storageClass)
+        self.assertEqual(summary, metricsOut.output)
+
+        # Get a component even though it was written without by forming URI ourselves
         summary = datastore.get("{}#{}".format(uri, "summary"), storageClass=storageClass)
         self.assertEqual(summary, metricsOut.summary)
 

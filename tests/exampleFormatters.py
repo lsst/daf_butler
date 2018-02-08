@@ -82,30 +82,3 @@ class MetricsExampleFormatter(Formatter):
 
         return (fileDescriptor.location.uri,
                 {c: fileDescriptor.location.componentUri(c) for c in ("output", "data", "summary")})
-
-
-class SimpleJSONFormatter(Formatter):
-    """Formatter for a Python native type to JSON.
-
-    Attributes
-    ----------
-    path : `str`
-        Path to use for reading/writing the fileDescriptor.
-    """
-
-    def getPath(self, fileDescriptor):
-        filepath = fileDescriptor.location.path
-        fragment = fileDescriptor.location.fragment
-        if fragment:
-            filepath = "{}#{}".format(filepath, fragment)
-        return filepath
-
-    def read(self, fileDescriptor):
-        with open(self.getPath(fileDescriptor), "r") as fd:
-            data = json.load(fd)
-        return data
-
-    def write(self, inMemoryDataset, fileDescriptor):
-        with open(self.getPath(fileDescriptor), "w") as fd:
-            json.dump(inMemoryDataset, fd)
-        return fileDescriptor.location.uri, {}

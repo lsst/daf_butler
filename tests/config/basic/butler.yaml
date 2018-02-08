@@ -6,15 +6,15 @@ datastore:
   storageClasses:
     StructuredDataDict:
       pytype: dict
-      formatter: exampleFormatters.SimpleJSONFormatter
+      formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
     StructuredDataList:
       pytype: list
-      formatter: exampleFormatters.SimpleJSONFormatter
+      formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
     StructuredData:
       # Data from a JSON or YAML file
       # type: dict
       pytype: examplePythonTypes.MetricsExample
-      formatter: exampleFormatters.MetricsExampleFormatter
+      formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
       components:
         # Components are those supported by get. We use the default formatter
         # though, and not the formatters associated with the components.

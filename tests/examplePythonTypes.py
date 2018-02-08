@@ -55,6 +55,19 @@ class MetricsExample:
             exportDict["data"] = list(self.data)
         return exportDict
 
+    def _asdict(self):
+        """Convert object contents to a single Python dict.
+
+        This interface is used for JSON serialization.
+
+        Returns
+        -------
+        exportDict : `dict`
+            Object contents in the form of a dict with keys corresponding
+            to object attributes.
+        """
+        return self.exportAsDict()
+
     @classmethod
     def makeFromDict(cls, exportDict):
         """Create a new object from a dict that is compatible with that
