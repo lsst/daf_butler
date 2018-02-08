@@ -23,8 +23,9 @@
 
 import builtins
 import json
+import collections
 
-from lsst.daf.butler.core.composites import genericAssembler
+from lsst.daf.butler.core.composites import genericAssembler, hasComponent
 from lsst.daf.butler.core.formatter import Formatter
 
 
@@ -161,8 +162,8 @@ class JsonFormatter(Formatter):
         comps = []
         if sc is not None and sc.components:
             for c in sc.components:
-                if (hasattr(inMemoryDataset, c) or
-                        (isinstance(inMemoryDataset, dict) and c in inMemoryDataset)):
+                if (hasComponent(inMemoryDataset, c) is not None or
+                        (isinstance(inMemoryDataset, collections.Mapping) and c in inMemoryDataset)):
                     comps.append(c)
 
         return (fileDescriptor.location.uri,
