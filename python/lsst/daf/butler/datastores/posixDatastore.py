@@ -111,8 +111,20 @@ class PosixDatastore(Datastore):
         """
         formatter = self.formatterFactory.getFormatter(storageClass)
         location = self.locationFactory.fromUri(uri)
+
+        # if we are asking for a component, the type we pass in to the formatter
+        # should be the type of the component and not the composite type
+        pytype = storageClass.pytype
+        comp = location.fragment
+        scComps = storageClass.components
+        if comp and scComps is not None:
+            pytype = None  # Clear it since this *is* a component
+            if comp in scComps:
+                pytype = scComps[comp].pytype
+
         try:
-            result = formatter.read(FileDescriptor(location, storageClass.pytype, parameters))
+            result = formatter.read(FileDescriptor(location, pytype=pytype,
+                                                   storageClass=storageClass, parameters=parameters))
         except Exception as e:
             raise ValueError("Failure from formatter: {}".format(e))
 
@@ -177,7 +189,8 @@ class PosixDatastore(Datastore):
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
             safeMakeDir(storageDir)
-        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.pytype))
+        return formatter.write(inMemoryDataset, FileDescriptor(location, pytype=storageClass.pytype,
+                                                               storageClass=storageClass))
 
     def remove(self, uri):
         """Indicate to the Datastore that a `Dataset` can be removed.
