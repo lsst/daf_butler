@@ -160,7 +160,7 @@ def SafeLockedFileForRead(name):
     file object
         The file to be read from.
     """
-    log = Log.getLogger("daf.persistence.butler")
+    log = Log.getLogger("daf.butler")
     try:
         with open(name, 'r') as f:
             log.debug("Acquiring shared lock on {}".format(name))
@@ -181,7 +181,7 @@ class SafeLockedFileForWrite:
     Contains __enter__ and __exit__ functions so this can be used by a context manager.
     """
     def __init__(self, name):
-        self.log = Log.getLogger("daf.persistence.butler")
+        self.log = Log.getLogger("daf.butler")
         self.name = name
         self._readable = None
         self._writeable = None
