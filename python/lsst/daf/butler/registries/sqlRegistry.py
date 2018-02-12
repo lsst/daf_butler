@@ -19,7 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ..core import RegistryConfig, Registry
+from sqlalchemy import create_engine
+
+from ..core.registry import RegistryConfig, Registry
+from ..core.schema import Schema
 
 
 class SqlRegistryConfig(RegistryConfig):
@@ -28,17 +31,19 @@ class SqlRegistryConfig(RegistryConfig):
 
 class SqlRegistry(Registry):
     """Registry backed by a SQL database.
+
+    Parameters
+    ----------
+    config : `SqlRegistryConfig` or `str`
+        Load configuration
     """
-
     def __init__(self, config):
-        """Constructor
+        super().__init__(config)
 
-        Parameters
-        ----------
-        config : `SqlRegistryConfig` or `str`
-            Load configuration
-        """
-        self.config = SqlRegistryConfig(config)['SqlRegistry']
+        self.config = SqlRegistryConfig(config)
+        self._schema = Schema(self.config['schema'])
+        self._engine = create_engine(self.config['db'])
+        self._schema.metadata.create_all(self._engine)
 
     def registerDatasetType(self, datasetType):
         """
@@ -98,7 +103,7 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        e: `Exception`
+        Exception
             If a `Dataset` with the given `DatasetRef` already exists in the
             given Collection.
         """
@@ -216,7 +221,7 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        e: `Exception`
+        Exception
             If `ref` is not already in the predicted inputs list.
         """
         raise NotImplementedError("Must be implemented by subclass")

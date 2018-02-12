@@ -123,5 +123,5 @@ datastore:
       pytype: lsst.afw.image.ExposureI
 registry:
   cls: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
-  dbname: 'sqlite:///:memory:'
-  id: 0
+  db: 'sqlite:///:memory:'
+  schema: './config/registry/default_schema.yaml'

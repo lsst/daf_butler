@@ -22,8 +22,24 @@
 import unittest
 import inspect
 
-from lsst.daf.butler.core.utils import doImport
+import lsst.utils.tests
+
+from lsst.daf.butler.core.utils import iterable, doImport
 from lsst.daf.butler.core.formatter import Formatter
+
+
+class IterableTestCase(lsst.utils.tests.TestCase):
+    """Tests for `iterable` helper.
+    """
+    def testNonIterable(self):
+        self.assertEqual(list(iterable(0)), [0, ])
+
+    def testString(self):
+        self.assertEqual(list(iterable("hello")), ["hello", ])
+
+    def testIterableNoString(self):
+        self.assertEqual(list(iterable([0, 1, 2])), [0, 1, 2])
+        self.assertEqual(list(iterable(["hello", "world"])), ["hello", "world"])
 
 
 class ImportTestCase(unittest.TestCase):
