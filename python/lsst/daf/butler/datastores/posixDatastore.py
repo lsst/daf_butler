@@ -194,9 +194,9 @@ class PosixDatastore(Datastore):
             disable `Dataset` deletion through standard interfaces.
         """
         location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.path):
+        if not os.path.exists(location.preferredPath()):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
-        os.remove(location.path)
+        os.remove(location.preferredPath())
 
     def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
