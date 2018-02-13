@@ -104,6 +104,61 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         self.assertCatalogEqual(catalog, catalogOut)
 
 
+class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        if lsst.afw.image is None:
+            raise unittest.SkipTest("afw not available.")
+
+    def setUp(self):
+        self.testDir = os.path.dirname(__file__)
+        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
+
+    def testExposurePutGet(self):
+        example = os.path.join(self.testDir, "data", "basic", "small.fits")
+        exposure = lsst.afw.image.ExposureF(example)
+        datastore = PosixDatastore(config=self.configFile)
+        # Put
+        storageClass = datastore.storageClassFactory.getStorageClass("SimpleExposureF")
+        uri, comps = datastore.put(exposure, storageClass=storageClass, storageHint="test_exposure.fits",
+                                   typeName=None)
+        # Get
+        exposureOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        self.assertEqual(type(exposure), type(exposureOut))
+
+        # Get a component
+        self.assertIn("wcs", comps)
+        wcs = datastore.get(comps["wcs"], storageClass=storageClass)
+
+        # Simple check of WCS
+        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
+                                   lsst.afw.geom.Extent2I(9, 9))
+        self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
+
+    def testExposureCompositePutGet(self):
+        example = os.path.join(self.testDir, "data", "basic", "small.fits")
+        exposure = lsst.afw.image.ExposureF(example)
+        datastore = PosixDatastore(config=self.configFile)
+        # Put
+        storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
+        uri, comps = datastore.put(exposure, storageClass=storageClass,
+                                   storageHint="test_composite_exposure.fits",
+                                   typeName=None)
+
+        # Get a component
+        for c in ("wcs", ):
+            self.assertIn(c, comps)
+            component = datastore.get(comps[c], storageClass=storageClass.components[c])
+            self.assertIsNotNone(component)
+
+        # Simple check of WCS
+        wcs = datastore.get(comps["wcs"], storageClass=storageClass.components["wcs"])
+        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
+                                   lsst.afw.geom.Extent2I(9, 9))
+        self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
+
+
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
 

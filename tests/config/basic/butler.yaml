@@ -33,21 +33,42 @@ datastore:
         output: StructuredDataDict
         data: StructuredDataList
     TablePersistable:
-      pytype: lsst.afw.table
+      pytype: lsst.afw.table.io.persistable.Persistable
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableWcs:
+      pytype: lsst.afw.image.wcs.wcs.Wcs
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     Image:
       pytype: lsst.afw.image.MaskedImage
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     Catalog:
       pytype: lsst.afw.table.BaseCatalog
     SourceCatalog:
       pytype: lsst.afw.table.SourceCatalog
       formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    Exposure:
-      pytype: lsst.afw.image.Exposure
+    SimpleExposureF:
+      pytype: lsst.afw.image.ExposureF
+      formatter: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
       components:
         image: Image
         mask: Image
         variance: Image
         wcs: TablePersistable
+        psf: TablePersistable
+        photoCalib: TablePersistable
+        visitInfo: TablePersistable
+        apCorr: TablePersistable
+        coaddInputs: TablePersistable
+    ExposureF:
+      pytype: lsst.afw.image.ExposureF
+      formatter: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+      assembler: lsst.daf.butler.core.composites.genericAssembler
+      disassembler: lsst.daf.butler.assemblers.exposureAssembler.exposureDisassembler
+      components:
+        image: Image
+        mask: Image
+        variance: Image
+        wcs: TablePersistableWcs
         psf: TablePersistable
         photoCalib: TablePersistable
         visitInfo: TablePersistable
