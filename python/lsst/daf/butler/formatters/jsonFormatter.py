@@ -24,29 +24,16 @@
 import builtins
 import json
 
-from lsst.daf.butler.core.composites import genericAssembler, validComponents
-from lsst.daf.butler.core.formatter import Formatter
+from lsst.daf.butler.core.composites import genericAssembler
+from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 
-class JsonFormatter(Formatter):
+class JsonFormatter(FileFormatter):
     """Interface for reading and writing Python objects to and from JSON files.
     """
+    extension = ".json"
 
-    def _getPath(self, fileDescriptor):
-        """Form the path to the file, taking into account URI fragments.
-
-        Parameters
-        ----------
-        fileDescriptor : `FileDescriptor`
-            `FileDescriptor` specifying the path to use and URI.
-        """
-        filepath = fileDescriptor.location.path
-        fragment = fileDescriptor.location.fragment
-        if fragment:
-            filepath = "{}#{}".format(filepath, fragment)
-        return filepath
-
-    def _readJson(self, path):
+    def _readFile(self, path, pytype=None):
         """Read a file from the path in JSON format.
 
         Parameters
@@ -68,95 +55,70 @@ class JsonFormatter(Formatter):
 
         return data
 
-    def read(self, fileDescriptor):
-        """Read a `Dataset`.
+    def _writeFile(self, inMemoryDataset, fileDescriptor):
+        """Write the in memory dataset to file on disk.
 
-        Supports read of either a component that was written by `write` or
-        a read of a component that was written as part of a single composite
-        write, so long as the component name matching a getter in the
-        composite.
-
-        Parameters
-        ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
-
-        Returns
-        -------
-        inMemoryDataset : `InMemoryDataset`
-            The requested `Dataset`.
-        """
-
-        # Try the file or the component version
-        path = self._getPath(fileDescriptor)
-        data = self._readJson(path)
-        name = fileDescriptor.location.fragment
-
-        if name:
-            if data is None:
-                # Must be composite written as single file
-                data = self._readJson(fileDescriptor.location.path)
-
-                # It will be a dict since that is the only way for JSON
-                # to serialize a composite.
-                data = data[name]
-
-            else:
-                # The component was written standalone
-                pass
-        else:
-            # Not requesting a component, so already read
-            pass
-
-        # Attempt to convert the simple python type from JSON to the expected
-        # type. Do not do this if the output type is expected to be a simple
-        # python type.
-        if not hasattr(builtins, fileDescriptor.pytype.__name__):
-            data = genericAssembler(fileDescriptor.storageClass, data, pytype=fileDescriptor.pytype)
-
-        return data
-
-    def write(self, inMemoryDataset, fileDescriptor):
-        """Write an inMemoryDataset to a JSON file.
-
-        The dataset will either be written directly, or if an `_asdict()`
-        method is available, it will be converted to a `dict` before being
-        serialized. The `_asdict()` method should be defined for all
-        complex Python classes.
+        Will look for `_asdict()` method to aid JSON serialization, following
+        the approach of the simpljson module.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to serialize.
         fileDescriptor : `FileDescriptor`
-            Information about the file output location and associated
-            type information.
+            Details of the file to be written.
 
-        Returns
-        -------
-        uri : `str`
-            URI to primary storage location.
-        components : `dict`
-            Individual components accessible from this items. The keys are
-            the component names matching those defined in the `StorageClass`
-            associated with the `fileDescriptor` that are also present in the
-            supplied inMemoryDataset,
-            and the values are URIs that should be used to retrieve the
-            components. Can be an empty `dict` if `StorageClass` defines
-            no components.
-
-        Notes
-        -----
-        `_asdict()` is the approach used by the `simplejson` package.
+        Raises
+        ------
+        Exception
+            The file could not be written.
         """
-        with open(self._getPath(fileDescriptor), "w") as fd:
+        with open(fileDescriptor.location.preferredPath(), "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
             json.dump(inMemoryDataset, fd)
 
-        # Get the list of valid components so we can build URIs
-        components = validComponents(inMemoryDataset, fileDescriptor.storageClass)
+    def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
+        """Coerce the supplied inMemoryDataset to type `pytype`.
 
-        return (fileDescriptor.location.uri,
-                {c: fileDescriptor.location.componentUri(c) for c in components})
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to coerce to expected type.
+        storageClass : `StorageClass`
+            StorageClass associated with `inMemoryDataset`.
+        pytype : `class`, optional
+            Override type to use for conversion.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Object of expected type `pytype`.
+        """
+        if not hasattr(builtins, pytype.__name__):
+            inMemoryDataset = genericAssembler(storageClass, inMemoryDataset, pytype=pytype)
+        return inMemoryDataset
+
+    def _getComponentFromComposite(self, composite, componentName):
+        """Get the component from the composite.
+
+        This implementation uses a generic getter.
+
+        Parameters
+        ----------
+        composite : `object`
+            Object from which to extract component.
+        componentName : `str`
+            Name of component to extract.
+
+        Returns
+        -------
+        component : `object`
+            Extracted component.
+
+        Raises
+        ------
+        AttributeError
+            The specified component can not be found in `composite`.
+        """
+        return composite[componentName]

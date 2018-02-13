@@ -25,40 +25,28 @@
 
 import pickle
 
-from lsst.daf.butler.core.composites import genericGetter, validComponents
-from lsst.daf.butler.core.formatter import Formatter
+from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 
-class PickleFormatter(Formatter):
+class PickleFormatter(FileFormatter):
     """Interface for reading and writing Python objects to and from pickle files.
     """
+    extension = ".pickle"
 
-    def _getPath(self, fileDescriptor):
-        """Form the path to the file, taking into account URI fragments.
-
-        Parameters
-        ----------
-        fileDescriptor : `FileDescriptor`
-            `FileDescriptor` specifying the path to use and URI.
-        """
-        filepath = fileDescriptor.location.path
-        fragment = fileDescriptor.location.fragment
-        if fragment:
-            filepath = "{}#{}".format(filepath, fragment)
-        return filepath
-
-    def _readPickle(self, path):
+    def _readFile(self, path, pytype=None):
         """Read a file from the path in pickle format.
 
         Parameters
         ----------
         path : `str`
             Path to use to open the file.
+        pytype : `class`, optional
+            Not used by this implementation.
 
         Returns
         -------
         data : `object`
-            Either data as Python object read from the pickel file, or None
+            Either data as Python object read from the pickle file, or None
             if the file could not be opened.
         """
         try:
@@ -69,89 +57,20 @@ class PickleFormatter(Formatter):
 
         return data
 
-    def read(self, fileDescriptor):
-        """Read a `Dataset`.
-
-        Supports read of either a component that was written by `write` or
-        a read of a component that was written as part of a single composite
-        write, so long as the component name matching a getter in the
-        composite.
-
-        Parameters
-        ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
-
-        Returns
-        -------
-        inMemoryDataset : `InMemoryDataset`
-            The requested `Dataset`.
-        """
-
-        # Try the file or the component version
-        path = self._getPath(fileDescriptor)
-        data = self._readPickle(path)
-        name = fileDescriptor.location.fragment
-
-        if name:
-            if data is None:
-                # Must be composite written as single file
-                data = self._readPickle(fileDescriptor.location.path)
-
-                # Now need to "get" the component somehow
-                data = genericGetter(data, name)
-
-            else:
-                # The component was written standalone
-                pass
-        else:
-            # Not requesting a component, so already read
-            pass
-
-        if data is None:
-            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
-
-        return data
-
-    def write(self, inMemoryDataset, fileDescriptor):
-        """Write an inMemoryDataset to a pickle file.
-
-        The dataset will either be written directly, or if an `_asdict()`
-        method is available, it will be converted to a `dict` before being
-        serialized. The `_asdict()` method should be defined for all
-        complex Python classes.
+    def _writeFile(self, inMemoryDataset, fileDescriptor):
+        """Write the in memory dataset to file on disk.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to serialize.
         fileDescriptor : `FileDescriptor`
-            Information about the file output location and associated
-            type information.
+            Details of the file to be written.
 
-        Returns
-        -------
-        uri : `str`
-            URI to primary storage location.
-        components : `dict`
-            Individual components accessible from this items. The keys are
-            the component names matching those defined in the `StorageClass`
-            associated with the `fileDescriptor` that are also present in the
-            supplied inMemoryDataset,
-            and the values are URIs that should be used to retrieve the
-            components. Can be an empty `dict` if `StorageClass` defines
-            no components.
-
-        Notes
-        -----
-        `_asdict()` is the approach used by the `simplejson` package.
+        Raises
+        ------
+        Exception
+            The file could not be written.
         """
-        with open(self._getPath(fileDescriptor), "wb") as fd:
+        with open(fileDescriptor.location.preferredPath(), "wb") as fd:
             pickle.dump(inMemoryDataset, fd, protocol=-1)
-
-        # Get the list of valid components so we can build URIs
-        components = validComponents(inMemoryDataset, fileDescriptor.storageClass)
-
-        return (fileDescriptor.location.uri,
-                {c: fileDescriptor.location.componentUri(c) for c in components})

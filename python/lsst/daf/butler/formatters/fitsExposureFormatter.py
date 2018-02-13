@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2018  AURA/LSST.
+# Copyright 2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -20,13 +20,15 @@
 # the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
+
 import os.path
 
+from lsst.daf.butler.assemblers.exposureAssembler import validExposureComponents, getComponentFromExposure
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 
-class FitsCatalogFormatter(FileFormatter):
-    """Interface for reading and writing catalogs to and from FITS files.
+class FitsExposureFormatter(FileFormatter):
+    """Interface for reading and writing Exposures to and from FITS files.
     """
     extension = ".fits"
 
@@ -67,3 +69,49 @@ class FitsCatalogFormatter(FileFormatter):
             The file could not be written.
         """
         inMemoryDataset.writeFits(fileDescriptor.location.preferredPath())
+
+    def _getComponentFromComposite(self, composite, componentName):
+        """Get the component from the composite.
+
+        This implementation uses a generic getter.
+
+        Parameters
+        ----------
+        composite : `object`
+            Object from which to extract component.
+        componentName : `str`
+            Name of component to extract.
+
+        Returns
+        -------
+        component : `object`
+            Extracted component.
+
+        Raises
+        ------
+        AttributeError
+            The specified component can not be found in `composite`.
+        """
+        return getComponentFromExposure(composite, componentName)
+
+    def _getValidComponents(self, composite, storageClass):
+        """Retrieve list of all components valid for this composite.
+
+        The list of supported components is defined by the `StorageClass`.
+
+        Parameters
+        ----------
+        composite : `object`
+            Object from which to determine if the component exists and is
+            not None.
+        storageClass : `StorageClass`
+            StorageClass used to define the supported components.
+
+        Returns
+        -------
+        components : `dict`
+            Dict of not-None components where the dict key is the name
+            of the component and the value is the item extracted from the
+            composite.
+        """
+        return validExposureComponents(composite, storageClass)
