@@ -25,14 +25,25 @@ import os
 import unittest
 
 import lsst.utils.tests
-import lsst.afw.table
 
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from datasetsHelper import FitsCatalogDatasetsHelper
 
-import datasetsHelper
+try:
+    import lsst.afw.table
+    import lsst.afw.image
+    import lsst.afw.geom
+except ImportError:
+    lsst.afw.table = None
+    lsst.afw.image = None
 
 
-class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase):
+class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
+
+    @classmethod
+    def setUpClass(cls):
+        if lsst.afw.table is None:
+            raise unittest.SkipTest("afw not available.")
 
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
@@ -43,14 +54,14 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase):
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
-        catalog = datasetsHelper.makeExampleCatalog()
+        catalog = self.makeExampleCatalog()
         datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
         uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
-        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
+        self.assertCatalogEqual(catalog, catalogOut)
         # These should raise
         with self.assertRaises(ValueError):
             # non-existing file
@@ -60,14 +71,14 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase):
             datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
 
     def testRemove(self):
-        catalog = datasetsHelper.makeExampleCatalog()
+        catalog = self.makeExampleCatalog()
         datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
         uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
-        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
+        self.assertCatalogEqual(catalog, catalogOut)
         # Remove
         datastore.remove(uri)
         # Get should now fail
@@ -78,7 +89,7 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase):
             datastore.remove(uri)
 
     def testTransfer(self):
-        catalog = datasetsHelper.makeExampleCatalog()
+        catalog = self.makeExampleCatalog()
         path = "tester.fits"
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
@@ -90,7 +101,7 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase):
         inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
         catalogOut = outputPosixDatastore.get(outputUri, storageClass)
-        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
+        self.assertCatalogEqual(catalog, catalogOut)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
