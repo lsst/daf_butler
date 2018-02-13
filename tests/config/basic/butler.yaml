@@ -46,24 +46,9 @@ datastore:
     SourceCatalog:
       pytype: lsst.afw.table.SourceCatalog
       formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    SimpleExposureF:
-      pytype: lsst.afw.image.ExposureF
+    Exposure: &Exposure
+      pytype: lsst.afw.image.Exposure
       formatter: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
-      components:
-        image: Image
-        mask: Image
-        variance: Image
-        wcs: TablePersistable
-        psf: TablePersistable
-        photoCalib: TablePersistable
-        visitInfo: TablePersistable
-        apCorr: TablePersistable
-        coaddInputs: TablePersistable
-    ExposureF:
-      pytype: lsst.afw.image.ExposureF
-      formatter: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
-      assembler: lsst.daf.butler.core.composites.genericAssembler
-      disassembler: lsst.daf.butler.assemblers.exposureAssembler.exposureDisassembler
       components:
         image: Image
         mask: Image
@@ -74,6 +59,22 @@ datastore:
         visitInfo: TablePersistable
         apCorr: TablePersistable
         coaddInputs: TablePersistable
+    ExposureF:
+      <<: *Exposure
+      pytype: lsst.afw.image.ExposureF
+    ExposureI:
+      <<: *Exposure
+      pytype: lsst.afw.image.ExposureI
+    ExposureComposite: &ExposureComposite
+      <<: *Exposure
+      assembler: lsst.daf.butler.core.composites.genericAssembler
+      disassembler: lsst.daf.butler.assemblers.exposureAssembler.exposureDisassembler
+    ExposureCompositeF:
+      <<: *ExposureComposite
+      pytype: lsst.afw.image.ExposureF
+    ExposureI:
+      <<: *ExposureComposite
+      pytype: lsst.afw.image.ExposureI
 registry:
   cls: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
   dbname: 'sqlite:///:memory:'

@@ -120,7 +120,7 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
         exposure = lsst.afw.image.ExposureF(example)
         datastore = PosixDatastore(config=self.configFile)
         # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("SimpleExposureF")
+        storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
         uri, comps = datastore.put(exposure, storageClass=storageClass, storageHint="test_exposure.fits",
                                    typeName=None)
         # Get
@@ -141,7 +141,7 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
         exposure = lsst.afw.image.ExposureF(example)
         datastore = PosixDatastore(config=self.configFile)
         # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
+        storageClass = datastore.storageClassFactory.getStorageClass("ExposureCompositeF")
         uri, comps = datastore.put(exposure, storageClass=storageClass,
                                    storageHint="test_composite_exposure.fits",
                                    typeName=None)
