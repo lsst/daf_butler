@@ -61,7 +61,11 @@ def _attrNames(componentName, getter=True):
         Tuple of strings to attempt.
     """
     root = "get" if getter else "set"
-    return (componentName, "{}_{}".format(root, componentName), "{}{}".format(root, componentName.capitalize))
+
+    # Capitalized name for getXxx must only capitalize first letter and not
+    # downcase the rest. getVisitInfo and not getVisitinfo
+    capitalized = "{}{}{}".format(root, componentName[0].upper(), componentName[1:])
+    return (componentName, "{}_{}".format(root, componentName), capitalized)
 
 
 def genericAssembler(storageClass, components, pytype=None):
@@ -113,15 +117,21 @@ def genericAssembler(storageClass, components, pytype=None):
 
         failed = []
         for name, component in components.items():
+            if component is None:
+                continue
             for attr in _attrNames(name, getter=False):
                 if hasattr(obj, attr):
-                    setattr(obj, attr, component)
+                    if attr == name:  # Real attribute
+                        setattr(obj, attr, component)
+                    else:
+                        setter = getattr(obj, attr)
+                        setter(component)
                     break
             else:
                 failed.append(name)
 
         if failed:
-            raise ValueError("There are unhandled components ({})".format(failed))
+            raise ValueError("Unhandled components during assembly ({})".format(failed))
 
     return obj
 
@@ -149,9 +159,13 @@ def validComponents(composite, storageClass):
             if isinstance(composite, collections.Mapping):
                 comp = composite[c]
             else:
-                comp = genericGetter(composite, c)
-            if comp is not None:
-                components[c] = comp
+                try:
+                    comp = genericGetter(composite, c)
+                except AttributeError:
+                    pass
+                else:
+                    if comp is not None:
+                        components[c] = comp
     return components
 
 
@@ -168,7 +182,7 @@ def hasComponent(composite, componentName):
     Returns
     -------
     getter : `str`
-        Name of attribute to use with `getattr`. None if nothing suitable
+        Name of attribute that matched. None if nothing suitable
         was found.
 
     """
@@ -194,17 +208,26 @@ def genericGetter(composite, componentName):
     Returns
     -------
     component : `object`
-        Component extracted from composite. None if nothing worked.
+        Component extracted from composite.
+
+    Raises
+    ------
+    AttributeError
+        The attribute could not be read from the composite.
     """
     component = None
     for attr in _attrNames(componentName, getter=True):
         if hasattr(composite, attr):
             component = getattr(composite, attr)
+            if attr != componentName:  # We have a method
+                component = component()
             break
+    else:
+        raise AttributeError("Unable to get component {}".format(componentName))
     return component
 
 
-def genericDisassembler(composite, storageClass):
+def genericDisassembler(composite, storageClass, subset=None, override=None):
     """Generic implementation of a disassembler.
 
     This implementation attempts to extract components from the parent
@@ -217,6 +240,13 @@ def genericDisassembler(composite, storageClass):
         Parent composite object consisting of components to be extracted.
     storageClass : `StorageClass`
         `StorageClass` associated with the parent, with defined components.
+    subset : `iterable`, optional
+        Iterable containing subset of components to extract from composite.
+        Must be a subset of those defined in `storageClass`.
+    override : `object`, optional
+        Object to use for disassembly instead of parent. This can be useful
+        when called from type-specific disassembler functions that are part of
+        a hierarchy.
 
     Returns
     -------
@@ -237,19 +267,34 @@ def genericDisassembler(composite, storageClass):
                         " ({} != {})".format(type(composite), storageClass.pytype))
 
     requested = set(storageClass.components.keys())
+
+    if subset is not None:
+        subset = set(subset)
+        diff = subset - requested
+        if diff:
+            raise ValueError("Requested subset is not a subset of supported components: {}".format(diff))
+        requested = subset
+
+    if override is not None:
+        composite = override
+
     components = {}
     for c in list(requested):
         # Try three different ways to get a value associated with the
         # component name.
-        component = genericGetter(composite, c)
-
-        # If we found a match store it in the results dict and remove
-        # it from the list of components we are still looking for.
-        if component is not None:
-            components[c] = DatasetComponent(c, storageClass.components[c], component)
+        try:
+            component = genericGetter(composite, c)
+        except AttributeError:
+            # Defer complaining so we get an idea of how many problems we have
+            pass
+        else:
+            # If we found a match store it in the results dict and remove
+            # it from the list of components we are still looking for.
+            if component is not None:
+                components[c] = DatasetComponent(c, storageClass.components[c], component)
             requested.remove(c)
 
     if requested:
-        raise ValueError("There are unhandled components ({})".format(requested))
+        raise ValueError("Unhandled components during disassembly ({})".format(requested))
 
     return components
