@@ -127,7 +127,13 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
         exposureOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertEqual(type(exposure), type(exposureOut))
 
-        # Get a component
+        # Get some components
+        for c in ("wcs", "image", "mask", "coaddInputs", "psf"):
+            self.assertIn(c, comps)
+            component = datastore.get(comps[c], storageClass=storageClass)
+            self.assertIsNotNone(component)
+
+        # Get a component to check it
         self.assertIn("wcs", comps)
         wcs = datastore.get(comps["wcs"], storageClass=storageClass)
 
@@ -147,7 +153,7 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
                                    typeName=None)
 
         # Get a component
-        for c in ("wcs", ):
+        for c in ("wcs", "image", "mask", "coaddInputs", "psf"):
             self.assertIn(c, comps)
             component = datastore.get(comps[c], storageClass=storageClass.components[c])
             self.assertIsNotNone(component)
