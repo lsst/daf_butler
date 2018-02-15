@@ -126,7 +126,7 @@ class PosixDatastore(Datastore):
             result = formatter.read(FileDescriptor(location, pytype=pytype,
                                                    storageClass=storageClass, parameters=parameters))
         except Exception as e:
-            raise ValueError("Failure from formatter: {}".format(e))
+            raise ValueError("Failure from formatter for URI {}: {}".format(uri, e))
 
         # Validate the returned data type matches the expected data type
         if pytype and not isinstance(result, pytype):
