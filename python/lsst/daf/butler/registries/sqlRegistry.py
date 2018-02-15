@@ -557,6 +557,8 @@ class SqlRegistry(Registry):
         """
         runTable = self._schema.metadata.tables['Run']
         with self._engine.begin() as connection:
+            # TODO: this check is probably undesirable, as we may want to have multiple Runs output
+            # to the same collection.  Fixing this requires (at least) modifying getRun() accordingly.
             if connection.execute(select([exists().where(runTable.c.collection == run.collection)])).scalar():
                 raise ValueError("A run already exists with this collection: {}".format(run.collection))
             # First add the Execution part
@@ -566,6 +568,7 @@ class SqlRegistry(Registry):
                                                         collection=run.collection,
                                                         environment_id=None,  # TODO add environment
                                                         pipeline_id=None))    # TODO add pipeline
+        # TODO: set given Run's 'id' attribute.
 
     def getRun(self, id=None, collection=None):
         """
