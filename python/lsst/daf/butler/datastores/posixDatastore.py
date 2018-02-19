@@ -68,7 +68,7 @@ class PosixDatastore(Datastore):
                     components[cname] = self.storageClassFactory.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for StorageClass Constructor
-            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler", "disassembler") if k in info}
+            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler") if k in info}
 
             # Fill in other items
             storageClassKwargs["components"] = components
@@ -160,16 +160,18 @@ class PosixDatastore(Datastore):
         location = self.locationFactory.fromPath(storageHint)
 
         # Check to see if this storage class has a disassembler
-        if storageClass.disassembler is not None:
+        # and also has components
+        if storageClass.assembler.disassemble is not None and storageClass.components:
             compUris = {}
-            components = storageClass.disassembler(inMemoryDataset, storageClass)
-            for comp, info in components.items():
-                compTypeName = typeName
-                if compTypeName is not None:
-                    compTypeName = "{}.{}".format(compTypeName, comp)
-                compUris[comp], _ = self.put(info.component, info.storageClass,
-                                             location.componentUri(comp), compTypeName)
-            return None, compUris
+            components = storageClass.assembler().disassemble(inMemoryDataset, storageClass)
+            if components:
+                for comp, info in components.items():
+                    compTypeName = typeName
+                    if compTypeName is not None:
+                        compTypeName = "{}.{}".format(compTypeName, comp)
+                    compUris[comp], _ = self.put(info.component, info.storageClass,
+                                                 location.componentUri(comp), compTypeName)
+                return None, compUris
 
         # Write a single component
         formatter = self.formatterFactory.getFormatter(storageClass, typeName)

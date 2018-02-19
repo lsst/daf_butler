@@ -14,9 +14,9 @@ datastore:
       # formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
     StructuredData:
       # Data from a JSON or YAML file
-      # type: dict
       pytype: examplePythonTypes.MetricsExample
       formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+      assembler: lsst.daf.butler.core.composites.CompositeAssemblerMonolithic
       components:
         # Components are those supported by get. We use the default formatter
         # though, and not the formatters associated with the components.
@@ -26,8 +26,7 @@ datastore:
         data: StructuredDataDict
     StructuredComposite:
       pytype: examplePythonTypes.MetricsExample
-      assembler: lsst.daf.butler.core.composites.genericAssembler
-      disassembler: lsst.daf.butler.core.composites.genericDisassembler
+      assembler: lsst.daf.butler.core.composites.CompositeAssembler
       components:
         summary: StructuredDataDict
         output: StructuredDataDict
@@ -67,6 +66,7 @@ datastore:
     Exposure: &Exposure
       pytype: lsst.afw.image.Exposure
       formatter: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+      assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
       components:
         image: ImageF
         mask: MaskX
@@ -85,8 +85,7 @@ datastore:
       pytype: lsst.afw.image.ExposureI
     ExposureComposite: &ExposureComposite
       <<: *Exposure
-      assembler: lsst.daf.butler.core.composites.genericAssembler
-      disassembler: lsst.daf.butler.assemblers.exposureAssembler.exposureDisassembler
+      assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
     ExposureCompositeF:
       <<: *ExposureComposite
       pytype: lsst.afw.image.ExposureF

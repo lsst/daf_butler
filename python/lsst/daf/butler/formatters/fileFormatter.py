@@ -25,7 +25,6 @@
 
 from abc import abstractmethod
 
-from lsst.daf.butler.core.composites import genericGetter, validComponents
 from lsst.daf.butler.core.formatter import Formatter
 
 
@@ -79,52 +78,6 @@ class FileFormatter(Formatter):
         """
         pass
 
-    def _getComponentFromComposite(self, composite, componentName):
-        """Get the component from the composite.
-
-        This implementation uses a generic getter.
-
-        Parameters
-        ----------
-        composite : `object`
-            Object from which to extract component.
-        componentName : `str`
-            Name of component to extract.
-
-        Returns
-        -------
-        component : `object`
-            Extracted component.
-
-        Raises
-        ------
-        AttributeError
-            The specified component can not be found in `composite`.
-        """
-        return genericGetter(composite, componentName)
-
-    def _getValidComponents(self, composite, storageClass):
-        """Retrieve list of all components valid for this composite.
-
-        The list of supported components is defined by the `StorageClass`.
-
-        Parameters
-        ----------
-        composite : `object`
-            Object from which to determine if the component exists and is
-            not None.
-        storageClass : `StorageClass`
-            StorageClass used to define the supported components.
-
-        Returns
-        -------
-        components : `dict`
-            Dict of not-None components where the dict key is the name
-            of the component and the value is the item extracted from the
-            composite.
-        """
-        return validComponents(composite, storageClass)
-
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.
 
@@ -173,7 +126,7 @@ class FileFormatter(Formatter):
 
                 # Now need to "get" the component somehow
                 try:
-                    data = self._getComponentFromComposite(data, name)
+                    data = fileDescriptor.storageClass.assembler().getComponent(data, name)
                 except AttributeError:
                     # Defer the complaint
                     data = None
@@ -217,7 +170,8 @@ class FileFormatter(Formatter):
         self._writeFile(inMemoryDataset, fileDescriptor)
 
         # Get the list of valid components so we can build URIs
-        components = self._getValidComponents(inMemoryDataset, fileDescriptor.storageClass)
+        storageClass = fileDescriptor.storageClass
+        components = storageClass.assembler().getValidComponents(inMemoryDataset, storageClass)
 
         return (fileDescriptor.location.uri,
                 {c: fileDescriptor.location.componentUri(c) for c in components})

@@ -103,7 +103,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             components[c] = datastore.get(u, storageClass=storageClass.components[c], parameters=None)
 
         # combine them into a new metrics composite object
-        metricsOut = storageClass.assembler(storageClass, components)
+        metricsOut = storageClass.assembler().assemble(storageClass, components)
         self.assertEqualMetrics(metrics, metricsOut)
 
     def testRemove(self):

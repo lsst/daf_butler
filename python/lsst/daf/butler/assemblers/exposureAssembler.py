@@ -25,144 +25,153 @@
 # Need to enable PSFs to be instantiated
 import lsst.afw.detection  # noqa F401
 
-from lsst.daf.butler.core.composites import genericDisassembler, genericGetter
-from lsst.daf.butler.core.composites import validComponents
-
-EXPOSURE_COMPONENTS = set(("image", "variance", "mask", "wcs", "psf"))
-EXPOSURE_INFO_COMPONENTS = set(("apCorrMap", "coaddInputs", "calib", "metadata",
-                                "filter", "transmissionCurve", "visitInfo"))
+from lsst.daf.butler.core.composites import CompositeAssembler
 
 
-def _groupRequestedComponents(storageClass):
-    """Group requested components into top level and ExposureInfo.
+class ExposureAssembler(CompositeAssembler):
 
-    Parameters
-    ----------
-    storageClass : `StorageClass`
-        Place to retrieve list of requested components.
+    EXPOSURE_COMPONENTS = set(("image", "variance", "mask", "wcs", "psf"))
+    EXPOSURE_INFO_COMPONENTS = set(("apCorrMap", "coaddInputs", "calib", "metadata",
+                                    "filter", "transmissionCurve", "visitInfo"))
 
-    Returns
-    -------
-    expComps : `dict`
-        Components associated with the top level Exposure.
-    expInfoComps : `dict`
-        Components associated with the ExposureInfo
+    @classmethod
+    def _groupRequestedComponents(cls, storageClass):
+        """Group requested components into top level and ExposureInfo.
 
-    Raises
-    ------
-    ValueError
-        There are components defined in the storage class that are not
-        expected by this assembler.
-    """
-    requested = set(storageClass.components.keys())
+        Parameters
+        ----------
+        storageClass : `StorageClass`
+            Place to retrieve list of requested components.
 
-    # Check that we are requesting something that we support
-    unknown = requested - (EXPOSURE_COMPONENTS | EXPOSURE_INFO_COMPONENTS)
-    if unknown:
-        raise ValueError("Asking for unrecognized component: {}".format(unknown))
+        Returns
+        -------
+        expComps : `dict`
+            Components associated with the top level Exposure.
+        expInfoComps : `dict`
+            Components associated with the ExposureInfo
 
-    expItems = requested & EXPOSURE_COMPONENTS
-    expInfoItems = requested & EXPOSURE_INFO_COMPONENTS
-    return expItems, expInfoItems
+        Raises
+        ------
+        ValueError
+            There are components defined in the storage class that are not
+            expected by this assembler.
+        """
+        requested = set(storageClass.components.keys())
+
+        # Check that we are requesting something that we support
+        unknown = requested - (cls.EXPOSURE_COMPONENTS | cls.EXPOSURE_INFO_COMPONENTS)
+        if unknown:
+            raise ValueError("Asking for unrecognized component: {}".format(unknown))
+
+        expItems = requested & cls.EXPOSURE_COMPONENTS
+        expInfoItems = requested & cls.EXPOSURE_INFO_COMPONENTS
+        return expItems, expInfoItems
+
+    def getComponent(self, composite, componentName):
+        """Get a component from an Exposure
+
+        Parameters
+        ----------
+        composite : `Exposure`
+            `Exposure` to access component.
+        componentName : `str`
+            Name of component to retrieve.
+
+        Returns
+        -------
+        component : `object`
+            The component. Can be None.
+
+        Raises
+        ------
+        AttributeError
+            The component can not be found.
+        """
+        if componentName in self.EXPOSURE_COMPONENTS:
+            return super().getComponent(composite, componentName)
+        elif componentName in self.EXPOSURE_INFO_COMPONENTS:
+            if hasattr(composite, "getInfo"):
+                # it is possible for this method to be called with
+                # an ExposureInfo composite so trap for that and only get
+                # the ExposureInfo if the method is supported
+                composite = composite.getInfo()
+            return super().getComponent(composite, componentName)
+        else:
+            raise AttributeError("Do not know how to retrieve component {} from {}".format(componentName,
+                                                                                           type(composite)))
+
+    def getValidComponents(self, composite, storageClass):
+        """Extract all non-None components from a composite.
+
+        Parameters
+        ----------
+        composite : `object`
+            Composite from which to extract components.
+        storageClass : `StorageClass`
+            `StorageClass` associated with this composite object.
+            If None, it is assumed this is not to be treated as a composite.
+
+        Returns
+        -------
+        comps : `dict`
+            Non-None components extracted from the composite, indexed by the component
+            name as derived from the `StorageClass`.
+        """
+        # For Exposure we call the generic version twice: once for top level
+        # components, and again for ExposureInfo.
+        expItems, expInfoItems = self._groupRequestedComponents(storageClass)
+
+        components = super().getValidComponents(composite, storageClass)
+        infoComps = super().getValidComponents(composite.getInfo(), storageClass)
+        components.update(infoComps)
+        return components
+
+    def disassemble(self, composite, storageClass):
+        """Disassemble an afw Exposure.
+
+        This implementation attempts to extract components from the parent
+        by looking for attributes of the same name or getter methods derived
+        from the component name.
+
+        Parameters
+        ----------
+        composite : `lsst.afw.Exposure`
+            `Exposure` composite object consisting of components to be extracted.
+        storageClass : `StorageClass`
+            `StorageClass` associated with the parent, with defined components.
+
+        Returns
+        -------
+        components : `dict`
+            `dict` with keys matching the components defined in `storageClass`
+            and values being `DatasetComponent` instances describing the component.
+
+        Raises
+        ------
+        ValueError
+            A requested component can not be found in the parent using generic
+            lookups.
+        TypeError
+            The parent object does not match the supplied `StorageClass`.
+        """
+        if not storageClass.validateInstance(composite):
+            raise TypeError("Unexpected type mismatch between parent and StorageClass"
+                            " ({} != {})".format(type(composite), storageClass.pytype))
+
+        # Only look for components that are defined by the StorageClass
+        components = {}
+        expItems, expInfoItems = self._groupRequestedComponents(storageClass)
+
+        fromExposure = super().disassemble(composite, storageClass, subset=expItems)
+        components.update(fromExposure)
+
+        fromExposureInfo = super().disassemble(composite, storageClass,
+                                               subset=expInfoItems, override=composite.getInfo())
+        components.update(fromExposureInfo)
+
+        return components
 
 
-def getComponentFromExposure(composite, componentName):
-    """Get a component from an Exposure
-
-    Parameters
-    ----------
-    composite : `Exposure`
-        `Exposure` to access component.
-    componentName : `str`
-        Name of component to retrieve.
-
-    Returns
-    -------
-    component : `object`
-        The component. Can be None.
-
-    Raises
-    ------
-    AttributeError
-        The component can not be found.
-    """
-    if componentName in EXPOSURE_COMPONENTS:
-        return genericGetter(composite, componentName)
-    elif componentName in EXPOSURE_INFO_COMPONENTS:
-        return genericGetter(composite.getInfo(), componentName)
-    else:
-        raise AttributeError("Do not know how to retrieve component {} from {}".format(componentName,
-                                                                                       type(composite)))
-
-
-def validExposureComponents(composite, storageClass):
-    """Extract requested components from a composite.
-
-    Parameters
-    ----------
-    composite : `object`
-        Composite from which to extract components.
-    storageClass : `StorageClass`
-        `StorageClass` associated with this composite object.
-        If None, it is assumed this is not to be treated as a composite.
-
-    Returns
-    -------
-    comps : `dict`
-        Non-None components extracted from the composite, indexed by the component
-        name as derived from the `StorageClass`.
-    """
-    # For Exposure we call the generic version twice: once for top level
-    # components, and again for ExposureInfo.
-    expItems, expInfoItems = _groupRequestedComponents(storageClass)
-
-    components = validComponents(composite, storageClass)
-    infoComps = validComponents(composite.getInfo(), storageClass)
-    components.update(infoComps)
-    return components
-
-
-def exposureDisassembler(composite, storageClass):
-    """Implementation of a disassembler for afw Exposure.
-
-    This implementation attempts to extract components from the parent
-    by looking for attributes of the same name or getter methods derived
-    from the component name.
-
-    Parameters
-    ----------
-    composite : `object`
-        Parent composite object consisting of components to be extracted.
-    storageClass : `StorageClass`
-        `StorageClass` associated with the parent, with defined components.
-
-    Returns
-    -------
-    components : `dict`
-        `dict` with keys matching the components defined in `storageClass`
-        and values being `DatasetComponent` instances describing the component.
-
-    Raises
-    ------
-    ValueError
-        A requested component can not be found in the parent using generic
-        lookups.
-    TypeError
-        The parent object does not match the supplied `StorageClass`.
-    """
-    if not storageClass.validateInstance(composite):
-        raise TypeError("Unexpected type mismatch between parent and StorageClass"
-                        " ({} != {})".format(type(composite), storageClass.pytype))
-
-    # Only look for components that are defined by the StorageClass
-    components = {}
-    expItems, expInfoItems = _groupRequestedComponents(storageClass)
-
-    fromExposure = genericDisassembler(composite, storageClass, subset=expItems)
-    components.update(fromExposure)
-
-    fromExposureInfo = genericDisassembler(composite, storageClass,
-                                           subset=expInfoItems, override=composite.getInfo())
-    components.update(fromExposureInfo)
-
-    return components
+class ExposureAssemblerMonolithic(ExposureAssembler):
+    """Exposure assembler with disassembly disabled."""
+    disassemble = None

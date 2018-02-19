@@ -26,6 +26,7 @@
 import builtins
 
 from lsst.daf.butler.core.utils import doImport
+from lsst.daf.butler.core.composites import CompositeAssembler
 
 from .mappingFactory import MappingFactory
 
@@ -41,14 +42,12 @@ class StorageClassMeta(type):
     ----------
     pytype
     assembler
-    disassembler
 
     """
 
     # Caches of imported code objects.
     _pytype = None
-    _assembler = None
-    _disassembler = None
+    _assembler = CompositeAssembler
 
     def __init__(self, name, bases, dct):
         super().__init__(name, bases, dct)
@@ -76,20 +75,10 @@ class StorageClassMeta(type):
         """Function to use to assemble an object from components."""
         if cls._assembler is not None:
             return cls._assembler
-        if cls._assemblerName is None:
+        if cls._assemblerClassName is None:
             return None
-        cls._assembler = doImport(cls._assemblerName)
+        cls._assembler = doImport(cls._assemblerClassName)
         return cls._assembler
-
-    @property
-    def disassembler(cls):  # noqa N805
-        """Function to use to split an object into components."""
-        if cls._disassembler is not None:
-            return cls._disassembler
-        if cls._disassemblerName is None:
-            return None
-        cls._disassembler = doImport(cls._disassemblerName)
-        return cls._disassembler
 
 
 class StorageClass(metaclass=StorageClassMeta):
@@ -105,14 +94,8 @@ class StorageClass(metaclass=StorageClassMeta):
         Dict mapping component names of a composite to an associated
         `StorageClass`.
     assembler : `function`, optional
-        Function to call to assemble an object of type `pytype` from
-        components.
-    disassembler : `function`, optional
-        Function to call to disassemble an object of type `pytype` into
-        its components.
-        Takes a Python instance object to be disassembled and the
-        `StorageClass` being used.
-
+        Class to use to assemble and disassemble an object of type `pytype`
+        from components.
     """
 
     subclasses = dict()
@@ -122,8 +105,7 @@ class StorageClass(metaclass=StorageClassMeta):
     # python types and functions from the string. The lazy loading is handled
     # in the metaclass.
     _pytypeName = None
-    _assemblerName = None
-    _disassemblerName = None
+    _assemblerClassName = None
 
     @property
     def pytype(self):
@@ -134,15 +116,6 @@ class StorageClass(metaclass=StorageClassMeta):
     def assembler(self):
         """Function object to use to create a type from components."""
         return type(self).assembler
-
-    @property
-    def disassembler(self):
-        """Function object to use to disassembler a type into components."""
-        return type(self).disassembler
-
-    @classmethod
-    def assemble(cls, parent, components):
-        return parent
 
     @classmethod
     def validateInstance(cls, instance):
@@ -162,7 +135,7 @@ class StorageClass(metaclass=StorageClassMeta):
         return isinstance(instance, cls.pytype)
 
 
-def makeNewStorageClass(name, pytype=None, components=None, assembler=None, disassembler=None):
+def makeNewStorageClass(name, pytype=None, components=None, assembler=None):
     """Create a new Python class as a subclass of `StorageClass`.
 
     Parameters
@@ -174,28 +147,23 @@ def makeNewStorageClass(name, pytype=None, components=None, assembler=None, disa
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
     assembler : `str`, optional
-        Fully qualified name of function to join components together to form a
-        `pytype` instance. Takes a dict with values being instances of objects
-        to be used to contruct `pytype`. Keys of the dict map those defined
-        in `components`.
-    disassembler : `str`, optional
-        Fully qualified name of function to split `pytype` instance into
-        components. Takes a Python instance object to be disassembled and the
-        `StorageClass` being used.
-        Returns dict with keys matching the entries in `components`
-        and values being the component instances extracted from `pytype`.
-
+        Fully qualified name of class supporting assembly and disassembly
+        of a `pytype` instance.
 
     Returns
     -------
     newtype : `StorageClass`
         Newly created Python type.
     """
-    return type(name, (StorageClass,), {"name": name,
-                                        "_pytypeName": pytype,
-                                        "_assemblerName": assembler,
-                                        "_disassemblerName": disassembler,
-                                        "components": components})
+    clsargs = {"name": name,
+               "_pytypeName": pytype,
+               "components": components}
+    # if the assembler is not None also set it and clear the default assembler
+    if assembler is not None:
+        clsargs["_assemblerClassName"] = assembler
+        clsargs["_assembler"] = None
+
+    return type(name, (StorageClass,), clsargs)
 
 
 class StorageClassFactory:

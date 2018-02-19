@@ -24,7 +24,6 @@
 import builtins
 import json
 
-from lsst.daf.butler.core.composites import genericAssembler
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 
@@ -96,29 +95,5 @@ class JsonFormatter(FileFormatter):
             Object of expected type `pytype`.
         """
         if not hasattr(builtins, pytype.__name__):
-            inMemoryDataset = genericAssembler(storageClass, inMemoryDataset, pytype=pytype)
+            inMemoryDataset = storageClass.assembler().assemble(storageClass, inMemoryDataset, pytype=pytype)
         return inMemoryDataset
-
-    def _getComponentFromComposite(self, composite, componentName):
-        """Get the component from the composite.
-
-        This implementation uses a generic getter.
-
-        Parameters
-        ----------
-        composite : `object`
-            Object from which to extract component.
-        componentName : `str`
-            Name of component to extract.
-
-        Returns
-        -------
-        component : `object`
-            Extracted component.
-
-        Raises
-        ------
-        AttributeError
-            The specified component can not be found in `composite`.
-        """
-        return composite[componentName]
