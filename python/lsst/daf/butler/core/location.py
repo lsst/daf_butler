@@ -157,6 +157,8 @@ class LocationFactory(object):
         location : `Location`
             The equivalent `Location`.
         """
+        if uri is None or not isinstance(uri, str):
+            raise ValueError("URI must be a string and not {}".format(uri))
         return Location(self._datastoreRoot, uri)
 
     def fromPath(self, path):
