@@ -47,8 +47,20 @@ def _groupRequestedComponents(storageClass):
         Components associated with the top level Exposure.
     expInfoComps : `dict`
         Components associated with the ExposureInfo
+
+    Raises
+    ------
+    ValueError
+        There are components defined in the storage class that are not
+        expected by this assembler.
     """
     requested = set(storageClass.components.keys())
+
+    # Check that we are requesting something that we support
+    unknown = requested - (EXPOSURE_COMPONENTS | EXPOSURE_INFO_COMPONENTS)
+    if unknown:
+        raise ValueError("Asking for unrecognized component: {}".format(unknown))
+
     expItems = requested & EXPOSURE_COMPONENTS
     expInfoItems = requested & EXPOSURE_INFO_COMPONENTS
     return expItems, expInfoItems

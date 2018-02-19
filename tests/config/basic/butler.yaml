@@ -73,9 +73,9 @@ datastore:
         variance: ImageF
         wcs: TablePersistableWcs
         psf: TablePersistablePsf
-        photoCalib: TablePersistableCalib
+        calib: TablePersistableCalib
         visitInfo: TablePersistableVisitInfo
-        apCorr: TablePersistableApCorr
+        apCorrMap: TablePersistableApCorr
         coaddInputs: TablePersistableCoaddInputs
     ExposureF:
       <<: *Exposure
