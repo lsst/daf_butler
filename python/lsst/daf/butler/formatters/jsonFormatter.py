@@ -59,7 +59,7 @@ class JsonFormatter(FileFormatter):
         """Write the in memory dataset to file on disk.
 
         Will look for `_asdict()` method to aid JSON serialization, following
-        the approach of the simpljson module.
+        the approach of the simplejson module.
 
         Parameters
         ----------
