@@ -95,12 +95,21 @@ def genericAssembler(storageClass, components, pytype=None):
     Raises
     ------
     ValueError
-        Some components could not be used to create the object.
+        Some components could not be used to create the object or,
+        alternatively, some components were not defined in the associated
+        StorageClass.
     """
     if pytype is not None:
         cls = pytype
     else:
         cls = storageClass.pytype
+
+    # Check that the storage class components are consistent
+    understood = set(storageClass.components)
+    requested = set(components.keys())
+    unknown = requested - understood
+    if unknown:
+        raise ValueError("Requested component(s) not known to StorageClass: {}".format(unknown))
 
     # Should we check that the storage class components match or are a superset
     # of the items described in the supplied components?
