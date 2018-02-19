@@ -147,7 +147,7 @@ class FileFormatter(Formatter):
         return inMemoryDataset
 
     def read(self, fileDescriptor):
-        """Read a `Exposure` from a FITS file.
+        """Read data from a file.
 
         Parameters
         ----------
@@ -157,10 +157,9 @@ class FileFormatter(Formatter):
 
         Returns
         -------
-        inMemoryDataset : `Exposure`
-            The requested `Exposure`.
-            The actual returned type will be a derived class
-            (e.g. `ExposureI` or `ExposureD`).
+        inMemoryDataset : `object`
+            The requested data as a Python object. The type of object
+            is controlled by the specific formatter.
         """
         # Try the file or the component version
         path = fileDescriptor.location.preferredPath()
