@@ -64,7 +64,12 @@ def _attrNames(componentName, getter=True):
 
     # Capitalized name for getXxx must only capitalize first letter and not
     # downcase the rest. getVisitInfo and not getVisitinfo
-    capitalized = "{}{}{}".format(root, componentName[0].upper(), componentName[1:])
+    first = componentName[0].upper()
+    if len(componentName) > 1:
+        tail = componentName[1:]
+    else:
+        tail = ""
+    capitalized = "{}{}{}".format(root, first, tail)
     return (componentName, "{}_{}".format(root, componentName), capitalized)
 
 
