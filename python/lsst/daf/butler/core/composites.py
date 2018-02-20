@@ -207,14 +207,17 @@ class CompositeAssembler:
             The attribute could not be read from the composite.
         """
         component = None
+
+        if hasattr(composite, '__contains__') and componentName in composite:
+            component = composite[componentName]
+            return component
+
         for attr in self._attrNames(componentName, getter=True):
             if hasattr(composite, attr):
                 component = getattr(composite, attr)
                 if attr != componentName:  # We have a method
                     component = component()
                 break
-            elif hasattr(composite, '__contains__') and attr in composite:
-                component = composite[attr]
         else:
             raise AttributeError("Unable to get component {}".format(componentName))
         return component
