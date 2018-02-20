@@ -161,7 +161,7 @@ class PosixDatastore(Datastore):
 
         # Check to see if this storage class has a disassembler
         # and also has components
-        if storageClass.assembler.disassemble is not None and storageClass.components:
+        if storageClass.assemblerClass.disassemble is not None and storageClass.components:
             compUris = {}
             components = storageClass.assembler().disassemble(inMemoryDataset, storageClass)
             if components:

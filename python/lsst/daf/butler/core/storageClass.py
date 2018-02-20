@@ -31,32 +31,38 @@ from lsst.daf.butler.core.composites import CompositeAssembler
 from .mappingFactory import MappingFactory
 
 
-class StorageClassMeta(type):
-
-    """Metaclass used by `StorageClass`.
-
-    Implements lazy loading of class attributes, allowing datastores to
-    delay loading of external code until it is needed.
-
-    Attributes
-    ----------
-    pytype
-    assembler
-
+class StorageClass:
+    """Class describing how a label maps to a particular Python type.
     """
 
-    # Caches of imported code objects.
+    # Components are fixed per class
+    _components = {}
+
+    # These are internal class attributes supporting lazy loading of concrete
+    # python types and functions from the string. The lazy loading is only done
+    # once the property is requested by an instance. The loading is fixed per
+    # class but class access to attribute is not supported.
+
+    # The names are defined when the class is constructed
+    _pytypeName = None
+    _assemblerClassName = None
+
+    # The types are created on demand and cached
+    # We set a default assembler so that a class is guaranteed to support
+    # something.
     _pytype = None
     _assembler = CompositeAssembler
 
-    def __init__(self, name, bases, dct):
-        super().__init__(name, bases, dct)
-        if hasattr(self, "name"):
-            StorageClass.subclasses[self.name] = self
+    @property
+    def components(self):
+        """Component names mapped to associated `StorageClass`
+        """
+        return type(self)._components
 
     @property
-    def pytype(cls):  # noqa N805
+    def pytype(self):
         """Python type associated with this `StorageClass`."""
+        cls = type(self)
         if cls._pytype is not None:
             return cls._pytype
         # Handle case where we did get a python type not string
@@ -71,8 +77,9 @@ class StorageClassMeta(type):
         return cls._pytype
 
     @property
-    def assembler(cls):  # noqa N805
-        """Function to use to assemble an object from components."""
+    def assemblerClass(self):
+        """Class to use to (dis)assemble an object from components."""
+        cls = type(self)
         if cls._assembler is not None:
             return cls._assembler
         if cls._assemblerClassName is None:
@@ -80,45 +87,17 @@ class StorageClassMeta(type):
         cls._assembler = doImport(cls._assemblerClassName)
         return cls._assembler
 
-
-class StorageClass(metaclass=StorageClassMeta):
-    """Class describing how a label maps to a particular Python type.
-
-    Attributes
-    ----------
-    name : `str`
-        Name associated with the StorageClass.
-    pytype : `type`
-        Python type associated with this name.
-    components : `dict`
-        Dict mapping component names of a composite to an associated
-        `StorageClass`.
-    assembler : `function`, optional
-        Class to use to assemble and disassemble an object of type `pytype`
-        from components.
-    """
-
-    subclasses = dict()
-    components = dict()
-
-    # These are internal class attributes supporting lazy loading of concrete
-    # python types and functions from the string. The lazy loading is handled
-    # in the metaclass.
-    _pytypeName = None
-    _assemblerClassName = None
-
-    @property
-    def pytype(self):
-        """Python type associated with this StorageClass."""
-        return type(self).pytype
-
-    @property
     def assembler(self):
-        """Function object to use to create a type from components."""
-        return type(self).assembler
+        """Return an instance of an assembler.
 
-    @classmethod
-    def validateInstance(cls, instance):
+        Returns
+        -------
+        assembler : `CompositeAssembler`
+            Instance of the assembler associated with this `StorageClass`
+        """
+        return self.assemblerClass()
+
+    def validateInstance(self, instance):
         """Check that the supplied instance has the expected Python type
 
         Parameters
@@ -132,7 +111,7 @@ class StorageClass(metaclass=StorageClassMeta):
             True is the supplied instance object can be handled by this
             `StorageClass`, False otherwise.
         """
-        return isinstance(instance, cls.pytype)
+        return isinstance(instance, self.pytype)
 
 
 def makeNewStorageClass(name, pytype=None, components=None, assembler=None):

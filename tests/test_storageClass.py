@@ -49,17 +49,17 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
         self.assertIsNone(sc.components)
-        self.assertEqual(sc.pytype, dict)
-        self.assertEqual(newclass.pytype, dict)
 
-        # Check that this class is listed in the subclasses
-        self.assertIn(className, newclass.subclasses)
+        # Test the caching by using private class attribute
+        self.assertIsNone(newclass._pytype)
+        self.assertEqual(sc.pytype, dict)
+        self.assertEqual(newclass._pytype, dict)
 
         # Check we can create a storageClass using the name of an importable
         # type.
         newclass = storageClass.makeNewStorageClass("TestImage2",
                                                     "lsst.daf.butler.core.storageClass.StorageClassFactory")
-        self.assertIsInstance(newclass.pytype(), storageClass.StorageClassFactory)
+        self.assertIsInstance(newclass().pytype(), storageClass.StorageClassFactory)
 
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
