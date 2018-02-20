@@ -93,9 +93,11 @@ class StorageClass:
         Returns
         -------
         assembler : `CompositeAssembler`
-            Instance of the assembler associated with this `StorageClass`
+            Instance of the assembler associated with this `StorageClass`.
+            Assembler is constructed with a new instance of this
+            `StorageClass`.
         """
-        return self.assemblerClass()
+        return self.assemblerClass(storageClass=type(self)())
 
     def validateInstance(self, instance):
         """Check that the supplied instance has the expected Python type

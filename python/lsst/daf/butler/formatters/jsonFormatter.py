@@ -95,5 +95,5 @@ class JsonFormatter(FileFormatter):
             Object of expected type `pytype`.
         """
         if not hasattr(builtins, pytype.__name__):
-            inMemoryDataset = storageClass.assembler().assemble(storageClass, inMemoryDataset, pytype=pytype)
+            inMemoryDataset = storageClass.assembler().assemble(inMemoryDataset, pytype=pytype)
         return inMemoryDataset

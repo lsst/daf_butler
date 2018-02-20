@@ -171,7 +171,7 @@ class FileFormatter(Formatter):
 
         # Get the list of valid components so we can build URIs
         storageClass = fileDescriptor.storageClass
-        components = storageClass.assembler().getValidComponents(inMemoryDataset, storageClass)
+        components = storageClass.assembler().getValidComponents(inMemoryDataset)
 
         return (fileDescriptor.location.uri,
                 {c: fileDescriptor.location.componentUri(c) for c in components})

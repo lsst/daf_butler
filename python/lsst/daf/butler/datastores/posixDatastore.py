@@ -163,7 +163,7 @@ class PosixDatastore(Datastore):
         # and also has components
         if storageClass.assemblerClass.disassemble is not None and storageClass.components:
             compUris = {}
-            components = storageClass.assembler().disassemble(inMemoryDataset, storageClass)
+            components = storageClass.assembler().disassemble(inMemoryDataset)
             if components:
                 for comp, info in components.items():
                     compTypeName = typeName

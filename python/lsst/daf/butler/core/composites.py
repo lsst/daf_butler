@@ -48,7 +48,14 @@ class DatasetComponent:
 class CompositeAssembler:
     """Class for providing assembler and disassembler support for composites.
 
+    Parameters
+    ----------
+    storageClass : `StorageClass`
+        `StorageClass` to be used with this assembler.
     """
+
+    def __init__(self, storageClass):
+        self.storageClass = storageClass
 
     @staticmethod
     def _attrNames(componentName, getter=True):
@@ -78,7 +85,7 @@ class CompositeAssembler:
         capitalized = "{}{}{}".format(root, first, tail)
         return (componentName, "{}_{}".format(root, componentName), capitalized)
 
-    def assemble(self, storageClass, components, pytype=None):
+    def assemble(self, components, pytype=None):
         """Construct an object from components based on storageClass.
 
         This generic implementation assumes that instances of objects
@@ -87,9 +94,6 @@ class CompositeAssembler:
 
         Parameters
         ----------
-        storageClass : `StorageClass`
-            `StorageClass` describing the entity to be created from the
-            components.
         components : `dict`
             Collection of components from which to assemble a new composite
             object. Keys correspond to composite names in the `StorageClass`.
@@ -112,10 +116,10 @@ class CompositeAssembler:
         if pytype is not None:
             cls = pytype
         else:
-            cls = storageClass.pytype
+            cls = self.storageClass.pytype
 
         # Check that the storage class components are consistent
-        understood = set(storageClass.components)
+        understood = set(self.storageClass.components)
         requested = set(components.keys())
         unknown = requested - understood
         if unknown:
@@ -151,26 +155,23 @@ class CompositeAssembler:
 
         return obj
 
-    def getValidComponents(self, composite, storageClass):
+    def getValidComponents(self, composite):
         """Extract all non-None components from a composite.
 
         Parameters
         ----------
         composite : `object`
             Composite from which to extract components.
-        storageClass : `StorageClass`
-            `StorageClass` associated with this composite object.
-            If None, it is assumed this is not to be treated as a composite.
 
         Returns
         -------
         comps : `dict`
             Non-None components extracted from the composite, indexed by the
-            component name as derived from the `StorageClass`.
+            component name as derived from the `self.storageClass`.
         """
         components = {}
-        if storageClass is not None and storageClass.components:
-            for c in storageClass.components:
+        if self.storageClass is not None and self.storageClass.components:
+            for c in self.storageClass.components:
                 if isinstance(composite, collections.Mapping):
                     comp = composite[c]
                 else:
@@ -219,7 +220,7 @@ class CompositeAssembler:
             raise AttributeError("Unable to get component {}".format(componentName))
         return component
 
-    def disassemble(self, composite, storageClass, subset=None, override=None):
+    def disassemble(self, composite, subset=None, override=None):
         """Generic implementation of a disassembler.
 
         This implementation attempts to extract components from the parent
@@ -230,11 +231,9 @@ class CompositeAssembler:
         ----------
         composite : `object`
             Parent composite object consisting of components to be extracted.
-        storageClass : `StorageClass`
-            `StorageClass` associated with the parent, with defined components.
         subset : `iterable`, optional
             Iterable containing subset of components to extract from composite.
-            Must be a subset of those defined in `storageClass`.
+            Must be a subset of those defined in `self.storageClass`.
         override : `object`, optional
             Object to use for disassembly instead of parent. This can be useful
             when called from subclasses that have composites in a hierarchy.
@@ -244,7 +243,7 @@ class CompositeAssembler:
         components : `dict`
             `dict` with keys matching the components defined in `storageClass`
             and values being `DatasetComponent` instances describing the
-            component. Returns None if this is not a composite `StorageClass`.
+            component. Returns None if this is not a composite `self.storageClass`.
 
         Raises
         ------
@@ -252,16 +251,16 @@ class CompositeAssembler:
             A requested component can not be found in the parent using generic
             lookups.
         TypeError
-            The parent object does not match the supplied `StorageClass`.
+            The parent object does not match the supplied `self.storageClass`.
         """
-        if storageClass.components is None:
+        if self.storageClass.components is None:
             return
 
-        if not storageClass.validateInstance(composite):
+        if not self.storageClass.validateInstance(composite):
             raise TypeError("Unexpected type mismatch between parent and StorageClass"
-                            " ({} != {})".format(type(composite), storageClass.pytype))
+                            " ({} != {})".format(type(composite), self.storageClass.pytype))
 
-        requested = set(storageClass.components.keys())
+        requested = set(self.storageClass.components)
 
         if subset is not None:
             subset = set(subset)
@@ -286,7 +285,7 @@ class CompositeAssembler:
                 # If we found a match store it in the results dict and remove
                 # it from the list of components we are still looking for.
                 if component is not None:
-                    components[c] = DatasetComponent(c, storageClass.components[c], component)
+                    components[c] = DatasetComponent(c, self.storageClass.components[c], component)
                 requested.remove(c)
 
         if requested:
