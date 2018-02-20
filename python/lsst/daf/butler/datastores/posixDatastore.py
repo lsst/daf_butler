@@ -29,7 +29,7 @@ from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
 from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
-from lsst.daf.butler.core.storageClass import StorageClassFactory
+from lsst.daf.butler.core.storageClass import StorageClassFactory, makeNewStorageClass
 
 
 class PosixDatastore(Datastore):
@@ -66,7 +66,16 @@ class PosixDatastore(Datastore):
                 components = {}
                 for cname, ctype in info["components"].items():
                     components[cname] = self.storageClassFactory.getStorageClass(ctype)
-            self.storageClassFactory.registerStorageClass(name, info["type"], components)
+
+            # Extract scalar items from dict that are needed for StorageClass Constructor
+            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler") if k in info}
+
+            # Fill in other items
+            storageClassKwargs["components"] = components
+
+            # Create the new storage class and register it
+            newStorageClass = makeNewStorageClass(name, **storageClassKwargs)
+            self.storageClassFactory.registerStorageClass(newStorageClass)
 
             # Create the formatter, indexed by the storage class
             # Currently, we allow this to be optional because some storage classes
@@ -92,12 +101,38 @@ class PosixDatastore(Datastore):
         -------
         inMemoryDataset : `InMemoryDataset`
             Requested `Dataset` or slice thereof as an `InMemoryDataset`.
+
+        Raises
+        ------
+        e : ValueError
+            Requested URI can not be retrieved.
+        e : TypeError
+            Return value from formatter has unexpected type.
         """
         formatter = self.formatterFactory.getFormatter(storageClass)
         location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.path):
-            raise ValueError("No such file: {0}".format(location.uri))
-        return formatter.read(FileDescriptor(location, storageClass.pytype, parameters))
+
+        # if we are asking for a component, the type we pass in to the formatter
+        # should be the type of the component and not the composite type
+        pytype = storageClass.pytype
+        comp = location.fragment
+        scComps = storageClass.components
+        if comp and scComps is not None:
+            pytype = None  # Clear it since this *is* a component
+            if comp in scComps:
+                pytype = scComps[comp].pytype
+
+        try:
+            result = formatter.read(FileDescriptor(location, pytype=pytype,
+                                                   storageClass=storageClass, parameters=parameters))
+        except Exception as e:
+            raise ValueError("Failure from formatter for URI {}: {}".format(uri, e))
+
+        # Validate the returned data type matches the expected data type
+        if pytype and not isinstance(result, pytype):
+            raise TypeError("Got type {} from formatter but expected {}".format(type(result), pytype))
+
+        return result
 
     def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
@@ -122,12 +157,30 @@ class PosixDatastore(Datastore):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
         location = self.locationFactory.fromPath(storageHint)
+
+        # Check to see if this storage class has a disassembler
+        # and also has components
+        if storageClass.assemblerClass.disassemble is not None and storageClass.components:
+            compUris = {}
+            components = storageClass.assembler().disassemble(inMemoryDataset)
+            if components:
+                for comp, info in components.items():
+                    compTypeName = typeName
+                    if compTypeName is not None:
+                        compTypeName = "{}.{}".format(compTypeName, comp)
+                    compUris[comp], _ = self.put(info.component, info.storageClass,
+                                                 location.componentUri(comp), compTypeName)
+                return None, compUris
+
+        # Write a single component
+        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
+
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
             safeMakeDir(storageDir)
-        return formatter.write(inMemoryDataset, FileDescriptor(location, storageClass.pytype))
+        return formatter.write(inMemoryDataset, FileDescriptor(location, pytype=storageClass.pytype,
+                                                               storageClass=storageClass))
 
     def remove(self, uri):
         """Indicate to the Datastore that a `Dataset` can be removed.
@@ -143,9 +196,9 @@ class PosixDatastore(Datastore):
             disable `Dataset` deletion through standard interfaces.
         """
         location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.path):
+        if not os.path.exists(location.preferredPath()):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
-        os.remove(location.path)
+        os.remove(location.preferredPath())
 
     def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,

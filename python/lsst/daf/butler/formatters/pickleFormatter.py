@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2018  AURA/LSST.
+# Copyright 2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -20,36 +20,42 @@
 # the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
-import os.path
+
+"""Formatter associated with Python pickled objects."""
+
+import pickle
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 
-class FitsCatalogFormatter(FileFormatter):
-    """Interface for reading and writing catalogs to and from FITS files.
+class PickleFormatter(FileFormatter):
+    """Interface for reading and writing Python objects to and from pickle files.
     """
-    extension = ".fits"
+    extension = ".pickle"
 
-    def _readFile(self, path, pytype):
-        """Read a file from the path in FITS format.
+    def _readFile(self, path, pytype=None):
+        """Read a file from the path in pickle format.
 
         Parameters
         ----------
         path : `str`
             Path to use to open the file.
-        pytype : `class`
-            Class to use to read the FITS file.
+        pytype : `class`, optional
+            Not used by this implementation.
 
         Returns
         -------
         data : `object`
-            Instance of class `pytype` read from FITS file. None
+            Either data as Python object read from the pickle file, or None
             if the file could not be opened.
         """
-        if not os.path.exists(path):
-            return None
+        try:
+            with open(path, "rb") as fd:
+                data = pickle.load(fd)
+        except FileNotFoundError:
+            data = None
 
-        return pytype.readFits(path)
+        return data
 
     def _writeFile(self, inMemoryDataset, fileDescriptor):
         """Write the in memory dataset to file on disk.
@@ -66,4 +72,5 @@ class FitsCatalogFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        inMemoryDataset.writeFits(fileDescriptor.location.preferredPath())
+        with open(fileDescriptor.location.preferredPath(), "wb") as fd:
+            pickle.dump(inMemoryDataset, fd, protocol=-1)

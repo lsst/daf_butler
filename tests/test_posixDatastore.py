@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2018  AURA/LSST.
+# Copyright 2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -25,77 +25,96 @@ import os
 import unittest
 
 import lsst.utils.tests
-import lsst.afw.table
 
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from examplePythonTypes import MetricsExample
 
-import datasetsHelper
+
+def makeExampleMetrics():
+    return MetricsExample({"AM1": 5.2, "AM2": 30.6},
+                          {"a": [1, 2, 3],
+                           "b": {"blue": 5, "red": "green"}},
+                          [563, 234, 456.7]
+                          )
 
 
 class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
+    """Some basic tests of a simple POSIX datastore."""
+
+    def assertEqualMetrics(self, first, second):
+        self.assertListEqual(first.data, second.data)
+        self.assertDictEqual(first.summary, second.summary)
+        self.assertDictEqual(first.output, second.output)
 
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
-
-    def _assertCatalogEqual(self, inputCatalog, outputCatalog):
-        self.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
-        inputTable = inputCatalog.getTable()
-        inputRecord = inputCatalog[0]
-        outputTable = outputCatalog.getTable()
-        outputRecord = outputCatalog[0]
-        self.assertEqual(inputTable.getPsfFluxDefinition(), outputTable.getPsfFluxDefinition())
-        self.assertEqual(inputRecord.getPsfFlux(), outputRecord.getPsfFlux())
-        self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
-        self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())
-        self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
-        self.assertFloatsAlmostEqual(
-            inputRecord.getCentroidErr()[0, 0],
-            outputRecord.getCentroidErr()[0, 0], rtol=1e-6)
-        self.assertFloatsAlmostEqual(
-            inputRecord.getCentroidErr()[1, 1],
-            outputRecord.getCentroidErr()[1, 1], rtol=1e-6)
-        self.assertEqual(inputTable.getShapeDefinition(), outputTable.getShapeDefinition())
-        self.assertFloatsAlmostEqual(
-            inputRecord.getShapeErr()[0, 0],
-            outputRecord.getShapeErr()[0, 0], rtol=1e-6)
-        self.assertFloatsAlmostEqual(
-            inputRecord.getShapeErr()[1, 1],
-            outputRecord.getShapeErr()[1, 1], rtol=1e-6)
-        self.assertFloatsAlmostEqual(
-            inputRecord.getShapeErr()[2, 2],
-            outputRecord.getShapeErr()[2, 2], rtol=1e-6)
 
     def testConstructor(self):
         datastore = PosixDatastore(config=self.configFile)
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
-        catalog = datasetsHelper.makeExampleCatalog()
+        metrics = makeExampleMetrics()
         datastore = PosixDatastore(config=self.configFile)
         # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
-        uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
+        storageClass = datastore.storageClassFactory.getStorageClass("StructuredData")
+        uri, comps = datastore.put(metrics, storageClass=storageClass, storageHint="tester.json",
+                                   typeName=None)
+
         # Get
-        catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
-        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
+        metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        self.assertEqualMetrics(metrics, metricsOut)
+
+        # Get a component
+        summary = datastore.get(comps["output"], storageClass=storageClass)
+        self.assertEqual(summary, metricsOut.output)
+
+        # Get a component even though it was written without by forming URI ourselves
+        summary = datastore.get("{}#{}".format(uri, "summary"), storageClass=storageClass)
+        self.assertEqual(summary, metricsOut.summary)
+
         # These should raise
         with self.assertRaises(ValueError):
             # non-existing file
-            datastore.get(uri="file:///non_existing.fits", storageClass=storageClass, parameters=None)
+            datastore.get(uri="file:///non_existing.json", storageClass=storageClass, parameters=None)
         with self.assertRaises(ValueError):
             # invalid storage class
-            datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
+            datastore.get(uri="file:///non_existing.json", storageClass=object, parameters=None)
+        with self.assertRaises(ValueError):
+            # Missing component
+            datastore.get("{}#{}".format(uri, "missing"), storageClass=storageClass)
+        with self.assertRaises(TypeError):
+            # Retrieve component of mismatched type
+            datastore.get("{}#{}".format(uri, "data"), storageClass=storageClass)
 
-    def testRemove(self):
-        catalog = datasetsHelper.makeExampleCatalog()
+    def testCompositePutGet(self):
+        metrics = makeExampleMetrics()
         datastore = PosixDatastore(config=self.configFile)
         # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
-        uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
+        storageClass = datastore.storageClassFactory.getStorageClass("StructuredComposite")
+        uri, comps = datastore.put(metrics, storageClass=storageClass, storageHint="testerc.json",
+                                   typeName=None)
+        self.assertIsNone(uri)
+
+        # Read all the components into a dict
+        components = {}
+        for c, u in comps.items():
+            components[c] = datastore.get(u, storageClass=storageClass.components[c], parameters=None)
+
+        # combine them into a new metrics composite object
+        metricsOut = storageClass.assembler().assemble(components)
+        self.assertEqualMetrics(metrics, metricsOut)
+
+    def testRemove(self):
+        metrics = makeExampleMetrics()
+        datastore = PosixDatastore(config=self.configFile)
+        # Put
+        storageClass = datastore.storageClassFactory.getStorageClass("StructuredData")
+        uri, _ = datastore.put(metrics, storageClass=storageClass, storageHint="tester.json", typeName=None)
         # Get
-        catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
-        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
+        metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        self.assertEqualMetrics(metrics, metricsOut)
         # Remove
         datastore.remove(uri)
         # Get should now fail
@@ -106,19 +125,19 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
             datastore.remove(uri)
 
     def testTransfer(self):
-        catalog = datasetsHelper.makeExampleCatalog()
-        path = "tester.fits"
+        metrics = makeExampleMetrics()
+        path = "tester.json"
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
         inputPosixDatastore = PosixDatastore(config=inputConfig)
         outputConfig = inputConfig.copy()
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig)
-        storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("SourceCatalog")
-        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
+        storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("StructuredData")
+        inputUri, _ = inputPosixDatastore.put(metrics, storageClass, path)
         outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
-        catalogOut = outputPosixDatastore.get(outputUri, storageClass)
-        datasetsHelper.assertCatalogEqual(self, catalog, catalogOut)
+        metricsOut = outputPosixDatastore.get(outputUri, storageClass)
+        self.assertEqualMetrics(metrics, metricsOut)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

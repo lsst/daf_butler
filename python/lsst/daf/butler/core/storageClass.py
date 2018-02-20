@@ -21,44 +21,105 @@
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
 
+"""Support for Storage Classes."""
+
+import builtins
+
 from lsst.daf.butler.core.utils import doImport
+from lsst.daf.butler.core.composites import CompositeAssembler
 
 from .mappingFactory import MappingFactory
 
 
-class StorageClassMeta(type):
-
-    def __init__(self, name, bases, dct):
-        super().__init__(name, bases, dct)
-        if hasattr(self, "name"):
-            StorageClass.subclasses[self.name] = self
-
-
-class StorageClass(metaclass=StorageClassMeta):
+class StorageClass:
     """Class describing how a label maps to a particular Python type.
-
-    Attributes
-    ----------
-    name : `str`
-        Name associated with the StorageClass.
-    pytype : `type`
-        Python type associated with this name.
-
     """
 
-    subclasses = dict()
+    # Components are fixed per class
+    _components = {}
 
-    components = dict()
+    # These are internal class attributes supporting lazy loading of concrete
+    # python types and functions from the string. The lazy loading is only done
+    # once the property is requested by an instance. The loading is fixed per
+    # class but class access to attribute is not supported.
 
-    @classmethod
-    def assemble(cls, parent, components):
-        return parent
+    # The names are defined when the class is constructed
+    _pytypeName = None
+    _assemblerClassName = None
+
+    # The types are created on demand and cached
+    # We set a default assembler so that a class is guaranteed to support
+    # something.
+    _pytype = None
+    _assembler = CompositeAssembler
+
+    @property
+    def components(self):
+        """Component names mapped to associated `StorageClass`
+        """
+        return type(self)._components
+
+    @property
+    def pytype(self):
+        """Python type associated with this `StorageClass`."""
+        cls = type(self)
+        if cls._pytype is not None:
+            return cls._pytype
+        # Handle case where we did get a python type not string
+        if not isinstance(cls._pytypeName, str):
+            pytype = cls._pytypeName
+            cls._pytypeName = cls._pytypeName.__name__
+        elif hasattr(builtins, cls._pytypeName):
+            pytype = getattr(builtins, cls._pytypeName)
+        else:
+            pytype = doImport(cls._pytypeName)
+        cls._pytype = pytype
+        return cls._pytype
+
+    @property
+    def assemblerClass(self):
+        """Class to use to (dis)assemble an object from components."""
+        cls = type(self)
+        if cls._assembler is not None:
+            return cls._assembler
+        if cls._assemblerClassName is None:
+            return None
+        cls._assembler = doImport(cls._assemblerClassName)
+        return cls._assembler
+
+    def assembler(self):
+        """Return an instance of an assembler.
+
+        Returns
+        -------
+        assembler : `CompositeAssembler`
+            Instance of the assembler associated with this `StorageClass`.
+            Assembler is constructed with a new instance of this
+            `StorageClass`.
+        """
+        return self.assemblerClass(storageClass=type(self)())
+
+    def validateInstance(self, instance):
+        """Check that the supplied instance has the expected Python type
+
+        Parameters
+        ----------
+        instance : `object`
+            Object to check.
+
+        Returns
+        -------
+        isOk : `bool`
+            True is the supplied instance object can be handled by this
+            `StorageClass`, False otherwise.
+        """
+        return isinstance(instance, self.pytype)
 
 
-def makeNewStorageClass(name, pytype, components=None):
+def makeNewStorageClass(name, pytype=None, components=None, assembler=None):
     """Create a new Python class as a subclass of `StorageClass`.
 
-    parameters
+    Parameters
     ----------
     name : `str`
         Name to use for this class.
@@ -66,21 +127,24 @@ def makeNewStorageClass(name, pytype, components=None):
         Python type (or name of type) to associate with the `StorageClass`
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
+    assembler : `str`, optional
+        Fully qualified name of class supporting assembly and disassembly
+        of a `pytype` instance.
 
     Returns
     -------
     newtype : `StorageClass`
         Newly created Python type.
     """
-    if isinstance(pytype, str):
-        # Special case Python native dict type for testing
-        if pytype == "dict":
-            pytype = dict
-        else:
-            pytype = doImport(pytype)
-    return type(name, (StorageClass,), {"name": name,
-                                        "pytype": pytype,
-                                        "components": components})
+    clsargs = {"name": name,
+               "_pytypeName": pytype,
+               "components": components}
+    # if the assembler is not None also set it and clear the default assembler
+    if assembler is not None:
+        clsargs["_assemblerClassName"] = assembler
+        clsargs["_assembler"] = None
+
+    return type(name, (StorageClass,), clsargs)
 
 
 class StorageClassFactory:
@@ -105,18 +169,16 @@ class StorageClassFactory:
         """
         return self._mappingFactory.getFromRegistry(storageClassName)
 
-    def registerStorageClass(self, storageClassName, pytype, components=None):
-        """Create a `StorageClass` subclass with the supplied properties
-        and associate it with the storageClassName in the registry.
+    def registerStorageClass(self, storageClass):
+        """Store the `StorageClass` in the factory.
+
+        Will be indexed by `StorageClass.name` and will return instances
+        of the supplied `StorageClass`.
 
         Parameters
         ----------
-        storageClassName : `str`
-            Name of new storage class to be created.
-        pytype : `str` or Python class.
-            Python type to be associated with this storage class.
-        components : `dict`
-            Map of storageClassName to `storageClass` for components.
+        storageClass: `StorageClass`
+            Type of the Python `StorageClass` to register.
 
         Raises
         ------
@@ -124,5 +186,4 @@ class StorageClassFactory:
             If a storage class has already been registered with
             storageClassName.
         """
-        newtype = makeNewStorageClass(storageClassName, pytype, components)
-        self._mappingFactory.placeInRegistry(storageClassName, newtype)
+        self._mappingFactory.placeInRegistry(storageClass.name, storageClass)

@@ -1,7 +1,7 @@
 #
 # LSST Data Management System
 #
-# Copyright 2008-2018  AURA/LSST.
+# Copyright 2018  AURA/LSST.
 #
 # This product includes software developed by the
 # LSST Project (http://www.lsst.org/).
@@ -20,13 +20,14 @@
 # the GNU General Public License along with this program.  If not,
 # see <https://www.lsstcorp.org/LegalNotices/>.
 #
+
 import os.path
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 
-class FitsCatalogFormatter(FileFormatter):
-    """Interface for reading and writing catalogs to and from FITS files.
+class FitsExposureFormatter(FileFormatter):
+    """Interface for reading and writing Exposures to and from FITS files.
     """
     extension = ".fits"
 

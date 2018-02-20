@@ -22,6 +22,7 @@
 #
 
 import os
+import os.path
 import urllib
 
 
@@ -54,6 +55,81 @@ class Location(object):
         """
         return os.path.join(self._datastoreRoot, self._uri.path.lstrip("/"))
 
+    @property
+    def component_path(self):
+        """Path corresponding to location of component of composite.
+
+        This is used in cases where a composite is broken into separate
+        files, combining the root file path with the component name.
+        When reading a file from the URI, it is possible that the file
+        will not exist if the composite was written as a single entity
+        and the URI fragment is referring to a location inside that entity.
+
+        This path includes the root of the `Datastore`. Returns the empty
+        string if no fragment has been specified as part of the URI.
+        """
+        if not self.fragment:
+            return ''
+
+        # We need to insert the fragment before the file extension because
+        # some I/O libraries insist on a particular extension.
+        filepath, extension = os.path.splitext(self.path)
+        return "{}#{}{}".format(filepath, self.fragment, extension)
+
+    @property
+    def fragment(self):
+        """URI fragment associated with this location.
+        """
+        return self._uri.fragment
+
+    def paths(self):
+        """Return path and component path.
+
+        Returns
+        -------
+        path : `tuple`
+            Tuple of the path and the component path.
+            The component path can be an empty string.
+        """
+        return (self.path, self.component_path)
+
+    def preferredPath(self):
+        """Returns component path, if set, else the path.
+
+        Returns
+        -------
+            Path for component in composite if set, else the default path.
+        """
+        return self.component_path if self.component_path else self.path
+
+    def componentUri(self, componentName):
+        """Returns URI of the named component."""
+        parts = list(self._uri)
+        parts[5] = componentName
+        return urllib.parse.urlunparse(parts)
+
+    def updateExtension(self, ext):
+        """Update the file extension associated with this `Location`.
+
+        Parameters
+        ----------
+        ext : `str`
+            New extension. If an empty string is given any extension will
+            be removed. If `None` is given there will be no change.
+        """
+        if ext is None:
+            return
+        path, _ = os.path.splitext(self._uri.path)
+
+        # Ensure that we have a leading "." on file extension (and we do not
+        # try to modify the empty string)
+        if ext and not ext.startswith("."):
+            ext = "." + ext
+
+        parts = list(self._uri)
+        parts[2] = path + ext
+        self._uri = urllib.parse.urlparse(urllib.parse.urlunparse(parts))
+
 
 class LocationFactory(object):
     """Factory for `Location` instances.
@@ -81,6 +157,8 @@ class LocationFactory(object):
         location : `Location`
             The equivalent `Location`.
         """
+        if uri is None or not isinstance(uri, str):
+            raise ValueError("URI must be a string and not {}".format(uri))
         return Location(self._datastoreRoot, uri)
 
     def fromPath(self, path):

@@ -4,31 +4,94 @@ datastore:
   root: ./butler_test_repository
   create: true
   storageClasses:
+    StructuredDataDict:
+      pytype: dict
+      formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+      # formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredDataList:
+      pytype: list
+      formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+      # formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
     StructuredData:
       # Data from a JSON or YAML file
-      type: dict
-      # formatter: "lsst.daf.butler.formatters.structuredDataFormatter.YAMLFormatter"
-    TablePersistable:
-      type: lsst.afw.table
-    Image:
-      type: lsst.afw.image.MaskedImage
-    Catalog:
-      type: lsst.afw.table.BaseCatalog
-    SourceCatalog:
-      type: lsst.afw.table.SourceCatalog
-      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    Exposure:
-      type: lsst.afw.image.Exposure
+      pytype: examplePythonTypes.MetricsExample
+      formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+      assembler: lsst.daf.butler.core.composites.CompositeAssemblerMonolithic
       components:
-        image: Image
-        mask: Image
-        variance: Image
-        wcs: TablePersistable
-        psf: TablePersistable
-        photoCalib: TablePersistable
-        visitInfo: TablePersistable
-        apCorr: TablePersistable
-        coaddInputs: TablePersistable
+        # Components are those supported by get. We use the default formatter
+        # though, and not the formatters associated with the components.
+        summary: StructuredDataDict
+        output: StructuredDataDict
+        # Deliberately set this to the wrong type
+        data: StructuredDataDict
+    StructuredComposite:
+      pytype: examplePythonTypes.MetricsExample
+      assembler: lsst.daf.butler.core.composites.CompositeAssembler
+      components:
+        summary: StructuredDataDict
+        output: StructuredDataDict
+        data: StructuredDataList
+    TablePersistable:
+      pytype: lsst.afw.table.io.persistable.Persistable
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableWcs:
+      pytype: lsst.afw.image.wcs.wcs.Wcs
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistablePsf:
+      pytype: lsst.afw.detection.Psf
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCoaddInputs:
+      pytype: lsst.afw.image.coaddInputs.CoaddInputs
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableVisitInfo:
+      pytype: lsst.afw.image.visitInfo.VisitInfo
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableApCorr:
+      pytype: lsst.afw.image.apCorrMap.ApCorrMap
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCalib:
+      pytype: lsst.afw.image.calib.Calib
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    ImageF:
+      pytype: lsst.afw.image.image.ImageF
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    MaskX:
+      pytype: lsst.afw.image.mask.MaskX
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Catalog:
+      pytype: lsst.afw.table.BaseCatalog
+    SourceCatalog:
+      pytype: lsst.afw.table.SourceCatalog
+      formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Exposure: &Exposure
+      pytype: lsst.afw.image.Exposure
+      formatter: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+      assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
+      components:
+        image: ImageF
+        mask: MaskX
+        variance: ImageF
+        wcs: TablePersistableWcs
+        psf: TablePersistablePsf
+        calib: TablePersistableCalib
+        visitInfo: TablePersistableVisitInfo
+        apCorrMap: TablePersistableApCorr
+        coaddInputs: TablePersistableCoaddInputs
+    ExposureF:
+      <<: *Exposure
+      pytype: lsst.afw.image.ExposureF
+    ExposureI:
+      <<: *Exposure
+      pytype: lsst.afw.image.ExposureI
+    ExposureComposite: &ExposureComposite
+      <<: *Exposure
+      assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    ExposureCompositeF:
+      <<: *ExposureComposite
+      pytype: lsst.afw.image.ExposureF
+    ExposureI:
+      <<: *ExposureComposite
+      pytype: lsst.afw.image.ExposureI
 registry:
   cls: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
   dbname: 'sqlite:///:memory:'

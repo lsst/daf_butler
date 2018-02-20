@@ -31,14 +31,17 @@ class FileDescriptor(object):
         Storage location.
     type : `cls`
         Type the object will have after reading in Python (typically
-        `StorageClass.pytype`).
+        `StorageClass.pytype` but can be overridden).
+    storageClass : `StorageClass`
+        `StorageClass` associated with this file.
     parameters : `dict`
         Additional parameters that can be used for reading and writing.
     """
 
-    __slots__ = ('location', 'pytype', 'parameters')
+    __slots__ = ('location', 'pytype', 'storageClass', 'parameters')
 
-    def __init__(self, location, pytype=None, parameters=None):
+    def __init__(self, location, pytype=None, storageClass=None, parameters=None):
         self.location = location
         self.pytype = pytype
+        self.storageClass = storageClass
         self.parameters = parameters
