@@ -55,22 +55,31 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
         datastore = PosixDatastore(config=self.configFile)
-        # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("StructuredData")
-        uri, comps = datastore.put(metrics, storageClass=storageClass, storageHint="tester.json",
-                                   typeName=None)
 
-        # Get
-        metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
-        self.assertEqualMetrics(metrics, metricsOut)
+        # Create multiple storage classes for testing different formulations
+        storageClasses = [datastore.storageClassFactory.getStorageClass(sc)
+                          for sc in ("StructuredData",
+                                     "StructuredDataJson",
+                                     "StructuredDataPickle")]
 
-        # Get a component
-        summary = datastore.get(comps["output"], storageClass=storageClass)
-        self.assertEqual(summary, metricsOut.output)
+        for sc in storageClasses:
+            print("Using storageClass: {}".format(sc.name))
+            uri, comps = datastore.put(metrics, storageClass=sc, storageHint="tester_monolith.xxx",
+                                       typeName=None)
 
-        # Get a component even though it was written without by forming URI ourselves
-        summary = datastore.get("{}#{}".format(uri, "summary"), storageClass=storageClass)
-        self.assertEqual(summary, metricsOut.summary)
+            # Get
+            metricsOut = datastore.get(uri, storageClass=sc, parameters=None)
+            self.assertEqualMetrics(metrics, metricsOut)
+
+            # Get a component
+            summary = datastore.get(comps["output"], storageClass=sc)
+            self.assertEqual(summary, metricsOut.output)
+
+            # Get a component even though it was written without by forming URI ourselves
+            summary = datastore.get("{}#{}".format(uri, "summary"), storageClass=sc)
+            self.assertEqual(summary, metricsOut.summary)
+
+        storageClass = sc
 
         # These should raise
         with self.assertRaises(ValueError):
@@ -89,20 +98,28 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()
         datastore = PosixDatastore(config=self.configFile)
-        # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("StructuredComposite")
-        uri, comps = datastore.put(metrics, storageClass=storageClass, storageHint="testerc.json",
-                                   typeName=None)
-        self.assertIsNone(uri)
 
-        # Read all the components into a dict
-        components = {}
-        for c, u in comps.items():
-            components[c] = datastore.get(u, storageClass=storageClass.components[c], parameters=None)
+        # Create multiple storage classes for testing different formulations
+        # of composites
+        storageClasses = [datastore.storageClassFactory.getStorageClass(sc)
+                          for sc in ("StructuredComposite",
+                                     "StructuredCompositeTestA",
+                                     "StructuredCompositeTestB")]
 
-        # combine them into a new metrics composite object
-        metricsOut = storageClass.assembler().assemble(components)
-        self.assertEqualMetrics(metrics, metricsOut)
+        for sc in storageClasses:
+            print("Using storageClass: {}".format(sc.name))
+            uri, comps = datastore.put(metrics, storageClass=sc, storageHint="testerc.json",
+                                       typeName=None)
+            self.assertIsNone(uri)
+
+            # Read all the components into a dict
+            components = {}
+            for c, u in comps.items():
+                components[c] = datastore.get(u, storageClass=sc.components[c], parameters=None)
+
+            # combine them into a new metrics composite object
+            metricsOut = sc.assembler().assemble(components)
+            self.assertEqualMetrics(metrics, metricsOut)
 
     def testRemove(self):
         metrics = makeExampleMetrics()
