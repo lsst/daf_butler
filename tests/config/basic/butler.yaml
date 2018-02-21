@@ -4,33 +4,62 @@ datastore:
   root: ./butler_test_repository
   create: true
   storageClasses:
-    StructuredDataDict:
+    StructuredDataDictYaml:
+      pytype: dict
+      formatter: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataListYaml:
+      pytype: list
+      formatter: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataDictJson:
       pytype: dict
       formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
-      # formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-    StructuredDataList:
+    StructuredDataListJson:
+      pytype: list
+      formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataDictPickle:
+      pytype: dict
+      formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredDataListPickle:
       pytype: list
       formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-      # formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
-    StructuredData:
-      # Data from a JSON or YAML file
+    StructuredData: &StructuredData
+      # Data from a simple Python class
       pytype: examplePythonTypes.MetricsExample
-      formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
       assembler: lsst.daf.butler.core.composites.CompositeAssemblerMonolithic
+      # Use YAML formatter by default
+      formatter: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
       components:
         # Components are those supported by get. We use the default formatter
         # though, and not the formatters associated with the components.
-        summary: StructuredDataDict
-        output: StructuredDataDict
+        summary: StructuredDataDictYaml
+        output: StructuredDataDictYaml
         # Deliberately set this to the wrong type
-        data: StructuredDataDict
-    StructuredComposite:
+        data: StructuredDataDictYaml
+    StructuredDataJson:
+      <<: *StructuredData
+      formatter: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataPickle:
+      <<: *StructuredData
+      formatter: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredComposite: &StructuredComposite
       pytype: examplePythonTypes.MetricsExample
       assembler: lsst.daf.butler.core.composites.CompositeAssembler
       components:
-        summary: StructuredDataDict
-        output: StructuredDataDict
-        data: StructuredDataList
+        summary: StructuredDataDictYaml
+        output: StructuredDataDictYaml
+        data: StructuredDataListYaml
+    StructuredCompositeTestA:
+      <<: *StructuredComposite
+      components:
+        summary: StructuredDataDictJson
+        output: StructuredDataDictJson
+        data: StructuredDataListJson
+    StructuredCompositeTestB:
+      <<: *StructuredComposite
+      components:
+        summary: StructuredDataDictPickle
+        output: StructuredDataDictJson
+        data: StructuredDataListYaml
     TablePersistable:
       pytype: lsst.afw.table.io.persistable.Persistable
       formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
