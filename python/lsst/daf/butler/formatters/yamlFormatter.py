@@ -84,7 +84,7 @@ class YamlFormatter(FileFormatter):
             Object to coerce to expected type.
         storageClass : `StorageClass`
             StorageClass associated with `inMemoryDataset`.
-        pytype : `class`, optional
+        pytype : `type`, optional
             Override type to use for conversion.
 
         Returns
