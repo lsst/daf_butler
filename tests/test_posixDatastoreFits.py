@@ -25,6 +25,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from lsst.daf.butler.core.dataUnits import DataUnits
 from datasetsHelper import FitsCatalogDatasetsHelper
 
 try:
@@ -55,8 +56,10 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         catalog = self.makeExampleCatalog()
         datastore = PosixDatastore(config=self.configFile)
         # Put
+        dataUnits = DataUnits({"visit": 123456, "filter": "blue"})
         storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
-        uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
+        uri, _ = datastore.put(catalog, storageClass=storageClass,
+                               dataUnits=dataUnits, typeName="calexp")
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertCatalogEqual(catalog, catalogOut)
@@ -73,7 +76,9 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         datastore = PosixDatastore(config=self.configFile)
         # Put
         storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
-        uri, _ = datastore.put(catalog, storageClass=storageClass, storageHint="tester.fits", typeName=None)
+        dataUnits = DataUnits({"visit": 1234567, "filter": "blue"})
+        uri, _ = datastore.put(catalog, storageClass=storageClass,
+                               dataUnits=dataUnits, typeName="calexp")
         # Get
         catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertCatalogEqual(catalog, catalogOut)
@@ -88,7 +93,7 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
 
     def testTransfer(self):
         catalog = self.makeExampleCatalog()
-        path = "tester.fits"
+        dataUnits = DataUnits({"visit": 12345, "filter": "red"})
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
         inputPosixDatastore = PosixDatastore(config=inputConfig)
@@ -96,8 +101,9 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig)
         storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("SourceCatalog")
-        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, path)
-        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
+        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, dataUnits, "calexp")
+        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri,
+                                                     storageClass, dataUnits, "calexp")
         catalogOut = outputPosixDatastore.get(outputUri, storageClass)
         self.assertCatalogEqual(catalog, catalogOut)
 
@@ -118,9 +124,11 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
         exposure = lsst.afw.image.ExposureF(example)
         datastore = PosixDatastore(config=self.configFile)
         # Put
+        dataUnits = DataUnits({"visit": 231, "filter": "Fc"})
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
-        uri, comps = datastore.put(exposure, storageClass=storageClass, storageHint="test_exposure.fits",
-                                   typeName=None)
+        uri, comps = datastore.put(exposure, storageClass=storageClass,
+                                   dataUnits=dataUnits,
+                                   typeName="calexp")
         # Get
         exposureOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertEqual(type(exposure), type(exposureOut))
@@ -145,10 +153,11 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
         exposure = lsst.afw.image.ExposureF(example)
         datastore = PosixDatastore(config=self.configFile)
         # Put
+        dataUnits = DataUnits({"visit": 23, "filter": "F"})
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureCompositeF")
         uri, comps = datastore.put(exposure, storageClass=storageClass,
-                                   storageHint="test_composite_exposure.fits",
-                                   typeName=None)
+                                   dataUnits=dataUnits,
+                                   typeName="calexp")
 
         # Get a component
         for c in ("wcs", "image", "mask", "coaddInputs", "psf"):

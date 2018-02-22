@@ -3,6 +3,10 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: ./butler_test_repository
   create: true
+  templates:
+    default: "{datasettype}/{tract:?}/{patch:?}/{filter:?}/{visit:?}"
+    calexp: "{datasettype}.{component:?}/{datasettype}_v{visit}_f{filter}_{component:?}"
+    metric: "{datasettype}.{component:?}/{datasettype}_v{visit:08d}_f{filter}_{component:?}"
   storageClasses:
     StructuredDataDictYaml:
       pytype: dict

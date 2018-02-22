@@ -28,6 +28,7 @@ from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
 from lsst.daf.butler.core.storageClass import StorageClassFactory, makeNewStorageClass
+from lsst.daf.butler.core.fileTemplates import FileTemplate
 
 
 class PosixDatastore(Datastore):
@@ -81,6 +82,12 @@ class PosixDatastore(Datastore):
             if "formatter" in info:
                 self.formatterFactory.registerFormatter(name, info["formatter"])
 
+        # Read the file naming templates and store them in the datastore
+        # indexed by datatype name
+        self.templates = {}
+        for name, info in self.config["templates"].items():
+            self.templates[name] = FileTemplate(info)
+
     def get(self, uri, storageClass, parameters=None):
         """Load an `InMemoryDataset` from the store.
 
@@ -132,7 +139,7 @@ class PosixDatastore(Datastore):
 
         return result
 
-    def put(self, inMemoryDataset, storageClass, storageHint, typeName=None):
+    def put(self, inMemoryDataset, storageClass, dataUnits, typeName=None):
         """Write a `InMemoryDataset` with a given `StorageClass` to the store.
 
         Parameters
@@ -141,8 +148,8 @@ class PosixDatastore(Datastore):
             The `Dataset` to store.
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
-        storageHint : `str`
-            Provides a hint that the `Datastore` may use as (part of) the URI.
+        dataUnits : `DataUnits`
+            DataUnits to use when constructing the filename.
         typeName : `str`
             The `DatasetType` name, which may be used by this `Datastore` to
             override the default serialization format for the `StorageClass`.
@@ -155,7 +162,6 @@ class PosixDatastore(Datastore):
             A dictionary of URIs for the `Dataset`' components.
             The latter will be empty if the `Dataset` is not a composite.
         """
-        location = self.locationFactory.fromPath(storageHint)
 
         # Check to see if this storage class has a disassembler
         # and also has components
@@ -168,8 +174,30 @@ class PosixDatastore(Datastore):
                     if compTypeName is not None:
                         compTypeName = "{}.{}".format(compTypeName, comp)
                     compUris[comp], _ = self.put(info.component, info.storageClass,
-                                                 location.componentUri(comp), compTypeName)
+                                                 dataUnits, compTypeName)
                 return None, compUris
+
+        # Get a location from the templates
+        template = None
+        component = None
+        if typeName is not None:
+            if typeName in self.templates:
+                template = self.templates[typeName]
+            elif "." in typeName:
+                baseType, component = typeName.split(".", maxsplit=1)
+                if baseType in self.templates:
+                    template = self.templates[baseType]
+
+        if template is None:
+            if "default" in self.templates:
+                template = self.templates["default"]
+
+        # if still not template give up for now.
+        if template is None:
+            raise TypeError("Unable to determine file template from supplied type [{}]".format(typeName))
+
+        location = self.locationFactory.fromPath(template.format(dataUnits,
+                                                                 datasettype=typeName))
 
         # Write a single component
         formatter = self.formatterFactory.getFormatter(storageClass, typeName)
@@ -198,7 +226,7 @@ class PosixDatastore(Datastore):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
         os.remove(location.preferredPath())
 
-    def transfer(self, inputDatastore, inputUri, storageClass, storageHint, typeName=None):
+    def transfer(self, inputDatastore, inputUri, storageClass, dataUnits, typeName=None):
         """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
         and store the result in this `Datastore`.
 
@@ -210,9 +238,8 @@ class PosixDatastore(Datastore):
             The `URI` of the `Dataset` in the input `Datastore`.
         storageClass : `StorageClass`
             The `StorageClass` associated with the `DatasetType`.
-        storageHint : `str`
-            Provides a hint that this `Datastore` may use as [part of] the
-            `URI`.
+        dataUnits : `DataUnits`
+            DataUnits to use when constructing the filename.
         typeName : `str`
             The `DatasetType` name, which may be used by this `Datastore`
             to override the default serialization format for the `StorageClass`.
@@ -227,4 +254,4 @@ class PosixDatastore(Datastore):
         """
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(inputUri, storageClass)
-        return self.put(inMemoryDataset, storageClass, storageHint, typeName)
+        return self.put(inMemoryDataset, storageClass, dataUnits, typeName)
