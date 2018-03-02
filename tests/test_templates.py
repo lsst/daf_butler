@@ -44,30 +44,50 @@ class TestFileTemplates(unittest.TestCase):
                             self.du, datasettype="calexp")
 
     def testOptional(self):
-        tmplstr = "{datasettype}.{component:?}/v{visit:05d}_f{filter}"
-        self.assertTemplate(tmplstr, "calexp.wcs/v00052_fU",
-                            self.du, datasettype="calexp.wcs")
-        self.assertTemplate(tmplstr, "calexp.psf/v00052_fU",
-                            self.du, datasettype="calexp", component="psf")
+        """Optional units in templates."""
+        tmplstr = "{datasettype}/v{visit:05d}_f{filter:?}"
+        self.assertTemplate(tmplstr, "calexp/v00052_fU",
+                            self.du, datasettype="calexp")
 
-        with self.assertRaises(KeyError):
-            self.assertTemplate(tmplstr, "", self.du, component="wcs")
+        du = DataUnits({"visit": 48, "tract": 265})
+        self.assertTemplate(tmplstr, "calexp/v00048",
+                            du, datasettype="calexp")
 
         # Ensure that this returns a relative path even if the first field
         # is optional
         tmplstr = "{datasettype:?}/{visit:?}/f{filter}"
         self.assertTemplate(tmplstr, "52/fU", self.du)
 
-    def testComponent(self):
-        tmplstr = "{datasettype}/v{visit:05d}"
-        self.assertTemplate(tmplstr, "calexp/v00052", self.du, datasettype="calexp")
+        # Ensure that // from optionals are converted to singles
+        tmplstr = "{datasettype}/{patch:?}/{tract:?}/f{filter}"
+        self.assertTemplate(tmplstr, "calexp/fU", self.du, datasettype="calexp")
 
-        with self.assertRaises(KeyError):
-            self.assertTemplate(tmplstr, "", self.du, datasettype="calexp", component="wcs")
+        # Optionals with some text between fields
+        tmplstr = "{datasettype}/p{patch:?}_t{tract:?}/f{filter}"
+        self.assertTemplate(tmplstr, "calexp/p/fU", self.du, datasettype="calexp")
+        tmplstr = "{datasettype}/p{patch:?}_t{visit:04d?}/f{filter}"
+        self.assertTemplate(tmplstr, "calexp/p_t0052/fU", self.du, datasettype="calexp")
+
+    def testComponent(self):
+        """Test handling of components in templates."""
+
+        tmplstr = "c_{component}_v{visit}"
+        self.assertTemplate(tmplstr, "c_output_v52", self.du, datasettype="metric.output")
+        self.assertTemplate(tmplstr, "c_output_v52", self.du, component="output")
 
         tmplstr = "{component:?}_{visit}"
         self.assertTemplate(tmplstr, "_52", self.du)
         self.assertTemplate(tmplstr, "output_52", self.du, datasettype="metric.output")
+        self.assertTemplate(tmplstr, "maskedimage.variance_52", self.du,
+                            datasettype="calexp.maskedimage.variance")
+        self.assertTemplate(tmplstr, "output_52", self.du, component="output")
+
+        # Providing a component but not using it
+        tmplstr = "{datasettype}/v{visit:05d}"
+        with self.assertRaises(KeyError):
+            self.assertTemplate(tmplstr, "", self.du, datasettype="calexp", component="wcs")
+        with self.assertRaises(KeyError):
+            self.assertTemplate(tmplstr, "", self.du, datasettype="calexp.wcs")
 
 
 if __name__ == "__main__":
