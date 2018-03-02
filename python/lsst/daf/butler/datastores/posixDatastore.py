@@ -197,7 +197,7 @@ class PosixDatastore(Datastore):
             raise TypeError("Unable to determine file template from supplied type [{}]".format(typeName))
 
         location = self.locationFactory.fromPath(template.format(dataUnits,
-                                                                 datasettype=typeName))
+                                                                 datasetType=typeName))
 
         # Write a single component
         formatter = self.formatterFactory.getFormatter(storageClass, typeName)

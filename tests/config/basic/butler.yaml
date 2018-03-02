@@ -4,9 +4,9 @@ datastore:
   root: ./butler_test_repository
   create: true
   templates:
-    default: "{datasettype}/{tract:?}/{patch:?}/{filter:?}/{visit:?}"
-    calexp: "{datasettype}.{component:?}/{datasettype}_v{visit}_f{filter}_{component:?}"
-    metric: "{datasettype}.{component:?}/{datasettype}_v{visit:08d}_f{filter}_{component:?}"
+    default: "{datasetType}/{tract:?}/{patch:?}/{filter:?}/{visit:?}"
+    calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter}_{component:?}"
+    metric: "{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
   storageClasses:
     StructuredDataDictYaml:
       pytype: dict

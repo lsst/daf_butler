@@ -38,56 +38,56 @@ class TestFileTemplates(unittest.TestCase):
         self.assertEqual(path, answer)
 
     def testBasic(self):
-        tmplstr = "{datasettype}/{visit:05d}/{filter}"
+        tmplstr = "{datasetType}/{visit:05d}/{filter}"
         self.assertTemplate(tmplstr,
-                            tmplstr.format(datasettype="calexp", **self.du.units),
-                            self.du, datasettype="calexp")
+                            tmplstr.format(datasetType="calexp", **self.du.units),
+                            self.du, datasetType="calexp")
 
     def testOptional(self):
         """Optional units in templates."""
-        tmplstr = "{datasettype}/v{visit:05d}_f{filter:?}"
+        tmplstr = "{datasetType}/v{visit:05d}_f{filter:?}"
         self.assertTemplate(tmplstr, "calexp/v00052_fU",
-                            self.du, datasettype="calexp")
+                            self.du, datasetType="calexp")
 
         du = DataUnits({"visit": 48, "tract": 265})
         self.assertTemplate(tmplstr, "calexp/v00048",
-                            du, datasettype="calexp")
+                            du, datasetType="calexp")
 
         # Ensure that this returns a relative path even if the first field
         # is optional
-        tmplstr = "{datasettype:?}/{visit:?}/f{filter}"
+        tmplstr = "{datasetType:?}/{visit:?}/f{filter}"
         self.assertTemplate(tmplstr, "52/fU", self.du)
 
         # Ensure that // from optionals are converted to singles
-        tmplstr = "{datasettype}/{patch:?}/{tract:?}/f{filter}"
-        self.assertTemplate(tmplstr, "calexp/fU", self.du, datasettype="calexp")
+        tmplstr = "{datasetType}/{patch:?}/{tract:?}/f{filter}"
+        self.assertTemplate(tmplstr, "calexp/fU", self.du, datasetType="calexp")
 
         # Optionals with some text between fields
-        tmplstr = "{datasettype}/p{patch:?}_t{tract:?}/f{filter}"
-        self.assertTemplate(tmplstr, "calexp/p/fU", self.du, datasettype="calexp")
-        tmplstr = "{datasettype}/p{patch:?}_t{visit:04d?}/f{filter}"
-        self.assertTemplate(tmplstr, "calexp/p_t0052/fU", self.du, datasettype="calexp")
+        tmplstr = "{datasetType}/p{patch:?}_t{tract:?}/f{filter}"
+        self.assertTemplate(tmplstr, "calexp/p/fU", self.du, datasetType="calexp")
+        tmplstr = "{datasetType}/p{patch:?}_t{visit:04d?}/f{filter}"
+        self.assertTemplate(tmplstr, "calexp/p_t0052/fU", self.du, datasetType="calexp")
 
     def testComponent(self):
         """Test handling of components in templates."""
 
         tmplstr = "c_{component}_v{visit}"
-        self.assertTemplate(tmplstr, "c_output_v52", self.du, datasettype="metric.output")
+        self.assertTemplate(tmplstr, "c_output_v52", self.du, datasetType="metric.output")
         self.assertTemplate(tmplstr, "c_output_v52", self.du, component="output")
 
         tmplstr = "{component:?}_{visit}"
         self.assertTemplate(tmplstr, "_52", self.du)
-        self.assertTemplate(tmplstr, "output_52", self.du, datasettype="metric.output")
+        self.assertTemplate(tmplstr, "output_52", self.du, datasetType="metric.output")
         self.assertTemplate(tmplstr, "maskedimage.variance_52", self.du,
-                            datasettype="calexp.maskedimage.variance")
+                            datasetType="calexp.maskedimage.variance")
         self.assertTemplate(tmplstr, "output_52", self.du, component="output")
 
         # Providing a component but not using it
-        tmplstr = "{datasettype}/v{visit:05d}"
+        tmplstr = "{datasetType}/v{visit:05d}"
         with self.assertRaises(KeyError):
-            self.assertTemplate(tmplstr, "", self.du, datasettype="calexp", component="wcs")
+            self.assertTemplate(tmplstr, "", self.du, datasetType="calexp", component="wcs")
         with self.assertRaises(KeyError):
-            self.assertTemplate(tmplstr, "", self.du, datasettype="calexp.wcs")
+            self.assertTemplate(tmplstr, "", self.du, datasetType="calexp.wcs")
 
 
 if __name__ == "__main__":

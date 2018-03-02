@@ -38,7 +38,7 @@ class FileTemplate:
     The templates use the standard Format Specification Mini-Language
     with the caveat that only named fields can be used. The field names
     are taken from the DataUnits along with two additional fields:
-    "datasettype" will be replaced with the DataSetType and "component"
+    "datasetType" will be replaced with the DatasetType and "component"
     will be replaced with the component name of a composite.
 
     The mini-language is extended to understand a "?" in the format
@@ -50,19 +50,19 @@ class FileTemplate:
     def __init__(self, template):
         self.template = template
 
-    def format(self, dataunits, datasettype=None, component=None):
+    def format(self, dataUnits, datasetType=None, component=None):
         """Format a template string into a full path.
 
         Parameters
         ----------
-        dataunits : `DataUnits`
+        dataUnits : `DataUnits`
             DataUnits and the corresponding values.
-        datasettype : `str`, optional.
-            DataSetType name to use if needed. If it contains a "." separator
-            the type name will be split up into the main DataSetType and a
+        datasetType : `str`, optional.
+            DatasetType name to use if needed. If it contains a "." separator
+            the type name will be split up into the main DatasetType and a
             component.
         component : `str`, optional
-            Component of a composite. If `datasettype` defines a component
+            Component of a composite. If `datasetType` defines a component
             this parameter will be ignored.
 
         Returns
@@ -77,17 +77,17 @@ class FileTemplate:
             Or, `component` is specified but "component" was not part of
             the template.
         """
-        units = dataunits.definedUnits()
+        fields = dataUnits.definedUnits()
 
-        if datasettype is not None:
+        if datasetType is not None:
             # calexp.wcs means wcs component of a calexp
-            if "." in datasettype:
-                datasettype, component = datasettype.split(".", maxsplit=1)
-            units["datasettype"] = datasettype
+            if "." in datasetType:
+                datasetType, component = datasetType.split(".", maxsplit=1)
+            fields["datasetType"] = datasetType
 
         usedComponent = False
         if component is not None:
-            units["component"] = component
+            fields["component"] = component
 
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
@@ -105,8 +105,8 @@ class FileTemplate:
             else:
                 optional = False
 
-            if field_name in units:
-                value = units[field_name]
+            if field_name in fields:
+                value = fields[field_name]
             elif optional:
                 # If this is optional ignore the format spec
                 # and do not include the literal text prior to the optional
