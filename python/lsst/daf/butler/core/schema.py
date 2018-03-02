@@ -143,6 +143,6 @@ class Schema:
                 - src, list of source column names
                 - tgt, list of target column names
         """
-        src = iterable(constraintDescription["src"])
-        tgt = iterable(constraintDescription["tgt"])
+        src = tuple(iterable(constraintDescription["src"]))
+        tgt = tuple(iterable(constraintDescription["tgt"]))
         return ForeignKeyConstraint(src, tgt)
