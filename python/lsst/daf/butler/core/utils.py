@@ -20,6 +20,23 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+def iterable(a):
+    """Make input iterable.
+
+    There are three cases, when the input is:
+    - iterable, but not a string -> iterate over elements (e.g. [i for i in a])
+    - a string -> return single element iterable (e.g. [a])
+    - not iterable -> return single elment iterable (e.g. [a]).
+    """
+    if isinstance(a, str):
+        yield a
+        return
+    try:
+        yield from a
+    except Exception:
+        yield a
+
+
 def allSlots(self):
     """
     Return combined __slots__ for all classes in objects mro.

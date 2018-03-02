@@ -24,6 +24,7 @@ import unittest
 import lsst.daf.butler.ci_hsc
 
 
+@unittest.skip("Does not use up-to-date schema")
 class TestDataTestCase(unittest.TestCase):
     """A test case for the ci_hsc Registry test data."""
 

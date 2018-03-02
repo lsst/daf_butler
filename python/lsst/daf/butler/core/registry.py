@@ -32,21 +32,40 @@ class RegistryConfig(Config):
 
 class Registry(metaclass=ABCMeta):
     """Registry interface.
+
+    Parameters
+    ----------
+    config : `RegistryConfig`
     """
     @staticmethod
     def fromConfig(config):
-        cls = doImport(config['registry.cls'])
-        return cls(config=config)
+        """Create `Registry` subclass instance from `config`.
 
-    def __init__(self, config):
-        """Constructor
+        Uses ``registry.cls`` from `config` to determine which subclass to instantiate.
 
         Parameters
         ----------
-        config : `RegistryConfig` or `str`
-            Load configuration
+        config : `RegistryConfig`, `Config` or `str`
+            Registry configuration
+
+        Returns
+        -------
+        registry : `Registry` (subclass)
+            A new `Registry` subclass instance.
         """
-        self.config = RegistryConfig(config)['registry']
+        if not isinstance(config, RegistryConfig):
+            if isinstance(config, str):
+                config = Config(config)
+            if isinstance(config, Config):
+                config = RegistryConfig(config['registry'])
+            else:
+                raise ValueError("Incompatible Registry configuration: {}".format(config))
+        cls = doImport(config['cls'])
+        return cls(config=config)
+
+    def __init__(self, config):
+        assert isinstance(config, RegistryConfig)
+        self.config = config
 
     @abstractmethod
     def registerDatasetType(self, datasetType):
