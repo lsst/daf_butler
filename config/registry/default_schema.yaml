@@ -330,6 +330,12 @@ dataUnits:
           doc: >
             The bandpass filter used for all exposures in this Visit.
         -
+          name: physical_filter
+          type: string
+          nullable: false
+          doc: >
+            The bandpass filter used for all exposures in this Visit.
+        -
           name: snap
           type: int
           doc: >
