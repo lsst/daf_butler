@@ -24,6 +24,61 @@
 import os.path
 import string
 
+from .config import Config
+
+
+class FileTemplatesConfig(Config):
+    pass
+
+
+class FileTemplates:
+    """Collection of `FileTemplate` templates.
+
+    Parameters
+    ----------
+    config : `FileTemplatesConfig` or `str`
+        Load configuration.
+    """
+    def __init__(self, config, default=None):
+        self.config = FileTemplatesConfig(config)
+        self.templates = {}
+        for name, info in self.config.items():
+            self.templates[name] = FileTemplate(info)
+
+    def getTemplate(self, datasetType):
+        """Retrieve the `FileTemplate` associated with the dataset type.
+
+        Parameters
+        ----------
+        datasetType : `str`
+            Dataset type.
+
+        Returns
+        -------
+        template : `FileTemplate`
+            Template instance to use with that dataset type.
+        """
+        # Get a location from the templates
+        template = None
+        component = None
+        if datasetType is not None:
+            if datasetType in self.templates:
+                template = self.templates[datasetType]
+            elif "." in datasetType:
+                baseType, component = datasetType.split(".", maxsplit=1)
+                if baseType in self.templates:
+                    template = self.templates[baseType]
+
+        if template is None:
+            if "default" in self.templates:
+                template = self.templates["default"]
+
+        # if still not template give up for now.
+        if template is None:
+            raise TypeError("Unable to determine file template from supplied type [{}]".format(datasetType))
+
+        return template
+
 
 class FileTemplate:
     """Format a path template into a fully expanded path.

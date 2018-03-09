@@ -28,7 +28,7 @@ from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
 from lsst.daf.butler.core.storageClass import StorageClassFactory, makeNewStorageClass
-from lsst.daf.butler.core.fileTemplates import FileTemplate
+from lsst.daf.butler.core.fileTemplates import FileTemplates
 
 
 class PosixDatastore(Datastore):
@@ -82,11 +82,8 @@ class PosixDatastore(Datastore):
             if "formatter" in info:
                 self.formatterFactory.registerFormatter(name, info["formatter"])
 
-        # Read the file naming templates and store them in the datastore
-        # indexed by datatype name
-        self.templates = {}
-        for name, info in self.config["templates"].items():
-            self.templates[name] = FileTemplate(info)
+        # Read the file naming templates
+        self.templates = FileTemplates(self.config["templates"])
 
     def get(self, uri, storageClass, parameters=None):
         """Load an `InMemoryDataset` from the store.
@@ -177,25 +174,7 @@ class PosixDatastore(Datastore):
                                                  dataUnits, compTypeName)
                 return None, compUris
 
-        # Get a location from the templates
-        template = None
-        component = None
-        if typeName is not None:
-            if typeName in self.templates:
-                template = self.templates[typeName]
-            elif "." in typeName:
-                baseType, component = typeName.split(".", maxsplit=1)
-                if baseType in self.templates:
-                    template = self.templates[baseType]
-
-        if template is None:
-            if "default" in self.templates:
-                template = self.templates["default"]
-
-        # if still not template give up for now.
-        if template is None:
-            raise TypeError("Unable to determine file template from supplied type [{}]".format(typeName))
-
+        template = self.templates.getTemplate(typeName)
         location = self.locationFactory.fromPath(template.format(dataUnits,
                                                                  datasetType=typeName))
 
