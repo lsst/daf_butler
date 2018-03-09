@@ -25,6 +25,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from lsst.daf.butler.core.dataUnits import DataUnits
 from examplePythonTypes import MetricsExample
 
 
@@ -62,10 +63,13 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
                                      "StructuredDataJson",
                                      "StructuredDataPickle")]
 
+        dataUnits = DataUnits({"visit": 52, "filter": "V"})
+
         for sc in storageClasses:
             print("Using storageClass: {}".format(sc.name))
-            uri, comps = datastore.put(metrics, storageClass=sc, storageHint="tester_monolith.xxx",
-                                       typeName=None)
+            uri, comps = datastore.put(metrics, storageClass=sc,
+                                       dataUnits=dataUnits,
+                                       typeName="metric")
 
             # Get
             metricsOut = datastore.get(uri, storageClass=sc, parameters=None)
@@ -99,6 +103,8 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         metrics = makeExampleMetrics()
         datastore = PosixDatastore(config=self.configFile)
 
+        dataUnits = DataUnits({"visit": 428, "filter": "R"})
+
         # Create multiple storage classes for testing different formulations
         # of composites
         storageClasses = [datastore.storageClassFactory.getStorageClass(sc)
@@ -108,8 +114,9 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
 
         for sc in storageClasses:
             print("Using storageClass: {}".format(sc.name))
-            uri, comps = datastore.put(metrics, storageClass=sc, storageHint="testerc.json",
-                                       typeName=None)
+            uri, comps = datastore.put(metrics, storageClass=sc,
+                                       dataUnits=dataUnits,
+                                       typeName="metric")
             self.assertIsNone(uri)
 
             # Read all the components into a dict
@@ -125,8 +132,10 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         metrics = makeExampleMetrics()
         datastore = PosixDatastore(config=self.configFile)
         # Put
+        dataUnits = DataUnits({"visit": 638, "filter": "U"})
         storageClass = datastore.storageClassFactory.getStorageClass("StructuredData")
-        uri, _ = datastore.put(metrics, storageClass=storageClass, storageHint="tester.json", typeName=None)
+        uri, _ = datastore.put(metrics, storageClass=storageClass,
+                               dataUnits=dataUnits, typeName="metric")
         # Get
         metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
         self.assertEqualMetrics(metrics, metricsOut)
@@ -141,7 +150,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
 
     def testTransfer(self):
         metrics = makeExampleMetrics()
-        path = "tester.json"
+        dataUnits = DataUnits({"visit": 2048, "filter": "Uprime"})
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
         inputPosixDatastore = PosixDatastore(config=inputConfig)
@@ -149,8 +158,9 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig)
         storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("StructuredData")
-        inputUri, _ = inputPosixDatastore.put(metrics, storageClass, path)
-        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri, storageClass, path)
+        inputUri, _ = inputPosixDatastore.put(metrics, storageClass, dataUnits, "metric")
+        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri,
+                                                     storageClass, dataUnits, "metric")
         metricsOut = outputPosixDatastore.get(outputUri, storageClass)
         self.assertEqualMetrics(metrics, metricsOut)
 

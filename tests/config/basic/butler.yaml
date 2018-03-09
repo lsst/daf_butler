@@ -3,6 +3,10 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: ./butler_test_repository
   create: true
+  templates:
+    default: "{datasetType}/{tract:?}/{patch:?}/{filter:?}/{visit:?}"
+    calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter}_{component:?}"
+    metric: "{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
   storageClasses:
     StructuredDataDictYaml:
       pytype: dict
@@ -64,7 +68,7 @@ datastore:
       pytype: lsst.afw.table.io.persistable.Persistable
       formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableWcs:
-      pytype: lsst.afw.image.wcs.wcs.Wcs
+      pytype: lsst.afw.geom.skyWcs.skyWcs.SkyWcs
       formatter: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistablePsf:
       pytype: lsst.afw.detection.Psf
