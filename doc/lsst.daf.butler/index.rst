@@ -4,7 +4,7 @@
 lsst.daf.butler
 ###############
 
-.. Paragraph that describes what this Python module does and links to related modules and frameworks.
+This module provides an abstracted data access interface.
 
 .. Add subsections with toctree to individual topic pages.
 
@@ -12,8 +12,27 @@ Python API reference
 ====================
 
 .. automodapi:: lsst.daf.butler
-.. automodapi:: lsst.daf.butler.core
-.. automodapi:: lsst.daf.butler.ci_hsc
-.. automodapi:: lsst.daf.butler.datastores
-.. automodapi:: lsst.daf.butler.formatters
-.. automodapi:: lsst.daf.butler.registries
+
+Example Datastores
+==================
+
+.. automodapi:: lsst.daf.butler.datastores.posixDatastore
+
+Example Registries
+==================
+
+.. automodapi:: lsst.daf.butler.registries.sqlRegistry
+
+Example Formatters
+==================
+
+.. automodapi:: lsst.daf.butler.formatters.fileFormatter
+.. automodapi:: lsst.daf.butler.formatters.jsonFormatter
+.. automodapi:: lsst.daf.butler.formatters.yamlFormatter
+.. automodapi:: lsst.daf.butler.formatters.pickleFormatter
+
+Support API
+===========
+
+.. automodapi:: lsst.daf.butler.core.safeFileIo
+.. automodapi:: lsst.daf.butler.core.utils

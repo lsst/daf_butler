@@ -24,6 +24,8 @@ import json
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
+__all__ = ("JsonFormatter", )
+
 
 class JsonFormatter(FileFormatter):
     """Interface for reading and writing Python objects to and from JSON files.

@@ -27,12 +27,12 @@ class FileDescriptor(object):
     ----------
     location : `Location`
         Storage location.
-    type : `cls`
+    pytype : `type`, optional
         Type the object will have after reading in Python (typically
         `StorageClass.pytype` but can be overridden).
-    storageClass : `StorageClass`
+    storageClass : `StorageClass`, optional
         `StorageClass` associated with this file.
-    parameters : `dict`
+    parameters : `dict`, optional
         Additional parameters that can be used for reading and writing.
     """
 

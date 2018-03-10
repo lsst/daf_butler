@@ -25,6 +25,8 @@ from lsst.daf.butler.core.utils import doImport
 
 from .config import Config
 
+__all__ = ("RegistryConfig", "Registry")
+
 
 class RegistryConfig(Config):
     pass
@@ -37,6 +39,7 @@ class Registry(metaclass=ABCMeta):
     ----------
     config : `RegistryConfig`
     """
+
     @staticmethod
     def fromConfig(config):
         """Create `Registry` subclass instance from `config`.
@@ -70,11 +73,11 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def registerDatasetType(self, datasetType):
         """
-        Add a new :ref:`DatasetType` to the Registry.
+        Add a new `DatasetType` to the `Registry`.
 
         Parameters
         ----------
-        datasetType: `DatasetType`
+        datasetType : `DatasetType`
             The `DatasetType` to be added.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -85,12 +88,12 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        name: `str`
+        name : `str`
             Name of the type.
 
         Returns
         -------
-        datasetType: `DatasetType`
+        datasetType : `DatasetType`
             The `DatasetType` associated with the given name.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -104,31 +107,31 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             Identifies the `Dataset` and contains its `DatasetType`.
-        uri: `str`
+        uri : `str`
             The URI that has been associated with the `Dataset` by a
             `Datastore`.
-        components: `dict`
+        components : `dict`
             If the `Dataset` is a composite, a ``{name : URI}`` dictionary of
             its named components and storage locations.
-        run: `Run`
+        run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
             A Run must be provided by one of the two arguments.
-        producer: `Quantum`
+        producer : `Quantum`
             Unit of work that produced the Dataset.  May be ``None`` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.
 
         Returns
         -------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             A newly-created `DatasetRef` instance.
 
         Raises
         ------
-        e: `Exception`
+        Exception
             If a `Dataset` with the given `DatasetRef` already exists in the
             given Collection.
         """
@@ -136,14 +139,14 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     def associate(self, collection, refs):
-        """Add existing `Dataset`s to a Collection, possibly creating the
+        """Add existing `Dataset`\ s to a Collection, possibly creating the
         Collection in the process.
 
         Parameters
         ----------
-        collection: `str`
-            Indicates the Collection the `Dataset`s should be associated with.
-        refs: `[DatasetRef]`
+        collection : `str`
+            Indicates the Collection the `Dataset`\ s should be associated with.
+        refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
         """
@@ -151,26 +154,27 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     def disassociate(self, collection, refs, remove=True):
-        """Remove existing `Dataset`s from a Collection.
+        """Remove existing `Dataset`\ s from a Collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
 
         Parameters
         ----------
-        collection: `str`
-            The Collection the `Dataset`s should no longer be associated with.
-        refs: `[DatasetRef]`
+        collection : `str`
+            The Collection the `Dataset`\ s should no longer be associated
+            with.
+        refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
-        remove: `bool`
-            If `True`, remove `Dataset`s from the `Registry` if they are not
+        remove : `bool`
+            If `True`, remove `Dataset`\s from the `Registry` if they are not
             associated with any Collection (including via any composites).
 
         Returns
         -------
-        removed: `[DatasetRef]`
-            If `remove` is `True`, the `list` of `DatasetRef`s that were
+        removed : `list` of `DatasetRef`
+            If `remove` is `True`, the `list` of `DatasetRef`\ s that were
             removed.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -181,13 +185,13 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        collection: `str`
+        collection : `str`
             The Collection collection used to identify all inputs and outputs
             of the `Run`.
 
         Returns
         -------
-        run: `Run`
+        run : `Run`
             A new `Run` instance.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -200,7 +204,7 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        run: `Run`
+        run : `Run`
             The `Run` to update with the new values filled in.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -208,7 +212,7 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def getRun(self, collection=None, id=None):
         """
-        Get a :ref:`Run` corresponding to it's collection or id
+        Get a `Run` corresponding to its collection or id
 
         Parameters
         ----------
@@ -225,13 +229,14 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        quantum: `Quantum`
+        quantum : `Quantum`
             Instance to add to the `Registry`.
             The given `Quantum` must not already be present in the `Registry`
             (or any other), therefore its:
+
             - `pkey` attribute must be `None`.
-            - `predictedInputs` attribute must be fully populated with
-               `DatasetRef`s, and its.
+            - `Quantum.predictedInputs` attribute must be fully populated with
+              `DatasetRef`\ s, and its.
             - `actualInputs` and `outputs` will be ignored.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -241,19 +246,20 @@ class Registry(metaclass=ABCMeta):
         """Record the given `DatasetRef` as an actual (not just predicted)
         input of the given `Quantum`.
 
-        This updates both the `Registry`'s `Quantum` table and the Python `Quantum.actualInputs` attribute.
+        This updates both the `Registry`'s `Quantum` table and the Python
+        `Quantum.actualInputs` attribute.
 
         Parameters
         ----------
-        quantum: `Quantum`
+        quantum : `Quantum`
             Producer to update.
             Will be updated in this call.
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             To set as actually used input.
 
         Raises
         ------
-        e: `Exception`
+        Exception
             If `ref` is not already in the predicted inputs list.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -263,9 +269,9 @@ class Registry(metaclass=ABCMeta):
         """Add a new `DataUnit`, optionally replacing an existing one
         (for updates).
 
-        unit: `DataUnit`
+        unit : `DataUnit`
             The `DataUnit` to add or replace.
-        replace: `bool`
+        replace : `bool`
             If `True`, replace any matching `DataUnit` that already exists
             (updating its non-unique fields) instead of raising an exception.
         """
@@ -277,14 +283,14 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        cls: `type`
+        cls : `type`
             A class that inherits from `DataUnit`.
-        values: `dict`
+        values : `dict`
             A dictionary of values that uniquely identify the `DataUnit`.
 
         Returns
         -------
-        unit: `DataUnit`
+        unit : `DataUnit`
             Instance of type `cls`, or `None` if no matching unit is found.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -295,12 +301,12 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             The `DatasetRef` to expand.
 
         Returns
         -------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             The expanded reference.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -315,14 +321,14 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        collection: `str`
+        collection : `str`
             Identifies the Collection to search.
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             Identifies the `Dataset`.
 
         Returns
         -------
-        ref: `DatasetRef`
+        ref : `DatasetRef`
             A ref to the `Dataset`, or `None` if no matching `Dataset`
             was found.
         """
@@ -334,18 +340,18 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        collection: `str`
+        collection : `str`
             Indicates the input Collection to subset.
-        expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly)
-            `Dataset`s in the subset.
-        datasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances should be included
+        expr : `str`
+            An expression that limits the `DataUnit`\ s and (indirectly)
+            `Dataset`\ s in the subset.
+        datasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances should be included
             in the subset.
 
         Returns
         -------
-        collection: `str`
+        collection : `str`
             The newly created collection.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -356,41 +362,41 @@ class Registry(metaclass=ABCMeta):
 
         Entries earlier in the list will be used in preference to later
         entries when both contain
-        `Dataset`s with the same `DatasetRef`.
+        `Dataset`\ s with the same `DatasetRef`.
 
         Parameters
         ----------
-        outputCollection: `str`
+        outputCollection : `str`
             collection to use for the new Collection.
-        inputCollections: `[str]`
+        inputCollections : `list` or `str`
             A `list` of Collections to combine.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
     def makeDataGraph(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
-        """Evaluate a filter expression and lists of `DatasetType`s and
+        """Evaluate a filter expression and lists of `DatasetType`\ s and
         return a `QuantumGraph`.
 
         Parameters
         ----------
-        collections: `[str]`
+        collections : `list` of `str`
             An ordered `list` of collections indicating the Collections to
-            search for `Dataset`s.
-        expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly) the
-            `Dataset`s returned.
-        neededDatasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances should be included
+            search for `Dataset`\ s.
+        expr : `str`
+            An expression that limits the `DataUnit`\ s and (indirectly) the
+            `Dataset`\ s returned.
+        neededDatasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances should be included
             in the graph and limit its extent.
-        futureDatasetTypes: `[DatasetType]`
-            The `list` of `DatasetType`s whose instances may be added to the
+        futureDatasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances may be added to the
             graph later, which requires that their `DataUnit` types must be
             present in the graph.
 
         Returns
         -------
-        graph: `QuantumGraph`
+        graph : `QuantumGraph`
             A `QuantumGraph` instance with a `QuantumGraph.units` attribute
             that is not `None`.
         """
@@ -399,39 +405,39 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def makeProvenanceGraph(self, expr, types=None):
         """Make a `QuantumGraph` that contains the full provenance of all
-        `Dataset`s matching an expression.
+        `Dataset`\ s matching an expression.
 
         Parameters
         ----------
-        expr: `str`
+        expr : `str`
             An expression (SQL query that evaluates to a list of `Dataset`
-            primary keys) that selects the `Dataset`s.
+            primary keys) that selects the `Dataset`\ s.
 
         Returns
         -------
-        graph: `QuantumGraph`
-            Instance (with `units` set to `None`).
+        graph : `QuantumGraph`
+            Instance (with `QuantumGraph.units` set to `None`).
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
     def export(self, expr):
         """Export contents of the `Registry`, limited to those reachable from
-        the `Dataset`s identified by the expression `expr`, into a `TableSet`
+        the `Dataset`\ s identified by the expression `expr`, into a `TableSet`
         format such that it can be imported into a different database.
 
         Parameters
         ----------
-        expr: `str`
+        expr : `str`
             An expression (SQL query that evaluates to a list of `Dataset`
-            primary keys) that selects the `Datasets, or a `QuantumGraph`
+            primary keys) that selects the `Dataset`\ s, or a `QuantumGraph`
             that can be similarly interpreted.
 
         Returns
         -------
-        ts: `TableSet`
+        ts : `TableSet`
             Containing all rows, from all tables in the `Registry` that
-            are reachable from the selected `Dataset`s.
+            are reachable from the selected `Dataset`\ s.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -442,29 +448,29 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        ts: `TableSet`
+        ts : `TableSet`
             Contains the previously exported content.
-        collection: `str`
+        collection : `str`
             An additional Collection collection assigned to the newly
-            imported `Dataset`s.
+            imported `Dataset`\ s.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
     def transfer(self, src, expr, collection):
         """Transfer contents from a source `Registry`, limited to those
-        reachable from the `Dataset`s identified by the expression `expr`,
+        reachable from the `Dataset`\ s identified by the expression `expr`,
         into this `Registry` and collection them with a Collection.
 
         Parameters
         ----------
-        src: `Registry`
+        src : `Registry`
             The source `Registry`.
-        expr: `str`
-            An expression that limits the `DataUnit`s and (indirectly)
-            the `Dataset`s transferred.
-        collection: `str`
+        expr : `str`
+            An expression that limits the `DataUnit`\ s and (indirectly)
+            the `Dataset`\ s transferred.
+        collection : `str`
             An additional Collection collection assigned to the newly
-            imported `Dataset`s.
+            imported `Dataset`\ s.
         """
         self.import_(src.export(expr), collection)

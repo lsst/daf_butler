@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Configuration control."""
+
 import collections
 import copy
 import yaml
@@ -26,6 +28,8 @@ import pprint
 
 from yaml.representer import Representer
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
+
+__all__ = ("Config",)
 
 
 # UserDict and yaml have defined metaclasses and Python 3 does not allow multiple
@@ -42,29 +46,35 @@ class _ConfigBase(collections.UserDict, yaml.YAMLObject, metaclass=_ConfigMeta):
 
 
 class Config(_ConfigBase):
-    """Config implements a datatype that is used by Butler for configuration parameters.
-    It is essentially a dict with key/value pairs, including nested dicts (as values). In fact, it can be
-    initialized with a dict. The only caveat is that keys may NOT contain dots ('.'). This is explained next:
-    Config extends the dict api so that hierarchical values may be accessed with dot-delimited notation.
-    That is, foo.getValue('a.b.c') is the same as foo['a']['b']['c'] is the same as foo['a.b.c'], and either
+    """Implements a datatype that is used by `Butler` for configuration
+    parameters.
+
+    It is essentially a `dict` with key/value pairs, including nested dicts
+    (as values). In fact, it can be initialized with a `dict`. The only caveat
+    is that keys may **not** contain dots (``.``). This is explained next:
+
+    Config extends the `dict` api so that hierarchical values may be accessed
+    with dot-delimited notation. That is, ``foo.getValue('a.b.c')`` is the
+    same as ``foo['a']['b']['c']`` is the same as ``foo['a.b.c']``, and either
     of these syntaxes may be used.
 
     Storage formats supported:
+
     - yaml: read and write is supported.
+
+
+    Parameters
+    ----------
+    other : `str` or `Config` or `dict`
+        Other source of configuration, can be:
+
+        - (`str`) Treated as a path to a config file on disk. Must end with '.yaml'.
+        - (`Config`) Copies the other Config's values into this one.
+        - (`dict`) Copies the values from the dict into this Config.
     """
 
     def __init__(self, other=None):
-        """Initialize the Config. Other can be used to initialize the Config in a variety of ways.
 
-        Parameters
-        ----------
-        other: `str` or `Config` or `dict`
-            Other source of configuration, can be:
-
-            - (`str`) Treated as a path to a config file on disk. Must end with '.yaml'.
-            - (`Config`) Copies the other Config's values into this one.
-            - (`dict`) Copies the values from the dict into this Config.
-        """
         collections.UserDict.__init__(self)
 
         if other is None:
@@ -88,7 +98,7 @@ class Config(_ConfigBase):
 
         Returns
         -------
-        s: `str`
+        s : `str`
             A prettyprint formatted string representing the config
         """
         return pprint.pformat(self.data, indent=2, width=1)
@@ -101,7 +111,7 @@ class Config(_ConfigBase):
 
         Parameters
         ----------
-        path: `str`
+        path : `str`
             To a persisted config file.
         """
         if path.endswith('yaml'):
@@ -114,7 +124,7 @@ class Config(_ConfigBase):
 
         Parameters
         ----------
-        path: `str`
+        path : `str`
             To a persisted config file in YAML format.
         """
         with open(path, 'r') as f:
@@ -130,7 +140,7 @@ class Config(_ConfigBase):
 
         Raises
         ------
-        e: `yaml.YAMLError`
+        yaml.YAMLError
             If there is an error loading the file.
         """
         self.data = yaml.safe_load(stream)
@@ -186,7 +196,7 @@ class Config(_ConfigBase):
 
         Parameters
         ----------
-        other: `dict` or `Config`
+        other : `dict` or `Config`
             Source of configuration:
 
             - If foo is a dict, then after the update foo == {'a': {'c': 2}}
@@ -211,7 +221,7 @@ class Config(_ConfigBase):
 
         Parameters
         ----------
-        other: `dict` or `Config`
+        other : `dict` or `Config`
             Source of configuration:
         """
         otherCopy = copy.deepcopy(other)
@@ -242,7 +252,7 @@ class Config(_ConfigBase):
 
         Parameters
         ----------
-        name: `str`
+        name : `str`
             Key
         """
         val = self.get(name)
@@ -313,7 +323,7 @@ class Config(_ConfigBase):
 
         Parameters
         ----------
-        path: `str`
+        path : `str`
             Path to the file to use for output.
         """
         with open(path, 'w') as f:

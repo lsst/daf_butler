@@ -21,6 +21,8 @@
 
 from lsst.daf.butler.core.utils import doImport
 
+__all__ = ("MappingFactory", )
+
 
 class MappingFactory:
     """
@@ -61,7 +63,7 @@ class MappingFactory:
 
         Raises
         ------
-        e : KeyError
+        KeyError
             None of the supplied target classes match an item in the registry.
         """
         attempts = []
@@ -93,7 +95,7 @@ class MappingFactory:
 
         Raises
         ------
-        e : `ValueError`
+        ValueError
             If instance of class is not of the expected type.
         """
         if not self._isValidStr(typeName):

@@ -22,21 +22,26 @@
 import lsst.sphgeom
 import lsst.afw.geom
 
+__all__ = ("makeBoxWcsRegion", )
+
 
 def makeBoxWcsRegion(box, wcs, margin):
     """Construct a spherical ConvexPolygon from a WCS and a bounding box.
 
-    Parameters:
-    -----------
-    box : afw.geom.Box2I or afw.geom.Box2D
+    Parameters
+    ----------
+    box : lsst.afw.geom.Box2I or lsst.afw.geom.Box2D
         A box in the pixel coordinate system defined by the WCS.
-    wcs : afw.image.Wcs
+    wcs : lsst.afw.image.Wcs
         A mapping from a pixel coordinate system to the sky.
     margin : float
         A buffer in pixels to grow the box by (in all directions) before
         transforming it to sky coordinates.
 
-    Returns a sphgeom.ConvexPolygon.
+    Returns
+    -------
+    polygon : `lsst.sphgeom.ConvexPolygon`
+        A convex polygon.
     """
     box = lsst.afw.geom.Box2D(box)
     box.grow(margin)

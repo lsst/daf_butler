@@ -23,14 +23,11 @@ import os
 import os.path
 import urllib
 
+__all__ = ("Location", "LocationFactory")
+
 
 class Location(object):
     """Identifies a location in the `Datastore`.
-
-    Attributes
-    ----------
-    uri
-    path
     """
 
     __slots__ = ("_datastoreRoot", "_uri")

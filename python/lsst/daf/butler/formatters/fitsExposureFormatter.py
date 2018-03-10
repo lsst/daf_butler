@@ -23,6 +23,8 @@ import os.path
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
+__all__ = ("FitsExposureFormatter", )
+
 
 class FitsExposureFormatter(FileFormatter):
     """Interface for reading and writing Exposures to and from FITS files.

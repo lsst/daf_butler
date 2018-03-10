@@ -19,13 +19,27 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Quantum",)
 
-class Quantum(object):
-    """A discrete unit of work that may depend on one or more Datasets and produces one or more `Dataset`s.
 
-    Most Quanta will be executions of a particular `SuperTask`’s `runQuantum` method,
-    but they can also be used to represent discrete units of work performed manually
-    by human operators or other software agents.
+class Quantum:
+    """A discrete unit of work that may depend on one or more Datasets and
+    produces one or more `Dataset`\ s.
+
+    Most Quanta will be executions of a particular `SuperTask`’s `runQuantum`
+    method, but they can also be used to represent discrete units of work
+    performed manually by human operators or other software agents.
+
+    Parameters
+    ----------
+    run : `Run`
+        Run this quantum is part of.
+    task : `SuperTask` or `str`, optional
+        Associated task information.
+    quantumId : ??, optional
+        ???
+    registryId : ??, optional
+        ???
     """
 
     __slots__ = ("_quantumId", "_registryId", "_run", "_task", "_predictedInputs", "_actualInputs")
@@ -37,17 +51,14 @@ class Quantum(object):
         """Generate a new Quantum ID number.
 
         ..todo::
-            This is a temporary workaround that will probably disapear in the future,
-            when a solution is found to the problem of autoincrement compound primary keys in SQLite.
+            This is a temporary workaround that will probably disapear in the
+            future, when a solution is found to the problem of autoincrement
+            compound primary keys in SQLite.
         """
         cls._currentId += 1
         return cls._currentId
 
     def __init__(self, run, task=None, quantumId=None, registryId=None):
-        """Constructor.
-
-        Parameters correspond directly to attributes.
-        """
         self._quantumId = quantumId
         self._registryId = registryId
         self._run = run
@@ -57,7 +68,9 @@ class Quantum(object):
 
     @property
     def pkey(self):
-        """The `(quantum_id, registry_id)` `tuple` used to uniquely identify this `Run`,
+        """Primary keys used to uniquely identify this `Run`.
+
+        Represented as a `tuple` of ``(quantum_id, registry_id)``,
         or `None` if it has not yet been inserted into a `Registry`.
         """
         if self._quantumId is not None and self._registryId is not None:
@@ -67,10 +80,12 @@ class Quantum(object):
 
     @property
     def quantumId(self):
+        """Quantum identifier."""
         return self._quantumId
 
     @property
     def registryId(self):
+        """Registry identifier."""
         return self._registryId
 
     @property
@@ -81,7 +96,9 @@ class Quantum(object):
 
     @property
     def task(self):
-        """If the `Quantum` is associated with a `SuperTask`, this is the
+        """Task associated with this `Quantum`.
+
+        If the `Quantum` is associated with a `SuperTask`, this is the
         `SuperTask` instance that produced and should execute this set of
         inputs and outputs. If not, a human-readable string identifier
         for the operation. Some Registries may permit the value to be
@@ -91,20 +108,20 @@ class Quantum(object):
 
     @property
     def predictedInputs(self):
-        """A dictionary of input datasets that were expected to be used,
+        """A `dict` of input datasets that were expected to be used,
         with `DatasetType` names as keys and a set of `DatasetRef` instances
         as values.
 
         Input `Datasets` that have already been stored may be
-        `DatasetRef`s, and in many contexts may be guaranteed to be.
-        Read-only; update via `addPredictedInput()`.
+        `DatasetRef`\s, and in many contexts may be guaranteed to be.
+        Read-only; update via `Quantum.addPredictedInput()`.
         """
         return self._predictedInputs
 
     @property
     def actualInputs(self):
         """A `dict` of input datasets that were actually used, with the same
-        form as `predictedInputs`.
+        form as `Quantum.predictedInputs`.
 
         All returned sets must be subsets of those in `predictedInputs`.
 

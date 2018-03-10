@@ -21,6 +21,8 @@
 
 """Code relating to DataUnits."""
 
+__all__ = ("DataUnits",)
+
 
 class DataUnits:
     """Represent DataUnits specification.

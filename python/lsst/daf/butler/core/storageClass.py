@@ -28,6 +28,8 @@ from lsst.daf.butler.core.composites import CompositeAssembler
 
 from .mappingFactory import MappingFactory
 
+__all__ = ("StorageClass", "StorageClassFactory")
+
 
 class StorageClass:
     """Class describing how a label maps to a particular Python type.
@@ -155,8 +157,8 @@ class StorageClassFactory:
     def getStorageClass(self, storageClassName):
         """Get a StorageClass instance associated with the supplied name.
 
-        Parameter
-        ---------
+        Parameters
+        ----------
         storageClassName : `str`
             Name of the storage class to retrieve.
 
@@ -175,12 +177,12 @@ class StorageClassFactory:
 
         Parameters
         ----------
-        storageClass: `StorageClass`
+        storageClass : `StorageClass`
             Type of the Python `StorageClass` to register.
 
         Raises
         ------
-        e : `KeyError`
+        KeyError
             If a storage class has already been registered with
             storageClassName.
         """
