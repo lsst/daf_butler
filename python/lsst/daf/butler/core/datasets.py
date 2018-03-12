@@ -23,6 +23,8 @@ from types import MappingProxyType
 from .utils import slotValuesAreEqual, slotValuesToHash
 from .units import DataUnitSet
 
+__all__ = ("DatasetType", "DatasetRef")
+
 
 def _safeMakeMappingProxyType(data):
     if data is None:
@@ -34,12 +36,14 @@ class DatasetType(object):
     """A named category of Datasets that defines how they are organized,
     related, and stored.
 
-    A concrete, final class whose instances represent `DatasetType`s.
+    A concrete, final class whose instances represent `DatasetType`\ s.
     `DatasetType` instances may be constructed without a `Registry`,
     but they must be registered
-    via `Registry.registerDatasetType()` before corresponding `Datasets`
+    via `Registry.registerDatasetType()` before corresponding `Dataset`\ s
     may be added.
     `DatasetType` instances are immutable.
+
+    All arguments correspond directly to instance attributes.
     """
 
     __slots__ = ("_name", "_template", "_units", "_storageClass")
@@ -55,7 +59,7 @@ class DatasetType(object):
 
     @property
     def template(self):
-        """A string with `str.format`-style replacement patterns that can be
+        """A string with `str`.format-style replacement patterns that can be
         used to create a path from a `Run`
         (and optionally its associated Collection) and a `DatasetRef`.
 
@@ -66,7 +70,7 @@ class DatasetType(object):
 
     @property
     def units(self):
-        """A `DataUnitSet` that defines the `DatasetRef`s corresponding
+        """A `DataUnitSet` that defines the `DatasetRef`\ s corresponding
         to this `DatasetType`.
         """
         return self._units
@@ -78,10 +82,6 @@ class DatasetType(object):
         return self._storageClass
 
     def __init__(self, name, template, units, storageClass):
-        """Constructor.
-
-        All arguments correspond directly to instance attributes.
-        """
         self._name = name
         self._template = template
         self._units = DataUnitSet(units)
@@ -91,8 +91,16 @@ class DatasetType(object):
 class DatasetRef(object):
     """Reference to a `Dataset` in a `Registry`.
 
-    A `DatasetRef` may point to a `Dataset`s that currently does not yet exist
-    (e.g. because it is a predicted input for provenance).
+    A `DatasetRef` may point to a `Dataset` that currently does not yet exist
+    (e.g., because it is a predicted input for provenance).
+
+    Parameters
+    ----------
+    datasetType : `DatasetType`
+        The `DatasetType` for this `Dataset`.
+    units : `dict`
+        Dictionary where the keys are `DataUnit` names and the values are
+        `DataUnit` instances.
     """
 
     __slots__ = ("_type", "_producer", "_predictedConsumers", "_actualConsumers")
@@ -111,17 +119,6 @@ class DatasetRef(object):
         return cls._currentId
 
     def __init__(self, datasetType, units):
-        """Construct a DatasetRef from a DatasetType and a complete tuple
-        of DataUnits.
-
-        Parameters
-        ----------
-        datasetType: `DatasetType`
-            The `DatasetType` for this `Dataset`.
-        units: `dict`
-            Dictionary where the keys are `DataUnit` names and the values are
-            `DataUnit` instances.
-        """
         units = datasetType.units.conform(units)
         super().__init__(
             datasetType.name,
@@ -160,7 +157,8 @@ class DatasetRef(object):
 
     @property
     def predictedConsumers(self):
-        """A sequence of `Quantum` instances that list this `Dataset` in their `predictedInputs` attributes.
+        """A sequence of `Quantum` instances that list this `Dataset` in their
+        `predictedInputs` attributes.
 
         Read-only; update via `Quantum.addPredictedInput()`.
         May be an empty list if no provenance information is available.

@@ -26,6 +26,8 @@ from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
+__all__ = ("SchemaConfig", "Schema")
+
 
 class SchemaConfig(Config):
     """Schema configuration.
@@ -97,13 +99,13 @@ class Schema:
         columnDescription : `dict`
             Description of the column to be created.
             Should always contain:
-                - name, descriptive name
-                - type, valid column type
+            - name, descriptive name
+            - type, valid column type
             May contain:
-                - nullable, entry can be null
-                - primary_key, mark this column as primary key
-                - foreign_key, link to other table
-                - doc, docstring
+            - nullable, entry can be null
+            - primary_key, mark this column as primary key
+            - foreign_key, link to other table
+            - doc, docstring
 
         Returns
         -------
@@ -140,8 +142,8 @@ class Schema:
         constraintDescription : `dict`
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
-                - src, list of source column names
-                - tgt, list of target column names
+            - src, list of source column names
+            - tgt, list of target column names
         """
         src = tuple(iterable(constraintDescription["src"]))
         tgt = tuple(iterable(constraintDescription["tgt"]))

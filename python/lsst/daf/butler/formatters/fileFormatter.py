@@ -25,6 +25,8 @@ from abc import abstractmethod
 
 from lsst.daf.butler.core.formatter import Formatter
 
+__all__ = ("FileFormatter", )
+
 
 class FileFormatter(Formatter):
     """Interface for reading and writing files on a POSIX file system.

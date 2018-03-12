@@ -23,9 +23,11 @@ from abc import ABCMeta, abstractmethod
 
 from .mappingFactory import MappingFactory
 
+__all__ = ("Formatter", "FormatterFactory")
+
 
 class Formatter(metaclass=ABCMeta):
-    """Interface for reading and writing `Dataset`s with a particular
+    """Interface for reading and writing `Dataset`\ s with a particular
     `StorageClass`.
     """
     @abstractmethod
@@ -62,7 +64,7 @@ class Formatter(metaclass=ABCMeta):
         uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
-            A dictionary of URIs for the `Dataset`' components.
+            A dictionary of URIs for the `Dataset`'s components.
             The latter will be empty if the `Dataset` is not a composite.
         """
         raise NotImplementedError("Type does not support writing")
@@ -89,18 +91,19 @@ class FormatterFactory:
         return self._mappingFactory.getFromRegistry(datasetType, storageClass)
 
     def registerFormatter(self, type_, formatter):
-        """Register a Formatter.
+        """Register a `Formatter`.
 
         Parameters
         ----------
         type_ : `str` or `StorageClass` or `DatasetType`
             Type for which this formatter is to be used.
         formatter : `str`
-            Identifies a `Formatter` subclass to use for reading and writing `Dataset`s of this type.
+            Identifies a `Formatter` subclass to use for reading and writing
+            `Dataset`\ s of this type.
 
         Raises
         ------
-        e : `ValueError`
+        ValueError
             If formatter does not name a valid formatter type.
         """
         self._mappingFactory.placeInRegistry(type_, formatter)

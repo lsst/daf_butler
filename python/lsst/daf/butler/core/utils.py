@@ -24,9 +24,21 @@ def iterable(a):
     """Make input iterable.
 
     There are three cases, when the input is:
-    - iterable, but not a string -> iterate over elements (e.g. [i for i in a])
-    - a string -> return single element iterable (e.g. [a])
-    - not iterable -> return single elment iterable (e.g. [a]).
+
+    - iterable, but not a `str` -> iterate over elements
+      (e.g. ``[i for i in a]``)
+    - a `str` -> return single element iterable (e.g. ``[a]``)
+    - not iterable -> return single elment iterable (e.g. ``[a]``).
+
+    Parameters
+    ----------
+    a : iterable or `str` or not iterable
+        Argument to be converted to an iterable.
+
+    Returns
+    -------
+    i : `generator`
+        Iterable version of the input value.
     """
     if isinstance(a, str):
         yield a
@@ -39,7 +51,17 @@ def iterable(a):
 
 def allSlots(self):
     """
-    Return combined __slots__ for all classes in objects mro.
+    Return combined ``__slots__`` for all classes in objects mro.
+
+    Parameters
+    ----------
+    self : `object`
+        Instance to be inspected.
+
+    Returns
+    -------
+    slots : `itertools.chain`
+        All the slots as an iterable.
     """
     from itertools import chain
     return chain.from_iterable(getattr(cls, '__slots__', []) for cls in self.__class__.__mro__)
@@ -49,6 +71,18 @@ def slotValuesAreEqual(self, other):
     """
     Test for equality by the contents of all slots, including those of its
     parents.
+
+    Parameters
+    ----------
+    self : `object`
+        Reference instance.
+    other : `object`
+        Comparison instance.
+
+    Returns
+    -------
+    equal : `bool`
+        Returns True if all the slots are equal in both arguments.
     """
     return all((getattr(self, slot) == getattr(other, slot) for slot in allSlots(self)))
 
@@ -56,6 +90,16 @@ def slotValuesAreEqual(self, other):
 def slotValuesToHash(self):
     """
     Generate a hash from slot values.
+
+    Parameters
+    ----------
+    self : `object`
+        Instance to be hashed.
+
+    Returns
+    -------
+    h : `int`
+        Hashed value generated from the slot values.
     """
     return hash(tuple(getattr(self, slot) for slot in allSlots(self)))
 
@@ -77,11 +121,11 @@ def doImport(pythonType):
 
     Raises
     ------
-    e : `TypeError`
+    TypeError
         pythonType is not a `str`.
-    e : `ValueError`
+    ValueError
         pythonType can not be imported.
-    e : `AttributeError`
+    AttributeError
         pythonType can be partially imported.
     """
     if not isinstance(pythonType, str):

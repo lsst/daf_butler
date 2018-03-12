@@ -24,6 +24,8 @@ import yaml
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
+__all__ = ("YamlFormatter", )
+
 
 class YamlFormatter(FileFormatter):
     """Interface for reading and writing Python objects to and from YAML files.

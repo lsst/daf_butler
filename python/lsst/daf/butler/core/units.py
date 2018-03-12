@@ -22,6 +22,21 @@
 from collections import OrderedDict
 from hashlib import sha512
 
+__all__ = ("DataUnitMeta",
+           "DataUnit",
+           "DataUnitSet",
+           "Camera",
+           "AbstractFilter",
+           "PhysicalFilter",
+           "PhysicalSensor",
+           "Visit",
+           "ObservedSensor",
+           "Snap",
+           "VisitRange",
+           "SkyMap",
+           "Tract",
+           "Patch")
+
 
 class DataUnitMeta(type):
     """
@@ -50,6 +65,11 @@ class DataUnit(metaclass=DataUnitMeta):
         """
         Compute a hash that is invariant across Python sessions, and hence
         can be stored in a database.
+
+        Returns
+        -------
+        h : `sha512`
+            Invariant hash of this instance.
         """
         return sha512(b''.join(str(v).encode('utf-8') for v in self.pkey)).digest()
 
@@ -60,7 +80,7 @@ class DataUnit(metaclass=DataUnitMeta):
     @classmethod
     def getType(cls, name):
         """
-        Get type object for DataUnit subclass by *name*
+        Get type object for `DataUnit` subclass by *name*
         """
         if name not in cls._subclasses:
             raise ValueError("Unknown DataUnit: {}".format(name))

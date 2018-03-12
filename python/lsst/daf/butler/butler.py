@@ -19,9 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""
+Butler top level classes.
+"""
+
 from .core.config import Config
 from .core.datastore import Datastore
 from .core.registry import Registry
+
+__all__ = ("ButlerConfig", "Butler")
 
 
 class ButlerConfig(Config):
@@ -42,22 +48,20 @@ class Butler(object):
 
     Attributes
     ----------
-    config : `str` or `ButlerConfiguration`
+    config : `str` or `Config`
         (filename to) configuration.
     datastore : `Datastore`
         Datastore to use for storage.
     registry : `Registry`
         Registry to use for lookups.
+
+    Parameters
+    ----------
+    config : `Config`
+        Configuration.
     """
 
     def __init__(self, config):
-        """Constructor.
-
-        Parameters
-        ----------
-        config : `ButlerConfiguration`
-            Configuration.
-        """
         self.config = ButlerConfig(config)
         self.datastore = Datastore.fromConfig(self.config)
         self.registry = Registry.fromConfig(self.config)
@@ -120,7 +124,8 @@ class Butler(object):
         inMemoryDataset : `InMemoryDataset`
             The `Dataset` to store.
         producer : `Quantum`
-            The producer of this `Dataset`.  May be ``None`` for some `Registries`.
+            The producer of this `Dataset`.  May be ``None`` for some
+            `Registry` instances.
             ``producer.run`` must match ``self.config['run']``.
 
         Returns
@@ -137,7 +142,8 @@ class Butler(object):
         return self.registry.addDataset(ref, uri, components, producer=producer, run=run)
 
     def markInputUsed(self, quantum, ref):
-        """Mark a `Dataset` as having been "actually" (not just predicted-to-be) used by a `Quantum`.
+        """Mark a `Dataset` as having been "actually" (not just
+        predicted-to-be) used by a `Quantum`.
 
         Parameters
         ----------
@@ -150,13 +156,16 @@ class Butler(object):
         self.registry.markInputUsed(ref, quantum)
 
     def unlink(self, *refs):
-        """Remove the `Dataset`s associated with the given `DatasetRef`s from the Butler's `Collection`,
-        and signal that they may be deleted from storage if they are not referenced by any other `Collection`.
+        """Remove dataset from collection.
+
+        Remove the `Dataset`\ s associated with the given `DatasetRef`\ s
+        from the `Butler`\ 's collection, and signal that they may be deleted
+        from storage if they are not referenced by any other collection.
 
         Parameters
         ----------
-        refs : [`DatasetRef`]
-            List of refs for `Dataset`s to unlink.
+        refs : `list` of `DatasetRef`
+            List of refs for `Dataset`\ s to unlink.
         """
         refs = [self.registry.find(self.run.collection, ref) for ref in refs]
         for ref in self.registry.disassociate(self.run.collection, refs, remove=True):

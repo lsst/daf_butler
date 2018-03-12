@@ -30,23 +30,24 @@ from lsst.daf.butler.core.formatter import FormatterFactory
 from lsst.daf.butler.core.storageClass import StorageClassFactory, makeNewStorageClass
 from lsst.daf.butler.core.fileTemplates import FileTemplates
 
+__all__ = ("PosixDatastore", )
+
 
 class PosixDatastore(Datastore):
     """Basic POSIX filesystem backed Datastore.
+
+    Parameters
+    ----------
+    config : `DatastoreConfig` or `str`
+        Configuration.
+
+    Raises
+    ------
+    ValueError
+        If root location does not exist and `create` is `False`.
     """
 
     def __init__(self, config):
-        """Construct a Datastore backed by a POSIX filesystem.
-
-        Parameters
-        ----------
-        config : `DatastoreConfig` or `str`
-            Configuration.
-
-        Raises
-        ------
-        `ValueError` : If root location does not exist and `create` is `False`.
-        """
         super().__init__(config)
         self.root = self.config['root']
         if not os.path.isdir(self.root):
@@ -106,9 +107,9 @@ class PosixDatastore(Datastore):
 
         Raises
         ------
-        e : ValueError
+        ValueError
             Requested URI can not be retrieved.
-        e : TypeError
+        TypeError
             Return value from formatter has unexpected type.
         """
         formatter = self.formatterFactory.getFormatter(storageClass)
@@ -156,7 +157,7 @@ class PosixDatastore(Datastore):
         uri : `str`
             The `URI` where the primary `Dataset` is stored.
         components : `dict`, optional
-            A dictionary of URIs for the `Dataset`' components.
+            A dictionary of URIs for the `Dataset` components.
             The latter will be empty if the `Dataset` is not a composite.
         """
 
@@ -196,9 +197,10 @@ class PosixDatastore(Datastore):
             A Universal Resource Identifier that specifies the location of the
             stored `Dataset`.
 
-        .. note::
-            Some Datastores may implement this method as a silent no-op to
-            disable `Dataset` deletion through standard interfaces.
+        Notes
+        -----
+        Some Datastores may implement this method as a silent no-op to
+        disable `Dataset` deletion through standard interfaces.
         """
         location = self.locationFactory.fromUri(uri)
         if not os.path.exists(location.preferredPath()):

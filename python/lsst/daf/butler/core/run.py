@@ -21,8 +21,25 @@
 
 from .utils import slotValuesAreEqual, slotValuesToHash
 
+__all__ = ("Run", )
+
 
 class Run(object):
+    """Represent a processing run.
+
+    Parameters
+    ----------
+    runId : `int`
+        ID to associate with this run.
+    registryId : `int`
+        ID associated with this `Registry`.
+    collection : `str`
+        Collection to use for this run.
+    environment : `str`
+        Something about the environment.
+    pipeline : `str`
+        Something about the pipeline.
+    """
     _currentId = 0
 
     @classmethod

@@ -10,3 +10,5 @@ tests/test_output_datastore/
 config.log
 ups/*.cfgc
 pytest_session.txt
+doc/_build
+doc/py-api

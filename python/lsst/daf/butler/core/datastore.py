@@ -19,10 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""
+Support for generic data stores.
+"""
+
+
 from lsst.daf.butler.core.utils import doImport
 
 from abc import ABCMeta, abstractmethod
 from .config import Config
+
+__all__ = ("DatastoreConfig", "Datastore")
 
 
 class DatastoreConfig(Config):
@@ -105,14 +112,15 @@ class Datastore(metaclass=ABCMeta):
             a Universal Resource Identifier that specifies the location of the
             stored `Dataset`.
 
-        .. note::
-            Some Datastores may implement this method as a silent no-op to
-            disable `Dataset` deletion through standard interfaces.
-
         Raises
         ------
-        e : `FileNotFoundError`
+        FileNotFoundError
             When `Dataset` does not exist.
+
+        Notes
+        -----
+        Some Datastores may implement this method as a silent no-op to
+        disable `Dataset` deletion through standard interfaces.
         """
         raise NotImplementedError("Must be implemented by subclass")
 

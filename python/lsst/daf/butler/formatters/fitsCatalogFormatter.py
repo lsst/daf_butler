@@ -23,6 +23,8 @@ import os.path
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
+__all__ = ("FitsCatalogFormatter", )
+
 
 class FitsCatalogFormatter(FileFormatter):
     """Interface for reading and writing catalogs to and from FITS files.
