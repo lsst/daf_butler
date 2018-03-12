@@ -24,6 +24,7 @@ import unittest
 
 import lsst.utils.tests
 
+from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
 
@@ -41,6 +42,32 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testInitFromConfig(self):
         registry = Registry.fromConfig(self.configFile)
         self.assertIsInstance(registry, SqlRegistry)
+
+    def testDatasetType(self):
+        registry = Registry.fromConfig(self.configFile)
+        # Check valid insert
+        datasetTypeName = "test"
+        storageClass = "StructuredData"
+        dataUnits = ("camera", "visit")
+        template = "{datasetType}/{camera}/{visit}"
+        inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        registry.registerDatasetType(inDatasetType)
+        outDatasetType = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType, inDatasetType)
+
+        # Re-inserting should fail
+        with self.assertRaises(KeyError):
+            registry.registerDatasetType(inDatasetType)
+
+        # Template can be None
+        datasetTypeName = "testNoneTemplate"
+        storageClass = "StructuredData"
+        dataUnits = ("camera", "visit")
+        template = None
+        inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass, template)
+        registry.registerDatasetType(inDatasetType)
+        outDatasetType = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType, inDatasetType)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

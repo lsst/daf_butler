@@ -21,7 +21,6 @@
 
 from types import MappingProxyType
 from .utils import slotValuesAreEqual, slotValuesToHash
-from .units import DataUnitSet
 
 __all__ = ("DatasetType", "DatasetRef")
 
@@ -46,7 +45,7 @@ class DatasetType(object):
     All arguments correspond directly to instance attributes.
     """
 
-    __slots__ = ("_name", "_template", "_units", "_storageClass")
+    __slots__ = ("_name", "_dataUnits", "_storageClass", "_template")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
@@ -56,6 +55,19 @@ class DatasetType(object):
         `DatasetType` across all Registries.
         """
         return self._name
+
+    @property
+    def dataUnits(self):
+        """A `frozenset` of `DataUnit` names that defines the `DatasetRef`\ s
+        corresponding to this `DatasetType`.
+        """
+        return self._dataUnits
+
+    @property
+    def storageClass(self):
+        """A `StorageClass` that defines how this `DatasetType` is persisted.
+        """
+        return self._storageClass
 
     @property
     def template(self):
@@ -68,24 +80,11 @@ class DatasetType(object):
         """
         return self._template
 
-    @property
-    def units(self):
-        """A `DataUnitSet` that defines the `DatasetRef`\ s corresponding
-        to this `DatasetType`.
-        """
-        return self._units
-
-    @property
-    def storageClass(self):
-        """A `StorageClass` that defines how this `DatasetType` is persisted.
-        """
-        return self._storageClass
-
-    def __init__(self, name, template, units, storageClass):
+    def __init__(self, name, dataUnits, storageClass, template=None):
         self._name = name
-        self._template = template
-        self._units = DataUnitSet(units)
+        self._dataUnits = frozenset(dataUnits)
         self._storageClass = storageClass
+        self._template = template
 
 
 class DatasetRef(object):
