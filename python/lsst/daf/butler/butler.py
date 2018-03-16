@@ -69,104 +69,40 @@ class Butler(object):
         if self.run is None:
             self.run = self.registry.makeRun(self.config['run'])
 
-    def getDirect(self, ref, parameters=None):
-        """Load a `Dataset` or a slice thereof from a `DatasetRef`.
-
-        Unlike `Butler.get`, this method allows `Datasets` outside the Butler's `Collection` to be read as
-        long as the `DatasetRef` that identifies them can be obtained separately.
+    def put(self, obj, datasetType, dataId, producer=None):
+        """Store and register a dataset.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            A pointer to the `Dataset` to load.
-        parameters : `dict`
-            `StorageClass`-specific parameters that can be used to obtain a slice of the `Dataset`.
-
+        obj : `object`
+            The dataset.
+        datasetType : `DatasetType` instance or `str`
+            The `DatasetType`.
+        dataId : `dict`
+            An identifier with `DataUnit` names and values.
+        producer : `Quantum`, optional
+            The producer.
+        
         Returns
         -------
-        inMemoryDataset : `InMemoryDataset`
-            The requested `Dataset`.
+        `DatasetRef`
+            A reference to the stored dataset.
         """
-        parent = self.datastore.get(ref.uri, ref.datasetType.storageClass, parameters) if ref.uri else None
-        children = {name: self.datastore.get(childRef, parameters)
-                    for name, childRef in ref.components.items()}
-        return ref.datasetType.storageClass.assemble(parent, children)
+        raise NotImplementedError("Not yet implemented")
 
-    def get(self, ref, parameters=None):
-        """Load a `Dataset` or a slice thereof from the Butler's `Collection`.
+    def get(self, datasetType, dataId):
+        """Retrieve a stored dataset.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The `Dataset` to retrieve.
-        parameters : `dict`
-            A dictionary of `StorageClass`-specific parameters that can be
-            used to obtain a slice of the `Dataset`.
-
+        datasetType : `DatasetType` instance or `str`
+            The `DatasetType`.
+        dataId : `dict`
+            An identifier with `DataUnit` names and values.
+        
         Returns
         -------
-        dataset : `InMemoryDataset`
-            The requested `Dataset`.
+        `object`
+            The dataset.
         """
-        ref = self.registry.find(self.run.collection, ref)
-        if ref:
-            return self.getDirect(ref, parameters)
-        else:
-            return None  # No Dataset found
-
-    def put(self, ref, inMemoryDataset, producer=None):
-        """Write a `Dataset`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The `Dataset` being stored.
-        inMemoryDataset : `InMemoryDataset`
-            The `Dataset` to store.
-        producer : `Quantum`
-            The producer of this `Dataset`.  May be ``None`` for some
-            `Registry` instances.
-            ``producer.run`` must match ``self.config['run']``.
-
-        Returns
-        -------
-        datasetRef : `DatasetRef`
-            The registered (and stored) dataset.
-        """
-        ref = self.registry.expand(ref)
-        run = self.run
-        assert(producer is None or run == producer.run)
-        storageHint = ref.makeStorageHint(run)
-        uri, components = self.datastore.put(inMemoryDataset, ref.datasetType.storageClass,
-                                             storageHint, ref.datasetType.name)
-        return self.registry.addDataset(ref, uri, components, producer=producer, run=run)
-
-    def markInputUsed(self, quantum, ref):
-        """Mark a `Dataset` as having been "actually" (not just
-        predicted-to-be) used by a `Quantum`.
-
-        Parameters
-        ----------
-        quantum : `Quantum`
-            The dependent `Quantum`.
-        ref : `DatasetRef`
-            The `Dataset` that is a true dependency of ``quantum``.
-        """
-        ref = self.registry.find(self.run.collection, ref)
-        self.registry.markInputUsed(ref, quantum)
-
-    def unlink(self, *refs):
-        """Remove dataset from collection.
-
-        Remove the `Dataset`\ s associated with the given `DatasetRef`\ s
-        from the `Butler`\ 's collection, and signal that they may be deleted
-        from storage if they are not referenced by any other collection.
-
-        Parameters
-        ----------
-        refs : `list` of `DatasetRef`
-            List of refs for `Dataset`\ s to unlink.
-        """
-        refs = [self.registry.find(self.run.collection, ref) for ref in refs]
-        for ref in self.registry.disassociate(self.run.collection, refs, remove=True):
-            self.datastore.remove(ref.uri)
+        raise NotImplementedError("Not yet implemented")
