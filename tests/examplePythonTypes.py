@@ -46,6 +46,9 @@ class MetricsExample:
         self.output = output
         self.data = data
 
+    def __eq__(self, other):
+        return self.summary == other.summary and self.output == other.output and self.data == other.data
+
     def exportAsDict(self):
         """Convert object contents to a single python dict."""
         exportDict = {"summary": self.summary,

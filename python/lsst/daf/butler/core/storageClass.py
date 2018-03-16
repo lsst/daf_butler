@@ -23,12 +23,16 @@
 
 import builtins
 
-from lsst.daf.butler.core.utils import doImport
-from lsst.daf.butler.core.composites import CompositeAssembler
-
+from .utils import doImport, Singleton
+from .composites import CompositeAssembler
+from .config import Config
 from .mappingFactory import MappingFactory
 
-__all__ = ("StorageClass", "StorageClassFactory")
+__all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
+
+
+class StorageClassConfig(Config):
+    pass
 
 
 class StorageClass:
@@ -46,6 +50,7 @@ class StorageClass:
     # The names are defined when the class is constructed
     _pytypeName = None
     _assemblerClassName = None
+    name = None
 
     # The types are created on demand and cached
     # We set a default assembler so that a class is guaranteed to support
@@ -100,7 +105,7 @@ class StorageClass:
         return self.assemblerClass(storageClass=type(self)())
 
     def validateInstance(self, instance):
-        """Check that the supplied instance has the expected Python type
+        """Check that the supplied Python object has the expected Python type
 
         Parameters
         ----------
@@ -110,10 +115,16 @@ class StorageClass:
         Returns
         -------
         isOk : `bool`
-            True is the supplied instance object can be handled by this
+            True if the supplied instance object can be handled by this
             `StorageClass`, False otherwise.
         """
         return isinstance(instance, self.pytype)
+
+    def __eq__(self, other):
+        return self.name == other.name
+
+    def __hash__(self):
+        return hash(self.name)
 
 
 def makeNewStorageClass(name, pytype=None, components=None, assembler=None):
@@ -136,9 +147,12 @@ def makeNewStorageClass(name, pytype=None, components=None, assembler=None):
     newtype : `StorageClass`
         Newly created Python type.
     """
+    if components is None:
+        components = {}
+
     clsargs = {"name": name,
                "_pytypeName": pytype,
-               "components": components}
+               "_components": components}
     # if the assembler is not None also set it and clear the default assembler
     if assembler is not None:
         clsargs["_assemblerClassName"] = assembler
@@ -147,12 +161,91 @@ def makeNewStorageClass(name, pytype=None, components=None, assembler=None):
     return type(name, (StorageClass,), clsargs)
 
 
-class StorageClassFactory:
+class StorageClassFactory(metaclass=Singleton):
     """Factory for `StorageClass` instances.
+
+    This class is a singleton, with each instance sharing the pool of
+    StorageClasses. Since code can not know whether it is the first
+    time the instance has been created, the constructor takes no arguments.
+    To populate the factory with storage classes, a call to
+    `~StorageClassFactory.addFromConfig()` should be made.
+
+    Parameters
+    ----------
+    config : `StorageClassConfig` or `str`, optional
+        Load configuration. Required to contain a ``storageClasses`` key.
     """
 
-    def __init__(self):
+    def __init__(self, config=None):
         self._mappingFactory = MappingFactory(StorageClass)
+        self._configs = []
+
+        if config is not None:
+            self.addFromConfig(config)
+
+    @classmethod
+    def fromConfig(cls, config):
+        """Create `StorageClassFactory` instance from `config`.
+
+        Uses ``storageClasses`` from ``config`` to learn storage class
+        definitions.
+
+        Parameters
+        ----------
+        config : `StorageClassConfig`, `Config` or `str`
+            Storage class configuration. Required to contain a
+            ``storageClasses.config`` key.
+
+        Returns
+        -------
+        storageClasses : `StorageClassFactory`
+            Factory of all known `StorageClass`\ es.
+        """
+        if not isinstance(config, StorageClassConfig):
+            if isinstance(config, str):
+                config = Config(config)
+            if isinstance(config, Config):
+                config = StorageClassConfig(config['storageClasses'])
+            else:
+                raise ValueError("Incompatible storage class configuration: {}".format(config))
+        factory = cls()
+        factory.addFromConfig(config["config"])
+        return factory
+
+    def addFromConfig(self, config):
+        """Add more `StorageClass` definitions from a config file.
+
+        Parameters
+        ----------
+        config : `StorageClassConfig`, `Config` or `str`
+            Storage class configuration. Required to contain a
+            ``storageClasses`` key.
+        """
+        sconfig = StorageClassConfig(config)['storageClasses']
+        self._configs.append(sconfig)
+
+        for name, info in sconfig.items():
+            if name == "config" or (isinstance(info, str) and info.endswith(".yaml")):
+                # This seems to be a location of another file so process that
+                self.addFromConfig(sconfig["config"])
+                continue
+
+            # Create the storage class
+            components = None
+            if "components" in info:
+                components = {}
+                for cname, ctype in info["components"].items():
+                    components[cname] = self.getStorageClass(ctype)
+
+            # Extract scalar items from dict that are needed for StorageClass Constructor
+            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler") if k in info}
+
+            # Fill in other items
+            storageClassKwargs["components"] = components
+
+            # Create the new storage class and register it
+            newStorageClass = makeNewStorageClass(name, **storageClassKwargs)
+            self.registerStorageClass(newStorageClass)
 
     def getStorageClass(self, storageClassName):
         """Get a StorageClass instance associated with the supplied name.
@@ -184,6 +277,6 @@ class StorageClassFactory:
         ------
         KeyError
             If a storage class has already been registered with
-            storageClassName.
+            storageClassName and the previous definition differs.
         """
         self._mappingFactory.placeInRegistry(storageClass.name, storageClass)

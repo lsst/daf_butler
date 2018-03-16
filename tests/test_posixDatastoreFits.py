@@ -24,9 +24,11 @@ import unittest
 
 import lsst.utils.tests
 
+from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
-from lsst.daf.butler.core.dataUnits import DataUnits
-from datasetsHelper import FitsCatalogDatasetsHelper
+from lsst.daf.butler import Registry
+
+from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 
 try:
     import lsst.afw.table
@@ -37,111 +39,160 @@ except ImportError:
     lsst.afw.image = None
 
 
-class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
+class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper, DatasetTestHelper):
 
     @classmethod
     def setUpClass(cls):
         if lsst.afw.table is None:
             raise unittest.SkipTest("afw not available.")
+        cls.testDir = os.path.dirname(__file__)
+        cls.storageClassFactory = StorageClassFactory()
+        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
+        cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self):
-        self.testDir = os.path.dirname(__file__)
-        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
+        self.registry = Registry.fromConfig(self.configFile)
+
+        # Need to keep ID for each datasetRef since we have no butler
+        # for these tests
+        self.id = 1
 
     def testConstructor(self):
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         catalog = self.makeExampleCatalog()
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
         # Put
-        dataUnits = DataUnits({"visit": 123456, "filter": "blue"})
-        storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
-        uri, _ = datastore.put(catalog, storageClass=storageClass,
-                               dataUnits=dataUnits, typeName="calexp")
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 123456, "filter": "blue"}
+        storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
+
+        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+
+        datastore.put(catalog, ref)
+
+        # Does it exist?
+        self.assertTrue(datastore.exists(ref))
+
+        uri = datastore.getUri(ref)
+        self.assertTrue(uri.endswith(".fits"))
+        self.assertTrue(uri.startswith("file:"))
+
         # Get
-        catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        catalogOut = datastore.get(ref, parameters=None)
         self.assertCatalogEqual(catalog, catalogOut)
+
         # These should raise
-        with self.assertRaises(ValueError):
+        ref = self.makeDatasetRef("calexp2", dataUnits, storageClass, dataId)
+        with self.assertRaises(FileNotFoundError):
             # non-existing file
-            datastore.get(uri="file:///non_existing.fits", storageClass=storageClass, parameters=None)
-        with self.assertRaises(ValueError):
-            # invalid storage class
-            datastore.get(uri="file:///non_existing.fits", storageClass=object, parameters=None)
+            datastore.get(ref, parameters=None)
 
     def testRemove(self):
         catalog = self.makeExampleCatalog()
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+
         # Put
-        storageClass = datastore.storageClassFactory.getStorageClass("SourceCatalog")
-        dataUnits = DataUnits({"visit": 1234567, "filter": "blue"})
-        uri, _ = datastore.put(catalog, storageClass=storageClass,
-                               dataUnits=dataUnits, typeName="calexp")
+        storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 1234567, "filter": "blue"}
+
+        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+        datastore.put(catalog, ref)
+
+        # Does it exist?
+        self.assertTrue(datastore.exists(ref))
+
         # Get
-        catalogOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        catalogOut = datastore.get(ref)
         self.assertCatalogEqual(catalog, catalogOut)
+
         # Remove
-        datastore.remove(uri)
+        datastore.remove(ref)
+
+        # Does it exist?
+        self.assertFalse(datastore.exists(ref))
+
         # Get should now fail
-        with self.assertRaises(ValueError):
-            datastore.get(uri, storageClass=storageClass, parameters=None)
+        with self.assertRaises(FileNotFoundError):
+            datastore.get(ref)
         # Can only delete once
         with self.assertRaises(FileNotFoundError):
-            datastore.remove(uri)
+            datastore.remove(ref)
 
     def testTransfer(self):
         catalog = self.makeExampleCatalog()
-        dataUnits = DataUnits({"visit": 12345, "filter": "red"})
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 12345, "filter": "red"}
+
+        storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
+        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
-        inputPosixDatastore = PosixDatastore(config=inputConfig)
+        inputPosixDatastore = PosixDatastore(config=inputConfig, registry=self.registry)
         outputConfig = inputConfig.copy()
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
-        outputPosixDatastore = PosixDatastore(config=outputConfig)
-        storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("SourceCatalog")
-        inputUri, _ = inputPosixDatastore.put(catalog, storageClass, dataUnits, "calexp")
-        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri,
-                                                     storageClass, dataUnits, "calexp")
-        catalogOut = outputPosixDatastore.get(outputUri, storageClass)
+        outputPosixDatastore = PosixDatastore(config=outputConfig,
+                                              registry=Registry.fromConfig(self.configFile))
+
+        inputPosixDatastore.put(catalog, ref)
+        outputPosixDatastore.transfer(inputPosixDatastore, ref)
+
+        catalogOut = outputPosixDatastore.get(ref)
         self.assertCatalogEqual(catalog, catalogOut)
 
 
-class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
+class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
 
     @classmethod
     def setUpClass(cls):
         if lsst.afw.image is None:
             raise unittest.SkipTest("afw not available.")
+        cls.testDir = os.path.dirname(__file__)
+        cls.storageClassFactory = StorageClassFactory()
+        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
+        cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self):
-        self.testDir = os.path.dirname(__file__)
-        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
+        self.registry = Registry.fromConfig(self.configFile)
+
+        # Need to keep ID for each datasetRef since we have no butler
+        # for these tests
+        self.id = 1
 
     def testExposurePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
         # Put
-        dataUnits = DataUnits({"visit": 231, "filter": "Fc"})
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 231, "filter": "Fc"}
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
-        uri, comps = datastore.put(exposure, storageClass=storageClass,
-                                   dataUnits=dataUnits,
-                                   typeName="calexp")
+        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+
+        datastore.put(exposure, ref)
+
+        # Does it exist?
+        self.assertTrue(datastore.exists(ref))
+
         # Get
-        exposureOut = datastore.get(uri, storageClass=storageClass, parameters=None)
+        exposureOut = datastore.get(ref)
         self.assertEqual(type(exposure), type(exposureOut))
 
         # Get some components
-        for c in ("wcs", "image", "mask", "coaddInputs", "psf"):
-            self.assertIn(c, comps)
-            component = datastore.get(comps[c], storageClass=storageClass)
-            self.assertIsNotNone(component)
+        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dataUnits,
+                                          storageClass.components[compName], dataId, id=ref.id)
+            component = datastore.get(compRef)
+            self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
 
-        # Get a component to check it
-        self.assertIn("wcs", comps)
-        wcs = datastore.get(comps["wcs"], storageClass=storageClass)
+        # Get the WCS component to check it
+        wcsRef = self.makeDatasetRef(ref.datasetType.componentTypeName("wcs"), dataUnits,
+                                     storageClass.components["wcs"], dataId, id=ref.id)
+        wcs = datastore.get(wcsRef)
 
         # Simple check of WCS
         bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
@@ -151,25 +202,44 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase):
     def testExposureCompositePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
         # Put
-        dataUnits = DataUnits({"visit": 23, "filter": "F"})
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 23, "filter": "F"}
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureCompositeF")
-        uri, comps = datastore.put(exposure, storageClass=storageClass,
-                                   dataUnits=dataUnits,
-                                   typeName="calexp")
+        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+
+        # Get the predicted URI
+        self.assertFalse(datastore.exists(ref))
+        uri = datastore.getUri(ref, predict=True)
+        self.assertTrue(uri.endswith("#predicted"))
+
+        components = storageClass.assembler().disassemble(exposure)
+        self.assertTrue(components)
 
         # Get a component
-        for c in ("wcs", "image", "mask", "coaddInputs", "psf"):
-            self.assertIn(c, comps)
-            component = datastore.get(comps[c], storageClass=storageClass.components[c])
-            self.assertIsNotNone(component)
+        compsRead = {}
+        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dataUnits,
+                                          components[compName].storageClass, dataId)
+
+            datastore.put(components[compName].component, compRef)
+
+            # Does it exist?
+            self.assertTrue(datastore.exists(compRef))
+
+            component = datastore.get(compRef)
+            self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
+            compsRead[compName] = component
 
         # Simple check of WCS
-        wcs = datastore.get(comps["wcs"], storageClass=storageClass.components["wcs"])
         bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
                                    lsst.afw.geom.Extent2I(9, 9))
-        self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
+        self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
+
+        # Try to reassemble the exposure
+        retrievedExposure = storageClass.assembler().assemble(compsRead)
+        self.assertIsInstance(retrievedExposure, type(exposure))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

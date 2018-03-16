@@ -1,0 +1,55 @@
+storageClasses:
+  StructuredDataDict:
+    pytype: dict
+  StructuredDataList:
+    pytype: list
+  TablePersistable:
+    pytype: lsst.afw.table.io.persistable.Persistable
+  TablePersistableWcs:
+    pytype: lsst.afw.geom.skyWcs.skyWcs.SkyWcs
+  TablePersistablePsf:
+    pytype: lsst.afw.detection.Psf
+  TablePersistableCoaddInputs:
+    pytype: lsst.afw.image.coaddInputs.CoaddInputs
+  TablePersistableVisitInfo:
+    pytype: lsst.afw.image.visitInfo.VisitInfo
+  TablePersistableApCorr:
+    pytype: lsst.afw.image.apCorrMap.ApCorrMap
+  TablePersistableCalib:
+    pytype: lsst.afw.image.calib.Calib
+  ImageF:
+    pytype: lsst.afw.image.image.ImageF
+  MaskX:
+    pytype: lsst.afw.image.mask.MaskX
+  Catalog:
+    pytype: lsst.afw.table.BaseCatalog
+  SourceCatalog:
+    pytype: lsst.afw.table.SourceCatalog
+  Exposure: &Exposure
+    pytype: lsst.afw.image.Exposure
+    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
+    components:
+      image: ImageF
+      mask: MaskX
+      variance: ImageF
+      wcs: TablePersistableWcs
+      psf: TablePersistablePsf
+      calib: TablePersistableCalib
+      visitInfo: TablePersistableVisitInfo
+      apCorrMap: TablePersistableApCorr
+      coaddInputs: TablePersistableCoaddInputs
+  ExposureF:
+    <<: *Exposure
+    pytype: lsst.afw.image.ExposureF
+  ExposureI:
+    <<: *Exposure
+    pytype: lsst.afw.image.ExposureI
+  ExposureComposite: &ExposureComposite
+    <<: *Exposure
+    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+  ExposureCompositeF:
+    <<: *ExposureComposite
+    pytype: lsst.afw.image.ExposureF
+  ExposureI:
+    <<: *ExposureComposite
+    pytype: lsst.afw.image.ExposureI

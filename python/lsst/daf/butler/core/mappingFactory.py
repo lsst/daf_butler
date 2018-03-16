@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from lsst.daf.butler.core.utils import doImport
+from .utils import getInstanceOf
 
 __all__ = ("MappingFactory", )
 
@@ -31,7 +31,7 @@ class MappingFactory:
     Enables instances of these classes to be retrieved from the factory later.
     The class can be specified as an object, class or string.
     If the key is an object it is converted to a string by accessing
-    a `name` attribute.
+    a ``name`` attribute.
 
     Parameters
     ----------
@@ -51,7 +51,7 @@ class MappingFactory:
 
         Parameters
         ----------
-        *targetClasses : `str` or objects supporting `.name` attribute
+        *targetClasses : `str` or objects supporting ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
 
@@ -78,17 +78,18 @@ class MappingFactory:
                 except KeyError:
                     pass
                 else:
-                    return self._getInstanceOf(typeName)
+                    return getInstanceOf(typeName)
         raise KeyError("Unable to find item in registry with keys: {}".format(attempts))
 
     def placeInRegistry(self, registryKey, typeName):
         """Register a class name with the associated type.
+
         The type name provided is validated against the reference
         class, `refType` attribute, if defined.
 
         Parameters
         ----------
-        registryKey : `str` or object supporting `.name` attribute.
+        registryKey : `str` or object supporting ``name`` attribute.
             Item to associate with the provided type.
         typeName : `str` or Python type
             Identifies a class to associate with the provided key.
@@ -97,12 +98,20 @@ class MappingFactory:
         ------
         ValueError
             If instance of class is not of the expected type.
+        KeyError
+            If item is already registered and has different value.
         """
         if not self._isValidStr(typeName):
             raise ValueError("Not a valid class string: {}".format(typeName))
         keyString = self._getName(registryKey)
         if keyString in self._registry:
-            raise ValueError("Item with key {} already registered".format(keyString))
+            # Compare the class strings since dynamic classes can be the
+            # same thing but be different.
+            if str(self._registry[keyString]) == str(typeName):
+                return
+
+            raise KeyError("Item with key {} already registered with different value"
+                           " ({} != {})".format(keyString, self._registry[keyString], typeName))
 
         self._registry[keyString] = typeName
 
@@ -112,7 +121,7 @@ class MappingFactory:
 
         Parameters
         ----------
-        typeOrName : `str` or object supporting `.name` attribute.
+        typeOrName : `str` or object supporting ``name`` attribute.
             Item from which to extract a name.
 
         Returns
@@ -127,23 +136,6 @@ class MappingFactory:
         else:
             raise ValueError("Cannot extract name from type")
 
-    @staticmethod
-    def _getInstanceOf(typeOrName):
-        """Given the type name or a type, instantiate an object of that type.
-
-        If a type name is given, an attempt will be made to import the type.
-
-        Parameters
-        ----------
-        typeOrName : `str` or Python class
-            A string describing the Python class to load or a Python type.
-        """
-        if isinstance(typeOrName, str):
-            cls = doImport(typeOrName)
-        else:
-            cls = typeOrName
-        return cls()
-
     def _isValidStr(self, typeName):
         """Validate that the class type name provided does create instances of
         objects that are of the expected type, as stored in the
@@ -152,7 +144,7 @@ class MappingFactory:
         if self.refType is None:
             return True
         try:
-            c = self._getInstanceOf(typeName)
+            c = getInstanceOf(typeName)
         except (ImportError, TypeError, AttributeError):
             return False
         else:

@@ -72,5 +72,5 @@ class PickleFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        with open(fileDescriptor.location.preferredPath(), "wb") as fd:
+        with open(fileDescriptor.location.path, "wb") as fd:
             pickle.dump(inMemoryDataset, fd, protocol=-1)

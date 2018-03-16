@@ -26,6 +26,7 @@ Butler top level classes.
 from .core.config import Config
 from .core.datastore import Datastore
 from .core.registry import Registry
+from .core.storageClass import StorageClassFactory
 
 __all__ = ("ButlerConfig", "Butler")
 
@@ -39,12 +40,12 @@ class ButlerConfig(Config):
         self.validate()
 
     def validate(self):
-        for k in ['run', 'datastore.cls', 'registry.cls']:
+        for k in ['run', 'datastore.cls', 'registry.cls', 'storageClasses.config']:
             if k not in self:
                 raise ValueError("Missing ButlerConfig parameter: {0}".format(k))
 
 
-class Butler(object):
+class Butler:
     """Main entry point for the data access system.
 
     Attributes
@@ -64,8 +65,10 @@ class Butler(object):
 
     def __init__(self, config):
         self.config = ButlerConfig(config)
-        self.datastore = Datastore.fromConfig(self.config)
         self.registry = Registry.fromConfig(self.config)
+        self.datastore = Datastore.fromConfig(self.config, self.registry)
+        self.storageClasses = StorageClassFactory()
+        self.storageClasses.addFromConfig(self.config)
         self.run = self.registry.getRun(collection=self.config['run'])
         if self.run is None:
             self.run = self.registry.makeRun(self.config['run'])
@@ -91,7 +94,27 @@ class Butler(object):
         """
         datasetType = self.registry.getDatasetType(datasetType)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
-        # self.datastore.put(obj, ref)
+
+        # Look up storage class to see if this is a composite
+        storageClass = datasetType.storageClass
+
+        # Check to see if this storage class has a disassembler
+        if storageClass.assemblerClass.disassemble is not None and storageClass.components:
+            components = storageClass.assembler().disassemble(obj)
+            for component, info in components.items():
+                compTypeName = datasetType.componentTypeName(component)
+                compRef = self.put(info.component, compTypeName, dataId, producer)
+                self.registry.attachComponent(component, ref, compRef)
+        else:
+            # This is an entity without a disassembler.
+            # If it is a composite we still need to register the components
+            for component in storageClass.components:
+                compTypeName = datasetType.componentTypeName(component)
+                compDatasetType = self.registry.getDatasetType(compTypeName)
+                compRef = self.registry.addDataset(compDatasetType, dataId, run=self.run, producer=producer)
+                self.registry.attachComponent(component, ref, compRef)
+            self.datastore.put(obj, ref)
+
         return ref
 
     def getDirect(self, ref):
@@ -110,9 +133,20 @@ class Butler(object):
         obj : `object`
             The dataset.
         """
-        # Currently a direct pass-through to `Datastore.get` but this should
-        # change for composites.
-        return self.datastore.get(ref)
+        # if the ref exists in the store we return it directly
+        if self.datastore.exists(ref):
+            return self.datastore.get(ref)
+        elif ref.components:
+            # Reconstruct the composite
+            components = {}
+            for compName, compRef in ref.components.items():
+                components[compName] = self.datastore.get(compRef)
+
+            # Assemble the components
+            return ref.datasetType.storageClass.assembler().assemble(components)
+        else:
+            # single entity in datastore
+            raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
 
     def get(self, datasetType, dataId):
         """Retrieve a stored dataset.
@@ -131,5 +165,5 @@ class Butler(object):
             The dataset.
         """
         datasetType = self.registry.getDatasetType(datasetType)
-        ref = self.registry.find(datasetType, dataId)
+        ref = self.registry.find(self.run.collection, datasetType, dataId)
         return self.getDirect(ref)

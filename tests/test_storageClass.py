@@ -46,7 +46,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         sc = newclass()
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
-        self.assertIsNone(sc.components)
+        self.assertFalse(sc.components)
 
         # Test the caching by using private class attribute
         self.assertIsNone(newclass._pytype)
@@ -69,7 +69,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         sc = factory.getStorageClass(className)
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
-        self.assertIsNone(sc.components)
+        self.assertFalse(sc.components)
         self.assertEqual(sc.pytype, PythonType)
 
 

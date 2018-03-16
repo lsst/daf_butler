@@ -21,6 +21,7 @@
 
 from types import MappingProxyType
 from .utils import slotValuesAreEqual, slotValuesToHash
+from .storageClass import StorageClass
 
 __all__ = ("DatasetType", "DatasetRef")
 
@@ -31,27 +32,27 @@ def _safeMakeMappingProxyType(data):
     return MappingProxyType(data)
 
 
-class DatasetType(object):
-    """A named category of Datasets that defines how they are organized,
+class DatasetType:
+    r"""A named category of Datasets that defines how they are organized,
     related, and stored.
 
     A concrete, final class whose instances represent `DatasetType`\ s.
     `DatasetType` instances may be constructed without a `Registry`,
     but they must be registered
-    via `Registry.registerDatasetType()` before corresponding `Dataset`\ s
+    via `Registry.registerDatasetType()` before corresponding Datasets
     may be added.
     `DatasetType` instances are immutable.
 
     Parameters
     ----------
     name : `str`
-        A string name for the `Dataset`; must correspond to the same
+        A string name for the Dataset; must correspond to the same
         `DatasetType` across all Registries.
     dataUnits : `iterable` of `str`
         `DataUnit` names that defines the `DatasetRef`\ s corresponding to
         this `DatasetType`.  The input iterable is copied into a `frozenset`.
-    storageClass : `str`
-        Name of a `StorageClass` that defines how this `DatasetType`
+    storageClass : `StorageClass`
+        Instance of a `StorageClass` that defines how this `DatasetType`
         is persisted.
     """
 
@@ -59,9 +60,32 @@ class DatasetType(object):
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
+    def __str__(self):
+        return "DatasetType({}, {}, {})".format(self.name, self.storageClass.name, self.dataUnits)
+
+    @staticmethod
+    def nameWithComponent(datasetTypeName, componentName):
+        """Form a valid DatasetTypeName from a parent and component.
+
+        No validation is performed.
+
+        Parameters
+        ----------
+        datasetTypeName : `str`
+            Base type name.
+        componentName : `str`
+            Name of component.
+
+        Returns
+        -------
+        compTypeName : `str`
+            Name to use for component DatasetType.
+        """
+        return "{}.{}".format(datasetTypeName, componentName)
+
     @property
     def name(self):
-        """A string name for the `Dataset`; must correspond to the same
+        """A string name for the Dataset; must correspond to the same
         `DatasetType` across all Registries.
         """
         return self._name
@@ -75,7 +99,7 @@ class DatasetType(object):
 
     @property
     def storageClass(self):
-        """Name of a `StorageClass` that defines how this `DatasetType`
+        """`StorageClass` instance that defines how this `DatasetType`
         is persisted.
         """
         return self._storageClass
@@ -83,19 +107,56 @@ class DatasetType(object):
     def __init__(self, name, dataUnits, storageClass):
         self._name = name
         self._dataUnits = frozenset(dataUnits)
+        assert isinstance(storageClass, StorageClass)
         self._storageClass = storageClass
 
+    def component(self):
+        """Component name (if defined)
 
-class DatasetRef(object):
-    """Reference to a `Dataset` in a `Registry`.
+        Returns
+        -------
+        comp : `str`
+            Name of component part of DatasetType name. `None` if this
+            `DatasetType` is not associated with a component.
+        """
+        comp = None
+        if "." in self.name:
+            _, comp = self.name.split(".", maxsplit=1)
+        return comp
 
-    A `DatasetRef` may point to a `Dataset` that currently does not yet exist
+    def componentTypeName(self, component):
+        """Given a component name, derive the datasetTypeName of that component
+
+        Parameters
+        ----------
+        component : `str`
+            Name of component
+
+        Returns
+        -------
+        derived : `str`
+            Compound name of this `DatasetType` and the component.
+
+        Raises
+        ------
+        KeyError
+            Requested component is not supported by this `DatasetType`.
+        """
+        if component in self.storageClass.components:
+            return self.nameWithComponent(self.name, component)
+        raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
+
+
+class DatasetRef:
+    """Reference to a Dataset in a `Registry`.
+
+    A `DatasetRef` may point to a Dataset that currently does not yet exist
     (e.g., because it is a predicted input for provenance).
 
     Parameters
     ----------
     datasetType : `DatasetType`
-        The `DatasetType` for this `Dataset`.
+        The `DatasetType` for this Dataset.
     dataId : `dict`
         Dictionary where the keys are `DataUnit` names and the values are
         `DataUnit` values.
@@ -130,7 +191,7 @@ class DatasetRef(object):
 
     @property
     def datasetType(self):
-        """The `DatasetType` associated with the `Dataset` the `DatasetRef`
+        """The `DatasetType` associated with the Dataset the `DatasetRef`
         points to.
         """
         return self._datasetType
@@ -145,7 +206,7 @@ class DatasetRef(object):
     @property
     def producer(self):
         """The `Quantum` instance that produced (or will produce) the
-        `Dataset`.
+        Dataset.
 
         Read-only; update via `Registry.addDataset()`,
         `QuantumGraph.addDataset()`, or `Butler.put()`.
@@ -155,7 +216,7 @@ class DatasetRef(object):
 
     @property
     def predictedConsumers(self):
-        """A sequence of `Quantum` instances that list this `Dataset` in their
+        """A sequence of `Quantum` instances that list this Dataset in their
         `predictedInputs` attributes.
 
         Read-only; update via `Quantum.addPredictedInput()`.
@@ -165,7 +226,7 @@ class DatasetRef(object):
 
     @property
     def actualConsumers(self):
-        """A sequence of `Quantum` instances that list this `Dataset` in their
+        """A sequence of `Quantum` instances that list this Dataset in their
         `actualInputs` attributes.
 
         Read-only; update via `Registry.markInputUsed()`.
@@ -190,3 +251,10 @@ class DatasetRef(object):
         Read-only; update via `Registry.setAssembler()`.
         """
         return self._assembler
+
+    def __str__(self):
+        components = ""
+        if self.components:
+            components = ", components=[" + ", ".join(self.components) + "]"
+        return "DatasetRef({}, id={}, dataId={} {})".format(self.datasetType.name,
+                                                            self.id, self.dataId, components)

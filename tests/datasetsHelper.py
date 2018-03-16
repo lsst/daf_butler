@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+from lsst.daf.butler import DatasetType, DatasetRef
 
 
 class FitsCatalogDatasetsHelper:
@@ -57,3 +58,15 @@ class FitsCatalogDatasetsHelper:
         self.assertFloatsAlmostEqual(
             inputRecord.getShapeErr()[2, 2],
             outputRecord.getShapeErr()[2, 2], rtol=1e-6)
+
+
+class DatasetTestHelper:
+    """Helper methods for Datasets"""
+
+    def makeDatasetRef(self, datasetTypeName, dataUnits, storageClass, dataId, id=None):
+        """Make a DatasetType and wrap it in a DatasetRef for a test"""
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        if id is None:
+            self.id += 1
+            id = self.id
+        return DatasetRef(datasetType, dataId, id=id)
