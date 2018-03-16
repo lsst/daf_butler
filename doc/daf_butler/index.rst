@@ -18,7 +18,7 @@ Repository
    https://github.com/lsst/daf_butler
 
 JIRA component
-   ``daf_butler``
+   https://jira.lsstcorp.org/issues/?jql=component%3Ddaf_butler
 
 Modules
 =======
