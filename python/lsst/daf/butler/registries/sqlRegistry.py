@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from sqlalchemy import create_engine
+from sqlalchemy.sql import select
 
+from ..core.datasets import DatasetType
 from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
 
@@ -39,6 +41,7 @@ class SqlRegistry(Registry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
+
     def __init__(self, config):
         super().__init__(config)
 
@@ -46,6 +49,16 @@ class SqlRegistry(Registry):
         self._schema = Schema(self.config['schema'])
         self._engine = create_engine(self.config['db'])
         self._schema.metadata.create_all(self._engine)
+        self._datasetTypes = {}
+
+    def _isValidDatasetType(self, datasetType):
+        """Check if given `DatasetType` instance is valid for this `Registry`.
+
+        .. todo::
+
+            Insert checks for `storageClass`, `dataUnits` and `template`.
+        """
+        return isinstance(datasetType, DatasetType)
 
     def registerDatasetType(self, datasetType):
         """
@@ -56,7 +69,20 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType` to be added.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        if not self._isValidDatasetType(datasetType):
+            raise ValueError("DatasetType is not valid for this registry")
+        if datasetType.name in self._datasetTypes:
+            raise KeyError("DatasetType: {} already registered".format(datasetType.name))
+        datasetTypeTable = self._schema.metadata.tables['DatasetType']
+        datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
+        with self._engine.begin() as connection:
+            connection.execute(datasetTypeTable.insert().values(dataset_type_name=datasetType.name,
+                                                                storage_class=datasetType.storageClass))
+            if datasetType.dataUnits:
+                connection.execute(datasetTypeUnitsTable.insert(),
+                                   [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
+                                    for dataUnitName in datasetType.dataUnits])
+            self._datasetTypes[datasetType.name] = datasetType
 
     def getDatasetType(self, name):
         """Get the `DatasetType`.
@@ -71,7 +97,25 @@ class SqlRegistry(Registry):
         type : `DatasetType`
             The `DatasetType` associated with the given name.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetType = None
+        if name in self._datasetTypes:
+            datasetType = self._datasetTypes[name]
+        else:
+            datasetTypeTable = self._schema.metadata.tables['DatasetType']
+            datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
+            with self._engine.begin() as connection:
+                # Get StorageClass from DatasetType table
+                result = connection.execute(select([datasetTypeTable.c.storage_class]).where(
+                    datasetTypeTable.c.dataset_type_name == name)).fetchone()
+                storageClass = result['storage_class']
+                # Get DataUnits (if any) from DatasetTypeUnits table
+                result = connection.execute(select([datasetTypeUnitsTable.c.unit_name]).where(
+                    datasetTypeUnitsTable.c.dataset_type_name == name)).fetchall()
+                dataUnits = (r[0] for r in result) if result else ()
+                datasetType = DatasetType(name=name,
+                                          storageClass=storageClass,
+                                          dataUnits=dataUnits)
+        return datasetType
 
     def addDataset(self, ref, uri, components, run, producer=None):
         """Add a `Dataset` to a Collection.
