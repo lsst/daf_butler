@@ -213,7 +213,6 @@ class SqlRegistry(Registry):
         environment = None
         pipeline = None
         runTable = self._schema.metadata.tables['Run']
-        run = None
         with self._engine.begin() as connection:
             connection.execute(runTable.insert().values(execution_id=execution,
                                                         collection=collection,

@@ -82,7 +82,7 @@ class Butler(object):
             An identifier with `DataUnit` names and values.
         producer : `Quantum`, optional
             The producer.
-        
+
         Returns
         -------
         `DatasetRef`
@@ -99,7 +99,7 @@ class Butler(object):
             The `DatasetType`.
         dataId : `dict`
             An identifier with `DataUnit` names and values.
-        
+
         Returns
         -------
         `object`
