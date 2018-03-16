@@ -25,6 +25,7 @@ from sqlalchemy.sql import select
 from ..core.datasets import DatasetType
 from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
+from ..core.run import Run
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -208,7 +209,17 @@ class SqlRegistry(Registry):
         run : `Run`
             A new `Run` instance.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        execution = None  # Automatically generate one
+        environment = None
+        pipeline = None
+        runTable = self._schema.metadata.tables['Run']
+        run = None
+        with self._engine.begin() as connection:
+            connection.execute(runTable.insert().values(execution_id=execution,
+                                                        collection=collection,
+                                                        environment_id=environment,
+                                                        pipeline_id=pipeline))
+        return self.getRun(collection)  # Needed because execution_id is autoincrement
 
     def updateRun(self, run):
         """Update the `environment` and/or `pipeline` of the given `Run`
@@ -233,7 +244,28 @@ class SqlRegistry(Registry):
         id : `int`, optional
             If given, lookup by id instead and ignore `collection`.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        runTable = self._schema.metadata.tables['Run']
+        run = None
+        with self._engine.begin() as connection:
+            if (id is not None) and (collection is None):
+                result = connection.execute(select([runTable.c.execution_id,
+                                                    runTable.c.collection,
+                                                    runTable.c.environment_id,
+                                                    runTable.c.pipeline_id]).where(
+                                                        runTable.c.execution_id == id)).fetchone()
+            elif (collection is not None) and (id is None):
+                result = connection.execute(select([runTable.c.execution_id,
+                                                    runTable.c.collection,
+                                                    runTable.c.environment_id,
+                                                    runTable.c.pipeline_id]).where(
+                                                        runTable.c.collection == collection)).fetchone()
+            else:
+                raise ValueError("Either collection or id must be given")
+            run = Run(execution=result['execution_id'],
+                      collection=result['collection'],
+                      environment=result['environment_id'],
+                      pipeline=result['pipeline_id'])
+        return run
 
     def addQuantum(self, quantum):
         """Add a new `Quantum` to the `SqlRegistry`.

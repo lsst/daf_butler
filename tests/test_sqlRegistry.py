@@ -24,6 +24,7 @@ import unittest
 
 import lsst.utils.tests
 
+from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
@@ -66,6 +67,27 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)
+
+    def testRun(self):
+        registry = Registry.fromConfig(self.configFile)
+        # Check insertion and retrieval with two different collections
+        for collection in ["one", "two"]:
+            run = registry.makeRun(collection)
+            self.assertIsInstance(run, Run)
+            self.assertEquals(run.collection, collection)
+            # Test retrieval by collection
+            runCpy1 = registry.getRun(collection=run.collection)
+            self.assertEquals(runCpy1, run)
+            # Test retrieval by (run/execution) id
+            runCpy2 = registry.getRun(id=run.execution)
+            self.assertEquals(runCpy2, run)
+
+        # Non-existing collection should fail
+        with self.assertRaises(TypeError):  # TODO this should be a different error
+            registry.getRun(collection="bogus")
+        # Non-existing id should fail
+        with self.assertRaises(TypeError):  # TODO this should be a different error
+            registry.getRun(id=100)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
