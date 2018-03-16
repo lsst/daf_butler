@@ -37,7 +37,6 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
 
-    @unittest.expectedFailure
     def testConstructor(self):
         """Independent test of constructor.
         """
