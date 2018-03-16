@@ -88,7 +88,10 @@ class Butler(object):
         `DatasetRef`
             A reference to the stored dataset.
         """
-        raise NotImplementedError("Not yet implemented")
+        datasetType = self.registry.getDatasetType(datasetType)
+        ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
+        self.datastore.put(obj, ref)
+        return ref
 
     def get(self, datasetType, dataId):
         """Retrieve a stored dataset.

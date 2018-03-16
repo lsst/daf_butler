@@ -118,7 +118,7 @@ class SqlRegistry(Registry):
                                           dataUnits=dataUnits)
         return datasetType
 
-    def addDataset(self, ref, uri, components, run, producer=None):
+    def addDataset(self, datasetType, dataId, run, producer=None):
         """Add a `Dataset` to a Collection.
 
         This always adds a new `Dataset`; to associate an existing `Dataset` with
@@ -126,14 +126,10 @@ class SqlRegistry(Registry):
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Identifies the `Dataset` and contains its `DatasetType`.
-        uri : `str`
-            The URI that has been associated with the `Dataset` by a
-            `Datastore`.
-        components : `dict`
-            If the `Dataset` is a composite, a ``{name : URI}`` dictionary of
-            its named components and storage locations.
+        datasetType : `str`
+            Name of a `DatasetType`.
+        dataId : `dict`
+            An identifier with `DataUnit` names and values.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -145,7 +141,7 @@ class SqlRegistry(Registry):
 
         Returns
         -------
-        ref : `DatasetRef`
+        `DatasetRef`
             A newly-created `DatasetRef` instance.
 
         Raises

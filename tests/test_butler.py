@@ -25,12 +25,15 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler import Butler
+from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
+
+from datasetsHelper import FitsCatalogDatasetsHelper
 
 """Tests for Butler.
 """
 
 
-class ButlerTestCase(lsst.utils.tests.TestCase):
+class ButlerTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
     """Test for Butler.
     """
     def setUp(self):
@@ -45,7 +48,20 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
 
     @unittest.expectedFailure
     def testBasicPutGet(self):
-        raise NotImplementedError("Not yet implemented")
+        butler = Butler(self.configFile)
+        # Create and register a DatasetType
+        datasetTypeName = "catalog"
+        dataUnits = ("camera", "visit")
+        storageClass = "SourceCatalog"
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        butler.registry.registerDatasetType(datasetType)
+        # Create and store a dataset
+        catalog = self.makeExampleCatalog()
+        dataId = {"camera": "DummyCam", "visit": 42}
+        ref = butler.put(catalog, datasetTypeName, dataId)
+        self.assertIsInstance(ref, DatasetRef)
+        catalogOut = catalog.copy()
+        self.assertCatalogEqual(catalog, catalogOut)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
