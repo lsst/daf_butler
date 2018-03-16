@@ -61,6 +61,16 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
                             DatasetType("a", "StorageA", ("UnitB", )))
 
     def testHashability(self):
+        """Test `DatasetType.__hash__`.
+
+        This test is performed by checking that `DatasetType` entries can
+        be inserted into a `set` and that unique values of its
+        (`name`, `storageClass`, `dataUnits`) parameters result in separate
+        entries (and equal ones don't).
+
+        This does not check for uniformity of hashing or the actual values
+        of the hash function.
+        """
         types = []
         unique = 0
         for name in ["a", "b"]:
@@ -69,8 +79,8 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
                     datasetType = DatasetType(name, storageClass, dataUnits)
                     datasetTypeCopy = DatasetType(name, storageClass, dataUnits)
                     types.extend((datasetType, datasetTypeCopy))
-                    unique += 1
-        self.assertEqual(len(set(types)), unique)
+                    unique += 1  # datasetType should always equal its copy
+        self.assertEqual(len(set(types)), unique) # all other combinations are unique
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

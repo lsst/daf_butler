@@ -42,7 +42,17 @@ class DatasetType(object):
     may be added.
     `DatasetType` instances are immutable.
 
-    All arguments correspond directly to instance attributes.
+    Parameters
+    ----------
+    name : `str`
+        A string name for the `Dataset`; must correspond to the same
+        `DatasetType` across all Registries.
+    dataUnits : `iterable` of `str`
+        `DataUnit` names that defines the `DatasetRef`\ s corresponding to
+        this `DatasetType`.  The input iterable is copied into a `frozenset`.
+    storageClass : `str`
+        Name of a `StorageClass` that defines how this `DatasetType`
+        is persisted.
     """
 
     __slots__ = ("_name", "_dataUnits", "_storageClass")
@@ -65,7 +75,8 @@ class DatasetType(object):
 
     @property
     def storageClass(self):
-        """A `StorageClass` that defines how this `DatasetType` is persisted.
+        """Name of a `StorageClass` that defines how this `DatasetType`
+        is persisted.
         """
         return self._storageClass
 
