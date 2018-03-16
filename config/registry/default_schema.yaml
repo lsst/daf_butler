@@ -1130,15 +1130,6 @@ tables:
         A unique autoincrement field used as part of the primary key for
         Dataset.
     -
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        A different number for each potentially independent producer of
-        dataset_ids, used as part of the primary key for Dataset to avoid
-        clashes.
-    -
       name: dataset_type_name
       type: string
       nullable: false
@@ -1151,17 +1142,14 @@ tables:
       nullable: false
       doc: >
         The ID of the Run that produced this Dataset, providing access to
-        coarse provenance information.  The registry_id of the associated
-        Run is assumed to be the same as that of the Dataset itself.
+        coarse provenance information.
     -
       name: quantum_id
       type: int
       doc: >
         The ID of the Quantum that produced this Dataset, providing access
-        to fine-grained provenance information.  The registry_id of the
-        associated Quantum is assumed to be the same as that of the
-        Dataset itself.  May be null for Datasets not produced by running
-        a SuperTask.
+        to fine-grained provenance information.
+        May be null for Datasets not produced by running a SuperTask.
     -
       name: assembler
       type: string
@@ -1175,19 +1163,11 @@ tables:
       src: dataset_type_name
       tgt: DatasetType.dataset_type_name
     -
-      src:
-      - run_id
-      - registry_id
-      tgt:
-      - Run.execution_id
-      - Run.registry_id
+      src: run_id
+      tgt: Run.execution_id
     -
-      src:
-      - quantum_id
-      - registry_id
-      tgt:
-      - Quantum.execution_id
-      - Quantum.registry_id
+      src: quantum_id
+      tgt: Quantum.execution_id
 
   DatasetComposition:
     doc: >
@@ -1200,16 +1180,7 @@ tables:
       primary_key: true
       nullable: false
       doc: >
-        Link (with parent_registry_id) to the Dataset entry for the
-        parent/composite dataset.
-    -
-      name: parent_registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        Link (with parent_dataset_id) to the Dataset entry for the
-        parent/composite dataset.
+        Link to the Dataset entry for the parent/composite dataset.
     -
       name: component_dataset_id
       type: int
@@ -1219,14 +1190,6 @@ tables:
         Link (with component_dataset_id) to the Dataset entry for a
         child/component dataset.
     -
-      name: component_registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        Link (with component_registry_id) to the Dataset entry for a
-        child/component dataset.
-    -
       name: component_name
       type: string
       nullable: false
@@ -1234,19 +1197,11 @@ tables:
         Name of this component within this composite.
     foreignKeys:
     -
-      src:
-      - parent_dataset_id
-      - parent_registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: parent_dataset_id
+      tgt: Dataset.dataset_id
     -
-      src:
-      - component_dataset_id
-      - component_registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: component_dataset_id
+      tgt: Dataset.dataset_id
 
   DatasetType:
     doc: >
@@ -1326,14 +1281,7 @@ tables:
       primary_key: true
       nullable: false
       doc: >
-        Link (with registry_id) to a unique record in the Dataset table.
-    -
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        Link (with dataset_id) to a unique record in the Dataset table.
+        Link to a unique record in the Dataset table.
     -
       name: collection
       type: string
@@ -1343,12 +1291,8 @@ tables:
         Name of a Collection with which this Dataset is associated.
     foreignKeys:
     -
-      src:
-      - dataset_id
-      - registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: dataset_id
+      tgt: Dataset.dataset_id
 
   Execution:
     doc: >
@@ -1362,15 +1306,6 @@ tables:
       doc: >
         A unique autoincrement field used as part of the primary key for
         Execution.
-    -
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        A different number for each potentially independent producer of
-        execution_ids, used as part of the primary key for Execution to
-        avoid clashes.
     -
       name: start_time
       type: datetime
@@ -1406,16 +1341,8 @@ tables:
       primary_key: true
       nullable: false
       doc: >
-        A unique (with registry_id) integer identifier for this Run, which
+        A unique integer identifier for this Run, which
         is also the execution_id for an associated Execution record.
-    -
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        A different number for each potentially independent producer of
-        execution_ids, used as part of the primary key to avoid clashes.
     -
       name: collection
       type: string
@@ -1428,36 +1355,22 @@ tables:
       doc: >
         A dataset_id linking to a Dataset that contains a description of
         the software environment (e.g. versions) used for this Run.
-        The registry_id of the Dataset must be the same as that of the Run.
     -
       name: pipeline_id
       type: int
       doc: >
         A dataset_id linking to a Dataset that contains a serialization of
         the SuperTask Pipeline used for this Run (if any).
-        The registry_id of the Dataset must be the same as that of the Run.
     foreignKeys:
     -
-      src:
-      - environment_id
-      - registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: environment_id
+      tgt: Dataset.dataset_id
     -
-      src:
-      - pipeline_id
-      - registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: pipeline_id
+      tgt: Dataset.dataset_id
     -
-      src:
-      - execution_id
-      - registry_id
-      tgt:
-      - Execution.execution_id
-      - Execution.registry_id
+      src: execution_id
+      tgt: Execution.execution_id
 
   Quantum:
     doc: >
@@ -1471,16 +1384,8 @@ tables:
       primary_key: true
       nullable: false
       doc: >
-        A unique (with registry_id) integer identifier for this Quantum,
+        A unique integer identifier for this Quantum,
         which is also the execution_id for an associated Execution record.
-    -
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        A different number for each potentially independent producer of
-        execution_ids, used as part of the primary key to avoid clashes.
     -
       name: task
       type: string
@@ -1490,22 +1395,14 @@ tables:
       name: run_id
       type: int
       doc: >
-        Link (with registry_id) to the Run this Quantum is a part of.
+        Link to the Run this Quantum is a part of.
     foreignKeys:
     -
-      src:
-      - run_id
-      - registry_id
-      tgt:
-      - Run.execution_id
-      - Run.registry_id
+      src: run_id
+      tgt: Run.execution_id
     -
-      src:
-      - execution_id
-      - registry_id
-      tgt:
-      - Execution.execution_id
-      - Execution.registry_id
+      src: execution_id
+      tgt: Execution.execution_id
 
   DatasetConsumers:
     doc: >
@@ -1516,25 +1413,13 @@ tables:
       type: int
       nullable: false
       doc: >
-        A link (with quantum_registry_id) to the associated Quantum.
-    -
-      name: quantum_registry_id
-      type: int
-      nullable: false
-      doc: >
-        A link (with quantum_id) to the associated Quantum.
+        A link to the associated Quantum.
     -
       name: dataset_id
       type: int
       nullable: false
       doc: >
-        A link (with dataset_registry_id) to the associated Dataset.
-    -
-      name: dataset_registry_id
-      type: int
-      nullable: false
-      doc: >
-        A link (with dataset_id) to the asscoiated Dataset.
+        A link to the associated Dataset.
     -
       name: actual
       type: bool
@@ -1544,19 +1429,11 @@ tables:
         (as opposed to just predicted to be used during preflight).
     foreignKeys:
     -
-      src:
-      - quantum_id
-      - quantum_registry_id
-      tgt:
-      - Quantum.execution_id
-      - Quantum.registry_id
+      src: quantum_id
+      tgt: Quantum.execution_id
     -
-      src:
-      - dataset_id
-      - dataset_registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: dataset_id
+      tgt: Dataset.dataset_id
 
   DatasetStorage:
     doc: >
@@ -1571,14 +1448,7 @@ tables:
       primary_key: true
       nullable: false
       doc: >
-        Link (with registry_id) to the Dataset table.
-    -
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        Link (with dataset_id) to the Dataset table.
+        Link to the Dataset table.
     - name: datastore_name
       type: string
       primary_key: true
@@ -1595,9 +1465,5 @@ tables:
         Total size of the stored dataset in bytes, if applicable.
     foreignKeys:
     -
-      src:
-      - dataset_id
-      - registry_id
-      tgt:
-      - Dataset.dataset_id
-      - Dataset.registry_id
+      src: dataset_id
+      tgt: Dataset.dataset_id
