@@ -25,16 +25,13 @@ import lsst.utils.tests
 
 from lsst.daf.butler.core.datasets import DatasetType
 
-"""Tests for SqlRegistry.
+"""Tests for DatasetType.
 """
 
 
 class DatasetTypeTestCase(lsst.utils.tests.TestCase):
     """Test for DatasetType.
     """
-    def setUp(self):
-        pass
-
     def testConstructor(self):
         """Test construction preserves values.
 
@@ -80,7 +77,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
                     datasetTypeCopy = DatasetType(name, storageClass, dataUnits)
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
-        self.assertEqual(len(set(types)), unique) # all other combinations are unique
+        self.assertEqual(len(set(types)), unique)  # all other combinations are unique
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

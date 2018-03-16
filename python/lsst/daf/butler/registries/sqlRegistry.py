@@ -105,7 +105,7 @@ class SqlRegistry(Registry):
             datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
             with self._engine.begin() as connection:
                 # Get StorageClass from DatasetType table
-                result = connection.execute(select([datasetTypeTable.c.storage_class,]).where(
+                result = connection.execute(select([datasetTypeTable.c.storage_class]).where(
                     datasetTypeTable.c.dataset_type_name == name)).fetchone()
                 storageClass = result['storage_class']
                 # Get DataUnits (if any) from DatasetTypeUnits table
