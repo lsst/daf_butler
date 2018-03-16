@@ -198,6 +198,8 @@ class SqlRegistry(Registry):
     def makeRun(self, collection):
         """Create a new `Run` in the `SqlRegistry` and return it.
 
+        If a run with this collection already exists, return that instead.
+
         Parameters
         ----------
         collection : `str`
@@ -209,16 +211,20 @@ class SqlRegistry(Registry):
         run : `Run`
             A new `Run` instance.
         """
-        execution = None  # Automatically generate one
-        environment = None
-        pipeline = None
-        runTable = self._schema.metadata.tables['Run']
-        with self._engine.begin() as connection:
-            connection.execute(runTable.insert().values(execution_id=execution,
-                                                        collection=collection,
-                                                        environment_id=environment,
-                                                        pipeline_id=pipeline))
-        return self.getRun(collection)  # Needed because execution_id is autoincrement
+        # First see if a run with this collection already exists
+        run = self.getRun(collection)
+        if run is not None:
+            execution = None  # Automatically generate one
+            environment = None
+            pipeline = None
+            runTable = self._schema.metadata.tables['Run']
+            with self._engine.begin() as connection:
+                connection.execute(runTable.insert().values(execution_id=execution,
+                                                            collection=collection,
+                                                            environment_id=environment,
+                                                            pipeline_id=pipeline))
+            run = self.getRun(collection)  # Needed because execution_id is autoincrement
+        return run
 
     def updateRun(self, run):
         """Update the `environment` and/or `pipeline` of the given `Run`
@@ -246,12 +252,14 @@ class SqlRegistry(Registry):
         runTable = self._schema.metadata.tables['Run']
         run = None
         with self._engine.begin() as connection:
+            # Retrieve by id
             if (id is not None) and (collection is None):
                 result = connection.execute(select([runTable.c.execution_id,
                                                     runTable.c.collection,
                                                     runTable.c.environment_id,
                                                     runTable.c.pipeline_id]).where(
                                                         runTable.c.execution_id == id)).fetchone()
+            # Retrieve by collection    
             elif (collection is not None) and (id is None):
                 result = connection.execute(select([runTable.c.execution_id,
                                                     runTable.c.collection,
@@ -260,10 +268,11 @@ class SqlRegistry(Registry):
                                                         runTable.c.collection == collection)).fetchone()
             else:
                 raise ValueError("Either collection or id must be given")
-            run = Run(execution=result['execution_id'],
-                      collection=result['collection'],
-                      environment=result['environment_id'],
-                      pipeline=result['pipeline_id'])
+            if result is not None:
+                run = Run(execution=result['execution_id'],
+                        collection=result['collection'],
+                        environment=result['environment_id'],
+                        pipeline=result['pipeline_id'])
         return run
 
     def addQuantum(self, quantum):
