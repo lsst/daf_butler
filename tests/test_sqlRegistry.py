@@ -49,7 +49,6 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         datasetTypeName = "test"
         storageClass = "StructuredData"
         dataUnits = ("camera", "visit")
-        template = "{datasetType}/{camera}/{visit}"
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
@@ -63,8 +62,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         datasetTypeName = "testNoneTemplate"
         storageClass = "StructuredData"
         dataUnits = ("camera", "visit")
-        template = None
-        inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass, template)
+        inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)

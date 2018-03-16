@@ -77,8 +77,7 @@ class SqlRegistry(Registry):
         datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
         with self._engine.begin() as connection:
             connection.execute(datasetTypeTable.insert().values(dataset_type_name=datasetType.name,
-                                                                storage_class=datasetType.storageClass,
-                                                                template=datasetType.template))
+                                                                storage_class=datasetType.storageClass))
             if datasetType.dataUnits:
                 connection.execute(datasetTypeUnitsTable.insert(),
                                    [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
@@ -105,20 +104,17 @@ class SqlRegistry(Registry):
             datasetTypeTable = self._schema.metadata.tables['DatasetType']
             datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
             with self._engine.begin() as connection:
-                # Get StorageClass and template from DatasetType table
-                result = connection.execute(select([datasetTypeTable.c.storage_class,
-                                                    datasetTypeTable.c.template]).where(
+                # Get StorageClass from DatasetType table
+                result = connection.execute(select([datasetTypeTable.c.storage_class,]).where(
                     datasetTypeTable.c.dataset_type_name == name)).fetchone()
                 storageClass = result['storage_class']
-                template = result['template']
                 # Get DataUnits (if any) from DatasetTypeUnits table
                 result = connection.execute(select([datasetTypeUnitsTable.c.unit_name]).where(
                     datasetTypeUnitsTable.c.dataset_type_name == name)).fetchall()
                 dataUnits = (r[0] for r in result) if result else ()
                 datasetType = DatasetType(name=name,
                                           storageClass=storageClass,
-                                          dataUnits=dataUnits,
-                                          template=template)
+                                          dataUnits=dataUnits)
         return datasetType
 
     def addDataset(self, ref, uri, components, run, producer=None):

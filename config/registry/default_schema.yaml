@@ -517,10 +517,6 @@ tables:
       name: storage_class
       type: string
       nullable: false
-    - 
-      name: template
-      type: string
-      nullable: true
 
   DatasetTypeUnits:
     doc: >

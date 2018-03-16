@@ -38,33 +38,27 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Test construction preserves values.
 
-        Note that construction doesn't check for valid storageClass,
-        dataUnits or template parameters.
+        Note that construction doesn't check for valid storageClass or
+        dataUnits parameters.
         These can only be verified for a particular schema.
         """
         datasetTypeName = "test"
         storageClass = "StructuredData"
         dataUnits = frozenset(("camera", "visit"))
-        template = "{datasetType}/{camera}/{visit}"
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass, template)
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
         self.assertEqual(datasetType.dataUnits, dataUnits)
-        self.assertEqual(datasetType.template, template)
 
     def testEquality(self):
         self.assertEqual(DatasetType("a", "StorageA", ("UnitA", )),
                          DatasetType("a", "StorageA", ("UnitA", )))
-        self.assertEqual(DatasetType("a", "StorageA", ("UnitA", ), "{UnitA}"),
-                         DatasetType("a", "StorageA", ("UnitA", ), "{UnitA}"))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", ), "{UnitA}"),
-                            DatasetType("b", "StorageA", ("UnitA", ), "{UnitA}"))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", ), "{UnitA}"),
-                            DatasetType("a", "StorageB", ("UnitA", ), "{UnitA}"))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", ), "{UnitA}"),
-                            DatasetType("a", "StorageA", ("UnitB", ), "{UnitA}"))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", ), "{UnitA}"),
-                            DatasetType("a", "StorageA", ("UnitA", ), "{UnitB}"))
+        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", )),
+                            DatasetType("b", "StorageA", ("UnitA", )))
+        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", )),
+                            DatasetType("a", "StorageB", ("UnitA", )))
+        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", )),
+                            DatasetType("a", "StorageA", ("UnitB", )))
 
     def testHashability(self):
         types = []
@@ -72,11 +66,10 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         for name in ["a", "b"]:
             for storageClass in ["c", "d"]:
                 for dataUnits in [("e", ), ("f", )]:
-                    for template in ["g", "h"]:
-                        datasetType = DatasetType(name, storageClass, dataUnits, template)
-                        datasetTypeCopy = DatasetType(name, storageClass, dataUnits, template)
-                        types.extend((datasetType, datasetTypeCopy))
-                        unique += 1
+                    datasetType = DatasetType(name, storageClass, dataUnits)
+                    datasetTypeCopy = DatasetType(name, storageClass, dataUnits)
+                    types.extend((datasetType, datasetTypeCopy))
+                    unique += 1
         self.assertEqual(len(set(types)), unique)
 
 

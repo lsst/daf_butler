@@ -45,7 +45,7 @@ class DatasetType(object):
     All arguments correspond directly to instance attributes.
     """
 
-    __slots__ = ("_name", "_dataUnits", "_storageClass", "_template")
+    __slots__ = ("_name", "_dataUnits", "_storageClass")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
@@ -69,22 +69,10 @@ class DatasetType(object):
         """
         return self._storageClass
 
-    @property
-    def template(self):
-        """A string with `str`.format-style replacement patterns that can be
-        used to create a path from a `Run`
-        (and optionally its associated Collection) and a `DatasetRef`.
-
-        May be `None` to indicate a read-only `Dataset` or one whose templates
-        must be provided at a higher level.
-        """
-        return self._template
-
-    def __init__(self, name, dataUnits, storageClass, template=None):
+    def __init__(self, name, dataUnits, storageClass):
         self._name = name
         self._dataUnits = frozenset(dataUnits)
         self._storageClass = storageClass
-        self._template = template
 
 
 class DatasetRef(object):
