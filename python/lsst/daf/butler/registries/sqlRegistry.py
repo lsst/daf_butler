@@ -173,6 +173,24 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             connection.execute(datasetTable.update().where(dataset_id=ref.id).values(assembler=assembler))
 
+    def attachComponent(self, name, parent, child):
+        """Attach a component to a dataset.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the component.
+        parent : `DatasetRef`
+            A reference to the parent dataset.
+        child : `DatasetRef`
+            A reference to the child dataset.
+        """
+        datasetCompositionTable = self._schema.metadata.tables['DatasetComposition']
+        with self._engine.begin() as connection:
+            connection.execute(datasetCompositionTable.insert().values(component_name=name,
+                                                                       parent_dataset_id=parent.id,
+                                                                       child_dataset_id=child.id))
+
     def associate(self, collection, refs):
         """Add existing `Dataset`\ s to a Collection, possibly creating the
         Collection in the process.
