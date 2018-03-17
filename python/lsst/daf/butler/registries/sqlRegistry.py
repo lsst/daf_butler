@@ -209,7 +209,7 @@ class SqlRegistry(Registry):
         """
         # First see if a run with this collection already exists
         run = self.getRun(collection)
-        if run is not None:
+        if run is None:
             execution = None  # Automatically generate one
             environment = None
             pipeline = None
@@ -255,7 +255,7 @@ class SqlRegistry(Registry):
                                                     runTable.c.environment_id,
                                                     runTable.c.pipeline_id]).where(
                                                         runTable.c.execution_id == id)).fetchone()
-            # Retrieve by collection    
+            # Retrieve by collection
             elif (collection is not None) and (id is None):
                 result = connection.execute(select([runTable.c.execution_id,
                                                     runTable.c.collection,
@@ -266,9 +266,9 @@ class SqlRegistry(Registry):
                 raise ValueError("Either collection or id must be given")
             if result is not None:
                 run = Run(execution=result['execution_id'],
-                        collection=result['collection'],
-                        environment=result['environment_id'],
-                        pipeline=result['pipeline_id'])
+                          collection=result['collection'],
+                          environment=result['environment_id'],
+                          pipeline=result['pipeline_id'])
         return run
 
     def addQuantum(self, quantum):

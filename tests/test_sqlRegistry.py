@@ -81,13 +81,10 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
             # Test retrieval by (run/execution) id
             runCpy2 = registry.getRun(id=run.execution)
             self.assertEquals(runCpy2, run)
-
-        # Non-existing collection should fail
-        with self.assertRaises(TypeError):  # TODO this should be a different error
-            registry.getRun(collection="bogus")
-        # Non-existing id should fail
-        with self.assertRaises(TypeError):  # TODO this should be a different error
-            registry.getRun(id=100)
+        # Non-existing collection should return None
+        self.assertIsNone(registry.getRun(collection="bogus"))
+        # Non-existing id should return None
+        self.assertIsNone(registry.getRun(id=100))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
