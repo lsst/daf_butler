@@ -23,9 +23,9 @@ import unittest
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.datasets import DatasetType
+from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
 
-"""Tests for DatasetType.
+"""Tests for datasets module.
 """
 
 
@@ -78,6 +78,25 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
+
+
+class DatasetRefTestCase(lsst.utils.tests.TestCase):
+    """Test for DatasetRef.
+    """
+    def testConstructor(self):
+        """Test construction preserves values.
+        """
+        datasetTypeName = "test"
+        storageClass = "StructuredData"
+        dataUnits = frozenset(("camera", "visit"))
+        dataId = dict(camera="DummyCam", visit=42)
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        ref = DatasetRef(datasetType, dataId)
+        self.assertEqual(ref.datasetType, datasetType)
+        self.assertEqual(ref.dataId, dataId)
+        self.assertIsNone(ref.producer)
+        self.assertEqual(ref.predictedConsumers, dict())
+        self.assertEqual(ref.actualConsumers, dict())
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
