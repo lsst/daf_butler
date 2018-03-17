@@ -209,7 +209,10 @@ class SqlRegistry(Registry):
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
+        with self._engine.begin() as connection:
+            connection.execute(datasetCollectionTable.insert(),
+                               [{'dataset_id': ref.id, 'collection': collection} for ref in refs])
 
     def disassociate(self, collection, refs, remove=True):
         """Remove existing `Dataset`\ s from a Collection.
