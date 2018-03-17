@@ -74,13 +74,13 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         for collection in ["one", "two"]:
             run = registry.makeRun(collection)
             self.assertIsInstance(run, Run)
-            self.assertEquals(run.collection, collection)
+            self.assertEqual(run.collection, collection)
             # Test retrieval by collection
             runCpy1 = registry.getRun(collection=run.collection)
-            self.assertEquals(runCpy1, run)
+            self.assertEqual(runCpy1, run)
             # Test retrieval by (run/execution) id
             runCpy2 = registry.getRun(id=run.execution)
-            self.assertEquals(runCpy2, run)
+            self.assertEqual(runCpy2, run)
         # Non-existing collection should return None
         self.assertIsNone(registry.getRun(collection="bogus"))
         # Non-existing id should return None

@@ -40,10 +40,10 @@ class RunTestCase(lsst.utils.tests.TestCase):
         environment = None
         pipeline = None
         run = Run(execution, collection, environment, pipeline)
-        self.assertEquals(run.execution, execution)
-        self.assertEquals(run.collection, collection)
-        self.assertEquals(run.environment, environment)
-        self.assertEquals(run.pipeline, pipeline)
+        self.assertEqual(run.execution, execution)
+        self.assertEqual(run.collection, collection)
+        self.assertEqual(run.environment, environment)
+        self.assertEqual(run.pipeline, pipeline)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
