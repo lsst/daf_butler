@@ -118,7 +118,7 @@ class DatasetRef(object):
     @property
     def id(self):
         """Primary key of the dataset (`int`)
-        
+
         Typically assigned by `Registry`.
         """
         return self._id

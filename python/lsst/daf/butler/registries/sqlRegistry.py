@@ -171,8 +171,7 @@ class SqlRegistry(Registry):
         """
         datasetTable = self._schema.metadata.tables['Dataset']
         with self._engine.begin() as connection:
-            result = connection.execute(datasetTable.update().where(
-                dataset_id=ref.id).values(assembler=assembler))
+            connection.execute(datasetTable.update().where(dataset_id=ref.id).values(assembler=assembler))
 
     def associate(self, collection, refs):
         """Add existing `Dataset`\ s to a Collection, possibly creating the
