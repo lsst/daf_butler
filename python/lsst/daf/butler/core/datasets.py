@@ -99,17 +99,29 @@ class DatasetRef(object):
     dataId : `dict`
         Dictionary where the keys are `DataUnit` names and the values are
         `DataUnit` values.
+    id : `int`, optional
+        A unique identifier.
+        Normally set to `None` and assigned by `Registry`
     """
 
-    __slots__ = ("_datasetType", "_dataId", "_producer", "_predictedConsumers", "_actualConsumers")
+    __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_predictedConsumers", "_actualConsumers")
 
-    def __init__(self, datasetType, dataId):
+    def __init__(self, datasetType, dataId, id=None):
         assert isinstance(datasetType, DatasetType)
+        self._id = id
         self._datasetType = datasetType
         self._dataId = dataId
         self._producer = None
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
+
+    @property
+    def id(self):
+        """Primary key of the dataset (`int`)
+        
+        Typically assigned by `Registry`.
+        """
+        return self._id
 
     @property
     def datasetType(self):

@@ -153,11 +153,26 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.metadata.tables['Dataset']
         datasetRef = None
         with self._engine.begin() as connection:
-            connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
-                                                            run_id=run.execution,
-                                                            quantum_id=None))  # TODO add producer
-            datasetRef = DatasetRef(datasetType, dataId)
+            result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
+                                                                     run_id=run.execution,
+                                                                     quantum_id=None))  # TODO add producer
+            datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
         return datasetRef
+
+    def setAssembler(self, ref, assembler):
+        """Set the assembler to use for a composite dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the dataset for which to set the assembler.
+        assembler : `str`
+            Fully qualified name of the assembler.
+        """
+        datasetTable = self._schema.metadata.tables['Dataset']
+        with self._engine.begin() as connection:
+            result = connection.execute(datasetTable.update().where(
+                dataset_id=ref.id).values(assembler=assembler))
 
     def associate(self, collection, refs):
         """Add existing `Dataset`\ s to a Collection, possibly creating the
