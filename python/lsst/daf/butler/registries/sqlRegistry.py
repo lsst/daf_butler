@@ -237,7 +237,14 @@ class SqlRegistry(Registry):
             If `remove` is `True`, the `list` of `DatasetRef`\ s that were
             removed.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        if remove:
+            raise NotImplementedError("Cleanup of datasets not yet implemented")
+        datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
+        with self._engine.begin() as connection:
+            for ref in refs:
+                connection.execute(datasetCollectionTable.delete().where(
+                    and_(dataset_id=ref.id, collection=collection)))
+        return []
 
     def makeRun(self, collection):
         """Create a new `Run` in the `SqlRegistry` and return it.
