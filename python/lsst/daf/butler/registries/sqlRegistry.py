@@ -22,7 +22,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select
 
-from ..core.datasets import DatasetType
+from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
 from ..core.run import Run
@@ -150,7 +150,15 @@ class SqlRegistry(Registry):
             If a `Dataset` with the given `DatasetRef` already exists in the
             given Collection.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetTable = self._schema.metadata.tables['Dataset']
+        datasetRef = None
+        with self._engine.begin() as connection:
+            connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
+                                                            run_id=run.execution,
+                                                            quantum_id=None,  # TODO add producer
+                                                            assembler=None))  # TODO add assembler
+            datasetRef = DatasetRef(datasetType, dataId)
+        return datasetRef
 
     def associate(self, collection, refs):
         """Add existing `Dataset`\ s to a Collection, possibly creating the

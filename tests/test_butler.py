@@ -46,7 +46,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
         butler = Butler(self.configFile)
         self.assertIsInstance(butler, Butler)
 
-    @unittest.expectedFailure
+#    @unittest.expectedFailure
     def testBasicPutGet(self):
         butler = Butler(self.configFile)
         # Create and register a DatasetType

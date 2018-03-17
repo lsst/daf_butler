@@ -90,7 +90,7 @@ class Butler(object):
         """
         datasetType = self.registry.getDatasetType(datasetType)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
-        self.datastore.put(obj, ref)
+        # self.datastore.put(obj, ref)
         return ref
 
     def get(self, datasetType, dataId):
