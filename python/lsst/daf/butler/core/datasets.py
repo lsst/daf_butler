@@ -104,6 +104,7 @@ class DatasetRef(object):
     __slots__ = ("_datasetType", "_dataId", "_producer", "_predictedConsumers", "_actualConsumers")
 
     def __init__(self, datasetType, dataId):
+        assert isinstance(datasetType, DatasetType)
         self._datasetType = datasetType
         self._dataId = dataId
         self._producer = None
