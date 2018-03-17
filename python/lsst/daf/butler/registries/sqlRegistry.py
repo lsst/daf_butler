@@ -155,8 +155,7 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
                                                             run_id=run.execution,
-                                                            quantum_id=None,  # TODO add producer
-                                                            assembler=None))  # TODO add assembler
+                                                            quantum_id=None))  # TODO add producer
             datasetRef = DatasetRef(datasetType, dataId)
         return datasetRef
 
