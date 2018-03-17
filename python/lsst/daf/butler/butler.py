@@ -108,4 +108,6 @@ class Butler(object):
         `object`
             The dataset.
         """
-        raise NotImplementedError("Not yet implemented")
+        datasetType = self.registry.getDatasetType(datasetType)
+        ref = self.registry.find(datasetType, dataId)
+        return self.datastore.get(ref)
