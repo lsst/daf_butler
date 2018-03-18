@@ -93,6 +93,26 @@ class Butler(object):
         # self.datastore.put(obj, ref)
         return ref
 
+    def getDirect(self, ref):
+        """Retrieve a stored dataset.
+
+        Unlike `Butler.get`, this method allows datasets outside the Butler's collection to be read as
+        long as the `DatasetRef` that identifies them can be obtained separately.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to an already stored dataset.
+
+        Returns
+        -------
+        `object`
+            The dataset.
+        """
+        # Currently a direct pass-through to `Datastore.get` but this should
+        # change for composites.
+        return self.datastore.get(ref)
+
     def get(self, datasetType, dataId):
         """Retrieve a stored dataset.
 
@@ -110,4 +130,4 @@ class Butler(object):
         """
         datasetType = self.registry.getDatasetType(datasetType)
         ref = self.registry.find(datasetType, dataId)
-        return self.datastore.get(ref)
+        return self.getDirect(ref)
