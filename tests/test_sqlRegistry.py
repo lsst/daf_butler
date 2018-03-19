@@ -24,6 +24,7 @@ import unittest
 
 import lsst.utils.tests
 
+from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
@@ -99,6 +100,27 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(registry.getRun(collection="bogus"))
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
+
+    def testStorageInfo(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        run = registry.makeRun(collection="test")
+        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+        datastoreName = "dummystore"
+        md5 = "d6fb1c0c8f338044b2faaf328f91f707"
+        size = 512
+        storageInfo = StorageInfo(datastoreName, md5, size)
+        # Test adding information about a new dataset
+        registry.addStorageInfo(ref, storageInfo)
+        outStorageInfo = registry.getStorageInfo(ref, datastoreName)
+        self.assertEqual(outStorageInfo, storageInfo)
+        # Test updating storage information for an existing dataset
+        updatedStorageInfo = StorageInfo(datastoreName, "20a38163c50f4aa3aa0f4047674f8ca7", size+1)
+        registry.updateStorageInfo(ref, datastoreName, updatedStorageInfo)
+        outStorageInfo = registry.getStorageInfo(ref, datastoreName)
+        self.assertNotEqual(outStorageInfo, storageInfo)
+        self.assertEqual(outStorageInfo, updatedStorageInfo)
 
     def testAssembler(self):
         registry = Registry.fromConfig(self.configFile)

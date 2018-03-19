@@ -20,12 +20,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from sqlalchemy import create_engine
-from sqlalchemy.sql import select
+from sqlalchemy.sql import select, and_
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
 from ..core.run import Run
+from ..core.storageInfo import StorageInfo
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -319,6 +320,79 @@ class SqlRegistry(Registry):
                           environment=result['environment_id'],
                           pipeline=result['pipeline_id'])
         return run
+
+    def addStorageInfo(self, ref, storageInfo):
+        """Add storage information for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to add storage information.
+        storageInfo : `StorageInfo`
+            Storage information about the dataset.
+        """
+        datasetStorageTable = self._schema.metadata.tables['DatasetStorage']
+        with self._engine.begin() as connection:
+            connection.execute(datasetStorageTable.insert().values(dataset_id=ref.id,
+                                                                   datastore_name=storageInfo.datastoreName,
+                                                                   md5=storageInfo.md5,
+                                                                   size=storageInfo.size))
+
+    def updateStorageInfo(self, ref, datastoreName, storageInfo):
+        """Update storage information for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to add storage information.
+        datastoreName : `str`
+            What datastore association to update.
+        storageInfo : `StorageInfo`
+            Storage information about the dataset.
+        """
+        datasetStorageTable = self._schema.metadata.tables['DatasetStorage']
+        with self._engine.begin() as connection:
+            connection.execute(datasetStorageTable.update().where(and_(
+                datasetStorageTable.c.dataset_id == ref.id,
+                datasetStorageTable.c.datastore_name == datastoreName)).values(
+                    datastore_name=storageInfo.datastoreName,
+                    md5=storageInfo.md5,
+                    size=storageInfo.size))
+
+    def getStorageInfo(self, ref, datastoreName):
+        """Retrieve storage information for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to add storage information.
+        datastoreName : `str`
+            What datastore association to update.
+
+        Returns
+        -------
+        `StorageInfo`
+            Storage information about the dataset.
+        """
+        datasetStorageTable = self._schema.metadata.tables['DatasetStorage']
+        storageInfo = None
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                select([datasetStorageTable.c.datastore_name,
+                        datasetStorageTable.c.md5,
+                        datasetStorageTable.c.size]).where(
+                            and_(datasetStorageTable.c.dataset_id == ref.id,
+                                 datasetStorageTable.c.datastore_name == datastoreName))).fetchone()
+            storageInfo = StorageInfo(datastoreName=result["datastore_name"],
+                                      md5=result["md5"],
+                                      size=result["size"])
+        return storageInfo
 
     def addQuantum(self, quantum):
         """Add a new `Quantum` to the `SqlRegistry`.
