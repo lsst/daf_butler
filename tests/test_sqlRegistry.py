@@ -68,6 +68,20 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)
 
+    def testComponents(self):
+        registry = Registry.fromConfig(self.configFile)
+        parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass="dummy")
+        childDatasetType = DatasetType(name="child", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(parentDatasetType)
+        registry.registerDatasetType(childDatasetType)
+        run = registry.makeRun(collection="test")
+        parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
+        children = {"child1": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run),
+                    "child2": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run)}
+        for name, child in children.items():
+            registry.attachComponent(name, parent, child)
+        self.assertEqual(parent.components, children)
+
     def testRun(self):
         registry = Registry.fromConfig(self.configFile)
         # Check insertion and retrieval with two different collections

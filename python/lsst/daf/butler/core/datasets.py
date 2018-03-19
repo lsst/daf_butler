@@ -104,7 +104,8 @@ class DatasetRef(object):
         Normally set to `None` and assigned by `Registry`
     """
 
-    __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_predictedConsumers", "_actualConsumers")
+    __slots__ = ("_id", "_datasetType", "_dataId", "_producer",
+                 "_predictedConsumers", "_actualConsumers", "_components")
 
     def __init__(self, datasetType, dataId, id=None):
         assert isinstance(datasetType, DatasetType)
@@ -114,6 +115,7 @@ class DatasetRef(object):
         self._producer = None
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
+        self._components = dict()
 
     @property
     def id(self):
@@ -167,3 +169,11 @@ class DatasetRef(object):
         May be an empty list if no provenance information is available.
         """
         return _safeMakeMappingProxyType(self._actualConsumers)
+
+    @property
+    def components(self):
+        """Named `DatasetRef` components.
+
+        Read-only; update via `Registry.attachComponent()`.
+        """
+        return _safeMakeMappingProxyType(self._components)

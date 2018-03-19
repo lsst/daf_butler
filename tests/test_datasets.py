@@ -97,6 +97,7 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(ref.producer)
         self.assertEqual(ref.predictedConsumers, dict())
         self.assertEqual(ref.actualConsumers, dict())
+        self.assertEqual(ref.components, dict())
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
