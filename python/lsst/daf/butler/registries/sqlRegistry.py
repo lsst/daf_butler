@@ -172,7 +172,7 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.metadata.tables['Dataset']
         with self._engine.begin() as connection:
             connection.execute(datasetTable.update().where(
-                datasetTable.c.dataset_id==ref.id).values(assembler=assembler))
+                datasetTable.c.dataset_id == ref.id).values(assembler=assembler))
             ref._assembler = assembler
 
     def attachComponent(self, name, parent, component):

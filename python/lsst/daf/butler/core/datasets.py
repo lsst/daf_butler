@@ -184,7 +184,7 @@ class DatasetRef(object):
     def assembler(self):
         """Fully-qualified name of an importable Assembler object that can be
         used to construct this Dataset from its components.
-        
+
         `None` for datasets that are not virtual composites.
         Read-only; update via `Registry.setAssembler()`.
         """
