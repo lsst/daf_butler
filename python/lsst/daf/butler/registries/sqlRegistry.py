@@ -159,6 +159,8 @@ class SqlRegistry(Registry):
                                                                      run_id=run.execution,
                                                                      quantum_id=None))  # TODO add producer
             datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
+            # A dataset is always associated with its Run collection
+            self.associate(run.collection, [datasetRef])
         return datasetRef
 
     def setAssembler(self, ref, assembler):
