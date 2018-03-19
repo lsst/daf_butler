@@ -171,7 +171,9 @@ class SqlRegistry(Registry):
         """
         datasetTable = self._schema.metadata.tables['Dataset']
         with self._engine.begin() as connection:
-            connection.execute(datasetTable.update().where(dataset_id=ref.id).values(assembler=assembler))
+            connection.execute(datasetTable.update().where(
+                datasetTable.c.dataset_id==ref.id).values(assembler=assembler))
+            ref._assembler = assembler
 
     def attachComponent(self, name, parent, component):
         """Attach a component to a dataset.

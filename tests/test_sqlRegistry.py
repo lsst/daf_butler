@@ -100,6 +100,18 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
 
+    def testAssembler(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        run = registry.makeRun(collection="test")
+        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+        self.assertIsNone(ref.assembler)
+        assembler = "some.fully.qualified.assembler"  # TODO replace by actual dummy assember once implemented
+        registry.setAssembler(ref, assembler)
+        self.assertEqual(ref.assembler, assembler)
+        # TODO add check that ref2.assembler is also correct when ref2 is returned by Registry.find()
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

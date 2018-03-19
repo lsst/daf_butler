@@ -105,7 +105,8 @@ class DatasetRef(object):
     """
 
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer",
-                 "_predictedConsumers", "_actualConsumers", "_components")
+                 "_predictedConsumers", "_actualConsumers", "_components",
+                 "_assembler")
 
     def __init__(self, datasetType, dataId, id=None):
         assert isinstance(datasetType, DatasetType)
@@ -116,6 +117,7 @@ class DatasetRef(object):
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
         self._components = dict()
+        self._assembler = None
 
     @property
     def id(self):
@@ -177,3 +179,13 @@ class DatasetRef(object):
         Read-only; update via `Registry.attachComponent()`.
         """
         return _safeMakeMappingProxyType(self._components)
+
+    @property
+    def assembler(self):
+        """Fully-qualified name of an importable Assembler object that can be
+        used to construct this Dataset from its components.
+        
+        `None` for datasets that are not virtual composites.
+        Read-only; update via `Registry.setAssembler()`.
+        """
+        return self._assembler
