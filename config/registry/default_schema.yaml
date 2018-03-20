@@ -1455,10 +1455,10 @@ tables:
       nullable: false
       doc: >
         Name of the Datastore this entry corresponds to.
-    - name: md5
+    - name: checksum
       type: string
       doc: >
-        MD5 checksum of the stored dataset, if applicable.
+        Checksum (e.g. md5) of the stored dataset, if applicable.
     - name: size
       type: int
       doc: >
