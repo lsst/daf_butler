@@ -39,6 +39,7 @@ class FileTemplates:
     config : `FileTemplatesConfig` or `str`
         Load configuration.
     """
+
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
         self.templates = {}

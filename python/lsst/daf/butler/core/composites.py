@@ -38,6 +38,7 @@ class DatasetComponent:
         Component extracted from the composite object.
 
     """
+
     def __init__(self, name, storageClass, component):
         self.name = name
         self.storageClass = storageClass

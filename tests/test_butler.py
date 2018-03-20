@@ -36,6 +36,7 @@ from datasetsHelper import FitsCatalogDatasetsHelper
 class ButlerTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
     """Test for Butler.
     """
+
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")

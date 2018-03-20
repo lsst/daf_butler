@@ -37,6 +37,7 @@ from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
 class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     """Test for SqlRegistry.
     """
+
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")

@@ -32,6 +32,7 @@ from lsst.daf.butler.core.run import Run
 class RunTestCase(lsst.utils.tests.TestCase):
     """Test for Run.
     """
+
     def testConstructor(self):
         """Test of constructor.
         """

@@ -32,6 +32,7 @@ from lsst.daf.butler.core.storageInfo import StorageInfo
 class StorageInfoTestCase(lsst.utils.tests.TestCase):
     """Test for StorageInfo.
     """
+
     def testConstructor(self):
         """Test of constructor.
         """

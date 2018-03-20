@@ -189,6 +189,7 @@ class SafeLockedFileForWrite:
 
     Contains __enter__ and __exit__ functions so this can be used by a context manager.
     """
+
     def __init__(self, name):
         self.log = Log.getLogger("daf.butler")
         self.name = name
