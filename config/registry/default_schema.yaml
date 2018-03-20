@@ -2,44 +2,48 @@ version: 0
 dataUnits:
   Camera:
     doc: >
-      A camera that defines a set of physical filters and sensors, and defines a
-      numbering system for its visits.
+      An entity that produces observations.  A Camera defines a set of
+      PhysicalFilters and Sensors and a numbering system for the Exposures
+      and Visits that represent observations with it.
     link:
-    - 
+    -
       name: camera
       type: string
       foreign_key: Camera.camera
     tables:
       Camera:
         doc: >
-          Definition table containing allowable values for e.g. Dataset.camera.
+          A definition table containing recognized Camera values.
         columns:
-        - 
+        -
           name: camera
           type: string
           primary_key: true
+          doc: >
+            Globally unique string indentifier for this Camera.
 
   AbstractFilter:
     doc: >
-      A filter that is not associated with a particular camera.  An abstract
-      filter can be used to relate similar physical filters, and is typically the
-      filter associated with coadds.
+      A filter that is not associated with a particular Camera.  An
+      abstract filter can be used to relate similar physical filters, and
+      is typically the filter associated with coadds.
     link:
-    - 
+    -
       name: abstract_filter
       type: string
       foreign_key: AbstractFilter.abstract_filter
     tables:
       AbstractFilter:
         doc: >
-          Definition table containing allowable values for e.g. Dataset.abstract_filter.
+          A definition table containing recognized AbstractFilter names.
         columns:
-        - 
+        -
           name: abstract_filter
           type: string
           primary_key: true
           doc: >
-            Name of the filter, typically a single letter (e.g. "r" or "i").
+            The name of the filter, typically a single letter
+            (e.g. "r" or "i").
 
   PhysicalFilter:
     dependencies:
@@ -48,34 +52,43 @@ dataUnits:
       optional:
       - AbstractFilter
     doc: >
-      A filter associated with a particular camera.  Physical filters are used to
-      identify datasets that can only be associated with a single observation.
+      A filter associated with a particular Camera.  PhysicalFilters are
+      used to identify datasets that can only be associated with a single
+      observation.
     link:
-    - 
+    -
       name: physical_filter
       type: string
       foreign_key: PhysicalFilter.physical_filter
     tables:
       PhysicalFilter:
         doc: >
-          Relationships between physical filters, cameras, and abstract filters.
+          A Camera-populated table that relates a PhysicalFilter
+          to its Camera and optional AbstractFilter.
         columns:
-        - 
+        -
           name: camera
           type: string
           primary_key: true
-        - 
+          doc: >
+            Name of the Camera with which this filter is associated.
+        -
           name: physical_filter
           type: string
           primary_key: true
-        - 
+          doc: >
+            String name of the filter, typically a multi-letter code in a
+            convention defined by the Camera (e.g. "HSC-I" or "F775W").
+        -
           name: abstract_filter
           type: string
+          doc: >
+            Name of the AbstractFilter with which this filter is associated.
         foreignKeys:
-        - 
+        -
           src: camera
           tgt: Camera.camera
-        - 
+        -
           src: abstract_filter
           tgt: AbstractFilter.abstract_filter
 
@@ -84,42 +97,53 @@ dataUnits:
       required:
       - Camera
     doc: >
-      A sensor associated with a particular camera (not an observation of that
+      A sensor associated with a particular Camera (not an observation of that
       sensor; that requires specifying an exposure or visit as well).
     link:
-    - 
+    -
       name: sensor
       type: string
       foreign_key: Sensor.sensor
     tables:
       Sensor:
         doc: >
-          Metadata and grouping information, allowing
-          sensors to be identified by something other than their numbers in user
-          expressions of what to process.
+          A Camera-populated table that relates a Sensor to its Camera and
+          provides additional labels.
         columns:
-        - 
+        -
           name: camera
           type: string
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            Name of the Camera with which this Sensor is associated.
+        -
           name: sensor
           type: int
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            A unique (with Camera) integer identifier for the Sensor.
+        -
           name: name
           type: string
-          primary_key: true
-        - 
+          doc: >
+            An alternate unique (with Camera) string identifer for the
+            sensor.
+        -
           name: group
           type: string
-        - 
+          doc: >
+            A string name for a group of sensors with a Camera-dependent
+            interpretation, such as LSST's rafts.
+        -
           name: purpose
           type: string
+          doc: >
+            Role of the Sensor; typically one of "SCIENCE", "WAVEFRONT",
+            or "GUIDE", though Cameras may define additional values.
         foreignKeys:
-        - 
+        -
           src: camera
           tgt: Camera.camera
 
@@ -130,52 +154,209 @@ dataUnits:
       optional:
       - PhysicalFilter
     doc: >
-      A sequence of observations processed together, comprised of one or more
-      Exposures.
+      A sequence of observations processed together, comprised of one or
+      more Exposures from the same Camera with the same pointing and
+      PhysicalFilter.
     link:
-    - 
+    -
       name: visit
       type: int
       foreign_key: Visit.visit
     tables:
       Visit:
         doc: >
-          Visit metadata, allowing them to be identified by something other than their numbers.
+          A table containing Camera-generic metadata for a Visit.
         columns:
-        - 
+        -
           name: camera
           type: string
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            The Camera used to observe the Exposures associated with this
+            Visit.
+        -
           name: visit
           type: int
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            Unique (with camera) integer identifier for this Visit.
+        -
           name: physical_filter
           type: string
           nullable: false
-        - 
+          doc: >
+            The bandpass filter used for all exposures in this Visit.
+        -
           name: datetime_begin
           type: datetime
           doc: >
-            This should be the same as the datetime_begin field of the first Exposure
-            associated with this Visit.
-        - 
+            Timestamp of the beginning of the Visit.  This should be the
+            same as the datetime_begin of the first Exposure associated
+            with this Visit.
+        -
           name: exposure_time
           type: float
           doc: >
-            This should cover the full time from the start of the first Exposure to
-            the end of the last one.
-        - 
+            The total exposure time of the Visit in seconds.  This should
+            be equal to the sum of the exposure_time values for all
+            constituent Exposures (i.e. it should not include time with
+            the shutter closed).
+        -
           name: region
           type: blob
+          doc: >
+            A spatial region on the sky that bounds the area covered by the
+            Visit.  This is expected to be more precise than the region covered
+            by the SkyPixels associated with the Visit, but may still be larger
+            than the Visit as long as it fully covers it.  Must also fully
+            cover all regions in the VisitSensorRegion entries associated with
+            this Visit.
         foreignKeys:
-        - 
+        -
           src: camera
           tgt: Camera.camera
-        - 
+        -
+          src:
+          - camera
+          - physical_filter
+          tgt:
+          - PhysicalFilter.camera
+          - PhysicalFilter.physical_filter
+      VisitSensorRegion:
+        doc: >
+          A one-to-many table join table that stores the spatial region
+          associated with a particular Visit-Sensor combination. Entries are
+          expected to be calculated outside the database and added/updated
+          whenever the Visit's region is.  This table contains exactly one
+          entry for each Visit+Sensor combination.
+        columns:
+        -
+          name: camera
+          type: string
+          primary_key: true
+          nullable: false
+          doc: Name of the Camera associated with the Visit and Sensor.
+        -
+          name: visit
+          type: int
+          primary_key: true
+          nullable: false
+          doc: Visit ID
+        -
+          name: sensor
+          type: int
+          primary_key: true
+          nullable: false
+          doc: visit
+        -
+          name: region
+          type: string
+          doc: >
+            A spatial region on the sky that bounds the area associated with
+            this Visit+Sensor combination.  This is expected to be more
+            precise than the SkyPixels associated with the Visit+Sensor (see
+            VisitSensorSkyPixJoin), but may still be larger than the true
+            region as long as it fully covers it.
+        foreignKeys:
+        -
+          src: camera
+          tgt: Camera.camera
+        -
+          src:
+          - camera
+          - visit
+          tgt:
+          - Visit.camera
+          - Visit.visit
+        -
+          src:
+          - camera
+          - sensor
+          tgt:
+          - Sensor.camera
+          - Sensor.sensor
+  Exposure:
+    dependencies:
+      required:
+      - Camera
+      optional:
+      - Visit
+      - PhysicalFilter
+    doc: >
+      An observation associated with a particular camera.  All direct
+      observations are identified with an Exposure, but derived datasets
+      that may be based on more than one Exposure (e.g. multiple snaps)
+      are typically identified with Visits instead, even for cameras that
+      don't have multiple Exposures per Visit.  As a result, Cameras that
+      don't have multiple Exposures per Visit will typically have Visit
+      entries that are essentially duplicates of their Exposure entries.
+    link:
+    -
+      name: exposure
+      type: int
+      foreign_key: Exposure.exposure
+    tables:
+      Exposure:
+        doc: >
+          A table containing Camera-generic Exposure metadata.
+        columns:
+        -
+          name: camera
+          type: string
+          primary_key: true
+          nullable: false
+          doc: >
+            The Camera used to observe the Exposure.
+        -
+          name: exposure
+          type: int
+          primary_key: true
+          nullable: false
+          doc: >
+            Unique (with camera) integer identifier for this Exposure.
+        -
+          name: visit
+          type: int
+          doc: >
+            ID of the Visit this Exposure is associated with.  Science
+            observations should essentially always be associated with a
+            visit, but calibration observations may not be.
+        -
+          name: physical_filter
+          type: string
+          nullable: false
+          doc: >
+            The bandpass filter used for all exposures in this Visit.
+        -
+          name: snap
+          type: int
+          doc: >
+            If visit is not null, the index of this Exposure in the Visit,
+            starting from zero.
+        -
+          name: datetime_begin
+          type: datetime
+          doc: >
+            Timestamp of the start of the Exposure.
+        -
+          name: exposure_time
+          type: float
+          doc: >
+            Duration of the Exposure in seconds.
+        foreignKeys:
+        -
+          src: camera
+          tgt: Camera.camera
+        -
+          src:
+          - camera
+          - visit
+          tgt:
+          - Visit.camera
+          - Visit.visit
+        -
           src:
           - camera
           - physical_filter
@@ -183,536 +364,1106 @@ dataUnits:
           - PhysicalFilter.camera
           - PhysicalFilter.physical_filter
 
-  Exposure:
-    dependencies:
-      required:
-      - Camera
-      - Visit
-    doc: >
-      An observation associated with a particular camera.  All direct observations
-      are identified with an Exposure, but derived datasets that may be based on
-      more than one Exposure (e.g. multiple snaps) are typically identified with
-      Visits instead, even for cameras that don't have multiple Exposures per
-      Visit.
-    link:
-    - 
-      name: exposure
-      type: int
-      foreign_key: Exposure.exposure
-    tables:
-      Exposure:
-        doc: >
-          Exposure metadata and fields indicating the relationships to Visits.
-        columns:
-        - 
-          name: camera
-          type: string
-          primary_key: true
-          nullable: false
-        - 
-          name: exposure
-          type: int
-          primary_key: true
-          nullable: false
-        - 
-          name: visit
-          type: int
-          primary_key: true
-          doc: >
-            ID of the Visit this Exposure is associated with.  Science observations
-            should essentially always be associated with a visit, but calibration
-            observations may not be.
-        - 
-          name: snap
-          type: int
-          doc: >
-            If visit is not null, the index of this Exposure in the Visit, starting
-            from zero.
-        - 
-          name: datetime_begin
-          type: datetime
-        - 
-          name: exposure_time
-          type: float
-        foreignKeys:
-        - 
-          src: camera
-          tgt: Camera.camera
-        - 
-          src:
-          - camera
-          - visit
-          tgt:
-          - Visit.camera
-          - Visit.visit
-
   ExposureRange:
     dependencies:
       required:
       - Camera
     doc: >
-      An inclusive range of Exposures that may be open in either direction.  There
-      is no SQL representation; its fields (duplicated below) are all part of its
-      compound primary key and are hence just present in Dataset.
+      An inclusive range of Exposures that may be open in either
+      direction, typically used to identify master calibration products.
+      There is no SQL table associated with ExposureRanges; there is no
+      additional information associated with an ExposureRange besides the
+      camera, valid_first, and valid_last fields already present in Dataset.
     link:
-    - 
+    -
       name: valid_first
       type: int
       doc: >
-        First exposure.id included (inclusive).  May be zero to indicate an open
-        interval.
-    - 
+        First Exposure identifier included in the range (inclusive).  May
+        be zero to indicate an open interval.
+    -
       name: valid_last
       type: int
       doc: >
-        Last exposure.id included (inclusive).  May be max(int) to indicate an
-        open interval.
+        Last Exposure identifier included in the range (inclusive).  May
+        be max(int) to indicate an open interval.
 
   SkyPix:
     doc: >
-      A pixel in a hierarchical decomposition of the sky (e.g. HTM; I hope we can
-      pick one pixelization for all data products and spatial indexes, but don't
-      want to declare yet what it should be).  Unlike a tract or patch in a
-      SkyMap, SkyPix units do not overlap.  Has no SQL representation (even a
-      definition table is not necessary, given that the allowable values are just
-      a range of consecutive integers.
+      A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
+      HEALPix; we will select and support just one, but which is TBD). Has no
+      SQL representation; even a definition table is not necessary, given that
+      the allowable values and the associated spatial regions are best
+      computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e. Tract-
+      Patch) units for Datasets without any overlap regions (e.g. sharded
+      reference catalogs).
+
+      There are also considerable advantages to standardizing on just one
+      level of the standard pixelization: if all SkyPix values are at a single
+      level, they can be indexed using standard B-Trees and compared with
+      simple equality comparison.  In contrast, comparing SkyPix values at
+      different levels requires pixelization- specific bit-shifting operations
+      and custom indexes, which are much harder to implement across multiple
+      RDMSs.  As a result, we will (at least initially) try to define just a
+      single level for all SkyPix values.  Our preliminary guess is that this
+      level should have pixels be approximately (within a factor of ~4) of the
+      size of a single Sensor on the sky.
+
     link:
-    - 
+    -
       name: skypix
       type: int
       doc: >
-        Unique ID of a pixel in the hierarchical pixelization.
-  
+        Unique ID of a pixel in the hierarchical pixelization, using a
+        numbering scheme that also encodes the level of the pixel.
+
   SkyMap:
     doc: >
-      A set of Tracts and Patches that subdivide the sky into rectangular regions
-      (with overlaps).
+      A set of Tracts and Patches that subdivide the sky into rectangular
+      regions with simple projections and intentional overlaps.
     link:
-    - 
+    -
       name: skymap
       type: string
       foreign_key: SkyMap.skymap
     tables:
       SkyMap:
         doc: >
-          Definition table containing allowable values for e.g. Dataset.skymap.
+          A table containing registered SkyMaps and the the SHA1 hashes
+          used to compare them.
         columns:
-        - 
+        -
           name: skymap
           type: string
           primary_key: true
           nullable: false
-    
+          doc: >
+            A human-readable name for the SkyMap, used as its unique
+            identifier.
+        -
+          name: sha1
+          type: string
+          nullable: false
+          doc: >
+            A SHA1 hash of the SkyMap's parameters, used to prevent
+            duplicate SkyMaps with the different names from being
+            registered.
   Tract:
     dependencies:
       required:
       - SkyMap
     doc: >
-      A rectangular region mapped to the sky with a single map projection,
-      associated with a particular SkyMap.
+      A large rectangular region mapped to the sky with a single map
+      projection, associated with a particular SkyMap.
     link:
-    - 
+    -
       name: tract
       type: int
       foreign_key: Tract.tract
     tables:
       Tract:
         doc: >
-          The spatial region for each tract.
+          A SkyMap-populated table relating a Tract to its spatial region
+          on the sky.
         columns:
-        - 
+        -
           name: skymap
           type: string
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            The SkyMap with which this Tract is associated.
+        -
           name: tract
           type: int
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            Unique (with SkyMap) integer identifier for the Tract.
+        -
           name: region
           type: blob
+          doc: >
+            A spatial region on the sky that bounds the area associated
+            with the Tract.  This is expected to be more precise than the
+            SkyPixels associated with the Visit (see TractSkyPixJoin), but
+            may still be larger than the Tract as long as it fully covers it.
         foreignKeys:
-        - 
+        -
           src: skymap
           tgt: SkyMap.skymap
-    
+
   Patch:
     dependencies:
       required:
       - SkyMap
       - Tract
     doc: >
-      A rectangular region within a tract.
+      A rectangular region within a Tract.
     link:
-    - 
+    -
       name: patch
       type: int
       foreign_key: Patch.patch
     tables:
       Patch:
         doc: >
-          Spatial region for each tract+patch combination and the patch's location
-          within the tract's grid.
+          A table relating a Patch to its position within a Tract and
+          on the sky.
         columns:
-        - 
+        -
           name: skymap
           type: string
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            The SkyMap with which this Patch is associated.
+        -
           name: tract
           type: int
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            The Tract with which this Patch is associated.
+        -
           name: patch
           type: int
           primary_key: true
           nullable: false
-        - 
+          doc: >
+            Unique (with SkyMap and Tract) integer identifier for the Patch.
+        -
           name: cell_x
           type: int
           nullable: false
-        - 
+          doc: >
+            Which column this Patch occupies in the Tract's grid of Patches.
+        -
           name: cell_y
           type: int
           nullable: false
-        - 
+          doc: >
+            Which row this Patch occupies in the Tract's grid of Patches.
+        -
           name: region
           type: blob
           nullable: false
+          doc: >
+            A spatial region on the sky that bounds the area associated
+            with the Patch.  This is expected to be more precise than the
+            SkyPixels associated with the Visit (see PatchSkyPixJoin), but
+            may still be larger than the Patch as long as it fully covers it.
         foreignKeys:
-        - 
+        -
           src: skymap
           tgt: SkyMap.skymap
-        - 
+        -
           src:
           - skymap
           - tract
           tgt:
           - Tract.skymap
           - Tract.tract
-  
+
   Label:
     doc: >
-      An arbitrary string value.  There is no SQL representation or constraint on
-      the values a Label can take.
+      An arbitrary string value.  There is no SQL representation or
+      constraint on the values a Label can take.  Multiple labels are
+      represented (by convention) by a comma-separated string.
     link:
-    - 
+    -
       name: label
       type: string
+      doc: A string value composed only of letters, numbers, and underscores.
+
+dataunit_joins:
+  ExposureRangeJoin:
+    doc: >
+      A calculated join between Datasets identified with an Exposure
+      (typically raw science frames) and Datasets identified with ExposureRange
+      (typically master calibrations).
+    lhs:
+    - Exposure
+    rhs:
+    - ExposureRange
+    sql:
+      where: (lhs.camera = rhs.camera) AND (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
+  MultiCameraExposureJoin:
+    doc: >
+      A join table that relates Exposures from different Cameras, with
+      explicitly-created entries.  This is intended to be used primarily in
+      calibration products production, to relate auxilliary telescope
+      observations with the main camera observations they support.  It could
+      also be used to relate CBP state (represented as CBP "Exposures") with
+      actual main camera observations of the CBP.
+    lhs:
+    - Exposure
+    rhs:
+    - Exposure
+    tables:
+      MultiCameraExposureJoin:
+        columns:
+        -
+          name: camera_1
+          type: string
+          nullable: false
+          doc: Camera name for lhs Dataset.
+        -
+          name: exposure_1
+          type: int
+          nullable: false
+          doc: Exposure ID for lhs Dataset.
+        -
+          name: camera_2
+          type: string
+          nullable: false
+          doc: Camera name for rhs Dataset.
+        -
+          name: exposure_2
+          type: int
+          nullable: false
+          doc: Exposure ID for rhs Dataset.
+        foreignKeys:
+        -
+          src:
+            - camera_1
+            - exposure_1
+          tgt:
+            - Exposure.camera
+            - Exposure.exposure
+        -
+          src:
+            - camera_1
+            - exposure_1
+          tgt:
+            - Exposure.camera
+            - Exposure.exposure
+
+  VisitSensorSkyPixJoin:
+    doc: >
+      A spatial join table that relates Visit+Sensor to SkyPix, also used as an
+      intermediate when relating Visit+Sensor to SkyMap DataUnits.
+
+      Entries are expected to be calculated outside the database and
+      added/updated whenever VisitSensorRegion is.
+
+    lhs:
+      - Visit
+      - Sensor
+    rhs: SkyPix
+    tables:
+      VisitSensorSkyPixJoin:
+        columns:
+        -
+          name: camera
+          type: string
+          nullable: false
+          doc: Name of the Camera associated with the Visit and Sensor.
+        -
+          name: visit
+          type: int
+          nullable: false
+          doc: Visit ID
+        -
+          name: sensor
+          type: int
+          doc: Sensor ID
+        -
+          name: skypix
+          type: int
+          nullable: false
+          doc: ID of a SkyPix that overlaps the Visit+Sensor combination.
+        foreignKeys:
+        -
+          src:
+            - camera
+            - visit
+            - sensor
+          tgt:
+            - VisitSensorRegion.camera
+            - VisitSensorRegion.visit
+            - VisitSensorRegion.sensor
+
+  VisitSkyPixJoin:
+    doc: >
+      A spatial join table that relates Visitto SkyPix, also used as an
+      intermediate when relating Visit to SkyMap DataUnits.
+
+      This can and probably should be implemented as a trivial view on
+      VisitSensorSkyPixJoin.
+
+    lhs:
+    - Visit
+    rhs:
+    - SkyPix
+    summarizes:
+    - VisitSensorSkyPixJoin
+    tables:
+      VisitSkyPixJoin:
+        columns:
+        -
+          name: camera
+          type: string
+          nullable: false
+          doc: Name of the Camera associated with the Visit.
+        -
+          name: visit
+          type: int
+          nullable: false
+          doc: Visit ID
+        -
+          name: skypix
+          type: int
+          nullable: false
+          doc: ID of a SkyPix that overlaps the Visit combination.
+        foreignKeys:
+        -
+          src:
+            - camera
+            - visit
+          tgt:
+            - Visit.camera
+            - Visit.visit
+    sql: >
+      CREATE VIEW VisitSkyPixJoin
+        SELECT DISTINCT camera, visit, skypix
+        FROM VisitSensorSkyPixJoin;
+
+  PatchSkyPixJoin:
+    doc: >
+      A spatial join table that relates Patch to SkyPix, also used as an
+      intermediate when relating Patch to Camera DataUnits.
+
+      Entries are expected to be calculated outside the database and
+      added along with the Patch itself.
+
+    lhs: Patch
+    rhs: SkyPix
+    tables:
+      PatchSkyPixJoin:
+        columns:
+        -
+          name: skymap
+          type: string
+          nullable: false
+          doc: Name of the SkyMap associated with the Patch.
+        -
+          name: tract
+          type: int
+          nullable: false
+          doc: Tract ID
+        -
+          name: patch
+          type: int
+          nullable: false
+          doc: Patch ID
+        -
+          name: skypix
+          type: int
+          nullable: false
+          doc: ID of a SkyPix that overlaps the Patch.
+        foreignKeys:
+        -
+          src:
+            - skymap
+            - tract
+            - patch
+          tgt:
+            - Patch.skymap
+            - Patch.tract
+            - Patch.patch
+
+  TractSkyPixJoin:
+    doc: >
+      A spatial join table that relates Tract to SkyPix, also used as an
+      intermediate when relating Tract to Camera DataUnits.
+
+      This can and probably should be implemented as a trivial view on
+      PatchSkyPixJoin.
+
+    lhs: Tract
+    rhs: SkyPix
+    summarizes:
+      - PatchSkyPixJoin
+    tables:
+      TractSkyPixJoin:
+        columns:
+        -
+          name: skymap
+          type: string
+          nullable: false
+          doc: Name of the SkyMap associated with the Tract.
+        -
+          name: tract
+          type: int
+          nullable: false
+          doc: Tract ID
+        -
+          name: skypix
+          type: int
+          nullable: false
+          doc: ID of a SkyPix that overlaps the Tract.
+        foreignKeys:
+        -
+          src:
+            - skymap
+            - tract
+          tgt:
+            - Tract.skymap
+            - Tract.tract
+    sql: >
+      CREATE VIEW TractPixJoin
+        SELECT DISTINCT skymap, tract, skypix
+        FROM PatchSkyPixJoin;
+
+  VisitSensorPatchJoin:
+    doc: >
+      A spatial join table that relates Visit+Sensor to Patch via SkyPix.
+
+      Should be implemented as a view; it may be materialized as long as it
+      can be kept up to date when new Visits or SkyMaps are added.
+
+      If a database UDF is available to determine whether two region blobs
+      overlap, we could include that in this view to refine the results.
+      For now, we will assume that such a UDF is not available.
+
+    lhs:
+      - Visit
+      - Sensor
+    rhs:
+      - Patch
+    tables:
+      VisitSensorPatchJoin:
+        columns:
+        -
+          name: camera
+          type: string
+          nullable: false
+          doc: Name of the Camera associated with the Visit and Sensor.
+        -
+          name: visit
+          type: int
+          nullable: false
+          doc: Visit ID
+        -
+          name: sensor
+          type: int
+          nullable: false
+          doc: Sensor ID
+        -
+          name: skymap
+          type: string
+          nullable: false
+          doc: Name of the SkyMap associated with the Patch.
+        -
+          name: tract
+          type: int
+          nullable: false
+          doc: Tract ID
+        -
+          name: patch
+          type: int
+          nullable: false
+          doc: Patch ID
+        foreignKeys:
+        -
+          src:
+            - camera
+            - visit
+            - sensor
+          tgt:
+            - VisitSensorRegion.camera
+            - VisitSensorRegion.visit
+            - VisitSensorRegion.sensor
+        -
+          src:
+            - skymap
+            - tract
+            - patch
+          tgt:
+            - Patch.skymap
+            - Patch.tract
+            - Patch.patch
+    sql: >
+      CREATE VIEW VisitSensorPatchJoin AS
+        SELECT DISTINCT
+          VisitSensorSkyPixJoin.camera,
+          VisitSensorSkyPixJoin.visit,
+          VisitSensorSkyPixJoin.sensor,
+          PatchSkyPixJoin.skymap,
+          PatchSkyPixJoin.tract,
+          PatchSkyPixJoin.patch
+        FROM
+          VisitSensorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
+            VisitSensorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+          );
+
+  VisitPatchJoin:
+    doc: >
+      A spatial join table that relates Visit to Patch via SkyPix.
+
+      Should be implemented as a view; it may be materialized as long as it
+      can be kept up to date when new Visits or SkyMaps are added.
+
+      If a database UDF is available to determine whether two region blobs
+      overlap, we could include that in this view to refine the results.
+      For now, we will assume that such a UDF is not available.
+
+    lhs:
+      - Visit
+    rhs:
+      - Patch
+    summarizes:
+      - VisitSensorPatchJoin
+    tables:
+      VisitPatchJoin:
+        columns:
+        -
+          name: camera
+          type: string
+          nullable: false
+          doc: Name of the Camera associated with the Visit.
+        -
+          name: visit
+          type: int
+          nullable: false
+          doc: Visit ID
+        -
+          name: skymap
+          type: string
+          nullable: false
+          doc: Name of the SkyMap associated with the Patch.
+        -
+          name: tract
+          type: int
+          nullable: false
+          doc: Tract ID
+        -
+          name: patch
+          type: int
+          nullable: false
+          doc: Patch ID
+        foreignKeys:
+        -
+          src:
+            - camera
+            - visit
+          tgt:
+            - Visit.camera
+            - Visit.visit
+        -
+          src:
+            - skymap
+            - tract
+            - patch
+          tgt:
+            - Patch.skymap
+            - Patch.tract
+            - Patch.patch
+    sql: >
+      CREATE VIEW VisitPatchJoin AS
+        SELECT DISTINCT
+          VisitSkyPixJoin.camera,
+          VisitSkyPixJoin.visit,
+          PatchSkyPixJoin.skymap,
+          PatchSkyPixJoin.tract,
+          PatchSkyPixJoin.patch
+        FROM
+          VisitSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
+            VisitSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+          );
+
+  VisitSensorTractJoin:
+    doc: >
+      A spatial join table that relates Visit+Sensor to Tract via SkyPix.
+
+      Should be implemented as a view; it may be materialized as long as it
+      can be kept up to date when new Visits or SkyMaps are added.
+
+      If a database UDF is available to determine whether two region blobs
+      overlap, we could include that in this view to refine the results.
+      For now, we will assume that such a UDF is not available.
+
+    lhs:
+      - Visit
+      - Sensor
+    rhs:
+      - Tract
+    summarizes:
+      - VisitSensorPatchJoin
+    tables:
+      VisitSensorTractJoin:
+        columns:
+        -
+          name: camera
+          type: string
+          nullable: false
+          doc: Name of the Camera associated with the Visit and Sensor.
+        -
+          name: visit
+          type: int
+          nullable: false
+          doc: Visit ID
+        -
+          name: sensor
+          type: int
+          nullable: false
+          doc: Sensor ID
+        -
+          name: skymap
+          type: string
+          nullable: false
+          doc: Name of the SkyMap associated with the Tract.
+        -
+          name: tract
+          type: int
+          nullable: false
+          doc: Tract ID
+        foreignKeys:
+        -
+          src:
+            - camera
+            - visit
+            - sensor
+          tgt:
+            - VisitSensorRegion.camera
+            - VisitSensorRegion.visit
+            - VisitSensorRegion.sensor
+        -
+          src:
+            - skymap
+            - tract
+          tgt:
+            - Tract.skymap
+            - Tract.tract
+    sql: >
+      CREATE VIEW VisitSensorTractJoin AS
+        SELECT DISTINCT
+          VisitSensorSkyPixJoin.camera,
+          VisitSensorSkyPixJoin.visit,
+          VisitSensorSkyPixJoin.sensor,
+          TractSkyPixJoin.skymap,
+          TractSkyPixJoin.tract
+        FROM
+          VisitSensorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
+            VisitSensorSkyPixJoin.skypix = TractSkyPixJoin.skypix
+          );
+
+  VisitTractJoin:
+    doc: >
+      A spatial join table that relates Visit to Tract via SkyPix.
+
+      Should be implemented as a view; it may be materialized as long as it
+      can be kept up to date when new Visits or SkyMaps are added.
+
+      If a database UDF is available to determine whether two region blobs
+      overlap, we could include that in this view to refine the results.
+      For now, we will assume that such a UDF is not available.
+
+    lhs:
+      - Visit
+    rhs:
+      - Tract
+    summarizes:
+      - VisitSensorPatchJoin
+      - VisitSensorTractJoin
+      - VisitPatchJoin
+    tables:
+      VisitTractJoin:
+        columns:
+        -
+          name: camera
+          type: string
+          nullable: false
+          doc: Name of the Camera associated with the Visit.
+        -
+          name: visit
+          type: int
+          nullable: false
+          doc: Visit ID
+        -
+          name: skymap
+          type: string
+          nullable: false
+          doc: Name of the SkyMap associated with the Tract.
+        -
+          name: tract
+          type: int
+          nullable: false
+          doc: Tract ID
+        foreignKeys:
+        -
+          src:
+            - camera
+            - visit
+          tgt:
+            - Visit.camera
+            - Visit.visit
+        -
+          src:
+            - skymap
+            - tract
+          tgt:
+            - Tract.skymap
+            - Tract.tract
+    sql: >
+      CREATE VIEW VisitTractJoin AS
+        SELECT DISTINCT
+          VisitSkyPixJoin.camera,
+          VisitSkyPixJoin.visit,
+          TractSkyPixJoin.skymap,
+          TractSkyPixJoin.tract
+        FROM
+          VisitSkyPixJoin INNER JOIN TractSkyPixJoin ON (
+            VisitSkyPixJoin.skypix = TractSkyPixJoin.skypix
+          );
 
 tables:
-  Datasets:
+  Dataset:
     columns:
-    - 
+    -
       name: dataset_id
       type: int
       primary_key: true
       nullable: false
       doc: >
-        Autoincrement
-    - 
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-      doc: >
-        A different number for each dataset_id incrementer (usually each different
-        Registry).
-    - 
+        A unique autoincrement field used as part of the primary key for
+        Dataset.
+    -
       name: dataset_type_name
       type: string
       nullable: false
-    - 
-      name: uri
-      type: string
-    - 
+      doc: >
+        The name of the DatasetType associated with this Dataset; a
+        reference to the DatasetType table.
+    -
       name: run_id
       type: int
       nullable: false
       doc: >
-        Link to the Run table.
-    - 
+        The ID of the Run that produced this Dataset, providing access to
+        coarse provenance information.
+    -
       name: quantum_id
       type: int
       doc: >
-        Link to the Quantum table (only present for SuperTask-generated Datasets).
+        The ID of the Quantum that produced this Dataset, providing access
+        to fine-grained provenance information.
+        May be null for Datasets not produced by running a SuperTask.
+    -
+      name: assembler
+      type: string
+      doc: >
+        Fully-qualified name of an importable Assembler object that can be
+        used to construct this Dataset from its components.  Null for
+        datasets that are not virtual composites.
+
     foreignKeys:
-    - 
+    -
       src: dataset_type_name
       tgt: DatasetType.dataset_type_name
-    - 
-      src:
-      - run_id
-      - registry_id
-      tgt:
-      - Run.run_id
-      - Run.registry_id
-    - 
-      src:
-      - quantum_id
-      - registry_id
-      tgt:
-      - Quantum.quantum_id
-      - Quantum.registry_id
+    -
+      src: run_id
+      tgt: Run.execution_id
+    -
+      src: quantum_id
+      tgt: Quantum.execution_id
 
   DatasetComposition:
     doc: >
-      Self-join table that relates components of a dataset to their parent.
+      A self-join table that relates components of a dataset to their
+      parent.
     columns:
-    - 
+    -
       name: parent_dataset_id
       type: int
       primary_key: true
       nullable: false
-    - 
-      name: parent_registry_id
-      type: int
-      primary_key: true
-      nullable: false
-    - 
+      doc: >
+        Link to the Dataset entry for the parent/composite dataset.
+    -
       name: component_dataset_id
       type: int
       primary_key: true
       nullable: false
-    - 
-      name: component_registry_id
-      type: int
-      primary_key: true
-      nullable: false
-    - 
+      doc: >
+        Link (with component_dataset_id) to the Dataset entry for a
+        child/component dataset.
+    -
       name: component_name
       type: string
       nullable: false
+      doc: >
+        Name of this component within this composite.
     foreignKeys:
-    - 
-      src:
-      - parent_dataset_id
-      - parent_registry_id
-      tgt:
-      - Datasets.dataset_id
-      - Datasets.registry_id
-    - 
-      src:
-      - component_dataset_id
-      - component_registry_id
-      tgt:
-      - Datasets.dataset_id
-      - Datasets.registry_id
+    -
+      src: parent_dataset_id
+      tgt: Dataset.dataset_id
+    -
+      src: component_dataset_id
+      tgt: Dataset.dataset_id
 
   DatasetType:
     doc: >
-      Table containing the set of registered DatasetTypes and their
+      A Table containing the set of registered DatasetTypes and their
       StorageClasses.
     columns:
-    - 
+    -
       name: dataset_type_name
       type: string
       primary_key: true
       nullable: false
-    - 
+      doc: >
+        Globally unique name for this DatasetType.
+    -
       name: storage_class
       type: string
       nullable: false
+      doc: >
+        Name of the StorageClass associated with this DatasetType.  All
+        registries must support the full set of standard StorageClasses,
+        so the set of allowed StorageClasses and their properties is
+        maintained in the registry Python code rather than the database.
 
   DatasetTypeUnits:
     doc: >
-      Definition table indicating which unit link fields in Dataset are non-NULL
-      for Datasets with this DatasetType.
+      A Definition table indicating which unit link fields in Dataset are
+      non-NULL for Datasets with this DatasetType.
     columns:
-    - 
+    -
       name: dataset_type_name
       type: string
       nullable: false
-    - 
+      doc: >
+        The name of the DatasetType.
+    -
       name: unit_name
       type: string
       nullable: false
+      doc: >
+        The name of a DataUnit associated with this DatasetType.
     foreignKeys:
-    - 
+    -
       src: dataset_type_name
       tgt: DatasetType.dataset_type_name
 
   DatasetTypeMetadata:
     doc: >
-      Definition table indicating which Metadata tables have entries for Datasets
-      with this DatasetType.
+      A table the indicating the Metadata tables that have entries for
+      Datasets with this DatasetType.
     columns:
-    - 
+    -
       name: dataset_type_name
       type: string
       nullable: false
-    - 
+      doc: >
+        The name of the DatasetType.
+    -
       name: metadata_name
       type: string
       nullable: false
+      doc: >
+        The name of a Metadata table that has a record for every Dataset
+        entry with this DatasetType.
     foreignKeys:
-    - 
+    -
       src: dataset_type_name
       tgt: DatasetType.dataset_type_name
 
   DatasetCollection:
+    doc: >
+        A table that associates Dataset records with Collections, which are
+        implemented simply as string tags.
     columns:
-    - 
+    -
       name: dataset_id
       type: int
       primary_key: true
       nullable: false
-    - 
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-    - 
+      doc: >
+        Link to a unique record in the Dataset table.
+    -
       name: collection
       type: string
       primary_key: true
       nullable: false
+      doc: >
+        Name of a Collection with which this Dataset is associated.
     foreignKeys:
-    - 
-      src:
-      - dataset_id
-      - registry_id
-      tgt:
-      - Datasets.dataset_id
-      - Datasets.registry_id
-  
+    -
+      src: dataset_id
+      tgt: Dataset.dataset_id
+
   Execution:
+    doc: >
+      A table whose entries represent any step in a production.
     columns:
-    - 
+    -
       name: execution_id
       type: int
+      primary_key: true
       nullable: false
-    - 
-      name: registry_id
-      type: int
-      nullable: false
-    - 
+      doc: >
+        A unique autoincrement field used as part of the primary key for
+        Execution.
+    -
       name: start_time
       type: datetime
       nullable: false
-    - 
+      doc: >
+        The start time for the execution.  May have a different
+        interpretation for different kinds of execution.
+    -
       name: end_time
       type: datetime
       nullable: false
-    - 
+      doc: >
+        The end time for the execution.  May have a different
+        interpretation for different kinds of execution.
+    -
       name: host
       type: string
       nullable: false
-  
+      doc: >
+        The system on which the execution was run.  May have a different
+        interpretation for different kinds of execution.
+
   Run:
+    doc: >
+      A table used to capture coarse provenance for all Datasets. For
+      Datasets produced by SuperTask Pipelines, a Run represents a single
+      execution of a single Pipeline. Each Run record is uniquely
+      associated with an Execution record.
     columns:
-    - 
-      name: run_id
-      type: int
-      primary_key: true
-      nullable: false
-    - 
+    -
       name: execution_id
       type: int
       primary_key: true
       nullable: false
-    - 
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-    - 
+      doc: >
+        A unique integer identifier for this Run, which
+        is also the execution_id for an associated Execution record.
+    -
       name: collection
       type: string
-      primary_key: true
-    - 
+      doc: >
+        A Collection name with which all Datasets in this Run are initially
+        associated, also used as a human-readable name for this Run.
+    -
       name: environment_id
       type: int
-    - 
+      doc: >
+        A dataset_id linking to a Dataset that contains a description of
+        the software environment (e.g. versions) used for this Run.
+    -
       name: pipeline_id
       type: int
+      doc: >
+        A dataset_id linking to a Dataset that contains a serialization of
+        the SuperTask Pipeline used for this Run (if any).
     foreignKeys:
-    - 
-      src:
-      - environment_id
-      - registry_id
-      tgt:
-      - Datasets.dataset_id
-      - Datasets.registry_id
-    - 
-      src:
-      - pipeline_id
-      - registry_id
-      tgt:
-      - Datasets.dataset_id
-      - Datasets.registry_id
-  
+    -
+      src: environment_id
+      tgt: Dataset.dataset_id
+    -
+      src: pipeline_id
+      tgt: Dataset.dataset_id
+    -
+      src: execution_id
+      tgt: Execution.execution_id
+
   Quantum:
+    doc: >
+      A table used to capture fine-grained provenance for Datasets
+      produced by SuperTasks. Each Quantum record is uniquely associated
+      with an Execution record.
     columns:
-    - 
-      name: quantum_id
-      type: int
-      primary_key: true
-      nullable: false  
-    - 
+    -
       name: execution_id
       type: int
       primary_key: true
       nullable: false
-    - 
-      name: registry_id
-      type: int
-      primary_key: true
-      nullable: false
-    - 
+      doc: >
+        A unique integer identifier for this Quantum,
+        which is also the execution_id for an associated Execution record.
+    -
       name: task
       type: string
-    - 
+      doc: >
+        Fully-qualified name of the SuperTask that executed this Quantum.
+    -
       name: run_id
       type: int
+      doc: >
+        Link to the Run this Quantum is a part of.
     foreignKeys:
-    - 
-      src:
-      - run_id
-      - registry_id
-      tgt:
-      - Run.execution_id
-      - Run.registry_id
-  
+    -
+      src: run_id
+      tgt: Run.execution_id
+    -
+      src: execution_id
+      tgt: Execution.execution_id
+
   DatasetConsumers:
+    doc: >
+      A table relating Quantum records to the Datasets they used as inputs.
     columns:
-    - 
+    -
       name: quantum_id
       type: int
       nullable: false
-    - 
-      name: quantum_registry_id
-      type: int
-      nullable: false
-    - 
+      doc: >
+        A link to the associated Quantum.
+    -
       name: dataset_id
       type: int
       nullable: false
-    - 
-      name: dataset_registry_id
-      type: int
-      nullable: false
-    - 
+      doc: >
+        A link to the associated Dataset.
+    -
       name: actual
       type: bool
       nullable: false
+      doc: >
+        Whether the Dataset was actually used as an input by the Quantum
+        (as opposed to just predicted to be used during preflight).
     foreignKeys:
-    - 
-      src:
-      - quantum_id
-      - quantum_registry_id
-      tgt:
-      - Quantum.execution_id
-      - Quantum.registry_id
-    - 
-      src:
-      - dataset_id
-      - dataset_registry_id
-      tgt:
-      - Datasets.dataset_id
-      - Datasets.registry_id      
+    -
+      src: quantum_id
+      tgt: Quantum.execution_id
+    -
+      src: dataset_id
+      tgt: Dataset.dataset_id
 
+  DatasetStorage:
+    doc: >
+      A table that provides information on how a Dataset is stored in one
+      or more Datastores.  The presence or absence of a record in this
+      table itself indicates whether the Dataset is present in that
+      Datastore.
+    columns:
+    -
+      name: dataset_id
+      type: int
+      primary_key: true
+      nullable: false
+      doc: >
+        Link to the Dataset table.
+    - name: datastore_name
+      type: string
+      primary_key: true
+      nullable: false
+      doc: >
+        Name of the Datastore this entry corresponds to.
+    - name: md5
+      type: string
+      doc: >
+        MD5 checksum of the stored dataset, if applicable.
+    - name: size
+      type: int
+      doc: >
+        Total size of the stored dataset in bytes, if applicable.
+    foreignKeys:
+    -
+      src: dataset_id
+      tgt: Dataset.dataset_id

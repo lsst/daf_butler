@@ -24,6 +24,7 @@ import unittest
 
 import lsst.utils.tests
 
+from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
@@ -66,6 +67,50 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)
+
+    def testComponents(self):
+        registry = Registry.fromConfig(self.configFile)
+        parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass="dummy")
+        childDatasetType = DatasetType(name="child", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(parentDatasetType)
+        registry.registerDatasetType(childDatasetType)
+        run = registry.makeRun(collection="test")
+        parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
+        children = {"child1": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run),
+                    "child2": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run)}
+        for name, child in children.items():
+            registry.attachComponent(name, parent, child)
+        self.assertEqual(parent.components, children)
+
+    def testRun(self):
+        registry = Registry.fromConfig(self.configFile)
+        # Check insertion and retrieval with two different collections
+        for collection in ["one", "two"]:
+            run = registry.makeRun(collection)
+            self.assertIsInstance(run, Run)
+            self.assertEqual(run.collection, collection)
+            # Test retrieval by collection
+            runCpy1 = registry.getRun(collection=run.collection)
+            self.assertEqual(runCpy1, run)
+            # Test retrieval by (run/execution) id
+            runCpy2 = registry.getRun(id=run.execution)
+            self.assertEqual(runCpy2, run)
+        # Non-existing collection should return None
+        self.assertIsNone(registry.getRun(collection="bogus"))
+        # Non-existing id should return None
+        self.assertIsNone(registry.getRun(id=100))
+
+    def testAssembler(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        run = registry.makeRun(collection="test")
+        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+        self.assertIsNone(ref.assembler)
+        assembler = "some.fully.qualified.assembler"  # TODO replace by actual dummy assember once implemented
+        registry.setAssembler(ref, assembler)
+        self.assertEqual(ref.assembler, assembler)
+        # TODO add check that ref2.assembler is also correct when ref2 is returned by Registry.find()
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

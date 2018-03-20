@@ -29,46 +29,32 @@ class Run(object):
 
     Parameters
     ----------
-    runId : `int`
-        ID to associate with this run.
-    registryId : `int`
-        ID associated with this `Registry`.
+    execution : `int`
+        A unique identifier for this Run, which is also the associated
+        Execution record.
     collection : `str`
-        Collection to use for this run.
-    environment : `str`
-        Something about the environment.
-    pipeline : `str`
-        Something about the pipeline.
+        A Collection name with which all Datasets in this Run are initially
+        associated, also used as a human-readable name for this Run.
+    environment : `DatasetRef`
+        A reference to a dataset that contains a description of
+        the software environment (e.g. versions) used for this Run.
+    pipeline : `DatasetRef`
+        A reference to a dataset that contains a serialization of
+        the SuperTask Pipeline used for this Run (if any).
     """
-    _currentId = 0
-
-    @classmethod
-    def getNewId(cls):
-        cls._currentId += 1
-        return cls._currentId
-
-    __slots__ = ("_runId", "_registryId", "_collection", "_environment", "_pipeline")
+    __slots__ = ("_execution", "_collection", "_environment", "_pipeline")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
-    def __init__(self, runId, registryId, collection, environment, pipeline):
-        self._runId = runId
-        self._registryId = registryId
+    def __init__(self, execution, collection, environment, pipeline):
+        self._execution = execution
         self._collection = collection
         self._environment = environment
         self._pipeline = pipeline
 
     @property
-    def pkey(self):
-        return (self._runId, self.registryId)
-
-    @property
-    def runId(self):
-        return self._runId
-
-    @property
-    def registryId(self):
-        return self._registryId
+    def execution(self):
+        return self._execution
 
     @property
     def collection(self):

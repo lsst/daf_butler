@@ -96,51 +96,50 @@ class DatasetRef(object):
     ----------
     datasetType : `DatasetType`
         The `DatasetType` for this `Dataset`.
-    units : `dict`
+    dataId : `dict`
         Dictionary where the keys are `DataUnit` names and the values are
-        `DataUnit` instances.
+        `DataUnit` values.
+    id : `int`, optional
+        A unique identifier.
+        Normally set to `None` and assigned by `Registry`
     """
 
-    __slots__ = ("_type", "_producer", "_predictedConsumers", "_actualConsumers")
-    _currentId = -1
+    __slots__ = ("_id", "_datasetType", "_dataId", "_producer",
+                 "_predictedConsumers", "_actualConsumers", "_components",
+                 "_assembler")
 
-    @classmethod
-    def getNewId(cls):
-        """Generate a new Dataset ID number.
-
-        ..todo::
-            This is a temporary workaround that will probably disapear in
-            the future, when a solution is found to the problem of
-            autoincrement compound primary keys in SQLite.
-        """
-        cls._currentId += 1
-        return cls._currentId
-
-    def __init__(self, datasetType, units):
-        units = datasetType.units.conform(units)
-        super().__init__(
-            datasetType.name,
-            **{unit.__class__.__name__: unit.value for unit in units}
-        )
+    def __init__(self, datasetType, dataId, id=None):
+        assert isinstance(datasetType, DatasetType)
+        self._id = id
         self._datasetType = datasetType
-        self._units = units
+        self._dataId = dataId
         self._producer = None
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
+        self._components = dict()
+        self._assembler = None
+
+    @property
+    def id(self):
+        """Primary key of the dataset (`int`)
+
+        Typically assigned by `Registry`.
+        """
+        return self._id
 
     @property
     def datasetType(self):
         """The `DatasetType` associated with the `Dataset` the `DatasetRef`
         points to.
         """
-        return self._type
+        return self._datasetType
 
     @property
-    def units(self):
-        """A `tuple` of `DataUnit` instances that label the `DatasetRef`
+    def dataId(self):
+        """A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
         within a Collection.
         """
-        return self._units
+        return self._dataId
 
     @property
     def producer(self):
@@ -173,14 +172,20 @@ class DatasetRef(object):
         """
         return _safeMakeMappingProxyType(self._actualConsumers)
 
-    def makeStorageHint(self, run, template=None):
-        """Construct a storage hint by filling in template with the Collection
-        collection and the values in the units tuple.
+    @property
+    def components(self):
+        """Named `DatasetRef` components.
 
-        Although a `Dataset` may belong to multiple Collections, only the one
-        corresponding to its `Run` is used.
+        Read-only; update via `Registry.attachComponent()`.
         """
-        if template is None:
-            template = self.datasetType.template
-        units = {unit.__class__.__name__: unit.value for unit in self.units}
-        return template.format(DatasetType=self.datasetType.name, Run=run.collection, **units)
+        return _safeMakeMappingProxyType(self._components)
+
+    @property
+    def assembler(self):
+        """Fully-qualified name of an importable Assembler object that can be
+        used to construct this Dataset from its components.
+
+        `None` for datasets that are not virtual composites.
+        Read-only; update via `Registry.setAssembler()`.
+        """
+        return self._assembler

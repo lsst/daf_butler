@@ -22,9 +22,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select
 
-from ..core.datasets import DatasetType
+from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
+from ..core.run import Run
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -117,7 +118,7 @@ class SqlRegistry(Registry):
                                           dataUnits=dataUnits)
         return datasetType
 
-    def addDataset(self, ref, uri, components, run, producer=None):
+    def addDataset(self, datasetType, dataId, run, producer=None):
         """Add a `Dataset` to a Collection.
 
         This always adds a new `Dataset`; to associate an existing `Dataset` with
@@ -125,14 +126,11 @@ class SqlRegistry(Registry):
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Identifies the `Dataset` and contains its `DatasetType`.
-        uri : `str`
-            The URI that has been associated with the `Dataset` by a
-            `Datastore`.
-        components : `dict`
-            If the `Dataset` is a composite, a ``{name : URI}`` dictionary of
-            its named components and storage locations.
+        datasetType : `str`
+            Name of a `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -153,7 +151,50 @@ class SqlRegistry(Registry):
             If a `Dataset` with the given `DatasetRef` already exists in the
             given Collection.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetTable = self._schema.metadata.tables['Dataset']
+        datasetRef = None
+        with self._engine.begin() as connection:
+            result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
+                                                                     run_id=run.execution,
+                                                                     quantum_id=None))  # TODO add producer
+            datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
+        return datasetRef
+
+    def setAssembler(self, ref, assembler):
+        """Set the assembler to use for a composite dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the dataset for which to set the assembler.
+        assembler : `str`
+            Fully qualified name of the assembler.
+        """
+        datasetTable = self._schema.metadata.tables['Dataset']
+        with self._engine.begin() as connection:
+            connection.execute(datasetTable.update().where(
+                datasetTable.c.dataset_id == ref.id).values(assembler=assembler))
+            ref._assembler = assembler
+
+    def attachComponent(self, name, parent, component):
+        """Attach a component to a dataset.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the component.
+        parent : `DatasetRef`
+            A reference to the parent dataset.
+        component : `DatasetRef`
+            A reference to the component dataset.
+        """
+        # TODO Insert check for component name and type against parent.storageClass specified components
+        datasetCompositionTable = self._schema.metadata.tables['DatasetComposition']
+        with self._engine.begin() as connection:
+            connection.execute(datasetCompositionTable.insert().values(component_name=name,
+                                                                       parent_dataset_id=parent.id,
+                                                                       component_dataset_id=component.id))
+            parent._components[name] = component
 
     def associate(self, collection, refs):
         """Add existing `Dataset`\ s to a Collection, possibly creating the
@@ -197,6 +238,8 @@ class SqlRegistry(Registry):
     def makeRun(self, collection):
         """Create a new `Run` in the `SqlRegistry` and return it.
 
+        If a run with this collection already exists, return that instead.
+
         Parameters
         ----------
         collection : `str`
@@ -208,7 +251,20 @@ class SqlRegistry(Registry):
         run : `Run`
             A new `Run` instance.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        # First see if a run with this collection already exists
+        run = self.getRun(collection)
+        if run is None:
+            execution = None  # Automatically generate one
+            environment = None
+            pipeline = None
+            runTable = self._schema.metadata.tables['Run']
+            with self._engine.begin() as connection:
+                connection.execute(runTable.insert().values(execution_id=execution,
+                                                            collection=collection,
+                                                            environment_id=environment,
+                                                            pipeline_id=pipeline))
+            run = self.getRun(collection)  # Needed because execution_id is autoincrement
+        return run
 
     def updateRun(self, run):
         """Update the `environment` and/or `pipeline` of the given `Run`
@@ -232,8 +288,37 @@ class SqlRegistry(Registry):
             Collection collection
         id : `int`, optional
             If given, lookup by id instead and ignore `collection`.
+
+        Returns
+        -------
+        run : `Run`
+            The `Run` instance.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        runTable = self._schema.metadata.tables['Run']
+        run = None
+        with self._engine.begin() as connection:
+            # Retrieve by id
+            if (id is not None) and (collection is None):
+                result = connection.execute(select([runTable.c.execution_id,
+                                                    runTable.c.collection,
+                                                    runTable.c.environment_id,
+                                                    runTable.c.pipeline_id]).where(
+                                                        runTable.c.execution_id == id)).fetchone()
+            # Retrieve by collection
+            elif (collection is not None) and (id is None):
+                result = connection.execute(select([runTable.c.execution_id,
+                                                    runTable.c.collection,
+                                                    runTable.c.environment_id,
+                                                    runTable.c.pipeline_id]).where(
+                                                        runTable.c.collection == collection)).fetchone()
+            else:
+                raise ValueError("Either collection or id must be given")
+            if result is not None:
+                run = Run(execution=result['execution_id'],
+                          collection=result['collection'],
+                          environment=result['environment_id'],
+                          pipeline=result['pipeline_id'])
+        return run
 
     def addQuantum(self, quantum):
         """Add a new `Quantum` to the `SqlRegistry`.
