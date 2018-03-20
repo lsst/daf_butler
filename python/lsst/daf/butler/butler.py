@@ -85,7 +85,7 @@ class Butler(object):
 
         Returns
         -------
-        `DatasetRef`
+        ref : `DatasetRef`
             A reference to the stored dataset.
         """
         datasetType = self.registry.getDatasetType(datasetType)
@@ -106,7 +106,7 @@ class Butler(object):
 
         Returns
         -------
-        `object`
+        obj : `object`
             The dataset.
         """
         # Currently a direct pass-through to `Datastore.get` but this should
@@ -121,11 +121,12 @@ class Butler(object):
         datasetType : `DatasetType` instance or `str`
             The `DatasetType`.
         dataId : `dict`
-            An identifier with `DataUnit` names and values.
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
 
         Returns
         -------
-        `object`
+        obj : `object`
             The dataset.
         """
         datasetType = self.registry.getDatasetType(datasetType)

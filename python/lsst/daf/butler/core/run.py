@@ -35,11 +35,11 @@ class Run(object):
     collection : `str`
         A Collection name with which all Datasets in this Run are initially
         associated, also used as a human-readable name for this Run.
-    environment : `int`
-        A Dataset that contains a description of
+    environment : `DatasetRef`
+        A reference to a dataset that contains a description of
         the software environment (e.g. versions) used for this Run.
-    pipeline : `int`
-        A Dataset that contains a serialization of
+    pipeline : `DatasetRef`
+        A reference to a dataset that contains a serialization of
         the SuperTask Pipeline used for this Run (if any).
     """
     __slots__ = ("_execution", "_collection", "_environment", "_pipeline")

@@ -129,7 +129,8 @@ class SqlRegistry(Registry):
         datasetType : `str`
             Name of a `DatasetType`.
         dataId : `dict`
-            An identifier with `DataUnit` names and values.
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -141,7 +142,7 @@ class SqlRegistry(Registry):
 
         Returns
         -------
-        `DatasetRef`
+        ref : `DatasetRef`
             A newly-created `DatasetRef` instance.
 
         Raises
@@ -287,6 +288,11 @@ class SqlRegistry(Registry):
             Collection collection
         id : `int`, optional
             If given, lookup by id instead and ignore `collection`.
+
+        Returns
+        -------
+        run : `Run`
+            The `Run` instance.
         """
         runTable = self._schema.metadata.tables['Run']
         run = None
