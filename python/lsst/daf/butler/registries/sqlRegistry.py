@@ -337,7 +337,7 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             connection.execute(datasetStorageTable.insert().values(dataset_id=ref.id,
                                                                    datastore_name=storageInfo.datastoreName,
-                                                                   md5=storageInfo.md5,
+                                                                   checksum=storageInfo.checksum,
                                                                    size=storageInfo.size))
 
     def updateStorageInfo(self, ref, datastoreName, storageInfo):
@@ -360,7 +360,7 @@ class SqlRegistry(Registry):
                 datasetStorageTable.c.dataset_id == ref.id,
                 datasetStorageTable.c.datastore_name == datastoreName)).values(
                     datastore_name=storageInfo.datastoreName,
-                    md5=storageInfo.md5,
+                    checksum=storageInfo.checksum,
                     size=storageInfo.size))
 
     def getStorageInfo(self, ref, datastoreName):
@@ -385,12 +385,12 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             result = connection.execute(
                 select([datasetStorageTable.c.datastore_name,
-                        datasetStorageTable.c.md5,
+                        datasetStorageTable.c.checksum,
                         datasetStorageTable.c.size]).where(
                             and_(datasetStorageTable.c.dataset_id == ref.id,
                                  datasetStorageTable.c.datastore_name == datastoreName))).fetchone()
             storageInfo = StorageInfo(datastoreName=result["datastore_name"],
-                                      md5=result["md5"],
+                                      checksum=result["checksum"],
                                       size=result["size"])
         return storageInfo
 

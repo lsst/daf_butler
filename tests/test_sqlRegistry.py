@@ -108,9 +108,9 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         datastoreName = "dummystore"
-        md5 = "d6fb1c0c8f338044b2faaf328f91f707"
+        checksum = "d6fb1c0c8f338044b2faaf328f91f707"
         size = 512
-        storageInfo = StorageInfo(datastoreName, md5, size)
+        storageInfo = StorageInfo(datastoreName, checksum, size)
         # Test adding information about a new dataset
         registry.addStorageInfo(ref, storageInfo)
         outStorageInfo = registry.getStorageInfo(ref, datastoreName)

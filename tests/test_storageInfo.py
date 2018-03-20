@@ -36,11 +36,11 @@ class StorageInfoTestCase(lsst.utils.tests.TestCase):
         """Test of constructor.
         """
         datastoreName = "dummy"
-        md5 = "d6fb1c0c8f338044b2faaf328f91f707"
+        checksum = "d6fb1c0c8f338044b2faaf328f91f707"
         size = 512
-        storageInfo = StorageInfo(datastoreName, md5, size)
+        storageInfo = StorageInfo(datastoreName, checksum, size)
         self.assertEqual(storageInfo.datastoreName, datastoreName)
-        self.assertEqual(storageInfo.md5, md5)
+        self.assertEqual(storageInfo.checksum, checksum)
         self.assertEqual(storageInfo.size, size)
 
     def testEquality(self):

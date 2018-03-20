@@ -31,19 +31,19 @@ class StorageInfo:
     ----------
     datastoreName : `str`
         Name of datastore.
-    md5 : `str`
+    checksum : `str`
         Checksum.
     size : `int`
         Size of stored object in bytes.
     """
     __eq__ = slotValuesAreEqual
-    __slots__ = ("_datastoreName", "_md5", "_size")
+    __slots__ = ("_datastoreName", "_checksum", "_size")
 
-    def __init__(self, datastoreName, md5=None, size=None):
+    def __init__(self, datastoreName, checksum=None, size=None):
         assert isinstance(datastoreName, str)
         self._datastoreName = datastoreName
-        assert md5 is None or isinstance(md5, str)
-        self._md5 = md5
+        assert checksum is None or isinstance(checksum, str)
+        self._checksum = checksum
         assert size is None or isinstance(size, int)
         self._size = size
 
@@ -54,10 +54,10 @@ class StorageInfo:
         return self._datastoreName
 
     @property
-    def md5(self):
+    def checksum(self):
         """Checksum (`str`).
         """
-        return self._md5
+        return self._checksum
 
     @property
     def size(self):
