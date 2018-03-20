@@ -135,6 +135,17 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(ref.assembler, assembler)
         # TODO add check that ref2.assembler is also correct when ref2 is returned by Registry.find()
 
+    def testFind(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="dummytype", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        collection = "test"
+        dataId = {"camera": "DummyCam"}
+        run = registry.makeRun(collection=collection)
+        inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
+        outputRef = registry.find(collection, datasetType, dataId)
+        self.assertEqual(outputRef, inputRef)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

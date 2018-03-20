@@ -312,19 +312,21 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def find(self, collection, ref):
-        """Look up the location of the `Dataset` associated with the given
-        `DatasetRef`.
+    def find(self, collection, datasetType, dataId):
+        """Lookup a dataset.
 
-        This can be used to obtain the URI that permits the `Dataset` to be
-        read from a `Datastore`.
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`.
 
         Parameters
         ----------
         collection : `str`
             Identifies the Collection to search.
-        ref : `DatasetRef`
-            Identifies the `Dataset`.
+        datasetType : `DatasetType`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
 
         Returns
         -------

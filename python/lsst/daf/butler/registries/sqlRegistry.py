@@ -489,19 +489,21 @@ class SqlRegistry(Registry):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def find(self, collection, ref):
-        """Look up the location of the `Dataset` associated with the given
-        `DatasetRef`.
+    def find(self, collection, datasetType, dataId):
+        """Lookup a dataset.
 
-        This can be used to obtain the URI that permits the `Dataset` to be
-        read from a `Datastore`.
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`.
 
         Parameters
         ----------
         collection : `str`
             Identifies the Collection to search.
-        ref : `DatasetRef`
-            Identifies the `Dataset`.
+        datasetType : `DatasetType`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
 
         Returns
         -------
@@ -509,7 +511,19 @@ class SqlRegistry(Registry):
             A ref to the `Dataset`, or `None` if no matching `Dataset`
             was found.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetTable = self._schema.metadata.tables['Dataset']
+        datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
+        datasetRef = None
+        with self._engine.begin() as connection:
+            result = connection.execute(select([datasetTable.c.dataset_id]).select_from(
+                datasetTable.join(datasetCollectionTable)).where(
+                    datasetCollectionTable.c.collection == collection)).fetchone()
+            # TODO add selection based on units.
+            # TODO update unit values and add Run, Quantum and assembler?
+            datasetRef = DatasetRef(datasetType=datasetType,
+                                    dataId=dataId,
+                                    id=result['dataset_id'])
+        return datasetRef
 
     def subset(self, collection, expr, datasetTypes):
         """Create a new `Collection` by subsetting an existing one.
