@@ -246,7 +246,8 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             for ref in refs:
                 connection.execute(datasetCollectionTable.delete().where(
-                    and_(dataset_id=ref.id, collection=collection)))
+                    and_(datasetCollectionTable.c.dataset_id == ref.id,
+                         datasetCollectionTable.c.collection == collection)))
         return []
 
     def makeRun(self, collection):

@@ -166,6 +166,34 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         nonExistingDataId = {"camera": "DummyCam", "visit": 42}
         self.assertIsNone(registry.find(collection, datasetType, nonExistingDataId))
 
+    def testCollections(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="dummytype", dataUnits=("camera", "visit"), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        collection = "ingest"
+        run = registry.makeRun(collection=collection)
+        dataId1 = {"camera": "DummyCam", "visit": 0}
+        inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
+        dataId2 = {"camera": "DummyCam", "visit": 1}
+        inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
+        # We should be able to find both datasets in their Run.collection
+        outputRef = registry.find(run.collection, datasetType, dataId1)
+        self.assertEqual(outputRef, inputRef1)
+        outputRef = registry.find(run.collection, datasetType, dataId2)
+        self.assertEqual(outputRef, inputRef2)
+        # and with the associated collection
+        newCollection = "something"
+        registry.associate(newCollection, [inputRef1, inputRef2])
+        outputRef = registry.find(newCollection, datasetType, dataId1)
+        self.assertEqual(outputRef, inputRef1)
+        outputRef = registry.find(newCollection, datasetType, dataId2)
+        self.assertEqual(outputRef, inputRef2)
+        # but no more after disassociation
+        registry.disassociate(newCollection, [inputRef1, ], remove=False)  # TODO test with removal when done
+        self.assertIsNone(registry.find(newCollection, datasetType, dataId1))
+        outputRef = registry.find(newCollection, datasetType, dataId2)
+        self.assertEqual(outputRef, inputRef2)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
