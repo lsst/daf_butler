@@ -71,6 +71,8 @@ class Schema:
     ----------
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description
+    dataUnits : `dict`
+        Columns that represent dataunit links.
     """
     VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float,
                           'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
@@ -81,9 +83,12 @@ class Schema:
         for tableName, tableDescription in self.config.tables.items():
             self.addTable(tableName, tableDescription)
         # Add DataUnit links
+        self.dataUnits = {}
         datasetTable = self.metadata.tables['Dataset']
         for dataUnitLinkDescription in self.config.dataUnitLinks:
-            datasetTable.append_column(self.makeColumn(dataUnitLinkDescription))
+            linkColumn = self.makeColumn(dataUnitLinkDescription)
+            self.dataUnits[dataUnitLinkDescription['name']] = linkColumn
+            datasetTable.append_column(linkColumn)
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.

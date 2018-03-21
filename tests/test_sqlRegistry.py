@@ -137,14 +137,34 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testFind(self):
         registry = Registry.fromConfig(self.configFile)
-        datasetType = DatasetType(name="dummytype", dataUnits=("camera",), storageClass="dummy")
+        datasetType = DatasetType(name="dummytype", dataUnits=("camera", "visit"), storageClass="dummy")
         registry.registerDatasetType(datasetType)
         collection = "test"
-        dataId = {"camera": "DummyCam"}
+        dataId = {"camera": "DummyCam", "visit": 0}
         run = registry.makeRun(collection=collection)
         inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
         outputRef = registry.find(collection, datasetType, dataId)
         self.assertEqual(outputRef, inputRef)
+        # Check that retrieval with invalid dataId raises
+        with self.assertRaises(ValueError):
+            dataId = {"camera": "DummyCam", "abstract_filter": "g"}  # should be visit
+            registry.find(collection, datasetType, dataId)
+        # Check that different dataIds match to different datasets
+        dataId1 = {"camera": "DummyCam", "visit": 1}
+        inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
+        dataId2 = {"camera": "DummyCam", "visit": 2}
+        inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
+        dataId3 = {"camera": "MyCam", "visit": 2}
+        inputRef3 = registry.addDataset(datasetType, dataId=dataId3, run=run)
+        self.assertEqual(registry.find(collection, datasetType, dataId1), inputRef1)
+        self.assertEqual(registry.find(collection, datasetType, dataId2), inputRef2)
+        self.assertEqual(registry.find(collection, datasetType, dataId3), inputRef3)
+        self.assertNotEqual(registry.find(collection, datasetType, dataId1), inputRef2)
+        self.assertNotEqual(registry.find(collection, datasetType, dataId2), inputRef1)
+        self.assertNotEqual(registry.find(collection, datasetType, dataId3), inputRef1)
+        # Check that requesting a non-existing dataId returns None
+        nonExistingDataId = {"camera": "DummyCam", "visit": 42}
+        self.assertIsNone(registry.find(collection, datasetType, nonExistingDataId))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

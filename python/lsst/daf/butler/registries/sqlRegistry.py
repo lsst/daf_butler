@@ -157,7 +157,8 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
                                                                      run_id=run.execution,
-                                                                     quantum_id=None))  # TODO add producer
+                                                                     quantum_id=None,  # TODO add producer
+                                                                     **dataId))
             datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
             # A dataset is always associated with its Run collection
             self.associate(run.collection, [datasetRef])
@@ -489,6 +490,28 @@ class SqlRegistry(Registry):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
+    def _validateDataId(self, datasetType, dataId):
+        """Check if a dataId is valid for a particular `DatasetType`.
+
+        TODO move this function to some other place once DataUnit relations
+        are implemented.
+
+        datasetType : `DatasetType`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
+
+        Returns
+        -------
+        valid : `bool`
+            `True` if the dataId is valid, `False` otherwise.
+        """
+        for name in datasetType.dataUnits:
+            if name not in dataId:
+                return False
+        return True
+
     def find(self, collection, datasetType, dataId):
         """Lookup a dataset.
 
@@ -510,20 +533,30 @@ class SqlRegistry(Registry):
         ref : `DatasetRef`
             A ref to the `Dataset`, or `None` if no matching `Dataset`
             was found.
+
+        Raises
+        ------
+        `ValueError`
+            If dataId is invalid.
         """
+        if not self._validateDataId(datasetType, dataId):
+            raise ValueError("Invalid dataId: {}".format(dataId))
         datasetTable = self._schema.metadata.tables['Dataset']
         datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
-        datasetRef = None
+        dataIdExpression = and_((self._schema.dataUnits[name] == dataId[name]
+                                 for name in datasetType.dataUnits))
         with self._engine.begin() as connection:
             result = connection.execute(select([datasetTable.c.dataset_id]).select_from(
-                datasetTable.join(datasetCollectionTable)).where(
-                    datasetCollectionTable.c.collection == collection)).fetchone()
-            # TODO add selection based on units.
-            # TODO update unit values and add Run, Quantum and assembler?
-            datasetRef = DatasetRef(datasetType=datasetType,
-                                    dataId=dataId,
-                                    id=result['dataset_id'])
-        return datasetRef
+                datasetTable.join(datasetCollectionTable)).where(and_(
+                    datasetCollectionTable.c.collection == collection,
+                    dataIdExpression))).fetchone()
+        # TODO update unit values and add Run, Quantum and assembler?
+        if result is not None:
+            return DatasetRef(datasetType=datasetType,
+                              dataId=dataId,
+                              id=result['dataset_id'])
+        else:
+            return None
 
     def subset(self, collection, expr, datasetTypes):
         """Create a new `Collection` by subsetting an existing one.
