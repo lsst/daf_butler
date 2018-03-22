@@ -20,8 +20,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import itertools
+from contextlib import closing
+
+from sqlite3 import Connection as SQLite3Connection
 
 from sqlalchemy import create_engine
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
 from sqlalchemy.sql import select, and_, exists
 
 from ..core.datasets import DatasetType, DatasetRef
@@ -34,6 +39,13 @@ from ..core.storageInfo import StorageInfo
 from ..core.storageClass import StorageClassFactory
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
+
+
+@event.listens_for(Engine, "connect")
+def _enableForeignKeysOnSqlite3(dbapiConnection, connectionRecord):
+    if isinstance(dbapiConnection, SQLite3Connection):
+        with closing(dbapiConnection.cursor()) as cursor:
+            cursor.execute("PRAGMA foreign_keys=ON;")
 
 
 class SqlRegistryConfig(RegistryConfig):
