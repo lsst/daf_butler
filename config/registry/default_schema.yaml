@@ -600,7 +600,8 @@ dataunit_joins:
     rhs:
     - ExposureRange
     sql:
-      where: (lhs.camera = rhs.camera) AND (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
+      (lhs.camera = rhs.camera) AND
+      (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
   MultiCameraExposureJoin:
     doc: >
       A join table that relates Exposures from different Cameras, with
@@ -680,6 +681,7 @@ dataunit_joins:
         -
           name: sensor
           type: int
+          nullable: false
           doc: Sensor ID
         -
           name: skypix
