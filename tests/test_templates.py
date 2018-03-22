@@ -29,6 +29,7 @@ from lsst.daf.butler.core.dataUnits import DataUnits
 
 class TestFileTemplates(unittest.TestCase):
     """Test creation of paths from templates."""
+
     def setUp(self):
         self.du = DataUnits({"visit": 52, "filter": "U"})
 

@@ -39,11 +39,24 @@ class SchemaConfig(Config):
         table = {}
         if 'tables' in self:
             table.update(self['tables'])
+        # TODO move this to some other place once DataUnit relations are settled
         if 'dataUnits' in self:
             for dataUnitDescription in self['dataUnits'].values():
                 if 'tables' in dataUnitDescription:
                     table.update(dataUnitDescription['tables'])
         return table
+
+    @property
+    def dataUnitLinks(self):
+        """All DataUnit links.
+
+        TODO move this to some other place once DataUnit relations are settled
+        """
+        dataUnits = self['dataUnits']
+        links = []
+        for dataUnitName in sorted(dataUnits.keys()):
+            links.extend(dataUnits[dataUnitName]['link'])
+        return links
 
 
 class Schema:
@@ -58,6 +71,8 @@ class Schema:
     ----------
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description
+    dataUnits : `dict`
+        Columns that represent dataunit links.
     """
     VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float,
                           'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
@@ -67,6 +82,13 @@ class Schema:
         self.metadata = MetaData()
         for tableName, tableDescription in self.config.tables.items():
             self.addTable(tableName, tableDescription)
+        # Add DataUnit links
+        self.dataUnits = {}
+        datasetTable = self.metadata.tables['Dataset']
+        for dataUnitLinkDescription in self.config.dataUnitLinks:
+            linkColumn = self.makeColumn(dataUnitLinkDescription)
+            self.dataUnits[dataUnitLinkDescription['name']] = linkColumn
+            datasetTable.append_column(linkColumn)
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -123,7 +145,7 @@ class Schema:
         args = (columnName, self.VALID_COLUMN_TYPES[description.pop("type")])
         # foreign_key is special
         if "foreign_key" in description:
-            args += ForeignKey(description.pop("foreign_key"))
+            args += (ForeignKey(description.pop("foreign_key")), )
         # additional optional arguments can be passed through directly
         kwargs = {}
         for opt in ("nullable", "primary_key", "doc"):

@@ -37,6 +37,7 @@ from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
 class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     """Test for SqlRegistry.
     """
+
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
@@ -72,13 +73,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testComponents(self):
         registry = Registry.fromConfig(self.configFile)
         parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass="dummy")
-        childDatasetType = DatasetType(name="child", dataUnits=("camera",), storageClass="dummy")
+        childDatasetType1 = DatasetType(name="child1", dataUnits=("camera",), storageClass="dummy")
+        childDatasetType2 = DatasetType(name="child2", dataUnits=("camera",), storageClass="dummy")
         registry.registerDatasetType(parentDatasetType)
-        registry.registerDatasetType(childDatasetType)
+        registry.registerDatasetType(childDatasetType1)
+        registry.registerDatasetType(childDatasetType2)
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
-        children = {"child1": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run),
-                    "child2": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run)}
+        children = {"child1": registry.addDataset(childDatasetType1, dataId={"camera": "DummyCam"}, run=run),
+                    "child2": registry.addDataset(childDatasetType2, dataId={"camera": "DummyCam"}, run=run)}
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
@@ -133,6 +136,65 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry.setAssembler(ref, assembler)
         self.assertEqual(ref.assembler, assembler)
         # TODO add check that ref2.assembler is also correct when ref2 is returned by Registry.find()
+
+    def testFind(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="dummytype", dataUnits=("camera", "visit"), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        collection = "test"
+        dataId = {"camera": "DummyCam", "visit": 0}
+        run = registry.makeRun(collection=collection)
+        inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
+        outputRef = registry.find(collection, datasetType, dataId)
+        self.assertEqual(outputRef, inputRef)
+        # Check that retrieval with invalid dataId raises
+        with self.assertRaises(ValueError):
+            dataId = {"camera": "DummyCam", "abstract_filter": "g"}  # should be visit
+            registry.find(collection, datasetType, dataId)
+        # Check that different dataIds match to different datasets
+        dataId1 = {"camera": "DummyCam", "visit": 1}
+        inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
+        dataId2 = {"camera": "DummyCam", "visit": 2}
+        inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
+        dataId3 = {"camera": "MyCam", "visit": 2}
+        inputRef3 = registry.addDataset(datasetType, dataId=dataId3, run=run)
+        self.assertEqual(registry.find(collection, datasetType, dataId1), inputRef1)
+        self.assertEqual(registry.find(collection, datasetType, dataId2), inputRef2)
+        self.assertEqual(registry.find(collection, datasetType, dataId3), inputRef3)
+        self.assertNotEqual(registry.find(collection, datasetType, dataId1), inputRef2)
+        self.assertNotEqual(registry.find(collection, datasetType, dataId2), inputRef1)
+        self.assertNotEqual(registry.find(collection, datasetType, dataId3), inputRef1)
+        # Check that requesting a non-existing dataId returns None
+        nonExistingDataId = {"camera": "DummyCam", "visit": 42}
+        self.assertIsNone(registry.find(collection, datasetType, nonExistingDataId))
+
+    def testCollections(self):
+        registry = Registry.fromConfig(self.configFile)
+        datasetType = DatasetType(name="dummytype", dataUnits=("camera", "visit"), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        collection = "ingest"
+        run = registry.makeRun(collection=collection)
+        dataId1 = {"camera": "DummyCam", "visit": 0}
+        inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
+        dataId2 = {"camera": "DummyCam", "visit": 1}
+        inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
+        # We should be able to find both datasets in their Run.collection
+        outputRef = registry.find(run.collection, datasetType, dataId1)
+        self.assertEqual(outputRef, inputRef1)
+        outputRef = registry.find(run.collection, datasetType, dataId2)
+        self.assertEqual(outputRef, inputRef2)
+        # and with the associated collection
+        newCollection = "something"
+        registry.associate(newCollection, [inputRef1, inputRef2])
+        outputRef = registry.find(newCollection, datasetType, dataId1)
+        self.assertEqual(outputRef, inputRef1)
+        outputRef = registry.find(newCollection, datasetType, dataId2)
+        self.assertEqual(outputRef, inputRef2)
+        # but no more after disassociation
+        registry.disassociate(newCollection, [inputRef1, ], remove=False)  # TODO test with removal when done
+        self.assertIsNone(registry.find(newCollection, datasetType, dataId1))
+        outputRef = registry.find(newCollection, datasetType, dataId2)
+        self.assertEqual(outputRef, inputRef2)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

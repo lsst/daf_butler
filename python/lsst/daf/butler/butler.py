@@ -33,6 +33,7 @@ __all__ = ("ButlerConfig", "Butler")
 class ButlerConfig(Config):
     """Contains the configuration for a `Butler`
     """
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.validate()

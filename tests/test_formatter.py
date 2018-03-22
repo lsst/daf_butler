@@ -32,6 +32,7 @@ import lsst.daf.butler.core.storageClass as storageClass
 class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
     """Tests of the formatter factory infrastructure.
     """
+
     def setUp(self):
         self.factory = formatter.FormatterFactory()
 

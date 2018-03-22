@@ -40,6 +40,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         This unittest does not verify the validaty of the schema description.
         It only checks that the generated tables match it.
     """
+
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.schemaFile = os.path.join(self.testDir, "../config/registry/default_schema.yaml")

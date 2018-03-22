@@ -31,6 +31,7 @@ from lsst.daf.butler.core.formatter import Formatter
 class IterableTestCase(lsst.utils.tests.TestCase):
     """Tests for `iterable` helper.
     """
+
     def testNonIterable(self):
         self.assertEqual(list(iterable(0)), [0, ])
 

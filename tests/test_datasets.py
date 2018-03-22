@@ -32,6 +32,7 @@ from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
 class DatasetTypeTestCase(lsst.utils.tests.TestCase):
     """Test for DatasetType.
     """
+
     def testConstructor(self):
         """Test construction preserves values.
 
@@ -83,6 +84,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
 class DatasetRefTestCase(lsst.utils.tests.TestCase):
     """Test for DatasetRef.
     """
+
     def testConstructor(self):
         """Test construction preserves values.
         """
