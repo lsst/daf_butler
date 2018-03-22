@@ -196,13 +196,20 @@ dataUnits:
             same as the datetime_begin of the first Exposure associated
             with this Visit.
         -
+          name: datetime_end
+          type: datetime
+          doc: >
+            Timestamp of the end of the Visit.  This should be the
+            same as the datetime_end of the last Exposure associated
+            with this Visit.
+        -
           name: exposure_time
           type: float
           doc: >
             The total exposure time of the Visit in seconds.  This should
             be equal to the sum of the exposure_time values for all
-            constituent Exposures (i.e. it should not include time with
-            the shutter closed).
+            constituent Exposures (i.e. it should not include time between
+            Exposures).
         -
           name: region
           type: blob
