@@ -29,9 +29,8 @@ class Run(object):
 
     Parameters
     ----------
-    execution : `int`
-        A unique identifier for this Run, which is also the associated
-        Execution record.
+    execution : `Execution`
+        The Execution for this Run.
     collection : `str`
         A Collection name with which all Datasets in this Run are initially
         associated, also used as a human-readable name for this Run.
