@@ -73,13 +73,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testComponents(self):
         registry = Registry.fromConfig(self.configFile)
         parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass="dummy")
-        childDatasetType = DatasetType(name="child", dataUnits=("camera",), storageClass="dummy")
+        childDatasetType1 = DatasetType(name="child1", dataUnits=("camera",), storageClass="dummy")
+        childDatasetType2 = DatasetType(name="child2", dataUnits=("camera",), storageClass="dummy")
         registry.registerDatasetType(parentDatasetType)
-        registry.registerDatasetType(childDatasetType)
+        registry.registerDatasetType(childDatasetType1)
+        registry.registerDatasetType(childDatasetType2)
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
-        children = {"child1": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run),
-                    "child2": registry.addDataset(childDatasetType, dataId={"camera": "DummyCam"}, run=run)}
+        children = {"child1": registry.addDataset(childDatasetType1, dataId={"camera": "DummyCam"}, run=run),
+                    "child2": registry.addDataset(childDatasetType2, dataId={"camera": "DummyCam"}, run=run)}
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)

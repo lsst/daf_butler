@@ -152,6 +152,15 @@ class SqlRegistry(Registry):
             If a `Dataset` with the given `DatasetRef` already exists in the
             given Collection.
         """
+        # TODO this is obviously not the most efficient way to check
+        # for existence.
+        # TODO also note that this check is not safe
+        # in the presence of concurrent calls to addDataset.
+        # Then again, it is undoubtedly not the only place where
+        # this problem occurs. Needs some serious thought.
+        if self.find(run.collection, datasetType, dataId) is not None:
+            raise ValueError("A dataset with id: {} already exists in collection {}".format(
+                dataId, run.collection))
         datasetTable = self._schema.metadata.tables['Dataset']
         datasetRef = None
         with self._engine.begin() as connection:
@@ -549,6 +558,7 @@ class SqlRegistry(Registry):
         with self._engine.begin() as connection:
             result = connection.execute(select([datasetTable.c.dataset_id]).select_from(
                 datasetTable.join(datasetCollectionTable)).where(and_(
+                    datasetTable.c.dataset_type_name == datasetType.name,
                     datasetCollectionTable.c.collection == collection,
                     dataIdExpression))).fetchone()
         # TODO update unit values and add Run, Quantum and assembler?
