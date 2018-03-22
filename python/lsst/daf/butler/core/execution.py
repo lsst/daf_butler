@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from .utils import slotValuesAreEqual
+
 __all__ = ("Execution",)
 
 
@@ -27,9 +29,6 @@ class Execution:
 
     Parameters
     ----------
-    id : `int`
-        A unique autoincrement field used as part of the primary key for
-        Execution.
     startTime : `datetime`
         The start time for the execution.  May have a different
         interpretation for different kinds of execution.
@@ -39,11 +38,16 @@ class Execution:
     host : `str`
         The system on which the execution was run.  May have a different
         interpretation for different kinds of execution.
+    id : `int`, optional
+        Unique integer identifier for this Execution.
+        Usually set to `None` (default) and assigned
+        by `Registry.addExecution`.
     """
 
     __slots__ = ("_id", "_startTime", "_endTime", "_host")
+    __eq__ = slotValuesAreEqual
 
-    def __init__(self, id, startTime=None, endTime=None, host=None):
+    def __init__(self, startTime=None, endTime=None, host=None, id=None):
         self._id = id
         self._startTime = startTime
         self._endTime = endTime

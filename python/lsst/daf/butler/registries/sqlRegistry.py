@@ -25,6 +25,7 @@ from sqlalchemy.sql import select, and_
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
+from ..core.execution import Execution
 from ..core.run import Run
 from ..core.storageInfo import StorageInfo
 
@@ -416,6 +417,46 @@ class SqlRegistry(Registry):
                                       checksum=result["checksum"],
                                       size=result["size"])
         return storageInfo
+
+    def addExecution(self, execution):
+        """Add a new `Execution` to the `SqlRegistry`.
+
+        Parameters
+        ----------
+        execution : `Execution`
+            Instance to add to the `SqlRegistry`.
+            The given `Execution` must not already be present in the `SqlRegistry`
+            (or any other), therefore its `id` attribute must be `None`.
+        """
+        assert execution.id is None  # Must not be preexisting
+        executionTable = self._schema.metadata.tables['Execution']
+        with self._engine.begin() as connection:
+            result = connection.execute(executionTable.insert().values(start_time=execution.startTime,
+                                                                       end_time=execution.endTime,
+                                                                       host=execution.host))
+            execution._id = result.inserted_primary_key[0]
+
+    def getExecution(self, id):
+        """Retrieve an Execution.
+
+        Parameters
+        ----------
+        id : `int`
+            The unique identifier for the Execution.
+        """
+        executionTable = self._schema.metadata.tables['Execution']
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                select([executionTable.c.start_time,
+                        executionTable.c.end_time,
+                        executionTable.c.host]).where(executionTable.c.execution_id == id)).fetchone()
+        if result is not None:
+            return Execution(startTime=result['start_time'],
+                             endTime=result['end_time'],
+                             host=result['host'],
+                             id=id)
+        else:
+            return None
 
     def addQuantum(self, quantum):
         """Add a new `Quantum` to the `SqlRegistry`.

@@ -37,12 +37,11 @@ class ExecutionTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Test of constructor.
         """
-        id = 0
         startTime = datetime(2018, 1, 1)
         endTime = startTime + timedelta(days=1, hours=5)
         host = "localhost"
-        execution = Execution(id, startTime, endTime, host)
-        self.assertEqual(execution.id, id)
+        execution = Execution(startTime, endTime, host)
+        self.assertIsNone(execution.id)
         self.assertEqual(execution.startTime, startTime)
         self.assertEqual(execution.endTime, endTime)
         self.assertEqual(execution.host, host)

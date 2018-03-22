@@ -21,10 +21,12 @@
 
 import os
 import unittest
+from datetime import datetime, timedelta
 
 import lsst.utils.tests
 
 from lsst.daf.butler.core.storageInfo import StorageInfo
+from lsst.daf.butler.core.execution import Execution
 from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
@@ -103,6 +105,18 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(registry.getRun(collection="bogus"))
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
+
+    def testExecution(self):
+        registry = Registry.fromConfig(self.configFile)
+        startTime = datetime(2018, 1, 1)
+        endTime = startTime + timedelta(days=1, hours=5)
+        host = "localhost"
+        execution = Execution(startTime, endTime, host)
+        self.assertIsNone(execution.id)
+        registry.addExecution(execution)
+        self.assertIsInstance(execution.id, int)
+        outExecution = registry.getExecution(execution.id)
+        self.assertEqual(outExecution, execution)
 
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)
