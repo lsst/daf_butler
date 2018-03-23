@@ -100,7 +100,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
             runCpy1 = registry.getRun(collection=run.collection)
             self.assertEqual(runCpy1, run)
             # Test retrieval by (run/execution) id
-            runCpy2 = registry.getRun(id=run.execution)
+            runCpy2 = registry.getRun(id=run.execution.id)
             self.assertEqual(runCpy2, run)
         # Non-existing collection should return None
         self.assertIsNone(registry.getRun(collection="bogus"))
@@ -119,7 +119,6 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outExecution = registry.getExecution(execution.id)
         self.assertEqual(outExecution, execution)
 
-    @unittest.expectedFailure
     def testQuantum(self):
         registry = Registry.fromConfig(self.configFile)
         execution = Execution(startTime=datetime(2018, 1, 1),

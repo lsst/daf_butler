@@ -24,6 +24,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler.core.run import Run
+from lsst.daf.butler.core.execution import Execution
 
 """Tests for Run.
 """
@@ -36,7 +37,7 @@ class RunTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Test of constructor.
         """
-        execution = 0
+        execution = Execution()
         collection = "ingest"
         environment = None
         pipeline = None

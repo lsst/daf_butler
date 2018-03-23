@@ -166,7 +166,7 @@ class SqlRegistry(Registry):
         datasetRef = None
         with self._engine.begin() as connection:
             result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
-                                                                     run_id=run.execution,
+                                                                     run_id=run.execution.id,
                                                                      quantum_id=None,  # TODO add producer
                                                                      **dataId))
             datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
@@ -279,16 +279,17 @@ class SqlRegistry(Registry):
         # First see if a run with this collection already exists
         run = self.getRun(collection)
         if run is None:
-            execution = None  # Automatically generate one
+            execution = Execution()
             environment = None
             pipeline = None
             runTable = self._schema.metadata.tables['Run']
             with self._engine.begin() as connection:
-                connection.execute(runTable.insert().values(execution_id=execution,
+                self.addExecution(execution)  # also assigns execution.id
+                connection.execute(runTable.insert().values(execution_id=execution.id,
                                                             collection=collection,
                                                             environment_id=environment,
                                                             pipeline_id=pipeline))
-            run = self.getRun(collection)  # Needed because execution_id is autoincrement
+            run = Run(execution, collection, environment, pipeline)
         return run
 
     def updateRun(self, run):
@@ -339,7 +340,8 @@ class SqlRegistry(Registry):
             else:
                 raise ValueError("Either collection or id must be given")
             if result is not None:
-                run = Run(execution=result['execution_id'],
+                execution = self.getExecution(result['execution_id'])
+                run = Run(execution=execution,
                           collection=result['collection'],
                           environment=result['environment_id'],
                           pipeline=result['pipeline_id'])

@@ -1309,21 +1309,21 @@ tables:
     -
       name: start_time
       type: datetime
-      nullable: false
+      nullable: true
       doc: >
         The start time for the execution.  May have a different
         interpretation for different kinds of execution.
     -
       name: end_time
       type: datetime
-      nullable: false
+      nullable: true
       doc: >
         The end time for the execution.  May have a different
         interpretation for different kinds of execution.
     -
       name: host
       type: string
-      nullable: false
+      nullable: true
       doc: >
         The system on which the execution was run.  May have a different
         interpretation for different kinds of execution.
