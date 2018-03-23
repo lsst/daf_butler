@@ -262,6 +262,12 @@ dataUnits:
             Local sideral time on the meridian (equivalent, but not
             equal, to Local Mean Sidereal Time).
         -
+          name: seeing
+          type: float
+          doc: >
+            Average seeing, measured as the FWHM of the Gaussian with the same
+            effective area (arcsec).
+        -
           name: region
           type: blob
           doc: >
