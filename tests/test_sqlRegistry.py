@@ -27,6 +27,7 @@ import lsst.utils.tests
 
 from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.execution import Execution
+from lsst.daf.butler.core.quantum import Quantum
 from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
@@ -117,6 +118,19 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(execution.id, int)
         outExecution = registry.getExecution(execution.id)
         self.assertEqual(outExecution, execution)
+
+    @unittest.expectedFailure
+    def testQuantum(self):
+        registry = Registry.fromConfig(self.configFile)
+        execution = Execution(startTime=datetime(2018, 1, 1),
+                              endTime=datetime(2018, 1, 2),
+                              host = "localhost")
+        registry.addExecution(execution)
+        run = registry.makeRun(collection="test")
+        quantum = Quantum(execution=execution,
+                          run=run,
+                          task="some.fully.qualified.SuperTask")
+        registry.addQuantum(quantum)
 
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)

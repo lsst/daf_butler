@@ -468,12 +468,17 @@ class SqlRegistry(Registry):
             The given `Quantum` must not already be present in the `SqlRegistry`
             (or any other), therefore its:
 
-            - `pkey` attribute must be `None`.
+            - `execution` attribute must be set to an existing `Execution`.
+            - `run` attribute must be set to an existing `Run`.
             - `predictedInputs` attribute must be fully populated with
               `DatasetRef`\ s, and its.
             - `actualInputs` and `outputs` will be ignored.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        quantumTable = self._schema.metadata.tables['Quantum']
+        with self._engine.begin() as connection:
+            connection.execute(quantumTable.insert().values(execution_id=quantum.execution.id,
+                                                            task=quantum.task,
+                                                            run_id=quantum.run.execution.id))
 
     def markInputUsed(self, quantum, ref):
         """Record the given `DatasetRef` as an actual (not just predicted)
