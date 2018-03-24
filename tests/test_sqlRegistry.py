@@ -121,16 +121,14 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testQuantum(self):
         registry = Registry.fromConfig(self.configFile)
-        execution = Execution(startTime=datetime(2018, 1, 1),
-                              endTime=datetime(2018, 1, 2),
-                              host = "localhost")
-        registry.addExecution(execution)
         run = registry.makeRun(collection="test")
-        quantum = Quantum(execution=execution,
-                          run=run,
-                          task="some.fully.qualified.SuperTask")
+        quantum = Quantum(run=run,
+                          task="some.fully.qualified.SuperTask",
+                          startTime=datetime(2018, 1, 1),
+                          endTime=datetime(2018, 1, 2),
+                          host="localhost")
         registry.addQuantum(quantum)
-        outQuantum = registry.getQuantum(execution.id)
+        outQuantum = registry.getQuantum(quantum.id)
         self.assertEqual(outQuantum, quantum)
 
     def testStorageInfo(self):

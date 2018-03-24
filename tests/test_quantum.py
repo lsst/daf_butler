@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+from datetime import datetime
 
 import lsst.utils.tests
 
@@ -36,15 +37,22 @@ class QuantumTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Test of constructor.
         """
-        execution = None  # TODO add Execution
+        # Quantum specific arguments
         run = None  # TODO add Run
         task = "some.task.object"  # TODO Add a `SuperTask`?
-        quantum = Quantum(execution, task, run)
-        self.assertEqual(quantum.execution, execution)
+        # Base class arguments
+        startTime = datetime(2018, 1, 1)
+        endTime = datetime(2018, 1, 2)
+        host = "localhost"
+        quantum = Quantum(task, run, startTime, endTime, host)
         self.assertEqual(quantum.task, task)
         self.assertEqual(quantum.run, run)
         self.assertEqual(quantum.predictedInputs, dict())
         self.assertEqual(quantum.actualInputs, dict())
+        self.assertIsNone(quantum.id)
+        self.assertEqual(quantum.startTime, startTime)
+        self.assertEqual(quantum.endTime, endTime)
+        self.assertEqual(quantum.host, host)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -479,7 +479,10 @@ class SqlRegistry(Registry):
         """
         quantumTable = self._schema.metadata.tables['Quantum']
         with self._engine.begin() as connection:
-            connection.execute(quantumTable.insert().values(execution_id=quantum.execution.id,
+            # First add the Execution part
+            self.addExecution(quantum)
+            # Then the Quantum specific part
+            connection.execute(quantumTable.insert().values(execution_id=quantum.id,
                                                             task=quantum.task,
                                                             run_id=quantum.run.execution.id))
 
@@ -491,17 +494,24 @@ class SqlRegistry(Registry):
         id : `int`
             The unique identifier for the Quantum.
         """
+        executionTable = self._schema.metadata.tables['Execution']
         quantumTable = self._schema.metadata.tables['Quantum']
         with self._engine.begin() as connection:
             result = connection.execute(
                 select([quantumTable.c.task,
-                        quantumTable.c.run_id]).where(quantumTable.c.execution_id == id)).fetchone()
+                        quantumTable.c.run_id,
+                        executionTable.c.start_time,
+                        executionTable.c.end_time,
+                        executionTable.c.host]).select_from(quantumTable.join(executionTable)).where(
+                    quantumTable.c.execution_id == id)).fetchone()
         if result is not None:
-            execution = self.getExecution(id)
             run = self.getRun(id=result['run_id'])
-            return Quantum(execution=execution,
-                           task=result['task'],
-                           run=run)
+            return Quantum(task=result['task'],
+                           run=run,
+                           startTime=result['start_time'],
+                           endTime=result['end_time'],
+                           host=result['host'],
+                           id=id)
         else:
             return None
 

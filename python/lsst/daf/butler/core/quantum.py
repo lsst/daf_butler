@@ -21,10 +21,12 @@
 
 from .utils import slotValuesAreEqual
 
+from .execution import Execution
+
 __all__ = ("Quantum",)
 
 
-class Quantum:
+class Quantum(Execution):
     """A discrete unit of work that may depend on one or more datasets and
     produces one or more datasets.
 
@@ -34,29 +36,21 @@ class Quantum:
 
     Parameters
     ----------
-    execution : `Execution`
-        The associated Execution.
     task : `str` or `SuperTask`
         Fully-qualified name of the SuperTask that executed this Quantum.
     run : `Run`
         The Run this Quantum is a part of.
     """
 
-    __slots__ = ("_execution", "_task", "_run", "_predictedInputs", "_actualInputs")
+    __slots__ = ("_task", "_run", "_predictedInputs", "_actualInputs")
     __eq__ = slotValuesAreEqual
 
-    def __init__(self, execution, task, run):
-        self._execution = execution
+    def __init__(self, task, run, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._task = task
         self._run = run
         self._predictedInputs = {}
         self._actualInputs = {}
-
-    @property
-    def execution(self):
-        """The associated Execution (`Execution`).
-        """
-        return self._execution
 
     @property
     def task(self):

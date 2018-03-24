@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import lsst.utils.tests
 
@@ -38,7 +38,7 @@ class ExecutionTestCase(lsst.utils.tests.TestCase):
         """Test of constructor.
         """
         startTime = datetime(2018, 1, 1)
-        endTime = startTime + timedelta(days=1, hours=5)
+        endTime = datetime(2018, 1, 2)
         host = "localhost"
         execution = Execution(startTime, endTime, host)
         self.assertIsNone(execution.id)
