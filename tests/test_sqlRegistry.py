@@ -130,6 +130,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
                           run=run,
                           task="some.fully.qualified.SuperTask")
         registry.addQuantum(quantum)
+        outQuantum = registry.getQuantum(execution.id)
+        self.assertEqual(outQuantum, quantum)
 
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)

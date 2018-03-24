@@ -27,6 +27,7 @@ from ..core.registry import RegistryConfig, Registry
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
+from ..core.quantum import Quantum
 from ..core.storageInfo import StorageInfo
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
@@ -481,6 +482,28 @@ class SqlRegistry(Registry):
             connection.execute(quantumTable.insert().values(execution_id=quantum.execution.id,
                                                             task=quantum.task,
                                                             run_id=quantum.run.execution.id))
+
+    def getQuantum(self, id):
+        """Retrieve an Quantum.
+
+        Parameters
+        ----------
+        id : `int`
+            The unique identifier for the Quantum.
+        """
+        quantumTable = self._schema.metadata.tables['Quantum']
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                select([quantumTable.c.task,
+                        quantumTable.c.run_id]).where(quantumTable.c.execution_id == id)).fetchone()
+        if result is not None:
+            execution = self.getExecution(id)
+            run = self.getRun(id=result['run_id'])
+            return Quantum(execution=execution,
+                           task=result['task'],
+                           run=run)
+        else:
+            return None
 
     def markInputUsed(self, quantum, ref):
         """Record the given `DatasetRef` as an actual (not just predicted)

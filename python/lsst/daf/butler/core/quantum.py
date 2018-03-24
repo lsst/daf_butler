@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from .utils import slotValuesAreEqual
+
 __all__ = ("Quantum",)
 
 
@@ -41,6 +43,7 @@ class Quantum:
     """
 
     __slots__ = ("_execution", "_task", "_run", "_predictedInputs", "_actualInputs")
+    __eq__ = slotValuesAreEqual
 
     def __init__(self, execution, task, run):
         self._execution = execution
