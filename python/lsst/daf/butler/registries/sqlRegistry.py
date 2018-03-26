@@ -193,7 +193,8 @@ class SqlRegistry(Registry):
             datasetType = self.getDatasetType(result['dataset_type_name'])
             # dataUnitName gives a `str` key which which is used to lookup
             # the corresponding sqlalchemy.core.Column entry to index the result.
-            dataId = {dataUnitName : result[self._schema.dataUnits[dataUnitName]] for dataUnitName in datasetType.dataUnits}
+            dataId = {dataUnitName: result[self._schema.dataUnits[dataUnitName]]
+                      for dataUnitName in datasetType.dataUnits}
             return DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
         else:
             return None
@@ -427,7 +428,7 @@ class SqlRegistry(Registry):
             The given `Run` must not already be present in the `SqlRegistry`
             (or any other).  Therefore its `id` must be `None` and its
             `collection` must not be associated with any existing `Run`.
-        
+
         Raises
         ------
         `ValueError`
@@ -478,15 +479,15 @@ class SqlRegistry(Registry):
                                                             runTable.c.execution_id == id)).fetchone()
             # Retrieve by collection
             elif (collection is not None) and (id is None):
-                              result = connection.execute(select([executionTable.c.execution_id,
+                result = connection.execute(select([executionTable.c.execution_id,
                                                     executionTable.c.start_time,
                                                     executionTable.c.end_time,
                                                     executionTable.c.host,
                                                     runTable.c.collection,
                                                     runTable.c.environment_id,
                                                     runTable.c.pipeline_id]).select_from(
-                                                        runTable.join(executionTable)).where(
-                                                            runTable.c.collection == collection)).fetchone()
+                    runTable.join(executionTable)).where(
+                    runTable.c.collection == collection)).fetchone()
             else:
                 raise ValueError("Either collection or id must be given")
             if result is not None:
@@ -529,8 +530,8 @@ class SqlRegistry(Registry):
             # dict of ``name : [DatasetRef, ...]`` and we need to flatten it
             # for inserting.
             connection.execute(datasetConsumersTable.insert(),
-                [{'quantum_id': quantum.id, 'dataset_id': ref.id, 'actual': False}
-                    for ref in itertools.chain.from_iterable(quantum.predictedInputs.values())])
+                               [{'quantum_id': quantum.id, 'dataset_id': ref.id, 'actual': False}
+                                for ref in itertools.chain.from_iterable(quantum.predictedInputs.values())])
 
     def getQuantum(self, id):
         """Retrieve an Quantum.
@@ -562,8 +563,8 @@ class SqlRegistry(Registry):
             datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
             with self._engine.begin() as connection:
                 for result in connection.execute(select([datasetConsumersTable.c.dataset_id,
-                                                        datasetConsumersTable.c.actual]).where(
-                                                            datasetConsumersTable.c.quantum_id == id)):
+                                                         datasetConsumersTable.c.actual]).where(
+                        datasetConsumersTable.c.quantum_id == id)):
                     ref = self.getDataset(result['dataset_id'])
                     quantum.addPredictedInput(ref)
                     if result['actual']:
