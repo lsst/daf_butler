@@ -192,7 +192,9 @@ class SqlRegistry(Registry):
         if result is not None:
             datasetType = self.getDatasetType(result['dataset_type_name'])
             # dataUnitName gives a `str` key which which is used to lookup
-            # the corresponding sqlalchemy.core.Column entry to index the result.
+            # the corresponding sqlalchemy.core.Column entry to index the result
+            # because the name of the key may not be the name of the name of the
+            # DataUnit link.
             dataId = {dataUnitName: result[self._schema.dataUnits[dataUnitName]]
                       for dataUnitName in datasetType.dataUnits}
             return DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
