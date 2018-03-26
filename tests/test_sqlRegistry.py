@@ -131,7 +131,6 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outExecution = registry.getExecution(execution.id)
         self.assertEqual(outExecution, execution)
 
-    @unittest.expectedFailure
     def testQuantum(self):
         registry = Registry.fromConfig(self.configFile)
         run = registry.makeRun(collection="test")
@@ -150,7 +149,12 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
                           host="localhost")
         quantum.addPredictedInput(ref1)
         quantum.addPredictedInput(ref2)
+        # Quantum is not yet in Registry, so can't mark input as actual
+        with self.assertRaises(KeyError):
+            registry.markInputUsed(quantum, ref1)
         registry.addQuantum(quantum)
+        # Now we can
+        registry.markInputUsed(quantum, ref1)
         outQuantum = registry.getQuantum(quantum.id)
         self.assertEqual(outQuantum, quantum)
 

@@ -553,17 +553,21 @@ class SqlRegistry(Registry):
         if result is not None:
             run = self.getRun(id=result['run_id'])
             quantum = Quantum(task=result['task'],
-                           run=run,
-                           startTime=result['start_time'],
-                           endTime=result['end_time'],
-                           host=result['host'],
-                           id=id)
+                              run=run,
+                              startTime=result['start_time'],
+                              endTime=result['end_time'],
+                              host=result['host'],
+                              id=id)
+            # Add predicted and actual inputs to quantum
+            datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
             with self._engine.begin() as connection:
-                datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
                 for result in connection.execute(select([datasetConsumersTable.c.dataset_id,
                                                         datasetConsumersTable.c.actual]).where(
                                                             datasetConsumersTable.c.quantum_id == id)):
-                    pass  # TODO use quantum.addPredictedInput when Registry.getDataset is implemented
+                    ref = self.getDataset(result['dataset_id'])
+                    quantum.addPredictedInput(ref)
+                    if result['actual']:
+                        quantum._markInputUsed(ref)
             return quantum
         else:
             return None
@@ -585,10 +589,19 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        Exception
+        `ValueError`
             If `ref` is not already in the predicted inputs list.
+        `KeyError`
+            If `ref` is not a predicted consumer for `quantum`.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
+        with self._engine.begin() as connection:
+            result = connection.execute(datasetConsumersTable.update().where(and_(
+                datasetConsumersTable.c.quantum_id == quantum.id,
+                datasetConsumersTable.c.dataset_id == ref.id)).values(actual=True))
+            if result.rowcount != 1:
+                raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
+            quantum._markInputUsed(ref)
 
     def addDataUnit(self, unit, replace=False):
         """Add a new `DataUnit`, optionally replacing an existing one

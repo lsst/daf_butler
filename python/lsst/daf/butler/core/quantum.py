@@ -104,3 +104,21 @@ class Quantum(Execution):
             self._predictedInputs[datasetTypeName] = [ref, ]
         else:
             self._predictedInputs[datasetTypeName].append(ref)
+
+    def _markInputUsed(self, ref):
+        """Mark an input as used.
+
+        This does not automatically update a `Registry`.
+        For that use `Registry.markInputUsed()` instead.
+        """
+        datasetTypeName = ref.datasetType.name
+        # First validate against predicted
+        if datasetTypeName not in self._predictedInputs:
+            raise ValueError("Dataset type {} not in predicted inputs".format(datasetTypeName))
+        if ref not in self._predictedInputs[datasetTypeName]:
+            raise ValueError("Actual input {} was not predicted".format(ref))
+        # Now insert as actual
+        if datasetTypeName not in self._actualInputs:
+            self._actualInputs[datasetTypeName] = [ref, ]
+        else:
+            self._actualInputs[datasetTypeName].append(ref)
