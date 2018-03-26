@@ -73,6 +73,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)
 
+    def testDataset(self):
+        registry = Registry.fromConfig(self.configFile)
+        run = registry.makeRun(collection="test")
+        datasetType = DatasetType(name="testtype", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+        outRef = registry.getDataset(ref.id)
+        self.assertEqual(ref, outRef)
+
     def testComponents(self):
         registry = Registry.fromConfig(self.configFile)
         parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass="dummy")
@@ -145,8 +154,6 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outQuantum = registry.getQuantum(quantum.id)
         self.assertEqual(outQuantum, quantum)
 
-
-        
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)
         datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass="dummy")

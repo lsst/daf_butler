@@ -172,10 +172,31 @@ class SqlRegistry(Registry):
                                                                      run_id=run.id,
                                                                      quantum_id=None,  # TODO add producer
                                                                      **dataId))
-            datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
+            datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0])
             # A dataset is always associated with its Run collection
             self.associate(run.collection, [datasetRef])
         return datasetRef
+
+    def getDataset(self, id):
+        """Retrieve an Dataset.
+
+        Parameters
+        ----------
+        id : `int`
+            The unique identifier for the Dataset.
+        """
+        datasetTable = self._schema.metadata.tables['Dataset']
+        with self._engine.begin() as connection:
+            result = connection.execute(
+                select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
+        if result is not None:
+            datasetType = self.getDatasetType(result['dataset_type_name'])
+            # dataUnitName gives a `str` key which which is used to lookup
+            # the corresponding sqlalchemy.core.Column entry to index the result.
+            dataId = {dataUnitName : result[self._schema.dataUnits[dataUnitName]] for dataUnitName in datasetType.dataUnits}
+            return DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
+        else:
+            return None
 
     def setAssembler(self, ref, assembler):
         """Set the assembler to use for a composite dataset.
