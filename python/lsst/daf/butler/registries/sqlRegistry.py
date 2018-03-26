@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import itertools
+
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select, and_, exists
 
@@ -493,6 +495,7 @@ class SqlRegistry(Registry):
             - `actualInputs` and `outputs` will be ignored.
         """
         quantumTable = self._schema.metadata.tables['Quantum']
+        datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
         with self._engine.begin() as connection:
             # First add the Execution part
             self.addExecution(quantum)
@@ -500,6 +503,13 @@ class SqlRegistry(Registry):
             connection.execute(quantumTable.insert().values(execution_id=quantum.id,
                                                             task=quantum.task,
                                                             run_id=quantum.run.id))
+            # Attach dataset consumers
+            # We use itertools.chain here because quantum.predictedInputs is a
+            # dict of ``name : [DatasetRef, ...]`` and we need to flatten it
+            # for inserting.
+            connection.execute(datasetConsumersTable.insert(),
+                [{'quantum_id': quantum.id, 'dataset_id': ref.id, 'actual': False}
+                    for ref in itertools.chain.from_iterable(quantum.predictedInputs.values())])
 
     def getQuantum(self, id):
         """Retrieve an Quantum.
@@ -521,12 +531,19 @@ class SqlRegistry(Registry):
                     quantumTable.c.execution_id == id)).fetchone()
         if result is not None:
             run = self.getRun(id=result['run_id'])
-            return Quantum(task=result['task'],
+            quantum = Quantum(task=result['task'],
                            run=run,
                            startTime=result['start_time'],
                            endTime=result['end_time'],
                            host=result['host'],
                            id=id)
+            with self._engine.begin() as connection:
+                datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
+                for result in connection.execute(select([datasetConsumersTable.c.dataset_id,
+                                                        datasetConsumersTable.c.actual]).where(
+                                                            datasetConsumersTable.c.quantum_id == id)):
+                    pass  # TODO use quantum.addPredictedInput when Registry.getDataset is implemented
+            return quantum
         else:
             return None
 

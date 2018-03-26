@@ -122,18 +122,31 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outExecution = registry.getExecution(execution.id)
         self.assertEqual(outExecution, execution)
 
+    @unittest.expectedFailure
     def testQuantum(self):
         registry = Registry.fromConfig(self.configFile)
         run = registry.makeRun(collection="test")
+        # Make two predicted inputs
+        datasetType1 = DatasetType(name="dst1", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType1)
+        ref1 = registry.addDataset(datasetType1, dataId={"camera": "DummyCam"}, run=run)
+        datasetType2 = DatasetType(name="dst2", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType2)
+        ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
+        # Create and add a Quantum
         quantum = Quantum(run=run,
                           task="some.fully.qualified.SuperTask",
                           startTime=datetime(2018, 1, 1),
                           endTime=datetime(2018, 1, 2),
                           host="localhost")
+        quantum.addPredictedInput(ref1)
+        quantum.addPredictedInput(ref2)
         registry.addQuantum(quantum)
         outQuantum = registry.getQuantum(quantum.id)
         self.assertEqual(outQuantum, quantum)
 
+
+        
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)
         datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass="dummy")

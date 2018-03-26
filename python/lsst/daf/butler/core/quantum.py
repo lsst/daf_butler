@@ -73,7 +73,7 @@ class Quantum(Execution):
     @property
     def predictedInputs(self):
         """A `dict` of input datasets that were expected to be used,
-        with `DatasetType` names as keys and a set of `DatasetRef` instances
+        with `DatasetType` names as keys and a list of `DatasetRef` instances
         as values.
 
         Input `Datasets` that have already been stored may be
@@ -99,7 +99,7 @@ class Quantum(Execution):
         This does not automatically update a `Registry`; all `predictedInputs`
         must be present before a `Registry.addQuantum()` is called.
         """
-        datasetTypeName = ref.type.name
+        datasetTypeName = ref.datasetType.name
         if datasetTypeName not in self._actualInputs:
             self._predictedInputs[datasetTypeName] = [ref, ]
         else:
