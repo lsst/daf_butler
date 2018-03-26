@@ -197,19 +197,6 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def updateRun(self, run):
-        """Update the `environment` and/or `pipeline` of the given `Run`
-        in the database, given the `DatasetRef` attributes of the input
-        `Run`.
-
-        Parameters
-        ----------
-        run : `Run`
-            The `Run` to update with the new values filled in.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
     def getRun(self, collection=None, id=None):
         """
         Get a `Run` corresponding to its collection or id

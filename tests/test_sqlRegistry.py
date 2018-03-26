@@ -100,12 +100,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
             runCpy1 = registry.getRun(collection=run.collection)
             self.assertEqual(runCpy1, run)
             # Test retrieval by (run/execution) id
-            runCpy2 = registry.getRun(id=run.execution.id)
+            runCpy2 = registry.getRun(id=run.id)
             self.assertEqual(runCpy2, run)
         # Non-existing collection should return None
         self.assertIsNone(registry.getRun(collection="bogus"))
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
+        # Inserting with a preexisting collection should fail
+        with self.assertRaises(ValueError):
+            registry.makeRun("one")
 
     def testExecution(self):
         registry = Registry.fromConfig(self.configFile)

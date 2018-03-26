@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from sqlalchemy import create_engine
-from sqlalchemy.sql import select, and_
+from sqlalchemy.sql import select, and_, exists
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
@@ -167,7 +167,7 @@ class SqlRegistry(Registry):
         datasetRef = None
         with self._engine.begin() as connection:
             result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
-                                                                     run_id=run.execution.id,
+                                                                     run_id=run.id,
                                                                      quantum_id=None,  # TODO add producer
                                                                      **dataId))
             datasetRef = DatasetRef(datasetType, dataId, result.inserted_primary_key[0])
@@ -260,93 +260,6 @@ class SqlRegistry(Registry):
                     and_(datasetCollectionTable.c.dataset_id == ref.id,
                          datasetCollectionTable.c.collection == collection)))
         return []
-
-    def makeRun(self, collection):
-        """Create a new `Run` in the `SqlRegistry` and return it.
-
-        If a run with this collection already exists, return that instead.
-
-        Parameters
-        ----------
-        collection : `str`
-            The Collection collection used to identify all inputs and outputs
-            of the `Run`.
-
-        Returns
-        -------
-        run : `Run`
-            A new `Run` instance.
-        """
-        # First see if a run with this collection already exists
-        run = self.getRun(collection)
-        if run is None:
-            execution = Execution()
-            environment = None
-            pipeline = None
-            runTable = self._schema.metadata.tables['Run']
-            with self._engine.begin() as connection:
-                self.addExecution(execution)  # also assigns execution.id
-                connection.execute(runTable.insert().values(execution_id=execution.id,
-                                                            collection=collection,
-                                                            environment_id=environment,
-                                                            pipeline_id=pipeline))
-            run = Run(execution, collection, environment, pipeline)
-        return run
-
-    def updateRun(self, run):
-        """Update the `environment` and/or `pipeline` of the given `Run`
-        in the database, given the `DatasetRef` attributes of the input
-        `Run`.
-
-        Parameters
-        ----------
-        run : `Run`
-            The `Run` to update with the new values filled in.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def getRun(self, collection=None, id=None):
-        """
-        Get a `Run` corresponding to it's collection or id
-
-        Parameters
-        ----------
-        collection : `str`
-            Collection collection
-        id : `int`, optional
-            If given, lookup by id instead and ignore `collection`.
-
-        Returns
-        -------
-        run : `Run`
-            The `Run` instance.
-        """
-        runTable = self._schema.metadata.tables['Run']
-        run = None
-        with self._engine.begin() as connection:
-            # Retrieve by id
-            if (id is not None) and (collection is None):
-                result = connection.execute(select([runTable.c.execution_id,
-                                                    runTable.c.collection,
-                                                    runTable.c.environment_id,
-                                                    runTable.c.pipeline_id]).where(
-                                                        runTable.c.execution_id == id)).fetchone()
-            # Retrieve by collection
-            elif (collection is not None) and (id is None):
-                result = connection.execute(select([runTable.c.execution_id,
-                                                    runTable.c.collection,
-                                                    runTable.c.environment_id,
-                                                    runTable.c.pipeline_id]).where(
-                                                        runTable.c.collection == collection)).fetchone()
-            else:
-                raise ValueError("Either collection or id must be given")
-            if result is not None:
-                execution = self.getExecution(result['execution_id'])
-                run = Run(execution=execution,
-                          collection=result['collection'],
-                          environment=result['environment_id'],
-                          pipeline=result['pipeline_id'])
-        return run
 
     def addStorageInfo(self, ref, storageInfo):
         """Add storage information for a given dataset.
@@ -461,6 +374,108 @@ class SqlRegistry(Registry):
         else:
             return None
 
+    def makeRun(self, collection):
+        """Create a new `Run` in the `SqlRegistry` and return it.
+
+        If a run with this collection already exists, return that instead.
+
+        Parameters
+        ----------
+        collection : `str`
+            The Collection collection used to identify all inputs and outputs
+            of the `Run`.
+
+        Returns
+        -------
+        run : `Run`
+            A new `Run` instance.
+        """
+        run = Run(collection=collection)
+        self.addRun(run)
+        return self.getRun(collection=collection)
+
+    def addRun(self, run):
+        """Add a new `Run` to the `SqlRegistry`.
+
+        Parameters
+        ----------
+        run : `Run`
+            Instance to add to the `SqlRegistry`.
+            The given `Run` must not already be present in the `SqlRegistry`
+            (or any other).  Therefore its `id` must be `None` and its
+            `collection` must not be associated with any existing `Run`.
+        
+        Raises
+        ------
+        `ValueError`
+            If a run already exists with this collection.
+        """
+        runTable = self._schema.metadata.tables['Run']
+        with self._engine.begin() as connection:
+            if connection.execute(select([exists().where(runTable.c.collection == run.collection)])).scalar():
+                raise ValueError("A run already exists with this collection: {}".format(run.collection))
+            # First add the Execution part
+            self.addExecution(run)
+            # Then the Run specific part
+            connection.execute(runTable.insert().values(execution_id=run.id,
+                                                        collection=run.collection,
+                                                        environment_id=None,  # TODO add environment
+                                                        pipeline_id=None))    # TODO add pipeline
+
+    def getRun(self, id=None, collection=None):
+        """
+        Get a `Run` corresponding to it's collection or id
+
+        Parameters
+        ----------
+        id : `int`, optional
+            Lookup by run `id`, or:
+        collection : `str`
+            If given, lookup by `collection` name instead.
+
+        Returns
+        -------
+        run : `Run`
+            The `Run` instance.
+        """
+        executionTable = self._schema.metadata.tables['Execution']
+        runTable = self._schema.metadata.tables['Run']
+        run = None
+        with self._engine.begin() as connection:
+            # Retrieve by id
+            if (id is not None) and (collection is None):
+                result = connection.execute(select([executionTable.c.execution_id,
+                                                    executionTable.c.start_time,
+                                                    executionTable.c.end_time,
+                                                    executionTable.c.host,
+                                                    runTable.c.collection,
+                                                    runTable.c.environment_id,
+                                                    runTable.c.pipeline_id]).select_from(
+                                                        runTable.join(executionTable)).where(
+                                                            runTable.c.execution_id == id)).fetchone()
+            # Retrieve by collection
+            elif (collection is not None) and (id is None):
+                              result = connection.execute(select([executionTable.c.execution_id,
+                                                    executionTable.c.start_time,
+                                                    executionTable.c.end_time,
+                                                    executionTable.c.host,
+                                                    runTable.c.collection,
+                                                    runTable.c.environment_id,
+                                                    runTable.c.pipeline_id]).select_from(
+                                                        runTable.join(executionTable)).where(
+                                                            runTable.c.collection == collection)).fetchone()
+            else:
+                raise ValueError("Either collection or id must be given")
+            if result is not None:
+                run = Run(id=result['execution_id'],
+                          startTime=result['start_time'],
+                          endTime=result['end_time'],
+                          host=result['host'],
+                          collection=result['collection'],
+                          environment=None,  # TODO add environment
+                          pipeline=None)     # TODO add pipeline
+        return run
+
     def addQuantum(self, quantum):
         """Add a new `Quantum` to the `SqlRegistry`.
 
@@ -484,7 +499,7 @@ class SqlRegistry(Registry):
             # Then the Quantum specific part
             connection.execute(quantumTable.insert().values(execution_id=quantum.id,
                                                             task=quantum.task,
-                                                            run_id=quantum.run.execution.id))
+                                                            run_id=quantum.run.id))
 
     def getQuantum(self, id):
         """Retrieve an Quantum.

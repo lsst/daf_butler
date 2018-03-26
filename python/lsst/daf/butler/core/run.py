@@ -19,18 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from .execution import Execution
 from .utils import slotValuesAreEqual, slotValuesToHash
 
 __all__ = ("Run", )
 
 
-class Run(object):
+class Run(Execution):
     """Represent a processing run.
 
     Parameters
     ----------
-    execution : `Execution`
-        The Execution for this Run.
     collection : `str`
         A Collection name with which all Datasets in this Run are initially
         associated, also used as a human-readable name for this Run.
@@ -41,19 +40,15 @@ class Run(object):
         A reference to a dataset that contains a serialization of
         the SuperTask Pipeline used for this Run (if any).
     """
-    __slots__ = ("_execution", "_collection", "_environment", "_pipeline")
+    __slots__ = ("_collection", "_environment", "_pipeline")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
-    def __init__(self, execution, collection, environment, pipeline):
-        self._execution = execution
+    def __init__(self, collection, environment=None, pipeline=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._collection = collection
         self._environment = environment
         self._pipeline = pipeline
-
-    @property
-    def execution(self):
-        return self._execution
 
     @property
     def collection(self):

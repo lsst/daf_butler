@@ -20,11 +20,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+from datetime import datetime
 
 import lsst.utils.tests
 
 from lsst.daf.butler.core.run import Run
-from lsst.daf.butler.core.execution import Execution
 
 """Tests for Run.
 """
@@ -37,15 +37,21 @@ class RunTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Test of constructor.
         """
-        execution = Execution()
         collection = "ingest"
         environment = None
         pipeline = None
-        run = Run(execution, collection, environment, pipeline)
-        self.assertEqual(run.execution, execution)
+        # Base class arguments
+        startTime = datetime(2018, 1, 1)
+        endTime = datetime(2018, 1, 2)
+        host = "localhost"
+        run = Run(collection, environment, pipeline, startTime, endTime, host)
         self.assertEqual(run.collection, collection)
         self.assertEqual(run.environment, environment)
         self.assertEqual(run.pipeline, pipeline)
+        self.assertIsNone(run.id)
+        self.assertEqual(run.startTime, startTime)
+        self.assertEqual(run.endTime, endTime)
+        self.assertEqual(run.host, host)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

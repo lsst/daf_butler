@@ -66,7 +66,7 @@ class Butler(object):
         self.config = ButlerConfig(config)
         self.datastore = Datastore.fromConfig(self.config)
         self.registry = Registry.fromConfig(self.config)
-        self.run = self.registry.getRun(self.config['run'])
+        self.run = self.registry.getRun(collection=self.config['run'])
         if self.run is None:
             self.run = self.registry.makeRun(self.config['run'])
 
