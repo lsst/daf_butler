@@ -418,7 +418,7 @@ class SqlRegistry(Registry):
         """
         run = Run(collection=collection)
         self.addRun(run)
-        return self.getRun(collection=collection)
+        return run
 
     def addRun(self, run):
         """Add a new `Run` to the `SqlRegistry`.
