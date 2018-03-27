@@ -9,7 +9,7 @@ dataUnits:
     -
       name: camera
       type: string
-      foreign_key: Camera.camera
+      #foreign_key: Camera.camera
     tables:
       Camera:
         doc: >
@@ -31,7 +31,7 @@ dataUnits:
     -
       name: abstract_filter
       type: string
-      foreign_key: AbstractFilter.abstract_filter
+      #foreign_key: AbstractFilter.abstract_filter
     tables:
       AbstractFilter:
         doc: >
@@ -59,7 +59,7 @@ dataUnits:
     -
       name: physical_filter
       type: string
-      foreign_key: PhysicalFilter.physical_filter
+      #foreign_key: PhysicalFilter.physical_filter
     tables:
       PhysicalFilter:
         doc: >
@@ -103,7 +103,7 @@ dataUnits:
     -
       name: sensor
       type: string
-      foreign_key: Sensor.sensor
+      #foreign_key: Sensor.sensor
     tables:
       Sensor:
         doc: >
@@ -161,7 +161,7 @@ dataUnits:
     -
       name: visit
       type: int
-      foreign_key: Visit.visit
+      #foreign_key: Visit.visit
     tables:
       Visit:
         doc: >
@@ -296,7 +296,7 @@ dataUnits:
     -
       name: exposure
       type: int
-      foreign_key: Exposure.exposure
+      #foreign_key: Exposure.exposure
     tables:
       Exposure:
         doc: >
@@ -425,7 +425,7 @@ dataUnits:
     -
       name: skymap
       type: string
-      foreign_key: SkyMap.skymap
+      #foreign_key: SkyMap.skymap
     tables:
       SkyMap:
         doc: >
@@ -459,7 +459,7 @@ dataUnits:
     -
       name: tract
       type: int
-      foreign_key: Tract.tract
+      #foreign_key: Tract.tract
     tables:
       Tract:
         doc: >
@@ -504,7 +504,7 @@ dataUnits:
     -
       name: patch
       type: int
-      foreign_key: Patch.patch
+      #foreign_key: Patch.patch
     tables:
       Patch:
         doc: >
