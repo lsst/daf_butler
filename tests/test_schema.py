@@ -79,7 +79,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(column, Column)
         self.assertEqual(column.primary_key, columnDescription.get('primary_key', False))
         self.assertEqual(column.nullable, columnDescription.get('nullable', True) and not column.primary_key)
-        self.assertIsInstance(column.type, self.schema.VALID_COLUMN_TYPES[columnDescription['type']])
+        self.assertIsInstance(column.type, self.schema.builder.VALID_COLUMN_TYPES[columnDescription['type']])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
         """Check that foreign-key constraints match the `constraintsDescription`.

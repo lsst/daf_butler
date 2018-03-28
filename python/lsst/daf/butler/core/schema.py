@@ -20,43 +20,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import iterable
-from .config import Config
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
+from .config import Config
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
-__all__ = ("SchemaConfig", "Schema")
+__all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
 
 
 class SchemaConfig(Config):
-    """Schema configuration.
-    """
     @property
     def tables(self):
-        """All tables including DataUnit tables.
-        """
-        table = {}
-        if 'tables' in self:
-            table.update(self['tables'])
-        # TODO move this to some other place once DataUnit relations are settled
-        if 'dataUnits' in self:
-            for dataUnitDescription in self['dataUnits'].values():
-                if 'tables' in dataUnitDescription:
-                    table.update(dataUnitDescription['tables'])
-        return table
-
-    @property
-    def dataUnitLinks(self):
-        """All DataUnit links.
-
-        TODO move this to some other place once DataUnit relations are settled
-        """
-        dataUnits = self['dataUnits']
-        links = []
-        for dataUnitName in sorted(dataUnits.keys()):
-            links.extend(dataUnits[dataUnitName]['link'])
-        return links
+        allTables = {}
+        allTables.update(self['tables'])
+        for dataUnitDescription in self['dataUnits']:
+            if 'tables' in dataUnitDescription:
+                allTables.update(dataUnitDescription['tables'])
+        return allTables
 
 
 class Schema:
@@ -70,25 +51,45 @@ class Schema:
     Attributes
     ----------
     metadata : `sqlalchemy.MetaData`
-        The sqlalchemy schema description
-    dataUnits : `dict`
-        Columns that represent dataunit links.
+        The sqlalchemy schema description.
+    """
+    def __init__(self, config):
+        if isinstance(config, str):
+            config = SchemaConfig(config)
+        self.config = config
+        self.builder = SchemaBuilder()
+        self.buildFromConfig(config)
+
+    def buildFromConfig(self, config):
+        for tableName, tableDescription in self.config['tables'].items():
+            self.builder.addTable(tableName, tableDescription)
+        datasetTable = self.builder.metadata.tables['Dataset']
+        self.dataUnits = {}
+        for dataUnitDescription in self.config['dataUnits'].values():
+            if 'tables' in dataUnitDescription:
+                for tableName, tableDescription in dataUnitDescription['tables'].items():
+                    self.builder.addTable(tableName, tableDescription)
+            if 'link' in dataUnitDescription:
+                for dataUnitLinkDescription in dataUnitDescription['link']:
+                    linkColumn = self.builder.makeColumn(dataUnitLinkDescription)
+                    self.dataUnits[dataUnitLinkDescription['name']] = linkColumn
+                    datasetTable.append_column(linkColumn)
+        self.metadata = self.builder.metadata
+
+
+class SchemaBuilder:
+    """Builds a Schema step-by-step.
+
+    Attributes
+    ----------
+    metadata : `sqlalchemy.MetaData`
+        The sqlalchemy schema description.
     """
     VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float,
                           'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
 
-    def __init__(self, config):
-        self.config = SchemaConfig(config)
+    def __init__(self):
         self.metadata = MetaData()
-        for tableName, tableDescription in self.config.tables.items():
-            self.addTable(tableName, tableDescription)
-        # Add DataUnit links
-        self.dataUnits = {}
-        datasetTable = self.metadata.tables['Dataset']
-        for dataUnitLinkDescription in self.config.dataUnitLinks:
-            linkColumn = self.makeColumn(dataUnitLinkDescription)
-            self.dataUnits[dataUnitLinkDescription['name']] = linkColumn
-            datasetTable.append_column(linkColumn)
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
