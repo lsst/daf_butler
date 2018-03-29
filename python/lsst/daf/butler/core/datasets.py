@@ -108,7 +108,6 @@ class DatasetRef(object):
                  "_predictedConsumers", "_actualConsumers", "_components",
                  "_assembler")
     __eq__ = slotValuesAreEqual
-    __hash__ = slotValuesToHash
 
     def __init__(self, datasetType, dataId, id=None):
         assert isinstance(datasetType, DatasetType)

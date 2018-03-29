@@ -24,34 +24,27 @@ from datetime import datetime
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.run import Run
+from lsst.daf.butler.core.execution import Execution
 
-"""Tests for Run.
+"""Tests for Execution.
 """
 
 
-class RunTestCase(lsst.utils.tests.TestCase):
-    """Test for Run.
+class ExecutionTestCase(lsst.utils.tests.TestCase):
+    """Test for Execution.
     """
 
     def testConstructor(self):
         """Test of constructor.
         """
-        collection = "ingest"
-        environment = None
-        pipeline = None
-        # Base class arguments
         startTime = datetime(2018, 1, 1)
         endTime = datetime(2018, 1, 2)
         host = "localhost"
-        run = Run(collection, environment, pipeline, startTime, endTime, host)
-        self.assertEqual(run.collection, collection)
-        self.assertEqual(run.environment, environment)
-        self.assertEqual(run.pipeline, pipeline)
-        self.assertIsNone(run.id)
-        self.assertEqual(run.startTime, startTime)
-        self.assertEqual(run.endTime, endTime)
-        self.assertEqual(run.host, host)
+        execution = Execution(startTime, endTime, host)
+        self.assertIsNone(execution.id)
+        self.assertEqual(execution.startTime, startTime)
+        self.assertEqual(execution.endTime, endTime)
+        self.assertEqual(execution.host, host)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

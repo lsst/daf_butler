@@ -21,10 +21,13 @@
 
 import os
 import unittest
+from datetime import datetime, timedelta
 
 import lsst.utils.tests
 
 from lsst.daf.butler.core.storageInfo import StorageInfo
+from lsst.daf.butler.core.execution import Execution
+from lsst.daf.butler.core.quantum import Quantum
 from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
@@ -70,6 +73,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)
 
+    def testDataset(self):
+        registry = Registry.fromConfig(self.configFile)
+        run = registry.makeRun(collection="test")
+        datasetType = DatasetType(name="testtype", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType)
+        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+        outRef = registry.getDataset(ref.id)
+        self.assertEqual(ref, outRef)
+
     def testComponents(self):
         registry = Registry.fromConfig(self.configFile)
         parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass="dummy")
@@ -85,6 +97,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
+        outParent = registry.getDataset(parent.id)
+        self.assertEqual(outParent.components, children)
 
     def testRun(self):
         registry = Registry.fromConfig(self.configFile)
@@ -97,12 +111,54 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
             runCpy1 = registry.getRun(collection=run.collection)
             self.assertEqual(runCpy1, run)
             # Test retrieval by (run/execution) id
-            runCpy2 = registry.getRun(id=run.execution)
+            runCpy2 = registry.getRun(id=run.id)
             self.assertEqual(runCpy2, run)
         # Non-existing collection should return None
         self.assertIsNone(registry.getRun(collection="bogus"))
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
+        # Inserting with a preexisting collection should fail
+        with self.assertRaises(ValueError):
+            registry.makeRun("one")
+
+    def testExecution(self):
+        registry = Registry.fromConfig(self.configFile)
+        startTime = datetime(2018, 1, 1)
+        endTime = startTime + timedelta(days=1, hours=5)
+        host = "localhost"
+        execution = Execution(startTime, endTime, host)
+        self.assertIsNone(execution.id)
+        registry.addExecution(execution)
+        self.assertIsInstance(execution.id, int)
+        outExecution = registry.getExecution(execution.id)
+        self.assertEqual(outExecution, execution)
+
+    def testQuantum(self):
+        registry = Registry.fromConfig(self.configFile)
+        run = registry.makeRun(collection="test")
+        # Make two predicted inputs
+        datasetType1 = DatasetType(name="dst1", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType1)
+        ref1 = registry.addDataset(datasetType1, dataId={"camera": "DummyCam"}, run=run)
+        datasetType2 = DatasetType(name="dst2", dataUnits=("camera",), storageClass="dummy")
+        registry.registerDatasetType(datasetType2)
+        ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
+        # Create and add a Quantum
+        quantum = Quantum(run=run,
+                          task="some.fully.qualified.SuperTask",
+                          startTime=datetime(2018, 1, 1),
+                          endTime=datetime(2018, 1, 2),
+                          host="localhost")
+        quantum.addPredictedInput(ref1)
+        quantum.addPredictedInput(ref2)
+        # Quantum is not yet in Registry, so can't mark input as actual
+        with self.assertRaises(KeyError):
+            registry.markInputUsed(quantum, ref1)
+        registry.addQuantum(quantum)
+        # Now we can
+        registry.markInputUsed(quantum, ref1)
+        outQuantum = registry.getQuantum(quantum.id)
+        self.assertEqual(outQuantum, quantum)
 
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)

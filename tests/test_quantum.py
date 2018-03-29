@@ -24,34 +24,35 @@ from datetime import datetime
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.run import Run
+from lsst.daf.butler.core.quantum import Quantum
 
-"""Tests for Run.
+"""Tests for Quantum.
 """
 
 
-class RunTestCase(lsst.utils.tests.TestCase):
-    """Test for Run.
+class QuantumTestCase(lsst.utils.tests.TestCase):
+    """Test for Quantum.
     """
 
     def testConstructor(self):
         """Test of constructor.
         """
-        collection = "ingest"
-        environment = None
-        pipeline = None
+        # Quantum specific arguments
+        run = None  # TODO add Run
+        task = "some.task.object"  # TODO Add a `SuperTask`?
         # Base class arguments
         startTime = datetime(2018, 1, 1)
         endTime = datetime(2018, 1, 2)
         host = "localhost"
-        run = Run(collection, environment, pipeline, startTime, endTime, host)
-        self.assertEqual(run.collection, collection)
-        self.assertEqual(run.environment, environment)
-        self.assertEqual(run.pipeline, pipeline)
-        self.assertIsNone(run.id)
-        self.assertEqual(run.startTime, startTime)
-        self.assertEqual(run.endTime, endTime)
-        self.assertEqual(run.host, host)
+        quantum = Quantum(task, run, startTime, endTime, host)
+        self.assertEqual(quantum.task, task)
+        self.assertEqual(quantum.run, run)
+        self.assertEqual(quantum.predictedInputs, dict())
+        self.assertEqual(quantum.actualInputs, dict())
+        self.assertIsNone(quantum.id)
+        self.assertEqual(quantum.startTime, startTime)
+        self.assertEqual(quantum.endTime, endTime)
+        self.assertEqual(quantum.host, host)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -19,12 +19,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from .utils import slotValuesAreEqual
+
+from .execution import Execution
+
 __all__ = ("Quantum",)
 
 
-class Quantum:
-    """A discrete unit of work that may depend on one or more Datasets and
-    produces one or more `Dataset`\ s.
+class Quantum(Execution):
+    """A discrete unit of work that may depend on one or more datasets and
+    produces one or more datasets.
 
     Most Quanta will be executions of a particular `SuperTask`’s `runQuantum`
     method, but they can also be used to represent discrete units of work
@@ -32,67 +36,21 @@ class Quantum:
 
     Parameters
     ----------
+    task : `str` or `SuperTask`
+        Fully-qualified name of the SuperTask that executed this Quantum.
     run : `Run`
-        Run this quantum is part of.
-    task : `SuperTask` or `str`, optional
-        Associated task information.
-    quantumId : ??, optional
-        ???
-    registryId : ??, optional
-        ???
+        The Run this Quantum is a part of.
     """
 
-    __slots__ = ("_quantumId", "_registryId", "_run", "_task", "_predictedInputs", "_actualInputs")
+    __slots__ = ("_task", "_run", "_predictedInputs", "_actualInputs")
+    __eq__ = slotValuesAreEqual
 
-    _currentId = -1
-
-    @classmethod
-    def getNewId(cls):
-        """Generate a new Quantum ID number.
-
-        ..todo::
-            This is a temporary workaround that will probably disapear in the
-            future, when a solution is found to the problem of autoincrement
-            compound primary keys in SQLite.
-        """
-        cls._currentId += 1
-        return cls._currentId
-
-    def __init__(self, run, task=None, quantumId=None, registryId=None):
-        self._quantumId = quantumId
-        self._registryId = registryId
-        self._run = run
+    def __init__(self, task, run, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._task = task
+        self._run = run
         self._predictedInputs = {}
         self._actualInputs = {}
-
-    @property
-    def pkey(self):
-        """Primary keys used to uniquely identify this `Run`.
-
-        Represented as a `tuple` of ``(quantum_id, registry_id)``,
-        or `None` if it has not yet been inserted into a `Registry`.
-        """
-        if self._quantumId is not None and self._registryId is not None:
-            return (self._quantumId, self._registryId)
-        else:
-            return None
-
-    @property
-    def quantumId(self):
-        """Quantum identifier."""
-        return self._quantumId
-
-    @property
-    def registryId(self):
-        """Registry identifier."""
-        return self._registryId
-
-    @property
-    def run(self):
-        """The `Run` this `Quantum` is a part of.
-        """
-        return self._run
 
     @property
     def task(self):
@@ -107,9 +65,15 @@ class Quantum:
         return self._task
 
     @property
+    def run(self):
+        """The Run this Quantum is a part of (`Run`).
+        """
+        return self._run
+
+    @property
     def predictedInputs(self):
         """A `dict` of input datasets that were expected to be used,
-        with `DatasetType` names as keys and a set of `DatasetRef` instances
+        with `DatasetType` names as keys and a list of `DatasetRef` instances
         as values.
 
         Input `Datasets` that have already been stored may be
@@ -135,8 +99,26 @@ class Quantum:
         This does not automatically update a `Registry`; all `predictedInputs`
         must be present before a `Registry.addQuantum()` is called.
         """
-        datasetTypeName = ref.type.name
+        datasetTypeName = ref.datasetType.name
         if datasetTypeName not in self._actualInputs:
             self._predictedInputs[datasetTypeName] = [ref, ]
         else:
             self._predictedInputs[datasetTypeName].append(ref)
+
+    def _markInputUsed(self, ref):
+        """Mark an input as used.
+
+        This does not automatically update a `Registry`.
+        For that use `Registry.markInputUsed()` instead.
+        """
+        datasetTypeName = ref.datasetType.name
+        # First validate against predicted
+        if datasetTypeName not in self._predictedInputs:
+            raise ValueError("Dataset type {} not in predicted inputs".format(datasetTypeName))
+        if ref not in self._predictedInputs[datasetTypeName]:
+            raise ValueError("Actual input {} was not predicted".format(ref))
+        # Now insert as actual
+        if datasetTypeName not in self._actualInputs:
+            self._actualInputs[datasetTypeName] = [ref, ]
+        else:
+            self._actualInputs[datasetTypeName].append(ref)
