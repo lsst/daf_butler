@@ -97,6 +97,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
+        outParent = registry.getDataset(parent.id)
+        self.assertEqual(outParent.components, children)
 
     def testRun(self):
         registry = Registry.fromConfig(self.configFile)

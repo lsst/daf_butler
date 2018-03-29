@@ -191,13 +191,26 @@ class SqlRegistry(Registry):
                 select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
         if result is not None:
             datasetType = self.getDatasetType(result['dataset_type_name'])
+            # Get components (if present)
+            # TODO check against expected components
+            components = {}
+            datasetCompositionTable = self._schema.metadata.tables['DatasetComposition']
+            with self._engine.begin() as connection:
+                results = connection.execute(
+                    select([datasetCompositionTable.c.component_name,
+                            datasetCompositionTable.c.component_dataset_id]).where(
+                                datasetCompositionTable.c.dataset_id == id)).fetchall()
+                if results is not None:
+                    for result in results:
+                        components[result['component_name']] = self.getDataset(result['component_dataset_id'])
             # dataUnitName gives a `str` key which which is used to lookup
             # the corresponding sqlalchemy.core.Column entry to index the result
             # because the name of the key may not be the name of the name of the
             # DataUnit link.
             dataId = {dataUnitName: result[self._schema.dataUnits[dataUnitName]]
                       for dataUnitName in datasetType.dataUnits}
-            return DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
+            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
+            ref._components = components
         else:
             return None
 
