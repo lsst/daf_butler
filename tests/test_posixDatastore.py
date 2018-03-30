@@ -24,8 +24,11 @@ import unittest
 
 import lsst.utils.tests
 
+from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
-from lsst.daf.butler.core.dataUnits import DataUnits
+from lsst.daf.butler import Registry
+
+from datasetsHelper import DatasetTestHelper
 from examplePythonTypes import MetricsExample
 
 
@@ -37,132 +40,175 @@ def makeExampleMetrics():
                           )
 
 
-class PosixDatastoreTestCase(lsst.utils.tests.TestCase):
+class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
     """Some basic tests of a simple POSIX datastore."""
 
-    def assertEqualMetrics(self, first, second):
-        self.assertListEqual(first.data, second.data)
-        self.assertDictEqual(first.summary, second.summary)
-        self.assertDictEqual(first.output, second.output)
+    @classmethod
+    def setUpClass(cls):
+        cls.testDir = os.path.dirname(__file__)
+        cls.storageClassFactory = StorageClassFactory()
+        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
+        cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self):
-        self.testDir = os.path.dirname(__file__)
-        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
+        self.registry = Registry.fromConfig(self.configFile)
+
+        # Need to keep ID for each datasetRef since we have no butler
+        # for these tests
+        self.id = 1
 
     def testConstructor(self):
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
 
         # Create multiple storage classes for testing different formulations
-        storageClasses = [datastore.storageClassFactory.getStorageClass(sc)
+        storageClasses = [self.storageClassFactory.getStorageClass(sc)
                           for sc in ("StructuredData",
                                      "StructuredDataJson",
                                      "StructuredDataPickle")]
 
-        dataUnits = DataUnits({"visit": 52, "filter": "V"})
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 52, "filter": "V"}
 
         for sc in storageClasses:
+            ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
             print("Using storageClass: {}".format(sc.name))
-            uri, comps = datastore.put(metrics, storageClass=sc,
-                                       dataUnits=dataUnits,
-                                       typeName="metric")
+            datastore.put(metrics, ref)
+
+            # Does it exist?
+            self.assertTrue(datastore.exists(ref))
 
             # Get
-            metricsOut = datastore.get(uri, storageClass=sc, parameters=None)
-            self.assertEqualMetrics(metrics, metricsOut)
+            metricsOut = datastore.get(ref, parameters=None)
+            self.assertEqual(metrics, metricsOut)
 
-            # Get a component
-            summary = datastore.get(comps["output"], storageClass=sc)
-            self.assertEqual(summary, metricsOut.output)
+            uri = datastore.getUri(ref)
+            self.assertEqual(uri[:5], "file:")
 
-            # Get a component even though it was written without by forming URI ourselves
-            summary = datastore.get("{}#{}".format(uri, "summary"), storageClass=sc)
-            self.assertEqual(summary, metricsOut.summary)
+            # Get a component -- we need to construct new refs for them
+            # with derived storage classes but with parent ID
+            comp = "output"
+            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(comp), dataUnits,
+                                          sc.components[comp], dataId, id=ref.id)
+            output = datastore.get(compRef)
+            self.assertEqual(output, metricsOut.output)
+
+            uri = datastore.getUri(compRef)
+            self.assertEqual(uri[:5], "file:")
 
         storageClass = sc
 
         # These should raise
-        with self.assertRaises(ValueError):
+        ref = self.makeDatasetRef("metrics", dataUnits, storageClass, dataId, id=10000)
+        with self.assertRaises(FileNotFoundError):
             # non-existing file
-            datastore.get(uri="file:///non_existing.json", storageClass=storageClass, parameters=None)
-        with self.assertRaises(ValueError):
-            # invalid storage class
-            datastore.get(uri="file:///non_existing.json", storageClass=object, parameters=None)
-        with self.assertRaises(ValueError):
-            # Missing component
-            datastore.get("{}#{}".format(uri, "missing"), storageClass=storageClass)
-        with self.assertRaises(TypeError):
-            # Retrieve component of mismatched type
-            datastore.get("{}#{}".format(uri, "data"), storageClass=storageClass)
+            datastore.get(ref)
+
+        # Get a URI from it
+        uri = datastore.getUri(ref, predict=True)
+        self.assertEqual(uri[:5], "file:")
+
+        with self.assertRaises(FileNotFoundError):
+            datastore.getUri(ref)
 
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()
-        datastore = PosixDatastore(config=self.configFile)
-
-        dataUnits = DataUnits({"visit": 428, "filter": "R"})
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
 
         # Create multiple storage classes for testing different formulations
         # of composites
-        storageClasses = [datastore.storageClassFactory.getStorageClass(sc)
+        storageClasses = [self.storageClassFactory.getStorageClass(sc)
                           for sc in ("StructuredComposite",
                                      "StructuredCompositeTestA",
                                      "StructuredCompositeTestB")]
 
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 428, "filter": "R"}
+
         for sc in storageClasses:
             print("Using storageClass: {}".format(sc.name))
-            uri, comps = datastore.put(metrics, storageClass=sc,
-                                       dataUnits=dataUnits,
-                                       typeName="metric")
-            self.assertIsNone(uri)
+            ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
 
-            # Read all the components into a dict
-            components = {}
-            for c, u in comps.items():
-                components[c] = datastore.get(u, storageClass=sc.components[c], parameters=None)
+            components = sc.assembler().disassemble(metrics)
+            self.assertTrue(components)
 
-            # combine them into a new metrics composite object
-            metricsOut = sc.assembler().assemble(components)
-            self.assertEqualMetrics(metrics, metricsOut)
+            compsRead = {}
+            for compName, compInfo in components.items():
+                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dataUnits,
+                                              components[compName].storageClass, dataId)
+
+                print("Writing component {} with {}".format(compName, compRef.datasetType.storageClass.name))
+                datastore.put(compInfo.component, compRef)
+
+                uri = datastore.getUri(compRef)
+                self.assertEqual(uri[:5], "file:")
+
+                compsRead[compName] = datastore.get(compRef)
+
+            # combine all the components we read back into a new composite
+            metricsOut = sc.assembler().assemble(compsRead)
+            self.assertEqual(metrics, metricsOut)
 
     def testRemove(self):
         metrics = makeExampleMetrics()
-        datastore = PosixDatastore(config=self.configFile)
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
         # Put
-        dataUnits = DataUnits({"visit": 638, "filter": "U"})
-        storageClass = datastore.storageClassFactory.getStorageClass("StructuredData")
-        uri, _ = datastore.put(metrics, storageClass=storageClass,
-                               dataUnits=dataUnits, typeName="metric")
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 638, "filter": "U"}
+
+        sc = self.storageClassFactory.getStorageClass("StructuredData")
+        ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+        datastore.put(metrics, ref)
+
+        # Does it exist?
+        self.assertTrue(datastore.exists(ref))
+
         # Get
-        metricsOut = datastore.get(uri, storageClass=storageClass, parameters=None)
-        self.assertEqualMetrics(metrics, metricsOut)
+        metricsOut = datastore.get(ref)
+        self.assertEqual(metrics, metricsOut)
         # Remove
-        datastore.remove(uri)
+        datastore.remove(ref)
+
+        # Does it exist?
+        self.assertFalse(datastore.exists(ref))
+
+        # Do we now get a predicted URI?
+        uri = datastore.getUri(ref, predict=True)
+        self.assertTrue(uri.endswith("#predicted"))
+
         # Get should now fail
-        with self.assertRaises(ValueError):
-            datastore.get(uri, storageClass=storageClass, parameters=None)
+        with self.assertRaises(FileNotFoundError):
+            datastore.get(ref)
         # Can only delete once
         with self.assertRaises(FileNotFoundError):
-            datastore.remove(uri)
+            datastore.remove(ref)
 
     def testTransfer(self):
         metrics = makeExampleMetrics()
-        dataUnits = DataUnits({"visit": 2048, "filter": "Uprime"})
+
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 2048, "filter": "Uprime"}
+
+        sc = self.storageClassFactory.getStorageClass("StructuredData")
+        ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
-        inputPosixDatastore = PosixDatastore(config=inputConfig)
+        inputPosixDatastore = PosixDatastore(config=inputConfig, registry=self.registry)
         outputConfig = inputConfig.copy()
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
-        outputPosixDatastore = PosixDatastore(config=outputConfig)
-        storageClass = outputPosixDatastore.storageClassFactory.getStorageClass("StructuredData")
-        inputUri, _ = inputPosixDatastore.put(metrics, storageClass, dataUnits, "metric")
-        outputUri, _ = outputPosixDatastore.transfer(inputPosixDatastore, inputUri,
-                                                     storageClass, dataUnits, "metric")
-        metricsOut = outputPosixDatastore.get(outputUri, storageClass)
-        self.assertEqualMetrics(metrics, metricsOut)
+        outputPosixDatastore = PosixDatastore(config=outputConfig,
+                                              registry=Registry.fromConfig(self.configFile))
+
+        inputPosixDatastore.put(metrics, ref)
+        outputPosixDatastore.transfer(inputPosixDatastore, ref)
+
+        metricsOut = outputPosixDatastore.get(ref)
+        self.assertEqual(metrics, metricsOut)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

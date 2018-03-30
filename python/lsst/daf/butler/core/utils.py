@@ -104,6 +104,26 @@ def slotValuesToHash(self):
     return hash(tuple(getattr(self, slot) for slot in allSlots(self)))
 
 
+def getFullTypeName(cls):
+    """Return full type name of the supplied entity.
+
+    Parameters
+    ----------
+    cls : `type` or `object`
+        Entity from which to obtain the full name. Can be an instance
+        or a `type`.
+
+    Returns
+    -------
+    name : `str`
+        Full name of type.
+    """
+    # If we have an instance we need to convert to a type
+    if not hasattr(cls, "__qualname__"):
+        cls = type(cls)
+    return cls.__module__ + "." + cls.__qualname__
+
+
 def doImport(pythonType):
     """Import a python object given an importable string and return the
     type object
@@ -147,3 +167,39 @@ def doImport(pythonType):
     importedClass = doImport(importClassString)
     pythonType = getattr(importedClass, pythonTypeTokenList[-1])
     return pythonType
+
+
+def getInstanceOf(typeOrName):
+    """Given the type name or a type, instantiate an object of that type.
+
+    If a type name is given, an attempt will be made to import the type.
+
+    Parameters
+    ----------
+    typeOrName : `str` or Python class
+        A string describing the Python class to load or a Python type.
+    """
+    if isinstance(typeOrName, str):
+        cls = doImport(typeOrName)
+    else:
+        cls = typeOrName
+    return cls()
+
+
+class Singleton(type):
+    """Metaclass to convert a class to a Singleton.
+
+    If this metaclass is used the constructor for the singleton class must
+    take no arguments. This is because a singleton class will only accept
+    the arguments the first time an instance is instantiated.
+    Therefore since you do not know if the constructor has been called yet it
+    is safer to always call it with no arguments and then call a method to
+    adjust state of the singleton.
+    """
+
+    _instances = {}
+
+    def __call__(cls):  # noqa N805
+        if cls not in cls._instances:
+            cls._instances[cls] = super(Singleton, cls).__call__()
+        return cls._instances[cls]

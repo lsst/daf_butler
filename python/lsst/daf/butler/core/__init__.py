@@ -8,7 +8,6 @@ from .composites import *
 from .config import *
 from .datasets import *
 from .datastore import *
-from .dataUnits import *
 from .fileDescriptor import *
 from .fileTemplates import *
 from .formatter import *
@@ -20,4 +19,6 @@ from .registry import *
 from .run import *
 from .schema import *
 from .storageClass import *
+from .storageInfo import *
+from .storedFileInfo import *
 from .units import *

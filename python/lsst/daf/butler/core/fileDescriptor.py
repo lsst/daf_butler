@@ -20,26 +20,36 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-class FileDescriptor(object):
+class FileDescriptor:
     """Describes a particular file.
 
     Parameters
     ----------
     location : `Location`
         Storage location.
-    pytype : `type`, optional
-        Type the object will have after reading in Python (typically
-        `StorageClass.pytype` but can be overridden).
-    storageClass : `StorageClass`, optional
-        `StorageClass` associated with this file.
+    storageClass : `StorageClass`
+        `StorageClass` associated with this file when it was stored.
+    readStorageClass : `StorageClass`, optional
+        Storage class associated with reading the file. Defines the
+        Python type that the in memory Dataset will have. Will default
+        to the ``storageClass`` if not specified.
     parameters : `dict`, optional
         Additional parameters that can be used for reading and writing.
     """
 
-    __slots__ = ('location', 'pytype', 'storageClass', 'parameters')
+    __slots__ = ('location', 'storageClass', '_readStorageClass', 'parameters')
 
-    def __init__(self, location, pytype=None, storageClass=None, parameters=None):
+    def __init__(self, location, storageClass, readStorageClass=None, parameters=None):
         self.location = location
-        self.pytype = pytype
+        self._readStorageClass = readStorageClass
         self.storageClass = storageClass
         self.parameters = parameters
+
+    @property
+    def readStorageClass(self):
+        """Storage class to use when reading. (`StorageClass`)
+
+        Will default to ``storageClass`` if none specified."""
+        if self._readStorageClass is None:
+            return self.storageClass
+        return self._readStorageClass

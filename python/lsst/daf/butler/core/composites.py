@@ -48,6 +48,10 @@ class DatasetComponent:
 class CompositeAssembler:
     """Class for providing assembler and disassembler support for composites.
 
+    Attributes
+    ----------
+    storageClass : `StorageClass`
+
     Parameters
     ----------
     storageClass : `StorageClass`
@@ -97,9 +101,9 @@ class CompositeAssembler:
         components : `dict`
             Collection of components from which to assemble a new composite
             object. Keys correspond to composite names in the `StorageClass`.
-        pytype : `class`, optional
-            Override the type from the `storageClass` to use when assembling
-            the final object.
+        pytype : `type`, optional
+            Override the type from the :attr:`CompositeAssembler.storageClass`
+            to use when assembling the final object.
 
         Returns
         -------
@@ -167,7 +171,8 @@ class CompositeAssembler:
         -------
         comps : `dict`
             Non-None components extracted from the composite, indexed by the
-            component name as derived from the `self.storageClass`.
+            component name as derived from the
+            `CompositeAssembler.storageClass`.
         """
         components = {}
         if self.storageClass is not None and self.storageClass.components:
@@ -234,9 +239,10 @@ class CompositeAssembler:
         ----------
         composite : `object`
             Parent composite object consisting of components to be extracted.
-        subset : `iterable`, optional
+        subset : iterable, optional
             Iterable containing subset of components to extract from composite.
-            Must be a subset of those defined in `self.storageClass`.
+            Must be a subset of those defined in
+            `CompositeAssembler.storageClass`.
         override : `object`, optional
             Object to use for disassembly instead of parent. This can be useful
             when called from subclasses that have composites in a hierarchy.
@@ -244,9 +250,11 @@ class CompositeAssembler:
         Returns
         -------
         components : `dict`
-            `dict` with keys matching the components defined in `storageClass`
+            `dict` with keys matching the components defined in
+            `CompositeAssembler.storageClass`
             and values being `DatasetComponent` instances describing the
-            component. Returns None if this is not a composite `self.storageClass`.
+            component. Returns None if this is not a composite
+            `CompositeAssembler.storageClass`.
 
         Raises
         ------
@@ -254,7 +262,8 @@ class CompositeAssembler:
             A requested component can not be found in the parent using generic
             lookups.
         TypeError
-            The parent object does not match the supplied `self.storageClass`.
+            The parent object does not match the supplied
+            `CompositeAssembler.storageClass`.
         """
         if self.storageClass.components is None:
             return

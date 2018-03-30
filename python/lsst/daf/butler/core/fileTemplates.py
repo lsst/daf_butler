@@ -106,20 +106,13 @@ class FileTemplate:
     def __init__(self, template):
         self.template = template
 
-    def format(self, dataUnits, datasetType=None, component=None):
+    def format(self, ref):
         """Format a template string into a full path.
 
         Parameters
         ----------
-        dataUnits : `DataUnits`
-            DataUnits and the corresponding values.
-        datasetType : `str`, optional.
-            DatasetType name to use if needed. If it contains a "." separator
-            the type name will be split up into the main DatasetType and a
-            component.
-        component : `str`, optional
-            Component of a composite. If `datasetType` defines a component
-            this parameter will be ignored.
+        ref : `DatasetRef`
+            The dataset to be formatted.
 
         Returns
         -------
@@ -133,13 +126,12 @@ class FileTemplate:
             Or, `component` is specified but "component" was not part of
             the template.
         """
-        fields = dataUnits.definedUnits()
+        # Extract defined non-None units from the dataId
+        fields = {k: v for k, v in ref.dataId.items() if v is not None}
 
-        if datasetType is not None:
-            # calexp.wcs means wcs component of a calexp
-            if "." in datasetType:
-                datasetType, component = datasetType.split(".", maxsplit=1)
-            fields["datasetType"] = datasetType
+        datasetType = ref.datasetType
+        fields["datasetType"] = datasetType.name
+        component = datasetType.component()
 
         usedComponent = False
         if component is not None:
@@ -179,8 +171,8 @@ class FileTemplate:
 
         # Complain if we were meant to use a component
         if component is not None and not usedComponent:
-            raise KeyError("Component {} specified but template {} did not use it".format(component,
-                                                                                          self.template))
+            raise KeyError("Component '{}' specified but template {} did not use it".format(component,
+                                                                                            self.template))
 
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in

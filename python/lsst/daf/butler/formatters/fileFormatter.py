@@ -88,7 +88,7 @@ class FileFormatter(Formatter):
         inMemoryDataset : `object`
             Object to coerce to expected type.
         storageClass : `StorageClass`
-            StorageClass associated with `inMemoryDataset`.
+            StorageClass associated with ``inMemoryDataset``.
         pytype : `class`, optional
             Override type to use for conversion.
 
@@ -99,7 +99,7 @@ class FileFormatter(Formatter):
         """
         return inMemoryDataset
 
-    def read(self, fileDescriptor):
+    def read(self, fileDescriptor, comp=None):
         """Read data from a file.
 
         Parameters
@@ -107,38 +107,46 @@ class FileFormatter(Formatter):
         fileDescriptor : `FileDescriptor`
             Identifies the file to read, type to read it into and parameters
             to be used for reading.
+        comp : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
 
         Returns
         -------
         inMemoryDataset : `object`
             The requested data as a Python object. The type of object
             is controlled by the specific formatter.
+
+        Raises
+        ------
+        ValueError
+            Component requested but this file does not seem to be a concrete
+            composite.
         """
-        # Try the file or the component version
-        path = fileDescriptor.location.preferredPath()
+
+        # Read the file naively
+        path = fileDescriptor.location.path
         data = self._readFile(path, fileDescriptor.storageClass.pytype)
-        name = fileDescriptor.location.fragment
 
-        if name:
-            if data is None:
-                # Must be composite written as single file
-                data = self._readFile(fileDescriptor.location.path, fileDescriptor.storageClass.pytype)
+        # if read and write storage classes differ, more work is required
+        readStorageClass = fileDescriptor.readStorageClass
+        if readStorageClass != fileDescriptor.storageClass:
+            if comp is None:
+                raise ValueError("Storage class inconsistency ({} vs {}) but no"
+                                 " component requested".format(readStorageClass.name,
+                                                               fileDescriptor.storageClass.name))
 
-                # Now need to "get" the component somehow
-                try:
-                    data = fileDescriptor.storageClass.assembler().getComponent(data, name)
-                except AttributeError:
-                    # Defer the complaint
-                    data = None
+            # Concrete composite written as a single file (we hope)
+            try:
+                data = fileDescriptor.storageClass.assembler().getComponent(data, comp)
+            except AttributeError:
+                # Defer the complaint
+                data = None
 
-            else:
-                # The component was written standalone
-                pass
-        else:
-            # Not requesting a component, so already read
-            pass
-
-        data = self._coerceType(data, fileDescriptor.storageClass, pytype=fileDescriptor.pytype)
+        # Coerce to the requested type (not necessarily the type that was written)
+        data = self._coerceType(data, fileDescriptor.readStorageClass,
+                                pytype=fileDescriptor.readStorageClass.pytype)
 
         if data is None:
             raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
@@ -158,20 +166,12 @@ class FileFormatter(Formatter):
 
         Returns
         -------
-        uri : `str`
+        path : `str`
             The `URI` where the primary file is stored.
-        components : `dict`, optional
-            A dictionary of URIs for the components.
-            The latter will be empty if the object is not a composite.
         """
         # Update the location with the formatter-preferred file extension
         fileDescriptor.location.updateExtension(self.extension)
 
         self._writeFile(inMemoryDataset, fileDescriptor)
 
-        # Get the list of valid components so we can build URIs
-        storageClass = fileDescriptor.storageClass
-        components = storageClass.assembler().getValidComponents(inMemoryDataset)
-
-        return (fileDescriptor.location.uri,
-                {c: fileDescriptor.location.componentUri(c) for c in components})
+        return fileDescriptor.location.pathInStore

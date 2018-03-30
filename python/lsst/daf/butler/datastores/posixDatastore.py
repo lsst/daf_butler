@@ -19,7 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""POSIX datastore."""
+
 import os
+import hashlib
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.datastore import Datastore
@@ -27,14 +30,36 @@ from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
 from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
-from lsst.daf.butler.core.storageClass import StorageClassFactory, makeNewStorageClass
 from lsst.daf.butler.core.fileTemplates import FileTemplates
+from lsst.daf.butler.core.storageInfo import StorageInfo
+from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
+from lsst.daf.butler.core.utils import getInstanceOf
+from lsst.daf.butler.core.storageClass import StorageClassFactory
 
 __all__ = ("PosixDatastore", )
 
 
 class PosixDatastore(Datastore):
     """Basic POSIX filesystem backed Datastore.
+
+    Attributes
+    ----------
+    config : `DatastoreConfig`
+        Configuration used to create Datastore.
+    registry : `Registry`
+        `Registry` to use when recording the writing of Datasets.
+    root : `str`
+        Root directory of this `Datastore`.
+    locationFactory : `LocationFactory`
+        Factory for creating locations relative to this root.
+    formatterFactory : `FormatterFactory`
+        Factory for creating instances of formatters.
+    storageClassFactory : `StorageClassFactory`
+        Factory for creating storage class instances from name.
+    templates : `FileTemplates`
+        File templates that can be used by this `Datastore`.
+    name : `str`
+        Label associated with this Datastore.
 
     Parameters
     ----------
@@ -44,11 +69,12 @@ class PosixDatastore(Datastore):
     Raises
     ------
     ValueError
-        If root location does not exist and `create` is `False`.
+        If root location does not exist and ``create`` is `False` in the
+        configuration.
     """
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, config, registry):
+        super().__init__(config, registry)
         self.root = self.config['root']
         if not os.path.isdir(self.root):
             if 'create' not in self.config or not self.config['create']:
@@ -56,183 +82,351 @@ class PosixDatastore(Datastore):
             safeMakeDir(self.root)
 
         self.locationFactory = LocationFactory(self.root)
-        self.storageClassFactory = StorageClassFactory()
         self.formatterFactory = FormatterFactory()
+        self.storageClassFactory = StorageClassFactory()
 
-        for name, info in self.config["storageClasses"].items():
-            # Create the storage class
-            components = None
-            if "components" in info:
-                components = {}
-                for cname, ctype in info["components"].items():
-                    components[cname] = self.storageClassFactory.getStorageClass(ctype)
-
-            # Extract scalar items from dict that are needed for StorageClass Constructor
-            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler") if k in info}
-
-            # Fill in other items
-            storageClassKwargs["components"] = components
-
-            # Create the new storage class and register it
-            newStorageClass = makeNewStorageClass(name, **storageClassKwargs)
-            self.storageClassFactory.registerStorageClass(newStorageClass)
-
-            # Create the formatter, indexed by the storage class
-            # Currently, we allow this to be optional because some storage classes
-            # are not yet defined fully.
-            if "formatter" in info:
-                self.formatterFactory.registerFormatter(name, info["formatter"])
+        # Now associate formatters with storage classes
+        for name, f in self.config["formatters"].items():
+            self.formatterFactory.registerFormatter(name, f)
 
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"])
 
-    def get(self, uri, storageClass, parameters=None):
-        """Load an `InMemoryDataset` from the store.
+        # Name ourselves
+        self.name = "POSIXDatastore@{}".format(self.root)
+
+        # Somewhere to temporarily store dataset to formatter maps
+        self.internalRegistry = {}
+
+    def addStoredFileInfo(self, ref, info):
+        """Record formatter information associated with this `DatasetRef`
 
         Parameters
         ----------
-        uri : `str`
-            a Universal Resource Identifier that specifies the location of the
-            stored `Dataset`.
-        storageClass : `StorageClass`
-            the `StorageClass` associated with the `DatasetType`.
-        parameters : `dict`
-            `StorageClass`-specific parameters that specify a slice of the
-            `Dataset` to be loaded.
+        ref : `DatasetRef`
+            The Dataset that has been stored.
+        info : `StoredFileInfo`
+            Metadata associated with the stored Dataset.
+
+        Notes
+        -----
+        Need to convert this to a real registry.
+        """
+        self.internalRegistry[ref.id] = (info.formatter, info.path, info.storageClass.name)
+
+    def removeStoredFileInfo(self, ref):
+        """Remove information about the file associated with this dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The Dataset that has been removed.
+        """
+        del self.internalRegistry[ref.id]
+
+    def getStoredFileInfo(self, ref):
+        """Retrieve information associated with file stored in this
+        `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The Dataset that is to be queried.
 
         Returns
         -------
-        inMemoryDataset : `InMemoryDataset`
-            Requested `Dataset` or slice thereof as an `InMemoryDataset`.
+        info : `StoredFileInfo`
+            Stored information about the internal location of this file
+            and its formatter.
 
         Raises
         ------
-        ValueError
-            Requested URI can not be retrieved.
+        KeyError
+            Dataset with that id can not be found.
+
+        Notes
+        -----
+        Need to convert this to a real registry.
+        """
+        if ref.id not in self.internalRegistry:
+            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
+        formatter_name, path, storageClass = self.internalRegistry[ref.id]
+        # Convert name of StorageClass to instance
+        storageClass = self.storageClassFactory.getStorageClass(storageClass)
+        return StoredFileInfo(formatter_name, path, storageClass)
+
+    def exists(self, ref):
+        """Check if the dataset exists in the datastore.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the entity exists in the `Datastore`.
+        """
+        # Get the file information (this will fail if no file)
+        try:
+            storedFileInfo = self.getStoredFileInfo(ref)
+        except KeyError:
+            return False
+
+        # Use the path to determine the location
+        location = self.locationFactory.fromPath(storedFileInfo.path)
+        return os.path.exists(location.path)
+
+    def get(self, ref, parameters=None):
+        """Load an InMemoryDataset from the store.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+        parameters : `dict`
+            `StorageClass`-specific parameters that specify, for example,
+            a slice of the Dataset to be loaded.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Requested Dataset or slice thereof as an InMemoryDataset.
+
+        Raises
+        ------
+        FileNotFoundError
+            Requested dataset can not be retrieved.
         TypeError
             Return value from formatter has unexpected type.
+        ValueError
+            Formatter failed to process the dataset.
         """
-        formatter = self.formatterFactory.getFormatter(storageClass)
-        location = self.locationFactory.fromUri(uri)
 
-        # if we are asking for a component, the type we pass in to the formatter
-        # should be the type of the component and not the composite type
-        pytype = storageClass.pytype
-        comp = location.fragment
-        scComps = storageClass.components
-        if comp and scComps is not None:
-            pytype = None  # Clear it since this *is* a component
-            if comp in scComps:
-                pytype = scComps[comp].pytype
-
+        # Get file metadata and internal metadata
         try:
-            result = formatter.read(FileDescriptor(location, pytype=pytype,
-                                                   storageClass=storageClass, parameters=parameters))
+            storageInfo = self.registry.getStorageInfo(ref, self.name)
+            storedFileInfo = self.getStoredFileInfo(ref)
+        except KeyError:
+            raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
+
+        # Use the path to determine the location
+        location = self.locationFactory.fromPath(storedFileInfo.path)
+
+        # Too expensive to recalculate the checksum on fetch
+        # but we can check size and existence
+        if not os.path.exists(location.path):
+            raise FileNotFoundError("Dataset with Id {} does not seem to exist at"
+                                    " expected location of {}".format(ref.id, location.path))
+        stat = os.stat(location.path)
+        size = stat.st_size
+        if size != storageInfo.size:
+            raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
+                               " match recorded size of {}".format(location.path, size, storageInfo.size))
+
+        # We have a write storage class and a read storage class and they
+        # can be different for concrete composites.
+        readStorageClass = ref.datasetType.storageClass
+        writeStorageClass = storedFileInfo.storageClass
+
+        # Is this a component request?
+        comp = ref.datasetType.component()
+
+        formatter = getInstanceOf(storedFileInfo.formatter)
+        try:
+            result = formatter.read(FileDescriptor(location, readStorageClass=readStorageClass,
+                                                   storageClass=writeStorageClass, parameters=parameters),
+                                    comp)
         except Exception as e:
-            raise ValueError("Failure from formatter for URI {}: {}".format(uri, e))
+            raise ValueError("Failure from formatter for Dataset {}: {}".format(ref.id, e))
 
         # Validate the returned data type matches the expected data type
+        pytype = readStorageClass.pytype
         if pytype and not isinstance(result, pytype):
             raise TypeError("Got type {} from formatter but expected {}".format(type(result), pytype))
 
         return result
 
-    def put(self, inMemoryDataset, storageClass, dataUnits, typeName=None):
-        """Write a `InMemoryDataset` with a given `StorageClass` to the store.
+    def put(self, inMemoryDataset, ref):
+        """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
         Parameters
         ----------
-        inMemoryDataset : `InMemoryDataset`
-            The `Dataset` to store.
-        storageClass : `StorageClass`
-            The `StorageClass` associated with the `DatasetType`.
-        dataUnits : `DataUnits`
-            DataUnits to use when constructing the filename.
-        typeName : `str`
-            The `DatasetType` name, which may be used by this `Datastore` to
-            override the default serialization format for the `StorageClass`.
-
-        Returns
-        -------
-        uri : `str`
-            The `URI` where the primary `Dataset` is stored.
-        components : `dict`, optional
-            A dictionary of URIs for the `Dataset` components.
-            The latter will be empty if the `Dataset` is not a composite.
+        inMemoryDataset : `object`
+            The Dataset to store.
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
         """
 
-        # Check to see if this storage class has a disassembler
-        # and also has components
-        if storageClass.assemblerClass.disassemble is not None and storageClass.components:
-            compUris = {}
-            components = storageClass.assembler().disassemble(inMemoryDataset)
-            if components:
-                for comp, info in components.items():
-                    compTypeName = typeName
-                    if compTypeName is not None:
-                        compTypeName = "{}.{}".format(compTypeName, comp)
-                    compUris[comp], _ = self.put(info.component, info.storageClass,
-                                                 dataUnits, compTypeName)
-                return None, compUris
+        datasetType = ref.datasetType
+        typeName = datasetType.name
+        storageClass = datasetType.storageClass
 
+        # Sanity check
+        if not isinstance(inMemoryDataset, storageClass.pytype):
+            raise ValueError("Inconsistency between supplied object ({}) "
+                             "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
+
+        # Work out output file name
         template = self.templates.getTemplate(typeName)
-        location = self.locationFactory.fromPath(template.format(dataUnits,
-                                                                 datasetType=typeName))
+        location = self.locationFactory.fromPath(template.format(ref))
 
-        # Write a single component
-        formatter = self.formatterFactory.getFormatter(storageClass, typeName)
+        # Get the formatter based on the storage class
+        formatter = self.formatterFactory.getFormatter(datasetType.storageClass, typeName)
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
             safeMakeDir(storageDir)
-        return formatter.write(inMemoryDataset, FileDescriptor(location, pytype=storageClass.pytype,
+
+        # Write the file
+        path = formatter.write(inMemoryDataset, FileDescriptor(location,
                                                                storageClass=storageClass))
 
-    def remove(self, uri):
-        """Indicate to the Datastore that a `Dataset` can be removed.
+        # Create Storage information in the registry
+        ospath = os.path.join(self.root, path)
+        checksum = self.computeChecksum(ospath)
+        stat = os.stat(ospath)
+        size = stat.st_size
+        info = StorageInfo(self.name, checksum, size)
+        self.registry.addStorageInfo(ref, info)
+
+        # Associate this dataset with the formatter for later read.
+        fileInfo = StoredFileInfo(formatter, path, storageClass)
+        self.addStoredFileInfo(ref, fileInfo)
+
+        # Register all components with same information
+        for compRef in ref.components.values():
+            self.registry.addStorageInfo(compRef, info)
+            self.addStoredFileInfo(compRef, fileInfo)
+
+    def getUri(self, ref, predict=False):
+        """URI to the Dataset.
 
         Parameters
         ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
         uri : `str`
-            A Universal Resource Identifier that specifies the location of the
-            stored `Dataset`.
+            URI string pointing to the Dataset within the datastore. If the
+            Dataset does not exist in the datastore, and if ``predict`` is
+            `True`, the URI will be a prediction and will include a URI fragment
+            "#predicted".
+            If the datastore does not have entities that relate well
+            to the concept of a URI the returned URI string will be
+            descriptive. The returned URI is not guaranteed to be obtainable.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+
+        """
+
+        # if this has never been written then we have to guess
+        if not self.exists(ref):
+            if not predict:
+                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
+
+            datasetType = ref.datasetType
+            typeName = datasetType.name
+            template = self.templates.getTemplate(typeName)
+            location = self.locationFactory.fromPath(template.format(ref) + "#predicted")
+        else:
+            # If this is a ref that we have written we can get the path.
+            # Get file metadata and internal metadata
+            storedFileInfo = self.getStoredFileInfo(ref)
+
+            # Use the path to determine the location
+            location = self.locationFactory.fromPath(storedFileInfo.path)
+
+        return location.uri
+
+    def remove(self, ref):
+        """Indicate to the Datastore that a Dataset can be removed.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+
+        Raises
+        ------
+        FileNotFoundError
+            Attempt to remove a dataset that does not exist.
 
         Notes
         -----
         Some Datastores may implement this method as a silent no-op to
-        disable `Dataset` deletion through standard interfaces.
+        disable Dataset deletion through standard interfaces.
         """
-        location = self.locationFactory.fromUri(uri)
-        if not os.path.exists(location.preferredPath()):
-            raise FileNotFoundError("No such file: {0}".format(location.uri))
-        os.remove(location.preferredPath())
+        # Get file metadata and internal metadata
 
-    def transfer(self, inputDatastore, inputUri, storageClass, dataUnits, typeName=None):
-        """Retrieve a `Dataset` with a given `URI` from an input `Datastore`,
+        try:
+            storedFileInfo = self.getStoredFileInfo(ref)
+        except KeyError:
+            raise FileNotFoundError("Requested dataset ({}) does not exist".format(ref))
+        location = self.locationFactory.fromPath(storedFileInfo.path)
+        if not os.path.exists(location.path):
+            raise FileNotFoundError("No such file: {0}".format(location.uri))
+        os.remove(location.path)
+
+        # Remove rows from registries
+        self.removeStoredFileInfo(ref)
+        self.registry.removeStorageInfo(self.name, ref)
+        for compRef in ref.components.values():
+            self.registry.removeStorageInfo(self.name, compRef)
+            self.removeStoredFileInfo(compRef)
+
+    def transfer(self, inputDatastore, ref):
+        """Retrieve a Dataset from an input `Datastore`,
         and store the result in this `Datastore`.
 
         Parameters
         ----------
         inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the `Dataset`.
-        inputUri : `str`
-            The `URI` of the `Dataset` in the input `Datastore`.
-        storageClass : `StorageClass`
-            The `StorageClass` associated with the `DatasetType`.
-        dataUnits : `DataUnits`
-            DataUnits to use when constructing the filename.
-        typeName : `str`
-            The `DatasetType` name, which may be used by this `Datastore`
-            to override the default serialization format for the `StorageClass`.
+            The external `Datastore` from which to retreive the Dataset.
+        ref : `DatasetRef`
+            Reference to the required Dataset in the input data store.
+
+        """
+        assert inputDatastore is not self  # unless we want it for renames?
+        inMemoryDataset = inputDatastore.get(ref)
+        return self.put(inMemoryDataset, ref)
+
+    @staticmethod
+    def computeChecksum(filename, algorithm="blake2b", block_size=8192):
+        """Compute the checksum of the supplied file.
+
+        Parameters
+        ----------
+        filename : `str`
+            Name of file to calculate checksum from.
+        algorithm : `str`, optional
+            Name of algorithm to use. Must be one of the algorithms supported
+            by :py:class`hashlib`.
+        block_size : `int`
+            Number of bytes to read from file at one time.
 
         Returns
         -------
-        uri : `str`
-            The `URI` where the primary `Dataset` is stored.
-        components : `dict`, optional
-            A dictionary of URIs for the `Dataset`' components.
-            The latter will be empty if the `Dataset` is not a composite.
+        hexdigest : `str`
+            Hex digest of the file.
         """
-        assert inputDatastore is not self  # unless we want it for renames?
-        inMemoryDataset = inputDatastore.get(inputUri, storageClass)
-        return self.put(inMemoryDataset, storageClass, dataUnits, typeName)
+        if algorithm not in hashlib.algorithms_guaranteed:
+            raise NameError('The specified algorithm "{}" is not supported by hashlib'.format(algorithm))
+
+        hasher = hashlib.new(algorithm)
+
+        with open(filename, 'rb') as f:
+            for chunk in iter(lambda: f.read(block_size), b''):
+                hasher.update(chunk)
+
+        return hasher.hexdigest()

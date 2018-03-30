@@ -23,6 +23,7 @@
 
 # Need to enable PSFs to be instantiated
 import lsst.afw.detection  # noqa F401
+from lsst.afw.image import makeExposure, makeMaskedImage
 
 from lsst.daf.butler.core.composites import CompositeAssembler
 
@@ -158,6 +159,70 @@ class ExposureAssembler(CompositeAssembler):
         components.update(fromExposureInfo)
 
         return components
+
+    def assemble(self, components):
+        """Construct an Exposure from components.
+
+        Parameters
+        ----------
+        components : `dict`
+            All the components from which to construct the Exposure.
+            Some can be missing.
+
+        Returns
+        -------
+        exposure : `~lsst.afw.image.Exposure`
+            Assembled exposure.
+
+        Raises
+        ------
+        ValueError
+            Some supplied components are not recognized.
+        """
+        components = components.copy()
+        maskedImageComponents = {}
+        hasMaskedImage = False
+        for component in ("image", "variance", "mask"):
+            value = None
+            if component in components:
+                hasMaskedImage = True
+                value = components.pop(component)
+            maskedImageComponents[component] = value
+
+        wcs = None
+        if "wcs" in components:
+            wcs = components.pop("wcs")
+
+        pytype = self.storageClass.pytype
+        if hasMaskedImage:
+            maskedImage = makeMaskedImage(**maskedImageComponents)
+            exposure = makeExposure(maskedImage, wcs=wcs)
+
+            if not isinstance(exposure, pytype):
+                raise RuntimeError("Unexpected type created in assembly;"
+                                   " was {} expected {}".format(type(exposure), pytype))
+
+        else:
+            exposure = pytype()
+            if wcs is not None:
+                exposure.setWcs(wcs)
+
+        # Set other components
+        exposure.setPsf(components.pop("psf", None))
+        exposure.setCalib(components.pop("calib", None))
+
+        info = exposure.getInfo()
+        if "visitInfo" in components:
+            info.setVisitInfo(components.pop("visitInfo"))
+        info.setApCorrMap(components.pop("apCorrMap", None))
+        info.setCoaddInputs(components.pop("coaddInputs", None))
+
+        # If we have some components left over that is a problem
+        if components:
+            raise ValueError("The following components were not understood:"
+                             " {}".format(list(components.keys())))
+
+        return exposure
 
 
 class ExposureAssemblerMonolithic(ExposureAssembler):

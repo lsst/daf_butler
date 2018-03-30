@@ -73,7 +73,7 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
     def testRegistryWithStorageClass(self):
         """Test that the registry can be given a StorageClass object.
         """
-        formatterTypeName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+        formatterTypeName = "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter"
         storageClassName = "TestClass"
         sc = storageClass.makeNewStorageClass(storageClassName, dict, None)
 
@@ -83,13 +83,15 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         # Retrieve using the class
         f = self.factory.getFormatter(sc)
         self.assertIsInstance(f, formatter.Formatter)
-        # Defer the import so that we ensure that the infrastructure loaded it on demand previously
-        from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
-        self.assertEqual(type(f), FitsCatalogFormatter)
 
-        with self.assertRaises(ValueError):
-            # Attempt to overwrite using the name as a simple str
-            self.factory.registerFormatter(storageClassName, formatterTypeName)
+        # This might defer the import, pytest may have already loaded it
+        from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
+        self.assertEqual(type(f), YamlFormatter)
+
+        with self.assertRaises(KeyError):
+            # Attempt to overwrite using a different value
+            self.factory.registerFormatter(storageClassName,
+                                           "lsst.daf.butler.formatters.jsonFormatter.JsonFormatter")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

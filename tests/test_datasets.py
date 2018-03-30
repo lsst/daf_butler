@@ -24,6 +24,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
+from lsst.daf.butler.core.storageClass import makeNewStorageClass
 
 """Tests for datasets module.
 """
@@ -41,7 +42,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         These can only be verified for a particular schema.
         """
         datasetTypeName = "test"
-        storageClass = "StructuredData"
+        storageClass = makeNewStorageClass("test_StructuredData")()
         dataUnits = frozenset(("camera", "visit"))
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
@@ -49,14 +50,16 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(datasetType.dataUnits, dataUnits)
 
     def testEquality(self):
-        self.assertEqual(DatasetType("a", "StorageA", ("UnitA", )),
-                         DatasetType("a", "StorageA", ("UnitA", )))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", )),
-                            DatasetType("b", "StorageA", ("UnitA", )))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", )),
-                            DatasetType("a", "StorageB", ("UnitA", )))
-        self.assertNotEqual(DatasetType("a", "StorageA", ("UnitA", )),
-                            DatasetType("a", "StorageA", ("UnitB", )))
+        storageA = makeNewStorageClass("test_a")()
+        storageB = makeNewStorageClass("test_b")()
+        self.assertEqual(DatasetType("a", ("UnitA", ), storageA,),
+                         DatasetType("a", ("UnitA", ), storageA,))
+        self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
+                            DatasetType("b", ("UnitA", ), storageA,))
+        self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
+                            DatasetType("a", ("UnitA", ), storageB,))
+        self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
+                            DatasetType("a", ("UnitB", ), storageA,))
 
     def testHashability(self):
         """Test `DatasetType.__hash__`.
@@ -71,11 +74,13 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         """
         types = []
         unique = 0
+        storageC = makeNewStorageClass("test_c")()
+        storageD = makeNewStorageClass("test_d")()
         for name in ["a", "b"]:
-            for storageClass in ["c", "d"]:
+            for storageClass in [storageC, storageD]:
                 for dataUnits in [("e", ), ("f", )]:
-                    datasetType = DatasetType(name, storageClass, dataUnits)
-                    datasetTypeCopy = DatasetType(name, storageClass, dataUnits)
+                    datasetType = DatasetType(name, dataUnits, storageClass)
+                    datasetTypeCopy = DatasetType(name, dataUnits, storageClass)
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
@@ -89,7 +94,7 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         """Test construction preserves values.
         """
         datasetTypeName = "test"
-        storageClass = "StructuredData"
+        storageClass = makeNewStorageClass("testref_StructuredData")()
         dataUnits = frozenset(("camera", "visit"))
         dataId = dict(camera="DummyCam", visit=42)
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)

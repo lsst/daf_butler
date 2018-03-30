@@ -67,4 +67,4 @@ class FitsCatalogFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        inMemoryDataset.writeFits(fileDescriptor.location.preferredPath())
+        inMemoryDataset.writeFits(fileDescriptor.location.path)

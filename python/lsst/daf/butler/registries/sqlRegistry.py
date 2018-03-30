@@ -31,6 +31,7 @@ from ..core.execution import Execution
 from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageInfo import StorageInfo
+from ..core.storageClass import StorageClassFactory
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -52,6 +53,7 @@ class SqlRegistry(Registry):
         super().__init__(config)
 
         self.config = SqlRegistryConfig(config)
+        self.storageClasses = StorageClassFactory()
         self._schema = Schema(self.config['schema'])
         self._engine = create_engine(self.config['db'])
         self._schema.metadata.create_all(self._engine)
@@ -74,6 +76,13 @@ class SqlRegistry(Registry):
         ----------
         datasetType : `DatasetType`
             The `DatasetType` to be added.
+
+        Raises
+        ------
+        KeyError
+            Dataset is already registered.
+        ValueError
+            DatasetType is not valid for this registry.
         """
         if not self._isValidDatasetType(datasetType):
             raise ValueError("DatasetType is not valid for this registry")
@@ -83,7 +92,7 @@ class SqlRegistry(Registry):
         datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
         with self._engine.begin() as connection:
             connection.execute(datasetTypeTable.insert().values(dataset_type_name=datasetType.name,
-                                                                storage_class=datasetType.storageClass))
+                                                                storage_class=datasetType.storageClass.name))
             if datasetType.dataUnits:
                 connection.execute(datasetTypeUnitsTable.insert(),
                                    [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
@@ -102,6 +111,11 @@ class SqlRegistry(Registry):
         -------
         type : `DatasetType`
             The `DatasetType` associated with the given name.
+
+        Raises
+        ------
+        KeyError
+            Requested named DatasetType could not be found in registry.
         """
         datasetType = None
         if name in self._datasetTypes:
@@ -113,7 +127,11 @@ class SqlRegistry(Registry):
                 # Get StorageClass from DatasetType table
                 result = connection.execute(select([datasetTypeTable.c.storage_class]).where(
                     datasetTypeTable.c.dataset_type_name == name)).fetchone()
-                storageClass = result['storage_class']
+
+                if result is None:
+                    raise KeyError("Could not find entry for datasetType {}".format(name))
+
+                storageClass = self.storageClasses.getStorageClass(result['storage_class'])
                 # Get DataUnits (if any) from DatasetTypeUnits table
                 result = connection.execute(select([datasetTypeUnitsTable.c.unit_name]).where(
                     datasetTypeUnitsTable.c.dataset_type_name == name)).fetchall()
@@ -124,10 +142,10 @@ class SqlRegistry(Registry):
         return datasetType
 
     def addDataset(self, datasetType, dataId, run, producer=None):
-        """Add a `Dataset` to a Collection.
+        """Add a Dataset to a Collection.
 
-        This always adds a new `Dataset`; to associate an existing `Dataset` with
-        a new `Collection`, use `associate`.
+        This always adds a new Dataset; to associate an existing Dataset with
+        a new `Collection`, use ``associate``.
 
         Parameters
         ----------
@@ -152,8 +170,8 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        Exception
-            If a `Dataset` with the given `DatasetRef` already exists in the
+        ValueError
+            If a Dataset with the given `DatasetRef` already exists in the
             given Collection.
         """
         # TODO this is obviously not the most efficient way to check
@@ -239,7 +257,8 @@ class SqlRegistry(Registry):
         name : `str`
             Name of the component.
         parent : `DatasetRef`
-            A reference to the parent dataset.
+            A reference to the parent dataset. Will be updated to reference
+            the component.
         component : `DatasetRef`
             A reference to the component dataset.
         """
@@ -252,13 +271,13 @@ class SqlRegistry(Registry):
             parent._components[name] = component
 
     def associate(self, collection, refs):
-        """Add existing `Dataset`\ s to a Collection, possibly creating the
+        r"""Add existing Datasets to a Collection, possibly creating the
         Collection in the process.
 
         Parameters
         ----------
         collection : `str`
-            Indicates the Collection the `Dataset`\ s should be associated with.
+            Indicates the Collection the Datasets should be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
@@ -269,7 +288,7 @@ class SqlRegistry(Registry):
                                [{'dataset_id': ref.id, 'collection': collection} for ref in refs])
 
     def disassociate(self, collection, refs, remove=True):
-        """Remove existing `Dataset`\ s from a Collection.
+        r"""Remove existing Datasets from a Collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
@@ -277,12 +296,12 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection : `str`
-            The Collection the `Dataset`\ s should no longer be associated with.
+            The Collection the Datasets should no longer be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
         remove : `bool`
-            If `True`, remove `Dataset`\ s from the `SqlRegistry` if they are not
+            If `True`, remove Datasets from the `SqlRegistry` if they are not
             associated with any Collection (including via any composites).
 
         Returns
@@ -357,8 +376,13 @@ class SqlRegistry(Registry):
 
         Returns
         -------
-        `StorageInfo`
+        info : `StorageInfo`
             Storage information about the dataset.
+
+        Raises
+        ------
+        KeyError
+            The requested Dataset does not exist.
         """
         datasetStorageTable = self._schema.metadata.tables['DatasetStorage']
         storageInfo = None
@@ -369,10 +393,33 @@ class SqlRegistry(Registry):
                         datasetStorageTable.c.size]).where(
                             and_(datasetStorageTable.c.dataset_id == ref.id,
                                  datasetStorageTable.c.datastore_name == datastoreName))).fetchone()
-            storageInfo = StorageInfo(datastoreName=result["datastore_name"],
-                                      checksum=result["checksum"],
-                                      size=result["size"])
+
+        if result is None:
+            raise KeyError("Unable to retrieve information associated with "
+                           "Dataset {} in datastore {}".format(ref.id, datastoreName))
+
+        storageInfo = StorageInfo(datastoreName=result["datastore_name"],
+                                  checksum=result["checksum"],
+                                  size=result["size"])
         return storageInfo
+
+    def removeStorageInfo(self, datastoreName, ref):
+        """Remove storage information associated with this dataset.
+
+        Typically used by `Datastore` when a dataset is removed.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of this `Datastore`.
+        ref : `DatasetRef`
+            A reference to the dataset for which information is to be removed.
+        """
+        datasetStorageTable = self._schema.metadata.tables['DatasetStorage']
+        with self._engine.begin() as connection:
+            connection.execute(datasetStorageTable.delete().where(
+                               and_(datasetStorageTable.c.dataset_id == ref.id,
+                                    datasetStorageTable.c.datastore_name == datastoreName)))
 
     def addExecution(self, execution):
         """Add a new `Execution` to the `SqlRegistry`.
@@ -447,7 +494,7 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        `ValueError`
+        ValueError
             If a run already exists with this collection.
         """
         runTable = self._schema.metadata.tables['Run']
@@ -477,6 +524,11 @@ class SqlRegistry(Registry):
         -------
         run : `Run`
             The `Run` instance.
+
+        Raises
+        ------
+        ValueError
+            Must supply one of ``collection`` or ``id``.
         """
         executionTable = self._schema.metadata.tables['Execution']
         runTable = self._schema.metadata.tables['Run']
@@ -517,7 +569,7 @@ class SqlRegistry(Registry):
         return run
 
     def addQuantum(self, quantum):
-        """Add a new `Quantum` to the `SqlRegistry`.
+        r"""Add a new `Quantum` to the `SqlRegistry`.
 
         Parameters
         ----------
@@ -606,10 +658,10 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        `ValueError`
-            If `ref` is not already in the predicted inputs list.
-        `KeyError`
-            If `ref` is not a predicted consumer for `quantum`.
+        ValueError
+            If ``ref`` is not already in the predicted inputs list.
+        KeyError
+            If ``ref`` is not a predicted consumer for ``quantum``.
         """
         datasetConsumersTable = self._schema.metadata.tables['DatasetConsumers']
         with self._engine.begin() as connection:
@@ -705,12 +757,12 @@ class SqlRegistry(Registry):
         Returns
         -------
         ref : `DatasetRef`
-            A ref to the `Dataset`, or `None` if no matching `Dataset`
+            A ref to the Dataset, or `None` if no matching Dataset
             was found.
 
         Raises
         ------
-        `ValueError`
+        ValueError
             If dataId is invalid.
         """
         if not self._validateDataId(datasetType, dataId):
@@ -727,14 +779,12 @@ class SqlRegistry(Registry):
                     dataIdExpression))).fetchone()
         # TODO update unit values and add Run, Quantum and assembler?
         if result is not None:
-            return DatasetRef(datasetType=datasetType,
-                              dataId=dataId,
-                              id=result['dataset_id'])
+            return self.getDataset(result['dataset_id'])
         else:
             return None
 
     def subset(self, collection, expr, datasetTypes):
-        """Create a new `Collection` by subsetting an existing one.
+        r"""Create a new `Collection` by subsetting an existing one.
 
         Parameters
         ----------
@@ -742,7 +792,7 @@ class SqlRegistry(Registry):
             Indicates the input Collection to subset.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly)
-            `Dataset`\ s in the subset.
+            Datasets in the subset.
         datasetTypes : `list` of `DatasetType`
             The `list` of `DatasetType`\ s whose instances should be included
             in the subset.
@@ -755,11 +805,10 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def merge(self, outputCollection, inputCollections):
-        """Create a new Collection from a series of existing ones.
+        r"""Create a new Collection from a series of existing ones.
 
         Entries earlier in the list will be used in preference to later
-        entries when both contain
-        `Dataset`\ s with the same `DatasetRef`.
+        entries when both contain Datasets with the same `DatasetRef`.
 
         Parameters
         ----------
@@ -771,17 +820,17 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def makeDataGraph(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
-        """Evaluate a filter expression and lists of `DatasetType`\ s and
+        r"""Evaluate a filter expression and lists of `DatasetType`\ s and
         return a `QuantumGraph`.
 
         Parameters
         ----------
         collections : `list` of `str`
             An ordered `list` of collections indicating the Collections to
-            search for `Dataset`\ s.
+            search for Datasets.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly) the
-            `Dataset`\ s returned.
+            Datasets returned.
         neededDatasetTypes : `list` of `DatasetType`
             The `list` of `DatasetType`\ s whose instances should be included
             in the graph and limit its extent.
@@ -800,13 +849,13 @@ class SqlRegistry(Registry):
 
     def makeProvenanceGraph(self, expr, types=None):
         """Make a `QuantumGraph` that contains the full provenance of all
-        `Dataset`\ s matching an expression.
+        Datasets matching an expression.
 
         Parameters
         ----------
         expr : `str`
-            An expression (SQL query that evaluates to a list of `Dataset`
-            primary keys) that selects the `Dataset`\ s.
+            An expression (SQL query that evaluates to a list of Dataset
+            primary keys) that selects the Datasets.
 
         Returns
         -------
@@ -817,13 +866,13 @@ class SqlRegistry(Registry):
 
     def export(self, expr):
         """Export contents of the `SqlRegistry`, limited to those reachable from
-        the `Dataset`\ s identified by the expression `expr`, into a `TableSet`
+        the Datasets identified by the expression `expr`, into a `TableSet`
         format such that it can be imported into a different database.
 
         Parameters
         ----------
         expr : `str`
-            An expression (SQL query that evaluates to a list of `Dataset`
+            An expression (SQL query that evaluates to a list of Dataset
             primary keys) that selects the `Datasets, or a `QuantumGraph`
             that can be similarly interpreted.
 
@@ -831,7 +880,7 @@ class SqlRegistry(Registry):
         -------
         ts : `TableSet`
             Containing all rows, from all tables in the `SqlRegistry` that
-            are reachable from the selected `Dataset`\ s.
+            are reachable from the selected Datasets.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -845,13 +894,13 @@ class SqlRegistry(Registry):
             Contains the previously exported content.
         collection : `str`
             An additional Collection collection assigned to the newly
-            imported `Dataset`\ s.
+            imported Datasets.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     def transfer(self, src, expr, collection):
-        """Transfer contents from a source `SqlRegistry`, limited to those
-        reachable from the `Dataset`\ s identified by the expression `expr`,
+        r"""Transfer contents from a source `SqlRegistry`, limited to those
+        reachable from the Datasets identified by the expression `expr`,
         into this `SqlRegistry` and collection them with a Collection.
 
         Parameters
@@ -860,9 +909,9 @@ class SqlRegistry(Registry):
             The source `SqlRegistry`.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly)
-            the `Dataset`\ s transferred.
+            the Datasets transferred.
         collection : `str`
             An additional Collection collection assigned to the newly
-            imported `Dataset`\ s.
+            imported Datasets.
         """
         self.import_(src.export(expr), collection)

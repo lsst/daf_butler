@@ -19,27 +19,55 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Tests for Butler.
+"""
+
 import os
 import unittest
 
 import lsst.utils.tests
 
 from lsst.daf.butler import Butler
-from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
-
-from datasetsHelper import FitsCatalogDatasetsHelper
-
-"""Tests for Butler.
-"""
+from lsst.daf.butler import StorageClassFactory
+from lsst.daf.butler import DatasetType, DatasetRef
+from examplePythonTypes import MetricsExample
 
 
-class ButlerTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
+def makeExampleMetrics():
+    return MetricsExample({"AM1": 5.2, "AM2": 30.6},
+                          {"a": [1, 2, 3],
+                           "b": {"blue": 5, "red": "green"}},
+                          [563, 234, 456.7]
+                          )
+
+
+class ButlerTestCase(lsst.utils.tests.TestCase):
     """Test for Butler.
     """
 
-    def setUp(self):
-        self.testDir = os.path.dirname(__file__)
-        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
+    @staticmethod
+    def registerDatasetTypes(datasetTypeName, dataUnits, storageClass, registry):
+        """Bulk register DatasetTypes
+        """
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        registry.registerDatasetType(datasetType)
+
+        for compName, compStorageClass in storageClass.components.items():
+            compType = DatasetType(datasetType.componentTypeName(compName), dataUnits, compStorageClass)
+            registry.registerDatasetType(compType)
+
+    @classmethod
+    def setUpClass(cls):
+        cls.testDir = os.path.dirname(__file__)
+        cls.storageClassFactory = StorageClassFactory()
+        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
+        cls.storageClassFactory.addFromConfig(cls.configFile)
+
+    def assertGetComponents(self, butler, datasetTypeName, dataId, components, reference):
+        for component in components:
+            compTypeName = DatasetType.nameWithComponent(datasetTypeName, component)
+            result = butler.get(compTypeName, dataId)
+            self.assertEqual(result, getattr(reference, component))
 
     def testConstructor(self):
         """Independent test of constructor.
@@ -47,26 +75,53 @@ class ButlerTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper):
         butler = Butler(self.configFile)
         self.assertIsInstance(butler, Butler)
 
-    @unittest.expectedFailure
     def testBasicPutGet(self):
         butler = Butler(self.configFile)
         # Create and register a DatasetType
-        datasetTypeName = "catalog"
+        datasetTypeName = "test_metric"
         dataUnits = ("camera", "visit")
-        storageClass = "SourceCatalog"
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
-        butler.registry.registerDatasetType(datasetType)
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
+
         # Create and store a dataset
-        catalog = self.makeExampleCatalog()
+        metric = makeExampleMetrics()
         dataId = {"camera": "DummyCam", "visit": 42}
-        ref = butler.put(catalog, datasetTypeName, dataId)
+        ref = butler.put(metric, datasetTypeName, dataId)
         self.assertIsInstance(ref, DatasetRef)
         # Test getDirect
-        catalogOut = butler.getDirect(ref)
-        self.assertCatalogEqual(catalog, catalogOut)
+        metricOut = butler.getDirect(ref)
+        self.assertEqual(metric, metricOut)
         # Test get
-        catalogOut = butler.get(datasetType, dataId)
-        self.assertCatalogEqual(catalog, catalogOut)
+        metricOut = butler.get(datasetTypeName, dataId)
+        self.assertEqual(metric, metricOut)
+
+        # Check we can get components
+        self.assertGetComponents(butler, datasetTypeName, dataId,
+                                 ("summary", "data", "output"), metric)
+
+    def testCompositePutGet(self):
+        butler = Butler(self.configFile)
+        # Create and register a DatasetType
+        datasetTypeName = "test_metric_comp"
+        dataUnits = ("camera", "visit")
+        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
+        self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
+
+        # Create and store a dataset
+        metric = makeExampleMetrics()
+        dataId = {"camera": "DummyCamComp", "visit": 423}
+        ref = butler.put(metric, datasetTypeName, dataId)
+        self.assertIsInstance(ref, DatasetRef)
+        # Test getDirect
+        metricOut = butler.getDirect(ref)
+        self.assertEqual(metric, metricOut)
+        # Test get
+        metricOut = butler.get(datasetTypeName, dataId)
+        self.assertEqual(metric, metricOut)
+
+        # Check we can get components
+        self.assertGetComponents(butler, datasetTypeName, dataId,
+                                 ("summary", "data", "output"), metric)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

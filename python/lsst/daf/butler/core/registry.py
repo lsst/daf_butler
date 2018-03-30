@@ -100,20 +100,20 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     def addDataset(self, ref, uri, components, run, producer=None):
-        """Add a `Dataset` to a Collection.
+        """Add a Dataset to a Collection.
 
-        This always adds a new `Dataset`; to associate an existing `Dataset` with
+        This always adds a new Dataset; to associate an existing Dataset with
         a new `Collection`, use `associate`.
 
         Parameters
         ----------
         ref : `DatasetRef`
-            Identifies the `Dataset` and contains its `DatasetType`.
+            Identifies the Dataset and contains its `DatasetType`.
         uri : `str`
-            The URI that has been associated with the `Dataset` by a
+            The URI that has been associated with the Dataset by a
             `Datastore`.
         components : `dict`
-            If the `Dataset` is a composite, a ``{name : URI}`` dictionary of
+            If the Dataset is a composite, a ``{name : URI}`` dictionary of
             its named components and storage locations.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
@@ -132,20 +132,20 @@ class Registry(metaclass=ABCMeta):
         Raises
         ------
         Exception
-            If a `Dataset` with the given `DatasetRef` already exists in the
+            If a Dataset with the given `DatasetRef` already exists in the
             given Collection.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
     def associate(self, collection, refs):
-        """Add existing `Dataset`\ s to a Collection, possibly creating the
+        """Add existing Datasets to a Collection, possibly creating the
         Collection in the process.
 
         Parameters
         ----------
         collection : `str`
-            Indicates the Collection the `Dataset`\ s should be associated with.
+            Indicates the Collection the Dataset\ s should be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
@@ -154,7 +154,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     def disassociate(self, collection, refs, remove=True):
-        """Remove existing `Dataset`\ s from a Collection.
+        """Remove existing Datasets from a Collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
@@ -162,13 +162,13 @@ class Registry(metaclass=ABCMeta):
         Parameters
         ----------
         collection : `str`
-            The Collection the `Dataset`\ s should no longer be associated
+            The Collection the Dataset\ s should no longer be associated
             with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
         remove : `bool`
-            If `True`, remove `Dataset`\s from the `Registry` if they are not
+            If `True`, remove Datasets from the `Registry` if they are not
             associated with any Collection (including via any composites).
 
         Returns
@@ -318,7 +318,7 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         ref : `DatasetRef`
-            A ref to the `Dataset`, or `None` if no matching `Dataset`
+            A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -333,7 +333,7 @@ class Registry(metaclass=ABCMeta):
             Indicates the input Collection to subset.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly)
-            `Dataset`\ s in the subset.
+            Datasets in the subset.
         datasetTypes : `list` of `DatasetType`
             The `list` of `DatasetType`\ s whose instances should be included
             in the subset.
@@ -351,7 +351,7 @@ class Registry(metaclass=ABCMeta):
 
         Entries earlier in the list will be used in preference to later
         entries when both contain
-        `Dataset`\ s with the same `DatasetRef`.
+        Datasets with the same `DatasetRef`.
 
         Parameters
         ----------
@@ -371,10 +371,10 @@ class Registry(metaclass=ABCMeta):
         ----------
         collections : `list` of `str`
             An ordered `list` of collections indicating the Collections to
-            search for `Dataset`\ s.
+            search for Datasets.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly) the
-            `Dataset`\ s returned.
+            Datasets returned.
         neededDatasetTypes : `list` of `DatasetType`
             The `list` of `DatasetType`\ s whose instances should be included
             in the graph and limit its extent.
@@ -394,13 +394,13 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def makeProvenanceGraph(self, expr, types=None):
         """Make a `QuantumGraph` that contains the full provenance of all
-        `Dataset`\ s matching an expression.
+        Datasets matching an expression.
 
         Parameters
         ----------
         expr : `str`
-            An expression (SQL query that evaluates to a list of `Dataset`
-            primary keys) that selects the `Dataset`\ s.
+            An expression (SQL query that evaluates to a list of Dataset
+            primary keys) that selects the Datasets.
 
         Returns
         -------
@@ -412,21 +412,21 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def export(self, expr):
         """Export contents of the `Registry`, limited to those reachable from
-        the `Dataset`\ s identified by the expression `expr`, into a `TableSet`
+        the Datasets identified by the expression `expr`, into a `TableSet`
         format such that it can be imported into a different database.
 
         Parameters
         ----------
         expr : `str`
-            An expression (SQL query that evaluates to a list of `Dataset`
-            primary keys) that selects the `Dataset`\ s, or a `QuantumGraph`
+            An expression (SQL query that evaluates to a list of Dataset
+            primary keys) that selects the Datasets, or a `QuantumGraph`
             that can be similarly interpreted.
 
         Returns
         -------
         ts : `TableSet`
             Containing all rows, from all tables in the `Registry` that
-            are reachable from the selected `Dataset`\ s.
+            are reachable from the selected Datasets.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -441,14 +441,14 @@ class Registry(metaclass=ABCMeta):
             Contains the previously exported content.
         collection : `str`
             An additional Collection collection assigned to the newly
-            imported `Dataset`\ s.
+            imported Datasets.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
     def transfer(self, src, expr, collection):
         """Transfer contents from a source `Registry`, limited to those
-        reachable from the `Dataset`\ s identified by the expression `expr`,
+        reachable from the Datasets identified by the expression `expr`,
         into this `Registry` and collection them with a Collection.
 
         Parameters
@@ -457,9 +457,9 @@ class Registry(metaclass=ABCMeta):
             The source `Registry`.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly)
-            the `Dataset`\ s transferred.
+            the Datasets transferred.
         collection : `str`
             An additional Collection collection assigned to the newly
-            imported `Dataset`\ s.
+            imported Datasets.
         """
         self.import_(src.export(expr), collection)
