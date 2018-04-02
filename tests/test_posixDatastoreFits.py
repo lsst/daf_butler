@@ -26,9 +26,10 @@ import lsst.utils.tests
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
-from lsst.daf.butler import Registry
 
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
+
+from dummyRegistry import DummyRegistry
 
 try:
     import lsst.afw.table
@@ -51,7 +52,7 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self):
-        self.registry = Registry.fromConfig(self.configFile)
+        self.registry = DummyRegistry()
 
         # Need to keep ID for each datasetRef since we have no butler
         # for these tests
@@ -136,7 +137,7 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         outputConfig = inputConfig.copy()
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig,
-                                              registry=Registry.fromConfig(self.configFile))
+                                              registry=DummyRegistry())
 
         inputPosixDatastore.put(catalog, ref)
         outputPosixDatastore.transfer(inputPosixDatastore, ref)
@@ -157,7 +158,7 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase, DatasetTestHelpe
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self):
-        self.registry = Registry.fromConfig(self.configFile)
+        self.registry = DummyRegistry()
 
         # Need to keep ID for each datasetRef since we have no butler
         # for these tests

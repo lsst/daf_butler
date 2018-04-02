@@ -26,10 +26,11 @@ import lsst.utils.tests
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
-from lsst.daf.butler import Registry
 
 from datasetsHelper import DatasetTestHelper
 from examplePythonTypes import MetricsExample
+
+from dummyRegistry import DummyRegistry
 
 
 def makeExampleMetrics():
@@ -51,7 +52,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def setUp(self):
-        self.registry = Registry.fromConfig(self.configFile)
+        self.registry = DummyRegistry()
 
         # Need to keep ID for each datasetRef since we have no butler
         # for these tests
@@ -202,7 +203,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         outputConfig = inputConfig.copy()
         outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig,
-                                              registry=Registry.fromConfig(self.configFile))
+                                              registry=DummyRegistry())
 
         inputPosixDatastore.put(metrics, ref)
         outputPosixDatastore.transfer(inputPosixDatastore, ref)
