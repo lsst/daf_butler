@@ -32,7 +32,7 @@ datastore:
     ExposureF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
     ExposureI: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
 registry:
-  cls: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
+  cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
   db: 'sqlite:///:memory:'
   schema: './config/registry/default_schema.yaml'
 storageClasses:
