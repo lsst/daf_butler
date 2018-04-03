@@ -23,6 +23,7 @@ import itertools
 
 from sqlalchemy import create_engine
 from sqlalchemy.sql import select, and_, exists
+from sqlalchemy.exc import IntegrityError
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
@@ -672,17 +673,25 @@ class SqlRegistry(Registry):
                 raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
             quantum._markInputUsed(ref)
 
-    def addDataUnit(self, unit, replace=False):
-        """Add a new `DataUnit`, optionally replacing an existing one
-        (for updates).
+    def addDataUnitEntry(self, dataUnitName, value):
+        """Add a new `DataUnit` entry.
 
-        unit : `DataUnit`
-            The `DataUnit` to add or replace.
-        replace : `bool`
-            If `True`, replace any matching `DataUnit` that already exists
-            (updating its non-unique fields) instead of raising an exception.
+        dataUnitName : `str`
+            Name of the `DataUnit` (e.g. ``"Camera"``).
+        values : `dict`
+            Dictionary of ``columnName, value`` pairs.
+
+        Raises
+        ------
+        ValueError
+            If an entry for this value is already present.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        dataUnitTable = self._schema.metadata.tables[dataUnitName]
+        with self._engine.begin() as connection:
+            try:
+                connection.execute(dataUnitTable.insert().values(**value))
+            except IntegrityError as err:
+                raise ValueError(str(err))  # TODO this should do an explicit validity check instead
 
     def findDataUnit(self, cls, values):
         """Return a `DataUnit` given a dictionary of values.
