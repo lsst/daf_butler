@@ -252,19 +252,6 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def addDataUnit(self, unit, replace=False):
-        """Add a new `DataUnit`, optionally replacing an existing one
-        (for updates).
-
-        unit : `DataUnit`
-            The `DataUnit` to add or replace.
-        replace : `bool`
-            If `True`, replace any matching `DataUnit` that already exists
-            (updating its non-unique fields) instead of raising an exception.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
     def findDataUnit(self, cls, values):
         """Return a `DataUnit` given a dictionary of values.
 
