@@ -673,23 +673,24 @@ class SqlRegistry(Registry):
                 raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
             quantum._markInputUsed(ref)
 
-    def addDataUnitEntry(self, dataUnitName, value):
+    def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
 
         dataUnitName : `str`
             Name of the `DataUnit` (e.g. ``"Camera"``).
         values : `dict`
-            Dictionary of ``columnName, value`` pairs.
+            Dictionary of ``columnName, columnValue`` pairs.
 
         Raises
         ------
         ValueError
-            If an entry for this value is already present.
+            If an entry with the primary-key defined in `values` is already
+            present.
         """
         dataUnitTable = self._schema.metadata.tables[dataUnitName]
         with self._engine.begin() as connection:
             try:
-                connection.execute(dataUnitTable.insert().values(**value))
+                connection.execute(dataUnitTable.insert().values(**values))
             except IntegrityError as err:
                 raise ValueError(str(err))  # TODO this should do an explicit validity check instead
 
