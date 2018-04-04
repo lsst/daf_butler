@@ -23,10 +23,10 @@ import unittest
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.dataUnit import DataUnit
+# from lsst.daf.butler.core.dataUnit import DataUnit
 
 
-class DataUnit(lsst.utils.tests.TestCase):
+class DataUnitTestCase(lsst.utils.tests.TestCase):
     """Tests for `DataUnit`.
     """
     pass

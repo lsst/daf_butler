@@ -41,10 +41,10 @@ class Instrument:
     @property
     def camera(self):
         raise NotImplementedError('Must be specified by derived class')
-    
+
     physicalFilters = []
     sensors = []
-    
+
     def register(self, registry):
         """Register an instance of this `Instrument` with a `Registry`.
 
