@@ -23,4 +23,41 @@ __all__ = ("DataUnit", )
 
 
 class DataUnit:
-    pass
+    """A discrete abstract unit of data that can be associated with
+    metadata and used to label datasets.
+    
+    `DataUnit` instances represent concrete units such as e.g. `Camera`,
+    `Sensor`, `Visit` and `SkyMap`.
+
+    Attributes
+    ----------
+    requiredDependencies : `frozenset`
+        Related `DataUnit` instances on which existence this `DataUnit`
+        instance depends.
+    optionalDependencies : `frozenset`
+        Related `DataUnit` instances that may also be provided (and when they
+        are, they must be kept in sync).
+    dependencies : `frozenset`
+        The union of `requiredDependencies` and `optionalDependencies`.
+    table : `sqlalchemy.core.Table`, optional
+        When not ``None`` the primary table entry corresponding to this
+        `DataUnit`.
+    """
+    @property
+    def requiredDependencies(self):
+        return self._requiredDependencies
+
+    @property
+    def optionalDependencies(self):
+        return self._optionalDependencies
+
+    @property
+    def dependencies(self):
+        return self.requiredDependencies.union(self.optionalDependencies)
+
+    @property
+    def table(self):
+        if hasattr(self, '_table'):
+            return self._table
+        else:
+            return None
