@@ -59,7 +59,12 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         """Check that the generated `Schema` tables match its description.
         """
         self.assertIsInstance(self.schema.metadata, MetaData)
-        for tableName, tableDescription in self.config.tables.items():
+        allTables = {}
+        allTables.update(self.config['tables'])
+        for dataUnitDescription in self.config['dataUnits']:
+            if 'tables' in dataUnitDescription:
+                allTables.update(dataUnitDescription['tables'])
+        for tableName, tableDescription in allTables.items():
             self.assertTable(self.schema.metadata, tableName, tableDescription)
 
     def assertTable(self, metadata, tableName, tableDescription):
