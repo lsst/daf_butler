@@ -21,10 +21,12 @@
 
 import unittest
 import inspect
+from itertools import permutations
+from random import shuffle
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.utils import iterable, doImport, getFullTypeName, Singleton
+from lsst.daf.butler.core.utils import iterable, doImport, getFullTypeName, Singleton, ConnectedSet
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
 
@@ -103,6 +105,69 @@ class SingletonTestCase(lsst.utils.tests.TestCase):
 
         with self.assertRaises(TypeError):
             SingletonTestCase.IsBadSingleton(52)
+
+
+class ConnectedSetTestCase(lsst.utils.tests.TestCase):
+    """Tests of the ConnectedSet class"""
+
+    def testConstructor(self):
+        elements = [1, 5, 7, 3, 10, 11]
+        connectedSet = ConnectedSet(elements)
+        for e in elements:
+            self.assertIn(e, connectedSet)
+
+    def testConnect(self):
+        elements = ['a', 'd', 'f']
+        connectedSet = ConnectedSet(elements)
+        # Adding connections should work
+        connectedSet.connect('a', 'd')
+        connectedSet.connect('a', 'f')
+        # Even when adding cycles (unfortunately)
+        connectedSet.connect('f', 'a')
+        # Adding the same connection again should fail
+        with self.assertRaises(ValueError):
+            connectedSet.connect('a', 'd')
+        # Adding a connection from or to a non existing element should also fail
+        with self.assertRaises(KeyError):
+            connectedSet.connect('a', 'c')
+        with self.assertRaises(KeyError):
+            connectedSet.connect('c', 'a')
+        with self.assertRaises(KeyError):
+            connectedSet.connect('c', 'g')
+
+    def testTopologicalOrdering(self):
+        """Iterating over a ConnectedSet should visit the elements
+        in the set in topologically sorted order.
+        """
+        # First check a basic topological ordering
+        elements = ['shoes', 'belt', 'trousers']
+        for p in permutations(elements):
+            connectedSet = ConnectedSet(p)
+            connectedSet.connect('belt', 'shoes')
+            connectedSet.connect('trousers', 'shoes')
+            # Check valid orderings
+            self.assertIn(list(connectedSet), [['belt', 'trousers', 'shoes'],
+                                               ['trousers', 'belt', 'shoes']])
+            # Check invalid orderings (probably redundant)
+            self.assertNotIn(list(connectedSet), [['shoes', 'belt', 'trousers'],
+                                                  ['shoes', 'trousers', 'belt']])
+        # Adding a cycle should cause iteration to fail
+        connectedSet.connect('shoes', 'belt')
+        with self.assertRaises(ValueError):
+            ignore = list(connectedSet)  # noqa F841
+        # Now check for a larger number of elements.
+        # Here we can't possibly test all possible valid topological orderings,
+        # so instead we connect all elements.
+        # Thus the topological sort should be equivalent to a regular sort
+        # (but less efficient).
+        N = 100
+        elements = list(range(N))
+        unorderedElements = elements.copy()
+        shuffle(unorderedElements)
+        connectedSet2 = ConnectedSet(unorderedElements)
+        for i in range(N-1):
+            connectedSet2.connect(i, i+1)
+        self.assertEqual(list(connectedSet2), elements)
 
 
 class TestButlerUtils(lsst.utils.tests.TestCase):

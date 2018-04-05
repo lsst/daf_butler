@@ -203,3 +203,87 @@ class Singleton(type):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__()
         return cls._instances[cls]
+
+
+class ConnectedSet:
+    """A collection that behaves like a builtin `set`, but where
+    elements can be interconnected (like a graph).
+
+    Iteration over this collection visits its elements in topologically
+    sorted order.
+
+    Parameters
+    ----------
+    elements : `iterable`
+        Any iterable with elements to insert.
+    """
+    def __init__(self, elements):
+        self._elements = set(elements)
+        self._connections = {e: set() for e in elements}
+        # Total number of connections
+        self._nConnections = 0
+        # Number of incomming connections per element
+        self._nIncommingConnections = {e: 0 for e in elements}
+
+    def __contains__(self, element):
+        return element in self._elements
+
+    def connect(self, sourceElement, targetElement):
+        """Connect two elements in the set.
+
+        The connection is directed from `sourceElement` to `targetElement` and
+        is distinct from its inverse.
+        Both elements must already be present in the set.
+
+        sourceElement : `object`
+            The source element.
+        targetElement : `object`
+            The target element.
+
+        Raises
+        ------
+        KeyError
+            When either element is not already in the set.
+        ValueError
+            When a dupplicate connection is inserted.
+        """
+        for element in (sourceElement, targetElement):
+            if element not in self._elements:
+                raise KeyError('{} not in set'.format(element))
+        if element in self._connections[sourceElement]:
+            raise ValueError('Dupplicate connection: ({}, {})'.format(sourceElement, targetElement))
+        self._connections[sourceElement].add(targetElement)
+        self._nIncommingConnections[targetElement] += 1
+        self._nConnections += 1
+
+    def __iter__(self):
+        """Iterate over elements in `ConnectedSet` in topologically sorted
+        order.
+
+        Uses Kahn's (1962) algorithm for topological sorting.
+
+        Raises
+        ------
+        ValueError
+            If a cycle is found and hence no topological order exists.
+        """
+        # Iteration needs to modify the number of incomming connections
+        _nIncommingConnections = self._nIncommingConnections.copy()
+        _nConnections = self._nConnections
+        # Set of all nodes with no incoming connections
+        startPoints = set(e for (e, n) in _nIncommingConnections.items() if n == 0)
+        while len(startPoints) > 0:
+            currentElement = startPoints.pop()
+            yield currentElement
+            # Loop through all outgoing connections
+            for targetElement in self._connections[currentElement]:
+                # We have now seen this connection from the currentElement
+                # to the targetElement.  Therefore we reduce the total number
+                # of unseen incomming connections for the targetElement by 1.
+                _nIncommingConnections[targetElement] -= 1
+                _nConnections -= 1
+                if _nIncommingConnections[targetElement] == 0:
+                    startPoints.add(targetElement)
+        if _nConnections != 0:
+            raise ValueError('Cycle found')
+        return
