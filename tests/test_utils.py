@@ -115,6 +115,7 @@ class ConnectedSetTestCase(lsst.utils.tests.TestCase):
         connectedSet = ConnectedSet(elements)
         for e in elements:
             self.assertIn(e, connectedSet)
+        self.assertEqual(len(elements), len(connectedSet))
 
     def testConnect(self):
         elements = ['a', 'd', 'f']

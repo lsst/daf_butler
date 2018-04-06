@@ -228,6 +228,9 @@ class ConnectedSet:
     def __contains__(self, element):
         return element in self._elements
 
+    def __len__(self):
+        return len(self._elements)
+
     def connect(self, sourceElement, targetElement):
         """Connect two elements in the set.
 
