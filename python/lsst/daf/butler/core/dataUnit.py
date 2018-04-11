@@ -74,6 +74,7 @@ class DataUnitRegistry:
     def __init__(self):
         self._dataUnitNames = None
         self._dataUnits = {}
+        self.links = {}  # TODO move this
 
     def __len__(self):
         return len(self._dataUnits)
@@ -99,8 +100,9 @@ class DataUnitRegistry:
             yield (dataUnitName, self[dataUnitName])
 
     @classmethod
-    def fromConfig(cls, config):
+    def fromConfig(cls, config, builder=None):
         dataUnitRegistry = cls()
+        dataUnitRegistry.builder = builder
         dataUnitRegistry._initDataUnitNames(config)
         dataUnitRegistry._initDataUnits(config)
         return dataUnitRegistry
@@ -121,12 +123,27 @@ class DataUnitRegistry:
             dataUnitDescription = config[dataUnitName]
             requiredDependencies = ()
             optionalDependencies = ()
+            table = None
             if 'dependencies' in dataUnitDescription:
                 dependencies = dataUnitDescription['dependencies']
                 if 'required' in dependencies:
                     requiredDependencies = (self[name] for name in dependencies['required'])
                 if 'optional' in dependencies:
                     optionalDependencies = (self[name] for name in dependencies['optional'])
+            if self.builder is not None:
+                if 'tables' in dataUnitDescription:
+                    for tableName, tableDescription in dataUnitDescription['tables'].items():
+                        if tableName == dataUnitName:
+                            # Primary table for this DataUnit
+                            table = self.builder.addTable(tableName, tableDescription)
+                        else:
+                            # Secondary table
+                            self.builder.addTable(tableName, tableDescription)
+                if 'link' in dataUnitDescription:
+                    for dataUnitLinkDescription in dataUnitDescription['link']:
+                        linkColumn = self.builder.makeColumn(dataUnitLinkDescription)
+                        self.links[dataUnitLinkDescription['name']] = linkColumn
             dataUnit = DataUnit(requiredDependencies=requiredDependencies,
-                                optionalDependencies=optionalDependencies)
+                                optionalDependencies=optionalDependencies,
+                                table=table)
             self[dataUnitName] = dataUnit

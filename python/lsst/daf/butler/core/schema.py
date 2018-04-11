@@ -23,6 +23,7 @@ from .utils import iterable
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
 from .config import Config
+from .dataUnit import DataUnitRegistry
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
@@ -58,22 +59,16 @@ class Schema:
             config = SchemaConfig(config)
         self.config = config
         self.builder = SchemaBuilder()
+        self.dataUnitRegistry = DataUnitRegistry.fromConfig(config['dataUnits'], self.builder)
         self.buildFromConfig(config)
 
     def buildFromConfig(self, config):
         for tableName, tableDescription in self.config['tables'].items():
             self.builder.addTable(tableName, tableDescription)
         datasetTable = self.builder.metadata.tables['Dataset']
-        self.dataUnits = {}
-        for dataUnitDescription in self.config['dataUnits'].values():
-            if 'tables' in dataUnitDescription:
-                for tableName, tableDescription in dataUnitDescription['tables'].items():
-                    self.builder.addTable(tableName, tableDescription)
-            if 'link' in dataUnitDescription:
-                for dataUnitLinkDescription in dataUnitDescription['link']:
-                    linkColumn = self.builder.makeColumn(dataUnitLinkDescription)
-                    self.dataUnits[dataUnitLinkDescription['name']] = linkColumn
-                    datasetTable.append_column(linkColumn)
+        self.dataUnits = self.dataUnitRegistry.links
+        for linkColumn in self.dataUnits.values():
+            datasetTable.append_column(linkColumn)
         self.metadata = self.builder.metadata
 
 
@@ -113,7 +108,7 @@ class SchemaBuilder:
         if tableName in self.metadata.tables:
             raise ValueError("Table with name {} already exists".format(tableName))
         # Create a Table object (attaches itself to metadata)
-        Table(tableName, self.metadata)
+        table = Table(tableName, self.metadata)
         if "columns" not in tableDescription:
             raise ValueError("No columns in table: {}".format(tableName))
         for columnDescription in tableDescription["columns"]:
@@ -121,6 +116,7 @@ class SchemaBuilder:
         if "foreignKeys" in tableDescription:
             for constraintDescription in tableDescription["foreignKeys"]:
                 self.addForeignKeyConstraint(tableName, constraintDescription)
+        return table
 
     def addColumn(self, tableName, columnDescription):
         """Add a column to a table.
