@@ -19,17 +19,39 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import unittest
 
 import lsst.utils.tests
 
-# from lsst.daf.butler.core.dataUnit import DataUnit
+from lsst.daf.butler.core.schema import SchemaConfig
+from lsst.daf.butler.core.dataUnit import DataUnit, DataUnitRegistry
 
 
 class DataUnitTestCase(lsst.utils.tests.TestCase):
     """Tests for `DataUnit`.
     """
     pass
+
+
+class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
+    """Tests for `DataUnitRegistry`.
+    """
+    def setUp(self):
+        self.testDir = os.path.dirname(__file__)
+        self.schemaFile = os.path.join(self.testDir, "../config/registry/default_schema.yaml")
+        self.config = SchemaConfig(self.schemaFile)
+
+    def testConstructor(self):
+        """Independent check for `Schema` constructor.
+        """
+        dataUnitRegistry = DataUnitRegistry.fromConfig(self.config['dataUnits'])
+        self.assertIsInstance(dataUnitRegistry, DataUnitRegistry)
+        for dataUnitName, dataUnit in dataUnitRegistry.items():
+            self.assertIsInstance(dataUnit, DataUnit)
+            for d in dataUnit.dependencies:
+                self.assertIsInstance(d, DataUnit)
+            print(dataUnitName, dataUnit.dependencies)
 
 
 if __name__ == "__main__":
