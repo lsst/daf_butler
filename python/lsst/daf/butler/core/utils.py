@@ -224,6 +224,8 @@ class ConnectedSet:
         self._nConnections = 0
         # Number of incomming connections per element
         self._nIncommingConnections = {e: 0 for e in elements}
+        # Cache of topological order, None if it needs to be recalculated
+        self._order = None
 
     def __contains__(self, element):
         return element in self._elements
@@ -258,10 +260,15 @@ class ConnectedSet:
         self._connections[sourceElement].add(targetElement)
         self._nIncommingConnections[targetElement] += 1
         self._nConnections += 1
+        # Adding a connection invalidates any previous topological ordering
+        self._order = None
 
     def __iter__(self):
         """Iterate over elements in `ConnectedSet` in topologically sorted
         order.
+
+        The ordering is cached so multiple iterations over the same
+        set are cheap.
 
         Uses Kahn's (1962) algorithm for topological sorting.
 
@@ -270,23 +277,26 @@ class ConnectedSet:
         ValueError
             If a cycle is found and hence no topological order exists.
         """
-        # Iteration needs to modify the number of incomming connections
-        _nIncommingConnections = self._nIncommingConnections.copy()
-        _nConnections = self._nConnections
-        # Set of all nodes with no incoming connections
-        startPoints = set(e for (e, n) in _nIncommingConnections.items() if n == 0)
-        while len(startPoints) > 0:
-            currentElement = startPoints.pop()
-            yield currentElement
-            # Loop through all outgoing connections
-            for targetElement in self._connections[currentElement]:
-                # We have now seen this connection from the currentElement
-                # to the targetElement.  Therefore we reduce the total number
-                # of unseen incomming connections for the targetElement by 1.
-                _nIncommingConnections[targetElement] -= 1
-                _nConnections -= 1
-                if _nIncommingConnections[targetElement] == 0:
-                    startPoints.add(targetElement)
-        if _nConnections != 0:
-            raise ValueError('Cycle found')
-        return
+        if self._order is None:
+            self._order = []
+            # Iteration needs to modify the number of incomming connections
+            _nIncommingConnections = self._nIncommingConnections.copy()
+            _nConnections = self._nConnections
+            # Set of all nodes with no incoming connections
+            startPoints = set(e for (e, n) in _nIncommingConnections.items() if n == 0)
+            while len(startPoints) > 0:
+                currentElement = startPoints.pop()
+                self._order.append(currentElement)
+                # Loop through all outgoing connections
+                for targetElement in self._connections[currentElement]:
+                    # We have now seen this connection from the currentElement
+                    # to the targetElement.  Therefore we reduce the total number
+                    # of unseen incomming connections for the targetElement by 1.
+                    _nIncommingConnections[targetElement] -= 1
+                    _nConnections -= 1
+                    if _nIncommingConnections[targetElement] == 0:
+                        startPoints.add(targetElement)
+            if _nConnections != 0:
+                self._order = None
+                raise ValueError('Cycle found')
+        yield from self._order
