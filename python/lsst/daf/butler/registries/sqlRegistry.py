@@ -214,7 +214,7 @@ class SqlRegistry(Registry):
             # the corresponding sqlalchemy.core.Column entry to index the result
             # because the name of the key may not be the name of the name of the
             # DataUnit link.
-            dataId = {dataUnitName: result[self._schema.dataUnits[dataUnitName]]
+            dataId = {dataUnitName: result[self._schema.dataUnits.links[dataUnitName]]
                       for dataUnitName in datasetType.dataUnits}
             # Get components (if present)
             # TODO check against expected components
@@ -778,7 +778,7 @@ class SqlRegistry(Registry):
             raise ValueError("Invalid dataId: {}".format(dataId))
         datasetTable = self._schema.metadata.tables['Dataset']
         datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
-        dataIdExpression = and_((self._schema.dataUnits[name] == dataId[name]
+        dataIdExpression = and_((self._schema.dataUnits.links[name] == dataId[name]
                                  for name in datasetType.dataUnits))
         with self._engine.begin() as connection:
             result = connection.execute(select([datasetTable.c.dataset_id]).select_from(

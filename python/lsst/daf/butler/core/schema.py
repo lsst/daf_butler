@@ -59,15 +59,14 @@ class Schema:
             config = SchemaConfig(config)
         self.config = config
         self.builder = SchemaBuilder()
-        self.dataUnitRegistry = DataUnitRegistry.fromConfig(config['dataUnits'], self.builder)
+        self.dataUnits = DataUnitRegistry.fromConfig(config['dataUnits'], self.builder)
         self.buildFromConfig(config)
 
     def buildFromConfig(self, config):
         for tableName, tableDescription in self.config['tables'].items():
             self.builder.addTable(tableName, tableDescription)
         datasetTable = self.builder.metadata.tables['Dataset']
-        self.dataUnits = self.dataUnitRegistry.links
-        for linkColumn in self.dataUnits.values():
+        for linkColumn in self.dataUnits.links.values():
             datasetTable.append_column(linkColumn)
         self.metadata = self.builder.metadata
 
