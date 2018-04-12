@@ -226,6 +226,13 @@ class Visit(DataUnit):
 
     dependencies = (Camera, PhysicalFilter)
 
+    def __init__(self, visitId):
+        self._visitId = visitId
+
+    @property
+    def visitId(self):
+        return self._visitId
+
 
 class ObservedSensor(DataUnit):
 
@@ -246,12 +253,33 @@ class SkyMap(DataUnit):
 
     dependencies = ()
 
+    def __init__(self, skyMapId):
+        self._skyMapId = skyMapId
+
+    @property
+    def skyMapId(self):
+        return self._skyMapId
+
 
 class Tract(DataUnit):
 
     dependencies = (SkyMap,)
 
+    def __init__(self, tractId):
+        self._tractId = tractId
+
+    @property
+    def tractId(self):
+        return self._tractId
+
 
 class Patch(DataUnit):
 
     dependencies = (SkyMap, Tract)
+
+    def __init__(self, patchId):
+        self._patchId = patchId
+
+    @property
+    def patchId(self):
+        return self._patchId

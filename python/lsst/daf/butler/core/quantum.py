@@ -42,7 +42,7 @@ class Quantum(Execution):
         The Run this Quantum is a part of.
     """
 
-    __slots__ = ("_task", "_run", "_predictedInputs", "_actualInputs")
+    __slots__ = ("_task", "_run", "_predictedInputs", "_actualInputs", "_outputs")
     __eq__ = slotValuesAreEqual
 
     def __init__(self, task, run, *args, **kwargs):
@@ -51,6 +51,7 @@ class Quantum(Execution):
         self._run = run
         self._predictedInputs = {}
         self._actualInputs = {}
+        self._outputs = {}
 
     @property
     def task(self):
@@ -93,11 +94,25 @@ class Quantum(Execution):
         """
         return self._actualInputs
 
+    @property
+    def outputs(self):
+        """A `dict` of output datasets (to be) generated for this quantum,
+        with the same form as `predictedInputs`.
+
+        Read-only; update via `addOutput()`.
+        """
+        return self._outputs
+
     def addPredictedInput(self, ref):
         """Add an input `DatasetRef` to the `Quantum`.
 
         This does not automatically update a `Registry`; all `predictedInputs`
         must be present before a `Registry.addQuantum()` is called.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference for a Dataset to add to the Quantum's predicted inputs.
         """
         datasetTypeName = ref.datasetType.name
         if datasetTypeName not in self._actualInputs:
@@ -122,3 +137,17 @@ class Quantum(Execution):
             self._actualInputs[datasetTypeName] = [ref, ]
         else:
             self._actualInputs[datasetTypeName].append(ref)
+
+    def addOutput(self, ref):
+        """Add an output `DatasetRef` to the `Quantum`.
+
+        This does not automatically update a `Registry`; all `outputs`
+        must be present before a `Registry.addQuantum()` is called.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference for a Dataset to add to the Quantum's outputs.
+        """
+        datasetTypeName = ref.datasetType.name
+        self._outputs.setdefault(datasetTypeName, []).append(ref)
