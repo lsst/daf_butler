@@ -45,10 +45,19 @@ class DataUnit:
         When not ``None`` the primary table entry corresponding to this
         `DataUnit`.
     """
-    def __init__(self, requiredDependencies, optionalDependencies, table=None):
+    def __init__(self, name, requiredDependencies, optionalDependencies, table=None, links=None):
+        self._name = name
         self._requiredDependencies = frozenset(requiredDependencies)
         self._optionalDependencies = frozenset(optionalDependencies)
         self._table = table
+        self._links = links.copy() if links is not None else {}
+
+    def __repr__(self):
+        return "DataUnit({})".format(self.name)
+
+    @property
+    def name(self):
+        return self._name
 
     @property
     def requiredDependencies(self):
@@ -68,6 +77,10 @@ class DataUnit:
             return self._table
         else:
             return None
+
+    @property
+    def links(self):
+        return self._links
 
 
 class DataUnitRegistry:
@@ -124,6 +137,7 @@ class DataUnitRegistry:
             requiredDependencies = ()
             optionalDependencies = ()
             table = None
+            links = {}
             if 'dependencies' in dataUnitDescription:
                 dependencies = dataUnitDescription['dependencies']
                 if 'required' in dependencies:
@@ -142,8 +156,11 @@ class DataUnitRegistry:
                 if 'link' in dataUnitDescription:
                     for dataUnitLinkDescription in dataUnitDescription['link']:
                         linkColumn = self.builder.makeColumn(dataUnitLinkDescription)
-                        self.links[dataUnitLinkDescription['name']] = linkColumn
-            dataUnit = DataUnit(requiredDependencies=requiredDependencies,
+                        links[dataUnitLinkDescription['name']] = linkColumn
+            self.links.update(links)
+            dataUnit = DataUnit(name=dataUnitName,
+                                requiredDependencies=requiredDependencies,
                                 optionalDependencies=optionalDependencies,
-                                table=table)
+                                table=table,
+                                links=links)
             self[dataUnitName] = dataUnit
