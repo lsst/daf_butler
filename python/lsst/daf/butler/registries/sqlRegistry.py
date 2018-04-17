@@ -686,29 +686,47 @@ class SqlRegistry(Registry):
         ValueError
             If an entry for this value is already present.
         """
-        dataUnitTable = self._schema.metadata.tables[dataUnitName]
+        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit.validateId(value)
+        dataUnitTable = dataUnit.table
+        primaryKeyColumns = dataUnit.primaryKeyColumns
+        for columnName in primaryKeyColumns:
+            if columnName not in value:
+                raise ValueError("Required primary-key column {} missing from value {}".format(
+                    columnName, value))
         with self._engine.begin() as connection:
             try:
                 connection.execute(dataUnitTable.insert().values(**value))
             except IntegrityError as err:
                 raise ValueError(str(err))  # TODO this should do an explicit validity check instead
 
-    def findDataUnit(self, cls, values):
-        """Return a `DataUnit` given a dictionary of values.
+    def findDataUnitEntry(self, dataUnitName, value):
+        """Return a `DataUnit` entry corresponding to a `value`.
 
         Parameters
         ----------
-        cls : `type`
-            A class that inherits from `DataUnit`.
-        values : `dict`
+        dataUnitName : `str`
+            Name of a `DataUnit`
+        value : `dict`
             A dictionary of values that uniquely identify the `DataUnit`.
 
         Returns
         -------
-        unit : `DataUnit`
-            Instance of type `cls`, or `None` if no matching unit is found.
+        dataUnitEntry : `dict`
+            Dictionary with all `DataUnit` values, or `None` if no matching entry is found.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit.validateId(value)
+        dataUnitTable = dataUnit.table
+        primaryKeyColumns = dataUnit.primaryKeyColumns
+        with self._engine.begin() as connection:
+            result = connection.execute(select([dataUnitTable]).where(and_(
+                        (primaryKeyColumns[name] == value[name] for name in primaryKeyColumns)
+                     ))).fetchone()
+            if result is not None:
+                return dict(result.items())
+            else:
+                return None
 
     def expand(self, ref):
         """Expand a `DatasetRef`.

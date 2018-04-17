@@ -45,12 +45,13 @@ class DataUnit:
         When not ``None`` the primary table entry corresponding to this
         `DataUnit`.
     """
-    def __init__(self, name, requiredDependencies, optionalDependencies, table=None, links=None):
+    def __init__(self, name, requiredDependencies, optionalDependencies, table=None, linkColumns=None):
         self._name = name
         self._requiredDependencies = frozenset(requiredDependencies)
         self._optionalDependencies = frozenset(optionalDependencies)
         self._table = table
-        self._links = links.copy() if links is not None else {}
+        self._linkColumns = linkColumns.copy() if linkColumns is not None else {}
+        self._primaryKeyColumns = None
 
     def __repr__(self):
         return "DataUnit({})".format(self.name)
@@ -79,8 +80,29 @@ class DataUnit:
             return None
 
     @property
-    def links(self):
-        return self._links
+    def linkColumns(self):
+        return self._linkColumns
+
+    @property
+    def primaryKeyColumns(self):
+        if self._primaryKeyColumns is None:
+            self._primaryKeyColumns = self.linkColumns.copy()
+            for dependency in self.requiredDependencies:
+                self._primaryKeyColumns.update(dependency.primaryKeyColumns)
+        return self._primaryKeyColumns
+
+    def validateId(self, value):
+        """Check if id is valid.
+
+        Raises
+        ------
+        ValueError
+            If a value for a required dependency is missing.
+        """
+        for columnName in self.primaryKeyColumns:
+            if columnName not in value:
+                raise ValueError("Required primary-key column {} missing from value {}".format(
+                    columnName, value))
 
 
 class DataUnitRegistry:
@@ -137,7 +159,7 @@ class DataUnitRegistry:
             requiredDependencies = ()
             optionalDependencies = ()
             table = None
-            links = {}
+            linkColumns = {}
             if 'dependencies' in dataUnitDescription:
                 dependencies = dataUnitDescription['dependencies']
                 if 'required' in dependencies:
@@ -155,12 +177,17 @@ class DataUnitRegistry:
                             self.builder.addTable(tableName, tableDescription)
                 if 'link' in dataUnitDescription:
                     for dataUnitLinkDescription in dataUnitDescription['link']:
-                        linkColumn = self.builder.makeColumn(dataUnitLinkDescription)
-                        links[dataUnitLinkDescription['name']] = linkColumn
-            self.links.update(links)
+                        linkColumnName = dataUnitLinkDescription['name']
+                        # Link column in Datasets table
+                        linkColumnName = dataUnitLinkDescription['name']
+                        self.links[linkColumnName] = self.builder.makeColumn(dataUnitLinkDescription)
+                        # Link column in DataUnit table
+                        if table is not None:
+                            linkColumns[linkColumnName] = table.columns[linkColumnName]
+
             dataUnit = DataUnit(name=dataUnitName,
                                 requiredDependencies=requiredDependencies,
                                 optionalDependencies=optionalDependencies,
                                 table=table,
-                                links=links)
+                                linkColumns=linkColumns)
             self[dataUnitName] = dataUnit
