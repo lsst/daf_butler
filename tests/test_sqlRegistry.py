@@ -260,6 +260,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
 
+    def testDatasetUnit(self):
+        registry = Registry.fromConfig(self.configFile)
+        dataUnitName = 'Camera'
+        dataUnitValue = {'camera': 'DummyCam'}
+        registry.addDataUnitEntry(dataUnitName, dataUnitValue)
+        # Inserting the same value twice should fail
+        with self.assertRaises(ValueError):
+            registry.addDataUnitEntry(dataUnitName, dataUnitValue)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
