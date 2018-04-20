@@ -123,6 +123,19 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Inserting with a preexisting collection should fail
         with self.assertRaises(ValueError):
             registry.makeRun("one")
+        # Insert a new Run and check that ensureRun silently ignores it
+        collection = "dummy"
+        run = registry.makeRun(collection)
+        registry.ensureRun(run)
+        # Calling ensureRun with a different Run with the same id should fail
+        run2 = Run(collection="hello")
+        run2._id = run.id
+        with self.assertRaises(ValueError):
+            registry.ensureRun(run2)
+        run2._id = None
+        # Now it should work
+        registry.ensureRun(run2)
+        self.assertEqual(run2, registry.getRun(id=run2.id))
 
     def testExecution(self):
         registry = Registry.fromConfig(self.configFile)

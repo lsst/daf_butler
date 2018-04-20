@@ -429,15 +429,15 @@ class SqlRegistry(Registry):
         ----------
         execution : `Execution`
             Instance to add to the `SqlRegistry`.
-            The given `Execution` must not already be present in the `SqlRegistry`
-            (or any other), therefore its `id` attribute must be `None`.
+            The given `Execution` must not already be present in the `SqlRegistry`.
         """
-        assert execution.id is None  # Must not be preexisting
         executionTable = self._schema.metadata.tables['Execution']
         with self._engine.begin() as connection:
-            result = connection.execute(executionTable.insert().values(start_time=execution.startTime,
+            result = connection.execute(executionTable.insert().values(execution_id=execution.id,
+                                                                       start_time=execution.startTime,
                                                                        end_time=execution.endTime,
                                                                        host=execution.host))
+            # Reassign id, may have been `None`
             execution._id = result.inserted_primary_key[0]
 
     def getExecution(self, id):
@@ -481,6 +481,30 @@ class SqlRegistry(Registry):
         run = Run(collection=collection)
         self.addRun(run)
         return run
+
+    def ensureRun(self, run):
+        """Conditionally add a new `Run` to the `SqlRegistry`.
+
+        If the ``run.id`` is ``None`` or a `Run` with this `id` doesn't exist
+        in the `Registry` yet, add it.  Otherwise, ensure the provided run is
+        identical to the one already in the registry.
+
+        Parameters
+        ----------
+        run : `Run`
+            Instance to add to the `SqlRegistry`.
+
+        Raises
+        ------
+        ValueError
+            If `run` already exists, but is not identical.
+        """
+        if run.id is not None:
+            existingRun = self.getRun(id=run.id)
+            if run != existingRun:
+                raise ValueError("{} != existing: {}".format(run, existingRun))
+            return
+        self.addRun(run)
 
     def addRun(self, run):
         """Add a new `Run` to the `SqlRegistry`.
