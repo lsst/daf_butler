@@ -12,3 +12,4 @@ ups/*.cfgc
 pytest_session.txt
 doc/_build
 doc/py-api
+butler_test_repository
