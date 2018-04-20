@@ -10,4 +10,5 @@ from .core import *
 # from .datastores import *
 # from .registries import *
 from .butler import *
+from .shimButler import *
 from .version import *

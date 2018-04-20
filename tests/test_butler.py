@@ -24,11 +24,8 @@
 
 import os
 import unittest
-<<<<<<< HEAD
 from tempfile import TemporaryDirectory
-=======
 import pickle
->>>>>>> Add pickle support to Butler.
 
 import lsst.utils.tests
 
@@ -71,9 +68,10 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(result, getattr(reference, component))
 
     def testConstructor(self):
-        """Independent test of constructor.
+        """Test of minimal constructor.
         """
-        butler = Butler(self.configFile)
+        config = Config()
+        butler = Butler(config, collection="dummy")
         self.assertIsInstance(butler, Butler)
 
     def testBasicPutGet(self):
@@ -167,10 +165,16 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("ExposureF")
         self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
-        dataId = {"visit": 23, "camera": "HSC"}
+        # Add needed DataUnits
+        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
+        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCamComp",
+                                                            "physical_filter": "d-r"})
+        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCamComp", "visit": 423,
+                                                   "physical_filter": "d-r"})
+        dataId = {"visit": 423, "camera": "DummyCamComp"}
         butler.put(exposure, "calexp", dataId)
         # Get the full thing
-        full = butler.get("calexp", dataId)
+        full = butler.get("calexp", dataId)  # noqa F841
         # TODO enable check for equality (fix for Exposure type)
         # self.assertEqual(full, exposure)
         # Get a component

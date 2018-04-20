@@ -87,7 +87,7 @@ class SqlDatabaseDict(DatabaseDict):
         self._engine = engine
         metadata = MetaData()
         self._table = Table(config["table"], metadata, *allColumns)
-        metadata.create_all(self._engine)
+        self._table.create(bind=self._engine, checkfirst=True)
         valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
         keyColumn = getattr(self._table.columns, key)
         self._getSql = select(valueColumns).where(keyColumn == bindparam("key"))
