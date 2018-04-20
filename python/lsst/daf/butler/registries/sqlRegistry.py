@@ -707,6 +707,9 @@ class SqlRegistry(Registry):
 
         Raises
         ------
+        TypeError
+            If the given `DataUnit` does not have explicit entries in the
+            registry.
         ValueError
             If an entry with the primary-key defined in `values` is already
             present.
@@ -714,6 +717,8 @@ class SqlRegistry(Registry):
         dataUnit = self._schema.dataUnits[dataUnitName]
         dataUnit.validateId(values)
         dataUnitTable = dataUnit.table
+        if dataUnitTable is None:
+            raise TypeError("DataUnit '{}' has no table.".format(dataUnitName))
         with self._engine.begin() as connection:
             try:
                 connection.execute(dataUnitTable.insert().values(**values))

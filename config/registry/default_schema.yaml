@@ -31,19 +31,6 @@ dataUnits:
     -
       name: abstract_filter
       type: string
-      #foreign_key: AbstractFilter.abstract_filter
-    tables:
-      AbstractFilter:
-        doc: >
-          A definition table containing recognized AbstractFilter names.
-        columns:
-        -
-          name: abstract_filter
-          type: string
-          primary_key: true
-          doc: >
-            The name of the filter, typically a single letter
-            (e.g. "r" or "i").
 
   PhysicalFilter:
     dependencies:
@@ -88,9 +75,6 @@ dataUnits:
         -
           src: camera
           tgt: Camera.camera
-        -
-          src: abstract_filter
-          tgt: AbstractFilter.abstract_filter
 
   Sensor:
     dependencies:
