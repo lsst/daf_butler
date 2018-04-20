@@ -23,40 +23,15 @@ from .utils import iterable
 from .config import Config
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
+from .dataUnit import DataUnitRegistry
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
-__all__ = ("SchemaConfig", "Schema")
+__all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
 
 
 class SchemaConfig(Config):
-    """Schema configuration.
-    """
-    @property
-    def tables(self):
-        """All tables including DataUnit tables.
-        """
-        table = {}
-        if 'tables' in self:
-            table.update(self['tables'])
-        # TODO move this to some other place once DataUnit relations are settled
-        if 'dataUnits' in self:
-            for dataUnitDescription in self['dataUnits'].values():
-                if 'tables' in dataUnitDescription:
-                    table.update(dataUnitDescription['tables'])
-        return table
-
-    @property
-    def dataUnitLinks(self):
-        """All DataUnit links.
-
-        TODO move this to some other place once DataUnit relations are settled
-        """
-        dataUnits = self['dataUnits']
-        links = []
-        for dataUnitName in sorted(dataUnits.keys()):
-            links.extend(dataUnits[dataUnitName]['link'])
-        return links
+    pass
 
 
 class Schema:
@@ -70,25 +45,38 @@ class Schema:
     Attributes
     ----------
     metadata : `sqlalchemy.MetaData`
-        The sqlalchemy schema description
-    dataUnits : `dict`
-        Columns that represent dataunit links.
+        The sqlalchemy schema description.
+    """
+    def __init__(self, config):
+        if isinstance(config, str):
+            config = SchemaConfig(config)
+        self.config = config
+        self.builder = SchemaBuilder()
+        self.dataUnits = DataUnitRegistry.fromConfig(config['dataUnits'], self.builder)
+        self.buildFromConfig(config)
+
+    def buildFromConfig(self, config):
+        for tableName, tableDescription in self.config['tables'].items():
+            self.builder.addTable(tableName, tableDescription)
+        datasetTable = self.builder.metadata.tables['Dataset']
+        for linkColumn in self.dataUnits.links.values():
+            datasetTable.append_column(linkColumn)
+        self.metadata = self.builder.metadata
+
+
+class SchemaBuilder:
+    """Builds a Schema step-by-step.
+
+    Attributes
+    ----------
+    metadata : `sqlalchemy.MetaData`
+        The sqlalchemy schema description.
     """
     VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float,
                           'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
 
-    def __init__(self, config):
-        self.config = SchemaConfig(config)
+    def __init__(self):
         self.metadata = MetaData()
-        for tableName, tableDescription in self.config.tables.items():
-            self.addTable(tableName, tableDescription)
-        # Add DataUnit links
-        self.dataUnits = {}
-        datasetTable = self.metadata.tables['Dataset']
-        for dataUnitLinkDescription in self.config.dataUnitLinks:
-            linkColumn = self.makeColumn(dataUnitLinkDescription)
-            self.dataUnits[dataUnitLinkDescription['name']] = linkColumn
-            datasetTable.append_column(linkColumn)
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -103,15 +91,61 @@ class Schema:
             Requires:
             - columns, a list of column descriptions
             - foreignKeys, a list of foreign-key constraint descriptions
+
+        Raises
+        ------
+        ValueError
+            If a table with the given name already exists.
         """
+        if tableName in self.metadata.tables:
+            raise ValueError("Table with name {} already exists".format(tableName))
+        # Create a Table object (attaches itself to metadata)
         table = Table(tableName, self.metadata)
         if "columns" not in tableDescription:
             raise ValueError("No columns in table: {}".format(tableName))
         for columnDescription in tableDescription["columns"]:
-            table.append_column(self.makeColumn(columnDescription))
+            self.addColumn(tableName, columnDescription)
         if "foreignKeys" in tableDescription:
             for constraintDescription in tableDescription["foreignKeys"]:
-                table.append_constraint(self.makeForeignKeyConstraint(constraintDescription))
+                self.addForeignKeyConstraint(tableName, constraintDescription)
+        return table
+
+    def addColumn(self, tableName, columnDescription):
+        """Add a column to a table.
+
+        Parameters
+        ----------
+        tableName : `str`
+            Key of the table.
+        columnDescription : `dict`
+            Description of the column to be created.
+            Should always contain:
+            - name, descriptive name
+            - type, valid column type
+            May contain:
+            - nullable, entry can be null
+            - primary_key, mark this column as primary key
+            - foreign_key, link to other table
+            - doc, docstring
+        """
+        table = self.metadata.tables[tableName]
+        table.append_column(self.makeColumn(columnDescription))
+
+    def addForeignKeyConstraint(self, tableName, constraintDescription):
+        """Add a ForeignKeyConstraint to a table.
+
+        Parameters
+        ----------
+        tableName : `str`
+            Key of the table.
+        constraintDescription : `dict`
+            Description of the ForeignKeyConstraint to be created.
+            Should always contain:
+            - src, list of source column names
+            - tgt, list of target column names
+        """
+        table = self.metadata.tables[tableName]
+        table.append_constraint(self.makeForeignKeyConstraint(constraintDescription))
 
     def makeColumn(self, columnDescription):
         """Make a Column entry for addition to a Table.

@@ -79,7 +79,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         butler = Butler(self.configFile)
         # Create and register a DatasetType
         datasetTypeName = "test_metric"
-        dataUnits = ("camera", "visit")
+        dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
 
@@ -103,7 +103,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         butler = Butler(self.configFile)
         # Create and register a DatasetType
         datasetTypeName = "test_metric_comp"
-        dataUnits = ("camera", "visit")
+        dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
         self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
 

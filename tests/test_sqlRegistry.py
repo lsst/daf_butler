@@ -55,7 +55,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Check valid insert
         datasetTypeName = "test"
         storageClass = makeNewStorageClass("testDatasetType")()
-        dataUnits = ("camera", "visit")
+        dataUnits = ("Camera", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
@@ -68,7 +68,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Template can be None
         datasetTypeName = "testNoneTemplate"
         storageClass = makeNewStorageClass("testDatasetType2")()
-        dataUnits = ("camera", "visit")
+        dataUnits = ("Camera", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
@@ -78,7 +78,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry = Registry.fromConfig(self.configFile)
         run = registry.makeRun(collection="test")
         storageClass = makeNewStorageClass("testDataset")()
-        datasetType = DatasetType(name="testtype", dataUnits=("camera",), storageClass=storageClass)
+        datasetType = DatasetType(name="testtype", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         outRef = registry.getDataset(ref.id)
@@ -87,9 +87,9 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testComponents(self):
         registry = Registry.fromConfig(self.configFile)
         storageClass = makeNewStorageClass("testComponents")()
-        parentDatasetType = DatasetType(name="parent", dataUnits=("camera",), storageClass=storageClass)
-        childDatasetType1 = DatasetType(name="child1", dataUnits=("camera",), storageClass=storageClass)
-        childDatasetType2 = DatasetType(name="child2", dataUnits=("camera",), storageClass=storageClass)
+        parentDatasetType = DatasetType(name="parent", dataUnits=("Camera",), storageClass=storageClass)
+        childDatasetType1 = DatasetType(name="child1", dataUnits=("Camera",), storageClass=storageClass)
+        childDatasetType2 = DatasetType(name="child2", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
@@ -141,10 +141,10 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         run = registry.makeRun(collection="test")
         storageClass = makeNewStorageClass("testQuantum")()
         # Make two predicted inputs
-        datasetType1 = DatasetType(name="dst1", dataUnits=("camera",), storageClass=storageClass)
+        datasetType1 = DatasetType(name="dst1", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType1)
         ref1 = registry.addDataset(datasetType1, dataId={"camera": "DummyCam"}, run=run)
-        datasetType2 = DatasetType(name="dst2", dataUnits=("camera",), storageClass=storageClass)
+        datasetType2 = DatasetType(name="dst2", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType2)
         ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
         # Create and add a Quantum
@@ -167,7 +167,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)
         storageClass = makeNewStorageClass("testStorageInfo")()
-        datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass=storageClass)
+        datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
@@ -189,7 +189,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testAssembler(self):
         registry = Registry.fromConfig(self.configFile)
         storageClass = makeNewStorageClass("testAssembler")()
-        datasetType = DatasetType(name="test", dataUnits=("camera",), storageClass=storageClass)
+        datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
@@ -202,7 +202,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testFind(self):
         registry = Registry.fromConfig(self.configFile)
         storageClass = makeNewStorageClass("testFind")()
-        datasetType = DatasetType(name="dummytype", dataUnits=("camera", "visit"), storageClass=storageClass)
+        datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         collection = "test"
         dataId = {"camera": "DummyCam", "visit": 0}
@@ -234,7 +234,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testCollections(self):
         registry = Registry.fromConfig(self.configFile)
         storageClass = makeNewStorageClass("testCollections")()
-        datasetType = DatasetType(name="dummytype", dataUnits=("camera", "visit"), storageClass=storageClass)
+        datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         collection = "ingest"
         run = registry.makeRun(collection=collection)
@@ -268,6 +268,21 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Inserting the same value twice should fail
         with self.assertRaises(ValueError):
             registry.addDataUnitEntry(dataUnitName, dataUnitValue)
+        # Find should return the entry
+        self.assertEqual(registry.findDataUnitEntry(dataUnitName, dataUnitValue), dataUnitValue)
+        # Find on a non-existant value should return None
+        self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {'camera': 'Unknown'}))
+        registry.addDataUnitEntry('AbstractFilter', {'abstract_filter': 'i'})
+        dataUnitName2 = 'PhysicalFilter'
+        dataUnitValue2 = {'physical_filter': 'DummyCam_i', 'abstract_filter': 'i'}
+        # Missing required dependency ('camera') should fail
+        with self.assertRaises(ValueError):
+            registry.addDataUnitEntry(dataUnitName2, dataUnitValue2)
+        # Adding required dependency should fix the failure
+        dataUnitValue2['camera'] = 'DummyCam'
+        registry.addDataUnitEntry(dataUnitName2, dataUnitValue2)
+        # Find should return the entry
+        self.assertEqual(registry.findDataUnitEntry(dataUnitName2, dataUnitValue2), dataUnitValue2)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

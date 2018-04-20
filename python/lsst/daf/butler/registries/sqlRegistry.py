@@ -214,8 +214,8 @@ class SqlRegistry(Registry):
             # the corresponding sqlalchemy.core.Column entry to index the result
             # because the name of the key may not be the name of the name of the
             # DataUnit link.
-            dataId = {dataUnitName: result[self._schema.dataUnits[dataUnitName]]
-                      for dataUnitName in datasetType.dataUnits}
+            dataId = {dataUnitName: result[self._schema.dataUnits.links[dataUnitName]]
+                      for dataUnitName in self._schema.dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
             # Get components (if present)
             # TODO check against expected components
             components = {}
@@ -687,29 +687,41 @@ class SqlRegistry(Registry):
             If an entry with the primary-key defined in `values` is already
             present.
         """
-        dataUnitTable = self._schema.metadata.tables[dataUnitName]
+        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit.validateId(values)
+        dataUnitTable = dataUnit.table
         with self._engine.begin() as connection:
             try:
                 connection.execute(dataUnitTable.insert().values(**values))
             except IntegrityError as err:
                 raise ValueError(str(err))  # TODO this should do an explicit validity check instead
 
-    def findDataUnit(self, cls, values):
-        """Return a `DataUnit` given a dictionary of values.
+    def findDataUnitEntry(self, dataUnitName, value):
+        """Return a `DataUnit` entry corresponding to a `value`.
 
         Parameters
         ----------
-        cls : `type`
-            A class that inherits from `DataUnit`.
-        values : `dict`
+        dataUnitName : `str`
+            Name of a `DataUnit`
+        value : `dict`
             A dictionary of values that uniquely identify the `DataUnit`.
 
         Returns
         -------
-        unit : `DataUnit`
-            Instance of type `cls`, or `None` if no matching unit is found.
+        dataUnitEntry : `dict`
+            Dictionary with all `DataUnit` values, or `None` if no matching entry is found.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit.validateId(value)
+        dataUnitTable = dataUnit.table
+        primaryKeyColumns = dataUnit.primaryKeyColumns
+        with self._engine.begin() as connection:
+            result = connection.execute(select([dataUnitTable]).where(
+                and_((primaryKeyColumns[name] == value[name] for name in primaryKeyColumns)))).fetchone()
+            if result is not None:
+                return dict(result.items())
+            else:
+                return None
 
     def expand(self, ref):
         """Expand a `DatasetRef`.
@@ -738,15 +750,13 @@ class SqlRegistry(Registry):
             A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
             within a Collection.
 
-        Returns
-        -------
-        valid : `bool`
-            `True` if the dataId is valid, `False` otherwise.
+        Raises
+        ------
+        ValueError
+            If the dataId is invalid for the given datasetType.
         """
         for name in datasetType.dataUnits:
-            if name not in dataId:
-                return False
-        return True
+            self._schema.dataUnits[name].validateId(dataId)
 
     def find(self, collection, datasetType, dataId):
         """Lookup a dataset.
@@ -775,12 +785,12 @@ class SqlRegistry(Registry):
         ValueError
             If dataId is invalid.
         """
-        if not self._validateDataId(datasetType, dataId):
-            raise ValueError("Invalid dataId: {}".format(dataId))
+        self._validateDataId(datasetType, dataId)
         datasetTable = self._schema.metadata.tables['Dataset']
         datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
-        dataIdExpression = and_((self._schema.dataUnits[name] == dataId[name]
-                                 for name in datasetType.dataUnits))
+        dataIdExpression = and_((self._schema.dataUnits.links[name] == dataId[name]
+                                 for name in self._schema.dataUnits.getPrimaryKeyNames(
+                                     datasetType.dataUnits)))
         with self._engine.begin() as connection:
             result = connection.execute(select([datasetTable.c.dataset_id]).select_from(
                 datasetTable.join(datasetCollectionTable)).where(and_(

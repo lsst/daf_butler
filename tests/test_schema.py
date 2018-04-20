@@ -59,7 +59,12 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         """Check that the generated `Schema` tables match its description.
         """
         self.assertIsInstance(self.schema.metadata, MetaData)
-        for tableName, tableDescription in self.config.tables.items():
+        allTables = {}
+        allTables.update(self.config['tables'])
+        for dataUnitDescription in self.config['dataUnits']:
+            if 'tables' in dataUnitDescription:
+                allTables.update(dataUnitDescription['tables'])
+        for tableName, tableDescription in allTables.items():
             self.assertTable(self.schema.metadata, tableName, tableDescription)
 
     def assertTable(self, metadata, tableName, tableDescription):
@@ -79,7 +84,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(column, Column)
         self.assertEqual(column.primary_key, columnDescription.get('primary_key', False))
         self.assertEqual(column.nullable, columnDescription.get('nullable', True) and not column.primary_key)
-        self.assertIsInstance(column.type, self.schema.VALID_COLUMN_TYPES[columnDescription['type']])
+        self.assertIsInstance(column.type, self.schema.builder.VALID_COLUMN_TYPES[columnDescription['type']])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
         """Check that foreign-key constraints match the `constraintsDescription`.
