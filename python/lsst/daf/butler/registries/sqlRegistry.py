@@ -21,7 +21,7 @@
 
 import itertools
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.sql import select, and_, exists
 from sqlalchemy.exc import IntegrityError
 
@@ -59,6 +59,34 @@ class SqlRegistry(Registry):
         self._engine = create_engine(self.config['db'])
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}
+
+    def query(self, sql, **params):
+        """Execute a SQL SELECT statement directly.
+
+        Named parameters are specified in the SQL query string by preceeding
+        them with a colon.  Parameter values are provided as additional
+        keyword arguments.  For example:
+
+            registry.query('SELECT * FROM Camera WHERE camera=:name', name='HSC')
+
+        Parameters
+        ----------
+        sql : `str`
+            SQL query string.  Must be a SELECT statement.
+        **params
+            Parameter name-value pairs to insert into the query.
+
+        Yields
+        -------
+        row : `dict`
+            The next row result from executing the query.
+
+        """
+        # TODO: make this guard against non-SELECT queries.
+        t = text(sql)
+        with self._engine.begin() as connection:
+            for row in connection.execute(t, **params):
+                yield dict(row)
 
     def _isValidDatasetType(self, datasetType):
         """Check if given `DatasetType` instance is valid for this `Registry`.
