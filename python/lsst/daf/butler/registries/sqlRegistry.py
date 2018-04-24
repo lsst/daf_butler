@@ -213,6 +213,7 @@ class SqlRegistry(Registry):
             raise ValueError("A dataset with id: {} already exists in collection {}".format(
                 dataId, run.collection))
         datasetTable = self._schema.metadata.tables['Dataset']
+        datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
         datasetRef = None
         with self._engine.begin() as connection:
             result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
@@ -221,7 +222,11 @@ class SqlRegistry(Registry):
                                                                      **dataId))
             datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0])
             # A dataset is always associated with its Run collection
-            self.associate(run.collection, [datasetRef])
+            # TODO: this should delegate to associate(), but the nested
+            # connection contexts produce OperationalErrors in Gen2 conversion
+            # of ci_hsc outputs, for unknown reasons.
+            connection.execute(datasetCollectionTable.insert(),
+                               [{'dataset_id': datasetRef.id, 'collection': run.collection}])
         return datasetRef
 
     def getDataset(self, id):
