@@ -44,7 +44,6 @@ from .ply import lex
 # Exported definitions --
 #------------------------
 
-
 class ParserLexError(Exception):
     """Exception raised for lex-phase errors.
 
@@ -93,17 +92,17 @@ class ParserLex:
     # SQL has reserved words which we could potentially make reserved in our
     # grammar too, for now try to pretend we don't care about SQL
     reserved = dict(
-        IS="IS",
+#         IS="IS",
         IN="IN",
-        NULL="NULL",
+#         NULL="NULL",
         OR="OR",
         AND="AND",
         XOR="XOR",
         NOT="NOT",
-        BETWEEN="BETWEEN",
-        LIKE="LIKE",
-        ESCAPE="ESCAPE",
-        REGEXP="REGEXP"
+#         BETWEEN="BETWEEN",
+#         LIKE="LIKE",
+#         ESCAPE="ESCAPE",
+#         REGEXP="REGEXP"
     )
 
     # List of token names.
@@ -115,7 +114,8 @@ class ParserLex:
         'IDENTIFIER',
         'LPAREN', 'RPAREN',
         'EQ', 'NE', 'LT', 'LE', 'GT', 'GE',
-        'ADD', 'SUB', 'MUL', 'DIV',
+        'ADD', 'SUB', 'MUL', 'DIV', 'MOD',
+        'COMMA'
     ) + tuple(reserved.values())
 
     # Regular expression rules for simple tokens
@@ -131,6 +131,8 @@ class ParserLex:
     t_SUB = '-'
     t_MUL = r'\*'
     t_DIV = '/'
+    t_MOD = '%'
+    t_COMMA = ','
 
     # A string containing ignored characters (spaces and tabs)
     t_ignore = ' \t'
