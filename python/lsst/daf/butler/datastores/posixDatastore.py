@@ -283,6 +283,23 @@ class PosixDatastore(Datastore):
         path = formatter.write(inMemoryDataset, FileDescriptor(location,
                                                                storageClass=storageClass))
 
+        self.ingest(path, ref, formatter=formatter)
+
+    def ingest(self, path, ref, formatter=None):
+        """Record that a Dataset with the given `DatasetRef` exists in the store.
+
+        Parameters
+        ----------
+        path : `str`
+            File path, relative to the repository root.
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
+        formatter : `Formatter` (optional)
+            Formatter that should be used to retreive the Dataset.
+        """
+        if formatter is None:
+            formatter = self.formatterFactory.getFormatter(ref.datasetType.storageClass,
+                                                           ref.datasetType.name)
         # Create Storage information in the registry
         ospath = os.path.join(self.root, path)
         checksum = self.computeChecksum(ospath)
@@ -292,7 +309,7 @@ class PosixDatastore(Datastore):
         self.registry.addStorageInfo(ref, info)
 
         # Associate this dataset with the formatter for later read.
-        fileInfo = StoredFileInfo(formatter, path, storageClass)
+        fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass)
         self.addStoredFileInfo(ref, fileInfo)
 
         # Register all components with same information
