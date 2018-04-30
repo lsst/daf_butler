@@ -31,19 +31,6 @@ dataUnits:
     -
       name: abstract_filter
       type: string
-      #foreign_key: AbstractFilter.abstract_filter
-    tables:
-      AbstractFilter:
-        doc: >
-          A definition table containing recognized AbstractFilter names.
-        columns:
-        -
-          name: abstract_filter
-          type: string
-          primary_key: true
-          doc: >
-            The name of the filter, typically a single letter
-            (e.g. "r" or "i").
 
   PhysicalFilter:
     dependencies:
@@ -88,9 +75,6 @@ dataUnits:
         -
           src: camera
           tgt: Camera.camera
-        -
-          src: abstract_filter
-          tgt: AbstractFilter.abstract_filter
 
   Sensor:
     dependencies:
@@ -157,6 +141,8 @@ dataUnits:
       A sequence of observations processed together, comprised of one or
       more Exposures from the same Camera with the same pointing and
       PhysicalFilter.
+      The Visit table contains metadata that is both meaningful only for
+      science Exposures and the same for all Exposures in a Visit.
     link:
     -
       name: visit
@@ -196,13 +182,75 @@ dataUnits:
             same as the datetime_begin of the first Exposure associated
             with this Visit.
         -
+          name: datetime_end
+          type: datetime
+          doc: >
+            Timestamp of the end of the Visit.  This should be the
+            same as the datetime_end of the last Exposure associated
+            with this Visit.
+        -
           name: exposure_time
           type: float
           doc: >
             The total exposure time of the Visit in seconds.  This should
             be equal to the sum of the exposure_time values for all
-            constituent Exposures (i.e. it should not include time with
-            the shutter closed).
+            constituent Exposures (i.e. it should not include time between
+            Exposures).
+        -
+          name: earth_rotation_angle
+          type: float
+          doc: Earth rotation angle in degrees.
+        -
+          name: boresight_ra
+          type: float
+          doc: Position of the boresight in right ascension (decimal degrees).
+        -
+          name: boresight_dec
+          type: float
+          doc: Position of the boresight in declination (decimal degrees).
+        -
+          name: boresight_alt
+          type: float
+          doc: Position of the boresight in altitude (decimal degrees).
+        -
+          name: boresight_az
+          type: float
+          doc: Position of the boresight in azimuth (decimal degrees).
+        -
+          name: boresight_hour_angle
+          type: float
+          doc: Hour angle at the boresight.
+        -
+          name: boresight_parallactic_angle
+          type: float
+          doc: >
+            Equal to the angle between the North celestial pole and Zenith at
+            the boresight. Or, the angular separation between two great circle
+            arcs that meet at the object, one passing through the North
+            celestial pole, and the other through zenith. For an object on the
+            meridian the angle is zero if it is South of zenith and pi if it is
+            North of zenith The angle is positive for objects East of the
+            meridian, and negative for objects to the West.
+        -
+          name: boresight_airmass
+          type: float
+          doc: Airmass at the boresight, relative to zenith at sea level.
+        -
+          name: rot_angle
+          type: float
+          doc: Rotation angle of the focal plane w.r.t. nominal.
+        -
+          name: local_era
+          type: float
+          doc: >
+            Local sideral time on the meridian (equivalent, but not
+            equal, to Local Mean Sidereal Time).
+        -
+          name: seeing
+          type: float
+          doc: >
+            Average seeing, measured as the FWHM of the Gaussian with the same
+            effective area (arcsec).
         -
           name: region
           type: blob
@@ -292,6 +340,10 @@ dataUnits:
       don't have multiple Exposures per Visit.  As a result, Cameras that
       don't have multiple Exposures per Visit will typically have Visit
       entries that are essentially duplicates of their Exposure entries.
+
+      The Exposure table contains metadata entries that are relevant for
+      calibration Exposures, and does not duplicate entries in Visit that
+      would be the same for all Exposures within a Visit.
     link:
     -
       name: exposure
@@ -330,6 +382,12 @@ dataUnits:
           doc: >
             The bandpass filter used for all exposures in this Visit.
         -
+          name: physical_filter
+          type: string
+          nullable: false
+          doc: >
+            The bandpass filter used for all exposures in this Visit.
+        -
           name: snap
           type: int
           doc: >
@@ -343,8 +401,23 @@ dataUnits:
         -
           name: exposure_time
           type: float
-          doc: >
-            Duration of the Exposure in seconds.
+          doc: Duration of the Exposure with shutter open (seconds).
+        -
+          name: dark_time
+          type: float
+          doc: Duration of the Exposure with shutter closed (seconds).
+        -
+          name: rot_angle
+          type: float
+          doc: Rotation angle of the focal plane w.r.t. nominal
+        -
+          name: boresight_alt
+          type: float
+          doc: Position of the boresight in altitude (decimal degrees).
+        -
+          name: boresight_az
+          type: float
+          doc: Position of the boresight in azimuth (decimal degrees).        
         foreignKeys:
         -
           src: camera
@@ -587,7 +660,8 @@ dataunit_joins:
     rhs:
     - ExposureRange
     sql:
-      where: (lhs.camera = rhs.camera) AND (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
+      (lhs.camera = rhs.camera) AND
+      (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
   MultiCameraExposureJoin:
     doc: >
       A join table that relates Exposures from different Cameras, with
@@ -667,6 +741,7 @@ dataunit_joins:
         -
           name: sensor
           type: int
+          nullable: false
           doc: Sensor ID
         -
           name: skypix

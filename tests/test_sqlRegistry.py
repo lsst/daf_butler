@@ -285,7 +285,9 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(registry.findDataUnitEntry(dataUnitName, dataUnitValue), dataUnitValue)
         # Find on a non-existant value should return None
         self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {'camera': 'Unknown'}))
-        registry.addDataUnitEntry('AbstractFilter', {'abstract_filter': 'i'})
+        # AbstractFilter doesn't have a table; should fail.
+        with self.assertRaises(TypeError):
+            registry.addDataUnitEntry('AbstractFilter', {'abstract_filter': 'i'})
         dataUnitName2 = 'PhysicalFilter'
         dataUnitValue2 = {'physical_filter': 'DummyCam_i', 'abstract_filter': 'i'}
         # Missing required dependency ('camera') should fail

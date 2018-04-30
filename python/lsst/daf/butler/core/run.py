@@ -50,6 +50,9 @@ class Run(Execution):
         self._environment = environment
         self._pipeline = pipeline
 
+    def __repr__(self):
+        return "Run(collection='{}', id={})".format(self.collection, self.id)
+
     @property
     def collection(self):
         return self._collection

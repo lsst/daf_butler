@@ -1,0 +1,51 @@
+mappers:
+  HscMapper:
+    # Gen3 Camera name associated with this Gen2 Mapper
+    camera: HSC
+    # VisitInfo objects are used to populate Gen3 Visit and Exposure DataUnit
+    # entries; options here say how to get those from a Gen2 repo.
+    VisitInfo:
+      # The Gen2 DatasetType to read when trying to create a VisitInfo.
+      # (we actually add a "_md" suffix, because we just read the metadata).
+      DatasetType: raw
+      # Gen2 Data ID keys for the above DatasetType that are used
+      # to construct Gen3 Exposure/Visit identifiers.
+      # At present, only one key can be provided and this is used directly
+      # as the Gen3 value.
+      uniqueKeys:
+        - visit
+collections:
+  substitutions:
+    # Regular expression patterns and replacement strings (passed directly
+    # to Python's re.sub) applied in order to all Gen2 absolute repository
+    # paths in order to construct names for the Collections they go into.
+    # This can be used to merge Gen2 repositories into a single Collection
+    # by making them reduce to the same name.
+    -
+      pattern: "^(.+)/rerun/private/"
+      repl: "u/"
+    -
+      pattern: "^(.+)/rerun/"
+      repl: "shared/"
+  overrides:
+    # A dictionary of DatasetType -> Collection mappings that force all
+    # Datasets with that DatasetType into a particular Collection.
+    # Collection names can be str.format patterns that utilize any of
+    # the Gen3 DataUnits or Gen2 DataIds associated with the Dataset.
+    raw: raw/{camera}
+    ref_cat: ref/{name}
+    ref_cat_config: ref/{name}
+runs:
+  # Names of Collections (after processing via the above section)
+  # that should be assigned to a particular Run.
+  # Note that the *first* Collection a Dataset is added to determines
+  # its Run; this will be the one corresponding to the Gen2 repository
+  # that originally contained the file, unless that has been overridden.
+  raw/HSC: 1
+  ref/ps1_pv3_3pi_20170110: 2
+
+skymaps: {}  # dictionary mapping repository roots to Gen3 SkyMap names
+
+storageClasses:
+  # dictionary mapping Gen2 Mapping.persistable to Gen3 StorageClass name
+  {}

@@ -21,7 +21,7 @@
 
 import itertools
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.sql import select, and_, exists
 from sqlalchemy.exc import IntegrityError
 
@@ -59,6 +59,34 @@ class SqlRegistry(Registry):
         self._engine = create_engine(self.config['db'])
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}
+
+    def query(self, sql, **params):
+        """Execute a SQL SELECT statement directly.
+
+        Named parameters are specified in the SQL query string by preceeding
+        them with a colon.  Parameter values are provided as additional
+        keyword arguments.  For example:
+
+            registry.query('SELECT * FROM Camera WHERE camera=:name', name='HSC')
+
+        Parameters
+        ----------
+        sql : `str`
+            SQL query string.  Must be a SELECT statement.
+        **params
+            Parameter name-value pairs to insert into the query.
+
+        Yields
+        -------
+        row : `dict`
+            The next row result from executing the query.
+
+        """
+        # TODO: make this guard against non-SELECT queries.
+        t = text(sql)
+        with self._engine.begin() as connection:
+            for row in connection.execute(t, **params):
+                yield dict(row)
 
     def _isValidDatasetType(self, datasetType):
         """Check if given `DatasetType` instance is valid for this `Registry`.
@@ -185,6 +213,7 @@ class SqlRegistry(Registry):
             raise ValueError("A dataset with id: {} already exists in collection {}".format(
                 dataId, run.collection))
         datasetTable = self._schema.metadata.tables['Dataset']
+        datasetCollectionTable = self._schema.metadata.tables['DatasetCollection']
         datasetRef = None
         with self._engine.begin() as connection:
             result = connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
@@ -193,7 +222,11 @@ class SqlRegistry(Registry):
                                                                      **dataId))
             datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0])
             # A dataset is always associated with its Run collection
-            self.associate(run.collection, [datasetRef])
+            # TODO: this should delegate to associate(), but the nested
+            # connection contexts produce OperationalErrors in Gen2 conversion
+            # of ci_hsc outputs, for unknown reasons.
+            connection.execute(datasetCollectionTable.insert(),
+                               [{'dataset_id': datasetRef.id, 'collection': run.collection}])
         return datasetRef
 
     def getDataset(self, id):
@@ -524,6 +557,8 @@ class SqlRegistry(Registry):
         """
         runTable = self._schema.metadata.tables['Run']
         with self._engine.begin() as connection:
+            # TODO: this check is probably undesirable, as we may want to have multiple Runs output
+            # to the same collection.  Fixing this requires (at least) modifying getRun() accordingly.
             if connection.execute(select([exists().where(runTable.c.collection == run.collection)])).scalar():
                 raise ValueError("A run already exists with this collection: {}".format(run.collection))
             # First add the Execution part
@@ -533,6 +568,7 @@ class SqlRegistry(Registry):
                                                         collection=run.collection,
                                                         environment_id=None,  # TODO add environment
                                                         pipeline_id=None))    # TODO add pipeline
+        # TODO: set given Run's 'id' attribute.
 
     def getRun(self, id=None, collection=None):
         """
@@ -707,6 +743,9 @@ class SqlRegistry(Registry):
 
         Raises
         ------
+        TypeError
+            If the given `DataUnit` does not have explicit entries in the
+            registry.
         ValueError
             If an entry with the primary-key defined in `values` is already
             present.
@@ -714,6 +753,8 @@ class SqlRegistry(Registry):
         dataUnit = self._schema.dataUnits[dataUnitName]
         dataUnit.validateId(values)
         dataUnitTable = dataUnit.table
+        if dataUnitTable is None:
+            raise TypeError("DataUnit '{}' has no table.".format(dataUnitName))
         with self._engine.begin() as connection:
             try:
                 connection.execute(dataUnitTable.insert().values(**values))
