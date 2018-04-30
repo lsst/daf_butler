@@ -40,3 +40,6 @@ class DummyRegistry:
 
     def removeStorageInfo(self, datastoreName, ref):
         del self._entries[ref.id]
+
+    def makeDatabaseDict(self, table, types, key, value):
+        return dict()
