@@ -61,7 +61,9 @@ class DatabaseDict(MutableMapping):
 
         If ``config`` contains a class ``cls`` key, this will be assumed to
         be the fully-qualified name of a DatabaseDict subclass to construct.
-        If not, ``registry.makeDatabaseDict`` will be called instead.
+        If not, ``registry.makeDatabaseDict`` will be called instead, and
+        ``config`` must contain a ``table`` key with the name of the table
+        to use.
 
         Parameters
         ----------

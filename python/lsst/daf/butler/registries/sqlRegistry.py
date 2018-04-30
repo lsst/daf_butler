@@ -33,6 +33,8 @@ from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageInfo import StorageInfo
 from ..core.storageClass import StorageClassFactory
+from ..core.config import Config
+from ..core.sqlDatabaseDict import SqlDatabaseDict
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -1000,3 +1002,38 @@ class SqlRegistry(Registry):
             imported Datasets.
         """
         self.import_(src.export(expr), collection)
+
+    def makeDatabaseDict(self, table, types, key, value):
+        """Construct a DatabaseDict backed by a table in the same database as
+        this Registry.
+
+        Parameters
+        ----------
+        table : `table`
+            Name of the table that backs the returned DatabaseDict.  If this
+            table already exists, its schema must include at least everything
+            in `types`.
+        types : `dict`
+            A dictionary mapping `str` field names to type objects, containing
+            all fields to be held in the database.
+        key : `str`
+            The name of the field to be used as the dictionary key.  Must not
+            be present in ``value._fields``.
+        value : `type`
+            The type used for the dictionary's values, typically a `namedtuple`.
+            Must have a ``_fields`` class attribute that is a tuple of field names
+            (i.e. as defined by `namedtuple`); these field names must also appear
+            in the ``types`` arg, and a `_make` attribute to construct it from a
+            sequence of values (again, as defined by `namedtuple`).
+        """
+        # We need to construct a temporary config for the table value because
+        # SqlDatabaseDict.__init__ is required to take a config so it can be
+        # called by DatabaseDict.fromConfig as well.
+        # I suppose we could have Registry.makeDatabaseDict take a config as
+        # well, since it'll also usually be called by DatabaseDict.fromConfig,
+        # but I strongly believe in having signatures that only take what they
+        # really need.
+        config = Config()
+        config['table'] = table
+        return SqlDatabaseDict(config, types=types, key=key, value=value,
+                               engine=self._engine)

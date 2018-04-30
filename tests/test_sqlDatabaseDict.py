@@ -129,6 +129,20 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         with self.assertRaises(TypeError):
             DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
 
+    def testFromRegistry(self):
+        """Test that we can obtain a DatabaseDict from a SqlRegistry."""
+        testDir = os.path.dirname(__file__)
+        configFile = os.path.join(testDir, "config/basic/butler.yaml")
+        registry = Registry.fromConfig(configFile)
+        value = namedtuple("TestValue", ["y", "z"])
+        data = {
+            0: value(y="zero", z=0.0),
+            1: value(y="one", z=0.1),
+        }
+        d = registry.makeDatabaseDict(table="TestRegistryTable", key=self.key, types=self.types,
+                                      value=value)
+        self.checkDatabaseDict(d, data)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
