@@ -47,5 +47,9 @@ runs:
 skymaps: {}  # dictionary mapping repository roots to Gen3 SkyMap names
 
 storageClasses:
-  # dictionary mapping Gen2 Mapping.persistable to Gen3 StorageClass name
-  {}
+  # dictionary mapping Gen2 Mapping.persistable, Mapping.python, or just the
+  # last term in Mapping.python (the unqualified type name) to Gen3
+  # StorageClass name.
+  # If nothing matches, we try the persistable and unqualified type names as
+  # StorageClass names themselves.
+  BaseSkyMap: SkyMap

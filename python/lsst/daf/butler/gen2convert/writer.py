@@ -136,19 +136,31 @@ class ConversionWriter:
                 continue
             if datasetTypeName in self.datasetTypes:
                 continue
+            log.debug("Looking for StorageClass configured for %s; trying full python '%s'",
+                      gen2dst.name, gen2dst.python)
             storageClassName = scConfig.get(gen2dst.python, None)
+            if storageClassName is None:
+                log.debug("Looking for StorageClass configured for %s; trying persistable '%s'",
+                          gen2dst.name, gen2dst.persistable)
+                storageClassName = scConfig.get(gen2dst.persistable, None)
+            if storageClassName is None:
+                unqualified = gen2dst.python.split(".")[-1]
+                log.debug("Looking for StorageClass configured for %s; trying unqualified python '%s'",
+                          gen2dst.name, unqualified)
+                storageClassName = scConfig.get(unqualified, None)
             if storageClassName is not None:
+                log.debug("Found StorageClass configured for %s: '%s'",
+                          gen2dst.name, storageClassName)
                 storageClass = scFactory.getStorageClass(storageClassName)
             else:
-                log.debug("No StorageClass name configured for %s; trying persistable '%s'",
-                          gen2dst.name, gen2dst.persistable)
                 try:
+                    log.debug("No StorageClass configured for %s; trying persistable '%s'",
+                              gen2dst.name, gen2dst.python)
                     storageClass = scFactory.getStorageClass(gen2dst.persistable)
                 except KeyError:
                     storageClass = None
                 if storageClass is None:
-                    unqualified = gen2dst.python.split(".")[-1]
-                    log.debug("No StorageClass name configured for %s; trying unqualified python type '%s'",
+                    log.debug("No StorageClass configured for %s; trying unqualified python type '%s'",
                               gen2dst.name, unqualified)
                     try:
                         storageClass = scFactory.getStorageClass(unqualified)
