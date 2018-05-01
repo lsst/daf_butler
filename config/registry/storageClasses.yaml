@@ -25,6 +25,8 @@ storageClasses:
     pytype: lsst.afw.table.BaseCatalog
   SourceCatalog:
     pytype: lsst.afw.table.SourceCatalog
+  SkyMap:
+    pytype: lsst.skymap.BaseSkyMap
   Exposure: &Exposure
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
