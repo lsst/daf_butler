@@ -136,6 +136,13 @@ class SqlRegistry(Registry):
                                    [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
                                     for dataUnitName in datasetType.dataUnits])
             self._datasetTypes[datasetType.name] = datasetType
+        # Now register component DatasetTypes (if any)
+        # TODO Make this atomic by handling components as part of the with clause above
+        for compName, compStorageClass in datasetType.storageClass.components.items():
+            compType = DatasetType(datasetType.componentTypeName(compName),
+                                   datasetType.dataUnits,
+                                   compStorageClass)
+            self.registerDatasetType(compType)
 
     def getDatasetType(self, name):
         """Get the `DatasetType`.
