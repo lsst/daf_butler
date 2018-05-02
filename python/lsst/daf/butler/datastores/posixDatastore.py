@@ -23,6 +23,7 @@
 
 import os
 import hashlib
+from collections import namedtuple
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.datastore import Datastore
@@ -35,6 +36,7 @@ from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
 from lsst.daf.butler.core.utils import getInstanceOf
 from lsst.daf.butler.core.storageClass import StorageClassFactory
+from ..core.databaseDict import DatabaseDict
 
 __all__ = ("PosixDatastore", )
 
@@ -73,6 +75,8 @@ class PosixDatastore(Datastore):
         configuration.
     """
 
+    RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path", "storage_class"])
+
     def __init__(self, config, registry):
         super().__init__(config, registry)
         self.root = self.config['root']
@@ -95,8 +99,11 @@ class PosixDatastore(Datastore):
         # Name ourselves
         self.name = "POSIXDatastore@{}".format(self.root)
 
-        # Somewhere to temporarily store dataset to formatter maps
-        self.internalRegistry = {}
+        # Storage of paths and formatters, keyed by dataset_id
+        types = {"path": str, "formatter": str, "storage_class": str, "dataset_id": int}
+        self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
+                                               value=self.RecordTuple, key="dataset_id",
+                                               registry=registry)
 
     def addStoredFileInfo(self, ref, info):
         """Record formatter information associated with this `DatasetRef`
@@ -107,12 +114,9 @@ class PosixDatastore(Datastore):
             The Dataset that has been stored.
         info : `StoredFileInfo`
             Metadata associated with the stored Dataset.
-
-        Notes
-        -----
-        Need to convert this to a real registry.
         """
-        self.internalRegistry[ref.id] = (info.formatter, info.path, info.storageClass.name)
+        self.records[ref.id] = self.RecordTuple(formatter=info.formatter, path=info.path,
+                                                storage_class=info.storageClass.name)
 
     def removeStoredFileInfo(self, ref):
         """Remove information about the file associated with this dataset.
@@ -122,7 +126,7 @@ class PosixDatastore(Datastore):
         ref : `DatasetRef`
             The Dataset that has been removed.
         """
-        del self.internalRegistry[ref.id]
+        del self.records[ref.id]
 
     def getStoredFileInfo(self, ref):
         """Retrieve information associated with file stored in this
@@ -143,17 +147,13 @@ class PosixDatastore(Datastore):
         ------
         KeyError
             Dataset with that id can not be found.
-
-        Notes
-        -----
-        Need to convert this to a real registry.
         """
-        if ref.id not in self.internalRegistry:
+        record = self.records.get(ref.id, None)
+        if record is None:
             raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
-        formatter_name, path, storageClass = self.internalRegistry[ref.id]
         # Convert name of StorageClass to instance
-        storageClass = self.storageClassFactory.getStorageClass(storageClass)
-        return StoredFileInfo(formatter_name, path, storageClass)
+        storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
+        return StoredFileInfo(record.formatter, record.path, storageClass)
 
     def exists(self, ref):
         """Check if the dataset exists in the datastore.

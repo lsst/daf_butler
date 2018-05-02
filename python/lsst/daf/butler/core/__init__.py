@@ -3,6 +3,7 @@ Core code for butler.
 """
 
 # Do not export the utility routines from safeFileIo and utils
+# Do not export SqlDatabaseDict (should be constructed by other classes).
 
 from .composites import *
 from .config import *
@@ -22,3 +23,4 @@ from .storageClass import *
 from .storageInfo import *
 from .storedFileInfo import *
 from .dataUnit import *
+from .databaseDict import *
