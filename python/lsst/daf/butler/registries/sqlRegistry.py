@@ -117,15 +117,28 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        KeyError
-            Dataset is already registered.
         ValueError
-            DatasetType is not valid for this registry.
+            DatasetType is not valid for this registry or is already registered
+            but not identical.
         """
+        # Check if datasetType is valid for this Registry
         if not self._isValidDatasetType(datasetType):
             raise ValueError("DatasetType is not valid for this registry")
-        if datasetType.name in self._datasetTypes:
-            raise KeyError("DatasetType: {} already registered".format(datasetType.name))
+        # If a DatasetType is already registered it must be identical
+        try:
+            # A DatasetType entry with this name may exist, get it first.
+            # Note that we can't just look in the cache, because it may not be there yet.
+            existingDatasetType = self.getDatasetType(datasetType.name)
+        except KeyError:
+            # No registered DatasetType with this name exists, move on to inserting it
+            pass
+        else:
+            # A DatasetType with this name exists, check if is equal
+            if datasetType == existingDatasetType:
+                return
+            else:
+                raise ValueError("DatasetType: {} already registered but different".format(datasetType.name))
+        # Insert it
         datasetTypeTable = self._schema.metadata.tables['DatasetType']
         datasetTypeUnitsTable = self._schema.metadata.tables['DatasetTypeUnits']
         with self._engine.begin() as connection:
@@ -136,7 +149,7 @@ class SqlRegistry(Registry):
                                    [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
                                     for dataUnitName in datasetType.dataUnits])
             self._datasetTypes[datasetType.name] = datasetType
-        # Now register component DatasetTypes (if any)
+        # Also register component DatasetTypes (if any)
         # TODO Make this atomic by handling components as part of the with clause above
         for compName, compStorageClass in datasetType.storageClass.components.items():
             compType = DatasetType(datasetType.componentTypeName(compName),
