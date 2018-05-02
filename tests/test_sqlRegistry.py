@@ -58,14 +58,19 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
         dataUnits = ("Camera", "Visit")
+        differentDataUnits = ("Camera", "Patch")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
-        registry.registerDatasetType(inDatasetType)
+        # Inserting for the first time should return True
+        self.assertTrue(registry.registerDatasetType(inDatasetType))
         outDatasetType = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType, inDatasetType)
 
-        # Re-inserting should fail
-        with self.assertRaises(KeyError):
-            registry.registerDatasetType(inDatasetType)
+        # Re-inserting should work
+        self.assertFalse(registry.registerDatasetType(inDatasetType))
+        # Except when they are not identical
+        with self.assertRaises(ValueError):
+            nonIdenticalDatasetType = DatasetType(datasetTypeName, differentDataUnits, storageClass)
+            registry.registerDatasetType(nonIdenticalDatasetType)
 
         # Template can be None
         datasetTypeName = "testNoneTemplate"
