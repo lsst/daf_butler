@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import pickle
 import unittest
 import lsst.utils.tests
 
@@ -71,6 +72,18 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(sc.name, className)
         self.assertFalse(sc.components)
         self.assertEqual(sc.pytype, PythonType)
+
+    def testPickle(self):
+        """Test that we can pickle storageclasses.
+        """
+        className = "TestImage"
+        newclass = storageClass.makeNewStorageClass(className, pytype=dict)
+        sc = newclass()
+        self.assertIsInstance(sc, storageClass.StorageClass)
+        self.assertEqual(sc.name, className)
+        self.assertFalse(sc.components)
+        sc2 = pickle.loads(pickle.dumps(sc))
+        self.assertEqual(sc2, sc)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
