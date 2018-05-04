@@ -35,7 +35,7 @@ class TestFileTemplates(unittest.TestCase):
             dataId = self.dataId
         if datasetTypeName not in self.datasetTypes:
             self.datasetTypes[datasetTypeName] = DatasetType(datasetTypeName, list(dataId.keys()),
-                                                             StorageClass())
+                                                             StorageClass(None))
         datasetType = self.datasetTypes[datasetTypeName]
         return DatasetRef(datasetType, dataId)
 

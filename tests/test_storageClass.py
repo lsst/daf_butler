@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import pickle
 import unittest
 import lsst.utils.tests
 
@@ -42,35 +43,39 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
 
         This is critical for testing the factory functions."""
         className = "TestImage"
-        newclass = storageClass.makeNewStorageClass(className, pytype=dict)
-        sc = newclass()
+        sc = storageClass.StorageClass(className, pytype=dict)
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
         self.assertFalse(sc.components)
-
-        # Test the caching by using private class attribute
-        self.assertIsNone(newclass._pytype)
-        self.assertEqual(sc.pytype, dict)
-        self.assertEqual(newclass._pytype, dict)
-
         # Check we can create a storageClass using the name of an importable
         # type.
-        newclass = storageClass.makeNewStorageClass("TestImage2",
-                                                    "lsst.daf.butler.core.storageClass.StorageClassFactory")
-        self.assertIsInstance(newclass().pytype(), storageClass.StorageClassFactory)
+        sc2 = storageClass.StorageClass("TestImage2",
+                                        "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        self.assertIsInstance(sc2.pytype(), storageClass.StorageClassFactory)
 
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
         in a registry."""
         className = "TestImage"
         factory = storageClass.StorageClassFactory()
-        newclass = storageClass.makeNewStorageClass(className, pytype=PythonType)
+        newclass = storageClass.StorageClass(className, pytype=PythonType)
         factory.registerStorageClass(newclass)
         sc = factory.getStorageClass(className)
         self.assertIsInstance(sc, storageClass.StorageClass)
         self.assertEqual(sc.name, className)
         self.assertFalse(sc.components)
         self.assertEqual(sc.pytype, PythonType)
+
+    def testPickle(self):
+        """Test that we can pickle storageclasses.
+        """
+        className = "TestImage"
+        sc = storageClass.StorageClass(className, pytype=dict)
+        self.assertIsInstance(sc, storageClass.StorageClass)
+        self.assertEqual(sc.name, className)
+        self.assertFalse(sc.components)
+        sc2 = pickle.loads(pickle.dumps(sc))
+        self.assertEqual(sc2, sc)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

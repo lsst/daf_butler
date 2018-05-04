@@ -26,7 +26,6 @@ import builtins
 from .utils import doImport, Singleton
 from .composites import CompositeAssembler
 from .config import Config
-from .mappingFactory import MappingFactory
 
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
@@ -37,60 +36,66 @@ class StorageClassConfig(Config):
 
 class StorageClass:
     """Class describing how a label maps to a particular Python type.
+
+    Parameters
+    ----------
+    name : `str`
+        Name to use for this class.
+    pytype : `type`
+        Python type (or name of type) to associate with the `StorageClass`
+    components : `dict`, optional
+        `dict` mapping name of a component to another `StorageClass`.
+    assembler : `str`, optional
+        Fully qualified name of class supporting assembly and disassembly
+        of a `pytype` instance.
     """
-
-    # Components are fixed per class
-    _components = {}
-
-    # These are internal class attributes supporting lazy loading of concrete
-    # python types and functions from the string. The lazy loading is only done
-    # once the property is requested by an instance. The loading is fixed per
-    # class but class access to attribute is not supported.
-
-    # The names are defined when the class is constructed
-    _pytypeName = None
-    _assemblerClassName = None
-    name = None
-
-    # The types are created on demand and cached
-    # We set a default assembler so that a class is guaranteed to support
-    # something.
-    _pytype = None
-    _assembler = CompositeAssembler
+    def __init__(self, name, pytype=None, components=None, assembler=None):
+        self.name = name
+        self._pytypeName = pytype
+        self._components = components if components is not None else {}
+        # if the assembler is not None also set it and clear the default assembler
+        if assembler is not None:
+            self._assemblerClassName = assembler
+            self._assembler = None
+        else:
+            # We set a default assembler so that a class is guaranteed to support
+            # something.
+            self._assemblerClassName = None
+            self._assembler = CompositeAssembler
+        # The types are created on demand and cached
+        self._pytype = None
 
     @property
     def components(self):
         """Component names mapped to associated `StorageClass`
         """
-        return type(self)._components
+        return self._components
 
     @property
     def pytype(self):
         """Python type associated with this `StorageClass`."""
-        cls = type(self)
-        if cls._pytype is not None:
-            return cls._pytype
+        if self._pytype is not None:
+            return self._pytype
         # Handle case where we did get a python type not string
-        if not isinstance(cls._pytypeName, str):
-            pytype = cls._pytypeName
-            cls._pytypeName = cls._pytypeName.__name__
-        elif hasattr(builtins, cls._pytypeName):
-            pytype = getattr(builtins, cls._pytypeName)
+        if not isinstance(self._pytypeName, str):
+            pytype = self._pytypeName
+            self._pytypeName = self._pytypeName.__name__
+        elif hasattr(builtins, self._pytypeName):
+            pytype = getattr(builtins, self._pytypeName)
         else:
-            pytype = doImport(cls._pytypeName)
-        cls._pytype = pytype
-        return cls._pytype
+            pytype = doImport(self._pytypeName)
+        self._pytype = pytype
+        return self._pytype
 
     @property
     def assemblerClass(self):
         """Class to use to (dis)assemble an object from components."""
-        cls = type(self)
-        if cls._assembler is not None:
-            return cls._assembler
-        if cls._assemblerClassName is None:
+        if self._assembler is not None:
+            return self._assembler
+        if self._assemblerClassName is None:
             return None
-        cls._assembler = doImport(cls._assemblerClassName)
-        return cls._assembler
+        self._assembler = doImport(self._assemblerClassName)
+        return self._assembler
 
     def assembler(self):
         """Return an instance of an assembler.
@@ -99,10 +104,10 @@ class StorageClass:
         -------
         assembler : `CompositeAssembler`
             Instance of the assembler associated with this `StorageClass`.
-            Assembler is constructed with a new instance of this
-            `StorageClass`.
+            Assembler is constructed with this `StorageClass`.
         """
-        return self.assemblerClass(storageClass=type(self)())
+        cls = self.assemblerClass
+        return cls(storageClass=self)
 
     def validateInstance(self, instance):
         """Check that the supplied Python object has the expected Python type
@@ -127,40 +132,6 @@ class StorageClass:
         return hash(self.name)
 
 
-def makeNewStorageClass(name, pytype=None, components=None, assembler=None):
-    """Create a new Python class as a subclass of `StorageClass`.
-
-    Parameters
-    ----------
-    name : `str`
-        Name to use for this class.
-    pytype : `type`
-        Python type (or name of type) to associate with the `StorageClass`
-    components : `dict`, optional
-        `dict` mapping name of a component to another `StorageClass`.
-    assembler : `str`, optional
-        Fully qualified name of class supporting assembly and disassembly
-        of a `pytype` instance.
-
-    Returns
-    -------
-    newtype : `StorageClass`
-        Newly created Python type.
-    """
-    if components is None:
-        components = {}
-
-    clsargs = {"name": name,
-               "_pytypeName": pytype,
-               "_components": components}
-    # if the assembler is not None also set it and clear the default assembler
-    if assembler is not None:
-        clsargs["_assemblerClassName"] = assembler
-        clsargs["_assembler"] = None
-
-    return type(name, (StorageClass,), clsargs)
-
-
 class StorageClassFactory(metaclass=Singleton):
     """Factory for `StorageClass` instances.
 
@@ -177,7 +148,7 @@ class StorageClassFactory(metaclass=Singleton):
     """
 
     def __init__(self, config=None):
-        self._mappingFactory = MappingFactory(StorageClass)
+        self._storageClasses = {}
         self._configs = []
 
         if config is not None:
@@ -244,7 +215,7 @@ class StorageClassFactory(metaclass=Singleton):
             storageClassKwargs["components"] = components
 
             # Create the new storage class and register it
-            newStorageClass = makeNewStorageClass(name, **storageClassKwargs)
+            newStorageClass = StorageClass(name, **storageClassKwargs)
             self.registerStorageClass(newStorageClass)
 
     def getStorageClass(self, storageClassName):
@@ -260,7 +231,7 @@ class StorageClassFactory(metaclass=Singleton):
         instance : `StorageClass`
             Instance of the correct `StorageClass`.
         """
-        return self._mappingFactory.getFromRegistry(storageClassName)
+        return self._storageClasses[storageClassName]
 
     def registerStorageClass(self, storageClass):
         """Store the `StorageClass` in the factory.
@@ -279,4 +250,4 @@ class StorageClassFactory(metaclass=Singleton):
             If a storage class has already been registered with
             storageClassName and the previous definition differs.
         """
-        self._mappingFactory.placeInRegistry(storageClass.name, storageClass)
+        self._storageClasses[storageClass.name] = storageClass
