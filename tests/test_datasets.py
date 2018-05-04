@@ -24,7 +24,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
-from lsst.daf.butler.core.storageClass import makeNewStorageClass
+from lsst.daf.butler.core.storageClass import StorageClass
 
 """Tests for datasets module.
 """
@@ -42,7 +42,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         These can only be verified for a particular schema.
         """
         datasetTypeName = "test"
-        storageClass = makeNewStorageClass("test_StructuredData")()
+        storageClass = StorageClass("test_StructuredData")
         dataUnits = frozenset(("camera", "visit"))
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
@@ -50,8 +50,8 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(datasetType.dataUnits, dataUnits)
 
     def testEquality(self):
-        storageA = makeNewStorageClass("test_a")()
-        storageB = makeNewStorageClass("test_b")()
+        storageA = StorageClass("test_a")
+        storageB = StorageClass("test_b")
         self.assertEqual(DatasetType("a", ("UnitA", ), storageA,),
                          DatasetType("a", ("UnitA", ), storageA,))
         self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
@@ -74,8 +74,8 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         """
         types = []
         unique = 0
-        storageC = makeNewStorageClass("test_c")()
-        storageD = makeNewStorageClass("test_d")()
+        storageC = StorageClass("test_c")
+        storageD = StorageClass("test_d")
         for name in ["a", "b"]:
             for storageClass in [storageC, storageD]:
                 for dataUnits in [("e", ), ("f", )]:
@@ -94,7 +94,7 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         """Test construction preserves values.
         """
         datasetTypeName = "test"
-        storageClass = makeNewStorageClass("testref_StructuredData")()
+        storageClass = StorageClass("testref_StructuredData")
         dataUnits = frozenset(("camera", "visit"))
         dataId = dict(camera="DummyCam", visit=42)
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)

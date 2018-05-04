@@ -179,7 +179,7 @@ class TestButlerUtils(lsst.utils.tests.TestCase):
                  (doImport, "lsst.daf.butler.core.utils.doImport"),
                  (int, "builtins.int"),
                  (StorageClass, "lsst.daf.butler.core.storageClass.StorageClass"),
-                 (StorageClass(), "lsst.daf.butler.core.storageClass.StorageClass")]
+                 (StorageClass(None), "lsst.daf.butler.core.storageClass.StorageClass")]
 
         for item, typeName in tests:
             self.assertEqual(getFullTypeName(item), typeName)

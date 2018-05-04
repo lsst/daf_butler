@@ -75,10 +75,10 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         """
         formatterTypeName = "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter"
         storageClassName = "TestClass"
-        sc = storageClass.makeNewStorageClass(storageClassName, dict, None)
+        sc = storageClass.StorageClass(storageClassName, dict, None)
 
         # Store using an instance
-        self.factory.registerFormatter(sc(), formatterTypeName)
+        self.factory.registerFormatter(sc, formatterTypeName)
 
         # Retrieve using the class
         f = self.factory.getFormatter(sc)

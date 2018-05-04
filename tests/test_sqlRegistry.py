@@ -32,7 +32,7 @@ from lsst.daf.butler.core.run import Run
 from lsst.daf.butler.core.datasets import DatasetType
 from lsst.daf.butler.core.registry import Registry
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
-from lsst.daf.butler.core.storageClass import makeNewStorageClass
+from lsst.daf.butler.core.storageClass import StorageClass
 
 """Tests for SqlRegistry.
 """
@@ -54,7 +54,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry = Registry.fromConfig(self.configFile)
         # Check valid insert
         datasetTypeName = "test"
-        storageClass = makeNewStorageClass("testDatasetType")()
+        storageClass = StorageClass("testDatasetType")
         dataUnits = ("Camera", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
@@ -67,7 +67,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
         # Template can be None
         datasetTypeName = "testNoneTemplate"
-        storageClass = makeNewStorageClass("testDatasetType2")()
+        storageClass = StorageClass("testDatasetType2")
         dataUnits = ("Camera", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
@@ -77,7 +77,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testDataset(self):
         registry = Registry.fromConfig(self.configFile)
         run = registry.makeRun(collection="test")
-        storageClass = makeNewStorageClass("testDataset")()
+        storageClass = StorageClass("testDataset")
         datasetType = DatasetType(name="testtype", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
@@ -86,7 +86,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testComponents(self):
         registry = Registry.fromConfig(self.configFile)
-        storageClass = makeNewStorageClass("testComponents")()
+        storageClass = StorageClass("testComponents")
         parentDatasetType = DatasetType(name="parent", dataUnits=("Camera",), storageClass=storageClass)
         childDatasetType1 = DatasetType(name="child1", dataUnits=("Camera",), storageClass=storageClass)
         childDatasetType2 = DatasetType(name="child2", dataUnits=("Camera",), storageClass=storageClass)
@@ -152,7 +152,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
     def testQuantum(self):
         registry = Registry.fromConfig(self.configFile)
         run = registry.makeRun(collection="test")
-        storageClass = makeNewStorageClass("testQuantum")()
+        storageClass = StorageClass("testQuantum")
         # Make two predicted inputs
         datasetType1 = DatasetType(name="dst1", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType1)
@@ -179,7 +179,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testStorageInfo(self):
         registry = Registry.fromConfig(self.configFile)
-        storageClass = makeNewStorageClass("testStorageInfo")()
+        storageClass = StorageClass("testStorageInfo")
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         run = registry.makeRun(collection="test")
@@ -201,7 +201,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testAssembler(self):
         registry = Registry.fromConfig(self.configFile)
-        storageClass = makeNewStorageClass("testAssembler")()
+        storageClass = StorageClass("testAssembler")
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         run = registry.makeRun(collection="test")
@@ -214,7 +214,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testFind(self):
         registry = Registry.fromConfig(self.configFile)
-        storageClass = makeNewStorageClass("testFind")()
+        storageClass = StorageClass("testFind")
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         collection = "test"
@@ -246,7 +246,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testCollections(self):
         registry = Registry.fromConfig(self.configFile)
-        storageClass = makeNewStorageClass("testCollections")()
+        storageClass = StorageClass("testCollections")
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         collection = "ingest"
