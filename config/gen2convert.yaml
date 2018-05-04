@@ -53,3 +53,7 @@ storageClasses:
   # If nothing matches, we try the persistable and unqualified type names as
   # StorageClass names themselves.
   BaseSkyMap: SkyMap
+  BaseCatalog: Catalog
+  TransmissionCurve: TablePersistableTransmissionCurve
+  BackgroundList: Background
+  Config: Config
