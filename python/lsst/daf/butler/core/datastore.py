@@ -54,6 +54,11 @@ class Datastore(metaclass=ABCMeta):
         Load configuration
     """
 
+    defaults = None
+    """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
+    absolute path. Can be None if no defaults specified.
+    """
+
     @staticmethod
     def fromConfig(config, registry):
         """Create datastore from type specified in config file.
