@@ -24,7 +24,11 @@
 
 import os
 import unittest
+<<<<<<< HEAD
 from tempfile import TemporaryDirectory
+=======
+import pickle
+>>>>>>> Add pickle support to Butler.
 
 import lsst.utils.tests
 
@@ -154,6 +158,13 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         # inheriting from defaults.
         self.assertIn("datastore.formatters", full)
         self.assertNotIn("datastore.formatters", limited)
+
+    def testPickle(self):
+        """Test pickle support.
+        """
+        butler = Butler(self.configFile)
+        butlerOut = pickle.loads(pickle.dumps(butler))
+        self.assertIsInstance(butlerOut, Butler)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
