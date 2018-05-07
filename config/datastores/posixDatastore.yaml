@@ -1,0 +1,5 @@
+datastore:
+  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  records:
+    table: PosixDatastoreRecords
+  create: true

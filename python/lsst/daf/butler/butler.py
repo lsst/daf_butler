@@ -23,26 +23,88 @@
 Butler top level classes.
 """
 
+import os
+
 from .core.config import Config
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.storageClass import StorageClassFactory
+from .core.utils import doImport
 
 __all__ = ("ButlerConfig", "Butler")
 
 
 class ButlerConfig(Config):
     """Contains the configuration for a `Butler`
+
+    The configuration is read and merged with default configurations for
+    the particular classes. The defaults are read from
+    ``$DAF_BUTLER_DIR/config`` using names specified by the appropriate classes
+    for registry and datastore, and including the standard schema and storage
+    class definitions.
+
+    Parameters
+    ----------
+    other : `str`
+        Path to butler configuration YAML file.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validate()
+    def __init__(self, other):
 
-    def validate(self):
-        for k in ['run', 'datastore.cls', 'registry.cls', 'storageClasses.config']:
-            if k not in self:
-                raise ValueError("Missing ButlerConfig parameter: {0}".format(k))
+        # Create an empty config for us to populate
+        super().__init__()
+
+        # Find the butler configs
+        self.defaultsDir = None
+        if "DAF_BUTLER_DIR" in os.environ:
+            self.defaultsDir = os.path.join(os.environ["DAF_BUTLER_DIR"], "config")
+
+        # Storage classes
+        storageClasses = Config(os.path.join(self.defaultsDir, "storageClasses.yaml"))
+        self.update(storageClasses)
+
+        # Default schema
+        schema = Config(os.path.join(self.defaultsDir, "registry", "default_schema.yaml"))
+        self.update(schema)
+
+        # Read the supplied config so that we can work out which other
+        # defaults to use.
+        butlerConfig = Config(other)
+
+        # Check that fundamental keys are present
+        self._validate(butlerConfig)
+
+        # Look for class specific defaults
+        for section in ("datastore", "registry"):
+            k = f"{section}.cls"
+            print("Checking {}: {}".format(k, butlerConfig[k]))
+            cls = doImport(butlerConfig[k])
+            defaultsPath = cls.defaults
+            if defaultsPath is not None:
+                if not os.path.isabs(defaultsPath):
+                    defaultsPath = os.path.join(self.defaultsDir, defaultsPath)
+                c = Config(defaultsPath)
+                # Merge into baseline
+                self.update(c)
+
+        # Now that we have all the defaults we can merge the externally
+        # provided config into the defaults.
+        self.update(butlerConfig)
+
+    def _validate(self, config=None):
+        """Check a butler config contains mandatory keys.
+
+        Parameters
+        ----------
+        config : `Config`, optional
+            By default checks itself, but if ``config`` is given, this
+            config will be checked instead.
+        """
+        if config is None:
+            config = self
+        for k in ['datastore.cls', 'registry.cls']:
+            if k not in config:
+                raise ValueError(f"Missing ButlerConfig parameter: {k}")
 
 
 class Butler:

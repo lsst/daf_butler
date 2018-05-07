@@ -36,9 +36,7 @@ datastore:
 registry:
   cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
   db: 'sqlite:///:memory:'
-  schema: './config/registry/default_schema.yaml'
 storageClasses:
-  config: './config/registry/storageClasses.yaml'
   StructuredDataDictYaml:
     pytype: dict
   StructuredDataListYaml:
