@@ -21,6 +21,7 @@
 
 import unittest
 import inspect
+import pickle
 from itertools import permutations
 from random import shuffle
 
@@ -180,6 +181,17 @@ class TopologicalSetTestCase(lsst.utils.tests.TestCase):
         for i in range(N-1):
             topologicalSet2.connect(i, i+1)
         self.assertEqual(list(topologicalSet2), elements)
+
+    def testPickle(self):
+        """Should be possible to pickle.
+        """
+        elements = ['a', 'd', 'f']
+        topologicalSet = TopologicalSet(elements)
+        # Adding connections should work
+        topologicalSet.connect('a', 'd')
+        topologicalSet.connect('a', 'f')
+        out = pickle.loads(pickle.dumps(topologicalSet))
+        self.assertEqual(out, topologicalSet)
 
 
 class TestButlerUtils(lsst.utils.tests.TestCase):
