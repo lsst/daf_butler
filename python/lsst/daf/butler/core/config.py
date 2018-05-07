@@ -94,7 +94,7 @@ class Config(_ConfigBase):
     def ppprint(self):
         """helper function for debugging, prints a config out in a readable way in the debugger.
 
-        use: pdb> print myConfigObject.pprint()
+        use: pdb> print myConfigObject.ppprint()
 
         Returns
         -------
