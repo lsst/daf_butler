@@ -26,23 +26,24 @@ from __future__ import absolute_import, division, print_function
 
 __all__ = []
 
-#--------------------------------
+# -------------------------------
 #  Imports of standard modules --
-#--------------------------------
+# -------------------------------
 import re
 
-#-----------------------------
-# Imports for other modules --
-#-----------------------------
+# -----------------------------
+#  Imports for other modules --
+# -----------------------------
 from .ply import lex
 
-#----------------------------------
-# Local non-exported definitions --
-#----------------------------------
+# ----------------------------------
+#  Local non-exported definitions --
+# ----------------------------------
 
-#------------------------
-# Exported definitions --
-#------------------------
+# ------------------------
+#  Exported definitions --
+# ------------------------
+
 
 class ParserLexError(Exception):
     """Exception raised for lex-phase errors.
@@ -92,25 +93,25 @@ class ParserLex:
     # SQL has reserved words which we could potentially make reserved in our
     # grammar too, for now try to pretend we don't care about SQL
     reserved = dict(
-#         IS="IS",
+        # IS="IS",
         IN="IN",
-#         NULL="NULL",
+        # NULL="NULL",
         OR="OR",
         AND="AND",
         XOR="XOR",
         NOT="NOT",
-#         BETWEEN="BETWEEN",
-#         LIKE="LIKE",
-#         ESCAPE="ESCAPE",
-#         REGEXP="REGEXP"
+        # BETWEEN="BETWEEN",
+        # LIKE="LIKE",
+        # ESCAPE="ESCAPE",
+        # REGEXP="REGEXP"
     )
 
     # List of token names.
     tokens = (
         'NUMERIC_LITERAL',
         'STRING_LITERAL',
-#         'TIME_LITERAL',
-#         'DURATION_LITERAL',
+        # 'TIME_LITERAL',
+        # 'DURATION_LITERAL',
         'IDENTIFIER',
         'LPAREN', 'RPAREN',
         'EQ', 'NE', 'LT', 'LE', 'GT', 'GE',

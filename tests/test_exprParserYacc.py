@@ -23,7 +23,6 @@
 """Simple unit test for expr_parser/parserLex module.
 """
 
-import re
 import unittest
 
 from lsst.pipe.supertask.expr_parser import exprTree
@@ -44,7 +43,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testInstantiate(self):
         """Tests for making ParserLex instances
         """
-        parser = parserYacc.ParserYacc()
+        parser = parserYacc.ParserYacc()  # noqa: F841
 
     def testParseLiteral(self):
         """Tests for literals (strings/numbers)
@@ -307,6 +306,7 @@ class MyMemoryTestCase(lsst.utils.tests.MemoryTestCase):
 
 def setup_module(module):
     lsst.utils.tests.init()
+
 
 if __name__ == "__main__":
     lsst.utils.tests.init()

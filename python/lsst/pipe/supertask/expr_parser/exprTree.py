@@ -34,21 +34,21 @@ from __future__ import absolute_import, division, print_function
 __all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
            'Parens', 'StringLiteral', 'UnaryOp']
 
-#--------------------------------
+# -------------------------------
 #  Imports of standard modules --
-#--------------------------------
+# -------------------------------
 
-#-----------------------------
-# Imports for other modules --
-#-----------------------------
+# -----------------------------
+#  Imports for other modules --
+# -----------------------------
 
-#----------------------------------
-# Local non-exported definitions --
-#----------------------------------
+# ----------------------------------
+#  Local non-exported definitions --
+# ----------------------------------
 
-#------------------------
-# Exported definitions --
-#------------------------
+# ------------------------
+#  Exported definitions --
+# ------------------------
 
 
 class Node:
