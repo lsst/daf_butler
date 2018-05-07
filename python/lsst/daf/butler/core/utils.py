@@ -218,6 +218,11 @@ class Singleton(type):
         return cls._instances[cls]
 
 
+# Helper Node in a TopologicalSet
+# Unfortunately can't be a class member because that breaks pickling
+TopologicalSetNode = namedtuple('TopologicalSetNode', ['element', 'sourceElements'])
+
+
 class TopologicalSet:
     """A collection that behaves like a builtin `set`, but where
     elements can be interconnected (like a graph).
@@ -230,10 +235,8 @@ class TopologicalSet:
     elements : `iterable`
         Any iterable with elements to insert.
     """
-    Node = namedtuple('Node', ['element', 'sourceElements'])
-
     def __init__(self, elements):
-        self._nodes = {e: TopologicalSet.Node(e, set()) for e in elements}
+        self._nodes = {e: TopologicalSetNode(e, set()) for e in elements}
         self._ordering = None
 
     def __contains__(self, element):
@@ -241,6 +244,9 @@ class TopologicalSet:
 
     def __len__(self):
         return len(self._nodes)
+
+    def __eq__(self, other):
+        return self._nodes == other._nodes
 
     def connect(self, sourceElement, targetElement):
         """Connect two elements in the set.
