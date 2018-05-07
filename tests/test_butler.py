@@ -25,6 +25,7 @@
 import os
 import unittest
 from tempfile import TemporaryDirectory
+import pickle
 
 import lsst.utils.tests
 
@@ -158,6 +159,14 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         # inheriting from defaults.
         self.assertIn("datastore.formatters", full)
         self.assertNotIn("datastore.formatters", limited)
+
+    def testPickle(self):
+        """Test pickle support.
+        """
+        butler = Butler(self.configFile)
+        butlerOut = pickle.loads(pickle.dumps(butler))
+        self.assertIsInstance(butlerOut, Butler)
+        self.assertEqual(butlerOut.config, butler.config)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
