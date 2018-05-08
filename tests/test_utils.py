@@ -64,10 +64,22 @@ class ImportTestCase(unittest.TestCase):
         self.assertTrue(inspect.isfunction(c))
 
         with self.assertRaises(AttributeError):
+            doImport("lsst.daf.butler.core.config.Config.xyprint")
+
+        with self.assertRaises(AttributeError):
             doImport("lsst.daf.butler.nothere")
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ModuleNotFoundError):
             doImport("missing module")
+
+        with self.assertRaises(ModuleNotFoundError):
+            doImport("lsstdummy.import.fail")
+
+        with self.assertRaises(AttributeError):
+            doImport("lsst.import.fail")
+
+        with self.assertRaises(AttributeError):
+            doImport("lsst.daf.butler.x")
 
         with self.assertRaises(TypeError):
             doImport([])

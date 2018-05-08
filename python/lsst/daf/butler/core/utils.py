@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import importlib
 from collections import namedtuple
 
 
@@ -145,30 +146,38 @@ def doImport(pythonType):
     ------
     TypeError
         pythonType is not a `str`.
-    ValueError
-        pythonType can not be imported.
+    ModuleNotFoundError
+        No module in the supplied import string could be found.
+    ImportError
+        pythonType is found but can not be imported.
     AttributeError
         pythonType can be partially imported.
     """
     if not isinstance(pythonType, str):
-        raise TypeError("Unhandled type of pythonType, val:%s" % pythonType)
-    try:
-        # import this pythonType dynamically
-        pythonTypeTokenList = pythonType.split('.')
-        importClassString = pythonTypeTokenList.pop()
-        importClassString = importClassString.strip()
-        importPackage = ".".join(pythonTypeTokenList)
-        importType = __import__(importPackage, globals(), locals(), [importClassString], 0)
-        pythonType = getattr(importType, importClassString)
-        return pythonType
-    except ImportError:
-        pass
-    # maybe python type is a member function, in the form: path.to.object.Class.funcname
-    pythonTypeTokenList = pythonType.split('.')
-    importClassString = '.'.join(pythonTypeTokenList[0:-1])
-    importedClass = doImport(importClassString)
-    pythonType = getattr(importedClass, pythonTypeTokenList[-1])
-    return pythonType
+        raise TypeError(f"Unhandled type of pythonType, val: {pythonType}")
+
+    def tryImport(module, fromlist):
+        pytype = importlib.import_module(module)
+        # Can have functions inside classes inside modules
+        for f in fromlist:
+            pytype = getattr(pytype, f)
+        return pytype
+
+    # Go through the import path attempting to load the module
+    # and retrieve the class or function as an attribute. Shift components
+    # from the module list to the attribute list until something works.
+    moduleComponents = pythonType.split(".")
+    infileComponents = []
+
+    while moduleComponents:
+        try:
+            pytype = tryImport(".".join(moduleComponents), infileComponents)
+            return pytype
+        except ModuleNotFoundError:
+            # Move element from module to file and try again
+            infileComponents.insert(0, moduleComponents.pop())
+
+    raise ModuleNotFoundError(f"Unable to import {pythonType}")
 
 
 def getInstanceOf(typeOrName):
