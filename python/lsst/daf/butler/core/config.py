@@ -29,7 +29,7 @@ import pprint
 from yaml.representer import Representer
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
-__all__ = ("Config",)
+__all__ = ("Config", "ConfigSubset")
 
 
 # UserDict and yaml have defined metaclasses and Python 3 does not allow multiple
@@ -328,3 +328,41 @@ class Config(_ConfigBase):
         """
         with open(path, 'w') as f:
             self.dump(f)
+
+
+class ConfigSubset(Config):
+    """Config which can be constructed from a global config but which uses a
+    subset.
+
+    Sometimes you want to instantiate a ``Config`` object but you know that
+    the configuration supplied might contain more keys than you are interested
+    in and you only want one bit of it. For example, your config might contain
+    ``schema`` if it's part of a global config but it might be the contents
+    of ``schema``.
+
+    Subclasses can use class attributes to indicate which component they
+    wish to keep.
+
+    Additional validation can be specified to check for keys that are mandatory
+    in the configuration.
+
+    """
+
+    component = None
+    """Component to use from supplied config. Can be None. If specified the
+    key is not required. Can be a full dot-separated path to a component.
+    """
+
+    requiredKeys = ()
+    """Keys that are required to be specified in the configuration.
+    """
+
+    def __init__(self, other=None):
+        super().__init__(other)
+        if self.component is not None and self.component in self.data:
+            self.data = self.data[self.component]
+
+        # Validation
+        missing = [k for k in self.requiredKeys if k not in self.data]
+        if missing:
+            raise KeyError(f"Mandatory keys ({missing}) missing from supplied configuration")
