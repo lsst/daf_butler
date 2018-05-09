@@ -198,10 +198,10 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
 
         inputConfig = DatastoreConfig(self.configFile)
-        inputConfig['datastore.root'] = os.path.join(self.testDir, "./test_input_datastore")
+        inputConfig['root'] = os.path.join(self.testDir, "./test_input_datastore")
         inputPosixDatastore = PosixDatastore(config=inputConfig, registry=self.registry)
         outputConfig = inputConfig.copy()
-        outputConfig['datastore.root'] = os.path.join(self.testDir, "./test_output_datastore")
+        outputConfig['root'] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = PosixDatastore(config=outputConfig,
                                               registry=DummyRegistry())
 

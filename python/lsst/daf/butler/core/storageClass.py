@@ -25,13 +25,13 @@ import builtins
 
 from .utils import doImport, Singleton
 from .composites import CompositeAssembler
-from .config import Config
+from .config import ConfigSubset
 
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 
-class StorageClassConfig(Config):
-    pass
+class StorageClassConfig(ConfigSubset):
+    component = "storageClasses"
 
 
 class StorageClass:
@@ -144,7 +144,8 @@ class StorageClassFactory(metaclass=Singleton):
     Parameters
     ----------
     config : `StorageClassConfig` or `str`, optional
-        Load configuration. Required to contain a ``storageClasses`` key.
+        Load configuration. In a ButlerConfig` the relevant configuration
+        is located in the ``storageClasses`` section.
     """
 
     def __init__(self, config=None):
@@ -160,10 +161,10 @@ class StorageClassFactory(metaclass=Singleton):
         Parameters
         ----------
         config : `StorageClassConfig`, `Config` or `str`
-            Storage class configuration. Required to contain a
-            ``storageClasses`` key.
+            Storage class configuration. Can contain a ``storageClasses``
+            key if part of a global configuration.
         """
-        sconfig = StorageClassConfig(config)['storageClasses']
+        sconfig = StorageClassConfig(config)
         self._configs.append(sconfig)
 
         for name, info in sconfig.items():

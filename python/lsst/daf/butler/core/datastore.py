@@ -27,13 +27,14 @@ Support for generic data stores.
 from lsst.daf.butler.core.utils import doImport
 
 from abc import ABCMeta, abstractmethod
-from .config import Config
+from .config import ConfigSubset
 
 __all__ = ("DatastoreConfig", "Datastore")
 
 
-class DatastoreConfig(Config):
-    pass
+class DatastoreConfig(ConfigSubset):
+    component = "datastore"
+    requiredKeys = ("cls",)
 
 
 class Datastore(metaclass=ABCMeta):
@@ -72,7 +73,7 @@ class Datastore(metaclass=ABCMeta):
         return cls(config=config, registry=registry)
 
     def __init__(self, config, registry):
-        self.config = DatastoreConfig(config)['datastore']
+        self.config = DatastoreConfig(config)
         self.registry = registry
         self.name = "ABCDataStore"
 
