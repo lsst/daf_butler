@@ -17,14 +17,24 @@ storageClasses:
     pytype: lsst.afw.image.apCorrMap.ApCorrMap
   TablePersistableCalib:
     pytype: lsst.afw.image.calib.Calib
+  TablePersistableTransmissionCurve:
+    pytype: lsst.afw.image.TransmissionCurve
   ImageF:
     pytype: lsst.afw.image.image.ImageF
+  ImageU:
+    pytype: lsst.afw.image.image.ImageU
+  DecoratedImageU:
+    pytype: lsst.afw.image.image.DectoratedImageU
   MaskX:
     pytype: lsst.afw.image.mask.MaskX
   Catalog:
     pytype: lsst.afw.table.BaseCatalog
+  PeakCatalog:
+    pytype: lsst.afw.detection.PeakCatalog
   SourceCatalog:
     pytype: lsst.afw.table.SourceCatalog
+  SkyMap:
+    pytype: lsst.skymap.BaseSkyMap
   Exposure: &Exposure
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
@@ -53,3 +63,9 @@ storageClasses:
   ExposureI:
     <<: *ExposureComposite
     pytype: lsst.afw.image.ExposureI
+  Background:
+    pytype: lsst.afw.math.BackgroundList
+  Config:
+    pytype: lsst.pex.config.Config
+  Packages:
+    pytype: lsst.base.Packages

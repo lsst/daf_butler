@@ -37,15 +37,23 @@ collections:
     ref_cat_config: ref/{name}
 runs:
   # Names of Collections (after processing via the above section)
-  # that should be assigned to a particular Run.
+  # that should be assigned to a particular Run (dict values are integer
+  # Run IDs).
   # Note that the *first* Collection a Dataset is added to determines
   # its Run; this will be the one corresponding to the Gen2 repository
   # that originally contained the file, unless that has been overridden.
-  raw/HSC: 1
-  ref/ps1_pv3_3pi_20170110: 2
+  {}
 
 skymaps: {}  # dictionary mapping repository roots to Gen3 SkyMap names
 
 storageClasses:
-  # dictionary mapping Gen2 Mapping.persistable to Gen3 StorageClass name
-  {}
+  # dictionary mapping Gen2 Mapping.persistable, Mapping.python, or just the
+  # last term in Mapping.python (the unqualified type name) to Gen3
+  # StorageClass name.
+  # If nothing matches, we try the persistable and unqualified type names as
+  # StorageClass names themselves.
+  BaseSkyMap: SkyMap
+  BaseCatalog: Catalog
+  TransmissionCurve: TablePersistableTransmissionCurve
+  BackgroundList: Background
+  Config: Config
