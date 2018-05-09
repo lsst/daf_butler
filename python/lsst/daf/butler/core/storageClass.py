@@ -154,35 +154,6 @@ class StorageClassFactory(metaclass=Singleton):
         if config is not None:
             self.addFromConfig(config)
 
-    @classmethod
-    def fromConfig(cls, config):
-        """Create `StorageClassFactory` instance from `config`.
-
-        Uses ``storageClasses`` from ``config`` to learn storage class
-        definitions.
-
-        Parameters
-        ----------
-        config : `StorageClassConfig`, `Config` or `str`
-            Storage class configuration. Required to contain a
-            ``storageClasses.config`` key.
-
-        Returns
-        -------
-        storageClasses : `StorageClassFactory`
-            Factory of all known `StorageClass`\ es.
-        """
-        if not isinstance(config, StorageClassConfig):
-            if isinstance(config, str):
-                config = Config(config)
-            if isinstance(config, Config):
-                config = StorageClassConfig(config['storageClasses'])
-            else:
-                raise ValueError("Incompatible storage class configuration: {}".format(config))
-        factory = cls()
-        factory.addFromConfig(config["config"])
-        return factory
-
     def addFromConfig(self, config):
         """Add more `StorageClass` definitions from a config file.
 
