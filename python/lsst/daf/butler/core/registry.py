@@ -21,14 +21,14 @@
 
 from abc import ABCMeta
 
-from lsst.daf.butler.core.utils import doImport
-
+from .utils import doImport
+from .butlerConfig import ButlerConfig
 from .config import Config
 
 __all__ = ("RegistryConfig", "Registry")
 
 
-class RegistryConfig(Config):
+class RegistryConfig(ButlerConfig):
     pass
 
 
@@ -63,12 +63,12 @@ class Registry(metaclass=ABCMeta):
         """
         if not isinstance(config, RegistryConfig):
             if isinstance(config, str):
-                config = Config(config)
+                config = RegistryConfig(config)
             if isinstance(config, Config):
-                config = RegistryConfig(config['registry'])
+                config = RegistryConfig(config)
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(config))
-        cls = doImport(config['cls'])
+        cls = doImport(config['registry.cls'])
         return cls(config=config)
 
     def __init__(self, config):

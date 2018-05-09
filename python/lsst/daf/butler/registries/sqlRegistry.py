@@ -63,7 +63,7 @@ class SqlRegistry(Registry):
         self.config = SqlRegistryConfig(config)
         self.storageClasses = StorageClassFactory()
         self._schema = Schema(self.config['schema'])
-        self._engine = create_engine(self.config['db'])
+        self._engine = create_engine(self.config['registry.db'])
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}
 
