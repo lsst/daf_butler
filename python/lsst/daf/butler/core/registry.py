@@ -62,9 +62,7 @@ class Registry(metaclass=ABCMeta):
             A new `Registry` subclass instance.
         """
         if not isinstance(config, RegistryConfig):
-            if isinstance(config, str):
-                config = RegistryConfig(config)
-            if isinstance(config, Config):
+            if isinstance(config, str) or isinstance(config, Config):
                 config = RegistryConfig(config)
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(config))
