@@ -32,6 +32,7 @@ __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 class StorageClassConfig(ConfigSubset):
     component = "storageClasses"
+    defaultConfigFile = "storageClasses.yaml"
 
 
 class StorageClass:

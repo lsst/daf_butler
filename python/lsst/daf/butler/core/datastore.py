@@ -35,6 +35,7 @@ __all__ = ("DatastoreConfig", "Datastore")
 class DatastoreConfig(ConfigSubset):
     component = "datastore"
     requiredKeys = ("cls",)
+    defaultConfigFile = "datastore.yaml"
 
 
 class Datastore(metaclass=ABCMeta):
@@ -55,7 +56,7 @@ class Datastore(metaclass=ABCMeta):
         Load configuration
     """
 
-    defaults = None
+    defaultConfigFile = None
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """

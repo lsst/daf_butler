@@ -22,14 +22,16 @@
 from abc import ABCMeta
 
 from .utils import doImport
-from .butlerConfig import ButlerConfig
-from .config import Config
+from .config import Config, ConfigSubset
+from .schema import SchemaConfig
 
 __all__ = ("RegistryConfig", "Registry")
 
 
-class RegistryConfig(ButlerConfig):
-    pass
+class RegistryConfig(ConfigSubset):
+    component = "registry"
+    requiredKeys = ("cls",)
+    defaultConfigFile = "registry.yaml"
 
 
 class Registry(metaclass=ABCMeta):
@@ -37,40 +39,58 @@ class Registry(metaclass=ABCMeta):
 
     Parameters
     ----------
-    config : `RegistryConfig`
+    registryConfig : `RegistryConfig`
+        Registry configuration.
+    schemaConfig : `SchemaConfig`, optional
+        Schema configuration.
     """
 
-    defaults = None
+    defaultConfigFile = None
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
 
     @staticmethod
-    def fromConfig(config):
+    def fromConfig(registryConfig, schemaConfig=None):
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to instantiate.
 
         Parameters
         ----------
-        config : `RegistryConfig`, `Config` or `str`
+        registryConfig : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
+        schemaConfig : `SchemaConfig`, `Config` or `str`, optional.
+            Schema configuration. Can be read from supplied registryConfig
+            if the relevant component is defined and ``schemaConfig`` is
+            `None`.
 
         Returns
         -------
         registry : `Registry` (subclass)
             A new `Registry` subclass instance.
         """
-        if not isinstance(config, RegistryConfig):
-            if isinstance(config, str) or isinstance(config, Config):
-                config = RegistryConfig(config)
+        if schemaConfig is None:
+            # Try to instantiate a schema configuration from the supplied
+            # registry configuration.
+            schemaConfig = SchemaConfig(registryConfig)
+        elif not isinstance(schemaConfig, SchemaConfig):
+            if isinstance(schemaConfig, str) or isinstance(schemaConfig, Config):
+                schemaConfig = SchemaConfig(schemaConfig)
             else:
-                raise ValueError("Incompatible Registry configuration: {}".format(config))
-        cls = doImport(config['registry.cls'])
-        return cls(config=config)
+                raise ValueError("Incompatible Schema configuration: {}".format(schemaConfig))
 
-    def __init__(self, config):
-        assert isinstance(config, RegistryConfig)
-        self.config = config
+        if not isinstance(registryConfig, RegistryConfig):
+            if isinstance(registryConfig, str) or isinstance(registryConfig, Config):
+                registryConfig = RegistryConfig(registryConfig)
+            else:
+                raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
+
+        cls = doImport(registryConfig['cls'])
+        return cls(registryConfig, schemaConfig)
+
+    def __init__(self, registryConfig, schemaConfig=None):
+        assert isinstance(registryConfig, RegistryConfig)
+        self.config = registryConfig
 
     #  TODO Add back all interfaces (copied from SqlRegistry) once that is stabalized

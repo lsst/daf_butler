@@ -357,6 +357,10 @@ class ConfigSubset(Config):
     """Keys that are required to be specified in the configuration.
     """
 
+    defaultConfigFile = None
+    """Name of the file containing defaults for this config class.
+    """
+
     def __init__(self, other=None):
         super().__init__(other)
         if self.component is not None and self.component in self.data:
