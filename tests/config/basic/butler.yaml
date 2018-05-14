@@ -4,7 +4,7 @@ datastore:
   root: ./butler_test_repository
   templates:
     default: "{datasetType}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
-    calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter}_{component:?}"
+    calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
     metric: "{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
     test_metric_comp: "{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{camera}_{component:?}"
   formatters:
