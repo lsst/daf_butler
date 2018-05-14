@@ -159,6 +159,33 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         self.assertIn("datastore.formatters", full)
         self.assertNotIn("datastore.formatters", limited)
 
+    def testExposureCompositePutGet(self):
+        example = os.path.join(self.testDir, "data", "basic", "small.fits")
+        exposure = lsst.afw.image.ExposureF(example)
+        butler = Butler(self.configFile)
+        datasetTypeName = "calexp"
+        dataUnits = ("Camera", "Visit")
+        storageClass = self.storageClassFactory.getStorageClass("ExposureF")
+        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+        dataId = {"visit": 23, "camera": "HSC"}
+        butler.put(exposure, "calexp", dataId)
+        # Get the full thing
+        full = butler.get("calexp", dataId)
+        # TODO enable check for equality (fix for Exposure type)
+        # self.assertEqual(full, exposure)
+        # Get a component
+        compsRead = {}
+        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+            component = butler.get("calexp.{}".format(compName), dataId)
+            # TODO enable check for component instance types
+            # compRef = butler.registry.find(butler.run.collection, "calexp.{}".format(compName), dataId)
+            # self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
+            compsRead[compName] = component
+        # Simple check of WCS
+        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
+                                   lsst.afw.geom.Extent2I(9, 9))
+        self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
+
     def testPickle(self):
         """Test pickle support.
         """
