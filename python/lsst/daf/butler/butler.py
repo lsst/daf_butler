@@ -25,6 +25,7 @@ Butler top level classes.
 
 from .core.datastore import Datastore
 from .core.registry import Registry
+from .core.run import Run
 from .core.storageClass import StorageClassFactory
 from .core.butlerConfig import ButlerConfig
 
@@ -49,17 +50,57 @@ class Butler:
     ----------
     config : `Config`
         Configuration.
+    collection : `str` or `None`
+        Collection to use for all input lookups, overriding config['collection']
+        if provided.
+    run : `str`, `Run`, or `None`
+        Collection associated with the `Run` to use for outputs, overriding
+        config['run'].  If a `Run` associated with the given Collection does
+        not exist, it will be created.  If "collection" is None, this
+        collection will be used for input lookups as well; if not, it must have
+        the same value as "run".
+
+    Raises
+    ------
+    ValueError
+        Raised if neither 'collection' nor 'run' are provided by argument or
+        config, or if both are provided and are inconsistent.
     """
 
-    def __init__(self, config=None):
+    def __init__(self, config=None, collection=None, run=None):
         self.config = ButlerConfig(config)
         self.registry = Registry.fromConfig(self.config)
         self.datastore = Datastore.fromConfig(self.config, self.registry)
         self.storageClasses = StorageClassFactory()
         self.storageClasses.addFromConfig(self.config)
-        self.run = self.registry.getRun(collection=self.config['run'])
-        if self.run is None:
-            self.run = self.registry.makeRun(self.config['run'])
+        if run is None:
+            runCollection = self.config.get("run", None)
+        else:
+            if isinstance(run, Run):
+                self.run = run
+                runCollection = self.run.collection
+            else:
+                runCollection = run
+                self.run = None
+            # if run *arg* is not None and collection arg is, use run for collecion.
+            if collection is None:
+                collection = runCollection
+        del run  # it's a logic bug if we try to use this variable below
+        if collection is None:  # didn't get a collection from collection or run *args*
+            collection = self.config.get("collection", None)
+            if collection is None:  # didn't get a collection from config['collection']
+                collection = runCollection    # get collection from run found in config
+        if collection is None:
+            raise ValueError("No run or collection provided.")
+        if runCollection is not None and collection != runCollection:
+            raise ValueError(
+                "Run ({}) and collection ({}) are inconsistent.".format(runCollection, collection)
+            )
+        self.collection = collection
+        if runCollection is not None and self.run is None:
+            self.run = self.registry.getRun(collection=runCollection)
+            if self.run is None:
+                self.run = self.registry.makeRun(runCollection)
 
     def put(self, obj, datasetType, dataId, producer=None):
         """Store and register a dataset.
@@ -79,7 +120,15 @@ class Butler:
         -------
         ref : `DatasetRef`
             A reference to the stored dataset.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler was not constructed with a Run, and is hence
+            read-only.
         """
+        if self.run is None:
+            raise TypeError("Butler is read-only.")
         datasetType = self.registry.getDatasetType(datasetType)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
 
@@ -153,5 +202,5 @@ class Butler:
             The dataset.
         """
         datasetType = self.registry.getDatasetType(datasetType)
-        ref = self.registry.find(self.run.collection, datasetType, dataId)
+        ref = self.registry.find(self.collection, datasetType, dataId)
         return self.getDirect(ref)
