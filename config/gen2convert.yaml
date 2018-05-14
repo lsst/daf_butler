@@ -35,6 +35,10 @@ collections:
     raw: raw/{camera}
     ref_cat: ref/{name}
     ref_cat_config: ref/{name}
+    transmission_filter: transmission/{camera}
+    transmission_sensor: transmission/{camera}
+    transmission_optics: transmission/{camera}
+    transmission_atmosphere: transmission/{camera}
 runs:
   # Names of Collections (after processing via the above section)
   # that should be assigned to a particular Run (dict values are integer
