@@ -22,6 +22,7 @@
 import os.path
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+from ..core.utils import doImport
 
 __all__ = ("PexConfigFormatter", )
 
@@ -50,7 +51,24 @@ class PexConfigFormatter(FileFormatter):
         if not os.path.exists(path):
             return None
         instance = pytype()
-        instance.read(path)
+        # Configs can only be loaded if you use the correct derived type,
+        # but we can't really store the correct derive type in the StorageClass
+        # because that'd be a huge proliferation of StorageClasses.
+        # Instead, we use a bit of a hack: try to load using the base-class
+        # Config, inspect the exception message to obtain the class we should
+        # have used, import that, and try it instead.
+        # TODO: clean this up, somehow.
+        try:
+            instance.load(path)
+            return instance
+        except AssertionError as err:
+            msg = str(err)
+            if not msg.startswith("config is of type"):
+                raise RuntimeError("Unexpected assertion; cannot infer Config class type.") from err
+            actualPyTypeStr = msg.split()[-1]
+        actualPyType = doImport(actualPyTypeStr)
+        instance = actualPyType()
+        instance.load(path)
         return instance
 
     def _writeFile(self, inMemoryDataset, fileDescriptor):
