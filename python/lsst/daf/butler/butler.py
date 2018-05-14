@@ -204,3 +204,62 @@ class Butler:
         datasetType = self.registry.getDatasetType(datasetType)
         ref = self.registry.find(self.collection, datasetType, dataId)
         return self.getDirect(ref)
+
+    def getUri(self, datasetType, dataId, predict=False):
+        """Return the URI to the Dataset.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` instance or `str`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
+        uri : `str`
+            URI string pointing to the Dataset within the datastore. If the
+            Dataset does not exist in the datastore, and if ``predict`` is
+            `True`, the URI will be a prediction and will include a URI fragment
+            "#predicted".
+            If the datastore does not have entities that relate well
+            to the concept of a URI the returned URI string will be
+            descriptive. The returned URI is not guaranteed to be obtainable.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+        """
+        datasetType = self.registry.getDatasetType(datasetType)
+        ref = self.registry.find(self.collection, datasetType, dataId)
+        return self.datastore.getUri(ref, predict)
+
+    def datasetExists(self, datasetType, dataId):
+        """Return True if the Dataset is actually present in the Datastore.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` instance or `str`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
+
+        Raises
+        ------
+        LookupError
+            Raised if the Dataset is not even present in the Registry.
+        """
+        datasetType = self.registry.getDatasetType(datasetType)
+        ref = self.registry.find(self.collection, datasetType, dataId)
+        if ref is None:
+            raise LookupError(
+                "{} with {} not found in collection {}".format(datasetType, dataId, self.collection)
+            )
+        return self.datastore.exists(ref)
