@@ -830,7 +830,10 @@ class SqlRegistry(Registry):
             If the dataId is invalid for the given datasetType.
         """
         for name in datasetType.dataUnits:
-            self._schema.dataUnits[name].validateId(dataId)
+            try:
+                self._schema.dataUnits[name].validateId(dataId)
+            except ValueError as err:
+                raise ValueError("Error validating {}".format(datasetType.name)) from err
 
     def find(self, collection, datasetType, dataId):
         """Lookup a dataset.
