@@ -25,6 +25,7 @@ from collections import namedtuple
 
 import lsst.utils.tests
 
+from lsst.daf.butler.core.butlerConfig import ButlerConfig
 from lsst.daf.butler.core import Config, DatabaseDict, Registry
 
 """Tests for SqlDatabaseDict.
@@ -133,7 +134,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         """Test that we can obtain a DatabaseDict from a SqlRegistry."""
         testDir = os.path.dirname(__file__)
         configFile = os.path.join(testDir, "config/basic/butler.yaml")
-        registry = Registry.fromConfig(configFile)
+        registry = Registry.fromConfig(ButlerConfig(configFile))
         value = namedtuple("TestValue", ["y", "z"])
         data = {
             0: value(y="zero", z=0.0),

@@ -22,6 +22,7 @@
 import os
 import unittest
 
+import lsst.utils
 import lsst.utils.tests
 
 from lsst.daf.butler.core.schema import SchemaConfig
@@ -33,7 +34,8 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
     """
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
-        self.schemaFile = os.path.join(self.testDir, "../config/registry/default_schema.yaml")
+        self.schemaFile = os.path.join(lsst.utils.getPackageDir("daf_butler"), "config",
+                                       SchemaConfig.defaultConfigFile)
         self.config = SchemaConfig(self.schemaFile)
 
     def testConstructor(self):

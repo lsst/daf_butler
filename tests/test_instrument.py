@@ -25,6 +25,7 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler.core import Registry
+from lsst.daf.butler.core.butlerConfig import ButlerConfig
 
 from lsst.daf.butler.instrument import Instrument
 
@@ -51,7 +52,7 @@ class InstrumentTestCase(lsst.utils.tests.TestCase):
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
 
     def testRegister(self):
-        registry = Registry.fromConfig(self.configFile)
+        registry = Registry.fromConfig(ButlerConfig(self.configFile))
         dummyCam = DummyCam()
         dummyCam.register(registry)
 
