@@ -24,7 +24,7 @@ storageClasses:
   ImageU:
     pytype: lsst.afw.image.image.ImageU
   DecoratedImageU:
-    pytype: lsst.afw.image.image.DectoratedImageU
+    pytype: lsst.afw.image.image.DecoratedImageU
   MaskX:
     pytype: lsst.afw.image.mask.MaskX
   Catalog:
