@@ -23,19 +23,27 @@
 
 import collections
 import copy
-import yaml
 import pprint
-
+import os
+import yaml
 from yaml.representer import Representer
+
+import lsst.utils
+
+from .utils import doImport
+
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
 __all__ = ("Config", "ConfigSubset")
 
+# PATH-like environment variable to use for defaults.
+CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
 # UserDict and yaml have defined metaclasses and Python 3 does not allow multiple
 # inheritance of classes with distinct metaclasses. We therefore have to
 # create a new baseclass that Config can inherit from. This is because the metaclass
 # syntax differs between versions
+
 
 class _ConfigMeta(type(collections.UserDict), type(yaml.YAMLObject)):
     pass
@@ -90,6 +98,38 @@ class Config(_ConfigBase):
         else:
             # if the config specified by other could not be recognized raise a runtime error.
             raise RuntimeError("A Config could not be loaded from other:%s" % other)
+
+    @classmethod
+    def defaultSearchPaths(cls):
+        """Read the environment to determine search paths to use for global
+        defaults.
+
+        Global defaults, at lowest priority, are found in the ``config``
+        directory of the butler source tree. Additional defaults can be
+        defined using the environment variable ``$DAF_BUTLER_CONFIG_PATHS``
+        which is a PATH-like variable where paths at the front of the list
+        have priority over those later.
+
+        Returns
+        -------
+        paths : `list`
+            Returns a list of paths to search. The returned order is in
+            reverse priority such that the later paths supercede defaults
+            read from the earlier paths.
+        """
+        # We can pick up defaults from multiple search paths
+        # We fill defaults by using the butler config path and then
+        # the config path environment variable in reverse order.
+        defaultsPaths = []
+
+        # Find the butler configs
+        defaultsPaths.append(os.path.join(lsst.utils.getPackageDir("daf_butler"), "config"))
+
+        if CONFIG_PATH in os.environ:
+            externalPaths = list(reversed(os.environ[CONFIG_PATH].split(os.pathsep)))
+            defaultsPaths.append(externalPaths)
+
+        return defaultsPaths
 
     def ppprint(self):
         """helper function for debugging, prints a config out in a readable way in the debugger.
@@ -346,6 +386,18 @@ class ConfigSubset(Config):
     Additional validation can be specified to check for keys that are mandatory
     in the configuration.
 
+    Parameters
+    ----------
+    other : `Config` or `str` or `dict`
+        Argument specifying the configuration information as understood
+        by `Config`
+    validate : `bool`, optional
+        If `True` required keys will be checked to ensure configuration
+        consistency.
+    mergeDefaults : `bool`, optional
+        If `True` defaults will be read and the supplied config will
+        be combined with the defaults, with the supplied valiues taking
+        precedence.
     """
 
     component = None
@@ -361,12 +413,81 @@ class ConfigSubset(Config):
     """Name of the file containing defaults for this config class.
     """
 
-    def __init__(self, other=None):
+    def __init__(self, other=None, validate=True, mergeDefaults=True):
         super().__init__(other)
         if self.component is not None and self.component in self.data:
             self.data = self.data[self.component]
 
+        # Sometimes we do not want to merge with defaults.
+        if mergeDefaults:
+
+            # Read default files
+            searchPaths = self.defaultSearchPaths()
+
+            # There are two places to find defaults for this particular config
+            # - The "defaultConfigFile" defined in the subclass
+            # - The class specified in the "cls" element in the config.
+            #   Read cls after merging in case it changes.
+
+            if self.defaultConfigFile is not None:
+                self._updateWithDefaultsFromPath(searchPaths, self.defaultConfigFile)
+
+            if "cls" in self:
+                try:
+                    cls = doImport(self["cls"])
+                except ImportError:
+                    raise RuntimeError("Failed to import cls '{}' for config {}".format(self["cls"],
+                                                                                        type(self)))
+                defaultsFile = cls.defaultConfigFile
+                if defaultsFile is not None:
+                    self._updateWithDefaultsFromPath(searchPaths, defaultsFile)
+
+        if validate:
+            self.validate()
+
+    def _updateWithDefaultsFromPath(self, searchPaths, configFile):
+        """Search the supplied path in order merging the configuration values
+
+        Parameters
+        ----------
+        searchPaths : `list`
+            Paths to search for the supplied configFile. Read in order such
+            that later entries in the list override earlier entries.
+        configFile : `str`
+            File to locate in path. If absolute path it will be read
+            directly.
+        """
+        if os.path.isabs(configFile):
+            self._updateWithDefaults(configFile)
+        else:
+            for pathDir in searchPaths:
+                file = os.path.join(pathDir, configFile)
+                if os.path.exists(file):
+                    self._updateWithDefaults(file)
+
+    def _updateWithDefaults(self, defaults):
+        """Read in some defaults and update.
+
+        Merge the current values with the defaults with the current values
+        taking priority. Defaults are not validated.
+
+        Parameters
+        ----------
+        defaults : `Config`, `str`, or `dict`
+            Entity that can be converted to a `ConfigSubset`.
+        """
+        # Use this class to read the defaults so that subsetting can happen
+        # correctly.
+        defaultValues = type(self)(defaults, validate=False, mergeDefaults=False)
+        current = copy.deepcopy(self)
+        self.data = defaultValues.data
+        self.update(current)
+
+    def validate(self):
+        """Check that mandatory keys are present in this configuration.
+
+        Ignored if ``requiredKeys`` is empty."""
         # Validation
         missing = [k for k in self.requiredKeys if k not in self.data]
         if missing:
-            raise KeyError(f"Mandatory keys ({missing}) missing from supplied configuration")
+            raise KeyError(f"Mandatory keys ({missing}) missing from supplied configuration for {type(self)}")

@@ -23,16 +23,15 @@
 Configuration classes specific to the Butler
 """
 
-import os
-
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
 from .registry import RegistryConfig
 from .storageClass import StorageClassConfig
-from .utils import doImport
 
 __all__ = ("ButlerConfig",)
+
+CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig, DatastoreConfig)
 
 
 class ButlerConfig(Config):
@@ -54,11 +53,19 @@ class ButlerConfig(Config):
 
     Parameters
     ----------
-    other : `str`
-        Path to butler configuration YAML file.
+    other : `str`, `Config`, optional
+        Path to butler configuration YAML file. If `None` the butler will
+        be configured based entirely on defaults read from the environment.
+        No defaults will be read if a `ButlerConfig` is supplied.
     """
 
-    def __init__(self, other):
+    def __init__(self, other=None):
+
+        # If this is already a ButlerConfig we assume that defaults
+        # have already been loaded.
+        if other is not None and isinstance(other, ButlerConfig):
+            super().__init__(other)
+            return
 
         # Create an empty config for us to populate
         super().__init__()
@@ -67,60 +74,20 @@ class ButlerConfig(Config):
         # defaults to use.
         butlerConfig = Config(other)
 
-        # All the configs that can be associated with default files
-        configComponents = (SchemaConfig, StorageClassConfig, DatastoreConfig, RegistryConfig)
-
-        # This is a list of all the config files to search
-        defaultsFiles = [(c, c.defaultConfigFile) for c in configComponents]
-
-        # Components that derive their configurations from implementation
-        # classes rather than configuration classes
-        specializedConfigs = (DatastoreConfig, RegistryConfig)
-
-        # Look for class specific default files to be added to the file list
-        # These class definitions must come from the suppliedbutler config and
-        # are not defaulted.
-        for componentConfig in specializedConfigs:
-            k = "{}.cls".format(componentConfig.component)
-            if k not in butlerConfig:
-                raise ValueError("Required configuration {} not present in {}".format(k, other))
-            cls = doImport(butlerConfig[k])
-            defaultsFile = cls.defaultConfigFile
-            if defaultsFile is not None:
-                defaultsFiles.append((componentConfig, defaultsFile))
-
-        # We can pick up defaults from multiple search paths
-        # We fill defaults by using the butler config path and then
-        # the config path environment variable in reverse order.
-        self.defaultsPaths = []
-
-        # Find the butler configs
-        if "DAF_BUTLER_DIR" in os.environ:
-            self.defaultsPaths.append(os.path.join(os.environ["DAF_BUTLER_DIR"], "config"))
-
-        if "DAF_BUTLER_CONFIG_PATH" in os.environ:
-            externalPaths = list(reversed(os.environ["DAF_BUTLER_CONFIG_PATH"].split(os.pathsep)))
-            self.defaultsPaths.append(externalPaths)
-
-        # Search each directory for each of the default files
-        for pathDir in self.defaultsPaths:
-            for configClass, configFile in defaultsFiles:
-                # Assume external paths have same config files as global config
-                # directory. Absolute paths are possible for external
-                # code.
-                # Should this be a log message? Are we using lsst.log?
-                # print("Checking path {} for {} ({})".format(pathDir, configClass, configFile))
-                if not os.path.isabs(configFile):
-                    configFile = os.path.join(pathDir, configFile)
-                if os.path.exists(configFile):
-                    # this checks a specific part of the tree
-                    # We may need to turn off validation since we do not
-                    # require that each defaults file found is fully
-                    # consistent.
-                    config = configClass(configFile)
-                    # Attach it using the global namespace
-                    self.update({configClass.component: config})
+        # A Butler config contains defaults defined by each of the component
+        # configuration classes. We ask each of them to apply defaults to
+        # the values we have been supplied by the user.
+        for configClass in CONFIG_COMPONENT_CLASSES:
+            config = configClass(butlerConfig)
+            # Re-attach it using the global namespace
+            self.update({configClass.component: config})
+            # Remove the key from the butlerConfig since we have already
+            # merged that information.
+            if configClass.component in butlerConfig:
+                del butlerConfig[configClass.component]
 
         # Now that we have all the defaults we can merge the externally
         # provided config into the defaults.
+        # Not needed if there is never information in a butler config file
+        # not present in component configurations
         self.update(butlerConfig)
