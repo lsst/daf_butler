@@ -1,5 +1,22 @@
 datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  root: default_butler_repository
   records:
     table: PosixDatastoreRecords
   create: true
+  templates:
+    default: "{datasetType}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
+  formatters:
+    TablePersistable: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableWcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistablePsf: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCoaddInputs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableVisitInfo: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableApCorr: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCalib: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    ImageF: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    MaskX: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    SourceCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Exposure: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ExposureF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ExposureI: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter

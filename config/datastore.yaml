@@ -1,0 +1,3 @@
+datastore:
+  # Use the PosixDatastore as a default for a default butler
+  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
