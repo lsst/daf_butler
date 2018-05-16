@@ -149,9 +149,8 @@ def doImport(pythonType):
     ModuleNotFoundError
         No module in the supplied import string could be found.
     ImportError
-        pythonType is found but can not be imported.
-    AttributeError
-        pythonType can be partially imported.
+        pythonType is found but can not be imported or the requested
+        item could not be retrieved from the imported module.
     """
     if not isinstance(pythonType, str):
         raise TypeError(f"Unhandled type of pythonType, val: {pythonType}")
@@ -160,7 +159,10 @@ def doImport(pythonType):
         pytype = importlib.import_module(module)
         # Can have functions inside classes inside modules
         for f in fromlist:
-            pytype = getattr(pytype, f)
+            try:
+                pytype = getattr(pytype, f)
+            except AttributeError as e:
+                raise ImportError(f"Could not get attribute '{f}' from '{module}'")
         return pytype
 
     # Go through the import path attempting to load the module
