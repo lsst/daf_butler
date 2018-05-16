@@ -219,11 +219,12 @@ class IsIn(Node):
 
     def __str__(self):
         values = ", ".join(str(x) for x in self.values)
+        not_in = ""
         if self.not_in:
             not_in = "NOT "
-            return "{lhs} {not_in}IN ({values})".format(lhs=self.lhs,
-                                                        not_in=not_in,
-                                                        values=values)
+        return "{lhs} {not_in}IN ({values})".format(lhs=self.lhs,
+                                                    not_in=not_in,
+                                                    values=values)
 
 
 class Parens(Node):

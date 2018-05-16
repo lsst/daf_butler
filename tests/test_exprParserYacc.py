@@ -264,11 +264,17 @@ class ParserLexTestCase(unittest.TestCase):
         tree = parser.parse("(a+b)")
         self.assertEqual(str(tree), '(a + b)')
 
+        tree = parser.parse("1 in (1,'x',3)")
+        self.assertEqual(str(tree), "1 IN (1, 'x', 3)")
+
         tree = parser.parse("a not   in (1,'x',3)")
         self.assertEqual(str(tree), "a NOT IN (1, 'x', 3)")
 
+        tree = parser.parse("(A or B) And NoT (x+3 > y)")
+        self.assertEqual(str(tree), "(A OR B) AND NOT (x + 3 > y)")
+
     def testVisit(self):
-        """Test for formatting"""
+        """Test for visitor methods"""
 
         def _visitor(node, nodes):
             nodes.append(node)
