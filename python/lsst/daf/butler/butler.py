@@ -37,8 +37,9 @@ class Butler:
 
     Attributes
     ----------
-    config : `str` or `Config`
-        (filename to) configuration.
+    config : `str`, `ButlerConfig` or `Config`, optional
+        (filename to) configuration. If this is not a `ButlerConfig`, defaults
+        will be read.
     datastore : `Datastore`
         Datastore to use for storage.
     registry : `Registry`
@@ -50,7 +51,7 @@ class Butler:
         Configuration.
     """
 
-    def __init__(self, config):
+    def __init__(self, config=None):
         self.config = ButlerConfig(config)
         self.registry = Registry.fromConfig(self.config)
         self.datastore = Datastore.fromConfig(self.config, self.registry)

@@ -84,6 +84,8 @@ class PosixDatastore(Datastore):
 
     def __init__(self, config, registry):
         super().__init__(config, registry)
+        if "root" not in self.config:
+            raise ValueError("No root directory specified in configuration")
         self.root = self.config['root']
         if not os.path.isdir(self.root):
             if 'create' not in self.config or not self.config['create']:
