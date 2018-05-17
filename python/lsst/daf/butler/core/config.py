@@ -488,7 +488,8 @@ class ConfigSubset(Config):
         """Search the supplied paths, merging the configuration values
 
         The values read will override values currently stored in the object.
-        Every file found in the path will be read. The priority
+        Every file found in the path will be read, such that the earlier
+        path entries have higher priority.
 
         Parameters
         ----------
