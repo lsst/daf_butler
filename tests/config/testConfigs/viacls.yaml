@@ -1,0 +1,5 @@
+# Intended to be loaded via a "cls" entry in another config
+comp:
+  "item1": "posix"
+  "item11": "class"
+  "item50": 50

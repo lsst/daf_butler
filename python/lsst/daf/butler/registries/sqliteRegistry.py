@@ -47,5 +47,5 @@ class SqliteRegistry(SqlRegistry):
         Load configuration
     """
 
-    def __init__(self, config):
-        super().__init__(config)
+    def __init__(self, registryConfig, schemaConfig):
+        super().__init__(registryConfig, schemaConfig)

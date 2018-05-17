@@ -27,13 +27,15 @@ Support for generic data stores.
 from lsst.daf.butler.core.utils import doImport
 
 from abc import ABCMeta, abstractmethod
-from .config import Config
+from .config import ConfigSubset
 
 __all__ = ("DatastoreConfig", "Datastore")
 
 
-class DatastoreConfig(Config):
-    pass
+class DatastoreConfig(ConfigSubset):
+    component = "datastore"
+    requiredKeys = ("cls",)
+    defaultConfigFile = "datastore.yaml"
 
 
 class Datastore(metaclass=ABCMeta):
@@ -54,6 +56,11 @@ class Datastore(metaclass=ABCMeta):
         Load configuration
     """
 
+    defaultConfigFile = None
+    """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
+    absolute path. Can be None if no defaults specified.
+    """
+
     @staticmethod
     def fromConfig(config, registry):
         """Create datastore from type specified in config file.
@@ -67,7 +74,7 @@ class Datastore(metaclass=ABCMeta):
         return cls(config=config, registry=registry)
 
     def __init__(self, config, registry):
-        self.config = DatastoreConfig(config)['datastore']
+        self.config = DatastoreConfig(config)
         self.registry = registry
         self.name = "ABCDataStore"
 

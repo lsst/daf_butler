@@ -50,14 +50,21 @@ class SqlRegistry(Registry):
     ----------
     config : `SqlRegistryConfig` or `str`
         Load configuration
+    schemaConfig : `SchemaConfig` or `str`
+        Definition of the schema to use.
     """
 
-    def __init__(self, config):
-        super().__init__(config)
+    defaultConfigFile = None
+    """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
+    absolute path. Can be None if no defaults specified.
+    """
 
-        self.config = SqlRegistryConfig(config)
+    def __init__(self, registryConfig, schemaConfig):
+        super().__init__(registryConfig)
+
+        self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(self.config['schema'])
+        self._schema = Schema(schemaConfig)
         self._engine = create_engine(self.config['db'])
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}

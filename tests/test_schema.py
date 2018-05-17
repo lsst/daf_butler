@@ -24,6 +24,7 @@ import unittest
 
 from sqlalchemy import create_engine, MetaData
 
+import lsst.utils
 import lsst.utils.tests
 
 from lsst.daf.butler.core.utils import iterable
@@ -43,8 +44,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
 
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
-        self.schemaFile = os.path.join(self.testDir, "../config/registry/default_schema.yaml")
-        self.config = SchemaConfig(self.schemaFile)
+        self.config = SchemaConfig()
         self.schema = Schema(self.config)
         self.engine = create_engine('sqlite:///:memory:')
         self.schema.metadata.create_all(self.engine)
@@ -52,7 +52,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Independent check for `Schema` constructor.
         """
-        schema = Schema(self.schemaFile)
+        schema = Schema()
         self.assertIsInstance(schema, Schema)
 
     def testSchemaCreation(self):

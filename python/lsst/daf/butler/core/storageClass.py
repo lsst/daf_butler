@@ -25,13 +25,14 @@ import builtins
 
 from .utils import doImport, Singleton
 from .composites import CompositeAssembler
-from .config import Config
+from .config import ConfigSubset
 
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 
-class StorageClassConfig(Config):
-    pass
+class StorageClassConfig(ConfigSubset):
+    component = "storageClasses"
+    defaultConfigFile = "storageClasses.yaml"
 
 
 class StorageClass:
@@ -144,7 +145,8 @@ class StorageClassFactory(metaclass=Singleton):
     Parameters
     ----------
     config : `StorageClassConfig` or `str`, optional
-        Load configuration. Required to contain a ``storageClasses`` key.
+        Load configuration. In a ButlerConfig` the relevant configuration
+        is located in the ``storageClasses`` section.
     """
 
     def __init__(self, config=None):
@@ -154,45 +156,16 @@ class StorageClassFactory(metaclass=Singleton):
         if config is not None:
             self.addFromConfig(config)
 
-    @classmethod
-    def fromConfig(cls, config):
-        """Create `StorageClassFactory` instance from `config`.
-
-        Uses ``storageClasses`` from ``config`` to learn storage class
-        definitions.
-
-        Parameters
-        ----------
-        config : `StorageClassConfig`, `Config` or `str`
-            Storage class configuration. Required to contain a
-            ``storageClasses.config`` key.
-
-        Returns
-        -------
-        storageClasses : `StorageClassFactory`
-            Factory of all known `StorageClass`\ es.
-        """
-        if not isinstance(config, StorageClassConfig):
-            if isinstance(config, str):
-                config = Config(config)
-            if isinstance(config, Config):
-                config = StorageClassConfig(config['storageClasses'])
-            else:
-                raise ValueError("Incompatible storage class configuration: {}".format(config))
-        factory = cls()
-        factory.addFromConfig(config["config"])
-        return factory
-
     def addFromConfig(self, config):
         """Add more `StorageClass` definitions from a config file.
 
         Parameters
         ----------
         config : `StorageClassConfig`, `Config` or `str`
-            Storage class configuration. Required to contain a
-            ``storageClasses`` key.
+            Storage class configuration. Can contain a ``storageClasses``
+            key if part of a global configuration.
         """
-        sconfig = StorageClassConfig(config)['storageClasses']
+        sconfig = StorageClassConfig(config)
         self._configs.append(sconfig)
 
         for name, info in sconfig.items():

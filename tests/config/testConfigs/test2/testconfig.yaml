@@ -1,0 +1,5 @@
+comp:
+  item3: "override"
+  item4: "new"
+irrelevant:
+  nothing: "here"

@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import iterable
-from .config import Config
+from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
 from .dataUnit import DataUnitRegistry
@@ -30,8 +30,10 @@ metadata = None  # Needed to make disabled test_hsc not fail on import
 __all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
 
 
-class SchemaConfig(Config):
-    pass
+class SchemaConfig(ConfigSubset):
+    component = "schema"
+    requiredKeys = ("version", "dataUnits")
+    defaultConfigFile = "schema.yaml"
 
 
 class Schema:
@@ -39,16 +41,17 @@ class Schema:
 
     Parameters
     ----------
-    config : `SchemaConfig` or `str`
-        Load configuration
+    config : `SchemaConfig` or `str`, optional
+        Load configuration. Defaults will be read if ``config`` is not
+        a `SchemaConfig`.
 
     Attributes
     ----------
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
     """
-    def __init__(self, config):
-        if isinstance(config, str):
+    def __init__(self, config=None):
+        if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
         self.config = config
         self.builder = SchemaBuilder()

@@ -23,26 +23,13 @@
 Butler top level classes.
 """
 
-from .core.config import Config
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.storageClass import StorageClassFactory
+from .core.butlerConfig import ButlerConfig
 
-__all__ = ("ButlerConfig", "Butler")
 
-
-class ButlerConfig(Config):
-    """Contains the configuration for a `Butler`
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.validate()
-
-    def validate(self):
-        for k in ['run', 'datastore.cls', 'registry.cls', 'storageClasses.config']:
-            if k not in self:
-                raise ValueError("Missing ButlerConfig parameter: {0}".format(k))
+__all__ = ("Butler",)
 
 
 class Butler:
@@ -50,8 +37,9 @@ class Butler:
 
     Attributes
     ----------
-    config : `str` or `Config`
-        (filename to) configuration.
+    config : `str`, `ButlerConfig` or `Config`, optional
+        (filename to) configuration. If this is not a `ButlerConfig`, defaults
+        will be read.
     datastore : `Datastore`
         Datastore to use for storage.
     registry : `Registry`
@@ -63,7 +51,7 @@ class Butler:
         Configuration.
     """
 
-    def __init__(self, config):
+    def __init__(self, config=None):
         self.config = ButlerConfig(config)
         self.registry = Registry.fromConfig(self.config)
         self.datastore = Datastore.fromConfig(self.config, self.registry)

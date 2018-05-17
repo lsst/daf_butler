@@ -19,9 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import unittest
 
+import lsst.utils
 import lsst.utils.tests
 
 from lsst.daf.butler.core.schema import SchemaConfig
@@ -32,9 +32,7 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
     """Tests for `DataUnitRegistry`.
     """
     def setUp(self):
-        self.testDir = os.path.dirname(__file__)
-        self.schemaFile = os.path.join(self.testDir, "../config/registry/default_schema.yaml")
-        self.config = SchemaConfig(self.schemaFile)
+        self.config = SchemaConfig()
 
     def testConstructor(self):
         """Independent check for `Schema` constructor.
