@@ -23,10 +23,14 @@
 Butler top level classes.
 """
 
+import os
+
+from .core.utils import doImport
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.run import Run
 from .core.storageClass import StorageClassFactory
+from .core.config import Config
 from .core.butlerConfig import ButlerConfig
 
 
@@ -40,7 +44,8 @@ class Butler:
     ----------
     config : `str`, `ButlerConfig` or `Config`, optional
         (filename to) configuration. If this is not a `ButlerConfig`, defaults
-        will be read.
+        will be read.  If a `str`, may be the path to a directory containing
+        a "butler.yaml" file.
     datastore : `Datastore`
         Datastore to use for storage.
     registry : `Registry`
@@ -66,6 +71,43 @@ class Butler:
         Raised if neither 'collection' nor 'run' are provided by argument or
         config, or if both are provided and are inconsistent.
     """
+
+    @staticmethod
+    def makeRepo(root, config=None, expand=False):
+        """Create an empty data repository by adding a butler.yaml config
+        to a repository root directory.
+
+        Parameters
+        ----------
+        root : `str`
+            Filesystem path to the root of the new repository.
+        config : `Config` or `None`
+            Configuration to write to the repository, after setting any
+            root-dependent Registry or Datastore config options.
+        expand : `bool`
+            If True, write all expanded defaults, not just customized or
+            repository-specific settings.
+            This (mostly) decouples the repository from the default
+            configuration insulating it from changes (which may be good or
+            bad, depending on the nature of the changes).
+
+        Note that when ``expand=False`` (the default), the configuration
+        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
+        construct the repository should also be used to construct any Butlers
+        to it to avoid configuration inconsistencies.
+        """
+        if isinstance(config, ButlerConfig):
+            raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
+        root = os.path.abspath(root)
+        config = Config(config)
+        full = ButlerConfig(config)  # this applies defaults
+        datastoreClass = doImport(full["datastore.cls"])
+        datastoreClass.setConfigRoot(root, config, full)
+        registryClass = doImport(full["registry.cls"])
+        registryClass.setConfigRoot(root, config, full)
+        if expand:
+            config.merge(full)
+        config.dumpToFile(os.path.join(root, "butler.yaml"))
 
     def __init__(self, config=None, collection=None, run=None):
         self.config = ButlerConfig(config)

@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 
 from .utils import doImport
 from .config import Config, ConfigSubset
@@ -49,6 +49,27 @@ class Registry(metaclass=ABCMeta):
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
+
+    @classmethod
+    @abstractmethod
+    def setConfigRoot(cls, root, config, full):
+        """Set any filesystem-dependent config options for this Registry to
+        be appropriate for a new empty repository with the given root.
+
+        Parameters
+        ----------
+        root : `str`
+            Filesystem path to the root of the data repository.
+        config : `Config`
+            A Butler-level config object to update (but not a
+            `ButlerConfig`, to avoid included expanded defaults).
+        full : `ButlerConfig`
+            A complete Butler config with all defaults expanded;
+            repository-specific options that should not be obtained
+            from defaults when Butler instances are constructed
+            should be copied from `full` to `Config`.
+        """
+        raise NotImplementedError()
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None):
