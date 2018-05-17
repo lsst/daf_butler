@@ -33,7 +33,7 @@ __all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
 class SchemaConfig(ConfigSubset):
     component = "schema"
     requiredKeys = ("version", "dataUnits")
-    defaultConfigFile = "registry_schema.yaml"
+    defaultConfigFile = "schema.yaml"
 
 
 class Schema:
