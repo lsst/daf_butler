@@ -24,10 +24,11 @@
 
 import os
 import unittest
+from tempfile import TemporaryDirectory
 
 import lsst.utils.tests
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from examplePythonTypes import MetricsExample
@@ -58,7 +59,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.testDir = os.path.dirname(__file__)
+        cls.testDir = os.path.abspath(os.path.dirname(__file__))
         cls.storageClassFactory = StorageClassFactory()
         cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
         cls.storageClassFactory.addFromConfig(cls.configFile)
@@ -122,6 +123,28 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         # Check we can get components
         self.assertGetComponents(butler, datasetTypeName, dataId,
                                  ("summary", "data", "output"), metric)
+
+    def testMakeRepo(self):
+        """Test that we can write butler configuration to a new repository via
+        the Butler.makeRepo interface and then instantiate a butler from the
+        repo root.
+        """
+        with TemporaryDirectory(prefix=self.testDir + "/") as root:
+            Butler.makeRepo(root)
+            limited = Config(os.path.join(root, "butler.yaml"))
+            butler1 = Butler(root, collection="null")
+            Butler.makeRepo(root, expand=True)
+            full = Config(os.path.join(root, "butler.yaml"))
+            butler2 = Butler(root, collection="null")
+        # Butlers should have the same configuration regardless of whether
+        # defaults were expanded.
+        self.assertEqual(butler1.config, butler2.config)
+        # Config files loaded directly should not be the same.
+        self.assertNotEqual(limited, full)
+        # Make sure 'limited' doesn't have a few keys we know it should be
+        # inheriting from defaults.
+        self.assertIn("datastore.formatters", full)
+        self.assertNotIn("datastore.formatters", limited)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

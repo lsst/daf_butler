@@ -117,6 +117,7 @@ class Butler:
         self.storageClasses.addFromConfig(self.config)
         if run is None:
             runCollection = self.config.get("run", None)
+            self.run = None
         else:
             if isinstance(run, Run):
                 self.run = run
