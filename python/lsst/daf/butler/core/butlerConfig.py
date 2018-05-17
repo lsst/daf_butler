@@ -75,7 +75,13 @@ class ButlerConfig(Config):
         # configuration classes. We ask each of them to apply defaults to
         # the values we have been supplied by the user.
         for configClass in CONFIG_COMPONENT_CLASSES:
-            config = configClass(butlerConfig)
+            # Only send the parent config if the child
+            # config component is present (otherwise it assumes that the
+            # keys from other components are part of the child)
+            localOverrides = None
+            if configClass.component in butlerConfig:
+                localOverrides = butlerConfig
+            config = configClass(localOverrides)
             # Re-attach it using the global namespace
             self.update({configClass.component: config})
             # Remove the key from the butlerConfig since we have already
