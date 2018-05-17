@@ -183,7 +183,10 @@ class Config(_ConfigBase):
         yaml.YAMLError
             If there is an error loading the file.
         """
-        self.data = yaml.safe_load(stream)
+        content = yaml.safe_load(stream)
+        if content is None:
+            content = {}
+        self.data = content
         return self
 
     def __getitem__(self, name):
