@@ -79,6 +79,8 @@ class Config(_ConfigBase):
         - (`str`) Treated as a path to a config file on disk. Must end with '.yaml'.
         - (`Config`) Copies the other Config's values into this one.
         - (`dict`) Copies the values from the dict into this Config.
+
+        If `None` is provided an empty `Config` will be created.
     """
 
     def __init__(self, other=None):
@@ -98,38 +100,6 @@ class Config(_ConfigBase):
         else:
             # if the config specified by other could not be recognized raise a runtime error.
             raise RuntimeError("A Config could not be loaded from other:%s" % other)
-
-    @classmethod
-    def defaultSearchPaths(cls):
-        """Read the environment to determine search paths to use for global
-        defaults.
-
-        Global defaults, at lowest priority, are found in the ``config``
-        directory of the butler source tree. Additional defaults can be
-        defined using the environment variable ``$DAF_BUTLER_CONFIG_PATHS``
-        which is a PATH-like variable where paths at the front of the list
-        have priority over those later.
-
-        Returns
-        -------
-        paths : `list`
-            Returns a list of paths to search. The returned order is in
-            reverse priority such that the later paths supercede defaults
-            read from the earlier paths.
-        """
-        # We can pick up defaults from multiple search paths
-        # We fill defaults by using the butler config path and then
-        # the config path environment variable in reverse order.
-        defaultsPaths = []
-
-        # Find the butler configs
-        defaultsPaths.append(os.path.join(lsst.utils.getPackageDir("daf_butler"), "config"))
-
-        if CONFIG_PATH in os.environ:
-            externalPaths = list(reversed(os.environ[CONFIG_PATH].split(os.pathsep)))
-            defaultsPaths.append(externalPaths)
-
-        return defaultsPaths
 
     def ppprint(self):
         """helper function for debugging, prints a config out in a readable way in the debugger.
@@ -374,17 +344,19 @@ class Config(_ConfigBase):
 
 
 class ConfigSubset(Config):
-    """Config which can be constructed from a global config but which uses a
-    subset.
+    """Config representing a subset of a more general configuration.
 
-    Sometimes you want to instantiate a ``Config`` object but you know that
-    the configuration supplied might contain more keys than you are interested
-    in and you only want one bit of it. For example, your config might contain
-    ``schema`` if it's part of a global config but it might be the contents
-    of ``schema``.
+    Subclasses define their own component and when given a configuration
+    that includes that component, the resulting configuration only includes
+    the subset.  For example, your config might contain ``schema`` if it's
+    part of a global config and that subset will be stored. If ``schema``
+    can not be found it is assumed that the entire contents of the
+    configuration should be used.
 
-    Subclasses can use class attributes to indicate which component they
-    wish to keep.
+    Default values are read from the environment or supplied search paths
+    using the default configuration file name specified in the subclass.
+    This allows a configuration class to be instantiated without any
+    additional arguments.
 
     Additional validation can be specified to check for keys that are mandatory
     in the configuration.
@@ -401,6 +373,11 @@ class ConfigSubset(Config):
         If `True` defaults will be read and the supplied config will
         be combined with the defaults, with the supplied valiues taking
         precedence.
+    searchPaths : `list` or `tuple`, optional
+        Explicit additional paths to search for defaults. They should
+        be supplied in priority order. These paths have higher priority
+        than those read from the environment in
+        `ConfigSubset.defaultSearchPaths()`.
     """
 
     component = None
@@ -416,75 +393,143 @@ class ConfigSubset(Config):
     """Name of the file containing defaults for this config class.
     """
 
-    def __init__(self, other=None, validate=True, mergeDefaults=True):
-        super().__init__(other)
-        if self.component is not None and self.component in self.data:
-            self.data = self.data[self.component]
+    def __init__(self, other=None, validate=True, mergeDefaults=True, searchPaths=None):
+
+        # Create a blank object to receive the defaults
+        # Once we have the defaults we then update with the external values
+        super().__init__()
+
+        # Create a standard Config rather than subset
+        externalConfig = Config(other)
+
+        # Select the part we need from it
+        if self.component is not None and self.component in externalConfig:
+            externalConfig.data = externalConfig.data[self.component]
+
+        # Default files read to create this configuration
+        self.filesRead = []
 
         # Sometimes we do not want to merge with defaults.
         if mergeDefaults:
 
-            # Read default files
-            searchPaths = self.defaultSearchPaths()
+            # Supplied search paths have highest priority
+            fullSearchPath = []
+            if searchPaths:
+                fullSearchPath.extend(searchPaths)
+
+            # Read default paths from enviroment
+            fullSearchPath.extend(self.defaultSearchPaths())
 
             # There are two places to find defaults for this particular config
             # - The "defaultConfigFile" defined in the subclass
             # - The class specified in the "cls" element in the config.
             #   Read cls after merging in case it changes.
-
             if self.defaultConfigFile is not None:
-                self._updateWithDefaultsFromPath(searchPaths, self.defaultConfigFile)
+                self._updateWithConfigsFromPath(fullSearchPath, self.defaultConfigFile)
 
-            if "cls" in self:
+            # Can have a class specification in the external config (priority)
+            # or from the defaults.
+            pytype = None
+            if "cls" in externalConfig:
+                pytype = externalConfig["cls"]
+            elif "cls" in self:
+                pytype = self["cls"]
+
+            if pytype is not None:
                 try:
-                    cls = doImport(self["cls"])
+                    cls = doImport(pytype)
                 except ImportError:
-                    raise RuntimeError("Failed to import cls '{}' for config {}".format(self["cls"],
+                    raise RuntimeError("Failed to import cls '{}' for config {}".format(pytype,
                                                                                         type(self)))
                 defaultsFile = cls.defaultConfigFile
                 if defaultsFile is not None:
-                    self._updateWithDefaultsFromPath(searchPaths, defaultsFile)
+                    self._updateWithConfigsFromPath(fullSearchPath, defaultsFile)
+
+        # Now update this object with the external values so that the external
+        # values always override the defaults
+        self.update(externalConfig)
 
         if validate:
             self.validate()
 
-    def _updateWithDefaultsFromPath(self, searchPaths, configFile):
-        """Search the supplied path in order merging the configuration values
+    @classmethod
+    def defaultSearchPaths(cls):
+        """Read the environment to determine search paths to use for global
+        defaults.
+
+        Global defaults, at lowest priority, are found in the ``config``
+        directory of the butler source tree. Additional defaults can be
+        defined using the environment variable ``$DAF_BUTLER_CONFIG_PATHS``
+        which is a PATH-like variable where paths at the front of the list
+        have priority over those later.
+
+        Returns
+        -------
+        paths : `list`
+            Returns a list of paths to search. The returned order is in
+            priority with the highest priority paths first. The butler config
+            directory will always be at the end of the list.
+        """
+        # We can pick up defaults from multiple search paths
+        # We fill defaults by using the butler config path and then
+        # the config path environment variable in reverse order.
+        defaultsPaths = []
+
+        if CONFIG_PATH in os.environ:
+            externalPaths = os.environ[CONFIG_PATH].split(os.pathsep)
+            defaultsPaths.extend(externalPaths)
+
+        # Find the butler configs
+        defaultsPaths.append(os.path.join(lsst.utils.getPackageDir("daf_butler"), "config"))
+
+        return defaultsPaths
+
+    def _updateWithConfigsFromPath(self, searchPaths, configFile):
+        """Search the supplied paths, merging the configuration values
+
+        The values read will override values currently stored in the object.
+        Every file found in the path will be read. The priority
 
         Parameters
         ----------
         searchPaths : `list`
-            Paths to search for the supplied configFile. Read in order such
-            that later entries in the list override earlier entries.
+            Paths to search for the supplied configFile. This path
+            is the priority order, such that files read from the
+            first path entry will be selected over those read from
+            a later path.
         configFile : `str`
             File to locate in path. If absolute path it will be read
-            directly.
+            directly and the search path will not be used.
         """
         if os.path.isabs(configFile):
-            self._updateWithDefaults(configFile)
+            if os.path.exists(configFile):
+                self.filesRead.append(configFile)
+                self._updateWithOtherConfigFile(configFile)
         else:
-            for pathDir in searchPaths:
+            # Reverse order so that high priority entries
+            # update the object last.
+            for pathDir in reversed(searchPaths):
                 file = os.path.join(pathDir, configFile)
                 if os.path.exists(file):
-                    self._updateWithDefaults(file)
+                    self.filesRead.append(file)
+                    self._updateWithOtherConfigFile(file)
 
-    def _updateWithDefaults(self, defaults):
+    def _updateWithOtherConfigFile(self, file):
         """Read in some defaults and update.
 
-        Merge the current values with the defaults with the current values
-        taking priority. Defaults are not validated.
+        Update the configuration by reading the supplied file as a config
+        of this class, and merging such that these values override the
+        current values. Contents of the external config are not validated.
 
         Parameters
         ----------
-        defaults : `Config`, `str`, or `dict`
+        file : `Config`, `str`, or `dict`
             Entity that can be converted to a `ConfigSubset`.
         """
         # Use this class to read the defaults so that subsetting can happen
         # correctly.
-        defaultValues = type(self)(defaults, validate=False, mergeDefaults=False)
-        current = copy.deepcopy(self)
-        self.data = defaultValues.data
-        self.update(current)
+        externalConfig = type(self)(file, validate=False, mergeDefaults=False)
+        self.update(externalConfig)
 
     def validate(self):
         """Check that mandatory keys are present in this configuration.
