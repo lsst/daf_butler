@@ -38,25 +38,16 @@ class ButlerConfig(Config):
     """Contains the configuration for a `Butler`
 
     The configuration is read and merged with default configurations for
-    the particular classes. The defaults are read from
-    ``$DAF_BUTLER_DIR/config`` and ``$DAF_BULTER_CONFIG_PATH``. The defaults
-    are constructed by reading first the global defaults, and then adding
-    in overrides from each entry in the colon-separated
-    ``$DAF_BUTLER_CONFIG_PATH`` in reverse order such that the entries ahead
-    in the list take priority. The registry and datastore configurations
-    are read using the names specified by the appropriate classes defined
-    in the supplied butler configuration.
-
-    The externally supplied butler configuration must include definitions
-    for ``registry.cls`` and ``datastore.cls`` to enable the correct defaults
-    to be located.
+    the particular classes. The defaults are read according to the rules
+    outlined in `ConfigSubset`. Each component of the configuration associated
+    with a configuration class reads its own defaults.
 
     Parameters
     ----------
     other : `str`, `Config`, optional
         Path to butler configuration YAML file. If `None` the butler will
         be configured based entirely on defaults read from the environment.
-        No defaults will be read if a `ButlerConfig` is supplied.
+        No defaults will be read if a `ButlerConfig` is supplied directly.
     """
 
     def __init__(self, other=None):
