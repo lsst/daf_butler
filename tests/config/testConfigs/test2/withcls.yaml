@@ -1,0 +1,7 @@
+# Config pointing to a cls that will have more config definitions
+comp:
+  item2: 2
+  cls: test_config.ExampleWithConfigFileReference2
+  item3: 3
+  help: class
+  help2: second
