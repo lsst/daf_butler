@@ -193,7 +193,6 @@ class ConversionWriter:
         self.insertObservations(registry)
         self.insertDatasetTypes(registry)
         self.insertDatasets(registry, datastore)
-        # TODO: associate parent repo datasets with child repo Collections
 
     def checkCameras(self, registry):
         """Check that all necessary Cameras are already present in the
@@ -303,6 +302,7 @@ class ConversionWriter:
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for repo in self.repos.values():
+            refs = []
             for datasetTypeName, datasets in repo.gen2.datasets.items():
                 datasetType = self.datasetTypes.get(datasetTypeName, None)
                 if datasetType is None:
@@ -326,3 +326,21 @@ class ConversionWriter:
                     log.debug("Adding Dataset %s as %s in %s", dataset.filePath, gen3id, repo.run)
                     ref = registry.addDataset(datasetType, gen3id, run)
                     datastore.ingest(path=os.path.relpath(dataset.fullPath, start=datastore.root), ref=ref)
+                    refs.append(ref)
+
+            # Add Datasets to collections associated with any child repos to
+            # simulate Gen2 parent lookups.
+
+            # TODO: The Gen2 behavior is to associate *everything* from the
+            #       parent repo, because it's a repo-level link.  In Gen3, we
+            #       want to limit to that to just the "relevant" datasets -
+            #       which we probably define to be those in the full
+            #       provenance tree of anything in the child repo.  Right now,
+            #       the conversion behavior is the Gen2 behavior, which could
+            #       get very expensive in the common case where we have a very
+            #       large parent repo with many small child repos.
+            for potentialChildRepo in self.repos.values():
+                if repo.gen2.isRecursiveParentOf(potentialChildRepo.gen2):
+                    log.info("Adding Datasets from %s to child collection %s.", repo.gen2.root,
+                             potentialChildRepo.run.collection)
+                    registry.associate(potentialChildRepo.run.collection, refs)

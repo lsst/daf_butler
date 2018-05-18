@@ -23,9 +23,14 @@
 Butler top level classes.
 """
 
+import os
+
+from .core.utils import doImport
 from .core.datastore import Datastore
 from .core.registry import Registry
+from .core.run import Run
 from .core.storageClass import StorageClassFactory
+from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
 
 
@@ -39,7 +44,8 @@ class Butler:
     ----------
     config : `str`, `ButlerConfig` or `Config`, optional
         (filename to) configuration. If this is not a `ButlerConfig`, defaults
-        will be read.
+        will be read.  If a `str`, may be the path to a directory containing
+        a "butler.yaml" file.
     datastore : `Datastore`
         Datastore to use for storage.
     registry : `Registry`
@@ -49,17 +55,117 @@ class Butler:
     ----------
     config : `Config`
         Configuration.
+    collection : `str`, optional
+        Collection to use for all input lookups, overriding config['collection']
+        if provided.
+    run : `str`, `Run`, optional
+        Collection associated with the `Run` to use for outputs, overriding
+        config['run'].  If a `Run` associated with the given Collection does
+        not exist, it will be created.  If "collection" is None, this
+        collection will be used for input lookups as well; if not, it must have
+        the same value as "run".
+
+    Raises
+    ------
+    ValueError
+        Raised if neither 'collection' nor 'run' are provided by argument or
+        config, or if both are provided and are inconsistent.
     """
 
-    def __init__(self, config=None):
+    @staticmethod
+    def makeRepo(root, config=None, standalone=False):
+        """Create an empty data repository by adding a butler.yaml config
+        to a repository root directory.
+
+        Parameters
+        ----------
+        root : `str`
+            Filesystem path to the root of the new repository.  Will be created
+            if it does not exist.
+        config : `Config`, optional
+            Configuration to write to the repository, after setting any
+            root-dependent Registry or Datastore config options.  If `None`,
+            default configuration will be used.
+        standalone : `bool`
+            If True, write all expanded defaults, not just customized or
+            repository-specific settings.
+            This (mostly) decouples the repository from the default
+            configuration, insulating it from changes to the defaults (which
+            may be good or bad, depending on the nature of the changes).
+            Future *additions* to the defaults will still be picked up when
+            initializing `Butlers` to repos created with ``standalone=True``.
+
+        Note that when ``standalone=False`` (the default), the configuration
+        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
+        construct the repository should also be used to construct any Butlers
+        to it to avoid configuration inconsistencies.
+
+        Returns
+        -------
+        config : `Config`
+            The updated `Config` instance written to the repo.
+
+        Raises
+        ------
+        ValueError
+            Raised if a ButlerConfig or ConfigSubset is passed instead of a
+            regular Config (as these subclasses would make it impossible to
+            support ``standalone=False``).
+        os.error
+            Raised if the directory does not exist, exists but is not a
+            directory, or cannot be created.
+        """
+        if isinstance(config, (ButlerConfig, ConfigSubset)):
+            raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
+        root = os.path.abspath(root)
+        if not os.path.isdir(root):
+            os.makedirs(root)
+        config = Config(config)
+        full = ButlerConfig(config)  # this applies defaults
+        datastoreClass = doImport(full["datastore.cls"])
+        datastoreClass.setConfigRoot(root, config, full)
+        registryClass = doImport(full["registry.cls"])
+        registryClass.setConfigRoot(root, config, full)
+        if standalone:
+            config.merge(full)
+        config.dumpToFile(os.path.join(root, "butler.yaml"))
+        return config
+
+    def __init__(self, config=None, collection=None, run=None):
         self.config = ButlerConfig(config)
         self.registry = Registry.fromConfig(self.config)
         self.datastore = Datastore.fromConfig(self.config, self.registry)
         self.storageClasses = StorageClassFactory()
         self.storageClasses.addFromConfig(self.config)
-        self.run = self.registry.getRun(collection=self.config['run'])
-        if self.run is None:
-            self.run = self.registry.makeRun(self.config['run'])
+        if run is None:
+            runCollection = self.config.get("run", None)
+            self.run = None
+        else:
+            if isinstance(run, Run):
+                self.run = run
+                runCollection = self.run.collection
+            else:
+                runCollection = run
+                self.run = None
+            # if run *arg* is not None and collection arg is, use run for collecion.
+            if collection is None:
+                collection = runCollection
+        del run  # it's a logic bug if we try to use this variable below
+        if collection is None:  # didn't get a collection from collection or run *args*
+            collection = self.config.get("collection", None)
+            if collection is None:  # didn't get a collection from config['collection']
+                collection = runCollection    # get collection from run found in config
+        if collection is None:
+            raise ValueError("No run or collection provided.")
+        if runCollection is not None and collection != runCollection:
+            raise ValueError(
+                "Run ({}) and collection ({}) are inconsistent.".format(runCollection, collection)
+            )
+        self.collection = collection
+        if runCollection is not None and self.run is None:
+            self.run = self.registry.getRun(collection=runCollection)
+            if self.run is None:
+                self.run = self.registry.makeRun(runCollection)
 
     def put(self, obj, datasetType, dataId, producer=None):
         """Store and register a dataset.
@@ -79,7 +185,15 @@ class Butler:
         -------
         ref : `DatasetRef`
             A reference to the stored dataset.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler was not constructed with a Run, and is hence
+            read-only.
         """
+        if self.run is None:
+            raise TypeError("Butler is read-only.")
         datasetType = self.registry.getDatasetType(datasetType)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
 
@@ -153,5 +267,64 @@ class Butler:
             The dataset.
         """
         datasetType = self.registry.getDatasetType(datasetType)
-        ref = self.registry.find(self.run.collection, datasetType, dataId)
+        ref = self.registry.find(self.collection, datasetType, dataId)
         return self.getDirect(ref)
+
+    def getUri(self, datasetType, dataId, predict=False):
+        """Return the URI to the Dataset.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` instance or `str`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+
+        Returns
+        -------
+        uri : `str`
+            URI string pointing to the Dataset within the datastore. If the
+            Dataset does not exist in the datastore, and if ``predict`` is
+            `True`, the URI will be a prediction and will include a URI fragment
+            "#predicted".
+            If the datastore does not have entities that relate well
+            to the concept of a URI the returned URI string will be
+            descriptive. The returned URI is not guaranteed to be obtainable.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
+        """
+        datasetType = self.registry.getDatasetType(datasetType)
+        ref = self.registry.find(self.collection, datasetType, dataId)
+        return self.datastore.getUri(ref, predict)
+
+    def datasetExists(self, datasetType, dataId):
+        """Return True if the Dataset is actually present in the Datastore.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` instance or `str`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
+
+        Raises
+        ------
+        LookupError
+            Raised if the Dataset is not even present in the Registry.
+        """
+        datasetType = self.registry.getDatasetType(datasetType)
+        ref = self.registry.find(self.collection, datasetType, dataId)
+        if ref is None:
+            raise LookupError(
+                "{} with {} not found in collection {}".format(datasetType, dataId, self.collection)
+            )
+        return self.datastore.exists(ref)

@@ -23,6 +23,8 @@
 Configuration classes specific to the Butler
 """
 
+import os.path
+
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
@@ -45,7 +47,8 @@ class ButlerConfig(Config):
     Parameters
     ----------
     other : `str`, `Config`, optional
-        Path to butler configuration YAML file. If `None` the butler will
+        Path to butler configuration YAML file or a directory containing a
+        "butler.yaml" file. If `None` the butler will
         be configured based entirely on defaults read from the environment.
         No defaults will be read if a `ButlerConfig` is supplied directly.
     """
@@ -58,6 +61,9 @@ class ButlerConfig(Config):
             super().__init__(other)
             return
 
+        if isinstance(other, str) and os.path.isdir(other):
+            other = os.path.join(other, "butler.yaml")
+
         # Create an empty config for us to populate
         super().__init__()
 
@@ -69,7 +75,13 @@ class ButlerConfig(Config):
         # configuration classes. We ask each of them to apply defaults to
         # the values we have been supplied by the user.
         for configClass in CONFIG_COMPONENT_CLASSES:
-            config = configClass(butlerConfig)
+            # Only send the parent config if the child
+            # config component is present (otherwise it assumes that the
+            # keys from other components are part of the child)
+            localOverrides = None
+            if configClass.component in butlerConfig:
+                localOverrides = butlerConfig
+            config = configClass(localOverrides)
             # Re-attach it using the global namespace
             self.update({configClass.component: config})
             # Remove the key from the butlerConfig since we have already

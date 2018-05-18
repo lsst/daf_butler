@@ -50,7 +50,7 @@ class FitsExposureFormatter(FileFormatter):
         if not os.path.exists(path):
             return None
 
-        return pytype.readFits(path)
+        return pytype(path)
 
     def _writeFile(self, inMemoryDataset, fileDescriptor):
         """Write the in memory dataset to file on disk.

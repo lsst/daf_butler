@@ -116,6 +116,23 @@ class Gen2Repo:
         self._datasets = defaultdict(dict)
         self._unrecognized = []
 
+    def __eq__(self, rhs):
+        if not isinstance(rhs, Gen2Repo):
+            return NotImplemented
+        return self.root == rhs.root
+
+    def __ne__(self, rhs):
+        return not (self == rhs)
+
+    def isRecursiveParentOf(self, other):
+        """Return true if self is a recursive parent repository of other."""
+        for parent in other.parents:
+            if parent == self:
+                return True
+            if self.isRecursiveParentOf(parent):
+                return True
+        return False
+
     @property
     def mapper(self):
         """Gen2 Mapper that organizes this repository (`obs.base.CameraMapper)."""
@@ -206,6 +223,14 @@ class ConvertedRepo:
     """
 
     __slots__ = ("gen2", "camera", "run", "translators")
+
+    def __eq__(self, rhs):
+        if not isinstance(rhs, ConvertedRepo):
+            return NotImplemented
+        return self.gen2 == rhs.gen2
+
+    def __ne__(self, rhs):
+        return not (self == rhs)
 
     def __init__(self, gen2, camera, run, translators):
         self.gen2 = gen2

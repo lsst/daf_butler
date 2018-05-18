@@ -82,6 +82,28 @@ class PosixDatastore(Datastore):
 
     RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path", "storage_class"])
 
+    @classmethod
+    def setConfigRoot(cls, root, config, full):
+        """Set any filesystem-dependent config options for this Datastore to
+        be appropriate for a new empty repository with the given root.
+
+        Parameters
+        ----------
+        root : `str`
+            Filesystem path to the root of the data repository.
+        config : `Config`
+            A Butler-level config object to update (but not a
+            `ButlerConfig`, to avoid included expanded defaults).
+        full : `ButlerConfig`
+            A complete Butler config with all defaults expanded;
+            repository-specific options that should not be obtained
+            from defaults when Butler instances are constructed
+            should be copied from `full` to `Config`.
+        """
+        config["datastore.root"] = root
+        for key in ("datastore.cls", "datastore.records.table"):
+            config[key] = full[key]
+
     def __init__(self, config, registry):
         super().__init__(config, registry)
         if "root" not in self.config:
