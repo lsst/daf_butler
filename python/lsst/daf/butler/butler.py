@@ -30,7 +30,7 @@ from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.run import Run
 from .core.storageClass import StorageClassFactory
-from .core.config import Config
+from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
 
 
@@ -55,10 +55,10 @@ class Butler:
     ----------
     config : `Config`
         Configuration.
-    collection : `str` or `None`
+    collection : `str`, optional
         Collection to use for all input lookups, overriding config['collection']
         if provided.
-    run : `str`, `Run`, or `None`
+    run : `str`, `Run`, optional
         Collection associated with the `Run` to use for outputs, overriding
         config['run'].  If a `Run` associated with the given Collection does
         not exist, it will be created.  If "collection" is None, this
@@ -73,41 +73,63 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root, config=None, expand=False):
+    def makeRepo(root, config=None, standalone=False):
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
         Parameters
         ----------
         root : `str`
-            Filesystem path to the root of the new repository.
-        config : `Config` or `None`
+            Filesystem path to the root of the new repository.  Will be created
+            if it does not exist.
+        config : `Config`, optional
             Configuration to write to the repository, after setting any
-            root-dependent Registry or Datastore config options.
-        expand : `bool`
+            root-dependent Registry or Datastore config options.  If `None`,
+            default configuration will be used.
+        standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
             This (mostly) decouples the repository from the default
-            configuration insulating it from changes (which may be good or
-            bad, depending on the nature of the changes).
+            configuration, insulating it from changes to the defaults (which
+            may be good or bad, depending on the nature of the changes).
+            Future *additions* to the defaults will still be picked up when
+            initializing `Butlers` to repos created with ``standalone=True``.
 
-        Note that when ``expand=False`` (the default), the configuration
+        Note that when ``standalone=False`` (the default), the configuration
         search path (see `ConfigSubset.defaultSearchPaths`) that was used to
         construct the repository should also be used to construct any Butlers
         to it to avoid configuration inconsistencies.
+
+        Returns
+        -------
+        config : `Config`
+            The updated `Config` instance written to the repo.
+
+        Raises
+        ------
+        ValueError
+            Raised if a ButlerConfig or ConfigSubset is passed instead of a
+            regular Config (as these subclasses would make it impossible to
+            support ``standalone=False``).
+        os.error
+            Raised if the directory does not exist, exists but is not a
+            directory, or cannot be created.
         """
-        if isinstance(config, ButlerConfig):
+        if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
         root = os.path.abspath(root)
+        if not os.path.isdir(root):
+            os.makedirs(root)
         config = Config(config)
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore.cls"])
         datastoreClass.setConfigRoot(root, config, full)
         registryClass = doImport(full["registry.cls"])
         registryClass.setConfigRoot(root, config, full)
-        if expand:
+        if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))
+        return config
 
     def __init__(self, config=None, collection=None, run=None):
         self.config = ButlerConfig(config)
