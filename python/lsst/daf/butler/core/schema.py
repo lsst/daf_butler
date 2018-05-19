@@ -22,7 +22,7 @@
 from .utils import iterable
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
-    Float, ForeignKey, ForeignKeyConstraint, Table, MetaData
+    Float, ForeignKeyConstraint, Table, MetaData
 from .dataUnit import DataUnitRegistry
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
@@ -64,6 +64,8 @@ class Schema:
         datasetTable = self.builder.metadata.tables['Dataset']
         for linkColumn in self.dataUnits.links.values():
             datasetTable.append_column(linkColumn)
+        for linkConstraint in self.dataUnits.constraints:
+            datasetTable.append_constraint(linkConstraint)
         self.metadata = self.builder.metadata
 
 
@@ -163,7 +165,6 @@ class SchemaBuilder:
             May contain:
             - nullable, entry can be null
             - primary_key, mark this column as primary key
-            - foreign_key, link to other table
             - doc, docstring
 
         Returns
@@ -180,9 +181,6 @@ class SchemaBuilder:
         # required
         columnName = description.pop("name")
         args = (columnName, self.VALID_COLUMN_TYPES[description.pop("type")])
-        # foreign_key is special
-        if "foreign_key" in description:
-            args += (ForeignKey(description.pop("foreign_key")), )
         # additional optional arguments can be passed through directly
         kwargs = {}
         for opt in ("nullable", "primary_key", "doc"):

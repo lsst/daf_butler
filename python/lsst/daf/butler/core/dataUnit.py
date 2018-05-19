@@ -160,6 +160,7 @@ class DataUnitRegistry:
         self._dataUnitNames = None
         self._dataUnits = {}
         self.links = {}
+        self.constraints = []
 
     @classmethod
     def fromConfig(cls, config, builder=None):
@@ -253,7 +254,12 @@ class DataUnitRegistry:
                     link = tuple((linkDescription['name'] for linkDescription in dataUnitDescription['link']))
                     # Link columns that will become part of the Datasets table
                     for linkDescription in dataUnitDescription['link']:
-                        self.links[linkDescription['name']] = builder.makeColumn(linkDescription)
+                        linkColumnDesc = linkDescription.copy()
+                        linkConstraintDesc = linkColumnDesc.pop("foreignKey", None)
+                        linkName = linkDescription['name']
+                        self.links[linkName] = builder.makeColumn(linkColumnDesc)
+                        if linkConstraintDesc is not None:
+                            self.constraints.append(builder.makeForeignKeyConstraint(linkConstraintDesc))
                 if 'tables' in dataUnitDescription:
                     for tableName, tableDescription in dataUnitDescription['tables'].items():
                         if tableName == dataUnitName:
