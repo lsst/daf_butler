@@ -34,6 +34,8 @@ schema:
       -
         name: abstract_filter
         type: string
+        doc: >
+          String name for the abstract filter, frequently a single character.
 
     PhysicalFilter:
       dependencies:
