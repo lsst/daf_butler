@@ -10,7 +10,9 @@ schema:
       -
         name: camera
         type: string
-        #foreign_key: Camera.camera
+        foreignKey:
+          src: camera
+          tgt: Camera.camera
       tables:
         Camera:
           doc: >
@@ -47,7 +49,13 @@ schema:
       -
         name: physical_filter
         type: string
-        #foreign_key: PhysicalFilter.physical_filter
+        foreignKey:
+          src:
+            - camera
+            - physical_filter
+          tgt:
+            - PhysicalFilter.camera
+            - PhysicalFilter.physical_filter
       tables:
         PhysicalFilter:
           doc: >
@@ -88,7 +96,13 @@ schema:
       -
         name: sensor
         type: string
-        #foreign_key: Sensor.sensor
+        foreignKey:
+          src:
+            - camera
+            - sensor
+          tgt:
+            - Sensor.camera
+            - Sensor.sensor
       tables:
         Sensor:
           doc: >
@@ -148,7 +162,13 @@ schema:
       -
         name: visit
         type: int
-        #foreign_key: Visit.visit
+        foreignKey:
+          src:
+            - camera
+            - visit
+          tgt:
+            - Visit.camera
+            - Visit.visit
       tables:
         Visit:
           doc: >
@@ -349,7 +369,13 @@ schema:
       -
         name: exposure
         type: int
-        #foreign_key: Exposure.exposure
+        foreignKey:
+          src:
+            - camera
+            - exposure
+          tgt:
+            - Exposure.camera
+            - Exposure.exposure
       tables:
         Exposure:
           doc: >
@@ -499,7 +525,9 @@ schema:
       -
         name: skymap
         type: string
-        #foreign_key: SkyMap.skymap
+        foreignKey:
+          src: skymap
+          tgt: SkyMap.skymap
       tables:
         SkyMap:
           doc: >
@@ -533,7 +561,13 @@ schema:
       -
         name: tract
         type: int
-        #foreign_key: Tract.tract
+        foreignKey:
+          src:
+            - skymap
+            - tract
+          tgt:
+            - Tract.skymap
+            - Tract.tract
       tables:
         Tract:
           doc: >
@@ -578,7 +612,15 @@ schema:
       -
         name: patch
         type: int
-        #foreign_key: Patch.patch
+        foreignKey:
+          src:
+            - skymap
+            - tract
+            - patch
+          tgt:
+            - Patch.skymap
+            - Patch.tract
+            - Patch.patch
       tables:
         Patch:
           doc: >
