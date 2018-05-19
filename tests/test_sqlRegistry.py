@@ -82,6 +82,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         storageClass = StorageClass("testDataset")
         datasetType = DatasetType(name="testtype", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertEqual(ref, outRef)
@@ -95,6 +96,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
         children = {"child1": registry.addDataset(childDatasetType1, dataId={"camera": "DummyCam"}, run=run),
@@ -153,6 +155,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testQuantum(self):
         registry = Registry.fromConfig(self.butlerConfig)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testQuantum")
         # Make two predicted inputs
@@ -184,6 +187,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         storageClass = StorageClass("testStorageInfo")
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         datastoreName = "dummystore"
@@ -206,6 +210,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         storageClass = StorageClass("testAssembler")
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         self.assertIsNone(ref.assembler)
@@ -219,6 +224,14 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         storageClass = StorageClass("testFind")
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        registry.addDataUnitEntry("Camera", {"camera": "MyCam"})
+        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+        registry.addDataUnitEntry("PhysicalFilter", {"camera": "MyCam", "physical_filter": "m-r"})
+        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 2, "physical_filter": "d-r"})
+        registry.addDataUnitEntry("Visit", {"camera": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
         dataId = {"camera": "DummyCam", "visit": 0}
         run = registry.makeRun(collection=collection)
@@ -251,8 +264,14 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         storageClass = StorageClass("testCollections")
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
+        # TODO: Dataset.physical_filter should be populated as well here
+        # from the Visit DataUnit values.
         dataId1 = {"camera": "DummyCam", "visit": 0}
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
         dataId2 = {"camera": "DummyCam", "visit": 1}

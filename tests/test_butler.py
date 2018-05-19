@@ -84,6 +84,12 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
 
+        # Add needed DataUnits
+        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 42,
+                                                   "physical_filter": "d-r"})
+
         # Create and store a dataset
         metric = makeExampleMetrics()
         dataId = {"camera": "DummyCam", "visit": 42}
@@ -107,6 +113,13 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
         self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
+
+        # Add needed DataUnits
+        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
+        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCamComp",
+                                                            "physical_filter": "d-r"})
+        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCamComp", "visit": 423,
+                                                   "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
