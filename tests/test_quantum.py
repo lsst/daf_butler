@@ -24,7 +24,9 @@ from datetime import datetime
 
 import lsst.utils.tests
 
+from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
 from lsst.daf.butler.core.quantum import Quantum
+from lsst.daf.butler.core.storageClass import StorageClass
 
 """Tests for Quantum.
 """
@@ -53,6 +55,46 @@ class QuantumTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(quantum.startTime, startTime)
         self.assertEqual(quantum.endTime, endTime)
         self.assertEqual(quantum.host, host)
+
+    def testAddInputsOutputs(self):
+        """Test of addPredictedInput() method.
+        """
+        quantum = Quantum(task="some.task.object", run=None)
+
+        # start with empty
+        self.assertEqual(quantum.predictedInputs, dict())
+
+        camera = "DummyCam"
+        datasetTypeName = "test_ds"
+        storageClass = StorageClass("testref_StructuredData")
+        datasetType = DatasetType(datasetTypeName, ("camera", "visit"), storageClass)
+
+        # add one ref
+        ref = DatasetRef(datasetType, dict(camera=camera, visit=42))
+        quantum.addPredictedInput(ref)
+        self.assertIn(datasetTypeName, quantum.predictedInputs)
+        self.assertEqual(len(quantum.predictedInputs[datasetTypeName]), 1)
+        # add second ref
+        ref = DatasetRef(datasetType, dict(camera=camera, visit=43))
+        quantum.addPredictedInput(ref)
+        self.assertEqual(len(quantum.predictedInputs[datasetTypeName]), 2)
+
+        # mark last ref as actually used
+        self.assertEqual(quantum.actualInputs, dict())
+        quantum._markInputUsed(ref)
+        self.assertIn(datasetTypeName, quantum.actualInputs)
+        self.assertEqual(len(quantum.actualInputs[datasetTypeName]), 1)
+
+        # add couple of outputs too
+        self.assertEqual(quantum.outputs, dict())
+        ref = DatasetRef(datasetType, dict(camera=camera, visit=42))
+        quantum.addOutput(ref)
+        self.assertIn(datasetTypeName, quantum.outputs)
+        self.assertEqual(len(quantum.outputs[datasetTypeName]), 1)
+
+        ref = DatasetRef(datasetType, dict(camera=camera, visit=43))
+        quantum.addOutput(ref)
+        self.assertEqual(len(quantum.outputs[datasetTypeName]), 2)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

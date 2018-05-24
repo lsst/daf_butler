@@ -115,10 +115,7 @@ class Quantum(Execution):
             Reference for a Dataset to add to the Quantum's predicted inputs.
         """
         datasetTypeName = ref.datasetType.name
-        if datasetTypeName not in self._actualInputs:
-            self._predictedInputs[datasetTypeName] = [ref, ]
-        else:
-            self._predictedInputs[datasetTypeName].append(ref)
+        self._predictedInputs.setdefault(datasetTypeName, []).append(ref)
 
     def _markInputUsed(self, ref):
         """Mark an input as used.
@@ -133,10 +130,7 @@ class Quantum(Execution):
         if ref not in self._predictedInputs[datasetTypeName]:
             raise ValueError("Actual input {} was not predicted".format(ref))
         # Now insert as actual
-        if datasetTypeName not in self._actualInputs:
-            self._actualInputs[datasetTypeName] = [ref, ]
-        else:
-            self._actualInputs[datasetTypeName].append(ref)
+        self._actualInputs.setdefault(datasetTypeName, []).append(ref)
 
     def addOutput(self, ref):
         """Add an output `DatasetRef` to the `Quantum`.
