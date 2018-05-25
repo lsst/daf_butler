@@ -25,6 +25,7 @@
 import os
 import unittest
 from tempfile import TemporaryDirectory
+import pickle
 
 import lsst.utils.tests
 
@@ -47,15 +48,11 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
     """
 
     @staticmethod
-    def registerDatasetTypes(datasetTypeName, dataUnits, storageClass, registry):
-        """Bulk register DatasetTypes
+    def addDatasetType(datasetTypeName, dataUnits, storageClass, registry):
+        """Create a DatasetType and register it
         """
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(datasetType)
-
-        for compName, compStorageClass in storageClass.components.items():
-            compType = DatasetType(datasetType.componentTypeName(compName), dataUnits, compStorageClass)
-            registry.registerDatasetType(compType)
 
     @classmethod
     def setUpClass(cls):
@@ -71,9 +68,10 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(result, getattr(reference, component))
 
     def testConstructor(self):
-        """Independent test of constructor.
+        """Test of minimal constructor.
         """
-        butler = Butler(self.configFile)
+        config = Config()
+        butler = Butler(config, collection="dummy")
         self.assertIsInstance(butler, Butler)
 
     def testBasicPutGet(self):
@@ -82,7 +80,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         datasetTypeName = "test_metric"
         dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
+        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
 
         # Add needed DataUnits
         butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
@@ -112,7 +110,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         datasetTypeName = "test_metric_comp"
         dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
-        self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
+        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
 
         # Add needed DataUnits
         butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
@@ -158,6 +156,46 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         # inheriting from defaults.
         self.assertIn("datastore.formatters", full)
         self.assertNotIn("datastore.formatters", limited)
+
+    def testExposureCompositePutGet(self):
+        example = os.path.join(self.testDir, "data", "basic", "small.fits")
+        exposure = lsst.afw.image.ExposureF(example)
+        butler = Butler(self.configFile)
+        datasetTypeName = "calexp"
+        dataUnits = ("Camera", "Visit")
+        storageClass = self.storageClassFactory.getStorageClass("ExposureF")
+        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+        # Add needed DataUnits
+        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
+        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCamComp",
+                                                            "physical_filter": "d-r"})
+        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCamComp", "visit": 423,
+                                                   "physical_filter": "d-r"})
+        dataId = {"visit": 423, "camera": "DummyCamComp"}
+        butler.put(exposure, "calexp", dataId)
+        # Get the full thing
+        full = butler.get("calexp", dataId)  # noqa F841
+        # TODO enable check for equality (fix for Exposure type)
+        # self.assertEqual(full, exposure)
+        # Get a component
+        compsRead = {}
+        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+            component = butler.get("calexp.{}".format(compName), dataId)
+            # TODO enable check for component instance types
+            # compRef = butler.registry.find(butler.run.collection, "calexp.{}".format(compName), dataId)
+            # self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
+            compsRead[compName] = component
+        # Simple check of WCS
+        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
+                                   lsst.afw.geom.Extent2I(9, 9))
+        self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
+
+    def testPickle(self):
+        """Test pickle support.
+        """
+        butler = Butler(self.configFile)
+        butlerOut = pickle.loads(pickle.dumps(butler))
+        self.assertIsInstance(butlerOut, Butler)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
