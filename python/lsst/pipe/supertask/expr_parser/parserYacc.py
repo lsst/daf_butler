@@ -147,8 +147,14 @@ class ParserYacc:
     # this is the starting rule
     def p_input(self, p):
         """ input : expr
+                  | empty
         """
         p[0] = p[1]
+
+    def p_empty(self, p):
+        """ empty :
+        """
+        p[0] = None
 
     def p_expr(self, p):
         """ expr : expr OR expr

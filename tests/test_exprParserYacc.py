@@ -45,6 +45,15 @@ class ParserLexTestCase(unittest.TestCase):
         """
         parser = parserYacc.ParserYacc()  # noqa: F841
 
+    def testEmpty(self):
+        """Tests for empty expression
+        """
+        parser = parserYacc.ParserYacc()
+
+        # empty expression is allowed, returns None
+        tree = parser.parse("")
+        self.assertIsNone(tree)
+
     def testParseLiteral(self):
         """Tests for literals (strings/numbers)
         """
@@ -243,9 +252,6 @@ class ParserLexTestCase(unittest.TestCase):
             self.assertEqual(exc.posInLine, posInLine)
 
         parser = parserYacc.ParserYacc()
-
-        with self.assertRaises(parserYacc.ParserEOFError):
-            parser.parse("")
 
         expression = "(1, 2, 3)"
         with self.assertRaises(parserYacc.ParseError) as catcher:
