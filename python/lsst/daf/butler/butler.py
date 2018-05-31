@@ -167,6 +167,11 @@ class Butler:
             if self.run is None:
                 self.run = self.registry.makeRun(runCollection)
 
+    def __reduce__(self):
+        """Support pickling.
+        """
+        return (Butler, (self.config, ))
+
     def put(self, obj, datasetType, dataId, producer=None):
         """Store and register a dataset.
 
