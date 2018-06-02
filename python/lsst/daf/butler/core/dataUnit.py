@@ -213,6 +213,7 @@ class DataUnitRegistry:
     def __init__(self):
         self._dataUnitNames = None
         self._dataUnits = {}
+        self._dataUnitRegions = {}
         self.links = {}
         self.constraints = []
         self.joins = {}
@@ -227,13 +228,16 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `SchemaConfig`
-            `Registry` schema configuration describing `DataUnit` relations.
+            `Registry` schema configuration containing 'DataUnits',
+            'dataUnitRegions', and 'dataUnitJoins' entries.
         builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
+            When given, create `sqlalchemy.core.Table` entries for every
+            `DataUnit` table.
         """
         dataUnitRegistry = cls()
         dataUnitRegistry._initDataUnitNames(config['dataUnits'])
         dataUnitRegistry._initDataUnits(config['dataUnits'], builder)
+        dataUnitRegistry._initDataUnitRegions(config['dataUnitRegions'], builder)
         dataUnitRegistry._initDataUnitJoins(config['dataUnitJoins'], builder)
         return dataUnitRegistry
 
@@ -263,6 +267,9 @@ class DataUnitRegistry:
     def getRegionTable(self, *dataUnitNames):
         if len(dataUnitNames) == 1:
             return self[dataUnitNames[0]].table
+        return self._dataUnitRegions[frozenset(dataUnitNames)]
+
+    def getJoinTable(self, lhs, rhs):
         raise NotImplementedError()
 
     def _initDataUnitNames(self, config):
@@ -275,7 +282,7 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `SchemaConfig`
-            Schema configuration describing `DataUnit` relations.
+            The `dataUnits` component of a `SchemaConfig`.
         """
         self._dataUnitNames = TopologicalSet(config)
         for dataUnitName, dataUnitDescription in config.items():
@@ -291,8 +298,8 @@ class DataUnitRegistry:
 
         Parameters
         ----------
-        config : `SchemaConfig`
-            Schema configuration describing `DataUnit` relations.
+        config : `Config`
+            The `dataUnits` component of a `SchemaConfig`.
         builder : `SchemaBuilder`, optional
             When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
         """
@@ -335,6 +342,25 @@ class DataUnitRegistry:
                                 table=table,
                                 link=link)
             self[dataUnitName] = dataUnit
+
+    def _initDataUnitRegions(self, config, builder):
+        """Initialize tables that associate regions with multiple DataUnits.
+
+        Parameters
+        ----------
+        config : `Config`
+            The `dataUnitRegions` component of a `SchemaConfig`.
+        builder : `SchemaBuilder`, optional
+            When given, create `sqlalchemy.core.Table` entries.
+        """
+        for description in config:
+            dataUnitNames = frozenset(description["relates"])
+            [(tableName, tableDescription)] = description["tables"].items()
+            if builder is not None:
+                table = builder.addTable(tableName, tableDescription)
+            else:
+                table = None
+            self._dataUnitRegions[dataUnitNames] = table
 
     def _initDataUnitJoins(self, config, builder):
         """Initialize `DataUnit` join entries.

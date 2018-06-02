@@ -295,59 +295,6 @@ schema:
             tgt:
             - PhysicalFilter.camera
             - PhysicalFilter.physical_filter
-        VisitSensorRegion:
-          doc: >
-            A one-to-many table join table that stores the spatial region
-            associated with a particular Visit-Sensor combination. Entries are
-            expected to be calculated outside the database and added/updated
-            whenever the Visit's region is.  This table contains exactly one
-            entry for each Visit+Sensor combination.
-          columns:
-          -
-            name: camera
-            type: string
-            primary_key: true
-            nullable: false
-            doc: Name of the Camera associated with the Visit and Sensor.
-          -
-            name: visit
-            type: int
-            primary_key: true
-            nullable: false
-            doc: Visit ID
-          -
-            name: sensor
-            type: int
-            primary_key: true
-            nullable: false
-            doc: visit
-          -
-            name: region
-            type: string
-            doc: >
-              A spatial region on the sky that bounds the area associated with
-              this Visit+Sensor combination.  This is expected to be more
-              precise than the SkyPixels associated with the Visit+Sensor (see
-              VisitSensorSkyPixJoin), but may still be larger than the true
-              region as long as it fully covers it.
-          foreignKeys:
-          -
-            src: camera
-            tgt: Camera.camera
-          -
-            src:
-            - camera
-            - visit
-            tgt:
-            - Visit.camera
-            - Visit.visit
-          -
-            src:
-            - camera
-            - sensor
-            tgt:
-            - Sensor.camera
-            - Sensor.sensor
     Exposure:
       dependencies:
         required:
@@ -692,6 +639,63 @@ schema:
         name: label
         type: string
         doc: A string value composed only of letters, numbers, and underscores.
+
+  dataUnitRegions:
+    -
+      relates:
+        - Visit
+        - Sensor
+      tables:
+        VisitSensorRegion:
+          doc: >
+            A one-to-many table join table that stores the spatial region
+            associated with a particular Visit-Sensor combination. Entries are
+            expected to be calculated outside the database and added/updated
+            whenever the Visit's region is.  This table contains exactly one
+            entry for each Visit+Sensor combination.
+          columns:
+          -
+            name: camera
+            type: string
+            primary_key: true
+            nullable: false
+            doc: Name of the Camera associated with the Visit and Sensor.
+          -
+            name: visit
+            type: int
+            primary_key: true
+            nullable: false
+            doc: Visit ID
+          -
+            name: sensor
+            type: int
+            primary_key: true
+            nullable: false
+            doc: Sensor ID
+          -
+            name: region
+            type: blob
+            doc: >
+              A spatial region on the sky that bounds the area associated with
+              this Visit+Sensor combination.  This is expected to be more
+              precise than the SkyPixels associated with the Visit+Sensor (see
+              VisitSensorSkyPixJoin), but may still be larger than the true
+              region as long as it fully covers it.
+          foreignKeys:
+          -
+            src:
+            - camera
+            - visit
+            tgt:
+            - Visit.camera
+            - Visit.visit
+          -
+            src:
+            - camera
+            - sensor
+            tgt:
+            - Sensor.camera
+            - Sensor.sensor
 
   dataUnitJoins:
     ExposureRangeJoin:
