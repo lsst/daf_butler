@@ -325,8 +325,15 @@ class ConversionWriter:
                         registry.ensureRun(run)
                     log.debug("Adding Dataset %s as %s in %s", dataset.filePath, gen3id, repo.run)
                     ref = registry.addDataset(datasetType, gen3id, run)
-                    datastore.ingest(path=os.path.relpath(dataset.fullPath, start=datastore.root), ref=ref)
                     refs.append(ref)
+                    for component in datasetType.storageClass.components:
+                        compTypeName = datasetType.componentTypeName(component)
+                        log.debug("  ...adding component dataset %s", compTypeName)
+                        compDatasetType = registry.getDatasetType(compTypeName)
+                        compRef = registry.addDataset(compDatasetType, gen3id, run=run)
+                        registry.attachComponent(component, ref, compRef)
+                        refs.append(compRef)
+                    datastore.ingest(path=os.path.relpath(dataset.fullPath, start=datastore.root), ref=ref)
 
             # Add Datasets to collections associated with any child repos to
             # simulate Gen2 parent lookups.
