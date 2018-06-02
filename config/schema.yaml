@@ -665,7 +665,6 @@ schema:
           -
             name: region
             type: blob
-            nullable: false
             doc: >
               A spatial region on the sky that bounds the area associated
               with the Patch.  This is expected to be more precise than the

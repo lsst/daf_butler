@@ -260,6 +260,11 @@ class DataUnitRegistry:
         for dataUnitName in self._dataUnitNames:
             yield (dataUnitName, self[dataUnitName])
 
+    def getRegionTable(self, *dataUnitNames):
+        if len(dataUnitNames) == 1:
+            return self[dataUnitNames[0]].table
+        raise NotImplementedError()
+
     def _initDataUnitNames(self, config):
         """Initialize DataUnit names.
 
