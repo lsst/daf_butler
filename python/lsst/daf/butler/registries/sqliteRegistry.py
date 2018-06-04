@@ -65,6 +65,7 @@ class SqliteRegistry(SqlRegistry):
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
+        super(SqliteRegistry, cls).setConfigRoot(root, config, full)
         config["registry.db"] = "sqlite:///{}/gen3.sqlite3".format(root)
         for key in ("registry.cls",):
             config[key] = full[key]
