@@ -78,24 +78,24 @@ class FitsExposureFormatter(Formatter):
             # Read the file naively
             data = fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **kwds)
 
-        # TODO: the rest of this method has a lot in common with FileFormatter;
-        # some refactoring could probably restore that inheritance relationship
-        # and remove this duplication.
+            # TODO: most of the rest of this method has a lot in common with
+            # FileFormatter; some refactoring could probably restore that
+            # inheritance relationship and remove this duplication.
 
-        # if read and write storage classes differ, more work is required
-        readStorageClass = fileDescriptor.readStorageClass
-        if readStorageClass != fileDescriptor.storageClass:
-            if comp is None:
-                raise ValueError("Storage class inconsistency ({} vs {}) but no"
-                                 " component requested".format(readStorageClass.name,
-                                                               fileDescriptor.storageClass.name))
+            # if read and write storage classes differ, more work is required
+            readStorageClass = fileDescriptor.readStorageClass
+            if readStorageClass != fileDescriptor.storageClass:
+                if comp is None:
+                    raise ValueError("Storage class inconsistency ({} vs {}) but no"
+                                     " component requested".format(readStorageClass.name,
+                                                                   fileDescriptor.storageClass.name))
 
-            # Concrete composite written as a single file (we hope)
-            try:
-                data = fileDescriptor.storageClass.assembler().getComponent(data, comp)
-            except AttributeError:
-                # Defer the complaint
-                data = None
+                # Concrete composite written as a single file (we hope)
+                try:
+                    data = fileDescriptor.storageClass.assembler().getComponent(data, comp)
+                except AttributeError:
+                    # Defer the complaint
+                    data = None
 
         if data is None:
             raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
