@@ -25,6 +25,9 @@ import datetime
 from collections import OrderedDict
 
 from lsst.log import Log
+from lsst.afw.image import bboxFromMetadata
+from lsst.geom import Box2D
+from lsst.sphgeom import ConvexPolygon
 
 from ..core import Config, Run, DatasetType, StorageClassFactory
 from .structures import ConvertedRepo
@@ -193,6 +196,7 @@ class ConversionWriter:
         self.insertObservations(registry)
         self.insertDatasetTypes(registry)
         self.insertDatasets(registry, datastore)
+        self.insertObservationRegions(registry, datastore)
 
     def checkCameras(self, registry):
         """Check that all necessary Cameras are already present in the
@@ -351,3 +355,43 @@ class ConversionWriter:
                     log.info("Adding Datasets from %s to child collection %s.", repo.gen2.root,
                              potentialChildRepo.run.collection)
                     registry.associate(potentialChildRepo.run.collection, refs)
+
+    def insertObservationRegions(self, registry, datastore):
+        """Add spatial regions for Visit-Sensor combinations.
+        """
+        sql = ("SELECT Wcs.camera AS camera, Wcs.visit AS visit, Wcs.sensor AS sensor, "
+               "        Wcs.dataset_id AS wcs, Metadata.dataset_id AS metadata "
+               "    FROM Dataset AS Wcs "
+               "        INNER JOIN DatasetCollection AS WcsCollection "
+               "            ON (Wcs.dataset_id = WcsCollection.dataset_id) "
+               "        INNER JOIN Dataset AS Metadata "
+               "            ON (Wcs.camera = Metadata.camera "
+               "                AND Wcs.visit = Metadata.visit "
+               "                AND Wcs.sensor = Metadata.sensor) "
+               "        INNER JOIN DatasetCollection AS MetadataCollection "
+               "            ON (Metadata.dataset_id = MetadataCollection.dataset_id) "
+               "    WHERE WcsCollection.collection = :collection "
+               "          AND MetadataCollection.collection = :collection "
+               "          AND Wcs.dataset_type_name = :wcsName"
+               "          AND Metadata.dataset_type_name = :metadataName")
+        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        for config in self.config["regions"]:
+            log.info("Adding observation regions using %s from %s.",
+                     config["DatasetType"], config["collection"])
+            visits = {}
+            for row in registry.query(sql, collection=config["collection"],
+                                      wcsName="{}.wcs".format(config["DatasetType"]),
+                                      metadataName="{}.metadata".format(config["DatasetType"])):
+                wcsRef = registry.getDataset(row["wcs"])
+                metadataRef = registry.getDataset(row["metadata"])
+                wcs = datastore.get(wcsRef)
+                metadata = datastore.get(metadataRef)
+                bbox = Box2D(bboxFromMetadata(metadata))
+                bbox.grow(config["padding"])
+                region = ConvexPolygon([sp.getVector() for sp in wcs.pixelToSky(bbox.getCorners())])
+                value = {k: row[k] for k in ("camera", "visit", "sensor")}
+                registry.setDataUnitRegion(("Visit", "Sensor"), value, region)
+                visits.setdefault((row["camera"], row["visit"]), []).extend(region.getVertices())
+            for (camera, visit), vertices in visits.items():
+                region = ConvexPolygon(vertices)
+                registry.setDataUnitRegion(("Visit",), dict(camera=camera, visit=visit), region)
