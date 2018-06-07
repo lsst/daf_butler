@@ -41,6 +41,13 @@ def makeExampleMetrics():
                           )
 
 
+class TransactionTestError(Exception):
+    """Specific error for transactions, to prevent misdiagnosing
+    that might otherwise occur when a standard exception is used.
+    """
+    pass
+
+
 class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
     """Some basic tests of a simple POSIX datastore."""
 
@@ -210,6 +217,77 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
 
         metricsOut = outputPosixDatastore.get(ref)
         self.assertEqual(metrics, metricsOut)
+
+    def testBasicTransaction(self):
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        dataUnits = frozenset(("visit", "filter"))
+        nDatasets = 6
+        dataIds = [{"visit": i, "filter": "V"} for i in range(nDatasets)]
+        data = [(self.makeDatasetRef("metric", dataUnits, storageClass, dataId), makeExampleMetrics())
+                for dataId in dataIds]
+        succeed = data[:nDatasets//2]
+        fail = data[nDatasets//2:]
+        # All datasets added in this transaction should continue to exist
+        with datastore.transaction():
+            for ref, metrics in succeed:
+                datastore.put(metrics, ref)
+        # Whereas datasets added in this transaction should not
+        with self.assertRaises(TransactionTestError):
+            with datastore.transaction():
+                for ref, metrics in fail:
+                    datastore.put(metrics, ref)
+                raise TransactionTestError("This should propagate out of the context manager")
+        # Check for datasets that should exist
+        for ref, metrics in succeed:
+            # Does it exist?
+            self.assertTrue(datastore.exists(ref))
+            # Get
+            metricsOut = datastore.get(ref, parameters=None)
+            self.assertEqual(metrics, metricsOut)
+            # URI
+            uri = datastore.getUri(ref)
+            self.assertEqual(uri[:5], "file:")
+        # Check for datasets that should not exist
+        for ref, _ in fail:
+            # These should raise
+            with self.assertRaises(FileNotFoundError):
+                # non-existing file
+                datastore.get(ref)
+            with self.assertRaises(FileNotFoundError):
+                datastore.getUri(ref)
+
+    def testNestedTransaction(self):
+        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        dataUnits = frozenset(("visit", "filter"))
+        metrics = makeExampleMetrics()
+
+        dataId = {"visit": 0, "filter": "V"}
+        refBefore = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+        datastore.put(metrics, refBefore)
+        with self.assertRaises(TransactionTestError):
+            with datastore.transaction():
+                dataId = {"visit": 1, "filter": "V"}
+                refOuter = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+                datastore.put(metrics, refOuter)
+                with datastore.transaction():
+                    dataId = {"visit": 2, "filter": "V"}
+                    refInner = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+                    datastore.put(metrics, refInner)
+                # All datasets should exist
+                for ref in (refBefore, refOuter, refInner):
+                    metricsOut = datastore.get(ref, parameters=None)
+                    self.assertEqual(metrics, metricsOut)
+                raise TransactionTestError("This should roll back the transaction")
+        # Dataset(s) inserted before the transaction should still exist
+        metricsOut = datastore.get(refBefore, parameters=None)
+        self.assertEqual(metrics, metricsOut)
+        # But all datasets inserted during the (rolled back) transaction should be gone
+        with self.assertRaises(FileNotFoundError):
+            datastore.get(refOuter)
+        with self.assertRaises(FileNotFoundError):
+            datastore.get(refInner)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -314,6 +314,9 @@ class PosixDatastore(Datastore):
 
         self.ingest(path, ref, formatter=formatter)
 
+        if self._transaction is not None:
+            self._transaction.registerUndo('put', self.remove, ref)
+
     def ingest(self, path, ref, formatter=None):
         """Record that a Dataset with the given `DatasetRef` exists in the store.
 
