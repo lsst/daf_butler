@@ -21,11 +21,12 @@
 
 import itertools
 import contextlib
-import functools
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.sql import select, and_, exists
 from sqlalchemy.exc import IntegrityError
+
+from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import RegistryConfig, Registry
@@ -43,16 +44,6 @@ __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
 class SqlRegistryConfig(RegistryConfig):
     pass
-
-
-def _transactional(func):
-    """Decorator that wraps a `SqlRegistry` method and makes it transactional.
-    """
-    @functools.wraps(func)
-    def inner(self, *args, **kwargs):
-        with self.transaction():
-            return func(self, *args, **kwargs)
-    return inner
 
 
 class SqlRegistry(Registry):
@@ -77,7 +68,7 @@ class SqlRegistry(Registry):
         self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
         self._schema = Schema(schemaConfig)
-        self._engine = create_engine(self.config['db'])
+        self._engine = create_engine(self.config['db'], echo=True)
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}
         self._connection = self._engine.connect()
@@ -128,7 +119,7 @@ class SqlRegistry(Registry):
         """
         return isinstance(datasetType, DatasetType)
 
-    @_transactional
+    @transactional
     def registerDatasetType(self, datasetType):
         """
         Add a new `DatasetType` to the SqlRegistry.
@@ -223,7 +214,7 @@ class SqlRegistry(Registry):
                                   dataUnits=dataUnits)
         return datasetType
 
-    @_transactional
+    @transactional
     def addDataset(self, datasetType, dataId, run, producer=None):
         """Add a Dataset to a Collection.
 
@@ -315,7 +306,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    @_transactional
+    @transactional
     def setAssembler(self, ref, assembler):
         """Set the assembler to use for a composite dataset.
 
@@ -331,7 +322,7 @@ class SqlRegistry(Registry):
             datasetTable.c.dataset_id == ref.id).values(assembler=assembler))
         ref._assembler = assembler
 
-    @_transactional
+    @transactional
     def attachComponent(self, name, parent, component):
         """Attach a component to a dataset.
 
@@ -353,7 +344,7 @@ class SqlRegistry(Registry):
         self._connection.execute(datasetCompositionTable.insert().values(**values))
         parent._components[name] = component
 
-    @_transactional
+    @transactional
     def associate(self, collection, refs):
         r"""Add existing Datasets to a Collection, possibly creating the
         Collection in the process.
@@ -370,7 +361,7 @@ class SqlRegistry(Registry):
         self._connection.execute(datasetCollectionTable.insert(),
                                  [{'dataset_id': ref.id, 'collection': collection} for ref in refs])
 
-    @_transactional
+    @transactional
     def disassociate(self, collection, refs, remove=True):
         r"""Remove existing Datasets from a Collection.
 
@@ -403,7 +394,7 @@ class SqlRegistry(Registry):
                      datasetCollectionTable.c.collection == collection)))
         return []
 
-    @_transactional
+    @transactional
     def addStorageInfo(self, ref, storageInfo):
         """Add storage information for a given dataset.
 
@@ -423,7 +414,7 @@ class SqlRegistry(Registry):
                       size=storageInfo.size)
         self._connection.execute(datasetStorageTable.insert().values(**values))
 
-    @_transactional
+    @transactional
     def updateStorageInfo(self, ref, datastoreName, storageInfo):
         """Update storage information for a given dataset.
 
@@ -486,7 +477,7 @@ class SqlRegistry(Registry):
                                   size=result["size"])
         return storageInfo
 
-    @_transactional
+    @transactional
     def removeStorageInfo(self, datastoreName, ref):
         """Remove storage information associated with this dataset.
 
@@ -504,7 +495,7 @@ class SqlRegistry(Registry):
             and_(datasetStorageTable.c.dataset_id == ref.id,
                  datasetStorageTable.c.datastore_name == datastoreName)))
 
-    @_transactional
+    @transactional
     def addExecution(self, execution):
         """Add a new `Execution` to the `SqlRegistry`.
 
@@ -543,7 +534,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    @_transactional
+    @transactional
     def makeRun(self, collection):
         """Create a new `Run` in the `SqlRegistry` and return it.
 
@@ -564,7 +555,7 @@ class SqlRegistry(Registry):
         self.addRun(run)
         return run
 
-    @_transactional
+    @transactional
     def ensureRun(self, run):
         """Conditionally add a new `Run` to the `SqlRegistry`.
 
@@ -589,7 +580,7 @@ class SqlRegistry(Registry):
             return
         self.addRun(run)
 
-    @_transactional
+    @transactional
     def addRun(self, run):
         """Add a new `Run` to the `SqlRegistry`.
 
@@ -679,7 +670,7 @@ class SqlRegistry(Registry):
                       pipeline=None)     # TODO add pipeline
         return run
 
-    @_transactional
+    @transactional
     def addQuantum(self, quantum):
         r"""Add a new `Quantum` to the `SqlRegistry`.
 
@@ -751,7 +742,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    @_transactional
+    @transactional
     def markInputUsed(self, quantum, ref):
         """Record the given `DatasetRef` as an actual (not just predicted)
         input of the given `Quantum`.
@@ -782,7 +773,7 @@ class SqlRegistry(Registry):
             raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
         quantum._markInputUsed(ref)
 
-    @_transactional
+    @transactional
     def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
 
@@ -918,7 +909,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    @_transactional
+    @transactional
     def subset(self, collection, expr, datasetTypes):
         r"""Create a new `Collection` by subsetting an existing one.
 
@@ -940,7 +931,7 @@ class SqlRegistry(Registry):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @_transactional
+    @transactional
     def merge(self, outputCollection, inputCollections):
         r"""Create a new Collection from a series of existing ones.
 
@@ -1021,7 +1012,7 @@ class SqlRegistry(Registry):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @_transactional
+    @transactional
     def import_(self, tables, collection):
         """Import (previously exported) contents into the (possibly empty)
         `SqlRegistry`.
@@ -1036,7 +1027,7 @@ class SqlRegistry(Registry):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @_transactional
+    @transactional
     def transfer(self, src, expr, collection):
         r"""Transfer contents from a source `SqlRegistry`, limited to those
         reachable from the Datasets identified by the expression `expr`,

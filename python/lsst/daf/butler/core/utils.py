@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import functools
 import importlib
 from collections import namedtuple
 
@@ -312,3 +313,13 @@ class TopologicalSet:
         for node in self._nodes.values():
             visit(node)
         return order
+
+
+def transactional(func):
+    """Decorator that wraps a method and makes it transactional.
+    """
+    @functools.wraps(func)
+    def inner(self, *args, **kwargs):
+        with self.transaction():
+            return func(self, *args, **kwargs)
+    return inner
