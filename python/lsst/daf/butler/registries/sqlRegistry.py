@@ -37,7 +37,7 @@ from ..core.quantum import Quantum
 from ..core.storageInfo import StorageInfo
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.sqlDatabaseDict import SqlDatabaseDict
+from ..core.sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -68,7 +68,7 @@ class SqlRegistry(Registry):
         self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
         self._schema = Schema(schemaConfig)
-        self._engine = create_engine(self.config['db'], echo=True)
+        self._engine = create_engine(self.config['db'])
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}
         self._connection = self._engine.connect()
@@ -1070,7 +1070,7 @@ class SqlRegistry(Registry):
             sequence of values (again, as defined by `namedtuple`).
         """
         # We need to construct a temporary config for the table value because
-        # SqlDatabaseDict.__init__ is required to take a config so it can be
+        # SqlRegistryDatabaseDict.__init__ is required to take a config so it can be
         # called by DatabaseDict.fromConfig as well.
         # I suppose we could have Registry.makeDatabaseDict take a config as
         # well, since it'll also usually be called by DatabaseDict.fromConfig,
@@ -1078,5 +1078,4 @@ class SqlRegistry(Registry):
         # really need.
         config = Config()
         config['table'] = table
-        return SqlDatabaseDict(config, types=types, key=key, value=value,
-                               engine=self._engine)
+        return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
