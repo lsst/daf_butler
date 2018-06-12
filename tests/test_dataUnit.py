@@ -37,7 +37,7 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Independent check for `Schema` constructor.
         """
-        dataUnitRegistry = DataUnitRegistry.fromConfig(self.config['dataUnits'])
+        dataUnitRegistry = DataUnitRegistry.fromConfig(self.config)
         self.assertIsInstance(dataUnitRegistry, DataUnitRegistry)
         for dataUnitName, dataUnit in dataUnitRegistry.items():
             self.assertIsInstance(dataUnit, DataUnit)
