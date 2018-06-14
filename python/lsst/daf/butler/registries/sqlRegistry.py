@@ -38,6 +38,7 @@ from ..core.storageInfo import StorageInfo
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
+from .sqlPreFlight import SqlPreFlight
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
@@ -73,6 +74,7 @@ class SqlRegistry(Registry):
         self._engine = create_engine(self.config['db'])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
+        self._preFlight = SqlPreFlight(self._schema, self._connection)
         if create:
             self._createTables()
 
@@ -1028,9 +1030,13 @@ class SqlRegistry(Registry):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def makeDataGraph(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
+    def selectDataUnits(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
         r"""Evaluate a filter expression and lists of `DatasetType`\ s and
-        return a `QuantumGraph`.
+        return a set of data unit values.
+
+        Returned set consists of combinations of units participating in data
+        transformation from ``neededDatasetTypes`` to ``futureDatasetTypes``,
+        restricted by existing data and filter expression.
 
         Parameters
         ----------
@@ -1050,11 +1056,17 @@ class SqlRegistry(Registry):
 
         Returns
         -------
-        graph : `QuantumGraph`
-            A `QuantumGraph` instance with a `QuantumGraph.units` attribute
-            that is not `None`.
+        header : `tuple` of `tuple`
+            Length of tuple equals the number of columns in the returned
+            result set. Each item is a tuple with two elements - DataUnit
+            name (e.g. "Visit") and unit value name (e.g. "visit").
+        rows : sequence of `tuple`
+            Result set, this can be a single-pass iterator. Each tuple
+            contains unit values corresponding to units in a header.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        return self._preFlight.selectDataUnits(collections, expr,
+                                               neededDatasetTypes,
+                                               futureDatasetTypes)
 
     def makeProvenanceGraph(self, expr, types=None):
         """Make a `QuantumGraph` that contains the full provenance of all
