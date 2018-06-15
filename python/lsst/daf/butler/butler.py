@@ -24,8 +24,9 @@ Butler top level classes.
 """
 
 import os
+import contextlib
 
-from .core.utils import doImport
+from .core.utils import doImport, transactional
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.run import Run
@@ -172,6 +173,17 @@ class Butler:
         """
         return (Butler, (self.config, ))
 
+    @contextlib.contextmanager
+    def transaction(self):
+        """Context manager supporting `Butler` transactions.
+
+        Transactions can be nested.
+        """
+        with self.registry.transaction():
+            with self.datastore.transaction():
+                yield
+
+    @transactional
     def put(self, obj, datasetType, dataId, producer=None):
         """Store and register a dataset.
 
