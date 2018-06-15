@@ -43,6 +43,13 @@ def makeExampleMetrics():
                           )
 
 
+class TransactionTestError(Exception):
+    """Specific error for testing transactions, to prevent misdiagnosing
+    that might otherwise occur when a standard exception is used.
+    """
+    pass
+
+
 class ButlerTestCase(lsst.utils.tests.TestCase):
     """Test for Butler.
     """
@@ -53,6 +60,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         """
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(datasetType)
+        return datasetType
 
     @classmethod
     def setUpClass(cls):
@@ -163,6 +171,50 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
+
+    def testTransaction(self):
+        butler = Butler(self.configFile)
+        datasetTypeName = "test_metric"
+        dataUnits = ("Camera", "Visit")
+        dataUnitEntries = (("Camera", {"camera": "DummyCam"}),
+                           ("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"}),
+                           ("Visit", {"camera": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        metric = makeExampleMetrics()
+        dataId = {"camera": "DummyCam", "visit": 42}
+        with self.assertRaises(TransactionTestError):
+            with butler.transaction():
+                # Create and register a DatasetType
+                datasetType = self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+                # Add needed DataUnits
+                for name, value in dataUnitEntries:
+                    butler.registry.addDataUnitEntry(name, value)
+                # Store a dataset
+                ref = butler.put(metric, datasetTypeName, dataId)
+                self.assertIsInstance(ref, DatasetRef)
+                # Test getDirect
+                metricOut = butler.getDirect(ref)
+                self.assertEqual(metric, metricOut)
+                # Test get
+                metricOut = butler.get(datasetTypeName, dataId)
+                self.assertEqual(metric, metricOut)
+                # Check we can get components
+                self.assertGetComponents(butler, datasetTypeName, dataId,
+                                         ("summary", "data", "output"), metric)
+                raise TransactionTestError("This should roll back the entire transaction")
+
+        with self.assertRaises(KeyError):
+            butler.registry.getDatasetType(datasetTypeName)
+        for name, value in dataUnitEntries:
+            self.assertIsNone(butler.registry.findDataUnitEntry(name, value))
+        # Should raise KeyError for missing DatasetType
+        with self.assertRaises(KeyError):
+            butler.get(datasetTypeName, dataId)
+        # Also check explicitly if Dataset entry is missing
+        self.assertIsNone(butler.registry.find(butler.collection, datasetType, dataId))
+        # Direct retrieval should not find the file in the Datastore
+        with self.assertRaises(FileNotFoundError):
+            butler.getDirect(ref)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
