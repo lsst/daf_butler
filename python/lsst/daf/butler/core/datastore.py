@@ -23,8 +23,11 @@
 Support for generic data stores.
 """
 
+import contextlib
+from collections import namedtuple
 
 from lsst.daf.butler.core.utils import doImport
+from lsst.log import Log
 
 from abc import ABCMeta, abstractmethod
 from .config import ConfigSubset
@@ -36,6 +39,65 @@ class DatastoreConfig(ConfigSubset):
     component = "datastore"
     requiredKeys = ("cls",)
     defaultConfigFile = "datastore.yaml"
+
+
+class DatastoreTransaction:
+    """Keeps a log of `Datastore` activity and allow rollback.
+
+    Parameters
+    ----------
+    parent : `DatastoreTransaction`, optional
+        The parent transaction (if any)
+
+    Attributes
+    ----------
+    parent : `DatastoreTransaction`
+        The parent transaction.
+    """
+    Event = namedtuple("Event", ["name", "undoFunc", "args", "kwargs"])
+
+    def __init__(self, parent=None):
+        self.parent = parent
+        self._log = []
+
+    def registerUndo(self, name, undoFunc, *args, **kwargs):
+        """Register event with undo function.
+
+        Parameters
+        ----------
+        `name` : str
+            Name of the event.
+        `undoFunc` : func
+            Function to undo this event.
+        `*args` : tuple
+            Positional arguments to `undoFunc`.
+        `**kwargs` : dict
+            Keyword arguments to `undoFunc`.
+        """
+        self._log.append(self.Event(name, undoFunc, args, kwargs))
+
+    def rollback(self):
+        """Roll back all events in this transaction.
+        """
+        while self._log:
+            name, undoFunc, args, kwargs = self._log.pop()
+            try:
+                undoFunc(*args, **kwargs)
+            except BaseException as e:
+                # Deliberately swallow error that may occur in unrolling
+                log = Log.getLogger("lsst.daf.butler.datastore.DatastoreTransaction")
+                log.debug("Exception: %s caught while unrolling: %s", e, name)
+                pass
+
+    def commit(self):
+        """Commit this transaction.
+        """
+        if self.parent is None:
+            # Just forget about the events, they have already happened.
+            return
+        else:
+            # We may still want to events from this transaction as part of the parent.
+            self.parent._log.extend(self._log)
 
 
 class Datastore(metaclass=ABCMeta):
@@ -98,6 +160,24 @@ class Datastore(metaclass=ABCMeta):
         self.config = DatastoreConfig(config)
         self.registry = registry
         self.name = "ABCDataStore"
+        self._transaction = None
+
+    @contextlib.contextmanager
+    def transaction(self):
+        """Context manager supporting `Datastore` transactions.
+
+        Transactions can be nested, and are to be used in combination with
+        `Registry.transaction`.
+        """
+        self._transaction = DatastoreTransaction(self._transaction)
+        try:
+            yield
+        except BaseException:
+            self._transaction.rollback()
+            raise
+        else:
+            self._transaction.commit()
+        self._transaction = self._transaction.parent
 
     @abstractmethod
     def exists(self, datasetRef):
