@@ -168,7 +168,7 @@ class DataUnitJoin:
         The table to be used for queries.  Note that this is not
         an actual `Table` in many cases because joins are often
         materialized as views (and thus are also not present
-        in `Registry._schema.metadata`).
+        in `Registry._schema._metadata`).
     """
     def __init__(self, name, lhs=None, rhs=None, summarizes=None, table=None):
         self._name = name
