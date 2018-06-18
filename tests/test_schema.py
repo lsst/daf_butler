@@ -29,6 +29,7 @@ import lsst.utils.tests
 
 from lsst.daf.butler.core.utils import iterable
 from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column
+from sqlalchemy.sql.expression import TableClause
 
 """Tests for Schema.
 """
@@ -46,8 +47,8 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.testDir = os.path.dirname(__file__)
         self.config = SchemaConfig()
         self.schema = Schema(self.config)
-        self.engine = create_engine('sqlite:///:memory:')
-        self.schema.metadata.create_all(self.engine)
+        self.engine = create_engine('sqlite:///:memory:', echo=True)
+        self.schema._metadata.create_all(self.engine)
 
     def testConstructor(self):
         """Independent check for `Schema` constructor.
@@ -58,19 +59,34 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
     def testSchemaCreation(self):
         """Check that the generated `Schema` tables match its description.
         """
-        self.assertIsInstance(self.schema.metadata, MetaData)
+        self.assertIsInstance(self.schema._metadata, MetaData)
         allTables = {}
         allTables.update(self.config['tables'])
-        for dataUnitDescription in self.config['dataUnits']:
+        for dataUnitDescription in self.config['dataUnits'].values():
             if 'tables' in dataUnitDescription:
                 allTables.update(dataUnitDescription['tables'])
+        for dataUnitJoinDescription in self.config['dataUnitJoins'].values():
+            if 'tables' in dataUnitJoinDescription:
+                allTables.update(dataUnitJoinDescription['tables'])
         for tableName, tableDescription in allTables.items():
-            self.assertTable(self.schema.metadata, tableName, tableDescription)
+            if 'sql' in tableDescription:
+                self.assertView(tableName, tableDescription)
+            else:
+                self.assertTable(tableName, tableDescription)
 
-    def assertTable(self, metadata, tableName, tableDescription):
+    def assertView(self, tableName, tableDescription):
+        """Check that a generated view matches its `tableDescription`.
+        """
+        table = self.schema.views[tableName]
+        self.assertIsInstance(table, TableClause)
+        for columnDescription in tableDescription['columns']:
+            column = getattr(table.c, columnDescription['name'])
+            self.assertIsInstance(column, Column)
+
+    def assertTable(self, tableName, tableDescription):
         """Check that a generated table matches its `tableDescription`.
         """
-        table = metadata.tables[tableName]
+        table = self.schema.tables[tableName]
         self.assertIsInstance(table, Table)
         for columnDescription in tableDescription['columns']:
             self.assertColumn(table, columnDescription['name'], columnDescription)

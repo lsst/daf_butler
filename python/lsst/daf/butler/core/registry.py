@@ -72,7 +72,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @staticmethod
-    def fromConfig(registryConfig, schemaConfig=None):
+    def fromConfig(registryConfig, schemaConfig=None, create=False):
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to instantiate.
@@ -85,6 +85,8 @@ class Registry(metaclass=ABCMeta):
             Schema configuration. Can be read from supplied registryConfig
             if the relevant component is defined and ``schemaConfig`` is
             `None`.
+        create : `bool`
+            Assume empty Registry and create a new one.
 
         Returns
         -------
@@ -108,9 +110,9 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
         cls = doImport(registryConfig['cls'])
-        return cls(registryConfig, schemaConfig)
+        return cls(registryConfig, schemaConfig, create=create)
 
-    def __init__(self, registryConfig, schemaConfig=None):
+    def __init__(self, registryConfig, schemaConfig=None, create=False):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
 

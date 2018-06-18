@@ -69,5 +69,7 @@ class SqliteRegistry(SqlRegistry):
         for key in ("registry.cls",):
             config[key] = full[key]
 
-    def __init__(self, registryConfig, schemaConfig):
-        super().__init__(registryConfig, schemaConfig)
+    def __init__(self, registryConfig, schemaConfig, create=False):
+        if ':memory:' in registryConfig.get('db', ''):
+            create = True
+        super().__init__(registryConfig, schemaConfig, create)

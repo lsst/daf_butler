@@ -49,11 +49,11 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.butlerConfig = ButlerConfig(self.configFile)
 
     def testInitFromConfig(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         self.assertIsInstance(registry, SqlRegistry)
 
     def testDatasetType(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         # Check valid insert
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
@@ -84,7 +84,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outDatasetType, inDatasetType)
 
     def testDataset(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
@@ -97,7 +97,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(ref, outRef)
 
     def testComponents(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testComponents")
         registry.storageClasses.registerStorageClass(storageClass)
         parentDatasetType = DatasetType(name="parent", dataUnits=("Camera",), storageClass=storageClass)
@@ -118,7 +118,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outParent.components, children)
 
     def testRun(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         # Check insertion and retrieval with two different collections
         for collection in ["one", "two"]:
             run = registry.makeRun(collection)
@@ -152,7 +152,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(run2, registry.getRun(id=run2.id))
 
     def testExecution(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         startTime = datetime(2018, 1, 1)
         endTime = startTime + timedelta(days=1, hours=5)
         host = "localhost"
@@ -164,7 +164,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outExecution, execution)
 
     def testQuantum(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testQuantum")
@@ -194,7 +194,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outQuantum, quantum)
 
     def testStorageInfo(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testStorageInfo")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
@@ -218,7 +218,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outStorageInfo, updatedStorageInfo)
 
     def testAssembler(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testAssembler")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
@@ -233,7 +233,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # TODO add check that ref2.assembler is also correct when ref2 is returned by Registry.find()
 
     def testFind(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testFind")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
@@ -274,7 +274,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(registry.find(collection, datasetType, nonExistingDataId))
 
     def testCollections(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testCollections")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
@@ -310,7 +310,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outputRef, inputRef2)
 
     def testDatasetUnit(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         dataUnitName = 'Camera'
         dataUnitValue = {'camera': 'DummyCam'}
         registry.addDataUnitEntry(dataUnitName, dataUnitValue)
@@ -336,7 +336,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(registry.findDataUnitEntry(dataUnitName2, dataUnitValue2), dataUnitValue2)
 
     def testBasicTransaction(self):
-        registry = Registry.fromConfig(self.butlerConfig)
+        registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
         dataUnits = ("Camera", )

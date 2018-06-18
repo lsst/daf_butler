@@ -150,6 +150,60 @@ class DataUnit:
                 missing, dataId, self.name))
 
 
+class DataUnitJoin:
+    """Represents a join between one or more `DataUnit`s.
+
+    Parameters
+    ----------
+    name : `str`
+        Name of this `DataUnit` (`str`, read-only).
+        Also assumed to be the name of the primary table (if present).
+    lhs : `tuple`
+        Left-hand-side of the join.
+    rhs : `tuple`
+        Right-hand-side of the join.
+    summarizes : `DataUnitJoin`
+        Summarizes this other `DataUnitJoin`.
+    table : `sqlalchemy.TableClause` or `sqlalchemy.Table`
+        The table to be used for queries.  Note that this is not
+        an actual `Table` in many cases because joins are often
+        materialized as views (and thus are also not present
+        in `Registry._schema._metadata`).
+    """
+    def __init__(self, name, lhs=None, rhs=None, summarizes=None, table=None):
+        self._name = name
+        self._lhs = lhs
+        self._rhs = rhs
+        self._summarizes = summarizes
+        self._table = table
+
+    @property
+    def name(self):
+        """Name of this `DataUnit` (`str`, read-only).
+
+        Also assumed to be the name of the primary table (if present)."""
+        return self._name
+
+    @property
+    def lhs(self):
+        return self._lhs
+
+    @property
+    def rhs(self):
+        return self._rhs
+
+    @property
+    def summarizes(self):
+        return self._summarizes
+
+    @property
+    def table(self):
+        """When not ``None`` the primary table entry corresponding to this
+        `DataUnitJoin` (`sqlalchemy.core.TableClause`, optional).
+        """
+        return getattr(self, '_table', None)
+
+
 class DataUnitRegistry:
     """Instances of this class keep track of `DataUnit` relations.
 
@@ -161,6 +215,7 @@ class DataUnitRegistry:
         self._dataUnits = {}
         self.links = {}
         self.constraints = []
+        self.joins = {}
 
     @classmethod
     def fromConfig(cls, config, builder=None):
@@ -177,8 +232,9 @@ class DataUnitRegistry:
             When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
         """
         dataUnitRegistry = cls()
-        dataUnitRegistry._initDataUnitNames(config)
-        dataUnitRegistry._initDataUnits(config, builder)
+        dataUnitRegistry._initDataUnitNames(config['dataUnits'])
+        dataUnitRegistry._initDataUnits(config['dataUnits'], builder)
+        dataUnitRegistry._initDataUnitJoins(config['dataUnitJoins'], builder)
         return dataUnitRegistry
 
     def __len__(self):
@@ -274,6 +330,31 @@ class DataUnitRegistry:
                                 table=table,
                                 link=link)
             self[dataUnitName] = dataUnit
+
+    def _initDataUnitJoins(self, config, builder):
+        """Initialize `DataUnit` join entries.
+
+        Parameters
+        ----------
+        config : `SchemaConfig`
+            Schema configuration describing `DataUnit` join relations.
+        builder : `SchemaBuilder`, optional
+            When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
+        """
+        for dataUnitJoinName, dataUnitJoinDescription in config.items():
+            table = None
+            if 'tables' in dataUnitJoinDescription and builder is not None:
+                for tableName, tableDescription in dataUnitJoinDescription['tables'].items():
+                    table = builder.addTable(tableName, tableDescription)
+            lhs = frozenset((dataUnitJoinDescription.get('lhs', None)))
+            rhs = frozenset((dataUnitJoinDescription.get('rhs', None)))
+            summarizes = dataUnitJoinDescription.get('summarizes', None)
+            dataUnitJoin = DataUnitJoin(name=dataUnitJoinName,
+                                        lhs=lhs,
+                                        rhs=rhs,
+                                        summarizes=summarizes,
+                                        table=table)
+            self.joins[(lhs, rhs)] = dataUnitJoin
 
     def getPrimaryKeyNames(self, dataUnitNames):
         """Get all primary-key column names for the given ``dataUnitNames``.

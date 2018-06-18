@@ -694,7 +694,7 @@ schema:
         type: string
         doc: A string value composed only of letters, numbers, and underscores.
 
-  dataunit_joins:
+  dataUnitJoins:
     ExposureRangeJoin:
       doc: >
         A calculated join between Datasets identified with an Exposure
@@ -844,10 +844,9 @@ schema:
             tgt:
               - Visit.camera
               - Visit.visit
-      sql: >
-        CREATE VIEW VisitSkyPixJoin
-          SELECT DISTINCT camera, visit, skypix
-          FROM VisitSensorSkyPixJoin;
+          sql: >
+            SELECT DISTINCT camera, visit, skypix
+            FROM VisitSensorSkyPixJoin;
 
     PatchSkyPixJoin:
       doc: >
@@ -931,10 +930,9 @@ schema:
             tgt:
               - Tract.skymap
               - Tract.tract
-      sql: >
-        CREATE VIEW TractPixJoin
-          SELECT DISTINCT skymap, tract, skypix
-          FROM PatchSkyPixJoin;
+          sql: >
+            SELECT DISTINCT skymap, tract, skypix
+            FROM PatchSkyPixJoin;
 
     VisitSensorPatchJoin:
       doc: >
@@ -1004,19 +1002,18 @@ schema:
               - Patch.skymap
               - Patch.tract
               - Patch.patch
-      sql: >
-        CREATE VIEW VisitSensorPatchJoin AS
-          SELECT DISTINCT
-            VisitSensorSkyPixJoin.camera,
-            VisitSensorSkyPixJoin.visit,
-            VisitSensorSkyPixJoin.sensor,
-            PatchSkyPixJoin.skymap,
-            PatchSkyPixJoin.tract,
-            PatchSkyPixJoin.patch
-          FROM
-            VisitSensorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
-              VisitSensorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
-            );
+          sql: >
+            SELECT DISTINCT
+              VisitSensorSkyPixJoin.camera,
+              VisitSensorSkyPixJoin.visit,
+              VisitSensorSkyPixJoin.sensor,
+              PatchSkyPixJoin.skymap,
+              PatchSkyPixJoin.tract,
+              PatchSkyPixJoin.patch
+            FROM
+              VisitSensorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
+                VisitSensorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+              );
 
     VisitPatchJoin:
       doc: >
@@ -1080,18 +1077,17 @@ schema:
               - Patch.skymap
               - Patch.tract
               - Patch.patch
-      sql: >
-        CREATE VIEW VisitPatchJoin AS
-          SELECT DISTINCT
-            VisitSkyPixJoin.camera,
-            VisitSkyPixJoin.visit,
-            PatchSkyPixJoin.skymap,
-            PatchSkyPixJoin.tract,
-            PatchSkyPixJoin.patch
-          FROM
-            VisitSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
-              VisitSkyPixJoin.skypix = PatchSkyPixJoin.skypix
-            );
+          sql: >
+            SELECT DISTINCT
+              VisitSkyPixJoin.camera,
+              VisitSkyPixJoin.visit,
+              PatchSkyPixJoin.skymap,
+              PatchSkyPixJoin.tract,
+              PatchSkyPixJoin.patch
+            FROM
+              VisitSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
+                VisitSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+              );
 
     VisitSensorTractJoin:
       doc: >
@@ -1156,18 +1152,17 @@ schema:
             tgt:
               - Tract.skymap
               - Tract.tract
-      sql: >
-        CREATE VIEW VisitSensorTractJoin AS
-          SELECT DISTINCT
-            VisitSensorSkyPixJoin.camera,
-            VisitSensorSkyPixJoin.visit,
-            VisitSensorSkyPixJoin.sensor,
-            TractSkyPixJoin.skymap,
-            TractSkyPixJoin.tract
-          FROM
-            VisitSensorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
-              VisitSensorSkyPixJoin.skypix = TractSkyPixJoin.skypix
-            );
+          sql: >
+            SELECT DISTINCT
+              VisitSensorSkyPixJoin.camera,
+              VisitSensorSkyPixJoin.visit,
+              VisitSensorSkyPixJoin.sensor,
+              TractSkyPixJoin.skymap,
+              TractSkyPixJoin.tract
+            FROM
+              VisitSensorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
+                VisitSensorSkyPixJoin.skypix = TractSkyPixJoin.skypix
+              );
 
     VisitTractJoin:
       doc: >
@@ -1226,17 +1221,16 @@ schema:
             tgt:
               - Tract.skymap
               - Tract.tract
-      sql: >
-        CREATE VIEW VisitTractJoin AS
-          SELECT DISTINCT
-            VisitSkyPixJoin.camera,
-            VisitSkyPixJoin.visit,
-            TractSkyPixJoin.skymap,
-            TractSkyPixJoin.tract
-          FROM
-            VisitSkyPixJoin INNER JOIN TractSkyPixJoin ON (
-              VisitSkyPixJoin.skypix = TractSkyPixJoin.skypix
-            );
+          sql: >
+            SELECT DISTINCT
+              VisitSkyPixJoin.camera,
+              VisitSkyPixJoin.visit,
+              TractSkyPixJoin.skymap,
+              TractSkyPixJoin.tract
+            FROM
+              VisitSkyPixJoin INNER JOIN TractSkyPixJoin ON (
+                VisitSkyPixJoin.skypix = TractSkyPixJoin.skypix
+              );
 
   tables:
     Dataset:

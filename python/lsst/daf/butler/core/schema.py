@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import iterable
+from .views import makeView
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKeyConstraint, Table, MetaData
@@ -55,7 +56,7 @@ class Schema:
             config = SchemaConfig(config)
         self.config = config
         self.builder = SchemaBuilder()
-        self.dataUnits = DataUnitRegistry.fromConfig(config['dataUnits'], self.builder)
+        self.dataUnits = DataUnitRegistry.fromConfig(config, self.builder)
         self.buildFromConfig(config)
 
     def buildFromConfig(self, config):
@@ -66,7 +67,9 @@ class Schema:
             datasetTable.append_column(linkColumn)
         for linkConstraint in self.dataUnits.constraints:
             datasetTable.append_constraint(linkConstraint)
-        self.metadata = self.builder.metadata
+        self._metadata = self.builder.metadata
+        self.tables = self.builder.tables
+        self.views = self.builder.views
 
 
 class SchemaBuilder:
@@ -76,12 +79,18 @@ class SchemaBuilder:
     ----------
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
+    tables : `dict`
+        All created tables.
+    views : `dict`
+        All created views.
     """
     VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float,
                           'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
 
     def __init__(self):
         self.metadata = MetaData()
+        self.tables = {}
+        self.views = {}
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -105,23 +114,31 @@ class SchemaBuilder:
         if tableName in self.metadata.tables:
             raise ValueError("Table with name {} already exists".format(tableName))
         # Create a Table object (attaches itself to metadata)
-        table = Table(tableName, self.metadata)
+        if "sql" in tableDescription:
+            # This table can be materialized as a view
+            table = makeView(tableName, self.metadata, selectable=tableDescription['sql'])
+            self.views[tableName] = table
+            view = True
+        else:
+            table = Table(tableName, self.metadata)
+            self.tables[tableName] = table
+            view = False
         if "columns" not in tableDescription:
             raise ValueError("No columns in table: {}".format(tableName))
         for columnDescription in tableDescription["columns"]:
-            self.addColumn(tableName, columnDescription)
-        if "foreignKeys" in tableDescription:
+            self.addColumn(table, columnDescription)
+        if not view and "foreignKeys" in tableDescription:
             for constraintDescription in tableDescription["foreignKeys"]:
-                self.addForeignKeyConstraint(tableName, constraintDescription)
+                self.addForeignKeyConstraint(table, constraintDescription)
         return table
 
-    def addColumn(self, tableName, columnDescription):
+    def addColumn(self, table, columnDescription):
         """Add a column to a table.
 
         Parameters
         ----------
-        tableName : `str`
-            Key of the table.
+        table : `sqlalchemy.Table`, `sqlalchemy.expression.TableClause` or `str`
+            The table.
         columnDescription : `dict`
             Description of the column to be created.
             Should always contain:
@@ -133,23 +150,25 @@ class SchemaBuilder:
             - foreign_key, link to other table
             - doc, docstring
         """
-        table = self.metadata.tables[tableName]
+        if isinstance(table, str):
+            table = self.metadata.tables[table]
         table.append_column(self.makeColumn(columnDescription))
 
-    def addForeignKeyConstraint(self, tableName, constraintDescription):
+    def addForeignKeyConstraint(self, table, constraintDescription):
         """Add a ForeignKeyConstraint to a table.
 
         Parameters
         ----------
-        tableName : `str`
-            Key of the table.
+        table : `sqlalchemy.Table` or `str`
+            The table.
         constraintDescription : `dict`
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
             - src, list of source column names
             - tgt, list of target column names
         """
-        table = self.metadata.tables[tableName]
+        if isinstance(table, str):
+            table = self.metadata.tables[table]
         table.append_constraint(self.makeForeignKeyConstraint(constraintDescription))
 
     def makeColumn(self, columnDescription):
