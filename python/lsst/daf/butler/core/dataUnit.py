@@ -162,8 +162,8 @@ class DataUnitJoin:
         Left-hand-side of the join.
     rhs : `tuple`
         Right-hand-side of the join.
-    summarizes : `DataUnit`
-        Summarizes this other `DataUnit`.
+    summarizes : `DataUnitJoin`
+        Summarizes this other `DataUnitJoin`.
     table : `sqlalchemy.TableClause` or `sqlalchemy.Table`
         The table to be used for queries.  Note that this is not
         an actual `Table` in many cases because joins are often
@@ -346,15 +346,15 @@ class DataUnitRegistry:
             if 'tables' in dataUnitJoinDescription and builder is not None:
                 for tableName, tableDescription in dataUnitJoinDescription['tables'].items():
                     table = builder.addTable(tableName, tableDescription)
-            lhs = dataUnitJoinDescription.get('lhs', None)
-            rhs = dataUnitJoinDescription.get('rhs', None)
+            lhs = frozenset((dataUnitJoinDescription.get('lhs', None)))
+            rhs = frozenset((dataUnitJoinDescription.get('rhs', None)))
             summarizes = dataUnitJoinDescription.get('summarizes', None)
             dataUnitJoin = DataUnitJoin(name=dataUnitJoinName,
                                         lhs=lhs,
                                         rhs=rhs,
                                         summarizes=summarizes,
                                         table=table)
-            self.joins[dataUnitJoinName] = dataUnitJoin
+            self.joins[(lhs, rhs)] = dataUnitJoin
 
     def getPrimaryKeyNames(self, dataUnitNames):
         """Get all primary-key column names for the given ``dataUnitNames``.
