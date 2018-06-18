@@ -51,10 +51,12 @@ class SqlRegistry(Registry):
 
     Parameters
     ----------
-    config : `SqlRegistryConfig` or `str`
+    registryConfig : `SqlRegistryConfig` or `str`
         Load configuration
     schemaConfig : `SchemaConfig` or `str`
         Definition of the schema to use.
+    create : `bool`
+        Assume registry is empty and create a new one.
     """
 
     defaultConfigFile = None
@@ -62,7 +64,7 @@ class SqlRegistry(Registry):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, registryConfig, schemaConfig):
+    def __init__(self, registryConfig, schemaConfig, create=False):
         super().__init__(registryConfig)
 
         self.config = SqlRegistryConfig(registryConfig)
@@ -72,6 +74,8 @@ class SqlRegistry(Registry):
         self._schema.metadata.create_all(self._engine)
         self._datasetTypes = {}
         self._connection = self._engine.connect()
+        if create:
+            self._createTables()
 
     @contextlib.contextmanager
     def transaction(self):
@@ -82,6 +86,9 @@ class SqlRegistry(Registry):
         except BaseException:
             trans.rollback()
             raise
+
+    def _createTables(self):
+        self._schema.metadata.create_all(self._engine)
 
     def query(self, sql, **params):
         """Execute a SQL SELECT statement directly.

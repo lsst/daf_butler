@@ -74,7 +74,7 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root, config=None, standalone=False):
+    def makeRepo(root, config=None, standalone=False, createRegistry=True):
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -95,6 +95,8 @@ class Butler:
             may be good or bad, depending on the nature of the changes).
             Future *additions* to the defaults will still be picked up when
             initializing `Butlers` to repos created with ``standalone=True``.
+        createRegistry : `bool`
+            If `True` create a new Registry.
 
         Note that when ``standalone=False`` (the default), the configuration
         search path (see `ConfigSubset.defaultSearchPaths`) that was used to
@@ -130,6 +132,8 @@ class Butler:
         if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))
+        # Create Registry and populate tables
+        registryClass.fromConfig(config, create=createRegistry)
         return config
 
     def __init__(self, config=None, collection=None, run=None):

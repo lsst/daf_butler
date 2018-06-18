@@ -151,7 +151,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
             Butler.makeRepo(root)
             limited = Config(os.path.join(root, "butler.yaml"))
             butler1 = Butler(root, collection="null")
-            Butler.makeRepo(root, standalone=True)
+            Butler.makeRepo(root, standalone=True, createRegistry=False)
             full = Config(os.path.join(root, "butler.yaml"))
             butler2 = Butler(root, collection="null")
         # Butlers should have the same configuration regardless of whether
