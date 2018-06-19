@@ -772,7 +772,8 @@ schema:
       lhs:
         - Visit
         - Sensor
-      rhs: SkyPix
+      rhs:
+        - SkyPix
       tables:
         VisitSensorSkyPixJoin:
           columns:
@@ -816,9 +817,9 @@ schema:
         VisitSensorSkyPixJoin.
 
       lhs:
-      - Visit
+        - Visit
       rhs:
-      - SkyPix
+        - SkyPix
       summarizes:
       - VisitSensorSkyPixJoin
       tables:
@@ -859,8 +860,10 @@ schema:
         Entries are expected to be calculated outside the database and
         added along with the Patch itself.
 
-      lhs: Patch
-      rhs: SkyPix
+      lhs:
+        - Patch
+      rhs:
+        - SkyPix
       tables:
         PatchSkyPixJoin:
           columns:
@@ -903,8 +906,10 @@ schema:
         This can and probably should be implemented as a trivial view on
         PatchSkyPixJoin.
 
-      lhs: Tract
-      rhs: SkyPix
+      lhs:
+        - Tract
+      rhs:
+        - SkyPix
       summarizes:
         - PatchSkyPixJoin
       tables:
