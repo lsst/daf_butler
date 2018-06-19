@@ -19,9 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from sqlalchemy import MetaData
 from sqlalchemy.schema import DDLElement
 from sqlalchemy.sql import text, select, table
 from sqlalchemy.ext import compiler
+from sqlalchemy import event
 
 __all__ = ('makeView', )
 
@@ -39,7 +41,8 @@ class DropView(DDLElement):
 
 @compiler.compiles(CreateView)
 def compileCreateView(element, compiler, **kw):
-    return "CREATE VIEW %s AS %s" % (element.name, compiler.sql_compiler.process(element.selectable))
+    return "CREATE VIEW IF NOT EXISTS %s AS %s" % (element.name,
+                                                   compiler.sql_compiler.process(element.selectable))
 
 
 @compiler.compiles(DropView)
@@ -67,7 +70,12 @@ def makeView(name, metadata, selectable):
     for c in selectable.c:
         c._make_proxy(t)
 
-    CreateView(name, selectable).execute_at('after-create', metadata)
-    DropView(name).execute_at('before-drop', metadata)
+    @event.listens_for(MetaData, 'after_create')
+    def receive_after_create(target, connection, **kwargs):
+        connection.execute(CreateView(name, selectable))
+
+    @event.listens_for(MetaData, 'before_drop')
+    def receive_before_drop(target, connection, **kwargs):
+        connection.execute(DropView(name))
 
     return t

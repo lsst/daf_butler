@@ -47,7 +47,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.testDir = os.path.dirname(__file__)
         self.config = SchemaConfig()
         self.schema = Schema(self.config)
-        self.engine = create_engine('sqlite:///:memory:', echo=True)
+        self.engine = create_engine('sqlite:///:memory:')
         self.schema._metadata.create_all(self.engine)
 
     def testConstructor(self):
