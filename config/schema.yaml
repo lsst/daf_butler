@@ -36,6 +36,21 @@ schema:
         type: string
         doc: >
           String name for the abstract filter, frequently a single character.
+      tables:
+        AbstractFilter:
+          doc: >
+            A view aggregating all distinct AbstractFilters references by any
+            PhysicalFilter.
+          columns:
+          -
+            name: abstract_filter
+            type: string
+            primary_key: true
+            doc: >
+              Name of the filter.
+          sql: >
+            SELECT DISTINCT abstract_filter
+            FROM PhysicalFilter;
 
     PhysicalFilter:
       dependencies:
