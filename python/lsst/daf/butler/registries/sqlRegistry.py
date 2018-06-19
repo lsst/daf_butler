@@ -865,6 +865,22 @@ class SqlRegistry(Registry):
                     **value
                 )
             )
+        assert "SkyPix" not in dataUnitNames
+        join = self._schema.dataUnits.getJoin(dataUnitNames, "SkyPix")
+        if join is None or join.isView:
+            return
+        if not new:
+            # Delete any old SkyPix join entries for this DataUnit
+            self._connection.execute(
+                join.table.delete().where(
+                    and_((keyColumns[name] == value[name] for name in keyColumns))
+                )
+            )
+        parameters = []
+        for begin, end in self.pixelization.envelope(region).ranges():
+            for skypix in range(begin, end):
+                parameters.append(dict(value, skypix=skypix))
+        self._connection.execute(join.table.insert(), parameters)
 
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.
