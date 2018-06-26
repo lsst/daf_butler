@@ -31,7 +31,7 @@ class FitsExposureFormatter(Formatter):
 
     parameters = frozenset(("bbox", "origin"))
 
-    def read(self, fileDescriptor, comp=None):
+    def read(self, fileDescriptor, component=None):
         """Read data from a file.
 
         Parameters
@@ -39,7 +39,7 @@ class FitsExposureFormatter(Formatter):
         fileDescriptor : `FileDescriptor`
             Identifies the file to read, type to read it into and parameters
             to be used for reading.
-        comp : `str`, optional
+        component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
@@ -62,19 +62,19 @@ class FitsExposureFormatter(Formatter):
         from lsst.afw.image import LOCAL, readMetadata
         from lsst.geom import Box2I, Point2I
 
-        if comp == "metadata":
+        if component == "metadata":
             data = readMetadata(fileDescriptor.location.path)
         else:
             # If we're reading a non-image component, just read in a single-pixel image for efficiency.
             kwds = {}
-            if comp in ("image", "variance", "mask"):
+            if component in ("image", "variance", "mask"):
                 kwds["bbox"] = Box2I(minimum=Point2I(0, 0), maximum=Point2I(0, 0))
                 kwds["origin"] = LOCAL
             elif fileDescriptor.parameters is not None:
                 # Just pass parameters into kwargs for constructor, but check that we recognize them.
                 kwds.update(fileDescriptor.parameters)
                 if not self.parameters.issuperset(kwds.keys()):
-                    raise KeyError("Unrecognized parameter key(s): {}".format(self.parameters - kwds.keys()))
+                    raise KeyError("Unrecognized parameter key(s): {}".format(kwds.keys() - self.parameters))
             # Read the file naively
             data = fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **kwds)
 
@@ -85,14 +85,14 @@ class FitsExposureFormatter(Formatter):
             # if read and write storage classes differ, more work is required
             readStorageClass = fileDescriptor.readStorageClass
             if readStorageClass != fileDescriptor.storageClass:
-                if comp is None:
+                if component is None:
                     raise ValueError("Storage class inconsistency ({} vs {}) but no"
                                      " component requested".format(readStorageClass.name,
                                                                    fileDescriptor.storageClass.name))
 
                 # Concrete composite written as a single file (we hope)
                 try:
-                    data = fileDescriptor.storageClass.assembler().getComponent(data, comp)
+                    data = fileDescriptor.storageClass.assembler().getComponent(data, component)
                 except AttributeError:
                     # Defer the complaint
                     data = None
