@@ -84,7 +84,7 @@ class SchemaBuilder:
     views : `dict`
         All created views.
     """
-    VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float,
+    VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float, "region": LargeBinary,
                           'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
 
     def __init__(self):

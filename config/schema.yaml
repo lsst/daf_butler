@@ -291,7 +291,7 @@ schema:
               effective area (arcsec).
           -
             name: region
-            type: blob
+            type: region
             doc: >
               A spatial region on the sky that bounds the area covered by the
               Visit.  This is expected to be more precise than the region covered
@@ -557,7 +557,7 @@ schema:
               Unique (with SkyMap) integer identifier for the Tract.
           -
             name: region
-            type: blob
+            type: region
             doc: >
               A spatial region on the sky that bounds the area associated
               with the Tract.  This is expected to be more precise than the
@@ -632,7 +632,7 @@ schema:
               Which row this Patch occupies in the Tract's grid of Patches.
           -
             name: region
-            type: blob
+            type: region
             doc: >
               A spatial region on the sky that bounds the area associated
               with the Patch.  This is expected to be more precise than the
@@ -698,7 +698,7 @@ schema:
             doc: Sensor ID
           -
             name: region
-            type: blob
+            type: region
             doc: >
               A spatial region on the sky that bounds the area associated with
               this Visit+Sensor combination.  This is expected to be more
@@ -961,7 +961,7 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
@@ -1039,7 +1039,7 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
@@ -1110,7 +1110,7 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
@@ -1181,7 +1181,7 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
