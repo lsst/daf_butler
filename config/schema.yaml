@@ -730,10 +730,8 @@ schema:
         A calculated join between Datasets identified with an Exposure
         (typically raw science frames) and Datasets identified with ExposureRange
         (typically master calibrations).
-      lhs:
-      - Exposure
-      rhs:
-      - ExposureRange
+      lhs: [Exposure]
+      rhs: [ExposureRange]
       sql:
         (lhs.camera = rhs.camera) AND
         (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
@@ -745,10 +743,8 @@ schema:
         observations with the main camera observations they support.  It could
         also be used to relate CBP state (represented as CBP "Exposures") with
         actual main camera observations of the CBP.
-      lhs:
-      - Exposure
-      rhs:
-      - Exposure
+      lhs: [Exposure]
+      rhs: [Exposure]
       tables:
         MultiCameraExposureJoin:
           columns:
@@ -796,11 +792,8 @@ schema:
         Entries are expected to be calculated outside the database and
         added/updated whenever VisitSensorRegion is.
 
-      lhs:
-        - Visit
-        - Sensor
-      rhs:
-        - SkyPix
+      lhs: [Visit, Sensor]
+      rhs: [SkyPix]
       tables:
         VisitSensorSkyPixJoin:
           columns:
@@ -843,12 +836,9 @@ schema:
         This can and probably should be implemented as a trivial view on
         VisitSensorSkyPixJoin.
 
-      lhs:
-        - Visit
-      rhs:
-        - SkyPix
-      summarizes:
-      - VisitSensorSkyPixJoin
+      lhs: [Visit]
+      rhs: [SkyPix]
+      summarizes: [VisitSensorSkyPixJoin]
       tables:
         VisitSkyPixJoin:
           columns:
@@ -887,10 +877,8 @@ schema:
         Entries are expected to be calculated outside the database and
         added along with the Patch itself.
 
-      lhs:
-        - Patch
-      rhs:
-        - SkyPix
+      lhs: [Patch]
+      rhs: [SkyPix]
       tables:
         PatchSkyPixJoin:
           columns:
@@ -933,12 +921,9 @@ schema:
         This can and probably should be implemented as a trivial view on
         PatchSkyPixJoin.
 
-      lhs:
-        - Tract
-      rhs:
-        - SkyPix
-      summarizes:
-        - PatchSkyPixJoin
+      lhs: [Tract]
+      rhs: [SkyPix]
+      summarizes: [PatchSkyPixJoin]
       tables:
         TractSkyPixJoin:
           columns:
@@ -980,11 +965,8 @@ schema:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-        - Sensor
-      rhs:
-        - Patch
+      lhs: [Visit, Sensor]
+      rhs: [Patch]
       tables:
         VisitSensorPatchJoin:
           columns:
@@ -1061,12 +1043,9 @@ schema:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-      rhs:
-        - Patch
-      summarizes:
-        - VisitSensorPatchJoin
+      lhs: [Visit]
+      rhs: [Patch]
+      summarizes: [VisitSensorPatchJoin]
       tables:
         VisitPatchJoin:
           columns:
@@ -1135,13 +1114,9 @@ schema:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-        - Sensor
-      rhs:
-        - Tract
-      summarizes:
-        - VisitSensorPatchJoin
+      lhs: [Visit, Sensor]
+      rhs: [Tract]
+      summarizes: [VisitSensorPatchJoin]
       tables:
         VisitSensorTractJoin:
           columns:
@@ -1210,10 +1185,8 @@ schema:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-      rhs:
-        - Tract
+      lhs: [Visit]
+      rhs: [Tract]
       summarizes:
         - VisitSensorPatchJoin
         - VisitSensorTractJoin
