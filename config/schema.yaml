@@ -299,6 +299,9 @@ schema:
               than the Visit as long as it fully covers it.  Must also fully
               cover all regions in the VisitSensorRegion entries associated with
               this Visit.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src: camera
@@ -560,6 +563,9 @@ schema:
               with the Tract.  This is expected to be more precise than the
               SkyPixels associated with the Visit (see TractSkyPixJoin), but
               may still be larger than the Tract as long as it fully covers it.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src: skymap
@@ -632,6 +638,9 @@ schema:
               with the Patch.  This is expected to be more precise than the
               SkyPixels associated with the Visit (see PatchSkyPixJoin), but
               may still be larger than the Patch as long as it fully covers it.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src: skymap
@@ -696,6 +705,9 @@ schema:
               precise than the SkyPixels associated with the Visit+Sensor (see
               VisitSensorSkyPixJoin), but may still be larger than the true
               region as long as it fully covers it.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src:
