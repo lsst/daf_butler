@@ -788,6 +788,12 @@ class SqlRegistry(Registry):
         values : `dict`
             Dictionary of ``columnName, columnValue`` pairs.
 
+        If ``values`` includes a "region" key, `setDataUnitRegion` will
+        automatically be called to set it any associated spatial join
+        tables.
+        Region fields associated with a combination of DataUnits must be
+        explicitly set separately.
+
         Raises
         ------
         TypeError
@@ -800,12 +806,81 @@ class SqlRegistry(Registry):
         dataUnit = self._schema.dataUnits[dataUnitName]
         dataUnit.validateId(values)
         dataUnitTable = dataUnit.table
+        v = values.copy()
+        region = v.pop("region", None)
         if dataUnitTable is None:
             raise TypeError("DataUnit '{}' has no table.".format(dataUnitName))
         try:
-            self._connection.execute(dataUnitTable.insert().values(**values))
+            self._connection.execute(dataUnitTable.insert().values(**v))
         except IntegrityError as err:
             raise ValueError(str(err))  # TODO this should do an explicit validity check instead
+        if region is not None:
+            self.setDataUnitRegion((dataUnitName,), v, region, new=True)
+
+    @transactional
+    def setDataUnitRegion(self, dataUnitNames, value, region, new=True):
+        """Set the region field for a DataUnit instance or a combination
+        thereof and update associated spatial join tables.
+
+        Parameters
+        ----------
+        dataUnitNames : sequence
+            A sequence of DataUnit names whose instances are jointly associated
+            with a region on the sky.
+        value : `dict`
+            A dictionary of values that uniquely identify the DataUnits.
+        region : `sphgeom.ConvexPolygon`
+            Region on the sky.
+        new : `bool`
+            If True, the DataUnits associated identified are being inserted for
+            the first time, so no spatial regions should already exist.
+            If False, existing region information for these DataUnits is being
+            replaced.
+        """
+        keyColumns = {}
+        for dataUnitName in dataUnitNames:
+            dataUnit = self._schema.dataUnits[dataUnitName]
+            dataUnit.validateId(value)
+            keyColumns.update(dataUnit.primaryKeyColumns)
+        table = self._schema.dataUnits.getRegionTable(*dataUnitNames)
+        if table is None:
+            raise TypeError("No region table found for '{}'.".format(dataUnitNames))
+        # If a region record for these DataUnits already exists, use an update
+        # query. That could happen either because those DataUnits have been
+        # inserted previously and this is an improved region for them, or
+        # because the region is associated with a single DataUnit instance and
+        # is hence part of that DataUnit's main table.
+        if not new or (len(dataUnitNames) == 1 and table == dataUnit.table):
+            self._connection.execute(
+                table.update().where(
+                    and_((keyColumns[name] == value[name] for name in keyColumns))
+                ).values(
+                    region=region.encode()
+                )
+            )
+        else:  # Insert rather than update.
+            self._connection.execute(
+                table.insert().values(
+                    region=region.encode(),
+                    **value
+                )
+            )
+        assert "SkyPix" not in dataUnitNames
+        join = self._schema.dataUnits.getJoin(dataUnitNames, "SkyPix")
+        if join is None or join.isView:
+            return
+        if not new:
+            # Delete any old SkyPix join entries for this DataUnit
+            self._connection.execute(
+                join.table.delete().where(
+                    and_((keyColumns[name] == value[name] for name in keyColumns))
+                )
+            )
+        parameters = []
+        for begin, end in self.pixelization.envelope(region).ranges():
+            for skypix in range(begin, end):
+                parameters.append(dict(value, skypix=skypix))
+        self._connection.execute(join.table.insert(), parameters)
 
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.

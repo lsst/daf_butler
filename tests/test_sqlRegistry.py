@@ -25,6 +25,7 @@ from datetime import datetime, timedelta
 
 import lsst.utils.tests
 
+from sqlalchemy.exc import OperationalError
 from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.execution import Execution
 from lsst.daf.butler.core.quantum import Quantum
@@ -322,7 +323,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Find on a non-existant value should return None
         self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {'camera': 'Unknown'}))
         # AbstractFilter doesn't have a table; should fail.
-        with self.assertRaises(TypeError):
+        with self.assertRaises(OperationalError):
             registry.addDataUnitEntry('AbstractFilter', {'abstract_filter': 'i'})
         dataUnitName2 = 'PhysicalFilter'
         dataUnitValue2 = {'physical_filter': 'DummyCam_i', 'abstract_filter': 'i'}

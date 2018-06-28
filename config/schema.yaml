@@ -36,6 +36,21 @@ schema:
         type: string
         doc: >
           String name for the abstract filter, frequently a single character.
+      tables:
+        AbstractFilter:
+          doc: >
+            A view aggregating all distinct AbstractFilters references by any
+            PhysicalFilter.
+          columns:
+          -
+            name: abstract_filter
+            type: string
+            primary_key: true
+            doc: >
+              Name of the filter.
+          sql: >
+            SELECT DISTINCT abstract_filter
+            FROM PhysicalFilter;
 
     PhysicalFilter:
       dependencies:
@@ -276,7 +291,7 @@ schema:
               effective area (arcsec).
           -
             name: region
-            type: blob
+            type: region
             doc: >
               A spatial region on the sky that bounds the area covered by the
               Visit.  This is expected to be more precise than the region covered
@@ -284,6 +299,9 @@ schema:
               than the Visit as long as it fully covers it.  Must also fully
               cover all regions in the VisitSensorRegion entries associated with
               this Visit.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src: camera
@@ -295,59 +313,6 @@ schema:
             tgt:
             - PhysicalFilter.camera
             - PhysicalFilter.physical_filter
-        VisitSensorRegion:
-          doc: >
-            A one-to-many table join table that stores the spatial region
-            associated with a particular Visit-Sensor combination. Entries are
-            expected to be calculated outside the database and added/updated
-            whenever the Visit's region is.  This table contains exactly one
-            entry for each Visit+Sensor combination.
-          columns:
-          -
-            name: camera
-            type: string
-            primary_key: true
-            nullable: false
-            doc: Name of the Camera associated with the Visit and Sensor.
-          -
-            name: visit
-            type: int
-            primary_key: true
-            nullable: false
-            doc: Visit ID
-          -
-            name: sensor
-            type: int
-            primary_key: true
-            nullable: false
-            doc: visit
-          -
-            name: region
-            type: string
-            doc: >
-              A spatial region on the sky that bounds the area associated with
-              this Visit+Sensor combination.  This is expected to be more
-              precise than the SkyPixels associated with the Visit+Sensor (see
-              VisitSensorSkyPixJoin), but may still be larger than the true
-              region as long as it fully covers it.
-          foreignKeys:
-          -
-            src: camera
-            tgt: Camera.camera
-          -
-            src:
-            - camera
-            - visit
-            tgt:
-            - Visit.camera
-            - Visit.visit
-          -
-            src:
-            - camera
-            - sensor
-            tgt:
-            - Sensor.camera
-            - Sensor.sensor
     Exposure:
       dependencies:
         required:
@@ -592,12 +557,15 @@ schema:
               Unique (with SkyMap) integer identifier for the Tract.
           -
             name: region
-            type: blob
+            type: region
             doc: >
               A spatial region on the sky that bounds the area associated
               with the Tract.  This is expected to be more precise than the
               SkyPixels associated with the Visit (see TractSkyPixJoin), but
               may still be larger than the Tract as long as it fully covers it.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src: skymap
@@ -664,13 +632,15 @@ schema:
               Which row this Patch occupies in the Tract's grid of Patches.
           -
             name: region
-            type: blob
-            nullable: false
+            type: region
             doc: >
               A spatial region on the sky that bounds the area associated
               with the Patch.  This is expected to be more precise than the
               SkyPixels associated with the Visit (see PatchSkyPixJoin), but
               may still be larger than the Patch as long as it fully covers it.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
           foreignKeys:
           -
             src: skymap
@@ -694,16 +664,74 @@ schema:
         type: string
         doc: A string value composed only of letters, numbers, and underscores.
 
+  dataUnitRegions:
+    -
+      relates:
+        - Visit
+        - Sensor
+      tables:
+        VisitSensorRegion:
+          doc: >
+            A one-to-many table join table that stores the spatial region
+            associated with a particular Visit-Sensor combination. Entries are
+            expected to be calculated outside the database and added/updated
+            whenever the Visit's region is.  This table contains exactly one
+            entry for each Visit+Sensor combination.
+          columns:
+          -
+            name: camera
+            type: string
+            primary_key: true
+            nullable: false
+            doc: Name of the Camera associated with the Visit and Sensor.
+          -
+            name: visit
+            type: int
+            primary_key: true
+            nullable: false
+            doc: Visit ID
+          -
+            name: sensor
+            type: int
+            primary_key: true
+            nullable: false
+            doc: Sensor ID
+          -
+            name: region
+            type: region
+            doc: >
+              A spatial region on the sky that bounds the area associated with
+              this Visit+Sensor combination.  This is expected to be more
+              precise than the SkyPixels associated with the Visit+Sensor (see
+              VisitSensorSkyPixJoin), but may still be larger than the true
+              region as long as it fully covers it.
+              Regions are lsst.sphgeom.ConvexPolygon objects persisted as
+              portable (but not human-readable) bytestrings using the encode
+              and decode methods.
+          foreignKeys:
+          -
+            src:
+            - camera
+            - visit
+            tgt:
+            - Visit.camera
+            - Visit.visit
+          -
+            src:
+            - camera
+            - sensor
+            tgt:
+            - Sensor.camera
+            - Sensor.sensor
+
   dataUnitJoins:
     ExposureRangeJoin:
       doc: >
         A calculated join between Datasets identified with an Exposure
         (typically raw science frames) and Datasets identified with ExposureRange
         (typically master calibrations).
-      lhs:
-      - Exposure
-      rhs:
-      - ExposureRange
+      lhs: [Exposure]
+      rhs: [ExposureRange]
       sql:
         (lhs.camera = rhs.camera) AND
         (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
@@ -715,10 +743,8 @@ schema:
         observations with the main camera observations they support.  It could
         also be used to relate CBP state (represented as CBP "Exposures") with
         actual main camera observations of the CBP.
-      lhs:
-      - Exposure
-      rhs:
-      - Exposure
+      lhs: [Exposure]
+      rhs: [Exposure]
       tables:
         MultiCameraExposureJoin:
           columns:
@@ -766,10 +792,8 @@ schema:
         Entries are expected to be calculated outside the database and
         added/updated whenever VisitSensorRegion is.
 
-      lhs:
-        - Visit
-        - Sensor
-      rhs: SkyPix
+      lhs: [Visit, Sensor]
+      rhs: [SkyPix]
       tables:
         VisitSensorSkyPixJoin:
           columns:
@@ -812,12 +836,9 @@ schema:
         This can and probably should be implemented as a trivial view on
         VisitSensorSkyPixJoin.
 
-      lhs:
-      - Visit
-      rhs:
-      - SkyPix
-      summarizes:
-      - VisitSensorSkyPixJoin
+      lhs: [Visit]
+      rhs: [SkyPix]
+      summarizes: [VisitSensorSkyPixJoin]
       tables:
         VisitSkyPixJoin:
           columns:
@@ -856,8 +877,8 @@ schema:
         Entries are expected to be calculated outside the database and
         added along with the Patch itself.
 
-      lhs: Patch
-      rhs: SkyPix
+      lhs: [Patch]
+      rhs: [SkyPix]
       tables:
         PatchSkyPixJoin:
           columns:
@@ -900,10 +921,9 @@ schema:
         This can and probably should be implemented as a trivial view on
         PatchSkyPixJoin.
 
-      lhs: Tract
-      rhs: SkyPix
-      summarizes:
-        - PatchSkyPixJoin
+      lhs: [Tract]
+      rhs: [SkyPix]
+      summarizes: [PatchSkyPixJoin]
       tables:
         TractSkyPixJoin:
           columns:
@@ -941,15 +961,12 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-        - Sensor
-      rhs:
-        - Patch
+      lhs: [Visit, Sensor]
+      rhs: [Patch]
       tables:
         VisitSensorPatchJoin:
           columns:
@@ -1022,16 +1039,13 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-      rhs:
-        - Patch
-      summarizes:
-        - VisitSensorPatchJoin
+      lhs: [Visit]
+      rhs: [Patch]
+      summarizes: [VisitSensorPatchJoin]
       tables:
         VisitPatchJoin:
           columns:
@@ -1096,17 +1110,13 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-        - Sensor
-      rhs:
-        - Tract
-      summarizes:
-        - VisitSensorPatchJoin
+      lhs: [Visit, Sensor]
+      rhs: [Tract]
+      summarizes: [VisitSensorPatchJoin]
       tables:
         VisitSensorTractJoin:
           columns:
@@ -1171,14 +1181,12 @@ schema:
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
 
-        If a database UDF is available to determine whether two region blobs
+        If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs:
-        - Visit
-      rhs:
-        - Tract
+      lhs: [Visit]
+      rhs: [Tract]
       summarizes:
         - VisitSensorPatchJoin
         - VisitSensorTractJoin

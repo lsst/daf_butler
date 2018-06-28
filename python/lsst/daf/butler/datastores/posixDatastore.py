@@ -260,13 +260,13 @@ class PosixDatastore(Datastore):
         writeStorageClass = storedFileInfo.storageClass
 
         # Is this a component request?
-        comp = ref.datasetType.component()
+        component = ref.datasetType.component()
 
         formatter = getInstanceOf(storedFileInfo.formatter)
         try:
             result = formatter.read(FileDescriptor(location, readStorageClass=readStorageClass,
                                                    storageClass=writeStorageClass, parameters=parameters),
-                                    comp)
+                                    component=component)
         except Exception as e:
             raise ValueError("Failure from formatter for Dataset {}: {}".format(ref.id, e))
 

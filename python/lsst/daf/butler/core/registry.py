@@ -69,7 +69,8 @@ class Registry(metaclass=ABCMeta):
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
-        raise NotImplementedError()
+        for key in ("registry.skypix.cls", "registry.skypix.level"):
+            config[key] = full[key]
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, create=False):
@@ -115,5 +116,14 @@ class Registry(metaclass=ABCMeta):
     def __init__(self, registryConfig, schemaConfig=None, create=False):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
+        self._pixelization = None
+
+    @property
+    def pixelization(self):
+        """Object that interprets SkyPix DataUnit values (`sphgeom.Pixelization`)."""
+        if self._pixelization is None:
+            pixelizationCls = doImport(self.config["skypix.cls"])
+            self._pixelization = pixelizationCls(level=self.config["skypix.level"])
+        return self._pixelization
 
     #  TODO Add back all interfaces (copied from SqlRegistry) once that is stabalized

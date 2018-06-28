@@ -35,6 +35,8 @@ storageClasses:
     pytype: lsst.afw.table.SourceCatalog
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
+  PropertyList:
+    pytype: lsst.daf.base.PropertyList
   Exposure: &Exposure
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
@@ -48,6 +50,7 @@ storageClasses:
       visitInfo: TablePersistableVisitInfo
       apCorrMap: TablePersistableApCorr
       coaddInputs: TablePersistableCoaddInputs
+      metadata: PropertyList
   ExposureF:
     <<: *Exposure
     pytype: lsst.afw.image.ExposureF

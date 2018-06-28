@@ -21,7 +21,7 @@
 
 from itertools import chain
 
-from .utils import TopologicalSet
+from .utils import TopologicalSet, iterable
 
 __all__ = ("DataUnit", "DataUnitRegistry")
 
@@ -164,17 +164,21 @@ class DataUnitJoin:
         Right-hand-side of the join.
     summarizes : `DataUnitJoin`
         Summarizes this other `DataUnitJoin`.
+    isView : `bool`, optional
+        True if the table assocaited with this join is actually a view, False if
+        it is a regular table, and None if it is neither.
     table : `sqlalchemy.TableClause` or `sqlalchemy.Table`
         The table to be used for queries.  Note that this is not
         an actual `Table` in many cases because joins are often
         materialized as views (and thus are also not present
         in `Registry._schema._metadata`).
     """
-    def __init__(self, name, lhs=None, rhs=None, summarizes=None, table=None):
+    def __init__(self, name, lhs=None, rhs=None, summarizes=None, isView=None, table=None):
         self._name = name
         self._lhs = lhs
         self._rhs = rhs
         self._summarizes = summarizes
+        self._isView = isView
         self._table = table
 
     @property
@@ -197,6 +201,10 @@ class DataUnitJoin:
         return self._summarizes
 
     @property
+    def isView(self):
+        return self._isView
+
+    @property
     def table(self):
         """When not ``None`` the primary table entry corresponding to this
         `DataUnitJoin` (`sqlalchemy.core.TableClause`, optional).
@@ -213,6 +221,7 @@ class DataUnitRegistry:
     def __init__(self):
         self._dataUnitNames = None
         self._dataUnits = {}
+        self._dataUnitRegions = {}
         self.links = {}
         self.constraints = []
         self.joins = {}
@@ -227,13 +236,16 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `SchemaConfig`
-            `Registry` schema configuration describing `DataUnit` relations.
+            `Registry` schema configuration containing 'DataUnits',
+            'dataUnitRegions', and 'dataUnitJoins' entries.
         builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
+            When given, create `sqlalchemy.core.Table` entries for every
+            `DataUnit` table.
         """
         dataUnitRegistry = cls()
         dataUnitRegistry._initDataUnitNames(config['dataUnits'])
         dataUnitRegistry._initDataUnits(config['dataUnits'], builder)
+        dataUnitRegistry._initDataUnitRegions(config['dataUnitRegions'], builder)
         dataUnitRegistry._initDataUnitJoins(config['dataUnitJoins'], builder)
         return dataUnitRegistry
 
@@ -260,6 +272,36 @@ class DataUnitRegistry:
         for dataUnitName in self._dataUnitNames:
             yield (dataUnitName, self[dataUnitName])
 
+    def getRegionTable(self, *dataUnitNames):
+        """Return the region table that holds regions for the given combination
+        of DataUnits.
+        """
+        if len(dataUnitNames) == 1:
+            return self[dataUnitNames[0]].table
+        return self._dataUnitRegions[frozenset(dataUnitNames)]
+
+    def getJoin(self, lhs, rhs):
+        """Return the DataUnitJoin that relates the given DataUnit names.
+
+        While DataUnitJoins are associated with a specific ordering or lhs and
+        rhs, this method tries both.
+
+        Parameters
+        ----------
+        lhs : `str` or sequence
+            DataUnit name or sequence of names for one side of the join.
+        rhs : `str` or sequence
+            DataUnit name or sequence of names for the other side of the join.
+
+        Returns
+        -------
+        join : `DataUnitJoin`
+            The DataUnitJoin that relates the given DataUnits, or None.
+        """
+        lhs = frozenset(iterable(lhs))
+        rhs = frozenset(iterable(rhs))
+        return self.joins.get((lhs, rhs), None) or self.joins.get((rhs, lhs), None)
+
     def _initDataUnitNames(self, config):
         """Initialize DataUnit names.
 
@@ -270,7 +312,7 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `SchemaConfig`
-            Schema configuration describing `DataUnit` relations.
+            The `dataUnits` component of a `SchemaConfig`.
         """
         self._dataUnitNames = TopologicalSet(config)
         for dataUnitName, dataUnitDescription in config.items():
@@ -286,8 +328,8 @@ class DataUnitRegistry:
 
         Parameters
         ----------
-        config : `SchemaConfig`
-            Schema configuration describing `DataUnit` relations.
+        config : `Config`
+            The `dataUnits` component of a `SchemaConfig`.
         builder : `SchemaBuilder`, optional
             When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
         """
@@ -331,6 +373,25 @@ class DataUnitRegistry:
                                 link=link)
             self[dataUnitName] = dataUnit
 
+    def _initDataUnitRegions(self, config, builder):
+        """Initialize tables that associate regions with multiple DataUnits.
+
+        Parameters
+        ----------
+        config : `Config`
+            The `dataUnitRegions` component of a `SchemaConfig`.
+        builder : `SchemaBuilder`, optional
+            When given, create `sqlalchemy.core.Table` entries.
+        """
+        for description in config:
+            dataUnitNames = frozenset(description["relates"])
+            [(tableName, tableDescription)] = description["tables"].items()
+            if builder is not None:
+                table = builder.addTable(tableName, tableDescription)
+            else:
+                table = None
+            self._dataUnitRegions[dataUnitNames] = table
+
     def _initDataUnitJoins(self, config, builder):
         """Initialize `DataUnit` join entries.
 
@@ -343,9 +404,11 @@ class DataUnitRegistry:
         """
         for dataUnitJoinName, dataUnitJoinDescription in config.items():
             table = None
+            isView = None
             if 'tables' in dataUnitJoinDescription and builder is not None:
                 for tableName, tableDescription in dataUnitJoinDescription['tables'].items():
                     table = builder.addTable(tableName, tableDescription)
+                    isView = "sql" in tableDescription
             lhs = frozenset((dataUnitJoinDescription.get('lhs', None)))
             rhs = frozenset((dataUnitJoinDescription.get('rhs', None)))
             summarizes = dataUnitJoinDescription.get('summarizes', None)
@@ -353,6 +416,7 @@ class DataUnitRegistry:
                                         lhs=lhs,
                                         rhs=rhs,
                                         summarizes=summarizes,
+                                        isView=isView,
                                         table=table)
             self.joins[(lhs, rhs)] = dataUnitJoin
 

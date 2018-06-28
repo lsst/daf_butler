@@ -99,7 +99,7 @@ class FileFormatter(Formatter):
         """
         return inMemoryDataset
 
-    def read(self, fileDescriptor, comp=None):
+    def read(self, fileDescriptor, component=None):
         """Read data from a file.
 
         Parameters
@@ -107,7 +107,7 @@ class FileFormatter(Formatter):
         fileDescriptor : `FileDescriptor`
             Identifies the file to read, type to read it into and parameters
             to be used for reading.
-        comp : `str`, optional
+        component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
@@ -132,14 +132,14 @@ class FileFormatter(Formatter):
         # if read and write storage classes differ, more work is required
         readStorageClass = fileDescriptor.readStorageClass
         if readStorageClass != fileDescriptor.storageClass:
-            if comp is None:
+            if component is None:
                 raise ValueError("Storage class inconsistency ({} vs {}) but no"
                                  " component requested".format(readStorageClass.name,
                                                                fileDescriptor.storageClass.name))
 
             # Concrete composite written as a single file (we hope)
             try:
-                data = fileDescriptor.storageClass.assembler().getComponent(data, comp)
+                data = fileDescriptor.storageClass.assembler().getComponent(data, component)
             except AttributeError:
                 # Defer the complaint
                 data = None

@@ -14,6 +14,16 @@ mappers:
       # as the Gen3 value.
       uniqueKeys:
         - visit
+regions:
+  -
+    # The Gen3 DatasetType (Exposure StorageClass) to use when creating
+    # Visit-Sensor regions.
+    DatasetType: calexp
+    # Padding (in pixels) to add to the edges of each Sensor region
+    # to account for WCS inaccuracies.
+    padding: 5.0
+    # Collection from which WCSs should be read.
+    collection: null
 collections:
   substitutions:
     # Regular expression patterns and replacement strings (passed directly
