@@ -89,7 +89,6 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
 class DatasetRefTestCase(lsst.utils.tests.TestCase):
     """Test for DatasetRef.
     """
-
     def testConstructor(self):
         """Test construction preserves values.
         """
@@ -105,6 +104,22 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(ref.predictedConsumers, dict())
         self.assertEqual(ref.actualConsumers, dict())
         self.assertEqual(ref.components, dict())
+
+    def testDetach(self):
+        datasetTypeName = "test"
+        storageClass = StorageClass("testref_StructuredData")
+        dataUnits = frozenset(("camera", "visit"))
+        dataId = dict(camera="DummyCam", visit=42)
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        ref = DatasetRef(datasetType, dataId, id=1)
+        detachedRef = ref.detach()
+        self.assertIsNotNone(ref.id)
+        self.assertIsNone(detachedRef.id)
+        self.assertEqual(ref.datasetType, detachedRef.datasetType)
+        self.assertEqual(ref.dataId, detachedRef.dataId)
+        self.assertEqual(ref.predictedConsumers, detachedRef.predictedConsumers)
+        self.assertEqual(ref.actualConsumers, detachedRef.actualConsumers)
+        self.assertEqual(ref.components, detachedRef.components)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
