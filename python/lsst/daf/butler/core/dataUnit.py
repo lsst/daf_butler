@@ -51,14 +51,19 @@ class DataUnit:
     table : `sqlalchemy.core.Table`, optional
         When not ``None`` the primary table entry corresponding to this
         `DataUnit`.
+    regionColumn : `str`, optional
+        Name of the column with encoded region specification, only for tables
+        which define region column in their schema.
     """
-    def __init__(self, name, requiredDependencies, optionalDependencies, link=(), table=None):
+    def __init__(self, name, requiredDependencies, optionalDependencies,
+                 link=(), table=None, regionColumn=None):
         self._name = name
         self._requiredDependencies = frozenset(requiredDependencies)
         self._optionalDependencies = frozenset(optionalDependencies)
         self._table = table
         self._link = link
         self._primaryKey = None
+        self._regionColumn = regionColumn
 
     def __repr__(self):
         return "DataUnit({})".format(self.name)
@@ -130,6 +135,16 @@ class DataUnit:
         into this `DataUnit` primary table as values (`dict`).
         """
         return {name: self.table.columns[name] for name in self.primaryKey}
+
+    @property
+    def regionColumn(self):
+        """Table column (`sqlalchemy.Column`) with encoded region data,
+        ``None`` if table has no region column.
+        """
+        table = self.table
+        if table is not None and self._regionColumn is not None:
+            return table.c[self._regionColumn]
+        return None
 
     def validateId(self, dataId):
         """Check if given dataId is valid.
@@ -212,6 +227,56 @@ class DataUnitJoin:
         return getattr(self, '_table', None)
 
 
+class DataUnitRegion:
+    """Represents a relationsip between two or more `DataUnit`s
+    with associated region.
+
+    Parameters
+    ----------
+    name : `str`
+        Name of this `DataUnitRegion`, same as the name of the table.
+    relates : `tuple` of `str`
+        Names of the DataUnits in this relationship.
+    table : `sqlalchemy.Table`, optional
+        The table to be used for queries.
+    regionColumn : `str`, optional
+        Name of the column with encoded region specification, only makes
+        sense when ``table`` is not ``None``.
+    """
+    def __init__(self, name, relates, table=None, regionColumn=None):
+        self._name = name
+        self._relates = relates
+        self._table = table
+        self._regionColumn = regionColumn
+
+    @property
+    def name(self):
+        """Name of this `DataUnitRegion`, same as the name of the table.
+        """
+        return self._name
+
+    @property
+    def relates(self):
+        return self._relates
+
+    @property
+    def table(self):
+        """When not ``None`` the table entry corresponding to this
+        `DataUnitRegion` (`sqlalchemy.Table`, optional).
+        """
+        return self._table
+
+    @property
+    def regionColumn(self):
+        """Table column with encoded region data, ``None`` if table has no
+        region column (`sqlalchemy.Column`, optional).
+        """
+        table = self.table
+        if table is not None and self._regionColumn is not None:
+            return table.c[self._regionColumn]
+        return None
+
+
 class DataUnitRegistry:
     """Instances of this class keep track of `DataUnit` relations.
 
@@ -272,12 +337,20 @@ class DataUnitRegistry:
         for dataUnitName in self._dataUnitNames:
             yield (dataUnitName, self[dataUnitName])
 
-    def getRegionTable(self, *dataUnitNames):
-        """Return the region table that holds regions for the given combination
-        of DataUnits.
+    def getRegionHolder(self, *dataUnitNames):
+        """Return the DataUnit or DataUnitRegion that holds region for the
+        given combination of DataUnits.
+
+        Returned object can be either `DataUnitRegion` or `DataUnit`. Use
+        ``table`` and/or ``regionColumn`` properties of returned object to
+        retrieve region data from database table.
+
+        Returns
+        -------
+        `DataUnitRegion` or `DataUnit` instance.
         """
         if len(dataUnitNames) == 1:
-            return self[dataUnitNames[0]].table
+            return self[dataUnitNames[0]]
         return self._dataUnitRegions[frozenset(dataUnitNames)]
 
     def getJoin(self, lhs, rhs):
@@ -339,6 +412,7 @@ class DataUnitRegistry:
             requiredDependencies = ()
             optionalDependencies = ()
             table = None
+            regionColumn = None
             link = ()
             if 'dependencies' in dataUnitDescription:
                 dependencies = dataUnitDescription['dependencies']
@@ -363,6 +437,7 @@ class DataUnitRegistry:
                         if tableName == dataUnitName:
                             # Primary table for this DataUnit
                             table = builder.addTable(tableName, tableDescription)
+                            regionColumn = dataUnitDescription.get('regionColumn')
                         else:
                             # Secondary table
                             builder.addTable(tableName, tableDescription)
@@ -370,7 +445,8 @@ class DataUnitRegistry:
                                 requiredDependencies=requiredDependencies,
                                 optionalDependencies=optionalDependencies,
                                 table=table,
-                                link=link)
+                                link=link,
+                                regionColumn=regionColumn)
             self[dataUnitName] = dataUnit
 
     def _initDataUnitRegions(self, config, builder):
@@ -388,9 +464,13 @@ class DataUnitRegistry:
             [(tableName, tableDescription)] = description["tables"].items()
             if builder is not None:
                 table = builder.addTable(tableName, tableDescription)
+                duRegion = DataUnitRegion(name=tableName,
+                                          relates=tuple(description["relates"]),
+                                          table=table,
+                                          regionColumn=description.get("regionColumn"))
             else:
-                table = None
-            self._dataUnitRegions[dataUnitNames] = table
+                duRegion = None
+            self._dataUnitRegions[dataUnitNames] = duRegion
 
     def _initDataUnitJoins(self, config, builder):
         """Initialize `DataUnit` join entries.

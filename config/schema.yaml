@@ -186,6 +186,7 @@ schema:
           tgt:
             - Visit.camera
             - Visit.visit
+      regionColumn: region
       tables:
         Visit:
           doc: >
@@ -535,6 +536,7 @@ schema:
           tgt:
             - Tract.skymap
             - Tract.tract
+      regionColumn: region
       tables:
         Tract:
           doc: >
@@ -591,6 +593,7 @@ schema:
             - Patch.skymap
             - Patch.tract
             - Patch.patch
+      regionColumn: region
       tables:
         Patch:
           doc: >
@@ -669,6 +672,7 @@ schema:
       relates:
         - Visit
         - Sensor
+      regionColumn: region
       tables:
         VisitSensorRegion:
           doc: >
