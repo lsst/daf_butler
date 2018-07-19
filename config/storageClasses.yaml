@@ -4,19 +4,19 @@ storageClasses:
   StructuredDataList:
     pytype: list
   TablePersistable:
-    pytype: lsst.afw.table.io.persistable.Persistable
+    pytype: lsst.afw.table.io.Persistable
   TablePersistableWcs:
-    pytype: lsst.afw.geom.skyWcs.skyWcs.SkyWcs
+    pytype: lsst.afw.geom.skyWcs.SkyWcs
   TablePersistablePsf:
     pytype: lsst.afw.detection.Psf
   TablePersistableCoaddInputs:
-    pytype: lsst.afw.image.coaddInputs.CoaddInputs
+    pytype: lsst.afw.image.CoaddInputs
   TablePersistableVisitInfo:
-    pytype: lsst.afw.image.visitInfo.VisitInfo
+    pytype: lsst.afw.image.VisitInfo
   TablePersistableApCorr:
-    pytype: lsst.afw.image.apCorrMap.ApCorrMap
+    pytype: lsst.afw.image.ApCorrMap
   TablePersistableCalib:
-    pytype: lsst.afw.image.calib.Calib
+    pytype: lsst.afw.image.Calib
   TablePersistableTransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
   ImageF:
