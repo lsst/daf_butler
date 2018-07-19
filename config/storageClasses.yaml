@@ -20,13 +20,13 @@ storageClasses:
   TablePersistableTransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
   ImageF:
-    pytype: lsst.afw.image.image.ImageF
+    pytype: lsst.afw.image.ImageF
   ImageU:
-    pytype: lsst.afw.image.image.ImageU
+    pytype: lsst.afw.image.ImageU
   DecoratedImageU:
-    pytype: lsst.afw.image.image.DecoratedImageU
+    pytype: lsst.afw.image.DecoratedImageU
   MaskX:
-    pytype: lsst.afw.image.mask.MaskX
+    pytype: lsst.afw.image.MaskX
   Catalog:
     pytype: lsst.afw.table.BaseCatalog
   PeakCatalog:
