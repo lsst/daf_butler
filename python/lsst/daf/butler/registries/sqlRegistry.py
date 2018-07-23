@@ -844,7 +844,7 @@ class SqlRegistry(Registry):
             dataUnit = self._schema.dataUnits[dataUnitName]
             dataUnit.validateId(value)
             keyColumns.update(dataUnit.primaryKeyColumns)
-        table = self._schema.dataUnits.getRegionTable(*dataUnitNames)
+        table = self._schema.dataUnits.getRegionHolder(*dataUnitNames).table
         if table is None:
             raise TypeError("No region table found for '{}'.".format(dataUnitNames))
         # If a region record for these DataUnits already exists, use an update
