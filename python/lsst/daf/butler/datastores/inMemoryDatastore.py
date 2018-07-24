@@ -35,21 +35,28 @@ class StoredItemInfo:
 
     Parameters
     ----------
-    timestamp : `int`
+    timestamp : `float`
         Unix timestamp indicating the time the dataset was stored.
     storageClass : `StorageClass`
         StorageClass associated with the dataset.
+    parentID : `int`, optional
+        ID of the parent `DatasetRef` if this entry is a concrete
+        composite. Not used if the dataset being stored is not a
+        virtual component of a composite
     """
 
-    def __init__(self, timestamp, storageClass):
+    def __init__(self, timestamp, storageClass, parentID=None):
         self.timestamp = timestamp
         self.storageClass = storageClass
+        self.parentID = parentID
 
     def __str__(self):
-        return "StoredItemInfo({}, {})".format(self.timestamp, self.storageClass.name)
+        return "StoredItemInfo({}, {}, parent={})".format(self.timestamp, self.storageClass.name,
+                                                          self.parentID)
 
     def __repr__(self):
-        return "StoredItemInfo({!r}, {!r})".format(self.timestamp, self.storageClass)
+        return "StoredItemInfo({!r}, {!r}, parent={})".format(self.timestamp, self.storageClass,
+                                                              self.parentID)
 
 
 class InMemoryDatastore(Datastore):
@@ -182,7 +189,18 @@ class InMemoryDatastore(Datastore):
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
         """
-        return ref.id in self.datasets
+        # Get the stored information (this will fail if no dataset)
+        try:
+            storedItemInfo = self.getStoredItemInfo(ref)
+        except KeyError:
+            return False
+
+        # The actual ID for the requested dataset might be that of a parent
+        # if this is a composite
+        thisref = ref.id
+        if storedItemInfo.parentID is not None:
+            thisref = storedItemInfo.parentID
+        return thisref in self.datasets
 
     def get(self, ref, parameters=None):
         """Load an InMemoryDataset from the store.
@@ -219,7 +237,11 @@ class InMemoryDatastore(Datastore):
         storedItemInfo = self.getStoredItemInfo(ref)
         writeStorageClass = storedItemInfo.storageClass
 
-        inMemoryDataset = self.datasets[ref.id]
+        # We might need a parent
+        thisID = ref.id
+        if storedItemInfo.parentID is not None:
+            thisID = storedItemInfo.parentID
+        inMemoryDataset = self.datasets[thisID]
 
         # Different storage classes implies a component request
         if readStorageClass != writeStorageClass:
@@ -271,10 +293,12 @@ class InMemoryDatastore(Datastore):
         size = get_object_size(inMemoryDataset)
         info = StorageInfo(self.name, checksum, size)
         self.registry.addStorageInfo(ref, info)
+        print("Info: {}".format(info))
 
         # Store time we received this content, to allow us to optionally
-        # expire it.
-        itemInfo = StoredItemInfo(time.time(), ref.datasetType.storageClass)
+        # expire it. Instead of storing a filename here, we include the
+        # ID of this datasetRef so we can find it from components.
+        itemInfo = StoredItemInfo(time.time(), ref.datasetType.storageClass, parentID=ref.id)
         self.addStoredItemInfo(ref, itemInfo)
 
         # Register all components with same information
