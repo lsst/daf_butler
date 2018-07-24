@@ -1,0 +1,6 @@
+comp1:
+  item1: 58
+comp2: !include testconfig.yaml
+comp3:
+  - 52
+  - !include viacls.yaml
