@@ -34,8 +34,10 @@ try:
 except ImportError:
     lsst.afw.image = None
 
+TESTDIR = os.path.dirname(__file__)
 
-class ButlerFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper, DatasetTestHelper):
+
+class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
 
     @staticmethod
     def registerDatasetTypes(datasetTypeName, dataUnits, storageClass, registry):
@@ -52,13 +54,11 @@ class ButlerFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper, D
     def setUpClass(cls):
         if lsst.afw.image is None:
             raise unittest.SkipTest("afw not available.")
-        cls.testDir = os.path.abspath(os.path.dirname(__file__))
         cls.storageClassFactory = StorageClassFactory()
-        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def testExposureCompositePutGet(self):
-        example = os.path.join(self.testDir, "data", "basic", "small.fits")
+        example = os.path.join(TESTDIR, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
         butler = Butler(self.configFile)
         datasetTypeName = "calexp"
@@ -89,6 +89,16 @@ class ButlerFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper, D
         bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
                                    lsst.afw.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
+
+
+class PosixDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization of a butler"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+
+class InMemoryDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
+    """InMemoryDatastore specialization of a butler"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -34,6 +34,8 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from examplePythonTypes import MetricsExample
 
+TESTDIR = os.path.dirname(__file__)
+
 
 def makeExampleMetrics():
     return MetricsExample({"AM1": 5.2, "AM2": 30.6},
@@ -50,8 +52,8 @@ class TransactionTestError(Exception):
     pass
 
 
-class ButlerTestCase(lsst.utils.tests.TestCase):
-    """Test for Butler.
+class ButlerTests:
+    """Tests for Butler.
     """
 
     @staticmethod
@@ -64,9 +66,7 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.testDir = os.path.abspath(os.path.dirname(__file__))
         cls.storageClassFactory = StorageClassFactory()
-        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def assertGetComponents(self, butler, datasetTypeName, dataId, components, reference):
@@ -142,28 +142,6 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         self.assertGetComponents(butler, datasetTypeName, dataId,
                                  ("summary", "data", "output"), metric)
 
-    def testMakeRepo(self):
-        """Test that we can write butler configuration to a new repository via
-        the Butler.makeRepo interface and then instantiate a butler from the
-        repo root.
-        """
-        with TemporaryDirectory(prefix=self.testDir + "/") as root:
-            Butler.makeRepo(root)
-            limited = Config(os.path.join(root, "butler.yaml"))
-            butler1 = Butler(root, collection="null")
-            Butler.makeRepo(root, standalone=True, createRegistry=False)
-            full = Config(os.path.join(root, "butler.yaml"))
-            butler2 = Butler(root, collection="null")
-        # Butlers should have the same configuration regardless of whether
-        # defaults were expanded.
-        self.assertEqual(butler1.config, butler2.config)
-        # Config files loaded directly should not be the same.
-        self.assertNotEqual(limited, full)
-        # Make sure 'limited' doesn't have a few keys we know it should be
-        # inheriting from defaults.
-        self.assertIn("datastore.formatters", full)
-        self.assertNotIn("datastore.formatters", limited)
-
     def testPickle(self):
         """Test pickle support.
         """
@@ -215,6 +193,42 @@ class ButlerTestCase(lsst.utils.tests.TestCase):
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError):
             butler.getDirect(ref)
+
+
+class ButlerRepos(lsst.utils.tests.TestCase):
+    """Butler tests without storing to datastore"""
+
+    def testMakeRepo(self):
+        """Test that we can write butler configuration to a new repository via
+        the Butler.makeRepo interface and then instantiate a butler from the
+        repo root.
+        """
+        with TemporaryDirectory(prefix=TESTDIR + "/") as root:
+            Butler.makeRepo(root)
+            limited = Config(os.path.join(root, "butler.yaml"))
+            butler1 = Butler(root, collection="null")
+            Butler.makeRepo(root, standalone=True, createRegistry=False)
+            full = Config(os.path.join(root, "butler.yaml"))
+            butler2 = Butler(root, collection="null")
+        # Butlers should have the same configuration regardless of whether
+        # defaults were expanded.
+        self.assertEqual(butler1.config, butler2.config)
+        # Config files loaded directly should not be the same.
+        self.assertNotEqual(limited, full)
+        # Make sure 'limited' doesn't have a few keys we know it should be
+        # inheriting from defaults.
+        self.assertIn("datastore.formatters", full)
+        self.assertNotIn("datastore.formatters", limited)
+
+
+class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization of a butler"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+
+class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+    """InMemoryDatastore specialization of a butler"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -1,0 +1,3 @@
+run: ingest
+datastore: !include inMemoryDatastore.yaml
+storageClasses: !include storageClasses.yaml
