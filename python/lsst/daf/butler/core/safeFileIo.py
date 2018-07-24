@@ -28,7 +28,7 @@ import fcntl
 import filecmp
 import os
 import tempfile
-from lsst.log import Log
+import logging
 
 __all__ = ("DoNotWrite",
            "safeMakeDir",
@@ -169,7 +169,7 @@ def SafeLockedFileForRead(name):
     file object
         The file to be read from.
     """
-    log = Log.getLogger("daf.butler")
+    log = logging.getLogger("daf.butler")
     try:
         with open(name, 'r') as f:
             log.debug("Acquiring shared lock on {}".format(name))
@@ -191,7 +191,7 @@ class SafeLockedFileForWrite:
     """
 
     def __init__(self, name):
-        self.log = Log.getLogger("daf.butler")
+        self.log = logging.getLogger("daf.butler")
         self.name = name
         self._readable = None
         self._writeable = None

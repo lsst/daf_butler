@@ -22,9 +22,9 @@
 import os
 import re
 import datetime
+import logging
 from collections import OrderedDict
 
-from lsst.log import Log
 from lsst.afw.image import bboxFromMetadata
 from lsst.geom import Box2D
 from lsst.sphgeom import ConvexPolygon
@@ -78,7 +78,7 @@ class ConversionWriter:
                    visitInfo=walker.visitInfo)
 
     def __init__(self, config, gen2repos, skyMaps, skyMapRoots, visitInfo):
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         self.config = Config(config)
         self.skyMaps = skyMaps
         self.visitInfo = visitInfo
@@ -105,7 +105,7 @@ class ConversionWriter:
         Also constructs all Translators and populates self.skyMapNames and
         self.datasetTypes.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         log.info("Preparing writing for repo at '%s'", gen2repo.root)
         converted = self.repos.get(gen2repo.root, None)
         if converted is not None:
@@ -202,7 +202,7 @@ class ConversionWriter:
         """Check that all necessary Cameras are already present in the
         Registry.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         cameras = set()
         for repo in self.repos.values():
             cameras.add(self.config["mappers"][repo.gen2.MapperClass.__name__]["camera"])
@@ -217,7 +217,7 @@ class ConversionWriter:
         """Add all necessary SkyMap DataUnits (and associated Tracts and
         Patches) to the Registry.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for sha1, skyMap in self.skyMaps.items():
             skyMapName = self.skyMapNames.get(sha1, None)
             try:
@@ -247,7 +247,7 @@ class ConversionWriter:
     def insertObservations(self, registry):
         """Add all necessary Visit and Exposure DataUnits to the Registry.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for mapperName, nested in self.visitInfo.items():
             camera = self.config["mappers"][mapperName]["camera"]
             log.info("Inserting Exposure and Visit DataUnits for Camera '%s'", camera)
@@ -291,7 +291,7 @@ class ConversionWriter:
     def insertDatasetTypes(self, registry):
         """Add all necessary DatasetType registrations to the Registry.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for datasetType in self.datasetTypes.values():
             # TODO: should put this "just make sure it exists" logic
             # into registerDatasetType itself, and make it a bit more careful.
@@ -304,7 +304,7 @@ class ConversionWriter:
     def insertDatasets(self, registry, datastore):
         """Add all Dataset entries to the given Registry and Datastore.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for repo in self.repos.values():
             refs = []
             for datasetTypeName, datasets in repo.gen2.datasets.items():
@@ -374,7 +374,7 @@ class ConversionWriter:
                "          AND MetadataCollection.collection = :collection "
                "          AND Wcs.dataset_type_name = :wcsName"
                "          AND Metadata.dataset_type_name = :metadataName")
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for config in self.config["regions"]:
             log.info("Adding observation regions using %s from %s.",
                      config["DatasetType"], config["collection"])

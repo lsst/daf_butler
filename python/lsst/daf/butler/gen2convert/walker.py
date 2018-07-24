@@ -21,12 +21,12 @@
 
 import os
 import pickle
-
+import logging
 import yaml
 
 # register YAML loader for repositoryCfg.yaml files.
 import lsst.daf.persistence.repositoryCfg   # noqa F401
-from lsst.log import Log
+
 from lsst.afw.image import readMetadata
 
 from ..core import Config
@@ -90,7 +90,7 @@ class ConversionWalker:
         Returns `True` if the path does appear to be a Gen2 Data Repository but
         it is in `self.ignored`.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         root = os.path.abspath(root)
         repo = self.found.get(root, None)
         if repo is not None:
@@ -170,7 +170,7 @@ class ConversionWalker:
         its `datasetTypes`, `datasets`, and `unrecognized` attributes will be
         populated.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         assert(repo.root in self.found)
         assert(repo.root not in self.ignored)
         # Short-circuit if we've already scanned this path.
@@ -300,7 +300,7 @@ class ConversionWalker:
 
         Assumes all parent repository objects have been fully initialized.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for datasetTypeName, mapping in repo.mapper.mappings.items():
             if not datasetTypeName.endswith("_skyMap"):
                 continue

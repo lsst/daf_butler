@@ -22,14 +22,14 @@
 __all__ = ("SqlPreFlight")
 
 import itertools
+import logging
 from sqlalchemy.sql import select, and_, text
 
-import lsst.log
 from lsst.sphgeom import Region
 from lsst.sphgeom.relationship import DISJOINT
 
 
-_LOG = lsst.log.Log.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 
 
 def _scanDataUnits(dataUnits):
