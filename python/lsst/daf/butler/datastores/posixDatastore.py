@@ -22,6 +22,7 @@
 """POSIX datastore."""
 
 import os
+import shutil
 import hashlib
 from collections import namedtuple
 
@@ -324,23 +325,88 @@ class PosixDatastore(Datastore):
         self.ingest(path, ref, formatter=formatter)
 
     @transactional
-    def ingest(self, path, ref, formatter=None):
-        """Record that a Dataset with the given `DatasetRef` exists in the store.
+    def ingest(self, path, ref, formatter=None, transfer=None):
+        """Add an on-disk file with the given `DatasetRef` to the store,
+        possibly transferring it.
+
+        The caller is responsible for ensuring that the given (or predicted)
+        Formatter is consistent with how the file was written; `ingest` will
+        in general silently ignore incorrect formatters (as it cannot
+        efficiently verify their correctness), deferring errors until ``get``
+        is first called on the ingested dataset.
 
         Parameters
         ----------
         path : `str`
-            File path, relative to the repository root.
+            File path.  Treated as relative to the repository root if not
+            absolute.
         ref : `DatasetRef`
             Reference to the associated Dataset.
         formatter : `Formatter` (optional)
-            Formatter that should be used to retreive the Dataset.
-        """
-        fullPath = os.path.join(self.root, path)
+            Formatter that should be used to retreive the Dataset.  If not
+            provided, the formatter will be constructed according to
+            Datastore configuration.
+        transfer : str (optional)
+            If not None, must be one of 'move', 'copy', 'hardlink', or
+            'symlink' indicating how to transfer the file.  The new
+            filename and location will be determined via template substitution,
+            as with ``put``.  If the file is outside the datastore root, it
+            must be transferred somehow.
 
+        Raises
+        ------
+        RuntimeError
+            Raised if ``transfer is None`` and path is outside the repository
+            root.
+        FileNotFoundError
+            Raised if the file at ``path`` does not exist.
+        FileExistsError
+            Raised if ``transfer is not None`` but a file already exists at the
+            location computed from the template.
+        """
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref.datasetType.storageClass,
                                                            ref.datasetType.name)
+
+        fullPath = os.path.join(self.root, path)
+        if not os.path.exists(fullPath):
+            raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
+                                    "assumed to be relative to self.root unless they are absolute."
+                                    .format(fullPath))
+
+        if transfer is None:
+            if os.path.isabs(path):
+                absRoot = os.path.abspath(self.root)
+                if os.path.commonpath([absRoot, os.path.abspath(path)]) != absRoot:
+                    raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
+        else:
+            template = self.templates.getTemplate(ref.datasetType.name)
+            location = self.locationFactory.fromPath(template.format(ref))
+            newPath = formatter.predictPath(location)
+            newFullPath = os.path.join(self.root, newPath)
+            if os.path.exists(newFullPath):
+                raise FileExistsError("File '{}' already exists".format(newFullPath))
+            storageDir = os.path.dirname(newFullPath)
+            if not os.path.isdir(storageDir):
+                with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
+                    safeMakeDir(storageDir)
+            if transfer == "move":
+                with self._transaction.undoWith("move", shutil.move, newFullPath, fullPath):
+                    shutil.move(fullPath, newFullPath)
+            elif transfer == "copy":
+                with self._transaction.undoWith("copy", os.remove, newFullPath):
+                    shutil.copy(fullPath, newFullPath)
+            elif transfer == "hardlink":
+                with self._transaction.undoWith("hardlink", os.unlink, newFullPath):
+                    os.link(fullPath, newFullPath)
+            elif transfer == "symlink":
+                with self._transaction.undoWith("symlink", os.unlink, newFullPath):
+                    os.symlink(fullPath, newFullPath)
+            else:
+                raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
+            path = newPath
+            fullPath = newFullPath
+
         # Create Storage information in the registry
         checksum = self.computeChecksum(fullPath)
         stat = os.stat(fullPath)

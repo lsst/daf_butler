@@ -246,6 +246,50 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
+    def ingest(self, path, ref, formatter=None, transfer=None):
+        """Add an on-disk file with the given `DatasetRef` to the store,
+        possibly transferring it.
+
+        The caller is responsible for ensuring that the given (or predicted)
+        Formatter is consistent with how the file was written; `ingest` will
+        in general silently ignore incorrect formatters (as it cannot
+        efficiently verify their correctness), deferring errors until ``get``
+        is first called on the ingested dataset.
+
+        Datastores are not required to implement this method, but must do so
+        in order to support direct raw data ingest.
+
+        Parameters
+        ----------
+        path : `str`
+            File path, relative to the repository root.
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
+        formatter : `Formatter` (optional)
+            Formatter that should be used to retreive the Dataset.  If not
+            provided, the formatter will be constructed according to
+            Datastore configuration.
+        transfer : str (optional)
+            If not None, must be one of 'move', 'copy', 'hardlink', or
+            'symlink' indicating how to transfer the file.
+            Datastores need not support all options, but must raise
+            NotImplementedError if the passed option is not supported.
+            That includes None, which indicates that the file should be
+            ingested at its current location with no transfer.  If a
+            Datastore does support ingest-without-transfer in general,
+            but the given path is not appropriate, an exception other
+            than NotImplementedError that better describes the problem
+            should be raised.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if the given transfer mode is not supported.
+        """
+        raise NotImplementedError(
+            "Datastore does not support direct file-based ingest."
+        )
+
     @abstractmethod
     def getUri(self, datasetRef):
         """URI to the Dataset.
