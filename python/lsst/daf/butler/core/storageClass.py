@@ -132,6 +132,13 @@ class StorageClass:
     def __hash__(self):
         return hash(self.name)
 
+    def __repr__(self):
+        components = list(self.components.keys() if self.components else "[]")
+        return "{}({}, pytype={}, components={})".format(type(self).__qualname__,
+                                                         self.name,
+                                                         self.pytype,
+                                                         components)
+
 
 class StorageClassFactory(metaclass=Singleton):
     """Factory for `StorageClass` instances.
