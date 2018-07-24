@@ -68,13 +68,22 @@ class Formatter(metaclass=ABCMeta):
         inMemoryDataset : `InMemoryDataset`
             The Dataset to store.
         fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
+            Identifies the file to write.
 
         Returns
         -------
         path : `str`
             The path to where the Dataset was stored.
+        """
+        raise NotImplementedError("Type does not support writing")
+
+    @abstractmethod
+    def predictPath(self, location):
+        """Return the path that would be returned by write, without actually
+        writing.
+
+        location : `Location`
+            The location to simulate writing to.
         """
         raise NotImplementedError("Type does not support writing")
 

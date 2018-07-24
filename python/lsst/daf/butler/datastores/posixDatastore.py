@@ -34,7 +34,7 @@ from lsst.daf.butler.core.formatter import FormatterFactory
 from lsst.daf.butler.core.fileTemplates import FileTemplates
 from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
-from lsst.daf.butler.core.utils import getInstanceOf
+from lsst.daf.butler.core.utils import getInstanceOf, transactional
 from lsst.daf.butler.core.storageClass import StorageClassFactory
 from ..core.databaseDict import DatabaseDict
 
@@ -277,6 +277,7 @@ class PosixDatastore(Datastore):
 
         return result
 
+    @transactional
     def put(self, inMemoryDataset, ref):
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
@@ -292,7 +293,6 @@ class PosixDatastore(Datastore):
         TypeError
             Supplied object and storage class are inconsistent.
         """
-
         datasetType = ref.datasetType
         typeName = datasetType.name
         storageClass = datasetType.storageClass
@@ -300,7 +300,8 @@ class PosixDatastore(Datastore):
         # Sanity check
         if not isinstance(inMemoryDataset, storageClass.pytype):
             raise TypeError("Inconsistency between supplied object ({}) "
-                            "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
+                            "and storage class type ({})".format(type(inMemoryDataset),
+                                                                 storageClass.pytype))
 
         # Work out output file name
         template = self.templates.getTemplate(typeName)
@@ -311,17 +312,18 @@ class PosixDatastore(Datastore):
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
-            safeMakeDir(storageDir)
+            with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
+                safeMakeDir(storageDir)
 
         # Write the file
-        path = formatter.write(inMemoryDataset, FileDescriptor(location,
-                                                               storageClass=storageClass))
+        predictedFullPath = os.path.join(self.root, formatter.predictPath(location))
+        with self._transaction.undoWith("write", os.remove, predictedFullPath):
+            path = formatter.write(inMemoryDataset, FileDescriptor(location, storageClass=storageClass))
+            assert predictedFullPath == os.path.join(self.root, path)
 
         self.ingest(path, ref, formatter=formatter)
 
-        if self._transaction is not None:
-            self._transaction.registerUndo('put', self.remove, ref)
-
+    @transactional
     def ingest(self, path, ref, formatter=None):
         """Record that a Dataset with the given `DatasetRef` exists in the store.
 
@@ -334,19 +336,23 @@ class PosixDatastore(Datastore):
         formatter : `Formatter` (optional)
             Formatter that should be used to retreive the Dataset.
         """
+        fullPath = os.path.join(self.root, path)
+
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref.datasetType.storageClass,
                                                            ref.datasetType.name)
         # Create Storage information in the registry
-        ospath = os.path.join(self.root, path)
-        checksum = self.computeChecksum(ospath)
-        stat = os.stat(ospath)
+        checksum = self.computeChecksum(fullPath)
+        stat = os.stat(fullPath)
         size = stat.st_size
         info = StorageInfo(self.name, checksum, size)
         self.registry.addStorageInfo(ref, info)
 
         # Associate this dataset with the formatter for later read.
         fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass)
+        # TODO: this is only transactional if the DatabaseDict uses
+        #       self.registry internally.  Probably need to add
+        #       transactions to DatabaseDict to do better than that.
         self.addStoredFileInfo(ref, fileInfo)
 
         # Register all components with same information

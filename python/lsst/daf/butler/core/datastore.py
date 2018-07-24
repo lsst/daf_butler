@@ -76,6 +76,24 @@ class DatastoreTransaction:
         """
         self._log.append(self.Event(name, undoFunc, args, kwargs))
 
+    @contextlib.contextmanager
+    def undoWith(self, name, undoFunc, *args, **kwargs):
+        """A context manager that calls `registerUndo` if the nested operation
+        does not raise an exception.
+
+        This can be used to wrap individual undo-able statements within a
+        DatastoreTransaction block.  Multiple statements that can fail
+        separately should not be part of the same `undoWith` block.
+
+        All arguments are forwarded directly to `registerUndo`.
+        """
+        try:
+            yield None
+        except BaseException:
+            raise
+        else:
+            self.registerUndo(name, undoFunc, *args, **kwargs)
+
     def rollback(self):
         """Roll back all events in this transaction.
         """
@@ -172,7 +190,7 @@ class Datastore(metaclass=ABCMeta):
         """
         self._transaction = DatastoreTransaction(self._transaction)
         try:
-            yield
+            yield self._transaction
         except BaseException:
             self._transaction.rollback()
             raise

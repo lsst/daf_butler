@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from contextlib import contextmanager
+
 
 class DummyRegistry:
     """Dummy Registry, for Datastore test purposes.
@@ -48,3 +50,7 @@ class DummyRegistry:
 
     def makeDatabaseDict(self, table, types, key, value):
         return dict()
+
+    @contextmanager
+    def transaction(self):
+        yield
