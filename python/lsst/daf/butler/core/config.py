@@ -54,7 +54,7 @@ class _ConfigBase(collections.UserDict, yaml.YAMLObject, metaclass=_ConfigMeta):
     pass
 
 
-class Loader(yaml.Loader):
+class Loader(yaml.CLoader):
     """YAML Loader that supports file include directives
 
     Uses ``!include`` directive in a YAML file to point to another
@@ -75,7 +75,7 @@ class Loader(yaml.Loader):
 
     def __init__(self, stream):
         self._root = os.path.split(stream.name)[0]
-        super(Loader, self).__init__(stream)
+        super().__init__(stream)
         Loader.add_constructor('!include', Loader.include)
 
     def include(self, node):
