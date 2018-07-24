@@ -25,7 +25,9 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from lsst.daf.butler.datastores.posixDatastore import DatastoreConfig
+
+from lsst.daf.butler.core.utils import doImport
 
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 
@@ -39,17 +41,29 @@ except ImportError:
     lsst.afw.table = None
     lsst.afw.image = None
 
+TESTDIR = os.path.dirname(__file__)
 
-class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsHelper, DatasetTestHelper):
+
+class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
 
     @classmethod
     def setUpClass(cls):
         if lsst.afw.table is None:
             raise unittest.SkipTest("afw not available.")
-        cls.testDir = os.path.dirname(__file__)
+
+        # Base classes need to know where the test directory is
+        cls.testDir = TESTDIR
+
+        # Storage Classes are fixed for all datastores in these tests
+        scConfigFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
         cls.storageClassFactory = StorageClassFactory()
-        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
-        cls.storageClassFactory.addFromConfig(cls.configFile)
+        cls.storageClassFactory.addFromConfig(scConfigFile)
+
+        # Read the Datastore config so we can get the class
+        # information (since we should not assume the constructor
+        # name here, but rely on the configuration file itself)
+        datastoreConfig = DatastoreConfig(cls.configFile)
+        cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
         self.registry = DummyRegistry()
@@ -59,12 +73,12 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         self.id = 1
 
     def testConstructor(self):
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         catalog = self.makeExampleCatalog()
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 123456, "filter": "blue"}
@@ -78,8 +92,9 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         self.assertTrue(datastore.exists(ref))
 
         uri = datastore.getUri(ref)
-        self.assertTrue(uri.endswith(".fits"))
-        self.assertTrue(uri.startswith("file:"))
+        if self.fileExt is not None:
+            self.assertTrue(uri.endswith(self.fileExt))
+        self.assertTrue(uri.startswith(self.uriScheme))
 
         # Get
         catalogOut = datastore.get(ref, parameters=None)
@@ -93,7 +108,7 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
 
     def testRemove(self):
         catalog = self.makeExampleCatalog()
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
 
         # Put
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
@@ -133,11 +148,11 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
 
         inputConfig = DatastoreConfig(self.configFile)
         inputConfig['root'] = os.path.join(self.testDir, "./test_input_datastore")
-        inputPosixDatastore = PosixDatastore(config=inputConfig, registry=self.registry)
+        inputPosixDatastore = self.datastoreType(config=inputConfig, registry=self.registry)
         outputConfig = inputConfig.copy()
         outputConfig['root'] = os.path.join(self.testDir, "./test_output_datastore")
-        outputPosixDatastore = PosixDatastore(config=outputConfig,
-                                              registry=DummyRegistry())
+        outputPosixDatastore = self.datastoreType(config=outputConfig,
+                                                  registry=DummyRegistry())
 
         inputPosixDatastore.put(catalog, ref)
         outputPosixDatastore.transfer(inputPosixDatastore, ref)
@@ -145,29 +160,10 @@ class PosixDatastoreFitsTestCase(lsst.utils.tests.TestCase, FitsCatalogDatasetsH
         catalogOut = outputPosixDatastore.get(ref)
         self.assertCatalogEqual(catalog, catalogOut)
 
-
-class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
-
-    @classmethod
-    def setUpClass(cls):
-        if lsst.afw.image is None:
-            raise unittest.SkipTest("afw not available.")
-        cls.testDir = os.path.dirname(__file__)
-        cls.storageClassFactory = StorageClassFactory()
-        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
-        cls.storageClassFactory.addFromConfig(cls.configFile)
-
-    def setUp(self):
-        self.registry = DummyRegistry()
-
-        # Need to keep ID for each datasetRef since we have no butler
-        # for these tests
-        self.id = 1
-
     def testExposurePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 231, "filter": "Fc"}
@@ -203,7 +199,7 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase, DatasetTestHelpe
     def testExposureCompositePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 23, "filter": "F"}
@@ -241,6 +237,13 @@ class PosixDatastoreExposureTestCase(lsst.utils.tests.TestCase, DatasetTestHelpe
         # Try to reassemble the exposure
         retrievedExposure = storageClass.assembler().assemble(compsRead)
         self.assertIsInstance(retrievedExposure, type(exposure))
+
+
+class PosixDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    uriScheme = "file:"
+    fileExt = ".fits"
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
