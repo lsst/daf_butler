@@ -218,7 +218,11 @@ class Config(_ConfigBase):
             if key in data:
                 data = data[key]
             else:
-                return None
+                try:
+                    i = int(key)
+                    data = data[i]
+                except ValueError:
+                    return None
         if isinstance(data, collections.Mapping):
             data = Config(data)
         return data
