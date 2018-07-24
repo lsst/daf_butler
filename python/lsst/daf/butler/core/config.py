@@ -26,6 +26,7 @@ import copy
 import pprint
 import os
 import yaml
+import sys
 from yaml.representer import Representer
 
 import lsst.utils
@@ -51,6 +52,56 @@ class _ConfigMeta(type(collections.UserDict), type(yaml.YAMLObject)):
 
 class _ConfigBase(collections.UserDict, yaml.YAMLObject, metaclass=_ConfigMeta):
     pass
+
+
+class Loader(yaml.Loader):
+    """YAML Loader that supports file include directives
+
+    Uses ``!include`` directive in a YAML file to point to another
+    YAML file to be included. The path in the include directive is relative
+    to the file containing that directive.
+
+        storageClasses: !include storageClasses.yaml
+
+    Examples
+    --------
+    >>> with open('document.yaml', 'r') as f:
+           data = yaml.load(f, Loader=Loader)
+
+    Notes
+    -----
+    See https://davidchall.github.io/yaml-includes.html
+    """
+
+    def __init__(self, stream):
+        self._root = os.path.split(stream.name)[0]
+        super(Loader, self).__init__(stream)
+        Loader.add_constructor('!include', Loader.include)
+
+    def include(self, node):
+        if isinstance(node, yaml.ScalarNode):
+            return self.extractFile(self.construct_scalar(node))
+
+        elif isinstance(node, yaml.SequenceNode):
+            result = []
+            for filename in self.construct_sequence(node):
+                result += self.extractFile(filename)
+            return result
+
+        elif isinstance(node, yaml.MappingNode):
+            result = {}
+            for k, v in self.construct_mapping(node).iteritems():
+                result[k] = self.extractFile(v)
+            return result
+
+        else:
+            print("Error:: unrecognised node type in !include statement", file=sys.stderr)
+            raise yaml.constructor.ConstructorError
+
+    def extractFile(self, filename):
+        filepath = os.path.join(self._root, filename)
+        with open(filepath, 'r') as f:
+            return yaml.load(f, Loader)
 
 
 class Config(_ConfigBase):
@@ -153,7 +204,7 @@ class Config(_ConfigBase):
         yaml.YAMLError
             If there is an error loading the file.
         """
-        content = yaml.safe_load(stream)
+        content = yaml.load(stream, Loader=Loader)
         if content is None:
             content = {}
         self.data = content
@@ -403,8 +454,16 @@ class ConfigSubset(Config):
         externalConfig = Config(other)
 
         # Select the part we need from it
-        if self.component is not None and self.component in externalConfig:
-            externalConfig.data = externalConfig.data[self.component]
+        # To simplify the use of !include we also check for the existence of
+        # component.component (since the included files can themselves
+        # include the component name)
+        if self.component is not None:
+            doubled = "{0}.{0}".format(self.component)
+            # Must check for double depth first
+            if doubled in externalConfig:
+                externalConfig = externalConfig[doubled]
+            elif self.component in externalConfig:
+                externalConfig.data = externalConfig.data[self.component]
 
         # Default files read to create this configuration
         self.filesRead = []
