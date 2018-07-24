@@ -86,7 +86,6 @@ class InMemoryDatastore(Datastore):
         # Name ourselves with the timestamp the datastore
         # was created.
         self.name = "InMemoryDatastore@{}".format(time.time())
-        print("Creating with name: {}".format(self.name))
 
         # Storage of datasets, keyed by dataset_id
         self.datasets = {}
@@ -183,9 +182,6 @@ class InMemoryDatastore(Datastore):
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
         """
-        print("Check existence datased {}".format(ref.id))
-        print(self.datasets)
-        print(self.records)
         return ref.id in self.datasets
 
     def get(self, ref, parameters=None):
@@ -213,8 +209,6 @@ class InMemoryDatastore(Datastore):
         ValueError
             Formatter failed to process the dataset.
         """
-
-        print("Attempting to retrieve dataset {}".format(ref))
 
         if not self.exists(ref):
             raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
@@ -268,7 +262,6 @@ class InMemoryDatastore(Datastore):
             raise ValueError("Inconsistency between supplied object ({}) "
                              "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
 
-        print("Store ID {}".format(ref.id))
         self.datasets[ref.id] = inMemoryDataset
 
         # We have to register this content with registry.
@@ -277,12 +270,7 @@ class InMemoryDatastore(Datastore):
         checksum = str(id(inMemoryDataset))
         size = get_object_size(inMemoryDataset)
         info = StorageInfo(self.name, checksum, size)
-        print("Store ID {}".format(ref.id))
-        print("Registr: {}".format(self.registry))
         self.registry.addStorageInfo(ref, info)
-        print("Store ID {}".format(ref.id))
-        print("Put dataset: {} (Size: {})".format(ref.id, size))
-        print(self.datasets)
 
         # Store time we received this content, to allow us to optionally
         # expire it.
@@ -357,7 +345,6 @@ class InMemoryDatastore(Datastore):
         Some Datastores may implement this method as a silent no-op to
         disable Dataset deletion through standard interfaces.
         """
-        print("Removing dataset {}".format(ref.id))
         if ref.id not in self.datasets:
             raise FileNotFoundError("No such file dataset in memory: {}".format(ref))
         del self.datasets[ref.id]
