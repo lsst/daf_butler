@@ -31,9 +31,14 @@ class DummyRegistry:
         self._entries = {}
 
     def addStorageInfo(self, ref, storageInfo):
-        ref._id = self._counter
+        # Only set ID if ID is 0 or None
+        incrementCounter = True
+        if ref.id is None or ref.id == 0:
+            ref._id = self._counter
+            incrementCounter = False
         self._entries[ref.id] = storageInfo
-        self._counter += 1
+        if incrementCounter:
+            self._counter += 1
 
     def getStorageInfo(self, ref, datastoreName):
         return self._entries[ref.id]
