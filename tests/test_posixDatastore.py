@@ -25,12 +25,17 @@ import unittest
 import lsst.utils.tests
 
 from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler.datastores.posixDatastore import PosixDatastore, DatastoreConfig
+from lsst.daf.butler import DatastoreConfig
+
+from lsst.daf.butler.core.utils import doImport
 
 from datasetsHelper import DatasetTestHelper
 from examplePythonTypes import MetricsExample
 
 from dummyRegistry import DummyRegistry
+
+
+TESTDIR = os.path.dirname(__file__)
 
 
 def makeExampleMetrics():
@@ -48,15 +53,21 @@ class TransactionTestError(Exception):
     pass
 
 
-class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
+class DatastoreTests(DatasetTestHelper):
     """Some basic tests of a simple POSIX datastore."""
 
     @classmethod
     def setUpClass(cls):
-        cls.testDir = os.path.dirname(__file__)
+        # Storage Classes are fixed for all datastores in these tests
+        scConfigFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
         cls.storageClassFactory = StorageClassFactory()
-        cls.configFile = os.path.join(cls.testDir, "config/basic/butler.yaml")
-        cls.storageClassFactory.addFromConfig(cls.configFile)
+        cls.storageClassFactory.addFromConfig(scConfigFile)
+
+        # Read the Datastore config so we can get the class
+        # information (since we should not assume the constructor
+        # name here, but rely on the configuration file itself)
+        datastoreConfig = DatastoreConfig(cls.configFile)
+        cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
         self.registry = DummyRegistry()
@@ -66,12 +77,12 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         self.id = 1
 
     def testConstructor(self):
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
 
         # Create multiple storage classes for testing different formulations
         storageClasses = [self.storageClassFactory.getStorageClass(sc)
@@ -95,7 +106,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
             self.assertEqual(metrics, metricsOut)
 
             uri = datastore.getUri(ref)
-            self.assertEqual(uri[:5], "file:")
+            self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
 
             # Get a component -- we need to construct new refs for them
             # with derived storage classes but with parent ID
@@ -106,7 +117,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
             self.assertEqual(output, metricsOut.output)
 
             uri = datastore.getUri(compRef)
-            self.assertEqual(uri[:5], "file:")
+            self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
 
         storageClass = sc
 
@@ -118,14 +129,14 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
 
         # Get a URI from it
         uri = datastore.getUri(ref, predict=True)
-        self.assertEqual(uri[:5], "file:")
+        self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
 
         with self.assertRaises(FileNotFoundError):
             datastore.getUri(ref)
 
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
 
         # Create multiple storage classes for testing different formulations
         # of composites
@@ -153,7 +164,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
                 datastore.put(compInfo.component, compRef)
 
                 uri = datastore.getUri(compRef)
-                self.assertEqual(uri[:5], "file:")
+                self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
 
                 compsRead[compName] = datastore.get(compRef)
 
@@ -163,7 +174,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
 
     def testRemove(self):
         metrics = makeExampleMetrics()
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 638, "filter": "U"}
@@ -205,21 +216,21 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
 
         inputConfig = DatastoreConfig(self.configFile)
-        inputConfig['root'] = os.path.join(self.testDir, "./test_input_datastore")
-        inputPosixDatastore = PosixDatastore(config=inputConfig, registry=self.registry)
+        inputConfig['root'] = os.path.join(TESTDIR, "./test_input_datastore")
+        inputDatastore = self.datastoreType(config=inputConfig, registry=self.registry)
         outputConfig = inputConfig.copy()
-        outputConfig['root'] = os.path.join(self.testDir, "./test_output_datastore")
-        outputPosixDatastore = PosixDatastore(config=outputConfig,
-                                              registry=DummyRegistry())
+        outputConfig['root'] = os.path.join(TESTDIR, "./test_output_datastore")
+        outputDatastore = self.datastoreType(config=outputConfig,
+                                             registry=DummyRegistry())
 
-        inputPosixDatastore.put(metrics, ref)
-        outputPosixDatastore.transfer(inputPosixDatastore, ref)
+        inputDatastore.put(metrics, ref)
+        outputDatastore.transfer(inputDatastore, ref)
 
-        metricsOut = outputPosixDatastore.get(ref)
+        metricsOut = outputDatastore.get(ref)
         self.assertEqual(metrics, metricsOut)
 
     def testBasicTransaction(self):
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dataUnits = frozenset(("visit", "filter"))
         nDatasets = 6
@@ -247,7 +258,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
             self.assertEqual(metrics, metricsOut)
             # URI
             uri = datastore.getUri(ref)
-            self.assertEqual(uri[:5], "file:")
+            self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
         # Check for datasets that should not exist
         for ref, _ in fail:
             # These should raise
@@ -258,7 +269,7 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
                 datastore.getUri(ref)
 
     def testNestedTransaction(self):
-        datastore = PosixDatastore(config=self.configFile, registry=self.registry)
+        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dataUnits = frozenset(("visit", "filter"))
         metrics = makeExampleMetrics()
@@ -288,6 +299,12 @@ class PosixDatastoreTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
             datastore.get(refOuter)
         with self.assertRaises(FileNotFoundError):
             datastore.get(refInner)
+
+
+class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    uriScheme = "file:"
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
