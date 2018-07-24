@@ -22,6 +22,7 @@
 """In-memory datastore."""
 
 import time
+import logging
 from collections import namedtuple
 
 from lsst.daf.butler.core.datastore import Datastore
@@ -93,6 +94,7 @@ class InMemoryDatastore(Datastore):
         # Name ourselves with the timestamp the datastore
         # was created.
         self.name = "InMemoryDatastore@{}".format(time.time())
+        logging.debug("Creating datastore %s", self.name)
 
         # Storage of datasets, keyed by dataset_id
         self.datasets = {}
@@ -228,6 +230,8 @@ class InMemoryDatastore(Datastore):
             Formatter failed to process the dataset.
         """
 
+        logging.debug("Retrieve %s from %s", ref, self.name)
+
         if not self.exists(ref):
             raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
 
@@ -285,6 +289,7 @@ class InMemoryDatastore(Datastore):
                              "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
 
         self.datasets[ref.id] = inMemoryDataset
+        logging.debug("Store %s in %s", ref, self.name)
 
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
@@ -293,7 +298,6 @@ class InMemoryDatastore(Datastore):
         size = get_object_size(inMemoryDataset)
         info = StorageInfo(self.name, checksum, size)
         self.registry.addStorageInfo(ref, info)
-        print("Info: {}".format(info))
 
         # Store time we received this content, to allow us to optionally
         # expire it. Instead of storing a filename here, we include the
