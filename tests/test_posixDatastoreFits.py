@@ -246,6 +246,13 @@ class PosixDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     fileExt = ".fits"
 
 
+class InMemoryDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
+    uriScheme = "mem:"
+    fileExt = None
+
+
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
 
