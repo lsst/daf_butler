@@ -74,8 +74,8 @@ class Loader(yaml.CLoader):
     """
 
     def __init__(self, stream):
-        self._root = os.path.split(stream.name)[0]
         super().__init__(stream)
+        self._root = os.path.split(stream.name)[0]
         Loader.add_constructor('!include', Loader.include)
 
     def include(self, node):
