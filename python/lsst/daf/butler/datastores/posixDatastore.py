@@ -286,6 +286,11 @@ class PosixDatastore(Datastore):
             The Dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
+
+        Raises
+        ------
+        TypeError
+            Supplied object and storage class are inconsistent.
         """
 
         datasetType = ref.datasetType
@@ -294,8 +299,8 @@ class PosixDatastore(Datastore):
 
         # Sanity check
         if not isinstance(inMemoryDataset, storageClass.pytype):
-            raise ValueError("Inconsistency between supplied object ({}) "
-                             "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
+            raise TypeError("Inconsistency between supplied object ({}) "
+                            "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
 
         # Work out output file name
         template = self.templates.getTemplate(typeName)
