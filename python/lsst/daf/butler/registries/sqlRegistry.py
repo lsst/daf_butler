@@ -1159,11 +1159,12 @@ class SqlRegistry(Registry):
             be present in ``value._fields``.
         value : `type`
             The type used for the dictionary's values, typically a
-            `namedtuple`.  Must have a ``_fields`` class attribute that is a
-            tuple of field names (i.e. as defined by `namedtuple`); these
-            field names must also appear in the ``types`` arg, and a `_make`
-            attribute to construct it from a sequence of values (again, as
-            defined by `namedtuple`).
+            `~collections.namedtuple`.  Must have a ``_fields`` class
+            attribute that is a tuple of field names (i.e. as defined by
+            `~collections.namedtuple`); these field names must also appear
+            in the ``types`` arg, and a `_make` attribute to construct it
+            from a sequence of values (again, as defined by
+            `~collections.namedtuple`).
         """
         # We need to construct a temporary config for the table value because
         # SqlRegistryDatabaseDict.__init__ is required to take a config so it

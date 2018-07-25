@@ -28,6 +28,8 @@ from lsst.daf.butler.core.datastore import Datastore
 from lsst.daf.butler.core.storageClass import StorageClassFactory
 from lsst.daf.butler.core.storageInfo import StorageInfo
 
+__all__ = ("StoredItemInfo", "InMemoryDatastore")
+
 
 class StoredItemInfo:
     """Internal Metadata associated with a DatasetRef.

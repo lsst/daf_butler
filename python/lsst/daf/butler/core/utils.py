@@ -24,10 +24,10 @@ import functools
 import importlib
 from collections import namedtuple
 
-
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "doImport", "getInstanceOf", "Singleton",
-           "TopologicalSet", "transactional", "getObjectSize")
+           "TopologicalSet", "TopologicalSetNode", "transactional",
+           "getObjectSize")
 
 
 def iterable(a):
@@ -239,7 +239,7 @@ class TopologicalSet:
 
     Parameters
     ----------
-    elements : `iterable`
+    elements : Iterable
         Any iterable with elements to insert.
     """
     def __init__(self, elements):

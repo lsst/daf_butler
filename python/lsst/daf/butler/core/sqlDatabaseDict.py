@@ -28,6 +28,8 @@ from sqlalchemy.exc import IntegrityError, StatementError
 
 from .databaseDict import DatabaseDict
 
+__all__ = ("SqlDatabaseDict", )
+
 
 class SqlDatabaseDict(DatabaseDict):
     """A DatabaseDict backed by a SQL database.
@@ -55,12 +57,13 @@ class SqlDatabaseDict(DatabaseDict):
     key : `str`
         The name of the field to be used as the dictionary key.  Must not be
         present in ``value._fields``.
-    value : `type` (`namedtuple`)
-        The type used for the dictionary's values, typically a `namedtuple`.
-        Must have a ``_fields`` class attribute that is a tuple of field names
-        (i.e. as defined by `namedtuple`); these field names must also appear
+    value : `type` (`~collections.namedtuple`)
+        The type used for the dictionary's values, typically a
+        `~collections.namedtuple`. Must have a ``_fields`` class attribute
+        that is a tuple of field names (i.e. as defined by
+        `~collections.namedtuple`); these field names must also appear
         in the ``types`` arg, and a `_make` attribute to construct it from a
-        sequence of values (again, as defined by `namedtuple`).
+        sequence of values (again, as defined by `~collections.namedtuple`).
     engine : `sqlalchemy.engine.Engine`
         A SQLAlchemy connection object.  If not None, ``config["db"]`` is
         ignored.
