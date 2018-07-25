@@ -118,8 +118,8 @@ class SqlDatabaseDict(DatabaseDict):
             except StatementError as err:
                 raise TypeError("Bad data types in value: {}".format(err))
 
-        # If we fail due to an IntegrityError (i.e. duplicate primary key values),
-        # try to do an update instead.
+        # If we fail due to an IntegrityError (i.e. duplicate primary key
+        # values), try to do an update instead.
         kwds.pop(self._key, None)
         with self._engine.begin() as connection:
             try:

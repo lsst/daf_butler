@@ -65,13 +65,13 @@ class DatastoreTransaction:
 
         Parameters
         ----------
-        `name` : str
+        name : `str`
             Name of the event.
-        `undoFunc` : func
+        undoFunc : func
             Function to undo this event.
-        `*args` : tuple
+        args : `tuple`
             Positional arguments to `undoFunc`.
-        `**kwargs` : dict
+        kwargs : `dict`
             Keyword arguments to `undoFunc`.
         """
         self._log.append(self.Event(name, undoFunc, args, kwargs))
@@ -96,7 +96,8 @@ class DatastoreTransaction:
             # Just forget about the events, they have already happened.
             return
         else:
-            # We may still want to events from this transaction as part of the parent.
+            # We may still want to events from this transaction as part of
+            # the parent.
             self.parent._log.extend(self._log)
 
 

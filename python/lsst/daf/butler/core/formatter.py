@@ -94,8 +94,8 @@ class FormatterFactory:
         storageClass : `StorageClass`
             Get `Formatter` associated with this `StorageClass`, unless.
         datasetType : `DatasetType` or `str`, optional
-            If given, look if an override has been specified for this `DatasetType` and,
-            if so return that instead.
+            If given, look if an override has been specified for this
+            `DatasetType` and, if so return that instead.
         """
         return self._mappingFactory.getFromRegistry(datasetType, storageClass)
 

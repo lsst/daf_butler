@@ -138,8 +138,8 @@ class MappingFactory:
 
     def _isValidStr(self, typeName):
         """Validate that the class type name provided does create instances of
-        objects that are of the expected type, as stored in the
-        `refType` attribute.
+        objects that are of the expected type, as stored in the `refType`
+        attribute.
         """
         if self.refType is None:
             return True

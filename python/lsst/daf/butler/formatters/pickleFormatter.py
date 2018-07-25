@@ -29,7 +29,8 @@ __all__ = ("PickleFormatter", )
 
 
 class PickleFormatter(FileFormatter):
-    """Interface for reading and writing Python objects to and from pickle files.
+    """Interface for reading and writing Python objects to and from pickle
+    files.
     """
     extension = ".pickle"
 

@@ -192,8 +192,8 @@ class CompositeAssembler:
     def getComponent(self, composite, componentName):
         """Attempt to retrieve component from composite object by heuristic.
 
-        Will attempt a direct attribute retrieval, or else getter methods of the
-        form "get_componentName" and "getComponentName".
+        Will attempt a direct attribute retrieval, or else getter methods of
+        the form "get_componentName" and "getComponentName".
 
         Parameters
         ----------

@@ -98,7 +98,7 @@ class SqlRegistry(Registry):
         them with a colon.  Parameter values are provided as additional
         keyword arguments.  For example:
 
-            registry.query('SELECT * FROM Camera WHERE camera=:name', name='HSC')
+          registry.query('SELECT * FROM Camera WHERE camera=:name', name='HSC')
 
         Parameters
         ----------
@@ -234,8 +234,8 @@ class SqlRegistry(Registry):
         datasetType : `str`
             Name of a `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
-            within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the
+            `DatasetRef` within a Collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -511,7 +511,8 @@ class SqlRegistry(Registry):
         ----------
         execution : `Execution`
             Instance to add to the `SqlRegistry`.
-            The given `Execution` must not already be present in the `SqlRegistry`.
+            The given `Execution` must not already be present in the
+            `SqlRegistry`.
         """
         executionTable = self._schema.tables['Execution']
         result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
@@ -686,8 +687,8 @@ class SqlRegistry(Registry):
         ----------
         quantum : `Quantum`
             Instance to add to the `SqlRegistry`.
-            The given `Quantum` must not already be present in the `SqlRegistry`
-            (or any other), therefore its:
+            The given `Quantum` must not already be present in the
+            `SqlRegistry` (or any other), therefore its:
 
             - `execution` attribute must be set to an existing `Execution`.
             - `run` attribute must be set to an existing `Run`.
@@ -897,7 +898,8 @@ class SqlRegistry(Registry):
         Returns
         -------
         dataUnitEntry : `dict`
-            Dictionary with all `DataUnit` values, or `None` if no matching entry is found.
+            Dictionary with all `DataUnit` values, or `None` if no matching
+            entry is found.
         """
         dataUnit = self._schema.dataUnits[dataUnitName]
         dataUnit.validateId(value)
@@ -934,8 +936,8 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
-            within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the
+            `DatasetRef` within a Collection.
 
         Raises
         ------
@@ -961,8 +963,8 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
-            within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the
+            `DatasetRef` within a Collection.
 
         Returns
         -------
@@ -1086,9 +1088,10 @@ class SqlRegistry(Registry):
         raise NotImplementedError("Must be implemented by subclass")
 
     def export(self, expr):
-        """Export contents of the `SqlRegistry`, limited to those reachable from
-        the Datasets identified by the expression `expr`, into a `TableSet`
-        format such that it can be imported into a different database.
+        """Export contents of the `SqlRegistry`, limited to those reachable
+        from the Datasets identified by the expression `expr`, into a
+        `TableSet` format such that it can be imported into a different
+        database.
 
         Parameters
         ----------
@@ -1156,15 +1159,16 @@ class SqlRegistry(Registry):
             The name of the field to be used as the dictionary key.  Must not
             be present in ``value._fields``.
         value : `type`
-            The type used for the dictionary's values, typically a `namedtuple`.
-            Must have a ``_fields`` class attribute that is a tuple of field names
-            (i.e. as defined by `namedtuple`); these field names must also appear
-            in the ``types`` arg, and a `_make` attribute to construct it from a
-            sequence of values (again, as defined by `namedtuple`).
+            The type used for the dictionary's values, typically a
+            `namedtuple`.  Must have a ``_fields`` class attribute that is a
+            tuple of field names (i.e. as defined by `namedtuple`); these
+            field names must also appear in the ``types`` arg, and a `_make`
+            attribute to construct it from a sequence of values (again, as
+            defined by `namedtuple`).
         """
         # We need to construct a temporary config for the table value because
-        # SqlRegistryDatabaseDict.__init__ is required to take a config so it can be
-        # called by DatabaseDict.fromConfig as well.
+        # SqlRegistryDatabaseDict.__init__ is required to take a config so it
+        # can be called by DatabaseDict.fromConfig as well.
         # I suppose we could have Registry.makeDatabaseDict take a config as
         # well, since it'll also usually be called by DatabaseDict.fromConfig,
         # but I strongly believe in having signatures that only take what they

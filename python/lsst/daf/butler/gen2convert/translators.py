@@ -33,13 +33,14 @@ class NoSkyMapError(LookupError):
 
 
 class KeyHandler(metaclass=ABCMeta):
-    """Base class for Translator helpers that each handle just one Gen3 Data ID key.
+    """Base class for Translator helpers that each handle just one Gen3 Data
+    ID key.
 
     Parameters
     ----------
     gen3key : `str`
-        Name of the Gen3 Data ID key (DataUnit link field name) populated by this
-        handler (e.g. "visit" or "abstract_filter")
+        Name of the Gen3 Data ID key (DataUnit link field name) populated by
+        this handler (e.g. "visit" or "abstract_filter")
     gen3unit : `str`
         Name of the Gen3 DataUnit associated with `gen3key` (e.g. "Visit" or
         "AbstractFilter").
@@ -149,7 +150,8 @@ class Translator:
         Parameters
         ----------
         handler : `KeyHandler`
-            A KeyHandler instance to add to a Translator when this rule matches.
+            A KeyHandler instance to add to a Translator when this rule
+            matches.
         camera : `str`
             Gen3 camera name the Gen2 repository must be associated with for
             this rule to match, or None to match any camera.
@@ -182,7 +184,8 @@ class Translator:
 
     @classmethod
     def makeMatching(cls, camera, datasetType, skyMapNames, skyMaps):
-        """Construct a Translator appropriate for instances of the given dataset.
+        """Construct a Translator appropriate for instances of the given
+        dataset.
 
         Parameters
         ----------

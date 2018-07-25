@@ -150,7 +150,8 @@ class Gen2Repo:
 
     @property
     def MapperClass(self):
-        """Gen2 Mapper type responsible for organizing this repository (`type`)."""
+        """Gen2 Mapper type responsible for organizing this repository
+        (`type`)."""
         return self._MapperClass
 
     @property
@@ -176,7 +177,8 @@ class Gen2Repo:
 
     @property
     def datasets(self):
-        """Datasets found directly in this repository, not a parent (`defaultdict`).
+        """Datasets found directly in this repository, not a parent
+        (`defaultdict`).
 
         This is a two-level nested dictionary; outer keys are
         datasetType (`str`), inner keys are filePath (`str`), values are

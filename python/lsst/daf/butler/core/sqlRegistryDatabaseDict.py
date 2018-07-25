@@ -107,14 +107,16 @@ class SqlRegistryDatabaseDict(DatabaseDict):
                 self.registry._connection.execute(self._table.insert(), **kwds)
                 return
             except IntegrityError:
-                # Swallow the expected IntegrityError (due to i.e. duplicate primary key values)
-                # TODO: would be better to explicitly inspect the error, but this is tricky.
+                # Swallow the expected IntegrityError (due to i.e. duplicate
+                # primary key values)
+                # TODO: would be better to explicitly inspect the error, but
+                # this is tricky.
                 pass
             except StatementError as err:
                 raise TypeError("Bad data types in value: {}".format(err))
 
-        # If we fail due to an IntegrityError (i.e. duplicate primary key values),
-        # try to do an update instead.
+        # If we fail due to an IntegrityError (i.e. duplicate primary key
+        # values), try to do an update instead.
         kwds.pop(self._key, None)
         with self.registry._connection.begin():
             try:

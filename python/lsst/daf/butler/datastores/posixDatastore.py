@@ -370,8 +370,8 @@ class PosixDatastore(Datastore):
         uri : `str`
             URI string pointing to the Dataset within the datastore. If the
             Dataset does not exist in the datastore, and if ``predict`` is
-            `True`, the URI will be a prediction and will include a URI fragment
-            "#predicted".
+            `True`, the URI will be a prediction and will include a URI
+            fragment "#predicted".
             If the datastore does not have entities that relate well
             to the concept of a URI the returned URI string will be
             descriptive. The returned URI is not guaranteed to be obtainable.

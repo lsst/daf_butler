@@ -45,9 +45,9 @@ class DataUnit:
         Related `DataUnit` instances that may also be provided (and when they
         are, they must be kept in sync).
     link : `tuple`
-        Names of columns that form the `DataUnit` specific part of the primary-key
-        in this `DataUnit` table and are also the names of the link column in
-        the Datasets table.
+        Names of columns that form the `DataUnit` specific part of the
+        primary-key in this `DataUnit` table and are also the names of the
+        link column in the Datasets table.
     table : `sqlalchemy.core.Table`, optional
         When not ``None`` the primary table entry corresponding to this
         `DataUnit`.
@@ -84,8 +84,8 @@ class DataUnit:
 
     @property
     def optionalDependencies(self):
-        """Related `DataUnit` instances that may also be provided (and when they
-        are, they must be kept in sync) (`frozenset`, read-only).
+        """Related `DataUnit` instances that may also be provided (and when
+        they are, they must be kept in sync) (`frozenset`, read-only).
         """
         return self._optionalDependencies
 
@@ -105,16 +105,16 @@ class DataUnit:
 
     @property
     def link(self):
-        """Names of columns that form the `DataUnit` specific part of the primary-key
-        in this `DataUnit` table and are also the names of the link column in
-        the Datasets table (`tuple`).
+        """Names of columns that form the `DataUnit` specific part of the
+        primary-key in this `DataUnit` table and are also the names of the
+        link column in the Datasets table (`tuple`).
         """
         return self._link
 
     @property
     def primaryKey(self):
-        """Full primary-key column name tuple.  Consists of the ``link`` of this
-        `DataUnit` and that of all its ``requiredDependencies`` (`set`).
+        """Full primary-key column name tuple.  Consists of the ``link`` of
+        this `DataUnit` and that of all its ``requiredDependencies`` (`set`).
         """
         if self._primaryKey is None:
             self._primaryKey = set(self.link)
@@ -131,8 +131,8 @@ class DataUnit:
 
     @property
     def primaryKeyColumns(self):
-        """Dictionary keyed on ``primaryKey`` names with `sqlalchemy.Column` entries
-        into this `DataUnit` primary table as values (`dict`).
+        """Dictionary keyed on ``primaryKey`` names with `sqlalchemy.Column`
+        entries into this `DataUnit` primary table as values (`dict`).
         """
         return {name: self.table.columns[name] for name in self.primaryKey}
 
@@ -180,8 +180,8 @@ class DataUnitJoin:
     summarizes : `DataUnitJoin`
         Summarizes this other `DataUnitJoin`.
     isView : `bool`, optional
-        True if the table assocaited with this join is actually a view, False if
-        it is a regular table, and None if it is neither.
+        True if the table assocaited with this join is actually a view, False
+        if it is a regular table, and None if it is neither.
     table : `sqlalchemy.TableClause` or `sqlalchemy.Table`
         The table to be used for queries.  Note that this is not
         an actual `Table` in many cases because joins are often
@@ -379,8 +379,8 @@ class DataUnitRegistry:
         """Initialize DataUnit names.
 
         Because `DataUnit` entries may apear in any order in the `Config`,
-        but dependencies between them define a topological order in which objects
-        should be created, store them in a `TopologicalSet`.
+        but dependencies between them define a topological order in which
+        objects should be created, store them in a `TopologicalSet`.
 
         Parameters
         ----------
@@ -404,7 +404,8 @@ class DataUnitRegistry:
         config : `Config`
             The `dataUnits` component of a `SchemaConfig`.
         builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
+            When given, create `sqlalchemy.core.Table` entries for every
+            `DataUnit` table.
         """
         # Visit DataUnits in dependency order
         for dataUnitName in self._dataUnitNames:
@@ -480,7 +481,8 @@ class DataUnitRegistry:
         config : `SchemaConfig`
             Schema configuration describing `DataUnit` join relations.
         builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every `DataUnit` table.
+            When given, create `sqlalchemy.core.Table` entries for every
+            `DataUnit` table.
         """
         for dataUnitJoinName, dataUnitJoinDescription in config.items():
             table = None
