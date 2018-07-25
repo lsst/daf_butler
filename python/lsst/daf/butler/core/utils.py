@@ -326,8 +326,11 @@ def transactional(func):
     return inner
 
 
-def get_object_size(obj, seen=None):
+def getObjectSize(obj, seen=None):
     """Recursively finds size of objects.
+
+    Only works well for pure python objects. For example it does not work for
+    ``Exposure`` objects where all the content is behind getter methods.
 
     Parameters
     ----------
@@ -360,10 +363,11 @@ def get_object_size(obj, seen=None):
     # self-referential objects
     seen.add(obj_id)
     if isinstance(obj, dict):
-        size += sum([get_object_size(v, seen) for v in obj.values()])
-        size += sum([get_object_size(k, seen) for k in obj.keys()])
+        size += sum([getObjectSize(v, seen) for v in obj.values()])
+        size += sum([getObjectSize(k, seen) for k in obj.keys()])
     elif hasattr(obj, '__dict__'):
-        size += get_object_size(obj.__dict__, seen)
+        size += getObjectSize(obj.__dict__, seen)
     elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
-        size += sum([get_object_size(i, seen) for i in obj])
+        size += sum([getObjectSize(i, seen) for i in obj])
+
     return size

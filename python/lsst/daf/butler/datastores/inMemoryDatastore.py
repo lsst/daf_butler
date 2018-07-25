@@ -26,7 +26,7 @@ import logging
 
 from lsst.daf.butler.core.datastore import Datastore
 from lsst.daf.butler.core.storageClass import StorageClassFactory
-from lsst.daf.butler.core.utils import get_object_size
+from lsst.daf.butler.core.utils import getObjectSize
 from lsst.daf.butler.core.storageInfo import StorageInfo
 
 
@@ -291,7 +291,7 @@ class InMemoryDatastore(Datastore):
         # Currently this assumes we have a file so we need to use stub entries
         # TODO: Add to ephemeral part of registry
         checksum = str(id(inMemoryDataset))
-        size = get_object_size(inMemoryDataset)
+        size = getObjectSize(inMemoryDataset)
         info = StorageInfo(self.name, checksum, size)
         self.registry.addStorageInfo(ref, info)
 
