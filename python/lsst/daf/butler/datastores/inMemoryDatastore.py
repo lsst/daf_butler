@@ -93,6 +93,9 @@ class InMemoryDatastore(Datastore):
 
         # Storage of datasets, keyed by dataset_id
         self.datasets = {}
+
+        # Records is distinct in order to track concrete composite components
+        # where we register multiple components for a single dataset.
         self.records = {}
 
     @classmethod
@@ -236,7 +239,8 @@ class InMemoryDatastore(Datastore):
         storedItemInfo = self.getStoredItemInfo(ref)
         writeStorageClass = storedItemInfo.storageClass
 
-        # We might need a parent
+        # We might need a parent if we are being asked for a component
+        # of a concrete composite
         thisID = ref.id
         if storedItemInfo.parentID is not None:
             thisID = storedItemInfo.parentID
@@ -363,10 +367,6 @@ class InMemoryDatastore(Datastore):
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
 
-        Notes
-        -----
-        Some Datastores may implement this method as a silent no-op to
-        disable Dataset deletion through standard interfaces.
         """
         if ref.id not in self.datasets:
             raise FileNotFoundError("No such file dataset in memory: {}".format(ref))
