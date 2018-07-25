@@ -23,7 +23,6 @@
 
 import time
 import logging
-from collections import namedtuple
 
 from lsst.daf.butler.core.datastore import Datastore
 from lsst.daf.butler.core.storageClass import StorageClassFactory
@@ -82,9 +81,6 @@ class InMemoryDatastore(Datastore):
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
-
-    RecordTuple = namedtuple("InMemoryDatastoreRecord",
-                             ["timestamp", "storage_class"])
 
     def __init__(self, config, registry=None):
         super().__init__(config, registry)
