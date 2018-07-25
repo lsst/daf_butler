@@ -23,7 +23,7 @@ import unittest
 import os
 import contextlib
 
-from lsst.daf.butler import ConfigSubset
+from lsst.daf.butler import ConfigSubset, Config
 
 
 @contextlib.contextmanager
@@ -222,6 +222,14 @@ class ConfigSubsetTestCase(unittest.TestCase):
         self.assertEqual(c["help"], "class")
         self.assertEqual(c["help2"], "second")
         self.assertEqual(c["help3"], "third")
+
+    def testInclude(self):
+        """Read a config that has an include directive"""
+        c = Config(os.path.join(self.configDir, "testinclude.yaml"))
+        print(c.ppprint())
+        self.assertEqual(c["comp1.item1"], 58)
+        self.assertEqual(c["comp2.comp.item1"], 1)
+        self.assertEqual(c["comp3.1.comp.item1"], "posix")
 
 
 if __name__ == "__main__":

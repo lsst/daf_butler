@@ -1,0 +1,47 @@
+# Storage Classes used by tests
+storageClasses:
+  StructuredDataDictYaml:
+    pytype: dict
+  StructuredDataListYaml:
+    pytype: list
+  StructuredDataDictJson:
+    pytype: dict
+  StructuredDataListJson:
+    pytype: list
+  StructuredDataDictPickle:
+    pytype: dict
+  StructuredDataListPickle:
+    pytype: list
+  StructuredData: &StructuredData
+    # Data from a simple Python class
+    pytype: examplePythonTypes.MetricsExample
+    assembler: lsst.daf.butler.core.composites.CompositeAssemblerMonolithic
+    # Use YAML formatter by default
+    components:
+      # Components are those supported by get.
+      summary: StructuredDataDictYaml
+      output: StructuredDataDictYaml
+      data: StructuredDataListYaml
+  StructuredDataJson:
+    <<: *StructuredData
+  StructuredDataPickle:
+    <<: *StructuredData
+  StructuredComposite: &StructuredComposite
+    pytype: examplePythonTypes.MetricsExample
+    assembler: lsst.daf.butler.core.composites.CompositeAssembler
+    components:
+      summary: StructuredDataDictYaml
+      output: StructuredDataDictYaml
+      data: StructuredDataListYaml
+  StructuredCompositeTestA:
+    <<: *StructuredComposite
+    components:
+      summary: StructuredDataDictJson
+      output: StructuredDataDictJson
+      data: StructuredDataListJson
+  StructuredCompositeTestB:
+    <<: *StructuredComposite
+    components:
+      summary: StructuredDataDictPickle
+      output: StructuredDataDictJson
+      data: StructuredDataListYaml

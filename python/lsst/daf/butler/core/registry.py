@@ -76,7 +76,8 @@ class Registry(metaclass=ABCMeta):
     def fromConfig(registryConfig, schemaConfig=None, create=False):
         """Create `Registry` subclass instance from `config`.
 
-        Uses ``registry.cls`` from `config` to determine which subclass to instantiate.
+        Uses ``registry.cls`` from `config` to determine which subclass to
+        instantiate.
 
         Parameters
         ----------

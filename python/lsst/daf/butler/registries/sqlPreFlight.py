@@ -22,18 +22,19 @@
 __all__ = ("SqlPreFlight")
 
 import itertools
+import logging
 from sqlalchemy.sql import select, and_, text
 
-import lsst.log
 from lsst.sphgeom import Region
 from lsst.sphgeom.relationship import DISJOINT
 
 
-_LOG = lsst.log.Log.getLogger(__name__)
+_LOG = logging.getLogger(__name__)
 
 
 def _scanDataUnits(dataUnits):
-    """Recursively scan units and their optional dependencies, return their names"""
+    """Recursively scan units and their optional dependencies, return their
+    names"""
     for dataUnit in dataUnits:
         yield dataUnit.name
         yield from _scanDataUnits(dataUnit.optionalDependencies)
@@ -217,13 +218,14 @@ class SqlPreFlight:
         firstRegionIndex = None
         for dataUnitJoin in dataUnitJoins:
 
-            # TODO: do not know yet how to handle MultiCameraExposureJoin, skip it for now
+            # TODO: do not know yet how to handle MultiCameraExposureJoin,
+            # skip it for now
             if dataUnitJoin.lhs == dataUnitJoin.rhs:
                 continue
 
-            # Look at each side of the DataUnitJoin and join it with corresponding
-            # DataUnit tables, including making all necessary joins for special
-            # multi-DataUnit region table(s).
+            # Look at each side of the DataUnitJoin and join it with
+            # corresponding DataUnit tables, including making all necessary
+            # joins for special multi-DataUnit region table(s).
             for connection in (dataUnitJoin.lhs, dataUnitJoin.rhs):
                 regionHolder = self._schema.dataUnits.getRegionHolder(*connection)
                 if len(connection) > 1:
@@ -248,8 +250,9 @@ class SqlPreFlight:
                     _LOG.debug("  joining on column: %s", colName)
                     where.append(dataUnitJoin.table.c[colName] == regionHolder.table.c[colName])
 
-                # We also have to include regions from each side of the join into
-                # resultset so that we can filter-out non-overlapping regions.
+                # We also have to include regions from each side of the join
+                # into resultset so that we can filter-out non-overlapping
+                # regions.
                 firstRegionIndex = len(header)
                 selectColumns.append(regionHolder.regionColumn)
 

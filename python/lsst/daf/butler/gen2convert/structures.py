@@ -20,9 +20,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
+import logging
 from collections import defaultdict
-
-from lsst.log import Log
 
 __all__ = ("Gen2DatasetType", "Gen2Dataset", "Gen2Repo", "ConvertedRepo")
 
@@ -137,9 +136,9 @@ class Gen2Repo:
     def mapper(self):
         """Gen2 Mapper that organizes this repository (`obs.base.CameraMapper)."""
         if self._mapper is None:
-            mapperLog = Log.getLogger("CameraMapper")
-            mapperLogLevel = mapperLog.getLevel()
-            mapperLog.setLevel(mapperLog.ERROR)
+            mapperLog = logging.getLogger("CameraMapper")
+            mapperLogLevel = mapperLog.level
+            mapperLog.setLevel("ERROR")
             self._mapper = self.MapperClass(root=self.root)
             mapperLog.setLevel(mapperLogLevel)
         return self._mapper
@@ -151,7 +150,8 @@ class Gen2Repo:
 
     @property
     def MapperClass(self):
-        """Gen2 Mapper type responsible for organizing this repository (`type`)."""
+        """Gen2 Mapper type responsible for organizing this repository
+        (`type`)."""
         return self._MapperClass
 
     @property
@@ -177,7 +177,8 @@ class Gen2Repo:
 
     @property
     def datasets(self):
-        """Datasets found directly in this repository, not a parent (`defaultdict`).
+        """Datasets found directly in this repository, not a parent
+        (`defaultdict`).
 
         This is a two-level nested dictionary; outer keys are
         datasetType (`str`), inner keys are filePath (`str`), values are

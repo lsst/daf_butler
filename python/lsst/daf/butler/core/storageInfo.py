@@ -39,6 +39,10 @@ class StorageInfo:
     __eq__ = slotValuesAreEqual
     __slots__ = ("_datastoreName", "_checksum", "_size")
 
+    def __str__(self):
+        return "StorageInfo(checksum={}, size={}, datastoreName={})".format(self.checksum, self.size,
+                                                                            self.datastoreName)
+
     def __init__(self, datastoreName, checksum=None, size=None):
         assert isinstance(datastoreName, str)
         self._datastoreName = datastoreName

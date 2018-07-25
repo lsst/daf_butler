@@ -25,9 +25,9 @@ Support for generic data stores.
 
 import contextlib
 from collections import namedtuple
+import logging
 
 from lsst.daf.butler.core.utils import doImport
-from lsst.log import Log
 
 from abc import ABCMeta, abstractmethod
 from .config import ConfigSubset
@@ -65,13 +65,13 @@ class DatastoreTransaction:
 
         Parameters
         ----------
-        `name` : str
+        name : `str`
             Name of the event.
-        `undoFunc` : func
+        undoFunc : func
             Function to undo this event.
-        `*args` : tuple
+        args : `tuple`
             Positional arguments to `undoFunc`.
-        `**kwargs` : dict
+        kwargs : `dict`
             Keyword arguments to `undoFunc`.
         """
         self._log.append(self.Event(name, undoFunc, args, kwargs))
@@ -85,7 +85,7 @@ class DatastoreTransaction:
                 undoFunc(*args, **kwargs)
             except BaseException as e:
                 # Deliberately swallow error that may occur in unrolling
-                log = Log.getLogger("lsst.daf.butler.datastore.DatastoreTransaction")
+                log = logging.getLogger(__name__)
                 log.debug("Exception: %s caught while unrolling: %s", e, name)
                 pass
 
@@ -96,7 +96,8 @@ class DatastoreTransaction:
             # Just forget about the events, they have already happened.
             return
         else:
-            # We may still want to events from this transaction as part of the parent.
+            # We may still want to events from this transaction as part of
+            # the parent.
             self.parent._log.extend(self._log)
 
 

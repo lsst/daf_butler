@@ -1,0 +1,2 @@
+datastore:
+  cls: lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore

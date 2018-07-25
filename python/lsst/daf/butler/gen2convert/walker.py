@@ -21,12 +21,12 @@
 
 import os
 import pickle
-
+import logging
 import yaml
 
 # register YAML loader for repositoryCfg.yaml files.
 import lsst.daf.persistence.repositoryCfg   # noqa F401
-from lsst.log import Log
+
 from lsst.afw.image import readMetadata
 
 from ..core import Config
@@ -84,13 +84,13 @@ class ConversionWalker:
         `self.found` and their `.parents` and `.MapperClass` attributes
         populated.
 
-        Returns `None` if the path does not appear to be the root of a Gen2 Data
-        Repository.
+        Returns `None` if the path does not appear to be the root of a Gen2
+        Data Repository.
 
         Returns `True` if the path does appear to be a Gen2 Data Repository but
         it is in `self.ignored`.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         root = os.path.abspath(root)
         repo = self.found.get(root, None)
         if repo is not None:
@@ -170,7 +170,7 @@ class ConversionWalker:
         its `datasetTypes`, `datasets`, and `unrecognized` attributes will be
         populated.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         assert(repo.root in self.found)
         assert(repo.root not in self.ignored)
         # Short-circuit if we've already scanned this path.
@@ -245,7 +245,8 @@ class ConversionWalker:
 
     @property
     def skyMaps(self):
-        """All SkyMaps found in any repository (`dict` of `{sha1: BaseSkyMap}`).
+        """All SkyMaps found in any repository
+        (`dict` of `{sha1: BaseSkyMap}`).
 
         The SkyMaps here are a superset of those actually used by scanned
         Datasets; some may be used by Datasets in data repositories that were
@@ -266,9 +267,9 @@ class ConversionWalker:
         found in any repository (`dict`, nested).
 
         This is a nested dictionary, with mapper class names as outer keys and
-        the inner keys a tuple of mapper-specific data ID values determined from
-        configuration.  Values are a tuple of `(lsst.afw.image.VisitInfo, str)`,
-        with the latter a Gen2 filter name.
+        the inner keys a tuple of mapper-specific data ID values determined
+        from configuration.  Values are a tuple of `(lsst.afw.image.VisitInfo,
+        str)`, with the latter a Gen2 filter name.
         """
         return self._visitInfo
 
@@ -283,7 +284,8 @@ class ConversionWalker:
         Raises
         ------
         ValueError
-            Raisedif this is there is no single MapperClass used by all parents.
+            Raisedif this is there is no single MapperClass used by all
+            parents.
         """
         if repo.MapperClass is None:
             parentMapperClasses = set(type(p.MapperClass) for p in repo.parents)
@@ -300,7 +302,7 @@ class ConversionWalker:
 
         Assumes all parent repository objects have been fully initialized.
         """
-        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        log = logging.getLogger("lsst.daf.butler.gen2convert")
         for datasetTypeName, mapping in repo.mapper.mappings.items():
             if not datasetTypeName.endswith("_skyMap"):
                 continue

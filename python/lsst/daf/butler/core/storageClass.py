@@ -54,13 +54,14 @@ class StorageClass:
         self.name = name
         self._pytypeName = pytype
         self._components = components if components is not None else {}
-        # if the assembler is not None also set it and clear the default assembler
+        # if the assembler is not None also set it and clear the default
+        # assembler
         if assembler is not None:
             self._assemblerClassName = assembler
             self._assembler = None
         else:
-            # We set a default assembler so that a class is guaranteed to support
-            # something.
+            # We set a default assembler so that a class is guaranteed to
+            # support something.
             self._assemblerClassName = None
             self._assembler = CompositeAssembler
         # The types are created on demand and cached
@@ -131,6 +132,13 @@ class StorageClass:
 
     def __hash__(self):
         return hash(self.name)
+
+    def __repr__(self):
+        components = list(self.components.keys() if self.components else "[]")
+        return "{}({}, pytype={}, components={})".format(type(self).__qualname__,
+                                                         self.name,
+                                                         self.pytype,
+                                                         components)
 
 
 class StorageClassFactory(metaclass=Singleton):

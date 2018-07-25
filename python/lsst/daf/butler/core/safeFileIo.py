@@ -28,7 +28,7 @@ import fcntl
 import filecmp
 import os
 import tempfile
-from lsst.log import Log
+import logging
 
 __all__ = ("DoNotWrite",
            "safeMakeDir",
@@ -58,11 +58,12 @@ def safeMakeDir(directory):
 
 def setFileMode(filename):
     """Set a file mode according to the user's umask"""
-    # Get the current umask, which we can only do by setting it and then reverting to the original.
+    # Get the current umask, which we can only do by setting it and then
+    # reverting to the original.
     umask = os.umask(0o077)
     os.umask(umask)
-    # chmod the new file to match what it would have been if it hadn't started life as a temporary
-    # file (which have more restricted permissions).
+    # chmod the new file to match what it would have been if it hadn't started
+    # life as a temporary file (which have more restricted permissions).
     os.chmod(filename, (~umask & 0o666))
 
 
@@ -72,13 +73,15 @@ class FileForWriteOnceCompareSameFailure(RuntimeError):
 
 @contextmanager
 def FileForWriteOnceCompareSame(name):
-    """Context manager to get a file that can be written only once and all other writes will succeed only if
-    they match the initial write.
+    """Context manager to get a file that can be written only once and all
+    other writes will succeed only if they match the initial write.
 
-    The context manager provides a temporary file object. After the user is done, the temporary file becomes
-    the permanent file if the file at name does not already exist. If the file at name does exist the
-    temporary file is compared to the file at name. If they are the same then this is good and the temp file
-    is silently thrown away. If they are not the same then a runtime error is raised.
+    The context manager provides a temporary file object. After the user is
+    done, the temporary file becomes the permanent file if the file at name
+    does not already exist. If the file at name does exist the temporary file
+    is compared to the file at name. If they are the same then this is good
+    and the temp file is silently thrown away. If they are not the same then
+    a runtime error is raised.
     """
     outDir, outName = os.path.split(name)
     safeMakeDir(outDir)
@@ -88,14 +91,16 @@ def FileForWriteOnceCompareSame(name):
     finally:
         try:
             temp.close()
-            # If the symlink cannot be created then it will raise. If it can't be created because a file at
-            # 'name' already exists then we'll do a compare-same check.
+            # If the symlink cannot be created then it will raise. If it can't
+            # be created because a file at 'name' already exists then we'll
+            # do a compare-same check.
             os.symlink(temp.name, name)
-            # If the symlink was created then this is the process that created the first instance of the
-            # file, and we know its contents match. Move the temp file over the symlink.
+            # If the symlink was created then this is the process that created
+            # the first instance of the file, and we know its contents match.
+            # Move the temp file over the symlink.
             os.rename(temp.name, name)
-            # At this point, we know the file has just been created. Set permissions according to the
-            # current umask.
+            # At this point, we know the file has just been created. Set
+            # permissions according to the current umask.
             setFileMode(name)
         except OSError as e:
             if e.errno != errno.EEXIST:
@@ -103,11 +108,13 @@ def FileForWriteOnceCompareSame(name):
             filesMatch = filecmp.cmp(temp.name, name, shallow=False)
             os.remove(temp.name)
             if filesMatch:
-                # if the files match then the compare-same check succeeded and we can silently return.
+                # if the files match then the compare-same check succeeded and
+                # we can silently return.
                 return
             else:
-                # if the files do not match then the calling code was trying to write a non-matching file over
-                # the previous file, maybe it's a race condition? In any event, raise a runtime error.
+                # if the files do not match then the calling code was trying
+                # to write a non-matching file over the previous file, maybe
+                # it's a race condition? In any event, raise a runtime error.
                 raise FileForWriteOnceCompareSameFailure("Written file does not match existing file.")
 
 
@@ -115,9 +122,9 @@ def FileForWriteOnceCompareSame(name):
 def SafeFile(name):
     """Context manager to create a file in a manner avoiding race conditions
 
-    The context manager provides a temporary file object. After the user is done,
-    we move that file into the desired place and close the fd to avoid resource
-    leakage.
+    The context manager provides a temporary file object. After the user is
+    done, we move that file into the desired place and close the fd to avoid
+    resource leakage.
     """
     outDir, outName = os.path.split(name)
     safeMakeDir(outDir)
@@ -135,11 +142,12 @@ def SafeFile(name):
 
 @contextmanager
 def SafeFilename(name):
-    """Context manager for creating a file in a manner avoiding race conditions
+    """Context manager for creating a file in a manner avoiding race
+    conditions.
 
-    The context manager provides a temporary filename with no open file descriptors
-    (as this can cause trouble on some systems). After the user is done, we move the
-    file into the desired place.
+    The context manager provides a temporary filename with no open file
+    descriptors (as this can cause trouble on some systems). After the user is
+    done, we move the file into the desired place.
     """
     outDir, outName = os.path.split(name)
     safeMakeDir(outDir)
@@ -155,9 +163,11 @@ def SafeFilename(name):
 
 @contextmanager
 def SafeLockedFileForRead(name):
-    """Context manager for reading a file that may be locked with an exclusive lock via
-    SafeLockedFileForWrite. This will first acquire a shared lock before returning the file. When the file is
-    closed the shared lock will be unlocked.
+    """Context manager for reading a file that may be locked with an exclusive
+    lock via SafeLockedFileForWrite.
+
+    This will first acquire a shared lock before returning the file. When
+    the file is closed the shared lock will be unlocked.
 
     Parameters
     ----------
@@ -169,7 +179,7 @@ def SafeLockedFileForRead(name):
     file object
         The file to be read from.
     """
-    log = Log.getLogger("daf.butler")
+    log = logging.getLogger("daf.butler")
     try:
         with open(name, 'r') as f:
             log.debug("Acquiring shared lock on {}".format(name))
@@ -181,17 +191,20 @@ def SafeLockedFileForRead(name):
 
 
 class SafeLockedFileForWrite:
-    """File-like object that is used to create a file if needed, lock it with an exclusive lock, and contain
-    file descriptors to readable and writable versions of the file.
+    """File-like object that is used to create a file if needed, lock it with
+    an exclusive lock, and contain file descriptors to readable and writable
+    versions of the file.
 
-    This will only open a file descriptor in 'write' mode if a write operation is performed. If no write
-    operation is performed, the existing file (if there is one) will not be overwritten.
+    This will only open a file descriptor in 'write' mode if a write operation
+    is performed. If no write operation is performed, the existing file (if
+    there is one) will not be overwritten.
 
-    Contains __enter__ and __exit__ functions so this can be used by a context manager.
+    Contains __enter__ and __exit__ functions so this can be used by a
+    context manager.
     """
 
     def __init__(self, name):
-        self.log = Log.getLogger("daf.butler")
+        self.log = logging.getLogger("daf.butler")
         self.name = name
         self._readable = None
         self._writeable = None

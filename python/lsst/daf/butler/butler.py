@@ -57,8 +57,8 @@ class Butler:
     config : `Config`
         Configuration.
     collection : `str`, optional
-        Collection to use for all input lookups, overriding config['collection']
-        if provided.
+        Collection to use for all input lookups, overriding
+        config['collection'] if provided.
     run : `str`, `Run`, optional
         Collection associated with the `Run` to use for outputs, overriding
         config['run'].  If a `Run` associated with the given Collection does
@@ -243,8 +243,9 @@ class Butler:
     def getDirect(self, ref):
         """Retrieve a stored dataset.
 
-        Unlike `Butler.get`, this method allows datasets outside the Butler's collection to be read as
-        long as the `DatasetRef` that identifies them can be obtained separately.
+        Unlike `Butler.get`, this method allows datasets outside the Butler's
+        collection to be read as long as the `DatasetRef` that identifies them
+        can be obtained separately.
 
         Parameters
         ----------
@@ -279,8 +280,8 @@ class Butler:
         datasetType : `DatasetType` instance or `str`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
-            within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the
+            `DatasetRef` within a Collection.
 
         Returns
         -------
@@ -299,8 +300,8 @@ class Butler:
         datasetType : `DatasetType` instance or `str`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
-            within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the
+            `DatasetRef` within a Collection.
         predict : `bool`
             If `True`, allow URIs to be returned of datasets that have not
             been written.
@@ -310,8 +311,8 @@ class Butler:
         uri : `str`
             URI string pointing to the Dataset within the datastore. If the
             Dataset does not exist in the datastore, and if ``predict`` is
-            `True`, the URI will be a prediction and will include a URI fragment
-            "#predicted".
+            `True`, the URI will be a prediction and will include a URI
+            fragment "#predicted".
             If the datastore does not have entities that relate well
             to the concept of a URI the returned URI string will be
             descriptive. The returned URI is not guaranteed to be obtainable.
@@ -334,8 +335,8 @@ class Butler:
         datasetType : `DatasetType` instance or `str`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
-            within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the
+            `DatasetRef` within a Collection.
 
         Raises
         ------

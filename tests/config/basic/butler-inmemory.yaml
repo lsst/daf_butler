@@ -1,3 +1,3 @@
 run: ingest
-datastore: !include posixDatastore.yaml
+datastore: !include inMemoryDatastore.yaml
 storageClasses: !include storageClasses.yaml
