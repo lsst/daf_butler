@@ -104,7 +104,7 @@ class DatastoreTransaction:
             except BaseException as e:
                 # Deliberately swallow error that may occur in unrolling
                 log = logging.getLogger(__name__)
-                log.debug("Exception: %s caught while unrolling: %s", e, name)
+                log.warn("Exception: %s caught while unrolling: %s", e, name)
                 pass
 
     def commit(self):
