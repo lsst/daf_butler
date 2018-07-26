@@ -412,6 +412,13 @@ class PosixDatastore(Datastore):
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.
 
+        .. warning::
+
+            This method does not support transactions; removals are
+            immediate, cannot be undone, and are not guaranteed to
+            be atomic if deleting either the file or the internal
+            database records fails.
+
         Parameters
         ----------
         ref : `DatasetRef`
