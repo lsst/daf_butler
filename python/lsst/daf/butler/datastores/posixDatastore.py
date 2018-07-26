@@ -421,11 +421,6 @@ class PosixDatastore(Datastore):
         ------
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
-
-        Notes
-        -----
-        Some Datastores may implement this method as a silent no-op to
-        disable Dataset deletion through standard interfaces.
         """
         # Get file metadata and internal metadata
 
