@@ -440,6 +440,12 @@ class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
         return self.datastoreType(config=self.config, registry=self.registry)
 
 
+class ChainedDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
+    uriScheme = "mem:"
+
+
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
 

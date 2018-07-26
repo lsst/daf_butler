@@ -18,6 +18,7 @@ Example Datastores
 
 .. automodapi:: lsst.daf.butler.datastores.posixDatastore
 .. automodapi:: lsst.daf.butler.datastores.inMemoryDatastore
+.. automodapi:: lsst.daf.butler.datastores.chainedDatastore
 
 Example Registries
 ==================
