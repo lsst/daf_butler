@@ -25,6 +25,11 @@ import importlib
 from collections import namedtuple
 
 
+__all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
+           "getFullTypeName", "doImport", "getInstanceOf", "Singleton",
+           "TopologicalSet", "transactional", "getObjectSize")
+
+
 def iterable(a):
     """Make input iterable.
 
