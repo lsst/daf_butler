@@ -38,15 +38,15 @@ class DummyRegistry:
         if ref.id is None or ref.id == 0:
             ref._id = self._counter
             incrementCounter = False
-        self._entries[ref.id] = storageInfo
+        self._entries[(storageInfo.datastoreName, ref.id)] = storageInfo
         if incrementCounter:
             self._counter += 1
 
     def getStorageInfo(self, ref, datastoreName):
-        return self._entries[ref.id]
+        return self._entries[(datastoreName, ref.id)]
 
     def removeStorageInfo(self, datastoreName, ref):
-        del self._entries[ref.id]
+        del self._entries[(datastoreName, ref.id)]
 
     def makeDatabaseDict(self, table, types, key, value):
         return dict()
