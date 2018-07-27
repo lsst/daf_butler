@@ -242,15 +242,31 @@ class Config(_ConfigBase):
             self.update(d)
         data = self.data
         for key in keys:
-            data = data.setdefault(key, {})
-        data[last] = value
+            # data could be a list
+            if isinstance(data, collections.Sequence):
+                data = data[int(key)]
+            else:
+                data = data.setdefault(key, {})
+        try:
+            data[last] = value
+        except TypeError:
+            data[int(last)] = value
 
     def __contains__(self, key):
         d = self.data
         keys = key.split('.')
         last = keys.pop()
         for k in keys:
-            if k in d:
+            if isinstance(d, collections.Sequence):
+                # Check sequence first because for lists
+                # __contains__ checks whether value is found in list
+                # not whether the index exists in list. When we traverse
+                # the hierarchy we are interested in the index.
+                try:
+                    d = d[int(k)]
+                except IndexError:
+                    return False
+            elif k in d:
                 d = d[k]
             else:
                 return False
@@ -280,9 +296,19 @@ class Config(_ConfigBase):
                         r = doUpdate(d.get(k, {}), v)
                         d[k] = r
                     else:
-                        d[k] = u[k]
+                        d[k] = v
                 else:
-                    d = {k: u[k]}
+                    if isinstance(d, collections.Sequence):
+                        try:
+                            intk = int(k)
+                        except ValueError:
+                            # This will overwrite the entire sequence
+                            d = {k: v}
+                        else:
+                            r = doUpdate(d[intk], v)
+                            d[intk] = r
+                    else:
+                        d = {k: v}
             return d
         doUpdate(self.data, other)
 
