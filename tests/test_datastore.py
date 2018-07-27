@@ -21,6 +21,8 @@
 
 import os
 import unittest
+import shutil
+import tempfile
 
 import lsst.utils.tests
 
@@ -70,6 +72,7 @@ class DatastoreTests(DatasetTestHelper):
         cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
+        super().setUp()
         self.registry = DummyRegistry()
 
         # Need to keep ID for each datasetRef since we have no butler
@@ -77,12 +80,12 @@ class DatastoreTests(DatasetTestHelper):
         self.id = 1
 
     def testConstructor(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
 
         # Create multiple storage classes for testing different formulations
         storageClasses = [self.storageClassFactory.getStorageClass(sc)
@@ -136,7 +139,7 @@ class DatastoreTests(DatasetTestHelper):
 
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
 
         # Create multiple storage classes for testing different formulations
         # of composites
@@ -174,7 +177,7 @@ class DatastoreTests(DatasetTestHelper):
 
     def testRemove(self):
         metrics = makeExampleMetrics()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 638, "filter": "U"}
@@ -215,13 +218,8 @@ class DatastoreTests(DatasetTestHelper):
         sc = self.storageClassFactory.getStorageClass("StructuredData")
         ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
 
-        inputConfig = DatastoreConfig(self.configFile)
-        inputConfig['root'] = os.path.join(TESTDIR, "./test_input_datastore")
-        inputDatastore = self.datastoreType(config=inputConfig, registry=self.registry)
-        outputConfig = inputConfig.copy()
-        outputConfig['root'] = os.path.join(TESTDIR, "./test_output_datastore")
-        outputDatastore = self.datastoreType(config=outputConfig,
-                                             registry=DummyRegistry())
+        inputDatastore = self.makeDatastore("test_input_datastore")
+        outputDatastore = self.makeDatastore("test_output_datastore")
 
         inputDatastore.put(metrics, ref)
         outputDatastore.transfer(inputDatastore, ref)
@@ -230,7 +228,7 @@ class DatastoreTests(DatasetTestHelper):
         self.assertEqual(metrics, metricsOut)
 
     def testBasicTransaction(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dataUnits = frozenset(("visit", "filter"))
         nDatasets = 6
@@ -269,7 +267,7 @@ class DatastoreTests(DatasetTestHelper):
                 datastore.getUri(ref)
 
     def testNestedTransaction(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dataUnits = frozenset(("visit", "filter"))
         metrics = makeExampleMetrics()
@@ -306,11 +304,54 @@ class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
 
+    def setUp(self):
+        super().setUp()
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.config = DatastoreConfig(self.configFile)
+        self.config["root"] = self.root
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def makeDatastore(self, sub=None):
+        """Make a new Datastore instance of the appropriate type.
+
+        Parameters
+        ----------
+        sub : str, optional
+            If not None, the returned Datastore will be distinct from any
+            Datastore constructed with a different value of sub.  For
+            PosixDatastore only, the converse is also true, and `sub` is
+            used as a subdirectory to form the new root.
+        """
+        config = self.config.copy()
+        if sub is not None:
+            config["root"] = os.path.join(self.root, sub)
+        return self.datastoreType(config=config, registry=self.registry)
+
 
 class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
     uriScheme = "mem:"
+
+    def setUp(self):
+        super().setUp()
+        self.config = DatastoreConfig(self.configFile)
+
+    def makeDatastore(self, sub=None):
+        """
+        Make a new Datastore instance of the appropriate type.
+
+        Parameters
+        ----------
+        sub : str, optional
+            If not None, the returned Datastore will be distinct from any
+            Datastore constructed with a different value of sub.  For
+            InMemoryDatastore only, this parameter is ignored - different
+            datastores are *always* distinct.
+        """
+        return self.datastoreType(config=self.config, registry=self.registry)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
