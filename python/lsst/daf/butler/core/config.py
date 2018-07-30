@@ -432,6 +432,66 @@ class Config(_ConfigBase):
         with open(path, 'w') as f:
             self.dump(f)
 
+    @staticmethod
+    def overrideConfigParameters(configType, config, full, toupdate=None, tocopy=None):
+            """Generic helper function for overriding specific config parameters
+
+            Allows for named parameters to be set to new values in bulk, and
+            for other values to be set by copying from a reference config.
+
+            Parameters
+            ----------
+            configType : `ConfigSubset`
+                Config type to use to extract relevant items from ``config``.
+            config : `Config`
+                A `Config` to update. Only the subset understood by
+                the supplied `ConfigSubset` will be modified. Default values
+                will not be inserted and the content will not be validated
+                since mandatory keys are allowed to be missing until
+                populated later by merging.
+            full : `Config`
+                A complete config with all defaults expanded that can be
+                converted to a ``configType``. Read-only and will not be
+                modified by this method. Values are read from here if
+                ``tocopy`` is defined.
+
+                Repository-specific options that should not be obtained
+                from defaults when Butler instances are constructed
+                should be copied from `full` to `Config`.
+            toupdate : `dict`, optional
+                A `dict` defining the keys to update and the new value to use.
+                The keys and values can be any supported by `Config`
+                assignment.
+            tocopy : `tuple`, optional
+                `tuple` of keys whose values should be copied from ``full``
+                into ``config``.
+
+            Raises
+            ------
+            ValueError
+                Neither ``toupdate`` not ``tocopy`` were defined.
+            """
+            if toupdate is None and tocopy is None:
+                raise ValueError("One of toupdate or tocopy parameters must be set.")
+
+            # Extract the part of the config we wish to update
+            localConfig = configType(config, mergeDefaults=False, validate=False)
+
+            if toupdate:
+                for key, value in toupdate.items():
+                    localConfig[key] = value
+
+            if tocopy:
+                localFullConfig = configType(full, mergeDefaults=False)
+                for key in tocopy:
+                    localConfig[key] = localFullConfig[key]
+
+            # Reattach to parent
+            if configType.component in config:
+                config[configType.component] = localConfig
+            else:
+                config.update(localConfig)
+
 
 class ConfigSubset(Config):
     """Config representing a subset of a more general configuration.
