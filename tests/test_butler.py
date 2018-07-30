@@ -34,7 +34,7 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from examplePythonTypes import MetricsExample
 
-TESTDIR = os.path.dirname(__file__)
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def makeExampleMetrics():
@@ -266,6 +266,11 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
 class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """InMemoryDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+
+
+class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

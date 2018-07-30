@@ -101,6 +101,11 @@ class InMemoryDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
 
 
+class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+
+
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
 
