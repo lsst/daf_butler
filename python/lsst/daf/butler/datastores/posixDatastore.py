@@ -26,9 +26,10 @@ import shutil
 import hashlib
 from collections import namedtuple
 
+from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.datastore import Datastore
-from lsst.daf.butler.core.datastore import DatastoreConfig  # noqa F401
+from lsst.daf.butler.core.datastore import DatastoreConfig
 from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
@@ -93,17 +94,20 @@ class PosixDatastore(Datastore):
         root : `str`
             Filesystem path to the root of the data repository.
         config : `Config`
-            A Butler-level config object to update (but not a
-            `ButlerConfig`, to avoid included expanded defaults).
-        full : `ButlerConfig`
-            A complete Butler config with all defaults expanded;
-            repository-specific options that should not be obtained
+            A `Config` to update. Only the subset understood by
+            this component will be updated. Will not expand
+            defaults.
+        full : `Config`
+            A complete config with all defaults expanded that can be
+            converted to a `DatastoreConfig`. Read-only and will not be
+            modified by this method.
+            Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
-        config["datastore.root"] = root
-        for key in ("datastore.cls", "datastore.records.table"):
-            config[key] = full[key]
+        Config.overrideConfigParameters(DatastoreConfig, config, full,
+                                        toupdate={"root": root},
+                                        tocopy=("cls", "records.table"))
 
     def __init__(self, config, registry):
         super().__init__(config, registry)

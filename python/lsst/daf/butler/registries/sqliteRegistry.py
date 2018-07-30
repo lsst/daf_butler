@@ -26,6 +26,9 @@ from sqlalchemy import event
 
 from sqlite3 import Connection as SQLite3Connection
 
+from lsst.daf.butler.core.config import Config
+from lsst.daf.butler.core.registry import RegistryConfig
+
 from .sqlRegistry import SqlRegistry
 
 __all__ = ("SqliteRegistry", )
@@ -66,9 +69,9 @@ class SqliteRegistry(SqlRegistry):
             should be copied from `full` to `Config`.
         """
         super().setConfigRoot(root, config, full)
-        config["registry.db"] = "sqlite:///{}/gen3.sqlite3".format(root)
-        for key in ("registry.cls",):
-            config[key] = full[key]
+        Config.overrideConfigParameters(RegistryConfig, config, full,
+                                        toupdate={"db": "sqlite:///{}/gen3.sqlite3".format(root)},
+                                        tocopy=("cls", ))
 
     def __init__(self, registryConfig, schemaConfig, create=False):
         if ':memory:' in registryConfig.get('db', ''):

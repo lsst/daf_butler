@@ -153,11 +153,14 @@ class Datastore(metaclass=ABCMeta):
         root : `str`
             Filesystem path to the root of the data repository.
         config : `Config`
-            A Butler-level config object to update (but not a
-            `ButlerConfig`, to avoid included expanded defaults).
-        full : `ButlerConfig`
-            A complete Butler config with all defaults expanded;
-            repository-specific options that should not be obtained
+            A `Config` to update. Only the subset understood by
+            this component will be updated. Will not expand
+            defaults.
+        full : `Config`
+            A complete config with all defaults expanded that can be
+            converted to a `DatastoreConfig`. Read-only and will not be
+            modified by this method.
+            Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
