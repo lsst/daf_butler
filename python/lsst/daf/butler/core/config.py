@@ -567,6 +567,9 @@ class ConfigSubset(Config):
         # Default files read to create this configuration
         self.filesRead = []
 
+        # Assume we are not looking up child configurations
+        containerKey = None
+
         # Sometimes we do not want to merge with defaults.
         if mergeDefaults:
 
@@ -603,9 +606,24 @@ class ConfigSubset(Config):
                 if defaultsFile is not None:
                     self._updateWithConfigsFromPath(fullSearchPath, defaultsFile)
 
+                # Get the container key in case we need it
+                try:
+                    containerKey = cls.containerKey
+                except AttributeError:
+                    pass
+
         # Now update this object with the external values so that the external
         # values always override the defaults
         self.update(externalConfig)
+
+        # If this configuration has child configurations of the same
+        # config class, we need to expand those defaults as well.
+
+        if mergeDefaults and containerKey is not None and containerKey in self:
+            for idx, subConfig in enumerate(self[containerKey]):
+                self[f"{containerKey}.{idx}"] = type(self)(other=subConfig, validate=validate,
+                                                           mergeDefaults=mergeDefaults,
+                                                           searchPaths=searchPaths)
 
         if validate:
             self.validate()

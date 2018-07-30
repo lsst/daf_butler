@@ -142,6 +142,11 @@ class Datastore(metaclass=ABCMeta):
     absolute path. Can be None if no defaults specified.
     """
 
+    containerKey = None
+    """Name of the key containing a list of subconfigurations that also
+    need to be merged with defaults and may use different Python types
+    (but the same config class). Assumed to be a list of configs."""
+
     @classmethod
     @abstractmethod
     def setConfigRoot(cls, root, config, full):
