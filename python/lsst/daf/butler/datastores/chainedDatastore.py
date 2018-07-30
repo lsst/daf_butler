@@ -64,6 +64,9 @@ class ChainedDatastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
+    containerKey = "datastores"
+    """Key to specify where child datastores are configured."""
+
     @classmethod
     def setConfigRoot(cls, root, config, full):
         """Set any filesystem-dependent config options for child Datastores to
@@ -74,17 +77,49 @@ class ChainedDatastore(Datastore):
         root : `str`
             Filesystem path to the root of the data repository.
         config : `Config`
-            A Butler-level config object to update (but not a
-            `ButlerConfig`, to avoid included expanded defaults).
-        full : `ButlerConfig`
-            A complete Butler config with all defaults expanded;
-            repository-specific options that should not be obtained
+            A `Config` to update. Only the subset understood by
+            this component will be updated. Will not expand
+            defaults.
+        full : `Config`
+            A complete config with all defaults expanded that can be
+            converted to a `DatastoreConfig`. Read-only and will not be
+            modified by this method.
+            Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
-        # Idea is that this could look at the child datastore configurations
-        # and update them using the supplied root and a subdirectory based
-        # on the datastore or index into chained datastore.
+
+        # Extract the part of the config we care about updating
+        datastoreConfig = DatastoreConfig(config, mergeDefaults=False)
+
+        # And the subset of the full config that we can use for reference.
+        # Do not bother with defaults because we are told this already has
+        # them.
+        fullDatastoreConfig = DatastoreConfig(full, mergeDefaults=False)
+
+        # Loop over each datastore config and pass the subsets to the
+        # child datastores to process.
+
+        containerKey = cls.containerKey
+        for idx, (child, fullChild) in enumerate(zip(datastoreConfig[containerKey],
+                                                     fullDatastoreConfig[containerKey])):
+            childConfig = DatastoreConfig(child, mergeDefaults=False)
+            fullChildConfig = DatastoreConfig(fullChild, mergeDefaults=False)
+            datastoreClass = doImport(fullChildConfig["cls"])
+            newroot = "{}/{}_{}".format(root, datastoreClass.__qualname__, idx)
+            datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig)
+
+            # Reattach to parent
+            datastoreConfig[f"{containerKey}.{idx}"] = childConfig
+
+        # Reattach modified datastore config to parent
+        # If this has a datastore key we attach there, otherwise we assume
+        # this information goes at the top of the config hierarchy.
+        if DatastoreConfig.component in config:
+            config[DatastoreConfig.component] = datastoreConfig
+        else:
+            config.update(datastoreConfig)
+
         return
 
     def __init__(self, config, registry=None):
