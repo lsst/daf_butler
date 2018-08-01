@@ -196,7 +196,6 @@ class Butler:
         ----------
         obj : `object`
             The dataset.
-<<<<<<< HEAD
         datasetRefOrType : `DatasetRef`, `DatasetType` instance or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
@@ -204,13 +203,6 @@ class Butler:
             An identifier with `DataUnit` names and values.
             When `None` a `DatasetRef` should be supplied as the second
             argument.
-=======
-        datasetType : `DatasetType` instance or `str`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
->>>>>>> Consistent docstring for DataId.
         producer : `Quantum`, optional
             The producer.
 
@@ -304,15 +296,10 @@ class Butler:
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
         dataId : `dict`
-<<<<<<< HEAD
-            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            A `dict` of `DataUnit` link name, value pairs that label the `DatasetRef`
             within a Collection.
             When `None` a `DatasetRef` should be supplied as the second
             argument.
-=======
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
->>>>>>> Consistent docstring for DataId.
 
         Returns
         -------
