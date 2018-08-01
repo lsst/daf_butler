@@ -233,7 +233,7 @@ class SqlRegistry(Registry):
         datasetType : `str`
             Name of a `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
+            A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a Collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
@@ -935,7 +935,7 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
+            A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a Collection.
 
         Raises
@@ -962,7 +962,7 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
+            A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a Collection.
 
         Returns

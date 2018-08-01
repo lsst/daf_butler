@@ -152,7 +152,8 @@ class DataUnit:
         Parameters
         ----------
         dataId : `dict`
-            A `dict` of `DataUnit` column name, value pairs.
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a Collection.
 
         Raises
         ------
