@@ -51,19 +51,20 @@ class DataUnit:
     table : `sqlalchemy.core.Table`, optional
         When not ``None`` the primary table entry corresponding to this
         `DataUnit`.
-    regionColumn : `str`, optional
-        Name of the column with encoded region specification, only for tables
-        which define region column in their schema.
+    spatial : `bool`, optional
+        Is this a spatial `DataUnit`? If so then it either has a ``region``
+        column, or some other way to get a region (e.g. ``SkyPix``).
     """
+
     def __init__(self, name, requiredDependencies, optionalDependencies,
-                 link=(), table=None, regionColumn=None):
+                 link=(), table=None, spatial=False):
         self._name = name
         self._requiredDependencies = frozenset(requiredDependencies)
         self._optionalDependencies = frozenset(optionalDependencies)
         self._table = table
         self._link = link
         self._primaryKey = None
-        self._regionColumn = regionColumn
+        self._spatial = spatial
 
     def __repr__(self):
         return "DataUnit({})".format(self.name)
@@ -142,9 +143,15 @@ class DataUnit:
         ``None`` if table has no region column.
         """
         table = self.table
-        if table is not None and self._regionColumn is not None:
-            return table.c[self._regionColumn]
+        if table is not None and self.spatial:
+            return table.c["region"]
         return None
+
+    @property
+    def spatial(self):
+        """Is this a spatial `DataUnitRegion`?
+        """
+        return self._spatial
 
     def validateId(self, dataId):
         """Check if given dataId is valid.
@@ -240,15 +247,16 @@ class DataUnitRegion:
         Names of the DataUnits in this relationship.
     table : `sqlalchemy.Table`, optional
         The table to be used for queries.
-    regionColumn : `str`, optional
-        Name of the column with encoded region specification, only makes
-        sense when ``table`` is not ``None``.
+    spatial : `bool`, optional
+        Is this a spatial `DataUnit`? If so then it either has a ``region``
+        column, or some other way to get a region (e.g. ``SkyPix``).
     """
-    def __init__(self, name, relates, table=None, regionColumn=None):
+
+    def __init__(self, name, relates, table=None, spatial=False):
         self._name = name
         self._relates = relates
         self._table = table
-        self._regionColumn = regionColumn
+        self._spatial = spatial
 
     @property
     def name(self):
@@ -273,9 +281,15 @@ class DataUnitRegion:
         region column (`sqlalchemy.Column`, optional).
         """
         table = self.table
-        if table is not None and self._regionColumn is not None:
-            return table.c[self._regionColumn]
+        if table is not None and self.spatial:
+            return table.c["region"]
         return None
+
+    @property
+    def spatial(self):
+        """Is this a spatial `DataUnitRegion`?
+        """
+        return self._spatial
 
 
 class DataUnitRegistry:
@@ -414,7 +428,7 @@ class DataUnitRegistry:
             requiredDependencies = ()
             optionalDependencies = ()
             table = None
-            regionColumn = None
+            spatial = False
             link = ()
             if 'dependencies' in dataUnitDescription:
                 dependencies = dataUnitDescription['dependencies']
@@ -439,7 +453,7 @@ class DataUnitRegistry:
                         if tableName == dataUnitName:
                             # Primary table for this DataUnit
                             table = builder.addTable(tableName, tableDescription)
-                            regionColumn = dataUnitDescription.get('regionColumn')
+                            spatial = dataUnitDescription.get('spatial', False)
                         else:
                             # Secondary table
                             builder.addTable(tableName, tableDescription)
@@ -469,7 +483,7 @@ class DataUnitRegistry:
                 duRegion = DataUnitRegion(name=tableName,
                                           relates=tuple(description["relates"]),
                                           table=table,
-                                          regionColumn=description.get("regionColumn"))
+                                          spatial=description.get("spatial", False))
             else:
                 duRegion = None
             self._dataUnitRegions[dataUnitNames] = duRegion
