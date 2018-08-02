@@ -246,7 +246,7 @@ class ConversionWalker:
     @property
     def skyMaps(self):
         """All SkyMaps found in any repository
-        (`dict` of `{sha1: BaseSkyMap}`).
+        (`dict` of `{hash: BaseSkyMap}`).
 
         The SkyMaps here are a superset of those actually used by scanned
         Datasets; some may be used by Datasets in data repositories that were
@@ -257,7 +257,7 @@ class ConversionWalker:
     @property
     def skyMapRoots(self):
         """Repository roots in which each SkyMap was found
-        (`dict` of `{sha1: list}`).
+        (`dict` of `{hash: list}`).
         """
         return self._skyMapRoots
 
