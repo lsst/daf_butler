@@ -217,6 +217,10 @@ class SqlPreFlight:
         joinedRegionTables = set()
         firstRegionIndex = None
         for dataUnitJoin in dataUnitJoins:
+            # Some `DataUnitJoin`s have an associated region (e.g. they are spatial)
+            # in that case they shouldn't be joined separately in the region lookup.
+            if dataUnitJoin.spatial:
+                continue
 
             # TODO: do not know yet how to handle MultiCameraExposureJoin,
             # skip it for now
