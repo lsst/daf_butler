@@ -283,6 +283,10 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     fullConfigKey = "datastore.formatters"
 
+    def testStringification(self):
+        butler = Butler(self.configFile)
+        self.assertEqual(str(butler), "Butler(collection='ingest', root='./butler_test_repository')")
+
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """InMemoryDatastore specialization of a butler"""
@@ -295,6 +299,10 @@ class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = "datastore.datastores.1.formatters"
+
+    def testStringification(self):
+        butler = Butler(self.configFile)
+        self.assertEqual(str(butler), "Butler(collection='ingest', root=':memory:')")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

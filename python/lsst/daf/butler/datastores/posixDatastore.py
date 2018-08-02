@@ -143,6 +143,10 @@ class PosixDatastore(Datastore):
                                                value=self.RecordTuple, key="dataset_id",
                                                registry=registry)
 
+    @property
+    def root(self):
+        return self._root
+
     def addStoredFileInfo(self, ref, info):
         """Record formatter information associated with this `DatasetRef`
 
