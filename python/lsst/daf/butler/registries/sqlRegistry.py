@@ -856,6 +856,16 @@ class SqlRegistry(Registry):
             raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
         quantum._markInputUsed(ref)
 
+    def getDataUnitDefinition(self, dataUnitName):
+        """Return the definition of a DataUnit (an actual `DataUnit` object).
+
+        Parameters
+        ----------
+        dataUnitName : `str`
+            Name of the DataUnit, e.g. "Camera", "Tract", etc.
+        """
+        return self._schema.dataUnits[dataUnitName]
+
     @transactional
     def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
