@@ -56,11 +56,11 @@ class ConversionWriter:
         values, usually obtained from the `scanned` attribute of a
         `ConversionWalker`.
     skyMaps : dict
-        A dictionary with sha1 hashes as keys and `BaseSkyMap` instances as
+        A dictionary with hashes as keys and `BaseSkyMap` instances as
         values, usually obtained from the `skyMaps` attribute of a
         `ConversionWalker`.
     skyMapRoots : dict
-        A dictionary with sha1 hashes as keys and lists of repository roots as
+        A dictionary with hashes as keys and lists of repository roots as
         values, usually obtained from the `skyMapRoots` attribute of a
         `ConversionWalker`.
     visitInfo: dict
@@ -85,13 +85,13 @@ class ConversionWriter:
         self.repos = OrderedDict()
         self.datasetTypes = dict()
         self.runs = {k: Run(id=v, collection=k) for k, v in self.config["runs"].items()}
-        self.skyMapNames = {}  # mapping from sha1 to Gen3 SkyMap name
+        self.skyMapNames = {}  # mapping from hash to Gen3 SkyMap name
         skyMapConfig = self.config.get("skymaps", {})
-        for sha1, skyMap in self.skyMaps.items():
-            for root in skyMapRoots[sha1]:
+        for hash, skyMap in self.skyMaps.items():
+            for root in skyMapRoots[hash]:
                 skyMapName = skyMapConfig.get(root, None)
                 if skyMapName is not None:
-                    log.debug("Using '%s' for SkyMap with sha1=%s", skyMapName, skyMap.getSha1().hex())
+                    log.debug("Using '%s' for SkyMap with hash=%s", skyMapName, skyMap.getSha1().hex())
                     self.skyMapNames[skyMap.getSha1()] = skyMapName
                     break
         for gen2repo in gen2repos.values():
@@ -119,7 +119,7 @@ class ConversionWriter:
         camera = self.config["mappers"][gen2repo.MapperClass.__name__]["camera"]
         skyMapNamesByCoaddName = {}
         for coaddName, skyMap in gen2repo.skyMaps.items():
-            log.debug("Using SkyMap with sha1=%s for '%s' in '%s'",
+            log.debug("Using SkyMap with hash=%s for '%s' in '%s'",
                       skyMap.getSha1().hex(), coaddName, gen2repo.root)
             skyMapNamesByCoaddName[coaddName] = self.skyMapNames[skyMap.getSha1()]
         # Create translators and Gen3 DatasetType objects from Gen2DatasetType objects, but
@@ -218,30 +218,30 @@ class ConversionWriter:
         Patches) to the Registry.
         """
         log = logging.getLogger("lsst.daf.butler.gen2convert")
-        for sha1, skyMap in self.skyMaps.items():
-            skyMapName = self.skyMapNames.get(sha1, None)
+        for hash, skyMap in self.skyMaps.items():
+            skyMapName = self.skyMapNames.get(hash, None)
             try:
-                existing, = registry.query("SELECT skymap FROM SkyMap WHERE sha1=:sha1",
-                                           sha1=sha1)
+                existing, = registry.query("SELECT skymap FROM SkyMap WHERE hash=:hash",
+                                           hash=hash)
                 if skyMapName is None:
                     skyMapName = existing["skymap"]
-                    self.skyMapNames[sha1] = skyMapName
-                    log.debug("Using preexisting SkyMap '%s' with sha1=%s", skyMapName, sha1.hex())
+                    self.skyMapNames[hash] = skyMapName
+                    log.debug("Using preexisting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
                 if skyMapName != existing["skymap"]:
                     raise ValueError(
-                        ("SkyMap with new name={} and sha1={} already exists in the Registry "
-                         "with name={}".format(skyMapName, sha1.hex(), existing["skymap"]))
+                        ("SkyMap with new name={} and hash={} already exists in the Registry "
+                         "with name={}".format(skyMapName, hash.hex(), existing["skymap"]))
                     )
                 continue
             except ValueError:
-                # No SkyMap with this sha1 exists, so we need to insert it.
+                # No SkyMap with this hash exists, so we need to insert it.
                 pass
             if skyMapName is None:
                 raise LookupError(
-                    ("SkyMap with sha1={} has no name "
-                     "and does not already exist in the Registry.").format(sha1.hex())
+                    ("SkyMap with hash={} has no name "
+                     "and does not already exist in the Registry.").format(hash.hex())
                 )
-            log.info("Inserting SkyMap '%s' with sha1=%s", skyMapName, sha1.hex())
+            log.info("Inserting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
             skyMap.register(skyMapName, registry)
 
     def insertObservations(self, registry):

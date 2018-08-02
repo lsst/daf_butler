@@ -511,7 +511,7 @@ schema:
               A human-readable name for the SkyMap, used as its unique
               identifier.
           -
-            name: sha1
+            name: hash
             type: string
             nullable: false
             doc: >
