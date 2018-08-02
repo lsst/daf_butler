@@ -27,6 +27,7 @@ import os
 import contextlib
 
 from .core.utils import doImport, transactional
+from .core.datasets import DatasetRef
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.run import Run
@@ -188,24 +189,28 @@ class Butler:
                 yield
 
     @transactional
-    def put(self, obj, datasetType, dataId, producer=None):
+    def put(self, obj, datasetRefOrType, dataId=None, producer=None):
         """Store and register a dataset.
 
         Parameters
         ----------
         obj : `object`
             The dataset.
-        datasetType : `DatasetType` instance or `str`
-            The `DatasetType`.
-        dataId : `dict`
+        datasetRefOrType : `DatasetRef`, `DatasetType` instance or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict`, optional
             An identifier with `DataUnit` names and values.
+            When `None` a `DatasetRef` should be supplied as the second
+            argument.
         producer : `Quantum`, optional
             The producer.
 
         Returns
         -------
         ref : `DatasetRef`
-            A reference to the stored dataset.
+            A reference to the stored dataset, updated with the correct id if
+            given.
 
         Raises
         ------
@@ -215,7 +220,17 @@ class Butler:
         """
         if self.run is None:
             raise TypeError("Butler is read-only.")
-        datasetType = self.registry.getDatasetType(datasetType)
+        if isinstance(datasetRefOrType, DatasetRef):
+            if dataId is not None:
+                raise ValueError("DatasetRef given, cannot use dataId as well")
+            if datasetRefOrType.id is not None:
+                raise ValueError("DatasetRef must not be in registry, must have None id")
+            dataId = datasetRefOrType.dataId
+            datasetType = datasetRefOrType.datasetType
+        else:
+            if dataId is None:
+                raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
+            datasetType = self.registry.getDatasetType(datasetRefOrType)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
 
         # Look up storage class to see if this is a composite
@@ -272,24 +287,39 @@ class Butler:
             # single entity in datastore
             raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
 
-    def get(self, datasetType, dataId):
+    def get(self, datasetRefOrType, dataId=None):
         """Retrieve a stored dataset.
 
         Parameters
         ----------
-        datasetType : `DatasetType` instance or `str`
-            The `DatasetType`.
+        datasetRefOrType : `DatasetRef`, `DatasetType` instance or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
-            `DatasetRef` within a Collection.
+            A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
+            within a Collection.
+            When `None` a `DatasetRef` should be supplied as the second
+            argument.
 
         Returns
         -------
         obj : `object`
             The dataset.
         """
-        datasetType = self.registry.getDatasetType(datasetType)
+        if isinstance(datasetRefOrType, DatasetRef):
+            if dataId is not None:
+                raise ValueError("DatasetRef given, cannot use dataId as well")
+            datasetType = datasetRefOrType.datasetType
+            dataId = datasetRefOrType.dataId
+            idNumber = datasetRefOrType.id
+        else:
+            datasetType = self.registry.getDatasetType(datasetRefOrType)
+            idNumber = None
+        # Always lookup the DatasetRef, even if one is given, to ensure it is
+        # present in the current collection.
         ref = self.registry.find(self.collection, datasetType, dataId)
+        if idNumber is not None and idNumber != ref.id:
+            raise ValueError("DatasetRef.id does not match id in registry")
         return self.getDirect(ref)
 
     def getUri(self, datasetType, dataId, predict=False):

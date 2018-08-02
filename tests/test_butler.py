@@ -111,6 +111,43 @@ class ButlerTests:
         self.assertGetComponents(butler, datasetTypeName, dataId,
                                  ("summary", "data", "output"), metric)
 
+    def testBasicPutGetWithDatasetRef(self):
+        butler = Butler(self.configFile)
+        # Create and register a DatasetType
+        datasetTypeName = "test_metric"
+        dataUnits = ("Camera", "Visit")
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+
+        # Add needed DataUnits
+        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 42,
+                                                   "physical_filter": "d-r"})
+
+        # Create and store a dataset using a DatasetRef
+        metric = makeExampleMetrics()
+        dataId = {"camera": "DummyCam", "visit": 42}
+        datasetType = butler.registry.getDatasetType(datasetTypeName)
+        ref = DatasetRef(datasetType, dataId, id=None)
+        ref = butler.put(metric, ref)
+        self.assertIsInstance(ref, DatasetRef)
+        # Put with a preexisting id should fail
+        with self.assertRaises(ValueError):
+            butler.put(metric, DatasetRef(datasetType, dataId, id=100))
+        # Test regular get
+        metricOut = butler.get(datasetTypeName, dataId)
+        self.assertEqual(metric, metricOut)
+        # Test get with DatasetRef
+        metricOut = butler.get(ref)
+        self.assertEqual(metric, metricOut)
+        # Combining a DatasetRef with a dataId should fail
+        with self.assertRaises(ValueError):
+            butler.get(ref, dataId)
+        # Getting with an explicit ref should fail if the id doesn't match
+        with self.assertRaises(ValueError):
+            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=101))
+
     def testCompositePutGet(self):
         butler = Butler(self.configFile)
         # Create and register a DatasetType

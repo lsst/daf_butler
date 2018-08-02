@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from copy import deepcopy
+
 from types import MappingProxyType
 from .utils import slotValuesAreEqual, slotValuesToHash
 from .storageClass import StorageClass
@@ -258,3 +260,13 @@ class DatasetRef:
             components = ", components=[" + ", ".join(self.components) + "]"
         return "DatasetRef({}, id={}, dataId={} {})".format(self.datasetType.name,
                                                             self.id, self.dataId, components)
+
+    def detach(self):
+        """Obtain a new DatasetRef that is detached from the registry.
+
+        Its ``id`` property will be ``None``.  This can be used for transfers
+        and similar operations.
+        """
+        ref = deepcopy(self)
+        ref._id = None
+        return ref
