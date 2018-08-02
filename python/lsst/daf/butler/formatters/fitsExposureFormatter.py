@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import copy
+
 from lsst.daf.butler import Formatter
 
 __all__ = ("FitsExposureFormatter", )
@@ -123,3 +125,14 @@ class FitsExposureFormatter(Formatter):
         fileDescriptor.location.updateExtension(self.extension)
         inMemoryDataset.writeFits(fileDescriptor.location.path)
         return fileDescriptor.location.pathInStore
+
+    def predictPath(self, location):
+        """Return the path that would be returned by write, without actually
+        writing.
+
+        location : `Location`
+            The location to simulate writing to.
+        """
+        location = copy.deepcopy(location)
+        location.updateExtension(self.extension)
+        return location.pathInStore

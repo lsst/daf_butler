@@ -21,6 +21,9 @@
 
 import os
 import unittest
+import shutil
+import yaml
+import tempfile
 
 import lsst.utils.tests
 
@@ -70,6 +73,7 @@ class DatastoreTests(DatasetTestHelper):
         cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
+        super().setUp()
         self.registry = DummyRegistry()
 
         # Need to keep ID for each datasetRef since we have no butler
@@ -77,12 +81,12 @@ class DatastoreTests(DatasetTestHelper):
         self.id = 1
 
     def testConstructor(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
 
         # Create multiple storage classes for testing different formulations
         storageClasses = [self.storageClassFactory.getStorageClass(sc)
@@ -136,7 +140,7 @@ class DatastoreTests(DatasetTestHelper):
 
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
 
         # Create multiple storage classes for testing different formulations
         # of composites
@@ -174,7 +178,7 @@ class DatastoreTests(DatasetTestHelper):
 
     def testRemove(self):
         metrics = makeExampleMetrics()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 638, "filter": "U"}
@@ -215,13 +219,8 @@ class DatastoreTests(DatasetTestHelper):
         sc = self.storageClassFactory.getStorageClass("StructuredData")
         ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
 
-        inputConfig = DatastoreConfig(self.configFile)
-        inputConfig['root'] = os.path.join(TESTDIR, "./test_input_datastore")
-        inputDatastore = self.datastoreType(config=inputConfig, registry=self.registry)
-        outputConfig = inputConfig.copy()
-        outputConfig['root'] = os.path.join(TESTDIR, "./test_output_datastore")
-        outputDatastore = self.datastoreType(config=outputConfig,
-                                             registry=DummyRegistry())
+        inputDatastore = self.makeDatastore("test_input_datastore")
+        outputDatastore = self.makeDatastore("test_output_datastore")
 
         inputDatastore.put(metrics, ref)
         outputDatastore.transfer(inputDatastore, ref)
@@ -230,7 +229,7 @@ class DatastoreTests(DatasetTestHelper):
         self.assertEqual(metrics, metricsOut)
 
     def testBasicTransaction(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dataUnits = frozenset(("visit", "filter"))
         nDatasets = 6
@@ -269,7 +268,7 @@ class DatastoreTests(DatasetTestHelper):
                 datastore.getUri(ref)
 
     def testNestedTransaction(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dataUnits = frozenset(("visit", "filter"))
         metrics = makeExampleMetrics()
@@ -300,17 +299,145 @@ class DatastoreTests(DatasetTestHelper):
         with self.assertRaises(FileNotFoundError):
             datastore.get(refInner)
 
+    def runIngestTest(self, func, expectOutput=True):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        dataUnits = frozenset(("visit", "filter"))
+        metrics = makeExampleMetrics()
+        dataId = {"visit": 0, "filter": "V"}
+        ref = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+        with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=expectOutput) as path:
+            with open(path, 'w') as fd:
+                yaml.dump(metrics._asdict(), stream=fd)
+            func(metrics, path, ref)
+
+    def testIngestNoTransfer(self):
+        """Test ingesting existing files with no transfer.
+        """
+        datastore = self.makeDatastore()
+
+        def succeed(obj, path, ref):
+            """Ingest a file already in the datastore root."""
+            # first move it into the root, and adjust the path accordingly
+            path = shutil.copy(path, datastore.root)
+            path = os.path.relpath(path, start=datastore.root)
+            datastore.ingest(path, ref, transfer=None)
+            self.assertEqual(obj, datastore.get(ref))
+
+        def failInputDoesNotExist(obj, path, ref):
+            """Can't ingest files if we're given a bad path."""
+            with self.assertRaises(FileNotFoundError):
+                datastore.ingest("this-file-does-not-exist.yaml", ref, transfer=None)
+            self.assertFalse(datastore.exists(ref))
+
+        def failOutsideRoot(obj, path, ref):
+            """Can't ingest files outside of datastore root."""
+            with self.assertRaises(RuntimeError):
+                datastore.ingest(os.path.abspath(path), ref, transfer=None)
+            self.assertFalse(datastore.exists(ref))
+
+        def failNotImplemented(obj, path, ref):
+            with self.assertRaises(NotImplementedError):
+                datastore.ingest(path, ref, transfer=None)
+
+        if None in self.ingestTransferModes:
+            self.runIngestTest(failOutsideRoot)
+            self.runIngestTest(failInputDoesNotExist)
+            self.runIngestTest(succeed)
+        else:
+            self.runIngestTest(failNotImplemented)
+
+    def testIngestTransfer(self):
+        """Test ingesting existing files after transferring them.
+        """
+
+        for mode in ("copy", "move", "hardlink", "symlink"):
+            with self.subTest(mode=mode):
+                datastore = self.makeDatastore(mode)
+
+                def succeed(obj, path, ref):
+                    """Ingest a file by transferring it to the template location."""
+                    datastore.ingest(os.path.abspath(path), ref, transfer=mode)
+                    self.assertEqual(obj, datastore.get(ref))
+
+                def failInputDoesNotExist(obj, path, ref):
+                    """Can't ingest files if we're given a bad path."""
+                    with self.assertRaises(FileNotFoundError):
+                        datastore.ingest("this-file-does-not-exist.yaml", ref, transfer=mode)
+                    self.assertFalse(datastore.exists(ref))
+
+                def failOutputExists(obj, path, ref):
+                    """Can't ingest files if transfer destination already exists."""
+                    with self.assertRaises(FileExistsError):
+                        datastore.ingest(os.path.abspath(path), ref, transfer=mode)
+                    self.assertFalse(datastore.exists(ref))
+
+                def failNotImplemented(obj, path, ref):
+                    with self.assertRaises(NotImplementedError):
+                        datastore.ingest(os.path.abspath(path), ref, transfer=mode)
+
+                if mode in self.ingestTransferModes:
+                    self.runIngestTest(failInputDoesNotExist)
+                    self.runIngestTest(succeed, expectOutput=(mode != "move"))
+                    self.runIngestTest(failOutputExists)
+                else:
+                    self.runIngestTest(failNotImplemented)
+
 
 class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
+    ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
+
+    def setUp(self):
+        super().setUp()
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.config = DatastoreConfig(self.configFile)
+        self.config["root"] = self.root
+
+    def tearDown(self):
+        shutil.rmtree(self.root)
+
+    def makeDatastore(self, sub=None):
+        """Make a new Datastore instance of the appropriate type.
+
+        Parameters
+        ----------
+        sub : str, optional
+            If not None, the returned Datastore will be distinct from any
+            Datastore constructed with a different value of sub.  For
+            PosixDatastore only, the converse is also true, and `sub` is
+            used as a subdirectory to form the new root.
+        """
+        config = self.config.copy()
+        if sub is not None:
+            config["root"] = os.path.join(self.root, sub)
+        return self.datastoreType(config=config, registry=self.registry)
 
 
 class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
     uriScheme = "mem:"
+    ingestTransferModes = ()
+
+    def setUp(self):
+        super().setUp()
+        self.config = DatastoreConfig(self.configFile)
+
+    def makeDatastore(self, sub=None):
+        """
+        Make a new Datastore instance of the appropriate type.
+
+        Parameters
+        ----------
+        sub : str, optional
+            If not None, the returned Datastore will be distinct from any
+            Datastore constructed with a different value of sub.  For
+            InMemoryDatastore only, this parameter is ignored - different
+            datastores are *always* distinct.
+        """
+        return self.datastoreType(config=self.config, registry=self.registry)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

@@ -24,6 +24,9 @@ from collections.abc import MutableMapping
 from .utils import doImport
 
 
+__all__ = ("DatabaseDict",)
+
+
 class DatabaseDict(MutableMapping):
     """An abstract base class for dict-like objects with a specific key type
     and namedtuple values, backed by a database.

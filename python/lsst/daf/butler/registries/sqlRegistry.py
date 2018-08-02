@@ -147,7 +147,7 @@ class SqlRegistry(Registry):
         -------
         inserted : `bool`
             ``True`` if ``datasetType`` was inserted, ``False`` if an identical
-            exisiting `DatsetType` was found.
+            existing `DatsetType` was found.
         """
         if not self._isValidDatasetType(datasetType):
             raise ValueError("DatasetType is not valid for this registry")
@@ -177,7 +177,6 @@ class SqlRegistry(Registry):
                                      for dataUnitName in datasetType.dataUnits])
         self._datasetTypes[datasetType.name] = datasetType
         # Also register component DatasetTypes (if any)
-        # TODO Make this atomic by handling components as part of the with clause above
         for compName, compStorageClass in datasetType.storageClass.components.items():
             compType = DatasetType(datasetType.componentTypeName(compName),
                                    datasetType.dataUnits,

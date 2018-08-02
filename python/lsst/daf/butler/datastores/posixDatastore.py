@@ -22,6 +22,7 @@
 """POSIX datastore."""
 
 import os
+import shutil
 import hashlib
 from collections import namedtuple
 
@@ -34,7 +35,7 @@ from lsst.daf.butler.core.formatter import FormatterFactory
 from lsst.daf.butler.core.fileTemplates import FileTemplates
 from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
-from lsst.daf.butler.core.utils import getInstanceOf
+from lsst.daf.butler.core.utils import getInstanceOf, transactional
 from lsst.daf.butler.core.storageClass import StorageClassFactory
 from ..core.databaseDict import DatabaseDict
 
@@ -277,6 +278,7 @@ class PosixDatastore(Datastore):
 
         return result
 
+    @transactional
     def put(self, inMemoryDataset, ref):
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
@@ -292,7 +294,6 @@ class PosixDatastore(Datastore):
         TypeError
             Supplied object and storage class are inconsistent.
         """
-
         datasetType = ref.datasetType
         typeName = datasetType.name
         storageClass = datasetType.storageClass
@@ -300,7 +301,8 @@ class PosixDatastore(Datastore):
         # Sanity check
         if not isinstance(inMemoryDataset, storageClass.pytype):
             raise TypeError("Inconsistency between supplied object ({}) "
-                            "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
+                            "and storage class type ({})".format(type(inMemoryDataset),
+                                                                 storageClass.pytype))
 
         # Work out output file name
         template = self.templates.getTemplate(typeName)
@@ -311,42 +313,112 @@ class PosixDatastore(Datastore):
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
-            safeMakeDir(storageDir)
+            with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
+                safeMakeDir(storageDir)
 
         # Write the file
-        path = formatter.write(inMemoryDataset, FileDescriptor(location,
-                                                               storageClass=storageClass))
+        predictedFullPath = os.path.join(self.root, formatter.predictPath(location))
+        with self._transaction.undoWith("write", os.remove, predictedFullPath):
+            path = formatter.write(inMemoryDataset, FileDescriptor(location, storageClass=storageClass))
+            assert predictedFullPath == os.path.join(self.root, path)
 
         self.ingest(path, ref, formatter=formatter)
 
-        if self._transaction is not None:
-            self._transaction.registerUndo('put', self.remove, ref)
+    @transactional
+    def ingest(self, path, ref, formatter=None, transfer=None):
+        """Add an on-disk file with the given `DatasetRef` to the store,
+        possibly transferring it.
 
-    def ingest(self, path, ref, formatter=None):
-        """Record that a Dataset with the given `DatasetRef` exists in the store.
+        The caller is responsible for ensuring that the given (or predicted)
+        Formatter is consistent with how the file was written; `ingest` will
+        in general silently ignore incorrect formatters (as it cannot
+        efficiently verify their correctness), deferring errors until ``get``
+        is first called on the ingested dataset.
 
         Parameters
         ----------
         path : `str`
-            File path, relative to the repository root.
+            File path.  Treated as relative to the repository root if not
+            absolute.
         ref : `DatasetRef`
             Reference to the associated Dataset.
         formatter : `Formatter` (optional)
-            Formatter that should be used to retreive the Dataset.
+            Formatter that should be used to retreive the Dataset.  If not
+            provided, the formatter will be constructed according to
+            Datastore configuration.
+        transfer : str (optional)
+            If not None, must be one of 'move', 'copy', 'hardlink', or
+            'symlink' indicating how to transfer the file.  The new
+            filename and location will be determined via template substitution,
+            as with ``put``.  If the file is outside the datastore root, it
+            must be transferred somehow.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if ``transfer is None`` and path is outside the repository
+            root.
+        FileNotFoundError
+            Raised if the file at ``path`` does not exist.
+        FileExistsError
+            Raised if ``transfer is not None`` but a file already exists at the
+            location computed from the template.
         """
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref.datasetType.storageClass,
                                                            ref.datasetType.name)
+
+        fullPath = os.path.join(self.root, path)
+        if not os.path.exists(fullPath):
+            raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
+                                    "assumed to be relative to self.root unless they are absolute."
+                                    .format(fullPath))
+
+        if transfer is None:
+            if os.path.isabs(path):
+                absRoot = os.path.abspath(self.root)
+                if os.path.commonpath([absRoot, os.path.abspath(path)]) != absRoot:
+                    raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
+        else:
+            template = self.templates.getTemplate(ref.datasetType.name)
+            location = self.locationFactory.fromPath(template.format(ref))
+            newPath = formatter.predictPath(location)
+            newFullPath = os.path.join(self.root, newPath)
+            if os.path.exists(newFullPath):
+                raise FileExistsError("File '{}' already exists".format(newFullPath))
+            storageDir = os.path.dirname(newFullPath)
+            if not os.path.isdir(storageDir):
+                with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
+                    safeMakeDir(storageDir)
+            if transfer == "move":
+                with self._transaction.undoWith("move", shutil.move, newFullPath, fullPath):
+                    shutil.move(fullPath, newFullPath)
+            elif transfer == "copy":
+                with self._transaction.undoWith("copy", os.remove, newFullPath):
+                    shutil.copy(fullPath, newFullPath)
+            elif transfer == "hardlink":
+                with self._transaction.undoWith("hardlink", os.unlink, newFullPath):
+                    os.link(fullPath, newFullPath)
+            elif transfer == "symlink":
+                with self._transaction.undoWith("symlink", os.unlink, newFullPath):
+                    os.symlink(fullPath, newFullPath)
+            else:
+                raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
+            path = newPath
+            fullPath = newFullPath
+
         # Create Storage information in the registry
-        ospath = os.path.join(self.root, path)
-        checksum = self.computeChecksum(ospath)
-        stat = os.stat(ospath)
+        checksum = self.computeChecksum(fullPath)
+        stat = os.stat(fullPath)
         size = stat.st_size
         info = StorageInfo(self.name, checksum, size)
         self.registry.addStorageInfo(ref, info)
 
         # Associate this dataset with the formatter for later read.
         fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass)
+        # TODO: this is only transactional if the DatabaseDict uses
+        #       self.registry internally.  Probably need to add
+        #       transactions to DatabaseDict to do better than that.
         self.addStoredFileInfo(ref, fileInfo)
 
         # Register all components with same information
@@ -406,6 +478,13 @@ class PosixDatastore(Datastore):
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.
 
+        .. warning::
+
+            This method does not support transactions; removals are
+            immediate, cannot be undone, and are not guaranteed to
+            be atomic if deleting either the file or the internal
+            database records fails.
+
         Parameters
         ----------
         ref : `DatasetRef`
@@ -415,11 +494,6 @@ class PosixDatastore(Datastore):
         ------
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
-
-        Notes
-        -----
-        Some Datastores may implement this method as a silent no-op to
-        disable Dataset deletion through standard interfaces.
         """
         # Get file metadata and internal metadata
 

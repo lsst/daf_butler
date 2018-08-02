@@ -21,6 +21,7 @@
 
 """Support for reading and writing files to a POSIX file system."""
 
+import copy
 from abc import abstractmethod
 
 from lsst.daf.butler.core.formatter import Formatter
@@ -175,3 +176,14 @@ class FileFormatter(Formatter):
         self._writeFile(inMemoryDataset, fileDescriptor)
 
         return fileDescriptor.location.pathInStore
+
+    def predictPath(self, location):
+        """Return the path that would be returned by write, without actually
+        writing.
+
+        location : `Location`
+            The location to simulate writing to.
+        """
+        location = copy.deepcopy(location)
+        location.updateExtension(self.extension)
+        return location.pathInStore
