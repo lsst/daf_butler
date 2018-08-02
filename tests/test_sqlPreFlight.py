@@ -149,7 +149,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         registry.addDataUnitEntry('PhysicalFilter', dict(camera='DummyCam',
                                                          physical_filter='dummy_i',
                                                          abstract_filter='i'))
-        registry.addDataUnitEntry('SkyMap', dict(skymap='DummyMap', sha1="sha!"))
+        registry.addDataUnitEntry('SkyMap', dict(skymap='DummyMap', hash="sha!"))
         for tract in range(10):
             registry.addDataUnitEntry('Tract', dict(skymap='DummyMap', tract=tract))
             for patch in range(10):
