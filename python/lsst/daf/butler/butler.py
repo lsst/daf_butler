@@ -59,10 +59,10 @@ class Butler:
         Configuration.
     collection : `str`, optional
         Collection to use for all input lookups, overriding
-        config['collection'] if provided.
+        config["collection"] if provided.
     run : `str`, `Run`, optional
         Collection associated with the `Run` to use for outputs, overriding
-        config['run'].  If a `Run` associated with the given Collection does
+        config["run"].  If a `Run` associated with the given Collection does
         not exist, it will be created.  If "collection" is None, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
@@ -70,7 +70,7 @@ class Butler:
     Raises
     ------
     ValueError
-        Raised if neither 'collection' nor 'run' are provided by argument or
+        Raised if neither "collection" nor "run" are provided by argument or
         config, or if both are provided and are inconsistent.
     """
 
@@ -159,7 +159,7 @@ class Butler:
         del run  # it's a logic bug if we try to use this variable below
         if collection is None:  # didn't get a collection from collection or run *args*
             collection = self.config.get("collection", None)
-            if collection is None:  # didn't get a collection from config['collection']
+            if collection is None:  # didn't get a collection from config["collection"]
                 collection = runCollection    # get collection from run found in config
         if collection is None:
             raise ValueError("No run or collection provided.")

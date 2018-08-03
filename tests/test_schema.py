@@ -47,7 +47,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.testDir = os.path.dirname(__file__)
         self.config = SchemaConfig()
         self.schema = Schema(self.config)
-        self.engine = create_engine('sqlite:///:memory:')
+        self.engine = create_engine("sqlite:///:memory:")
         self.schema._metadata.create_all(self.engine)
 
     def testConstructor(self):
@@ -61,15 +61,15 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         """
         self.assertIsInstance(self.schema._metadata, MetaData)
         allTables = {}
-        allTables.update(self.config['tables'])
-        for dataUnitDescription in self.config['dataUnits'].values():
-            if 'tables' in dataUnitDescription:
-                allTables.update(dataUnitDescription['tables'])
-        for dataUnitJoinDescription in self.config['dataUnitJoins'].values():
-            if 'tables' in dataUnitJoinDescription:
-                allTables.update(dataUnitJoinDescription['tables'])
+        allTables.update(self.config["tables"])
+        for dataUnitDescription in self.config["dataUnits"].values():
+            if "tables" in dataUnitDescription:
+                allTables.update(dataUnitDescription["tables"])
+        for dataUnitJoinDescription in self.config["dataUnitJoins"].values():
+            if "tables" in dataUnitJoinDescription:
+                allTables.update(dataUnitJoinDescription["tables"])
         for tableName, tableDescription in allTables.items():
-            if 'sql' in tableDescription:
+            if "sql" in tableDescription:
                 self.assertView(tableName, tableDescription)
             else:
                 self.assertTable(tableName, tableDescription)
@@ -79,8 +79,8 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         """
         table = self.schema.views[tableName]
         self.assertIsInstance(table, TableClause)
-        for columnDescription in tableDescription['columns']:
-            column = getattr(table.c, columnDescription['name'])
+        for columnDescription in tableDescription["columns"]:
+            column = getattr(table.c, columnDescription["name"])
             self.assertIsInstance(column, Column)
 
     def assertTable(self, tableName, tableDescription):
@@ -88,8 +88,8 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         """
         table = self.schema.tables[tableName]
         self.assertIsInstance(table, Table)
-        for columnDescription in tableDescription['columns']:
-            self.assertColumn(table, columnDescription['name'], columnDescription)
+        for columnDescription in tableDescription["columns"]:
+            self.assertColumn(table, columnDescription["name"], columnDescription)
         if "foreignKeys" in tableDescription:
             self.assertForeignKeyConstraints(table, tableDescription["foreignKeys"])
 
@@ -98,9 +98,9 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         """
         column = getattr(table.c, columnName)
         self.assertIsInstance(column, Column)
-        self.assertEqual(column.primary_key, columnDescription.get('primary_key', False))
-        self.assertEqual(column.nullable, columnDescription.get('nullable', True) and not column.primary_key)
-        self.assertIsInstance(column.type, self.schema.builder.VALID_COLUMN_TYPES[columnDescription['type']])
+        self.assertEqual(column.primary_key, columnDescription.get("primary_key", False))
+        self.assertEqual(column.nullable, columnDescription.get("nullable", True) and not column.primary_key)
+        self.assertIsInstance(column.type, self.schema.builder.VALID_COLUMN_TYPES[columnDescription["type"]])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
         """Check that foreign-key constraints match the `constraintsDescription`.

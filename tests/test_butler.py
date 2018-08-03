@@ -255,7 +255,7 @@ class ButlerTests:
         self.assertEqual(butler1.config, butler2.config)
         # Config files loaded directly should not be the same.
         self.assertNotEqual(limited, full)
-        # Make sure 'limited' doesn't have a few keys we know it should be
+        # Make sure "limited" doesn't have a few keys we know it should be
         # inheriting from defaults.
         self.assertIn(self.fullConfigKey, full)
         self.assertNotIn(self.fullConfigKey, limited)

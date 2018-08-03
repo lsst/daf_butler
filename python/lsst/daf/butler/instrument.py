@@ -55,16 +55,16 @@ class Instrument:
         self._addSensors(registry)
 
     def _addCamera(self, registry):
-        registry.addDataUnitEntry('Camera', {'camera': self.camera})
+        registry.addDataUnitEntry("Camera", {"camera": self.camera})
 
     def _addPhysicalFilters(self, registry):
         for entry in self.physicalFilters:
-            if 'camera' not in entry:
-                entry['camera'] = self.camera
-            registry.addDataUnitEntry('PhysicalFilter', entry)
+            if "camera" not in entry:
+                entry["camera"] = self.camera
+            registry.addDataUnitEntry("PhysicalFilter", entry)
 
     def _addSensors(self, registry):
         for entry in self.sensors:
-            if 'camera' not in entry:
-                entry['camera'] = self.camera
-            registry.addDataUnitEntry('Sensor', entry)
+            if "camera" not in entry:
+                entry["camera"] = self.camera
+            registry.addDataUnitEntry("Sensor", entry)

@@ -78,7 +78,7 @@ class SqlDatabaseDict(DatabaseDict):
             column = Column(name, self.COLUMN_TYPES.get(type_, type_), primary_key=(name == key))
             allColumns.append(column)
         if engine is None:
-            engine = create_engine(config['db'])
+            engine = create_engine(config["db"])
         if key in value._fields:
             raise ValueError("DatabaseDict's key field may not be a part of the value tuple")
         if key not in types.keys():

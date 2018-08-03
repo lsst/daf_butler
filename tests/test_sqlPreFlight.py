@@ -48,25 +48,25 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         registry = self.registry
 
         # need a bunch of units and datasets for test
-        registry.addDataUnitEntry('Camera', dict(camera='DummyCam'))
-        registry.addDataUnitEntry('PhysicalFilter', dict(camera='DummyCam',
-                                                         physical_filter='dummy_r',
-                                                         abstract_filter='r'))
-        registry.addDataUnitEntry('PhysicalFilter', dict(camera='DummyCam',
-                                                         physical_filter='dummy_i',
-                                                         abstract_filter='i'))
+        registry.addDataUnitEntry("Camera", dict(camera="DummyCam"))
+        registry.addDataUnitEntry("PhysicalFilter", dict(camera="DummyCam",
+                                                         physical_filter="dummy_r",
+                                                         abstract_filter="r"))
+        registry.addDataUnitEntry("PhysicalFilter", dict(camera="DummyCam",
+                                                         physical_filter="dummy_i",
+                                                         abstract_filter="i"))
         for sensor in (1, 2, 3, 4, 5):
-            registry.addDataUnitEntry('Sensor', dict(camera='DummyCam', sensor=sensor))
-        registry.addDataUnitEntry('Visit', dict(camera='DummyCam', visit=10, physical_filter='dummy_i'))
-        registry.addDataUnitEntry('Visit', dict(camera='DummyCam', visit=11, physical_filter='dummy_r'))
-        registry.addDataUnitEntry('Exposure', dict(camera='DummyCam', exposure=100, visit=10,
-                                                   physical_filter='dummy_i'))
-        registry.addDataUnitEntry('Exposure', dict(camera='DummyCam', exposure=101, visit=10,
-                                                   physical_filter='dummy_i'))
-        registry.addDataUnitEntry('Exposure', dict(camera='DummyCam', exposure=110, visit=11,
-                                                   physical_filter='dummy_r'))
-        registry.addDataUnitEntry('Exposure', dict(camera='DummyCam', exposure=111, visit=11,
-                                                   physical_filter='dummy_r'))
+            registry.addDataUnitEntry("Sensor", dict(camera="DummyCam", sensor=sensor))
+        registry.addDataUnitEntry("Visit", dict(camera="DummyCam", visit=10, physical_filter="dummy_i"))
+        registry.addDataUnitEntry("Visit", dict(camera="DummyCam", visit=11, physical_filter="dummy_r"))
+        registry.addDataUnitEntry("Exposure", dict(camera="DummyCam", exposure=100, visit=10,
+                                                   physical_filter="dummy_i"))
+        registry.addDataUnitEntry("Exposure", dict(camera="DummyCam", exposure=101, visit=10,
+                                                   physical_filter="dummy_i"))
+        registry.addDataUnitEntry("Exposure", dict(camera="DummyCam", exposure=110, visit=11,
+                                                   physical_filter="dummy_r"))
+        registry.addDataUnitEntry("Exposure", dict(camera="DummyCam", exposure=111, visit=11,
+                                                   physical_filter="dummy_r"))
 
         # dataset types
         run = registry.makeRun(collection="test")
@@ -83,7 +83,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         for exposure in (100, 101, 110, 111):
             for sensor in (1, 2, 3):
                 # note that only 3 of 5 sensors have datasets
-                dataId = dict(camera='DummyCam', exposure=exposure, sensor=sensor)
+                dataId = dict(camera="DummyCam", exposure=exposure, sensor=sensor)
                 registry.addDataset(rawType, dataId=dataId, run=run)
 
         # with empty expression
@@ -91,10 +91,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                                                        neededDatasetTypes=[rawType],
                                                        futureDatasetTypes=[calexpType])
         # order of columns is not defined
-        self.assertCountEqual(headers, (('Camera', 'camera'),
-                                        ('Sensor', 'sensor'),
-                                        ('Exposure', 'exposure'),
-                                        ('Visit', 'visit')))
+        self.assertCountEqual(headers, (("Camera", "camera"),
+                                        ("Sensor", "sensor"),
+                                        ("Exposure", "exposure"),
+                                        ("Visit", "visit")))
         rows = list(rows)
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 sensors
 
@@ -140,20 +140,20 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         """Test involving only SkyMap units, no joins to Camera"""
         registry = self.registry
 
-        # need a bunch of units and datasets for test, we want 'AbstractFilter'
+        # need a bunch of units and datasets for test, we want "AbstractFilter"
         # in the test so also have to add PhysicalFilter units
-        registry.addDataUnitEntry('Camera', dict(camera='DummyCam'))
-        registry.addDataUnitEntry('PhysicalFilter', dict(camera='DummyCam',
-                                                         physical_filter='dummy_r',
-                                                         abstract_filter='r'))
-        registry.addDataUnitEntry('PhysicalFilter', dict(camera='DummyCam',
-                                                         physical_filter='dummy_i',
-                                                         abstract_filter='i'))
-        registry.addDataUnitEntry('SkyMap', dict(skymap='DummyMap', hash="sha!"))
+        registry.addDataUnitEntry("Camera", dict(camera="DummyCam"))
+        registry.addDataUnitEntry("PhysicalFilter", dict(camera="DummyCam",
+                                                         physical_filter="dummy_r",
+                                                         abstract_filter="r"))
+        registry.addDataUnitEntry("PhysicalFilter", dict(camera="DummyCam",
+                                                         physical_filter="dummy_i",
+                                                         abstract_filter="i"))
+        registry.addDataUnitEntry("SkyMap", dict(skymap="DummyMap", hash="sha!"))
         for tract in range(10):
-            registry.addDataUnitEntry('Tract', dict(skymap='DummyMap', tract=tract))
+            registry.addDataUnitEntry("Tract", dict(skymap="DummyMap", tract=tract))
             for patch in range(10):
-                registry.addDataUnitEntry('Patch', dict(skymap='DummyMap', tract=tract, patch=patch,
+                registry.addDataUnitEntry("Patch", dict(skymap="DummyMap", tract=tract, patch=patch,
                                                         cell_x=0, cell_y=0,
                                                         region=Box(LonLat(NormalizedAngle(0.), Angle(0.)))))
 
@@ -176,10 +176,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         # add pre-existing datasets
         for tract in (1, 3, 5):
             for patch in (2, 4, 6, 7):
-                dataId = dict(skymap='DummyMap', tract=tract, patch=patch)
+                dataId = dict(skymap="DummyMap", tract=tract, patch=patch)
                 registry.addDataset(mergeType, dataId=dataId, run=run)
-                for aFilter in ('i', 'r'):
-                    dataId = dict(skymap='DummyMap', tract=tract, patch=patch, abstract_filter=aFilter)
+                for aFilter in ("i", "r"):
+                    dataId = dict(skymap="DummyMap", tract=tract, patch=patch, abstract_filter=aFilter)
                     registry.addDataset(calexpType, dataId=dataId, run=run)
 
         # with empty expression
@@ -187,10 +187,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                                                        neededDatasetTypes=[calexpType, mergeType],
                                                        futureDatasetTypes=[measType])
         # order of columns is not defined
-        self.assertCountEqual(headers, (('SkyMap', 'skymap'),
-                                        ('Tract', 'tract'),
-                                        ('Patch', 'patch'),
-                                        ('AbstractFilter', 'abstract_filter')))
+        self.assertCountEqual(headers, (("SkyMap", "skymap"),
+                                        ("Tract", "tract"),
+                                        ("Patch", "patch"),
+                                        ("AbstractFilter", "abstract_filter")))
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
 

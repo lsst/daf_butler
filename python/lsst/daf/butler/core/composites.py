@@ -214,7 +214,7 @@ class CompositeAssembler:
         """
         component = None
 
-        if hasattr(composite, '__contains__') and componentName in composite:
+        if hasattr(composite, "__contains__") and componentName in composite:
             component = composite[componentName]
             return component
 

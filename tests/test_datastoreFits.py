@@ -147,10 +147,10 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
 
         inputConfig = DatastoreConfig(self.configFile)
-        inputConfig['root'] = os.path.join(self.testDir, "./test_input_datastore")
+        inputConfig["root"] = os.path.join(self.testDir, "./test_input_datastore")
         inputPosixDatastore = self.datastoreType(config=inputConfig, registry=self.registry)
         outputConfig = inputConfig.copy()
-        outputConfig['root'] = os.path.join(self.testDir, "./test_output_datastore")
+        outputConfig["root"] = os.path.join(self.testDir, "./test_output_datastore")
         outputPosixDatastore = self.datastoreType(config=outputConfig,
                                                   registry=DummyRegistry())
 

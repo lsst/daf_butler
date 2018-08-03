@@ -34,13 +34,13 @@ from lsst.daf.butler.instrument import Instrument
 
 
 class DummyCam(Instrument):
-    camera = 'DummyCam'
+    camera = "DummyCam"
 
-    physicalFilters = [{'physical_filter': 'dummy_g'},
-                       {'physical_filter': 'dummy_u'}]
+    physicalFilters = [{"physical_filter": "dummy_g"},
+                       {"physical_filter": "dummy_u"}]
 
-    sensors = [{'sensor': 'one'},
-               {'sensor': 'two'}]
+    sensors = [{"sensor": "one"},
+               {"sensor": "two"}]
 
 
 class InstrumentTestCase(lsst.utils.tests.TestCase):

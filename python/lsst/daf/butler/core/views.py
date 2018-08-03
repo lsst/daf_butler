@@ -25,7 +25,7 @@ from sqlalchemy.sql import text, select, table
 from sqlalchemy.ext import compiler
 from sqlalchemy import event
 
-__all__ = ('makeView', )
+__all__ = ("makeView", )
 
 
 class CreateView(DDLElement):
@@ -70,11 +70,11 @@ def makeView(name, metadata, selectable):
     for c in selectable.c:
         c._make_proxy(t)
 
-    @event.listens_for(MetaData, 'after_create')
+    @event.listens_for(MetaData, "after_create")
     def receive_after_create(target, connection, **kwargs):
         connection.execute(CreateView(name, selectable))
 
-    @event.listens_for(MetaData, 'before_drop')
+    @event.listens_for(MetaData, "before_drop")
     def receive_before_drop(target, connection, **kwargs):
         connection.execute(DropView(name))
 

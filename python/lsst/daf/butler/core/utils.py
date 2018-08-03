@@ -74,7 +74,7 @@ def allSlots(self):
         All the slots as an iterable.
     """
     from itertools import chain
-    return chain.from_iterable(getattr(cls, '__slots__', []) for cls in self.__class__.__mro__)
+    return chain.from_iterable(getattr(cls, "__slots__", []) for cls in self.__class__.__mro__)
 
 
 def slotValuesAreEqual(self, other):
@@ -227,7 +227,7 @@ class Singleton(type):
 
 # Helper Node in a TopologicalSet
 # Unfortunately can't be a class member because that breaks pickling
-TopologicalSetNode = namedtuple('TopologicalSetNode', ['element', 'sourceElements'])
+TopologicalSetNode = namedtuple("TopologicalSetNode", ["element", "sourceElements"])
 
 
 class TopologicalSet:
@@ -275,10 +275,10 @@ class TopologicalSet:
             If a self connections between elements would be created.
         """
         if sourceElement == targetElement:
-            raise ValueError('Cannot connect {} to itself'.format(sourceElement))
+            raise ValueError("Cannot connect {} to itself".format(sourceElement))
         for element in (sourceElement, targetElement):
             if element not in self._nodes:
-                raise KeyError('{} not in set'.format(element))
+                raise KeyError("{} not in set".format(element))
         targetNode = self._nodes[targetElement]
         targetNode.sourceElements.add(sourceElement)
         # Adding a connection invalidates previous ordering
@@ -370,9 +370,9 @@ def getObjectSize(obj, seen=None):
     if isinstance(obj, dict):
         size += sum([getObjectSize(v, seen) for v in obj.values()])
         size += sum([getObjectSize(k, seen) for k in obj.keys()])
-    elif hasattr(obj, '__dict__'):
+    elif hasattr(obj, "__dict__"):
         size += getObjectSize(obj.__dict__, seen)
-    elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+    elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes, bytearray)):
         size += sum([getObjectSize(i, seen) for i in obj])
 
     return size

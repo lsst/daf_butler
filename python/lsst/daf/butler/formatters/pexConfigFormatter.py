@@ -53,7 +53,7 @@ class PexConfigFormatter(FileFormatter):
         instance = pytype()
         # Configs can only be loaded if you use the correct derived type,
         # but we can't really store the correct derive type in the StorageClass
-        # because that'd be a huge proliferation of StorageClasses.
+        # because that"d be a huge proliferation of StorageClasses.
         # Instead, we use a bit of a hack: try to load using the base-class
         # Config, inspect the exception message to obtain the class we should
         # have used, import that, and try it instead.

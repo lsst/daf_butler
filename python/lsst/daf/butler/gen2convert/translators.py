@@ -269,11 +269,11 @@ class Translator:
         return frozenset(h.gen3unit for h in self.handlers)
 
 
-# Add "skymap" to Gen3 ID if Gen2 ID has a 'tract' key.
+# Add "skymap" to Gen3 ID if Gen2 ID has a "tract" key.
 Translator.addRule(SkyMapKeyHandler(), gen2keys=("tract",), consume=False)
 
 # Translate Gen2 str patch IDs to Gen3 sequential integers.
 Translator.addRule(PatchKeyHandler(), gen2keys=("patch",))
 
-# Copy Gen2 'tract' to Gen3 'tract'.
+# Copy Gen2 "tract" to Gen3 "tract".
 Translator.addRule(CopyKeyHandler("tract", "Tract"), gen2keys=("tract",))

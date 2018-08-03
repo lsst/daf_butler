@@ -73,7 +73,7 @@ class SqlRegistry(Registry):
         self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
         self._schema = Schema(schemaConfig)
-        self._engine = create_engine(self.config['db'])
+        self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
         self._preFlight = SqlPreFlight(self._schema, self._connection)
@@ -100,7 +100,7 @@ class SqlRegistry(Registry):
         them with a colon.  Parameter values are provided as additional
         keyword arguments.  For example:
 
-          registry.query('SELECT * FROM Camera WHERE camera=:name', name='HSC')
+          registry.query("SELECT * FROM Camera WHERE camera=:name", name="HSC")
 
         Parameters
         ----------
@@ -168,14 +168,14 @@ class SqlRegistry(Registry):
             else:
                 raise ValueError("DatasetType: {} != existing {}".format(datasetType, existingDatasetType))
         # Insert it
-        datasetTypeTable = self._schema.tables['DatasetType']
-        datasetTypeUnitsTable = self._schema.tables['DatasetTypeUnits']
-        values = {'dataset_type_name': datasetType.name,
-                  'storage_class': datasetType.storageClass.name}
+        datasetTypeTable = self._schema.tables["DatasetType"]
+        datasetTypeUnitsTable = self._schema.tables["DatasetTypeUnits"]
+        values = {"dataset_type_name": datasetType.name,
+                  "storage_class": datasetType.storageClass.name}
         self._connection.execute(datasetTypeTable.insert().values(**values))
         if datasetType.dataUnits:
             self._connection.execute(datasetTypeUnitsTable.insert(),
-                                     [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
+                                     [{"dataset_type_name": datasetType.name, "unit_name": dataUnitName}
                                       for dataUnitName in datasetType.dataUnits])
         self._datasetTypes[datasetType.name] = datasetType
         # Also register component DatasetTypes (if any)
@@ -204,8 +204,8 @@ class SqlRegistry(Registry):
         KeyError
             Requested named DatasetType could not be found in registry.
         """
-        datasetTypeTable = self._schema.tables['DatasetType']
-        datasetTypeUnitsTable = self._schema.tables['DatasetTypeUnits']
+        datasetTypeTable = self._schema.tables["DatasetType"]
+        datasetTypeUnitsTable = self._schema.tables["DatasetTypeUnits"]
         # Get StorageClass from DatasetType table
         result = self._connection.execute(select([datasetTypeTable.c.storage_class]).where(
             datasetTypeTable.c.dataset_type_name == name)).fetchone()
@@ -213,7 +213,7 @@ class SqlRegistry(Registry):
         if result is None:
             raise KeyError("Could not find entry for datasetType {}".format(name))
 
-        storageClass = self.storageClasses.getStorageClass(result['storage_class'])
+        storageClass = self.storageClasses.getStorageClass(result["storage_class"])
         # Get DataUnits (if any) from DatasetTypeUnits table
         result = self._connection.execute(select([datasetTypeUnitsTable.c.unit_name]).where(
             datasetTypeUnitsTable.c.dataset_type_name == name)).fetchall()
@@ -266,7 +266,7 @@ class SqlRegistry(Registry):
         if self.find(run.collection, datasetType, dataId) is not None:
             raise ValueError("A dataset with id: {} already exists in collection {}".format(
                 dataId, run.collection))
-        datasetTable = self._schema.tables['Dataset']
+        datasetTable = self._schema.tables["Dataset"]
         datasetRef = None
         # TODO add producer
         result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
@@ -286,12 +286,12 @@ class SqlRegistry(Registry):
         id : `int`
             The unique identifier for the Dataset.
         """
-        datasetTable = self._schema.tables['Dataset']
+        datasetTable = self._schema.tables["Dataset"]
         with self._connection.begin():
             result = self._connection.execute(
                 select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
         if result is not None:
-            datasetType = self.getDatasetType(result['dataset_type_name'])
+            datasetType = self.getDatasetType(result["dataset_type_name"])
             # dataUnitName gives a `str` key which which is used to lookup
             # the corresponding sqlalchemy.core.Column entry to index the result
             # because the name of the key may not be the name of the name of the
@@ -301,14 +301,14 @@ class SqlRegistry(Registry):
             # Get components (if present)
             # TODO check against expected components
             components = {}
-            datasetCompositionTable = self._schema.tables['DatasetComposition']
+            datasetCompositionTable = self._schema.tables["DatasetComposition"]
             results = self._connection.execute(
                 select([datasetCompositionTable.c.component_name,
                         datasetCompositionTable.c.component_dataset_id]).where(
                             datasetCompositionTable.c.parent_dataset_id == id)).fetchall()
             if results is not None:
                 for result in results:
-                    components[result['component_name']] = self.getDataset(result['component_dataset_id'])
+                    components[result["component_name"]] = self.getDataset(result["component_dataset_id"])
             ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
             ref._components = components
             return ref
@@ -326,7 +326,7 @@ class SqlRegistry(Registry):
         assembler : `str`
             Fully qualified name of the assembler.
         """
-        datasetTable = self._schema.tables['Dataset']
+        datasetTable = self._schema.tables["Dataset"]
         self._connection.execute(datasetTable.update().where(
             datasetTable.c.dataset_id == ref.id).values(assembler=assembler))
         ref._assembler = assembler
@@ -346,7 +346,7 @@ class SqlRegistry(Registry):
             A reference to the component dataset.
         """
         # TODO Insert check for component name and type against parent.storageClass specified components
-        datasetCompositionTable = self._schema.tables['DatasetComposition']
+        datasetCompositionTable = self._schema.tables["DatasetComposition"]
         values = dict(component_name=name,
                       parent_dataset_id=parent.id,
                       component_dataset_id=component.id)
@@ -366,9 +366,9 @@ class SqlRegistry(Registry):
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
         """
-        datasetCollectionTable = self._schema.tables['DatasetCollection']
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
         self._connection.execute(datasetCollectionTable.insert(),
-                                 [{'dataset_id': ref.id, 'collection': collection} for ref in refs])
+                                 [{"dataset_id": ref.id, "collection": collection} for ref in refs])
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
@@ -396,7 +396,7 @@ class SqlRegistry(Registry):
         """
         if remove:
             raise NotImplementedError("Cleanup of datasets not yet implemented")
-        datasetCollectionTable = self._schema.tables['DatasetCollection']
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
         for ref in refs:
             self._connection.execute(datasetCollectionTable.delete().where(
                 and_(datasetCollectionTable.c.dataset_id == ref.id,
@@ -416,7 +416,7 @@ class SqlRegistry(Registry):
         storageInfo : `StorageInfo`
             Storage information about the dataset.
         """
-        datasetStorageTable = self._schema.tables['DatasetStorage']
+        datasetStorageTable = self._schema.tables["DatasetStorage"]
         values = dict(dataset_id=ref.id,
                       datastore_name=storageInfo.datastoreName,
                       checksum=storageInfo.checksum,
@@ -438,7 +438,7 @@ class SqlRegistry(Registry):
         storageInfo : `StorageInfo`
             Storage information about the dataset.
         """
-        datasetStorageTable = self._schema.tables['DatasetStorage']
+        datasetStorageTable = self._schema.tables["DatasetStorage"]
         self._connection.execute(datasetStorageTable.update().where(and_(
             datasetStorageTable.c.dataset_id == ref.id,
             datasetStorageTable.c.datastore_name == datastoreName)).values(
@@ -468,7 +468,7 @@ class SqlRegistry(Registry):
         KeyError
             The requested Dataset does not exist.
         """
-        datasetStorageTable = self._schema.tables['DatasetStorage']
+        datasetStorageTable = self._schema.tables["DatasetStorage"]
         storageInfo = None
         result = self._connection.execute(
             select([datasetStorageTable.c.datastore_name,
@@ -499,7 +499,7 @@ class SqlRegistry(Registry):
         ref : `DatasetRef`
             A reference to the dataset for which information is to be removed.
         """
-        datasetStorageTable = self._schema.tables['DatasetStorage']
+        datasetStorageTable = self._schema.tables["DatasetStorage"]
         self._connection.execute(datasetStorageTable.delete().where(
             and_(datasetStorageTable.c.dataset_id == ref.id,
                  datasetStorageTable.c.datastore_name == datastoreName)))
@@ -515,7 +515,7 @@ class SqlRegistry(Registry):
             The given `Execution` must not already be present in the
             `SqlRegistry`.
         """
-        executionTable = self._schema.tables['Execution']
+        executionTable = self._schema.tables["Execution"]
         result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
                                                                          start_time=execution.startTime,
                                                                          end_time=execution.endTime,
@@ -531,15 +531,15 @@ class SqlRegistry(Registry):
         id : `int`
             The unique identifier for the Execution.
         """
-        executionTable = self._schema.tables['Execution']
+        executionTable = self._schema.tables["Execution"]
         result = self._connection.execute(
             select([executionTable.c.start_time,
                     executionTable.c.end_time,
                     executionTable.c.host]).where(executionTable.c.execution_id == id)).fetchone()
         if result is not None:
-            return Execution(startTime=result['start_time'],
-                             endTime=result['end_time'],
-                             host=result['host'],
+            return Execution(startTime=result["start_time"],
+                             endTime=result["end_time"],
+                             host=result["host"],
                              id=id)
         else:
             return None
@@ -607,7 +607,7 @@ class SqlRegistry(Registry):
         ValueError
             If a run already exists with this collection.
         """
-        runTable = self._schema.tables['Run']
+        runTable = self._schema.tables["Run"]
         # TODO: this check is probably undesirable, as we may want to have multiple Runs output
         # to the same collection.  Fixing this requires (at least) modifying getRun() accordingly.
         selection = select([exists().where(runTable.c.collection == run.collection)])
@@ -620,7 +620,7 @@ class SqlRegistry(Registry):
                                                           collection=run.collection,
                                                           environment_id=None,  # TODO add environment
                                                           pipeline_id=None))    # TODO add pipeline
-        # TODO: set given Run's 'id' attribute.
+        # TODO: set given Run's "id" attribute.
 
     def getRun(self, id=None, collection=None):
         """
@@ -643,8 +643,8 @@ class SqlRegistry(Registry):
         ValueError
             Must supply one of ``collection`` or ``id``.
         """
-        executionTable = self._schema.tables['Execution']
-        runTable = self._schema.tables['Run']
+        executionTable = self._schema.tables["Execution"]
+        runTable = self._schema.tables["Run"]
         run = None
         # Retrieve by id
         if (id is not None) and (collection is None):
@@ -671,11 +671,11 @@ class SqlRegistry(Registry):
         else:
             raise ValueError("Either collection or id must be given")
         if result is not None:
-            run = Run(id=result['execution_id'],
-                      startTime=result['start_time'],
-                      endTime=result['end_time'],
-                      host=result['host'],
-                      collection=result['collection'],
+            run = Run(id=result["execution_id"],
+                      startTime=result["start_time"],
+                      endTime=result["end_time"],
+                      host=result["host"],
+                      collection=result["collection"],
                       environment=None,  # TODO add environment
                       pipeline=None)     # TODO add pipeline
         return run
@@ -697,8 +697,8 @@ class SqlRegistry(Registry):
               `DatasetRef`\ s, and its.
             - `actualInputs` and `outputs` will be ignored.
         """
-        quantumTable = self._schema.tables['Quantum']
-        datasetConsumersTable = self._schema.tables['DatasetConsumers']
+        quantumTable = self._schema.tables["Quantum"]
+        datasetConsumersTable = self._schema.tables["DatasetConsumers"]
         # First add the Execution part
         self.addExecution(quantum)
         # Then the Quantum specific part
@@ -711,7 +711,7 @@ class SqlRegistry(Registry):
         # for inserting.
         flatInputs = itertools.chain.from_iterable(quantum.predictedInputs.values())
         self._connection.execute(datasetConsumersTable.insert(),
-                                 [{'quantum_id': quantum.id, 'dataset_id': ref.id, 'actual': False}
+                                 [{"quantum_id": quantum.id, "dataset_id": ref.id, "actual": False}
                                      for ref in flatInputs])
 
     def getQuantum(self, id):
@@ -722,8 +722,8 @@ class SqlRegistry(Registry):
         id : `int`
             The unique identifier for the Quantum.
         """
-        executionTable = self._schema.tables['Execution']
-        quantumTable = self._schema.tables['Quantum']
+        executionTable = self._schema.tables["Execution"]
+        quantumTable = self._schema.tables["Quantum"]
         result = self._connection.execute(
             select([quantumTable.c.task,
                     quantumTable.c.run_id,
@@ -732,21 +732,21 @@ class SqlRegistry(Registry):
                     executionTable.c.host]).select_from(quantumTable.join(executionTable)).where(
                 quantumTable.c.execution_id == id)).fetchone()
         if result is not None:
-            run = self.getRun(id=result['run_id'])
-            quantum = Quantum(task=result['task'],
+            run = self.getRun(id=result["run_id"])
+            quantum = Quantum(task=result["task"],
                               run=run,
-                              startTime=result['start_time'],
-                              endTime=result['end_time'],
-                              host=result['host'],
+                              startTime=result["start_time"],
+                              endTime=result["end_time"],
+                              host=result["host"],
                               id=id)
             # Add predicted and actual inputs to quantum
-            datasetConsumersTable = self._schema.tables['DatasetConsumers']
+            datasetConsumersTable = self._schema.tables["DatasetConsumers"]
             for result in self._connection.execute(select([datasetConsumersTable.c.dataset_id,
                                                            datasetConsumersTable.c.actual]).where(
                     datasetConsumersTable.c.quantum_id == id)):
-                ref = self.getDataset(result['dataset_id'])
+                ref = self.getDataset(result["dataset_id"])
                 quantum.addPredictedInput(ref)
-                if result['actual']:
+                if result["actual"]:
                     quantum._markInputUsed(ref)
             return quantum
         else:
@@ -757,7 +757,7 @@ class SqlRegistry(Registry):
         """Record the given `DatasetRef` as an actual (not just predicted)
         input of the given `Quantum`.
 
-        This updates both the `SqlRegistry`'s `Quantum` table and the Python
+        This updates both the `SqlRegistry`"s `Quantum` table and the Python
         `Quantum.actualInputs` attribute.
 
         Parameters
@@ -775,7 +775,7 @@ class SqlRegistry(Registry):
         KeyError
             If ``ref`` is not a predicted consumer for ``quantum``.
         """
-        datasetConsumersTable = self._schema.tables['DatasetConsumers']
+        datasetConsumersTable = self._schema.tables["DatasetConsumers"]
         result = self._connection.execute(datasetConsumersTable.update().where(and_(
             datasetConsumersTable.c.quantum_id == quantum.id,
             datasetConsumersTable.c.dataset_id == ref.id)).values(actual=True))
@@ -977,8 +977,8 @@ class SqlRegistry(Registry):
             If dataId is invalid.
         """
         self._validateDataId(datasetType, dataId)
-        datasetTable = self._schema.tables['Dataset']
-        datasetCollectionTable = self._schema.tables['DatasetCollection']
+        datasetTable = self._schema.tables["Dataset"]
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_((self._schema.dataUnits.links[name] == dataId[name]
                                  for name in self._schema.dataUnits.getPrimaryKeyNames(
                                      datasetType.dataUnits)))
@@ -989,7 +989,7 @@ class SqlRegistry(Registry):
                 dataIdExpression))).fetchone()
         # TODO update unit values and add Run, Quantum and assembler?
         if result is not None:
-            return self.getDataset(result['dataset_id'])
+            return self.getDataset(result["dataset_id"])
         else:
             return None
 
@@ -1204,9 +1204,9 @@ class SqlRegistry(Registry):
         # SqlRegistryDatabaseDict.__init__ is required to take a config so it
         # can be called by DatabaseDict.fromConfig as well.
         # I suppose we could have Registry.makeDatabaseDict take a config as
-        # well, since it'll also usually be called by DatabaseDict.fromConfig,
+        # well, since it"ll also usually be called by DatabaseDict.fromConfig,
         # but I strongly believe in having signatures that only take what they
         # really need.
         config = Config()
-        config['table'] = table
+        config["table"] = table
         return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
