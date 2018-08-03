@@ -24,7 +24,7 @@
 import builtins
 import itertools
 
-from .utils import doImport, Singleton
+from .utils import doImport, Singleton, getFullTypeName
 from .composites import CompositeAssembler
 from .config import ConfigSubset
 
@@ -51,9 +51,14 @@ class StorageClass:
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
+    defaultAssembler = CompositeAssembler
+    defaultAssemblerName = getFullTypeName(defaultAssembler)
+
     def __init__(self, name, pytype=None, components=None, assembler=None):
         self.name = name
         self._pytypeName = pytype
+        if pytype is None:
+            raise ValueError("All StorageClass definitions require a Python type")
         self._components = components if components is not None else {}
         # if the assembler is not None also set it and clear the default
         # assembler
@@ -63,8 +68,8 @@ class StorageClass:
         else:
             # We set a default assembler so that a class is guaranteed to
             # support something.
-            self._assemblerClassName = None
-            self._assembler = CompositeAssembler
+            self._assembler = self.defaultAssembler
+            self._assemblerClassName = self.defaultAssemblerName
         # The types are created on demand and cached
         self._pytype = None
 
@@ -129,7 +134,31 @@ class StorageClass:
         return isinstance(instance, self.pytype)
 
     def __eq__(self, other):
-        return self.name == other.name
+        """Equality checks name, pytype name, assembler name, and components"""
+        if self.name != other.name:
+            return False
+
+        if type(self) != type(other):
+            return False
+
+        # We must compare pytype and assembler by name since we do not want
+        # to trigger an import of external module code here
+        if self._assemblerClassName != other._assemblerClassName:
+            return False
+        if self._pytypeName != other._pytypeName:
+            return False
+
+        # Ensure we have the same component keys in each
+        if set(self.components.keys()) != set(other.components.keys()):
+            return False
+
+        # Ensure that all the components have the same type
+        for k in self.components:
+            if self.components[k] != other.components[k]:
+                return False
+
+        # If we got to this point everything checks out
+        return True
 
     def __hash__(self):
         return hash(self.name)
@@ -181,7 +210,7 @@ class StorageClassFactory(metaclass=Singleton):
             True if the supplied string is present, or if the supplied
             `StorageClass` is present and identical.
         """
-        if isinstance(storageClassOrName, "str"):
+        if isinstance(storageClassOrName, str):
             return storageClassOrName in self._storageClasses
         elif isinstance(storageClassOrName, StorageClass):
             if storageClassOrName.name in self._storageClasses:
@@ -271,3 +300,18 @@ class StorageClassFactory(metaclass=Singleton):
                                  " definition")
         else:
             self._storageClasses[storageClass.name] = storageClass
+
+    def unregisterStorageClass(self, storageClassName):
+        """Remove the named StorageClass from the factory.
+
+        Parameters
+        ----------
+        storageClassName : `str`
+            Name of storage class to remove.
+
+        Raises
+        ------
+        KeyError
+            The named storage class is not registered.
+        """
+        del self._storageClasses[storageClassName]
