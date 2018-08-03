@@ -58,6 +58,29 @@ class TransactionTestError(Exception):
 
 class DatastoreTests(DatasetTestHelper):
     """Some basic tests of a simple POSIX datastore."""
+    root = None
+
+    def makeDatastore(self, sub=None):
+        """Make a new Datastore instance of the appropriate type.
+
+        Parameters
+        ----------
+        sub : str, optional
+            If not None, the returned Datastore will be distinct from any
+            Datastore constructed with a different value of ``sub``.  For
+            PosixDatastore, for example, the converse is also true, and ``sub``
+            is used as a subdirectory to form the new root.
+
+        Returns
+        -------
+        datastore : `Datastore`
+            Datastore constructed by this routine using the supplied
+            optional subdirectory if supported.
+        """
+        config = self.config.copy()
+        if sub is not None and self.root is not None:
+            self.datastoreType.setConfigRoot(os.path.join(self.root, sub), config, self.config)
+        return self.datastoreType(config=config, registry=self.registry)
 
     @classmethod
     def setUpClass(cls):
@@ -73,12 +96,21 @@ class DatastoreTests(DatasetTestHelper):
         cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
-        super().setUp()
         self.registry = DummyRegistry()
 
         # Need to keep ID for each datasetRef since we have no butler
         # for these tests
         self.id = 1
+
+        self.config = DatastoreConfig(self.configFile)
+
+        # Some subclasses override the working root directory
+        if self.root is not None:
+            def cleanup(path):
+                if path is not None and os.path.exists(path):
+                    shutil.rmtree(path)
+            self.addCleanup(cleanup, self.root)
+            self.datastoreType.setConfigRoot(self.root, self.config, self.config.copy())
 
     def testConstructor(self):
         datastore = self.makeDatastore()
@@ -390,29 +422,9 @@ class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
 
     def setUp(self):
-        super().setUp()
+        # Override the working directory before calling the base class
         self.root = tempfile.mkdtemp(dir=TESTDIR)
-        self.config = DatastoreConfig(self.configFile)
-        self.config["root"] = self.root
-
-    def tearDown(self):
-        shutil.rmtree(self.root)
-
-    def makeDatastore(self, sub=None):
-        """Make a new Datastore instance of the appropriate type.
-
-        Parameters
-        ----------
-        sub : str, optional
-            If not None, the returned Datastore will be distinct from any
-            Datastore constructed with a different value of sub.  For
-            PosixDatastore only, the converse is also true, and `sub` is
-            used as a subdirectory to form the new root.
-        """
-        config = self.config.copy()
-        if sub is not None:
-            config["root"] = os.path.join(self.root, sub)
-        return self.datastoreType(config=config, registry=self.registry)
+        super().setUp()
 
 
 class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
@@ -421,29 +433,12 @@ class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     uriScheme = "mem:"
     ingestTransferModes = ()
 
-    def setUp(self):
-        super().setUp()
-        self.config = DatastoreConfig(self.configFile)
 
-    def makeDatastore(self, sub=None):
-        """
-        Make a new Datastore instance of the appropriate type.
-
-        Parameters
-        ----------
-        sub : str, optional
-            If not None, the returned Datastore will be distinct from any
-            Datastore constructed with a different value of sub.  For
-            InMemoryDatastore only, this parameter is ignored - different
-            datastores are *always* distinct.
-        """
-        return self.datastoreType(config=self.config, registry=self.registry)
-
-
-class ChainedDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
-    """PosixDatastore specialization"""
+class ChainedDatastoreTestCase(PosixDatastoreTestCase):
+    """ChainedDatastore specialization using a POSIXDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     uriScheme = "mem:"
+    ingestTransferModes = ("copy", "move", "hardlink", "symlink")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
