@@ -148,6 +148,17 @@ class TopologicalSetTestCase(lsst.utils.tests.TestCase):
         with self.assertRaises(ValueError):
             topologicalSet.connect("c", "c")
 
+    def testSetOps(self):
+        """Test that TopologicalSet behaves like a Set.
+        """
+        a = TopologicalSet([1, 2, 3, 4])
+        b = set([3, 4, 5])
+        self.assertNotEqual(a, b)
+        self.assertEqual(a & b, {3, 4})
+        self.assertEqual(a | b, {1, 2, 3, 4, 5})
+        self.assertEqual(a ^ b, {1, 2, 5})
+        self.assertEqual(a - b, {1, 2})
+
     def testTopologicalOrdering(self):
         """Iterating over a TopologicalSet should visit the elements
         in the set in topologically sorted order.
