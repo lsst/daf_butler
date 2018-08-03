@@ -232,6 +232,8 @@ class Config(_ConfigBase):
     def __setitem__(self, name, value):
         keys = name.split('.')
         last = keys.pop()
+        if isinstance(value, Config):
+            value = copy.deepcopy(value.data)
         data = self.data
         for key in keys:
             # data could be a list
