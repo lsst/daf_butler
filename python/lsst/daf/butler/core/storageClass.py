@@ -250,8 +250,14 @@ class StorageClassFactory(metaclass=Singleton):
 
         Raises
         ------
-        KeyError
+        ValueError
             If a storage class has already been registered with
             storageClassName and the previous definition differs.
         """
-        self._storageClasses[storageClass.name] = storageClass
+        if storageClass.name in self._storageClasses:
+            existing = self.getStorageClass(storageClass.name)
+            if existing != storageClass:
+                raise ValueError(f"New definition for StorageClass {storageClass.name} differs from current"
+                                 " definition")
+        else:
+            self._storageClasses[storageClass.name] = storageClass
