@@ -22,6 +22,7 @@
 """Support for Storage Classes."""
 
 import builtins
+import itertools
 
 from .utils import doImport, Singleton
 from .composites import CompositeAssembler
@@ -199,13 +200,22 @@ class StorageClassFactory(metaclass=Singleton):
         sconfig = StorageClassConfig(config)
         self._configs.append(sconfig)
 
+        # Since we can not assume that we will get definitions of
+        # components before the definitions of the composites, we create
+        # two lists
+        composites = {}
+        simple = {}
         for name, info in sconfig.items():
-            if name == "config" or (isinstance(info, str) and info.endswith(".yaml")):
-                # This seems to be a location of another file so process that
-                self.addFromConfig(sconfig["config"])
-                continue
+            if "components" in info:
+                composites[name] = info
+            else:
+                simple[name] = info
 
-            # Create the storage class
+        for name in itertools.chain(simple, composites):
+            info = sconfig[name]
+
+            # Always create the storage class so we can ensure that
+            # we are not trying to overwrite with a different definition
             components = None
             if "components" in info:
                 components = {}
