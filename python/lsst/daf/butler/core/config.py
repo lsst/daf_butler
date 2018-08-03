@@ -232,14 +232,6 @@ class Config(_ConfigBase):
     def __setitem__(self, name, value):
         keys = name.split('.')
         last = keys.pop()
-        if isinstance(value, collections.Mapping):
-            d = {}
-            cur = d
-            for key in keys:
-                cur[key] = {}
-                cur = cur[key]
-            cur[last] = value
-            self.update(d)
         data = self.data
         for key in keys:
             # data could be a list
