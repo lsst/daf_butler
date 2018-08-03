@@ -164,6 +164,29 @@ class StorageClassFactory(metaclass=Singleton):
         if config is not None:
             self.addFromConfig(config)
 
+    def __contains__(self, storageClassOrName):
+        """Indicates whether the storage class exists in the factory.
+
+        Parameters
+        ----------
+        storageClassOrName : `str` or `StorageClass`
+            If `str` is given existence of the named StorageClass
+            in the factory is checked. If `StorageClass` is given
+            existence and equality are checked.
+
+        Returns
+        -------
+        in : `bool`
+            True if the supplied string is present, or if the supplied
+            `StorageClass` is present and identical.
+        """
+        if isinstance(storageClassOrName, "str"):
+            return storageClassOrName in self._storageClasses
+        elif isinstance(storageClassOrName, StorageClass):
+            if storageClassOrName.name in self._storageClasses:
+                return storageClassOrName == self._storageClasses[storageClassOrName.name]
+        return False
+
     def addFromConfig(self, config):
         """Add more `StorageClass` definitions from a config file.
 
