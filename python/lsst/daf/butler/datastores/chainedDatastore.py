@@ -222,6 +222,38 @@ class ChainedDatastore(Datastore):
         if self._transaction is not None:
             self._transaction.registerUndo('put', self.remove, ref)
 
+    def ingest(self, *args, **kwargs):
+        """Add an on-disk file with the given `DatasetRef` to the store,
+        possibly transferring it.
+
+        This method is forwarded to each of the chained datastores, trapping
+        cases where a datastore has not implemented file ingest and ignoring
+        them.
+
+        A transfer mode of None is not supported since that requires the
+        file to have been previously copied to each individual datastore.
+
+        Raises
+        ------
+        NotImplementedError
+            If all chained datastores have no ingest implemented or if
+            a transfer mode of `None` is specified.
+        """
+        log.debug("Ingesting %s (transfer=%s)", args[1], kwargs["transfer"])
+
+        if kwargs["transfer"] is None:
+            raise NotImplementedError("ChainedDatastore does not support transfer=None")
+
+        counter = 0
+        for datastore in self.datastores:
+            try:
+                datastore.ingest(*args, **kwargs)
+            except NotImplementedError:
+                counter += 1
+                pass
+        if counter == len(self.datastores):
+            raise NotImplementedError("Ingest not implemented by any of the chained datastores")
+
     def getUri(self, ref, predict=False):
         """URI to the Dataset.
 
