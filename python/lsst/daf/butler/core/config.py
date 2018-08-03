@@ -439,6 +439,12 @@ class Config(_ConfigBase):
             Allows for named parameters to be set to new values in bulk, and
             for other values to be set by copying from a reference config.
 
+            Assumes that the supplied config is compatible with ```configType``
+            and will attach the updated values to the supplied config by
+            looking for the related component key.  It is assumed that
+            ``config`` and ``full`` are from the same part of the
+            configuration hierarchy.
+
             Parameters
             ----------
             configType : `ConfigSubset`
@@ -474,6 +480,14 @@ class Config(_ConfigBase):
             if toupdate is None and tocopy is None:
                 raise ValueError("One of toupdate or tocopy parameters must be set.")
 
+            # If this is a parent configuration then we need to ensure that
+            # the supplied config has the relevant component key in it.
+            # If this is a parent configuration we add in the stub entry
+            # so that the ConfigSubset constructor will do the right thing.
+            # We check full for this since that is guaranteed to be complete.
+            if configType.component in full and configType.component not in config:
+                config[configType.component] = {}
+
             # Extract the part of the config we wish to update
             localConfig = configType(config, mergeDefaults=False, validate=False)
 
@@ -486,7 +500,7 @@ class Config(_ConfigBase):
                 for key in tocopy:
                     localConfig[key] = localFullConfig[key]
 
-            # Reattach to parent
+            # Reattach to parent if this is a child config
             if configType.component in config:
                 config[configType.component] = localConfig
             else:
