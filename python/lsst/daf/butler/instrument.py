@@ -19,8 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Instrument", "makeExposureEntryFromVisitInfo", "makeVisitEntryFromVisitInfo")
 
-__all__ = ("Instrument", )
+from lsst.daf.base import DateTime
+
+
+# TODO: all code in this module probably needs to be moved to a higher-level
+# package (perhaps obs_base), but it is needed by the gen2convert subpackage.
+# We should probably move that as well.
 
 
 class Instrument:
@@ -65,6 +71,76 @@ class Instrument:
 
     def _addSensors(self, registry):
         for entry in self.sensors:
-            if "camera" not in entry:
-                entry["camera"] = self.camera
-            registry.addDataUnitEntry("Sensor", entry)
+            if 'camera' not in entry:
+                entry['camera'] = self.camera
+            registry.addDataUnitEntry('Sensor', entry)
+
+
+def makeExposureEntryFromVisitInfo(dataId, visitInfo, snap=0):
+    """Construct an Exposure DataUnit entry from `afw.image.VisitInfo`.
+
+    Parameters
+    ----------
+    dataId : `dict`
+        Dictionary of DataUnit primary/foreign key values for Exposure
+        ("camera", "exposure", optionally "visit" and "physical_filter").
+    visitInfo : `afw.image.VisitInfo`
+        A `VisitInfo` object corresponding to the Exposure.
+    snap : `int`
+        Snap index of the Exposure.
+
+    Returns
+    -------
+    entry : `dict`
+        A dictionary containing all fields in the Exposure table.
+    """
+    avg = visitInfo.getDate()
+    begin = DateTime(int(avg.nsecs(DateTime.TAI) - 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
+    result = {
+        "datetime_begin": begin.toPython(),
+        "exposure_time": visitInfo.getExposureTime(),
+        "boresight_az": visitInfo.getBoresightAzAlt().getLongitude().asDegrees(),
+        "boresight_alt": visitInfo.getBoresightAzAlt().getLatitude().asDegrees(),
+        "rot_angle": visitInfo.getBoresightRotAngle().asDegrees(),
+        "snap": snap,
+        "dark_time": visitInfo.getDarkTime()
+    }
+    result.update(dataId)
+    return result
+
+
+def makeVisitEntryFromVisitInfo(dataId, visitInfo):
+    """Construct a Visit DataUnit entry from `afw.image.VisitInfo`.
+
+    Parameters
+    ----------
+    dataId : `dict`
+        Dictionary of DataUnit primary/foreign key values for Visit ("camera",
+        "visit", optionally "physical_filter").
+    visitInfo : `afw.image.VisitInfo`
+        A `VisitInfo` object corresponding to the Visit.
+
+    Returns
+    -------
+    entry : `dict`
+        A dictionary containing all fields in the Visit table aside from
+        "region".
+    """
+    avg = visitInfo.getDate()
+    begin = DateTime(int(avg.nsecs(DateTime.TAI) - 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
+    end = DateTime(int(avg.nsecs(DateTime.TAI) + 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
+    result = {
+        "datetime_begin": begin.toPython(),
+        "datetime_end": end.toPython(),
+        "exposure_time": visitInfo.getExposureTime(),
+        "boresight_az": visitInfo.getBoresightAzAlt().getLongitude().asDegrees(),
+        "boresight_alt": visitInfo.getBoresightAzAlt().getLatitude().asDegrees(),
+        "rot_angle": visitInfo.getBoresightRotAngle().asDegrees(),
+        "earth_rotation_angle": visitInfo.getEra().asDegrees(),
+        "boresight_ra": visitInfo.getBoresightRaDec().getLongitude().asDegrees(),
+        "boresight_dec": visitInfo.getBoresightRaDec().getLatitude().asDegrees(),
+        "boresight_parallactic_angle": visitInfo.getBoresightParAngle().asDegrees(),
+        "local_era": visitInfo.getLocalEra().asDegrees(),
+    }
+    result.update(dataId)
+    return result
