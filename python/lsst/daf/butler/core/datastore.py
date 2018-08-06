@@ -144,8 +144,11 @@ class Datastore(metaclass=ABCMeta):
 
     containerKey = None
     """Name of the key containing a list of subconfigurations that also
-    need to be merged with defaults and may use different Python types
-    (but the same config class). Assumed to be a list of configs."""
+    need to be merged with defaults and will likely use different Python
+    datastore classes (but all using DatastoreConfig).  Assumed to be a
+    list of configurations that can be represented in a DatastoreConfig
+    and containing a "cls" definition. None indicates that no containers
+    are expected in this Datastore."""
 
     @classmethod
     @abstractmethod
