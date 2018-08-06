@@ -52,12 +52,17 @@ class FileTemplates:
         Parameters
         ----------
         datasetType : `str`
-            Dataset type.
+            Dataset type name.
 
         Returns
         -------
         template : `FileTemplate`
             Template instance to use with that dataset type.
+
+        Raises
+        ------
+        KeyError
+            No template could be located for this Dataset type.
         """
         # Get a location from the templates
         template = None
@@ -76,7 +81,7 @@ class FileTemplates:
 
         # if still not template give up for now.
         if template is None:
-            raise TypeError("Unable to determine file template from supplied type [{}]".format(datasetType))
+            raise KeyError("Unable to determine file template from supplied type [{}]".format(datasetType))
 
         return template
 
