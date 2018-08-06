@@ -27,8 +27,8 @@ import tempfile
 
 import lsst.utils.tests
 
-from lsst.daf.butler import StorageClassFactory
-from lsst.daf.butler import DatastoreConfig
+from lsst.daf.butler import StorageClassFactory, StorageClass
+from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError
 
 from lsst.daf.butler.core.utils import doImport
 
@@ -59,6 +59,7 @@ class TransactionTestError(Exception):
 class DatastoreTests(DatasetTestHelper):
     """Some basic tests of a simple POSIX datastore."""
     root = None
+    hasUnsupportedPut = True
 
     def makeDatastore(self, sub=None):
         """Make a new Datastore instance of the appropriate type.
@@ -156,6 +157,13 @@ class DatastoreTests(DatasetTestHelper):
             self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
 
         storageClass = sc
+
+        # Check that a put fails if the dataset type is not supported
+        if self.hasUnsupportedPut:
+            sc = StorageClass("UnsupportedSC", pytype=type(metrics))
+            ref = self.makeDatasetRef("unsupportedType", dataUnits, sc, dataId)
+            with self.assertRaises(DatasetTypeNotSupportedError):
+                datastore.put(metrics, ref)
 
         # These should raise
         ref = self.makeDatasetRef("metrics", dataUnits, storageClass, dataId, id=10000)
@@ -431,6 +439,7 @@ class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
     uriScheme = "mem:"
+    hasUnsupportedPut = False
     ingestTransferModes = ()
 
 

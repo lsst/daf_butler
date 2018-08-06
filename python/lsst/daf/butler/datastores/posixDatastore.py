@@ -38,6 +38,7 @@ from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
 from lsst.daf.butler.core.utils import getInstanceOf, transactional
 from lsst.daf.butler.core.storageClass import StorageClassFactory
+from lsst.daf.butler.core.exceptions import DatasetTypeNotSupportedError
 from ..core.databaseDict import DatabaseDict
 
 __all__ = ("PosixDatastore", )
@@ -297,6 +298,8 @@ class PosixDatastore(Datastore):
         ------
         TypeError
             Supplied object and storage class are inconsistent.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
         """
         datasetType = ref.datasetType
         typeName = datasetType.name
@@ -309,11 +312,20 @@ class PosixDatastore(Datastore):
                                                                  storageClass.pytype))
 
         # Work out output file name
-        template = self.templates.getTemplate(typeName)
+        try:
+            template = self.templates.getTemplate(typeName)
+        except KeyError as e:
+            raise DatasetTypeNotSupportedError(f"Unable to find template for {typeName}") from e
+
         location = self.locationFactory.fromPath(template.format(ref))
 
         # Get the formatter based on the storage class
-        formatter = self.formatterFactory.getFormatter(datasetType.storageClass, typeName)
+        try:
+            formatter = self.formatterFactory.getFormatter(datasetType.storageClass, typeName)
+        except KeyError as e:
+            raise DatasetTypeNotSupportedError("Unable to find formatter for StorageClass "
+                                               f"{datasetType.storageClass.name} or "
+                                               f"DatasetType {typeName}") from e
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
