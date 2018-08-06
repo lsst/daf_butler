@@ -26,6 +26,8 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.sql import select, and_, exists
 from sqlalchemy.exc import IntegrityError
 
+from lsst.sphgeom import ConvexPolygon
+
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
@@ -174,7 +176,7 @@ class SqlRegistry(Registry):
         if datasetType.dataUnits:
             self._connection.execute(datasetTypeUnitsTable.insert(),
                                      [{'dataset_type_name': datasetType.name, 'unit_name': dataUnitName}
-                                     for dataUnitName in datasetType.dataUnits])
+                                      for dataUnitName in datasetType.dataUnits])
         self._datasetTypes[datasetType.name] = datasetType
         # Also register component DatasetTypes (if any)
         for compName, compStorageClass in datasetType.storageClass.components.items():
@@ -233,7 +235,7 @@ class SqlRegistry(Registry):
         datasetType : `str`
             Name of a `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
+            A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a Collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
@@ -817,10 +819,11 @@ class SqlRegistry(Registry):
         except IntegrityError as err:
             raise ValueError(str(err))  # TODO this should do an explicit validity check instead
         if region is not None:
-            self.setDataUnitRegion((dataUnitName,), v, region, new=True)
+            self.setDataUnitRegion(
+                (dataUnitName,) + tuple(d.name for d in dataUnit.requiredDependencies), v, region)
 
     @transactional
-    def setDataUnitRegion(self, dataUnitNames, value, region, new=True):
+    def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
         """Set the region field for a DataUnit instance or a combination
         thereof and update associated spatial join tables.
 
@@ -833,33 +836,30 @@ class SqlRegistry(Registry):
             A dictionary of values that uniquely identify the DataUnits.
         region : `sphgeom.ConvexPolygon`
             Region on the sky.
-        new : `bool`
-            If True, the DataUnits associated identified are being inserted for
-            the first time, so no spatial regions should already exist.
-            If False, existing region information for these DataUnits is being
-            replaced.
+        update : `bool`
+            If True, existing region information for these DataUnits is being
+            replaced.  This is usually required because DataUnit entries are
+            assumed to be pre-inserted prior to calling this function.
         """
-        keyColumns = {}
+        primaryKey = set()
         for dataUnitName in dataUnitNames:
             dataUnit = self._schema.dataUnits[dataUnitName]
             dataUnit.validateId(value)
-            keyColumns.update(dataUnit.primaryKeyColumns)
+            primaryKey.update(dataUnit.primaryKey)
         table = self._schema.dataUnits.getRegionHolder(*dataUnitNames).table
         if table is None:
             raise TypeError("No region table found for '{}'.".format(dataUnitNames))
-        # If a region record for these DataUnits already exists, use an update
-        # query. That could happen either because those DataUnits have been
-        # inserted previously and this is an improved region for them, or
-        # because the region is associated with a single DataUnit instance and
-        # is hence part of that DataUnit's main table.
-        if not new or (len(dataUnitNames) == 1 and table == dataUnit.table):
-            self._connection.execute(
+        # Update the region for an existing entry
+        if update:
+            result = self._connection.execute(
                 table.update().where(
-                    and_((keyColumns[name] == value[name] for name in keyColumns))
+                    and_((table.columns[name] == value[name] for name in primaryKey))
                 ).values(
                     region=region.encode()
                 )
             )
+            if result.rowcount == 0:
+                raise ValueError("No records were updated when setting region, did you forget update=False?")
         else:  # Insert rather than update.
             self._connection.execute(
                 table.insert().values(
@@ -871,11 +871,11 @@ class SqlRegistry(Registry):
         join = self._schema.dataUnits.getJoin(dataUnitNames, "SkyPix")
         if join is None or join.isView:
             return
-        if not new:
+        if update:
             # Delete any old SkyPix join entries for this DataUnit
             self._connection.execute(
                 join.table.delete().where(
-                    and_((keyColumns[name] == value[name] for name in keyColumns))
+                    and_((join.table.columns[name] == value[name] for name in primaryKey))
                 )
             )
         parameters = []
@@ -935,7 +935,7 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
+            A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a Collection.
 
         Raises
@@ -962,7 +962,7 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` name, value pairs that label the
+            A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a Collection.
 
         Returns
@@ -990,6 +990,40 @@ class SqlRegistry(Registry):
         # TODO update unit values and add Run, Quantum and assembler?
         if result is not None:
             return self.getDataset(result['dataset_id'])
+        else:
+            return None
+
+    def getRegion(self, dataId):
+        """Get region associated with a dataId.
+
+        Parameters
+        ----------
+        dataId : `dict`
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a Collection.
+
+        Returns
+        -------
+        region : `lsst.sphgeom.ConvexPolygon`
+            The region associated with a ``dataId`` or ``None`` if not present.
+
+        Raises
+        ------
+        KeyError
+            If the set of dataunits for the ``dataId`` does not correspond to
+            a unique spatial lookup.
+        """
+        dataUnitNames = (self._schema.dataUnits.getByLinkName(linkName).name for linkName in dataId)
+        regionHolder = self._schema.dataUnits.getRegionHolder(*tuple(dataUnitNames))
+        # Skypix does not have a table to lookup the region in, instead generate it
+        if regionHolder == self._schema.dataUnits["SkyPix"]:
+            return self.pixelization.pixel(dataId["skypix"])
+        # Lookup region
+        primaryKeyColumns = regionHolder.primaryKeyColumns
+        result = self._connection.execute(select([regionHolder.regionColumn]).where(
+            and_((primaryKeyColumns[name] == dataId[name] for name in primaryKeyColumns)))).fetchone()
+        if result is not None:
+            return ConvexPolygon.decode(result[0])
         else:
             return None
 
