@@ -72,8 +72,8 @@ class Registry(metaclass=ABCMeta):
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
-        Config.overrideConfigParameters(RegistryConfig, config, full,
-                                        tocopy=("skypix.cls", "skypix.level"))
+        Config.overrideParameters(RegistryConfig, config, full,
+                                  toCopy=("skypix.cls", "skypix.level"))
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, create=False):

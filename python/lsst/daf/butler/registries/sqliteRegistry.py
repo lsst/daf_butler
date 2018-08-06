@@ -69,9 +69,9 @@ class SqliteRegistry(SqlRegistry):
             should be copied from `full` to `Config`.
         """
         super().setConfigRoot(root, config, full)
-        Config.overrideConfigParameters(RegistryConfig, config, full,
-                                        toupdate={"db": "sqlite:///{}/gen3.sqlite3".format(root)},
-                                        tocopy=("cls", ))
+        Config.overrideParameters(RegistryConfig, config, full,
+                                  toUpdate={"db": "sqlite:///{}/gen3.sqlite3".format(root)},
+                                  toCopy=("cls", ))
 
     def __init__(self, registryConfig, schemaConfig, create=False):
         if ':memory:' in registryConfig.get('db', ''):

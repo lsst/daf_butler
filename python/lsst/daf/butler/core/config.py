@@ -427,7 +427,7 @@ class Config(_ConfigBase):
             self.dump(f)
 
     @staticmethod
-    def overrideConfigParameters(configType, config, full, toupdate=None, tocopy=None):
+    def overrideParameters(configType, config, full, toUpdate=None, toCopy=None):
             """Generic helper function for overriding specific config parameters
 
             Allows for named parameters to be set to new values in bulk, and
@@ -453,26 +453,26 @@ class Config(_ConfigBase):
                 A complete config with all defaults expanded that can be
                 converted to a ``configType``. Read-only and will not be
                 modified by this method. Values are read from here if
-                ``tocopy`` is defined.
+                ``toCopy`` is defined.
 
                 Repository-specific options that should not be obtained
                 from defaults when Butler instances are constructed
                 should be copied from `full` to `Config`.
-            toupdate : `dict`, optional
+            toUpdate : `dict`, optional
                 A `dict` defining the keys to update and the new value to use.
                 The keys and values can be any supported by `Config`
                 assignment.
-            tocopy : `tuple`, optional
+            toCopy : `tuple`, optional
                 `tuple` of keys whose values should be copied from ``full``
                 into ``config``.
 
             Raises
             ------
             ValueError
-                Neither ``toupdate`` not ``tocopy`` were defined.
+                Neither ``toUpdate`` not ``toCopy`` were defined.
             """
-            if toupdate is None and tocopy is None:
-                raise ValueError("One of toupdate or tocopy parameters must be set.")
+            if toUpdate is None and toCopy is None:
+                raise ValueError("One of toUpdate or toCopy parameters must be set.")
 
             # If this is a parent configuration then we need to ensure that
             # the supplied config has the relevant component key in it.
@@ -485,13 +485,13 @@ class Config(_ConfigBase):
             # Extract the part of the config we wish to update
             localConfig = configType(config, mergeDefaults=False, validate=False)
 
-            if toupdate:
-                for key, value in toupdate.items():
+            if toUpdate:
+                for key, value in toUpdate.items():
                     localConfig[key] = value
 
-            if tocopy:
+            if toCopy:
                 localFullConfig = configType(full, mergeDefaults=False)
-                for key in tocopy:
+                for key in toCopy:
                     localConfig[key] = localFullConfig[key]
 
             # Reattach to parent if this is a child config

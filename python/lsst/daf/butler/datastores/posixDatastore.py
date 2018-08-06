@@ -105,9 +105,9 @@ class PosixDatastore(Datastore):
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
-        Config.overrideConfigParameters(DatastoreConfig, config, full,
-                                        toupdate={"root": root},
-                                        tocopy=("cls", "records.table"))
+        Config.overrideParameters(DatastoreConfig, config, full,
+                                  toUpdate={"root": root},
+                                  toCopy=("cls", "records.table"))
 
     def __init__(self, config, registry):
         super().__init__(config, registry)
