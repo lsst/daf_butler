@@ -22,10 +22,8 @@
 import os
 import unittest
 from datetime import datetime, timedelta
-from itertools import combinations
 
 import lsst.utils.tests
-import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
 from lsst.daf.butler.core.storageInfo import StorageInfo
@@ -377,81 +375,6 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(registry.getDataset(refId))
         # Or the DataUnit entries
         self.assertIsNone(registry.findDataUnitEntry("Camera", {"camera": "DummyCam"}))
-
-    def testGetRegion(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
-        regionTract = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
-                                                  lsst.sphgeom.UnitVector3d(0, 1, 0),
-                                                  lsst.sphgeom.UnitVector3d(0, 0, 1)))
-        regionPatch = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 1, 0),
-                                                  lsst.sphgeom.UnitVector3d(0, 1, 0),
-                                                  lsst.sphgeom.UnitVector3d(0, 0, 1)))
-        regionVisit = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
-                                                  lsst.sphgeom.UnitVector3d(0, 1, 1),
-                                                  lsst.sphgeom.UnitVector3d(0, 0, 1)))
-        regionVisitSensor = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
-                                                        lsst.sphgeom.UnitVector3d(0, 1, 0),
-                                                        lsst.sphgeom.UnitVector3d(0, 1, 1)))
-        for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitSensor), 2):
-            self.assertNotEqual(a, b)
-        # Add some dataunits
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam",
-                                                     "physical_filter": "dummy_r",
-                                                     "abstract_filter": "r"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam",
-                                                     "physical_filter": "dummy_i",
-                                                     "abstract_filter": "i"})
-        for sensor in (1, 2, 3, 4, 5):
-            registry.addDataUnitEntry("Sensor", {"camera": "DummyCam", "sensor": sensor})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "dummy_r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "dummy_i"})
-        registry.addDataUnitEntry("SkyMap", {"skymap": "DummySkyMap", "hash": bytes()})
-        registry.addDataUnitEntry("Tract", {"skymap": "DummySkyMap", "tract": 0, "region": regionTract})
-        registry.addDataUnitEntry("Patch",
-                                  {"skymap": "DummySkyMap",
-                                   "tract": 0,
-                                   "patch": 0,
-                                   "cell_x": 0,
-                                   "cell_y": 0,
-                                   "region": regionPatch})
-        registry.setDataUnitRegion(("Visit",),
-                                   {"camera": "DummyCam", "visit": 0},
-                                   regionVisit,
-                                   update=True)
-        registry.setDataUnitRegion(("Visit", "Sensor"),
-                                   {"camera": "DummyCam", "visit": 0, "sensor": 2},
-                                   regionVisitSensor,
-                                   update=False)
-        # Get region for a tract
-        self.assertEqual(regionTract, registry.getRegion({"skymap": "DummySkyMap", "tract": 0}))
-        # Attempt to get region for a non-existent tract
-        self.assertIsNone(registry.getRegion({"skymap": "DummySkyMap", "tract": 1}))
-        # Get region for a (tract, patch) combination
-        self.assertEqual(regionPatch, registry.getRegion({"skymap": "DummySkyMap", "tract": 0, "patch": 0}))
-        # Get region for a non-existent (tract, patch) combination
-        self.assertIsNone(registry.getRegion({"skymap": "DummySkyMap", "tract": 0, "patch": 1}))
-        # Get region for a visit
-        self.assertEqual(regionVisit, registry.getRegion({"camera": "DummyCam", "visit": 0}))
-        # Attempt to get region for a non-existent visit
-        self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 10}))
-        # Get region for a (visit, sensor) combination
-        self.assertEqual(regionVisitSensor,
-                         registry.getRegion({"camera": "DummyCam", "visit": 0, "sensor": 2}))
-        # Attempt to get region for a non-existent (visit, sensor) combination
-        self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 0, "sensor": 3}))
-        # getRegion for a dataId containing no spatial dataunits should fail
-        with self.assertRaises(KeyError):
-            registry.getRegion({"camera": "DummyCam"})
-        # getRegion for a mix of spatial dataunits should fail
-        with self.assertRaises(KeyError):
-            registry.getRegion({"camera": "DummyCam",
-                                "visit": 0,
-                                "sensor": 2,
-                                "skymap": "DummySkyMap",
-                                "tract": 1})
-        # Check if we can get the region for a skypix
-        self.assertIsInstance(registry.getRegion({"skypix": 1000}), lsst.sphgeom.ConvexPolygon)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

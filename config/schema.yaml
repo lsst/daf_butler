@@ -186,7 +186,7 @@ schema:
           tgt:
             - Visit.camera
             - Visit.visit
-      spatial: true
+      regionColumn: region
       tables:
         Visit:
           doc: >
@@ -476,7 +476,7 @@ schema:
         single level for all SkyPix values.  Our preliminary guess is that this
         level should have pixels be approximately (within a factor of ~4) of the
         size of a single Sensor on the sky.
-      spatial: true
+
       link:
       -
         name: skypix
@@ -536,7 +536,7 @@ schema:
           tgt:
             - Tract.skymap
             - Tract.tract
-      spatial: true
+      regionColumn: region
       tables:
         Tract:
           doc: >
@@ -593,7 +593,7 @@ schema:
             - Patch.skymap
             - Patch.tract
             - Patch.patch
-      spatial: true
+      regionColumn: region
       tables:
         Patch:
           doc: >
@@ -672,7 +672,7 @@ schema:
       relates:
         - Visit
         - Sensor
-      spatial: true
+      regionColumn: region
       tables:
         VisitSensorRegion:
           doc: >

@@ -160,8 +160,8 @@ class DatasetRef:
     datasetType : `DatasetType`
         The `DatasetType` for this Dataset.
     dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+        Dictionary where the keys are `DataUnit` names and the values are
+        `DataUnit` values.
     id : `int`, optional
         A unique identifier.
         Normally set to `None` and assigned by `Registry`
@@ -200,7 +200,7 @@ class DatasetRef:
 
     @property
     def dataId(self):
-        """A `dict` of `DataUnit` link name, value pairs that label the `DatasetRef`
+        """A `dict` of `DataUnit` name, value pairs that label the `DatasetRef`
         within a Collection.
         """
         return self._dataId
