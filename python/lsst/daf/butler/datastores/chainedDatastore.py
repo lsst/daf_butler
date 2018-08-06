@@ -127,11 +127,6 @@ class ChainedDatastore(Datastore):
 
         self.storageClassFactory = StorageClassFactory()
 
-        # Name ourselves with the timestamp the datastore
-        # was created.
-        self.name = "{}@{}".format(type(self).__qualname__, time.time())
-        log.debug("Creating datastore %s", self.name)
-
         # Scan for child datastores and instantiate them with the same registry
         self.datastores = []
         for c in self.config["datastores"]:
@@ -140,6 +135,14 @@ class ChainedDatastore(Datastore):
             datastore = datastoreType(c, registry)
             log.debug("Creating child datastore %s", datastore.name)
             self.datastores.append(datastore)
+
+        # Name ourself based on our children
+        if self.datastores:
+            childNames = ",".join([d.name for d in self.datastores])
+        else:
+            childNames = "(empty@{})".format(time.time())
+        self.name = "{}[{}]".format(type(self).__qualname__, childNames)
+        log.debug("Created %s", self.name)
 
     def exists(self, ref):
         """Check if the dataset exists in one of the datastores.
