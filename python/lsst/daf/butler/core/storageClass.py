@@ -58,7 +58,8 @@ class StorageClass:
         self.name = name
         self._pytypeName = pytype
         if pytype is None:
-            raise ValueError("All StorageClass definitions require a Python type")
+            self._pytypeName = "object"
+            self._pytype = object
         self._components = components if components is not None else {}
         # if the assembler is not None also set it and clear the default
         # assembler

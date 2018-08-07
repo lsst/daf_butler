@@ -50,8 +50,9 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(sc.validateInstance({}))
         self.assertFalse(sc.validateInstance(""))
 
-        with self.assertRaises(ValueError):
-            storageClass.StorageClass(className)
+        # Allow no definition of python type
+        scn = storageClass.StorageClass(className)
+        self.assertIs(scn.pytype, object)
 
         # Include some components
         scc = storageClass.StorageClass(className, pytype=PythonType, components={"comp1": sc})
