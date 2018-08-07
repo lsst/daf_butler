@@ -21,9 +21,10 @@
 
 from itertools import chain
 
+from .config import ConfigSubset
 from .utils import TopologicalSet, iterable
 
-__all__ = ("DataUnit", "DataUnitRegistry")
+__all__ = ("DataUnit", "DataUnitRegistry", "DataUnitRegistryConfig")
 
 
 class DataUnit:
@@ -48,20 +49,16 @@ class DataUnit:
         Names of columns that form the `DataUnit` specific part of the
         primary-key in this `DataUnit` table and are also the names of the
         link column in the Datasets table.
-    table : `sqlalchemy.core.Table`, optional
-        When not ``None`` the primary table entry corresponding to this
-        `DataUnit`.
     spatial : `bool`, optional
         Is this a spatial `DataUnit`? If so then it either has a ``region``
         column, or some other way to get a region (e.g. ``SkyPix``).
     """
 
     def __init__(self, name, requiredDependencies, optionalDependencies,
-                 link=(), table=None, spatial=False):
+                 link=(), spatial=False):
         self._name = name
         self._requiredDependencies = frozenset(requiredDependencies)
         self._optionalDependencies = frozenset(optionalDependencies)
-        self._table = table
         self._link = link
         self._primaryKey = None
         self._spatial = spatial
@@ -107,13 +104,6 @@ class DataUnit:
         return self.requiredDependencies.union(self.optionalDependencies)
 
     @property
-    def table(self):
-        """When not ``None`` the primary table entry corresponding to this
-        `DataUnit` (`sqlalchemy.core.Table`, optional).
-        """
-        return getattr(self, "_table", None)
-
-    @property
     def link(self):
         """Names of columns that form the `DataUnit` specific part of the
         primary-key in this `DataUnit` table and are also the names of the
@@ -131,30 +121,6 @@ class DataUnit:
             for dependency in self.requiredDependencies:
                 self._primaryKey.update(dependency.primaryKey)
         return self._primaryKey
-
-    @property
-    def linkColumns(self):
-        """Dictionary keyed on ``link`` names with `sqlalchemy.Column` entries
-        into this `DataUnit` primary table as values (`dict`).
-        """
-        return {name: self.table.columns[name] for name in self.link}
-
-    @property
-    def primaryKeyColumns(self):
-        """Dictionary keyed on ``primaryKey`` names with `sqlalchemy.Column`
-        entries into this `DataUnit` primary table as values (`dict`).
-        """
-        return {name: self.table.columns[name] for name in self.primaryKey}
-
-    @property
-    def regionColumn(self):
-        """Table column (`sqlalchemy.Column`) with encoded region data,
-        ``None`` if table has no region column.
-        """
-        table = self.table
-        if table is not None and self.spatial:
-            return table.c["region"]
-        return None
 
     @property
     def spatial(self):
@@ -196,14 +162,6 @@ class DataUnitJoin:
         Right-hand-side of the join.
     summarizes : `DataUnitJoin`
         Summarizes this other `DataUnitJoin`.
-    isView : `bool`, optional
-        True if the table assocaited with this join is actually a view, False
-        if it is a regular table, and None if it is neither.
-    table : `sqlalchemy.TableClause` or `sqlalchemy.Table`
-        The table to be used for queries.  Note that this is not
-        an actual `Table` in many cases because joins are often
-        materialized as views (and thus are also not present
-        in `Registry._schema._metadata`).
     relates : `tuple` of `DataUnit`
         The DataUnits in this relationship.
     spatial : `bool`, optional
@@ -212,13 +170,11 @@ class DataUnitJoin:
     """
 
     def __init__(self, name, lhs=None, rhs=None, summarizes=None,
-                 isView=None, table=None, relates=None, spatial=False):
+                 relates=None, spatial=False):
         self._name = name
         self._lhs = lhs
         self._rhs = rhs
         self._summarizes = summarizes
-        self._isView = isView
-        self._table = table
         self._relates = relates
         self._spatial = spatial
 
@@ -250,17 +206,6 @@ class DataUnitJoin:
         return self._summarizes
 
     @property
-    def isView(self):
-        return self._isView
-
-    @property
-    def table(self):
-        """When not ``None`` the primary table entry corresponding to this
-        `DataUnitJoin` (`sqlalchemy.core.TableClause`, optional).
-        """
-        return getattr(self, "_table", None)
-
-    @property
     def primaryKey(self):
         """Full primary-key column name tuple.
         """
@@ -287,6 +232,12 @@ class DataUnitJoin:
         return None
 
 
+class DataUnitRegistryConfig(ConfigSubset):
+    component = "dataUnitsConfig"
+    requiredKeys = ("version", "dataUnits")
+    defaultConfigFile = "dataUnits.yaml"
+
+
 class DataUnitRegistry:
     """Instances of this class keep track of `DataUnit` relations.
 
@@ -305,25 +256,21 @@ class DataUnitRegistry:
         self._spatialDataUnits = frozenset()
 
     @classmethod
-    def fromConfig(cls, config, builder=None):
+    def fromConfig(cls, config):
         """Alternative constructor.
 
-        Build a `DataUnitRegistry` instance from a `Config` object and an
-        (optional) `SchemaBuilder`.
+        Build a `DataUnitRegistry` instance from a `Config` object.
 
         Parameters
         ----------
         config : `SchemaConfig`
-            `Registry` schema configuration containing "DataUnits",
-            "dataUnitRegions", and "dataUnitJoins" entries.
-        builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every
-            `DataUnit` table.
+            `Registry` DataUnit configuration containing "dataUnits",
+            "joins" entries.
         """
         dataUnitRegistry = cls()
         dataUnitRegistry._initDataUnitNames(config["dataUnits"])
-        dataUnitRegistry._initDataUnits(config["dataUnits"], builder)
-        dataUnitRegistry._initDataUnitJoins(config["dataUnitJoins"], builder)
+        dataUnitRegistry._initDataUnits(config["dataUnits"])
+        dataUnitRegistry._initDataUnitJoins(config["joins"])
         return dataUnitRegistry
 
     def __len__(self):
@@ -424,55 +371,30 @@ class DataUnitRegistry:
                         for dependency in dependencies[category]:
                             self._dataUnitNames.connect(dependency, dataUnitName)
 
-    def _initDataUnits(self, config, builder):
+    def _initDataUnits(self, config):
         """Initialize `DataUnit` entries.
 
         Parameters
         ----------
         config : `Config`
-            The `dataUnits` component of a `SchemaConfig`.
-        builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every
-            `DataUnit` table.
+            The `dataUnits` component of a `DataUnitRegistryConfig`.
         """
         # Visit DataUnits in dependency order
         for dataUnitName in self._dataUnitNames:
             dataUnitDescription = config[dataUnitName]
             requiredDependencies = ()
             optionalDependencies = ()
-            table = None
             spatial = dataUnitDescription.get("spatial", False)
-            link = ()
+            link = dataUnitDescription.get("link")
             if "dependencies" in dataUnitDescription:
                 dependencies = dataUnitDescription["dependencies"]
                 if "required" in dependencies:
                     requiredDependencies = (self[name] for name in dependencies["required"])
                 if "optional" in dependencies:
                     optionalDependencies = (self[name] for name in dependencies["optional"])
-            if builder is not None:
-                if "link" in dataUnitDescription:
-                    # Link names
-                    link = tuple((linkDescription["name"] for linkDescription in dataUnitDescription["link"]))
-                    # Link columns that will become part of the Datasets table
-                    for linkDescription in dataUnitDescription["link"]:
-                        linkColumnDesc = linkDescription.copy()
-                        linkConstraintDesc = linkColumnDesc.pop("foreignKey", None)
-                        linkName = linkDescription["name"]
-                        self.links[linkName] = builder.makeColumn(linkColumnDesc)
-                        if linkConstraintDesc is not None:
-                            self.constraints.append(builder.makeForeignKeyConstraint(linkConstraintDesc))
-                if "tables" in dataUnitDescription:
-                    for tableName, tableDescription in dataUnitDescription["tables"].items():
-                        if tableName == dataUnitName:
-                            # Primary table for this DataUnit
-                            table = builder.addTable(tableName, tableDescription)
-                        else:
-                            # Secondary table
-                            builder.addTable(tableName, tableDescription)
             dataUnit = DataUnit(name=dataUnitName,
                                 requiredDependencies=requiredDependencies,
                                 optionalDependencies=optionalDependencies,
-                                table=table,
                                 link=link,
                                 spatial=spatial)
             self[dataUnitName] = dataUnit
@@ -491,24 +413,15 @@ class DataUnitRegistry:
                                       if d.name in self._spatialDataUnits))
                 self._dataUnitRegions[key] = dataUnit
 
-    def _initDataUnitJoins(self, config, builder):
+    def _initDataUnitJoins(self, config):
         """Initialize `DataUnit` join entries.
 
         Parameters
         ----------
-        config : `SchemaConfig`
-            Schema configuration describing `DataUnit` join relations.
-        builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries for every
-            `DataUnit` table.
+        config : `DataUnitRegistryConfig`
+            Configuration describing `DataUnit` join relations.
         """
         for dataUnitJoinName, dataUnitJoinDescription in config.items():
-            table = None
-            isView = None
-            if "tables" in dataUnitJoinDescription and builder is not None:
-                for tableName, tableDescription in dataUnitJoinDescription["tables"].items():
-                    table = builder.addTable(tableName, tableDescription)
-                    isView = "sql" in tableDescription
             lhs = frozenset((dataUnitJoinDescription.get("lhs", None)))
             rhs = frozenset((dataUnitJoinDescription.get("rhs", None)))
             dataUnitNames = lhs | rhs
@@ -519,8 +432,6 @@ class DataUnitRegistry:
                                         lhs=lhs,
                                         rhs=rhs,
                                         summarizes=summarizes,
-                                        isView=isView,
-                                        table=table,
                                         spatial=spatial,
                                         relates=relates)
             self.joins[(lhs, rhs)] = dataUnitJoin

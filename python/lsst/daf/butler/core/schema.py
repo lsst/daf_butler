@@ -19,12 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import itertools
+
 from .utils import iterable
 from .views import makeView
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKeyConstraint, Table, MetaData
-from .dataUnit import DataUnitRegistry
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
@@ -33,7 +34,7 @@ __all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
 
 class SchemaConfig(ConfigSubset):
     component = "schema"
-    requiredKeys = ("version", "dataUnits")
+    requiredKeys = ("version", "tables")
     defaultConfigFile = "schema.yaml"
 
 
@@ -42,6 +43,8 @@ class Schema:
 
     Parameters
     ----------
+    dataUnits : `DataUnitsRegistry`
+        Registry of all possible data units.
     config : `SchemaConfig` or `str`, optional
         Load configuration. Defaults will be read if ``config`` is not
         a `SchemaConfig`.
@@ -51,25 +54,23 @@ class Schema:
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
     """
-    def __init__(self, config=None):
+    def __init__(self, dataUnits, config=None):
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
         self.config = config
         self.builder = SchemaBuilder()
-        self.dataUnits = DataUnitRegistry.fromConfig(config, self.builder)
+        self.dataUnits = dataUnits
         self.buildFromConfig(config)
 
     def buildFromConfig(self, config):
         for tableName, tableDescription in self.config["tables"].items():
             self.builder.addTable(tableName, tableDescription)
-        datasetTable = self.builder.metadata.tables["Dataset"]
-        for linkColumn in self.dataUnits.links.values():
-            datasetTable.append_column(linkColumn)
-        for linkConstraint in self.dataUnits.constraints:
-            datasetTable.append_constraint(linkConstraint)
+        self.datasetTable = self.builder.metadata.tables["Dataset"]
         self._metadata = self.builder.metadata
-        self.tables = self.builder.tables
-        self.views = self.builder.views
+        self._tables = self.builder.tables
+        self._views = self.builder.views
+        self.tables = {k: v for k, v in itertools.chain(self._tables.items(),
+                                                        self._views.items())}
 
 
 class SchemaBuilder:

@@ -1,0 +1,290 @@
+dataUnitsConfig:
+  version: 0
+  dataUnits:
+    Camera:
+      doc: >
+        An entity that produces observations.  A Camera defines a set of
+        PhysicalFilters and Sensors and a numbering system for the Exposures
+        and Visits that represent observations with it.
+      link:
+      - camera
+
+    AbstractFilter:
+      doc: >
+        A filter that is not associated with a particular Camera.  An
+        abstract filter can be used to relate similar physical filters, and
+        is typically the filter associated with coadds.
+      link:
+      - abstract_filter
+
+    PhysicalFilter:
+      dependencies:
+        required:
+        - Camera
+        optional:
+        - AbstractFilter
+      doc: >
+        A filter associated with a particular Camera.  PhysicalFilters are
+        used to identify datasets that can only be associated with a single
+        observation.
+      link:
+      - physical_filter
+
+    Sensor:
+      dependencies:
+        required:
+        - Camera
+      doc: >
+        A sensor associated with a particular Camera (not an observation of that
+        sensor; that requires specifying an exposure or visit as well).
+      link:
+      - sensor
+
+    Visit:
+      dependencies:
+        required:
+        - Camera
+        optional:
+        - PhysicalFilter
+      doc: >
+        A sequence of observations processed together, comprised of one or
+        more Exposures from the same Camera with the same pointing and
+        PhysicalFilter.
+        The Visit table contains metadata that is both meaningful only for
+        science Exposures and the same for all Exposures in a Visit.
+      link:
+      - visit
+      spatial: true
+
+    Exposure:
+      dependencies:
+        required:
+        - Camera
+        optional:
+        - Visit
+        - PhysicalFilter
+      doc: >
+        An observation associated with a particular camera.  All direct
+        observations are identified with an Exposure, but derived datasets
+        that may be based on more than one Exposure (e.g. multiple snaps)
+        are typically identified with Visits instead, even for cameras that
+        don't have multiple Exposures per Visit.  As a result, Cameras that
+        don't have multiple Exposures per Visit will typically have Visit
+        entries that are essentially duplicates of their Exposure entries.
+
+        The Exposure table contains metadata entries that are relevant for
+        calibration Exposures, and does not duplicate entries in Visit that
+        would be the same for all Exposures within a Visit.
+      link:
+      - exposure
+
+    ExposureRange:
+      dependencies:
+        required:
+        - Camera
+      doc: >
+        An inclusive range of Exposures that may be open in either
+        direction, typically used to identify master calibration products.
+        There is no SQL table associated with ExposureRanges; there is no
+        additional information associated with an ExposureRange besides the
+        camera, valid_first, and valid_last fields already present in Dataset.
+      link:
+      - valid_first
+      - valid_last
+
+    SkyPix:
+      doc: >
+        A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
+        HEALPix; we will select and support just one, but which is TBD). Has no
+        SQL representation; even a definition table is not necessary, given that
+        the allowable values and the associated spatial regions are best
+        computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e. Tract-
+        Patch) units for Datasets without any overlap regions (e.g. sharded
+        reference catalogs).
+
+        There are also considerable advantages to standardizing on just one
+        level of the standard pixelization: if all SkyPix values are at a single
+        level, they can be indexed using standard B-Trees and compared with
+        simple equality comparison.  In contrast, comparing SkyPix values at
+        different levels requires pixelization- specific bit-shifting operations
+        and custom indexes, which are much harder to implement across multiple
+        RDMSs.  As a result, we will (at least initially) try to define just a
+        single level for all SkyPix values.  Our preliminary guess is that this
+        level should have pixels be approximately (within a factor of ~4) of the
+        size of a single Sensor on the sky.
+      spatial: true
+      link:
+      - skypix
+
+    SkyMap:
+      doc: >
+        A set of Tracts and Patches that subdivide the sky into rectangular
+        regions with simple projections and intentional overlaps.
+      link:
+      - skymap
+
+    Tract:
+      dependencies:
+        required:
+        - SkyMap
+      doc: >
+        A large rectangular region mapped to the sky with a single map
+        projection, associated with a particular SkyMap.
+      link:
+      - tract
+      spatial: true
+
+    Patch:
+      dependencies:
+        required:
+        - SkyMap
+        - Tract
+      doc: >
+        A rectangular region within a Tract.
+      link:
+      - patch
+      spatial: true
+
+    Label:
+      doc: >
+        An arbitrary string value.  There is no SQL representation or
+        constraint on the values a Label can take.  Multiple labels are
+        represented (by convention) by a comma-separated string.
+      link:
+      - label
+
+  joins:
+    VisitSensorRegion:
+      lhs: [Visit]
+      rhs: [Sensor]
+      spatial: true
+
+    ExposureRangeJoin:
+      doc: >
+        A calculated join between Datasets identified with an Exposure
+        (typically raw science frames) and Datasets identified with ExposureRange
+        (typically master calibrations).
+      lhs: [Exposure]
+      rhs: [ExposureRange]
+      sql:
+        (lhs.camera = rhs.camera) AND
+        (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
+    MultiCameraExposureJoin:
+      doc: >
+        A join table that relates Exposures from different Cameras, with
+        explicitly-created entries.  This is intended to be used primarily in
+        calibration products production, to relate auxilliary telescope
+        observations with the main camera observations they support.  It could
+        also be used to relate CBP state (represented as CBP "Exposures") with
+        actual main camera observations of the CBP.
+      lhs: [Exposure]
+      rhs: [Exposure]
+
+    VisitSensorSkyPixJoin:
+      doc: >
+        A spatial join table that relates Visit+Sensor to SkyPix, also used as an
+        intermediate when relating Visit+Sensor to SkyMap DataUnits.
+
+        Entries are expected to be calculated outside the database and
+        added/updated whenever VisitSensorRegion is.
+
+      lhs: [Visit, Sensor]
+      rhs: [SkyPix]
+
+    VisitSkyPixJoin:
+      doc: >
+        A spatial join table that relates Visitto SkyPix, also used as an
+        intermediate when relating Visit to SkyMap DataUnits.
+
+        This can and probably should be implemented as a trivial view on
+        VisitSensorSkyPixJoin.
+
+      lhs: [Visit]
+      rhs: [SkyPix]
+      summarizes: [VisitSensorSkyPixJoin]
+
+    PatchSkyPixJoin:
+      doc: >
+        A spatial join table that relates Patch to SkyPix, also used as an
+        intermediate when relating Patch to Camera DataUnits.
+
+        Entries are expected to be calculated outside the database and
+        added along with the Patch itself.
+
+      lhs: [Patch]
+      rhs: [SkyPix]
+
+    TractSkyPixJoin:
+      doc: >
+        A spatial join table that relates Tract to SkyPix, also used as an
+        intermediate when relating Tract to Camera DataUnits.
+
+        This can and probably should be implemented as a trivial view on
+        PatchSkyPixJoin.
+
+      lhs: [Tract]
+      rhs: [SkyPix]
+      summarizes: [PatchSkyPixJoin]
+
+    VisitSensorPatchJoin:
+      doc: >
+        A spatial join table that relates Visit+Sensor to Patch via SkyPix.
+
+        Should be implemented as a view; it may be materialized as long as it
+        can be kept up to date when new Visits or SkyMaps are added.
+
+        If a database UDF is available to determine whether two regions
+        overlap, we could include that in this view to refine the results.
+        For now, we will assume that such a UDF is not available.
+
+      lhs: [Visit, Sensor]
+      rhs: [Patch]
+
+    VisitPatchJoin:
+      doc: >
+        A spatial join table that relates Visit to Patch via SkyPix.
+
+        Should be implemented as a view; it may be materialized as long as it
+        can be kept up to date when new Visits or SkyMaps are added.
+
+        If a database UDF is available to determine whether two regions
+        overlap, we could include that in this view to refine the results.
+        For now, we will assume that such a UDF is not available.
+
+      lhs: [Visit]
+      rhs: [Patch]
+      summarizes: [VisitSensorPatchJoin]
+
+    VisitSensorTractJoin:
+      doc: >
+        A spatial join table that relates Visit+Sensor to Tract via SkyPix.
+
+        Should be implemented as a view; it may be materialized as long as it
+        can be kept up to date when new Visits or SkyMaps are added.
+
+        If a database UDF is available to determine whether two regions
+        overlap, we could include that in this view to refine the results.
+        For now, we will assume that such a UDF is not available.
+
+      lhs: [Visit, Sensor]
+      rhs: [Tract]
+      summarizes: [VisitSensorPatchJoin]
+
+    VisitTractJoin:
+      doc: >
+        A spatial join table that relates Visit to Tract via SkyPix.
+
+        Should be implemented as a view; it may be materialized as long as it
+        can be kept up to date when new Visits or SkyMaps are added.
+
+        If a database UDF is available to determine whether two regions
+        overlap, we could include that in this view to refine the results.
+        For now, we will assume that such a UDF is not available.
+
+      lhs: [Visit]
+      rhs: [Tract]
+      summarizes:
+        - VisitSensorPatchJoin
+        - VisitSensorTractJoin
+        - VisitPatchJoin
+

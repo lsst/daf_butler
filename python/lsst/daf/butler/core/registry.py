@@ -24,6 +24,7 @@ import contextlib
 
 from .utils import doImport
 from .config import Config, ConfigSubset
+from .dataUnit import DataUnitRegistryConfig, DataUnitRegistry
 from .schema import SchemaConfig
 from .utils import transactional
 
@@ -78,7 +79,7 @@ class Registry(metaclass=ABCMeta):
                                   toCopy=("skypix.cls", "skypix.level"))
 
     @staticmethod
-    def fromConfig(registryConfig, schemaConfig=None, create=False):
+    def fromConfig(registryConfig, schemaConfig=None, dataUnitRegistryConfig=None, create=False):
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to
@@ -92,6 +93,10 @@ class Registry(metaclass=ABCMeta):
             Schema configuration. Can be read from supplied registryConfig
             if the relevant component is defined and ``schemaConfig`` is
             `None`.
+        dataUnitRegistryConfig : `DataUnitRegistryConfig` or `Config` or
+            `str`, optional. DataUnitRegistry configuration. Can be read
+            from supplied registryConfig if the relevant component is
+            defined and ``dataUnitRegistryConfig`` is `None`.
         create : `bool`
             Assume empty Registry and create a new one.
 
@@ -110,6 +115,16 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Schema configuration: {}".format(schemaConfig))
 
+        if dataUnitRegistryConfig is None:
+            # Try to instantiate a schema configuration from the supplied
+            # registry configuration.
+            dataUnitRegistryConfig = DataUnitRegistryConfig(registryConfig)
+        elif not isinstance(dataUnitRegistryConfig, DataUnitRegistryConfig):
+            if isinstance(dataUnitRegistryConfig, str) or isinstance(dataUnitRegistryConfig, Config):
+                dataUnitRegistryConfig = DataUnitRegistryConfig(dataUnitRegistryConfig)
+            else:
+                raise ValueError("Incompatible Schema configuration: {}".format(dataUnitRegistryConfig))
+
         if not isinstance(registryConfig, RegistryConfig):
             if isinstance(registryConfig, str) or isinstance(registryConfig, Config):
                 registryConfig = RegistryConfig(registryConfig)
@@ -117,12 +132,13 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
         cls = doImport(registryConfig["cls"])
-        return cls(registryConfig, schemaConfig, create=create)
+        return cls(registryConfig, schemaConfig, dataUnitRegistryConfig, create=create)
 
-    def __init__(self, registryConfig, schemaConfig=None, create=False):
+    def __init__(self, registryConfig, schemaConfig=None, dataUnitRegistryConfig=None, create=False):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
         self._pixelization = None
+        self._dataUnits = DataUnitRegistry.fromConfig(dataUnitRegistryConfig)
 
     def __str__(self):
         return "None"
