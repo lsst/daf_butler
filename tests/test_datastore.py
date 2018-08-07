@@ -447,6 +447,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     """ChainedDatastore specialization using a POSIXDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     uriScheme = "mem:"
+    hasUnsupportedPut = False
     ingestTransferModes = ("copy", "move", "hardlink", "symlink")
 
 

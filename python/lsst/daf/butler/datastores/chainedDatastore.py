@@ -23,10 +23,12 @@
 
 import time
 import logging
+import os
 
 from lsst.daf.butler.core.utils import doImport
 from lsst.daf.butler.core.datastore import Datastore, DatastoreConfig
 from lsst.daf.butler.core.storageClass import StorageClassFactory
+from lsst.daf.butler.core.exceptions import DatasetTypeNotSupportedError
 
 log = logging.getLogger(__name__)
 
@@ -206,6 +208,11 @@ class ChainedDatastore(Datastore):
         """Write a InMemoryDataset with a given `DatasetRef` to each
         datastore.
 
+        The put() to child datastores can fail with
+        `DatasetTypeNotSupportedError`.  The put() for this datastore will be
+        deemed to have succeeded so long as at least one child datastore
+        accepted the inMemoryDataset.
+
         Parameters
         ----------
         inMemoryDataset : `object`
@@ -217,15 +224,26 @@ class ChainedDatastore(Datastore):
         ------
         TypeError
             Supplied object and storage class are inconsistent.
+        DatasetTypeNotSupportedError
+            All datastores reported `DatasetTypeNotSupportedError`.
         """
+        log.debug("Put %s", ref)
 
+        counter = 0
         for datastore in self.datastores:
-            datastore.put(inMemoryDataset, ref)
+            try:
+                datastore.put(inMemoryDataset, ref)
+                counter += 1
+            except DatasetTypeNotSupportedError:
+                pass
+
+        if counter == 0:
+            raise DatasetTypeNotSupportedError(f"None of the chained datastores supported ref {ref}")
 
         if self._transaction is not None:
             self._transaction.registerUndo('put', self.remove, ref)
 
-    def ingest(self, *args, **kwargs):
+    def ingest(self, path, ref, formatter=None, transfer=None):
         """Add an on-disk file with the given `DatasetRef` to the store,
         possibly transferring it.
 
@@ -233,8 +251,33 @@ class ChainedDatastore(Datastore):
         cases where a datastore has not implemented file ingest and ignoring
         them.
 
-        A transfer mode of None is not supported since that requires the
-        file to have been previously copied to each individual datastore.
+        Notes
+        -----
+        If an absolute path is given and "move" mode is specified, then
+        we tell the child datastore to use "copy" mode and unlink it
+        at the end.  If a relative path is given then it is assumed the file
+        is already inside the child datastore.
+
+        A transfer mode of None implies that the file is already within
+        each of the (relevant) child datastores.
+
+        Parameters
+        ----------
+        path : `str`
+            File path.  Treated as relative to the repository root of each
+            child datastore if not absolute.
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
+        formatter : `Formatter` (optional)
+            Formatter that should be used to retreive the Dataset.  If not
+            provided, the formatter will be constructed according to
+            Datastore configuration.
+        transfer : str (optional)
+            If not None, must be one of 'move', 'copy', 'hardlink', or
+            'symlink' indicating how to transfer the file.  The new
+            filename and location will be determined via template substitution,
+            as with ``put``.  If the file is outside the datastore root, it
+            must be transferred somehow.
 
         Raises
         ------
@@ -242,20 +285,33 @@ class ChainedDatastore(Datastore):
             If all chained datastores have no ingest implemented or if
             a transfer mode of `None` is specified.
         """
-        log.debug("Ingesting %s (transfer=%s)", args[1], kwargs["transfer"])
+        log.debug("Ingesting %s (transfer=%s)", ref, transfer)
 
-        if kwargs["transfer"] is None:
+        if transfer is None:
             raise NotImplementedError("ChainedDatastore does not support transfer=None")
+
+        # A "move" is sometimes a "copy"
+        moveIsCopy = False
+        if transfer == "move" and os.path.isabs(path):
+            moveIsCopy = True
 
         counter = 0
         for datastore in self.datastores:
+            dstransfer = transfer
+            # Each child datastore must copy the file for a move operation
+            if moveIsCopy:
+                dstransfer = "copy"
             try:
-                datastore.ingest(*args, **kwargs)
+                datastore.ingest(path, ref, transfer=dstransfer, formatter=formatter)
             except NotImplementedError:
                 counter += 1
-                pass
+
         if counter == len(self.datastores):
             raise NotImplementedError("Ingest not implemented by any of the chained datastores")
+
+        # if the file was meant to be moved then we have to delete it
+        if moveIsCopy:
+            os.unlink(path)
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.
@@ -308,7 +364,8 @@ class ChainedDatastore(Datastore):
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.
 
-        The dataset will be removed from each datastore.
+        The dataset will be removed from each datastore.  The dataset is
+        not required to exist in every child datastore.
 
         Parameters
         ----------
@@ -318,10 +375,21 @@ class ChainedDatastore(Datastore):
         Raises
         ------
         FileNotFoundError
-            Attempt to remove a dataset that does not exist.
+            Attempt to remove a dataset that does not exist.  Raised if none
+            of the child datastores removed the dataset.
         """
+        log.debug(f"Removing {ref}")
+
+        counter = 0
         for datastore in self.datastores:
-            datastore.remove(ref)
+            try:
+                datastore.remove(ref)
+                counter += 1
+            except FileNotFoundError:
+                pass
+
+        if counter == 0:
+            raise FileNotFoundError(f"Could not remove from any child datastore: {ref}")
 
     def transfer(self, inputDatastore, ref):
         """Retrieve a Dataset from an input `Datastore`,

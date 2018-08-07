@@ -3,3 +3,4 @@ datastore:
   datastores:
   - !include inMemoryDatastore.yaml
   - !include posixDatastore.yaml
+  - !include posixDatastore2.yaml
