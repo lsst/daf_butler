@@ -256,8 +256,8 @@ class InMemoryDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
 class ChainedDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
-    uriScheme = "mem:"
-    fileExt = None
+    uriScheme = "file:"
+    fileExt = ".fits"
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

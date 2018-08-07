@@ -150,6 +150,11 @@ class Datastore(metaclass=ABCMeta):
     and containing a "cls" definition. None indicates that no containers
     are expected in this Datastore."""
 
+    isEphemeral = False
+    """Indicate whether this Datastore is ephemeral or not.  An ephemeral
+    datastore is one where the contents of the datastore will not exist
+    across process restarts."""
+
     @classmethod
     @abstractmethod
     def setConfigRoot(cls, root, config, full):

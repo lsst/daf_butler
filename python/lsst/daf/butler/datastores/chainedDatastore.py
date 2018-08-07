@@ -24,6 +24,7 @@
 import time
 import logging
 import os
+import warnings
 
 from lsst.daf.butler.core.utils import doImport
 from lsst.daf.butler.core.datastore import Datastore, DatastoreConfig
@@ -31,7 +32,6 @@ from lsst.daf.butler.core.storageClass import StorageClassFactory
 from lsst.daf.butler.core.exceptions import DatasetTypeNotSupportedError
 
 log = logging.getLogger(__name__)
-
 
 __all__ = ("ChainedDatastore", )
 
@@ -229,16 +229,28 @@ class ChainedDatastore(Datastore):
         """
         log.debug("Put %s", ref)
 
-        counter = 0
+        isPermanent = False
+        nsuccess = 0
+        npermanent = 0
+        nephemeral = 0
         for datastore in self.datastores:
+            if datastore.isEphemeral:
+                nephemeral += 1
+            else:
+                npermanent += 1
             try:
                 datastore.put(inMemoryDataset, ref)
-                counter += 1
+                nsuccess += 1
+                if not datastore.isEphemeral:
+                    isPermanent = True
             except DatasetTypeNotSupportedError:
                 pass
 
-        if counter == 0:
+        if nsuccess == 0:
             raise DatasetTypeNotSupportedError(f"None of the chained datastores supported ref {ref}")
+
+        if not isPermanent and npermanent > 0:
+            warnings.warn(f"Put of {ref} only succeeded in ephemeral databases", stacklevel=2)
 
         if self._transaction is not None:
             self._transaction.registerUndo('put', self.remove, ref)
@@ -317,8 +329,9 @@ class ChainedDatastore(Datastore):
         """URI to the Dataset.
 
         The returned URI is from the first datastore in the list that has
-        the dataset. If no datastores have the dataset and prediction is
-        allowed, the predicted URI for the first datastore in the list will
+        the dataset with preference given to the first dataset coming from
+        a permanent datastore. If no datastores have the dataset and prediction
+        is allowed, the predicted URI for the first datastore in the list will
         be returned.
 
         Parameters
@@ -349,15 +362,35 @@ class ChainedDatastore(Datastore):
             A URI has been requested for a dataset that does not exist and
             guessing is not allowed.
         """
-        predicted = None
+        log.debug("Requesting URI for %s", ref)
+        predictedUri = None
+        predictedEphemeralUri = None
+        firstEphemeralUri = None
         for datastore in self.datastores:
             if datastore.exists(ref):
-                return datastore.getUri(ref)
-            elif predicted is None and predict:
-                predicted = datastore.getUri(ref, predict)
+                if not datastore.isEphemeral:
+                    uri = datastore.getUri(ref)
+                    log.debug("Retrieved ephemeral URI: %s", uri)
+                    return uri
+                elif firstEphemeralUri is None:
+                    firstEphemeralUri = datastore.getUri(ref)
+            elif predict:
+                if predictedUri is None and not datastore.isEphemeral:
+                    predictedUri = datastore.getUri(ref, predict)
+                elif predictedEphemeralUri is None and datastore.isEphemeral:
+                    predictedEphemeralUri = datastore.getUri(ref, predict)
 
-        if predicted is not None:
-            return predicted
+        if firstEphemeralUri is not None:
+            log.debug("Retrieved ephemeral URI: %s", firstEphemeralUri)
+            return firstEphemeralUri
+
+        if predictedUri is not None:
+            log.debug("Retrieved predicted URI: %s", predictedUri)
+            return predictedUri
+
+        if predictedEphemeralUri is not None:
+            log.debug("Retrieved predicted ephemeral URI: %s", predictedEphemeralUri)
+            return predictedEphemeralUri
 
         raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
 
