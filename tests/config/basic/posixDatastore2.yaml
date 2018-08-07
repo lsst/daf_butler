@@ -1,6 +1,8 @@
 datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: ./butler_test_repository2
+  records:
+    table: PosixDatastoreRecords2
   templates:
     default: "{datasetType}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
     calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
