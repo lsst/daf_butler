@@ -28,6 +28,8 @@ from lsst.daf.butler.core.datastore import Datastore
 from lsst.daf.butler.core.storageClass import StorageClassFactory
 from lsst.daf.butler.core.storageInfo import StorageInfo
 
+log = logging.getLogger(__name__)
+
 __all__ = ("StoredItemInfo", "InMemoryDatastore")
 
 
@@ -63,6 +65,10 @@ class StoredItemInfo:
 class InMemoryDatastore(Datastore):
     """Basic Datastore for writing to an in memory cache.
 
+    This datastore is ephemeral in that the contents of the datastore
+    disappear when the Python process completes.  This also means that
+    other processes can not access this datastore.
+
     Attributes
     ----------
     config : `DatastoreConfig`
@@ -83,6 +89,10 @@ class InMemoryDatastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
+    isEphemeral = True
+    """A new datastore is created every time and datasets disappear when
+    the process shuts down."""
+
     def __init__(self, config, registry=None):
         super().__init__(config, registry)
 
@@ -91,7 +101,7 @@ class InMemoryDatastore(Datastore):
         # Name ourselves with the timestamp the datastore
         # was created.
         self.name = "InMemoryDatastore@{}".format(time.time())
-        logging.debug("Creating datastore %s", self.name)
+        log.debug("Creating datastore %s", self.name)
 
         # Storage of datasets, keyed by dataset_id
         self.datasets = {}
@@ -233,7 +243,7 @@ class InMemoryDatastore(Datastore):
             Formatter failed to process the dataset.
         """
 
-        logging.debug("Retrieve %s from %s", ref, self.name)
+        log.debug("Retrieve %s from %s", ref, self.name)
 
         if not self.exists(ref):
             raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
@@ -298,7 +308,7 @@ class InMemoryDatastore(Datastore):
                             "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
 
         self.datasets[ref.id] = inMemoryDataset
-        logging.debug("Store %s in %s", ref, self.name)
+        log.debug("Store %s in %s", ref, self.name)
 
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries

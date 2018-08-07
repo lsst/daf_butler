@@ -24,6 +24,7 @@
 import os
 import shutil
 import hashlib
+import logging
 from collections import namedtuple
 
 from lsst.daf.butler.core.config import Config
@@ -40,6 +41,8 @@ from lsst.daf.butler.core.utils import getInstanceOf, transactional
 from lsst.daf.butler.core.storageClass import StorageClassFactory
 from lsst.daf.butler.core.exceptions import DatasetTypeNotSupportedError
 from ..core.databaseDict import DatabaseDict
+
+log = logging.getLogger(__name__)
 
 __all__ = ("PosixDatastore", )
 
@@ -337,6 +340,7 @@ class PosixDatastore(Datastore):
         with self._transaction.undoWith("write", os.remove, predictedFullPath):
             path = formatter.write(inMemoryDataset, FileDescriptor(location, storageClass=storageClass))
             assert predictedFullPath == os.path.join(self.root, path)
+            log.debug("Wrote file to %s", path)
 
         self.ingest(path, ref, formatter=formatter)
 
