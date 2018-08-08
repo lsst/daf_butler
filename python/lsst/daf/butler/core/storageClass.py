@@ -23,10 +23,13 @@
 
 import builtins
 import itertools
+import logging
 
 from .utils import doImport, Singleton, getFullTypeName
 from .composites import CompositeAssembler
 from .config import ConfigSubset
+
+log = logging.getLogger(__name__)
 
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
@@ -66,11 +69,15 @@ class StorageClass:
         if assembler is not None:
             self._assemblerClassName = assembler
             self._assembler = None
-        else:
-            # We set a default assembler so that a class is guaranteed to
-            # support something.
+        elif components is not None:
+            # We set a default assembler for composites so that a class is
+            # guaranteed to support something if it is a composite.
+            log.debug("Setting default assembler for %s", self.name)
             self._assembler = self.defaultAssembler
             self._assemblerClassName = self.defaultAssemblerName
+        else:
+            self._assembler = None
+            self._assemblerClassName = None
         # The types are created on demand and cached
         self._pytype = None
 
