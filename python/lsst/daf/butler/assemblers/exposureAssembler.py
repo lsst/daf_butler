@@ -105,8 +105,8 @@ class ExposureAssembler(CompositeAssembler):
         Returns
         -------
         comps : `dict`
-            Non-None components extracted from the composite, indexed by the component
-            name as derived from the `self.storageClass`.
+            Non-None components extracted from the composite, indexed by the
+            component name as derived from the `self.storageClass`.
         """
         # For Exposure we call the generic version twice: once for top level
         # components, and again for ExposureInfo.
@@ -127,13 +127,15 @@ class ExposureAssembler(CompositeAssembler):
         Parameters
         ----------
         composite : `lsst.afw.Exposure`
-            `Exposure` composite object consisting of components to be extracted.
+            `Exposure` composite object consisting of components to be
+            extracted.
 
         Returns
         -------
         components : `dict`
-            `dict` with keys matching the components defined in `self.storageClass`
-            and values being `DatasetComponent` instances describing the component.
+            `dict` with keys matching the components defined in
+            `self.storageClass` and values being `DatasetComponent` instances
+            describing the component.
 
         Raises
         ------

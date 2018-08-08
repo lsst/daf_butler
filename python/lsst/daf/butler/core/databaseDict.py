@@ -23,7 +23,6 @@ from collections.abc import MutableMapping
 
 from .utils import doImport
 
-
 __all__ = ("DatabaseDict",)
 
 
@@ -33,7 +32,7 @@ class DatabaseDict(MutableMapping):
 
     DatabaseDict subclasses must implement the abstract ``__getitem__``,
     ``__setitem__``, ``__delitem__`, ``__iter__``, and ``__len__`` abstract
-    methods defined by `MutableMapping`.
+    methods defined by `~collections.abc.MutableMapping`.
 
     They must also provide a constructor that takes the same arguments as that
     of `DatabaseDict` itself, *unless* they are constructed solely by

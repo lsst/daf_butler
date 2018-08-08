@@ -232,25 +232,35 @@ class Config(_ConfigBase):
     def __setitem__(self, name, value):
         keys = name.split('.')
         last = keys.pop()
-        if isinstance(value, collections.Mapping):
-            d = {}
-            cur = d
-            for key in keys:
-                cur[key] = {}
-                cur = cur[key]
-            cur[last] = value
-            self.update(d)
+        if isinstance(value, Config):
+            value = copy.deepcopy(value.data)
         data = self.data
         for key in keys:
-            data = data.setdefault(key, {})
-        data[last] = value
+            # data could be a list
+            if isinstance(data, collections.Sequence):
+                data = data[int(key)]
+            else:
+                data = data.setdefault(key, {})
+        try:
+            data[last] = value
+        except TypeError:
+            data[int(last)] = value
 
     def __contains__(self, key):
         d = self.data
         keys = key.split('.')
         last = keys.pop()
         for k in keys:
-            if k in d:
+            if isinstance(d, collections.Sequence):
+                # Check sequence first because for lists
+                # __contains__ checks whether value is found in list
+                # not whether the index exists in list. When we traverse
+                # the hierarchy we are interested in the index.
+                try:
+                    d = d[int(k)]
+                except IndexError:
+                    return False
+            elif k in d:
                 d = d[k]
             else:
                 return False
@@ -280,9 +290,19 @@ class Config(_ConfigBase):
                         r = doUpdate(d.get(k, {}), v)
                         d[k] = r
                     else:
-                        d[k] = u[k]
+                        d[k] = v
                 else:
-                    d = {k: u[k]}
+                    if isinstance(d, collections.Sequence):
+                        try:
+                            intk = int(k)
+                        except ValueError:
+                            # This will overwrite the entire sequence
+                            d = {k: v}
+                        else:
+                            r = doUpdate(d[intk], v)
+                            d[intk] = r
+                    else:
+                        d = {k: v}
             return d
         doUpdate(self.data, other)
 
@@ -406,6 +426,80 @@ class Config(_ConfigBase):
         with open(path, 'w') as f:
             self.dump(f)
 
+    @staticmethod
+    def overrideParameters(configType, config, full, toUpdate=None, toCopy=None):
+            """Generic helper function for overriding specific config parameters
+
+            Allows for named parameters to be set to new values in bulk, and
+            for other values to be set by copying from a reference config.
+
+            Assumes that the supplied config is compatible with ```configType``
+            and will attach the updated values to the supplied config by
+            looking for the related component key.  It is assumed that
+            ``config`` and ``full`` are from the same part of the
+            configuration hierarchy.
+
+            Parameters
+            ----------
+            configType : `ConfigSubset`
+                Config type to use to extract relevant items from ``config``.
+            config : `Config`
+                A `Config` to update. Only the subset understood by
+                the supplied `ConfigSubset` will be modified. Default values
+                will not be inserted and the content will not be validated
+                since mandatory keys are allowed to be missing until
+                populated later by merging.
+            full : `Config`
+                A complete config with all defaults expanded that can be
+                converted to a ``configType``. Read-only and will not be
+                modified by this method. Values are read from here if
+                ``toCopy`` is defined.
+
+                Repository-specific options that should not be obtained
+                from defaults when Butler instances are constructed
+                should be copied from `full` to `Config`.
+            toUpdate : `dict`, optional
+                A `dict` defining the keys to update and the new value to use.
+                The keys and values can be any supported by `Config`
+                assignment.
+            toCopy : `tuple`, optional
+                `tuple` of keys whose values should be copied from ``full``
+                into ``config``.
+
+            Raises
+            ------
+            ValueError
+                Neither ``toUpdate`` not ``toCopy`` were defined.
+            """
+            if toUpdate is None and toCopy is None:
+                raise ValueError("One of toUpdate or toCopy parameters must be set.")
+
+            # If this is a parent configuration then we need to ensure that
+            # the supplied config has the relevant component key in it.
+            # If this is a parent configuration we add in the stub entry
+            # so that the ConfigSubset constructor will do the right thing.
+            # We check full for this since that is guaranteed to be complete.
+            if configType.component in full and configType.component not in config:
+                config[configType.component] = {}
+
+            # Extract the part of the config we wish to update
+            localConfig = configType(config, mergeDefaults=False, validate=False)
+
+            if toUpdate:
+                for key, value in toUpdate.items():
+                    localConfig[key] = value
+
+            if toCopy:
+                localFullConfig = configType(full, mergeDefaults=False)
+                for key in toCopy:
+                    localConfig[key] = localFullConfig[key]
+
+            # Reattach to parent if this is a child config
+            if configType.component in config:
+                config[configType.component] = localConfig
+            else:
+                config.update(localConfig)
+
 
 class ConfigSubset(Config):
     """Config representing a subset of a more general configuration.
@@ -481,6 +575,9 @@ class ConfigSubset(Config):
         # Default files read to create this configuration
         self.filesRead = []
 
+        # Assume we are not looking up child configurations
+        containerKey = None
+
         # Sometimes we do not want to merge with defaults.
         if mergeDefaults:
 
@@ -517,9 +614,24 @@ class ConfigSubset(Config):
                 if defaultsFile is not None:
                     self._updateWithConfigsFromPath(fullSearchPath, defaultsFile)
 
+                # Get the container key in case we need it
+                try:
+                    containerKey = cls.containerKey
+                except AttributeError:
+                    pass
+
         # Now update this object with the external values so that the external
         # values always override the defaults
         self.update(externalConfig)
+
+        # If this configuration has child configurations of the same
+        # config class, we need to expand those defaults as well.
+
+        if mergeDefaults and containerKey is not None and containerKey in self:
+            for idx, subConfig in enumerate(self[containerKey]):
+                self[f"{containerKey}.{idx}"] = type(self)(other=subConfig, validate=validate,
+                                                           mergeDefaults=mergeDefaults,
+                                                           searchPaths=searchPaths)
 
         if validate:
             self.validate()

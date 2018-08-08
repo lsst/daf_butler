@@ -34,7 +34,7 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from examplePythonTypes import MetricsExample
 
-TESTDIR = os.path.dirname(__file__)
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 def makeExampleMetrics():
@@ -231,22 +231,25 @@ class ButlerTests:
         with self.assertRaises(FileNotFoundError):
             butler.getDirect(ref)
 
-
-class ButlerRepos(lsst.utils.tests.TestCase):
-    """Butler tests without storing to datastore"""
-
     def testMakeRepo(self):
         """Test that we can write butler configuration to a new repository via
         the Butler.makeRepo interface and then instantiate a butler from the
         repo root.
         """
+        # Do not run the test if we know this datastore configuration does
+        # not support a file system root
+        if self.fullConfigKey is None:
+            return
+
         with TemporaryDirectory(prefix=TESTDIR + "/") as root:
-            Butler.makeRepo(root)
-            limited = Config(os.path.join(root, "butler.yaml"))
-            butler1 = Butler(root, collection="null")
-            Butler.makeRepo(root, standalone=True, createRegistry=False)
+            Butler.makeRepo(root, config=Config(self.configFile))
+            limited = Config(self.configFile)
+            print(limited.ppprint())
+            butler1 = Butler(root, collection="ingest")
+            Butler.makeRepo(root, standalone=True, createRegistry=False,
+                            config=Config(self.configFile))
             full = Config(os.path.join(root, "butler.yaml"))
-            butler2 = Butler(root, collection="null")
+            butler2 = Butler(root, collection="ingest")
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
         self.assertEqual(butler1.config, butler2.config)
@@ -254,18 +257,26 @@ class ButlerRepos(lsst.utils.tests.TestCase):
         self.assertNotEqual(limited, full)
         # Make sure 'limited' doesn't have a few keys we know it should be
         # inheriting from defaults.
-        self.assertIn("datastore.formatters", full)
-        self.assertNotIn("datastore.formatters", limited)
+        self.assertIn(self.fullConfigKey, full)
+        self.assertNotIn(self.fullConfigKey, limited)
 
 
 class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    fullConfigKey = "datastore.formatters"
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """InMemoryDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+    fullConfigKey = None
+
+
+class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+    fullConfigKey = "datastore.datastores.1.formatters"
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

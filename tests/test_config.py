@@ -22,6 +22,7 @@
 import unittest
 import os
 import contextlib
+import collections
 
 from lsst.daf.butler import ConfigSubset, Config
 
@@ -87,6 +88,47 @@ class ConfigTestAbsPath(ConfigTest):
 
 class ConfigTestCls(ConfigTest):
     defaultConfigFile = "withcls.yaml"
+
+
+class ConfigTestCase(unittest.TestCase):
+    """Tests of simple Config"""
+    def testHierarchy(self):
+        c = Config()
+
+        # Simple dict
+        c["a"] = {"z": 52, "x": "string"}
+        self.assertIn("a.z", c)
+        self.assertEqual(c["a.x"], "string")
+
+        c["b.new.thing1"] = "thing1"
+        c["b.new.thing2"] = "thing2"
+        c["b.new.thing3.supp"] = "supplemental"
+        self.assertEqual(c["b.new.thing1"], "thing1")
+        tmp = c["b.new"]
+        self.assertEqual(tmp["thing2"], "thing2")
+        self.assertEqual(c["b.new.thing3.supp"], "supplemental")
+
+        # Test that we can index into lists
+        c["a.b.c"] = [1, "7", 3, {"1": 4, "5": "Five"}, "hello"]
+        self.assertIn("a.b.c.3.5", c)
+        self.assertEqual(c["a.b.c.3.5"], "Five")
+        # Is the value in the list?
+        self.assertIn("a.b.c.hello", c)
+
+        # And assign to an element in the list
+        self.assertEqual(c["a.b.c.1"], "7")
+        c["a.b.c.1"] = 8
+        self.assertEqual(c["a.b.c.1"], 8)
+        self.assertIsInstance(c["a.b.c"], collections.Sequence)
+
+        # Check that lists still work even if assigned a dict
+        c = Config({"cls": "lsst.daf.butler",
+                    "datastores": [{"datastore": {"cls": "datastore1"}},
+                                   {"datastore": {"cls": "datastore2"}}]})
+        c["datastores.1.datastore"] = {"cls": "datastore2modified"}
+        self.assertEqual(c["datastores.0.datastore.cls"], "datastore1")
+        self.assertEqual(c["datastores.1.datastore.cls"], "datastore2modified")
+        self.assertIsInstance(c["datastores"], collections.Sequence)
 
 
 class ConfigSubsetTestCase(unittest.TestCase):

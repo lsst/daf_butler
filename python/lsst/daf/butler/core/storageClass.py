@@ -22,6 +22,7 @@
 """Support for Storage Classes."""
 
 import builtins
+import itertools
 
 from .utils import doImport, Singleton
 from .composites import CompositeAssembler
@@ -164,6 +165,29 @@ class StorageClassFactory(metaclass=Singleton):
         if config is not None:
             self.addFromConfig(config)
 
+    def __contains__(self, storageClassOrName):
+        """Indicates whether the storage class exists in the factory.
+
+        Parameters
+        ----------
+        storageClassOrName : `str` or `StorageClass`
+            If `str` is given existence of the named StorageClass
+            in the factory is checked. If `StorageClass` is given
+            existence and equality are checked.
+
+        Returns
+        -------
+        in : `bool`
+            True if the supplied string is present, or if the supplied
+            `StorageClass` is present and identical.
+        """
+        if isinstance(storageClassOrName, "str"):
+            return storageClassOrName in self._storageClasses
+        elif isinstance(storageClassOrName, StorageClass):
+            if storageClassOrName.name in self._storageClasses:
+                return storageClassOrName == self._storageClasses[storageClassOrName.name]
+        return False
+
     def addFromConfig(self, config):
         """Add more `StorageClass` definitions from a config file.
 
@@ -176,13 +200,22 @@ class StorageClassFactory(metaclass=Singleton):
         sconfig = StorageClassConfig(config)
         self._configs.append(sconfig)
 
+        # Since we can not assume that we will get definitions of
+        # components before the definitions of the composites, we create
+        # two lists
+        composites = {}
+        simple = {}
         for name, info in sconfig.items():
-            if name == "config" or (isinstance(info, str) and info.endswith(".yaml")):
-                # This seems to be a location of another file so process that
-                self.addFromConfig(sconfig["config"])
-                continue
+            if "components" in info:
+                composites[name] = info
+            else:
+                simple[name] = info
 
-            # Create the storage class
+        for name in itertools.chain(simple, composites):
+            info = sconfig[name]
+
+            # Always create the storage class so we can ensure that
+            # we are not trying to overwrite with a different definition
             components = None
             if "components" in info:
                 components = {}
@@ -227,8 +260,14 @@ class StorageClassFactory(metaclass=Singleton):
 
         Raises
         ------
-        KeyError
+        ValueError
             If a storage class has already been registered with
             storageClassName and the previous definition differs.
         """
-        self._storageClasses[storageClass.name] = storageClass
+        if storageClass.name in self._storageClasses:
+            existing = self.getStorageClass(storageClass.name)
+            if existing != storageClass:
+                raise ValueError(f"New definition for StorageClass {storageClass.name} differs from current"
+                                 " definition")
+        else:
+            self._storageClasses[storageClass.name] = storageClass
