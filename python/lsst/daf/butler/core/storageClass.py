@@ -217,6 +217,13 @@ class StorageClassFactory(metaclass=Singleton):
         in : `bool`
             True if the supplied string is present, or if the supplied
             `StorageClass` is present and identical.
+
+        Notes
+        -----
+        The two different checks (one for "key" and one for "value") based on
+        the type of the given argument mean that it is possible for
+        StorageClass.name to be in the factory but StorageClass to not be
+        in the factory.
         """
         if isinstance(storageClassOrName, str):
             return storageClassOrName in self._storageClasses
@@ -321,5 +328,10 @@ class StorageClassFactory(metaclass=Singleton):
         ------
         KeyError
             The named storage class is not registered.
+
+        Notes
+        -----
+        This method is intended to simplify testing of StorageClassFactory
+        functionality and it is not expected to be required for normal usage.
         """
         del self._storageClasses[storageClassName]
