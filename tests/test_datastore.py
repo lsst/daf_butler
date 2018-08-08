@@ -116,6 +116,7 @@ class DatastoreTests(DatasetTestHelper):
     def testConstructor(self):
         datastore = self.makeDatastore()
         self.assertIsNotNone(datastore)
+        self.assertIs(datastore.isEphemeral, self.isEphemeral)
 
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
@@ -428,6 +429,7 @@ class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
     ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
+    isEphemeral = False
 
     def setUp(self):
         # Override the working directory before calling the base class
@@ -441,6 +443,7 @@ class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     uriScheme = "mem:"
     hasUnsupportedPut = False
     ingestTransferModes = ()
+    isEphemeral = True
 
 
 class ChainedDatastoreTestCase(PosixDatastoreTestCase):
@@ -448,6 +451,12 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
     ingestTransferModes = ("copy", "move", "hardlink", "symlink")
+    isEphemeral = False
+
+
+class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
+    """ChainedDatastore specialization using all InMemoryDatastore"""
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2.yaml")
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
