@@ -237,7 +237,7 @@ class Butler:
         storageClass = datasetType.storageClass
 
         # Check to see if this storage class has a disassembler
-        if storageClass.assemblerClass.disassemble is not None and storageClass.components:
+        if storageClass.components and storageClass.assemblerClass.disassemble is not None:
             components = storageClass.assembler().disassemble(obj)
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)

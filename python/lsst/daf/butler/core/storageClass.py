@@ -23,10 +23,13 @@
 
 import builtins
 import itertools
+import logging
 
-from .utils import doImport, Singleton
+from .utils import doImport, Singleton, getFullTypeName
 from .composites import CompositeAssembler
 from .config import ConfigSubset
+
+log = logging.getLogger(__name__)
 
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
@@ -51,20 +54,30 @@ class StorageClass:
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
+    defaultAssembler = CompositeAssembler
+    defaultAssemblerName = getFullTypeName(defaultAssembler)
+
     def __init__(self, name, pytype=None, components=None, assembler=None):
         self.name = name
         self._pytypeName = pytype
+        if pytype is None:
+            self._pytypeName = "object"
+            self._pytype = object
         self._components = components if components is not None else {}
         # if the assembler is not None also set it and clear the default
         # assembler
         if assembler is not None:
             self._assemblerClassName = assembler
             self._assembler = None
+        elif components is not None:
+            # We set a default assembler for composites so that a class is
+            # guaranteed to support something if it is a composite.
+            log.debug("Setting default assembler for %s", self.name)
+            self._assembler = self.defaultAssembler
+            self._assemblerClassName = self.defaultAssemblerName
         else:
-            # We set a default assembler so that a class is guaranteed to
-            # support something.
+            self._assembler = None
             self._assemblerClassName = None
-            self._assembler = CompositeAssembler
         # The types are created on demand and cached
         self._pytype = None
 
@@ -129,7 +142,31 @@ class StorageClass:
         return isinstance(instance, self.pytype)
 
     def __eq__(self, other):
-        return self.name == other.name
+        """Equality checks name, pytype name, assembler name, and components"""
+        if self.name != other.name:
+            return False
+
+        if type(self) != type(other):
+            return False
+
+        # We must compare pytype and assembler by name since we do not want
+        # to trigger an import of external module code here
+        if self._assemblerClassName != other._assemblerClassName:
+            return False
+        if self._pytypeName != other._pytypeName:
+            return False
+
+        # Ensure we have the same component keys in each
+        if set(self.components.keys()) != set(other.components.keys()):
+            return False
+
+        # Ensure that all the components have the same type
+        for k in self.components:
+            if self.components[k] != other.components[k]:
+                return False
+
+        # If we got to this point everything checks out
+        return True
 
     def __hash__(self):
         return hash(self.name)
@@ -180,8 +217,15 @@ class StorageClassFactory(metaclass=Singleton):
         in : `bool`
             True if the supplied string is present, or if the supplied
             `StorageClass` is present and identical.
+
+        Notes
+        -----
+        The two different checks (one for "key" and one for "value") based on
+        the type of the given argument mean that it is possible for
+        StorageClass.name to be in the factory but StorageClass to not be
+        in the factory.
         """
-        if isinstance(storageClassOrName, "str"):
+        if isinstance(storageClassOrName, str):
             return storageClassOrName in self._storageClasses
         elif isinstance(storageClassOrName, StorageClass):
             if storageClassOrName.name in self._storageClasses:
@@ -271,3 +315,23 @@ class StorageClassFactory(metaclass=Singleton):
                                  " definition")
         else:
             self._storageClasses[storageClass.name] = storageClass
+
+    def _unregisterStorageClass(self, storageClassName):
+        """Remove the named StorageClass from the factory.
+
+        Parameters
+        ----------
+        storageClassName : `str`
+            Name of storage class to remove.
+
+        Raises
+        ------
+        KeyError
+            The named storage class is not registered.
+
+        Notes
+        -----
+        This method is intended to simplify testing of StorageClassFactory
+        functionality and it is not expected to be required for normal usage.
+        """
+        del self._storageClasses[storageClassName]
