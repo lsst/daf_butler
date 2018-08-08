@@ -66,6 +66,7 @@ storageClasses:
       visitInfo: TablePersistableVisitInfo
       apCorrMap: TablePersistableApCorr
       coaddInputs: TablePersistableCoaddInputs
+      transmissionCurve: TablePersistableTransmissionCurve
       metadata: PropertyList
   ExposureF: &ExposureF
     <<: *Exposure
