@@ -149,7 +149,7 @@ class DataUnit:
 
     @property
     def spatial(self):
-        """Is this a spatial `DataUnitRegion`?
+        """Is this a spatial `DataUnitJoin`?
         """
         return self._spatial
 
@@ -195,15 +195,23 @@ class DataUnitJoin:
         an actual `Table` in many cases because joins are often
         materialized as views (and thus are also not present
         in `Registry._schema._metadata`).
+    relates : `tuple` of `DataUnit`
+        The DataUnits in this relationship.
+    spatial : `bool`, optional
+        Is this a spatial `DataUnit`? If so then it either has a ``region``
+        column, or some other way to get a region (e.g. ``SkyPix``).
     """
 
-    def __init__(self, name, lhs=None, rhs=None, summarizes=None, isView=None, table=None):
+    def __init__(self, name, lhs=None, rhs=None, summarizes=None,
+                 isView=None, table=None, relates=None, spatial=False):
         self._name = name
         self._lhs = lhs
         self._rhs = rhs
         self._summarizes = summarizes
         self._isView = isView
         self._table = table
+        self._relates = relates
+        self._spatial = spatial
 
     @property
     def name(self):
@@ -221,6 +229,14 @@ class DataUnitJoin:
         return self._rhs
 
     @property
+    def relates(self):
+        return self._relates
+
+    @property
+    def spatial(self):
+        return self._spatial
+
+    @property
     def summarizes(self):
         return self._summarizes
 
@@ -235,47 +251,6 @@ class DataUnitJoin:
         """
         return getattr(self, '_table', None)
 
-
-class DataUnitRegion:
-    """Represents a relationsip between two or more `DataUnit`s
-    with associated region.
-
-    Parameters
-    ----------
-    name : `str`
-        Name of this `DataUnitRegion`, same as the name of the table.
-    relates : `tuple` of `DataUnit`
-        The DataUnits in this relationship.
-    table : `sqlalchemy.Table`, optional
-        The table to be used for queries.
-    spatial : `bool`, optional
-        Is this a spatial `DataUnit`? If so then it either has a ``region``
-        column, or some other way to get a region (e.g. ``SkyPix``).
-    """
-
-    def __init__(self, name, relates, table=None, spatial=False):
-        self._name = name
-        self._relates = relates
-        self._table = table
-        self._spatial = spatial
-
-    @property
-    def name(self):
-        """Name of this `DataUnitRegion`, same as the name of the table.
-        """
-        return self._name
-
-    @property
-    def relates(self):
-        return self._relates
-
-    @property
-    def table(self):
-        """When not ``None`` the table entry corresponding to this
-        `DataUnitRegion` (`sqlalchemy.Table`, optional).
-        """
-        return self._table
-
     @property
     def primaryKey(self):
         """Full primary-key column name tuple.
@@ -288,7 +263,7 @@ class DataUnitRegion:
     @property
     def primaryKeyColumns(self):
         """Dictionary keyed on ``primaryKey`` names with `sqlalchemy.Column`
-        entries into this `DataUnitRegion` primary table as values (`dict`).
+        entries into this `DataUnitJoin` primary table as values (`dict`).
         """
         return {name: self.table.columns[name] for name in self.primaryKey}
 
@@ -301,12 +276,6 @@ class DataUnitRegion:
         if table is not None and self.spatial:
             return table.c["region"]
         return None
-
-    @property
-    def spatial(self):
-        """Is this a spatial `DataUnitRegion`?
-        """
-        return self._spatial
 
 
 class DataUnitRegistry:
@@ -345,7 +314,6 @@ class DataUnitRegistry:
         dataUnitRegistry = cls()
         dataUnitRegistry._initDataUnitNames(config['dataUnits'])
         dataUnitRegistry._initDataUnits(config['dataUnits'], builder)
-        dataUnitRegistry._initDataUnitRegions(config['dataUnitRegions'], builder)
         dataUnitRegistry._initDataUnitJoins(config['dataUnitJoins'], builder)
         return dataUnitRegistry
 
@@ -373,16 +341,16 @@ class DataUnitRegistry:
             yield (dataUnitName, self[dataUnitName])
 
     def getRegionHolder(self, *dataUnitNames):
-        """Return the DataUnit or DataUnitRegion that holds region for the
+        """Return the DataUnit or DataUnitJoin that holds region for the
         given combination of DataUnits.
 
-        Returned object can be either `DataUnitRegion` or `DataUnit`. Use
+        Returned object can be either `DataUnitJoin` or `DataUnit`. Use
         ``table`` and/or ``regionColumn`` properties of returned object to
         retrieve region data from database table.
 
         Returns
         -------
-        `DataUnitRegion` or `DataUnit` instance.
+        `DataUnitJoin` or `DataUnit` instance.
         """
         return self._dataUnitRegions[frozenset(dataUnitNames) & self._spatialDataUnits]
 
@@ -486,7 +454,7 @@ class DataUnitRegistry:
                 self._dataUnitsByLinkColumnName[linkColumnName] = dataUnit
             if spatial is not None:
                 self._spatialDataUnits |= frozenset((dataUnitName, ))
-                # The DataUnit (or DataUnitRegion) instance that can be used
+                # The DataUnit (or DataUnitJoin) instance that can be used
                 # to retreive the region is keyed based on the union
                 # of the DataUnit and its required dependencies that are also spatial.
                 # E.g. 'Patch' is keyed on ('Tract', 'Patch').
@@ -496,30 +464,6 @@ class DataUnitRegistry:
                                 tuple(d.name for d in dataUnit.requiredDependencies
                                       if d.name in self._spatialDataUnits))
                 self._dataUnitRegions[key] = dataUnit
-
-    def _initDataUnitRegions(self, config, builder):
-        """Initialize tables that associate regions with multiple DataUnits.
-
-        Parameters
-        ----------
-        config : `Config`
-            The `dataUnitRegions` component of a `SchemaConfig`.
-        builder : `SchemaBuilder`, optional
-            When given, create `sqlalchemy.core.Table` entries.
-        """
-        for description in config:
-            dataUnitNames = frozenset(description["relates"])
-            [(tableName, tableDescription)] = description["tables"].items()
-            if builder is not None:
-                table = builder.addTable(tableName, tableDescription)
-                duRegion = DataUnitRegion(name=tableName,
-                                          relates=frozenset(self[name] for name in dataUnitNames),
-                                          table=table,
-                                          spatial=description.get("spatial", False))
-            else:
-                duRegion = None
-            self._dataUnitRegions[dataUnitNames] = duRegion
-            self._spatialDataUnits |= frozenset(dataUnitNames)
 
     def _initDataUnitJoins(self, config, builder):
         """Initialize `DataUnit` join entries.
@@ -541,14 +485,22 @@ class DataUnitRegistry:
                     isView = "sql" in tableDescription
             lhs = frozenset((dataUnitJoinDescription.get('lhs', None)))
             rhs = frozenset((dataUnitJoinDescription.get('rhs', None)))
+            dataUnitNames = lhs | rhs
+            relates = frozenset(self[name] for name in dataUnitNames)
             summarizes = dataUnitJoinDescription.get('summarizes', None)
+            spatial = dataUnitJoinDescription.get("spatial", False)
             dataUnitJoin = DataUnitJoin(name=dataUnitJoinName,
                                         lhs=lhs,
                                         rhs=rhs,
                                         summarizes=summarizes,
                                         isView=isView,
-                                        table=table)
+                                        table=table,
+                                        spatial=spatial,
+                                        relates=relates)
             self.joins[(lhs, rhs)] = dataUnitJoin
+            if spatial:
+                self._dataUnitRegions[dataUnitNames] = dataUnitJoin
+                self._spatialDataUnits |= frozenset(dataUnitNames)
 
     def getPrimaryKeyNames(self, dataUnitNames):
         """Get all primary-key column names for the given ``dataUnitNames``.

@@ -667,11 +667,10 @@ schema:
         type: string
         doc: A string value composed only of letters, numbers, and underscores.
 
-  dataUnitRegions:
-    -
-      relates:
-        - Visit
-        - Sensor
+  dataUnitJoins:
+    VisitSensorRegion:
+      lhs: [Visit]
+      rhs: [Sensor]
       spatial: true
       tables:
         VisitSensorRegion:
@@ -728,7 +727,6 @@ schema:
             - Sensor.camera
             - Sensor.sensor
 
-  dataUnitJoins:
     ExposureRangeJoin:
       doc: >
         A calculated join between Datasets identified with an Exposure
