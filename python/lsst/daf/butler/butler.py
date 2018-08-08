@@ -324,6 +324,9 @@ class Butler:
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.find(self.collection, datasetType, dataId)
+        if ref is None:
+            raise LookupError("Dataset {} with data ID {} could not be found in {}".format(
+                              datasetType.name, dataId, self.collection))
         if idNumber is not None and idNumber != ref.id:
             raise ValueError("DatasetRef.id does not match id in registry")
         return self.getDirect(ref)
