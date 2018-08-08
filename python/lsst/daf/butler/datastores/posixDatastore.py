@@ -402,8 +402,9 @@ class PosixDatastore(Datastore):
         if transfer is None:
             if os.path.isabs(path):
                 absRoot = os.path.abspath(self.root)
-                if os.path.commonpath([absRoot, os.path.abspath(path)]) != absRoot:
+                if os.path.commonpath([absRoot, path]) != absRoot:
                     raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
+                path = os.path.relpath(path, absRoot)
         else:
             template = self.templates.getTemplate(ref.datasetType.name)
             location = self.locationFactory.fromPath(template.format(ref))
