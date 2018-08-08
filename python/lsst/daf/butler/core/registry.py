@@ -114,7 +114,7 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
-        cls = doImport(registryConfig['cls'])
+        cls = doImport(registryConfig["cls"])
         return cls(registryConfig, schemaConfig, create=create)
 
     def __init__(self, registryConfig, schemaConfig=None, create=False):

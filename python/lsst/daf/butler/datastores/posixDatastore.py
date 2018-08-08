@@ -117,9 +117,9 @@ class PosixDatastore(Datastore):
         super().__init__(config, registry)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
-        self.root = self.config['root']
+        self.root = self.config["root"]
         if not os.path.isdir(self.root):
-            if 'create' not in self.config or not self.config['create']:
+            if "create" not in self.config or not self.config["create"]:
                 raise ValueError("No valid root at: {0}".format(self.root))
             safeMakeDir(self.root)
 
@@ -569,12 +569,12 @@ class PosixDatastore(Datastore):
             Hex digest of the file.
         """
         if algorithm not in hashlib.algorithms_guaranteed:
-            raise NameError('The specified algorithm "{}" is not supported by hashlib'.format(algorithm))
+            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
 
         hasher = hashlib.new(algorithm)
 
-        with open(filename, 'rb') as f:
-            for chunk in iter(lambda: f.read(block_size), b''):
+        with open(filename, "rb") as f:
+            for chunk in iter(lambda: f.read(block_size), b""):
                 hasher.update(chunk)
 
         return hasher.hexdigest()

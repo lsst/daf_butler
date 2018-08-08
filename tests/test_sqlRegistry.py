@@ -314,8 +314,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
 
     def testDatasetUnit(self):
         registry = Registry.fromConfig(self.butlerConfig, create=True)
-        dataUnitName = 'Camera'
-        dataUnitValue = {'camera': 'DummyCam'}
+        dataUnitName = "Camera"
+        dataUnitValue = {"camera": "DummyCam"}
         registry.addDataUnitEntry(dataUnitName, dataUnitValue)
         # Inserting the same value twice should fail
         with self.assertRaises(ValueError):
@@ -323,17 +323,17 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # Find should return the entry
         self.assertEqual(registry.findDataUnitEntry(dataUnitName, dataUnitValue), dataUnitValue)
         # Find on a non-existant value should return None
-        self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {'camera': 'Unknown'}))
+        self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {"camera": "Unknown"}))
         # AbstractFilter doesn't have a table; should fail.
         with self.assertRaises(OperationalError):
-            registry.addDataUnitEntry('AbstractFilter', {'abstract_filter': 'i'})
-        dataUnitName2 = 'PhysicalFilter'
-        dataUnitValue2 = {'physical_filter': 'DummyCam_i', 'abstract_filter': 'i'}
-        # Missing required dependency ('camera') should fail
+            registry.addDataUnitEntry("AbstractFilter", {"abstract_filter": "i"})
+        dataUnitName2 = "PhysicalFilter"
+        dataUnitValue2 = {"physical_filter": "DummyCam_i", "abstract_filter": "i"}
+        # Missing required dependency ("camera") should fail
         with self.assertRaises(ValueError):
             registry.addDataUnitEntry(dataUnitName2, dataUnitValue2)
         # Adding required dependency should fix the failure
-        dataUnitValue2['camera'] = 'DummyCam'
+        dataUnitValue2["camera"] = "DummyCam"
         registry.addDataUnitEntry(dataUnitName2, dataUnitValue2)
         # Find should return the entry
         self.assertEqual(registry.findDataUnitEntry(dataUnitName2, dataUnitValue2), dataUnitValue2)

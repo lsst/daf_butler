@@ -94,11 +94,11 @@ class DatabaseDict(MutableMapping):
         dictionary : `DatabaseDict` (subclass)
             A new `DatabaseDict` subclass instance.
         """
-        if 'cls' in config:
-            cls = doImport(config['cls'])
+        if "cls" in config:
+            cls = doImport(config["cls"])
             return cls(config=config, types=types, key=key, value=value)
         else:
-            table = config['table']
+            table = config["table"]
             if registry is None:
                 raise ValueError("Either config['cls'] or registry must be provided.")
             return registry.makeDatabaseDict(table, types=types, key=key, value=value)

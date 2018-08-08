@@ -131,41 +131,41 @@ class TopologicalSetTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(len(elements), len(topologicalSet))
 
     def testConnect(self):
-        elements = ['a', 'd', 'f']
+        elements = ["a", "d", "f"]
         topologicalSet = TopologicalSet(elements)
         # Adding connections should work
-        topologicalSet.connect('a', 'd')
-        topologicalSet.connect('a', 'f')
+        topologicalSet.connect("a", "d")
+        topologicalSet.connect("a", "f")
         # Even when adding cycles (unfortunately)
-        topologicalSet.connect('f', 'a')
+        topologicalSet.connect("f", "a")
         # Adding a connection from or to a non existing element should also fail
         with self.assertRaises(KeyError):
-            topologicalSet.connect('a', 'c')
+            topologicalSet.connect("a", "c")
         with self.assertRaises(KeyError):
-            topologicalSet.connect('c', 'a')
+            topologicalSet.connect("c", "a")
         with self.assertRaises(KeyError):
-            topologicalSet.connect('c', 'g')
+            topologicalSet.connect("c", "g")
         with self.assertRaises(ValueError):
-            topologicalSet.connect('c', 'c')
+            topologicalSet.connect("c", "c")
 
     def testTopologicalOrdering(self):
         """Iterating over a TopologicalSet should visit the elements
         in the set in topologically sorted order.
         """
         # First check a basic topological ordering
-        elements = ['shoes', 'belt', 'trousers']
+        elements = ["shoes", "belt", "trousers"]
         for p in permutations(elements):
             topologicalSet = TopologicalSet(p)
-            topologicalSet.connect('belt', 'shoes')
-            topologicalSet.connect('trousers', 'shoes')
+            topologicalSet.connect("belt", "shoes")
+            topologicalSet.connect("trousers", "shoes")
             # Check valid orderings
-            self.assertIn(list(topologicalSet), [['belt', 'trousers', 'shoes'],
-                                                 ['trousers', 'belt', 'shoes']])
+            self.assertIn(list(topologicalSet), [["belt", "trousers", "shoes"],
+                                                 ["trousers", "belt", "shoes"]])
             # Check invalid orderings (probably redundant)
-            self.assertNotIn(list(topologicalSet), [['shoes', 'belt', 'trousers'],
-                                                    ['shoes', 'trousers', 'belt']])
+            self.assertNotIn(list(topologicalSet), [["shoes", "belt", "trousers"],
+                                                    ["shoes", "trousers", "belt"]])
         # Adding a cycle should cause iteration to fail
-        topologicalSet.connect('shoes', 'belt')
+        topologicalSet.connect("shoes", "belt")
         with self.assertRaises(ValueError):
             ignore = list(topologicalSet)  # noqa F841
         # Now check for a larger number of elements.
@@ -185,11 +185,11 @@ class TopologicalSetTestCase(lsst.utils.tests.TestCase):
     def testPickle(self):
         """Should be possible to pickle.
         """
-        elements = ['a', 'd', 'f']
+        elements = ["a", "d", "f"]
         topologicalSet = TopologicalSet(elements)
         # Adding connections should work
-        topologicalSet.connect('a', 'd')
-        topologicalSet.connect('a', 'f')
+        topologicalSet.connect("a", "d")
+        topologicalSet.connect("a", "f")
         out = pickle.loads(pickle.dumps(topologicalSet))
         self.assertEqual(out, topologicalSet)
 

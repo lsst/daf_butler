@@ -32,12 +32,12 @@ def createDatabase(dbname):
     metadata.create_all(engine)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Create SQL schema.')
-    parser.add_argument('--dbname', dest='dbname', help='Name of database to connect to',
-                        default='sqlite:///:memory:')
+    parser = argparse.ArgumentParser(description="Create SQL schema.")
+    parser.add_argument("--dbname", dest="dbname", help="Name of database to connect to",
+                        default="sqlite:///:memory:")
 
     args = parser.parse_args()
 

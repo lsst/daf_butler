@@ -102,7 +102,7 @@ class DataUnit:
         """When not ``None`` the primary table entry corresponding to this
         `DataUnit` (`sqlalchemy.core.Table`, optional).
         """
-        return getattr(self, '_table', None)
+        return getattr(self, "_table", None)
 
     @property
     def link(self):
@@ -249,7 +249,7 @@ class DataUnitJoin:
         """When not ``None`` the primary table entry corresponding to this
         `DataUnitJoin` (`sqlalchemy.core.TableClause`, optional).
         """
-        return getattr(self, '_table', None)
+        return getattr(self, "_table", None)
 
     @property
     def primaryKey(self):
@@ -305,16 +305,16 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `SchemaConfig`
-            `Registry` schema configuration containing 'DataUnits',
-            'dataUnitRegions', and 'dataUnitJoins' entries.
+            `Registry` schema configuration containing "DataUnits",
+            "dataUnitRegions", and "dataUnitJoins" entries.
         builder : `SchemaBuilder`, optional
             When given, create `sqlalchemy.core.Table` entries for every
             `DataUnit` table.
         """
         dataUnitRegistry = cls()
-        dataUnitRegistry._initDataUnitNames(config['dataUnits'])
-        dataUnitRegistry._initDataUnits(config['dataUnits'], builder)
-        dataUnitRegistry._initDataUnitJoins(config['dataUnitJoins'], builder)
+        dataUnitRegistry._initDataUnitNames(config["dataUnits"])
+        dataUnitRegistry._initDataUnits(config["dataUnits"], builder)
+        dataUnitRegistry._initDataUnitJoins(config["dataUnitJoins"], builder)
         return dataUnitRegistry
 
     def __len__(self):
@@ -390,9 +390,9 @@ class DataUnitRegistry:
         """
         self._dataUnitNames = TopologicalSet(config)
         for dataUnitName, dataUnitDescription in config.items():
-            if 'dependencies' in dataUnitDescription:
-                dependencies = dataUnitDescription['dependencies']
-                for category in ('required', 'optional'):
+            if "dependencies" in dataUnitDescription:
+                dependencies = dataUnitDescription["dependencies"]
+                for category in ("required", "optional"):
                     if category in dependencies:
                         for dependency in dependencies[category]:
                             self._dataUnitNames.connect(dependency, dataUnitName)
@@ -416,30 +416,30 @@ class DataUnitRegistry:
             table = None
             spatial = False
             link = ()
-            if 'dependencies' in dataUnitDescription:
-                dependencies = dataUnitDescription['dependencies']
-                if 'required' in dependencies:
-                    requiredDependencies = (self[name] for name in dependencies['required'])
-                if 'optional' in dependencies:
-                    optionalDependencies = (self[name] for name in dependencies['optional'])
+            if "dependencies" in dataUnitDescription:
+                dependencies = dataUnitDescription["dependencies"]
+                if "required" in dependencies:
+                    requiredDependencies = (self[name] for name in dependencies["required"])
+                if "optional" in dependencies:
+                    optionalDependencies = (self[name] for name in dependencies["optional"])
             if builder is not None:
-                if 'link' in dataUnitDescription:
+                if "link" in dataUnitDescription:
                     # Link names
-                    link = tuple((linkDescription['name'] for linkDescription in dataUnitDescription['link']))
+                    link = tuple((linkDescription["name"] for linkDescription in dataUnitDescription["link"]))
                     # Link columns that will become part of the Datasets table
-                    for linkDescription in dataUnitDescription['link']:
+                    for linkDescription in dataUnitDescription["link"]:
                         linkColumnDesc = linkDescription.copy()
                         linkConstraintDesc = linkColumnDesc.pop("foreignKey", None)
-                        linkName = linkDescription['name']
+                        linkName = linkDescription["name"]
                         self.links[linkName] = builder.makeColumn(linkColumnDesc)
                         if linkConstraintDesc is not None:
                             self.constraints.append(builder.makeForeignKeyConstraint(linkConstraintDesc))
-                if 'tables' in dataUnitDescription:
-                    for tableName, tableDescription in dataUnitDescription['tables'].items():
+                if "tables" in dataUnitDescription:
+                    for tableName, tableDescription in dataUnitDescription["tables"].items():
                         if tableName == dataUnitName:
                             # Primary table for this DataUnit
                             table = builder.addTable(tableName, tableDescription)
-                            spatial = dataUnitDescription.get('spatial', False)
+                            spatial = dataUnitDescription.get("spatial", False)
                         else:
                             # Secondary table
                             builder.addTable(tableName, tableDescription)
@@ -457,7 +457,7 @@ class DataUnitRegistry:
                 # The DataUnit (or DataUnitJoin) instance that can be used
                 # to retreive the region is keyed based on the union
                 # of the DataUnit and its required dependencies that are also spatial.
-                # E.g. 'Patch' is keyed on ('Tract', 'Patch').
+                # E.g. "Patch" is keyed on ("Tract", "Patch").
                 # This requires that DataUnit's are visited in topologically sorted order
                 # (which they are).
                 key = frozenset((dataUnitName, ) +
@@ -479,15 +479,15 @@ class DataUnitRegistry:
         for dataUnitJoinName, dataUnitJoinDescription in config.items():
             table = None
             isView = None
-            if 'tables' in dataUnitJoinDescription and builder is not None:
-                for tableName, tableDescription in dataUnitJoinDescription['tables'].items():
+            if "tables" in dataUnitJoinDescription and builder is not None:
+                for tableName, tableDescription in dataUnitJoinDescription["tables"].items():
                     table = builder.addTable(tableName, tableDescription)
                     isView = "sql" in tableDescription
-            lhs = frozenset((dataUnitJoinDescription.get('lhs', None)))
-            rhs = frozenset((dataUnitJoinDescription.get('rhs', None)))
+            lhs = frozenset((dataUnitJoinDescription.get("lhs", None)))
+            rhs = frozenset((dataUnitJoinDescription.get("rhs", None)))
             dataUnitNames = lhs | rhs
             relates = frozenset(self[name] for name in dataUnitNames)
-            summarizes = dataUnitJoinDescription.get('summarizes', None)
+            summarizes = dataUnitJoinDescription.get("summarizes", None)
             spatial = dataUnitJoinDescription.get("spatial", False)
             dataUnitJoin = DataUnitJoin(name=dataUnitJoinName,
                                         lhs=lhs,

@@ -40,7 +40,7 @@ __all__ = ("ConversionWalker",)
 
 class ConversionWalker:
     """A class that walks Gen2 Data Repositories to extract the information
-    necessary to create a Gen3 'snapshot' view to them.
+    necessary to create a Gen3 "snapshot" view to them.
 
     ConversionWalkers attempt to only include state that does not involve any
     user choices about how to perform the conversion; anything that does is
@@ -102,7 +102,7 @@ class ConversionWalker:
         parentPaths = []
         repoCfgPath = os.path.join(root, "repositoryCfg.yaml")
         if os.path.exists(repoCfgPath):
-            with open(repoCfgPath, 'r') as f:
+            with open(repoCfgPath, "r") as f:
                 repoCfg = yaml.load(f)
             parentPaths = [parent.root for parent in repoCfg.parents]
             MapperClass = repoCfg.mapper
@@ -112,7 +112,7 @@ class ConversionWalker:
                 parentPaths.append(os.readlink(parentLinkPath))
             mapperFilePath = os.path.join(root, "_mapper")
             if os.path.exists(mapperFilePath):
-                with open(mapperFilePath, 'r') as f:
+                with open(mapperFilePath, "r") as f:
                     mapperClassPath = f.read().strip()
                 MapperClass = doImport(mapperClassPath)
 
@@ -123,7 +123,7 @@ class ConversionWalker:
             return None
 
         # We now have either a MapperClass or a non-zero parents list, so
-        # it's likely this is a valid repository.  We'll add it to self.found
+        # it's likely this is a valid repository.  We"ll add it to self.found
         # before we recurse into parents to make sure we short-cut any cycles
         # (which shouldn't exist, but better to detect that later rather than
         # recurse infinitely).
@@ -173,7 +173,7 @@ class ConversionWalker:
         log = logging.getLogger("lsst.daf.butler.gen2convert")
         assert(repo.root in self.found)
         assert(repo.root not in self.ignored)
-        # Short-circuit if we've already scanned this path.
+        # Short-circuit if we"ve already scanned this path.
         existing = self.scanned.setdefault(repo.root, repo)
         if existing is not repo:
             return existing
@@ -203,7 +203,7 @@ class ConversionWalker:
         """Load unique VisitInfo objects and filter associations from all scanned repositories.
         """
         for repo in self.scanned.values():
-            config = self.config['mappers'][repo.MapperClass.__name__]["VisitInfo"]
+            config = self.config["mappers"][repo.MapperClass.__name__]["VisitInfo"]
             cameraVisitInfo = self.visitInfo.setdefault(repo.MapperClass.__name__, {})
             datasets = repo.datasets.get(config["DatasetType"], {})
             for dataset in datasets.values():
@@ -310,8 +310,8 @@ class ConversionWalker:
             filePath = mapping.template  # SkyMaps should never need a dataId for lookup
             fullPath = os.path.join(repo.root, filePath)
             if os.path.exists(fullPath):
-                with open(fullPath, 'rb') as f:
-                    skyMap = pickle.load(f, encoding='latin1')
+                with open(fullPath, "rb") as f:
+                    skyMap = pickle.load(f, encoding="latin1")
                 # If we have already loaded an equivalent SkyMap, use that.
                 skyMap = self.skyMaps.setdefault(skyMap.getSha1(), skyMap)
                 self.skyMapRoots.setdefault(skyMap.getSha1(), []).append(repo.root)

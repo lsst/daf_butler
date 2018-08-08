@@ -28,7 +28,7 @@ __all__ = ("Extractor",)
 
 # Regular expression that matches a single substitution in
 # Gen2 CameraMapper template, such as "%(tract)04d".
-TEMPLATE_RE = re.compile(r'\%\((?P<name>\w+)\)[^\%]*?(?P<type>[idrs])')
+TEMPLATE_RE = re.compile(r"\%\((?P<name>\w+)\)[^\%]*?(?P<type>[idrs])")
 
 
 class FilePathParser:

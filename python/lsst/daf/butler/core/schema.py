@@ -60,9 +60,9 @@ class Schema:
         self.buildFromConfig(config)
 
     def buildFromConfig(self, config):
-        for tableName, tableDescription in self.config['tables'].items():
+        for tableName, tableDescription in self.config["tables"].items():
             self.builder.addTable(tableName, tableDescription)
-        datasetTable = self.builder.metadata.tables['Dataset']
+        datasetTable = self.builder.metadata.tables["Dataset"]
         for linkColumn in self.dataUnits.links.values():
             datasetTable.append_column(linkColumn)
         for linkConstraint in self.dataUnits.constraints:
@@ -84,8 +84,8 @@ class SchemaBuilder:
     views : `dict`
         All created views.
     """
-    VALID_COLUMN_TYPES = {'string': String, 'int': Integer, 'float': Float, "region": LargeBinary,
-                          'bool': Boolean, 'blob': LargeBinary, 'datetime': DateTime}
+    VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
+                          "bool": Boolean, "blob": LargeBinary, "datetime": DateTime}
 
     def __init__(self):
         self.metadata = MetaData()
@@ -116,7 +116,7 @@ class SchemaBuilder:
         # Create a Table object (attaches itself to metadata)
         if "sql" in tableDescription:
             # This table can be materialized as a view
-            table = makeView(tableName, self.metadata, selectable=tableDescription['sql'])
+            table = makeView(tableName, self.metadata, selectable=tableDescription["sql"])
             self.views[tableName] = table
             view = True
         else:

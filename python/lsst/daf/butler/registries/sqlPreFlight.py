@@ -263,8 +263,8 @@ class SqlPreFlight:
         _LOG.debug("units where: %s", [str(x) for x in where])
 
         # join with input datasets to restrict to existing inputs
-        dsTable = self._schema._metadata.tables['Dataset']
-        dsCollTable = self._schema._metadata.tables['DatasetCollection']
+        dsTable = self._schema._metadata.tables["Dataset"]
+        dsCollTable = self._schema._metadata.tables["DatasetCollection"]
         for dsType in neededDatasetTypes:
             _LOG.debug("joining dataset: %s", dsType.name)
             dsAlias = dsTable.alias("ds" + dsType.name)
@@ -276,9 +276,9 @@ class SqlPreFlight:
                     _LOG.debug("joining on link: %s", link)
                     where.append(dsAlias.c[link] == dataUnit.table.c[link])
 
-            where += [dsAlias.c['dataset_id'] == dsCollAlias.c['dataset_id'],
-                      dsAlias.c['dataset_type_name'] == dsType.name,
-                      dsCollAlias.c['collection'] == collection]
+            where += [dsAlias.c["dataset_id"] == dsCollAlias.c["dataset_id"],
+                      dsAlias.c["dataset_type_name"] == dsType.name,
+                      dsCollAlias.c["collection"] == collection]
         _LOG.debug("datasets where: %s", [str(x) for x in where])
 
         # build full query

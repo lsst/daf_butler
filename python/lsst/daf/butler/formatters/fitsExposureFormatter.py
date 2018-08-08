@@ -67,7 +67,7 @@ class FitsExposureFormatter(Formatter):
         if component == "metadata":
             data = readMetadata(fileDescriptor.location.path)
         else:
-            # If we're reading a non-image component, just read in a
+            # If we"re reading a non-image component, just read in a
             # single-pixel image for efficiency.
             kwds = {}
             if component in ("image", "variance", "mask"):

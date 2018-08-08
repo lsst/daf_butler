@@ -92,7 +92,7 @@ def FileForWriteOnceCompareSame(name):
         try:
             temp.close()
             # If the symlink cannot be created then it will raise. If it can't
-            # be created because a file at 'name' already exists then we'll
+            # be created because a file at "name" already exists then we"ll
             # do a compare-same check.
             os.symlink(temp.name, name)
             # If the symlink was created then this is the process that created
@@ -181,7 +181,7 @@ def SafeLockedFileForRead(name):
     """
     log = logging.getLogger("daf.butler")
     try:
-        with open(name, 'r') as f:
+        with open(name, "r") as f:
             log.debug("Acquiring shared lock on {}".format(name))
             fcntl.flock(f, fcntl.LOCK_SH)
             log.debug("Acquired shared lock on {}".format(name))
@@ -195,7 +195,7 @@ class SafeLockedFileForWrite:
     an exclusive lock, and contain file descriptors to readable and writable
     versions of the file.
 
-    This will only open a file descriptor in 'write' mode if a write operation
+    This will only open a file descriptor in "write" mode if a write operation
     is performed. If no write operation is performed, the existing file (if
     there is one) will not be overwritten.
 
@@ -218,7 +218,7 @@ class SafeLockedFileForWrite:
         self.close()
 
     def open(self):
-        self._fileHandle = open(self.name, 'a')
+        self._fileHandle = open(self.name, "a")
         self.log.debug("Acquiring exclusive lock on {}".format(self.name))
         fcntl.flock(self._fileHandle, fcntl.LOCK_EX)
         self.log.debug("Acquired exclusive lock on {}".format(self.name))
@@ -234,13 +234,13 @@ class SafeLockedFileForWrite:
     @property
     def readable(self):
         if self._readable is None:
-            self._readable = open(self.name, 'r')
+            self._readable = open(self.name, "r")
         return self._readable
 
     @property
     def writeable(self):
         if self._writeable is None:
-            self._writeable = open(self.name, 'w')
+            self._writeable = open(self.name, "w")
         return self._writeable
 
     def read(self, size=None):

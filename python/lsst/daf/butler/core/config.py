@@ -65,7 +65,7 @@ class Loader(yaml.CLoader):
 
     Examples
     --------
-    >>> with open('document.yaml', 'r') as f:
+    >>> with open("document.yaml", "r") as f:
            data = yaml.load(f, Loader=Loader)
 
     Notes
@@ -76,7 +76,7 @@ class Loader(yaml.CLoader):
     def __init__(self, stream):
         super().__init__(stream)
         self._root = os.path.split(stream.name)[0]
-        Loader.add_constructor('!include', Loader.include)
+        Loader.add_constructor("!include", Loader.include)
 
     def include(self, node):
         if isinstance(node, yaml.ScalarNode):
@@ -100,7 +100,7 @@ class Loader(yaml.CLoader):
 
     def extractFile(self, filename):
         filepath = os.path.join(self._root, filename)
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             return yaml.load(f, Loader)
 
 
@@ -113,8 +113,8 @@ class Config(_ConfigBase):
     is that keys may **not** contain dots (``.``). This is explained next:
 
     Config extends the `dict` api so that hierarchical values may be accessed
-    with dot-delimited notation. That is, ``foo.getValue('a.b.c')`` is the
-    same as ``foo['a']['b']['c']`` is the same as ``foo['a.b.c']``, and either
+    with dot-delimited notation. That is, ``foo.getValue("a.b.c")`` is the
+    same as ``foo["a"]["b"]["c"]`` is the same as ``foo["a.b.c"]``, and either
     of these syntaxes may be used.
 
     Storage formats supported:
@@ -128,7 +128,7 @@ class Config(_ConfigBase):
         Other source of configuration, can be:
 
         - (`str`) Treated as a path to a config file on disk. Must end with
-          '.yaml'.
+          ".yaml".
         - (`Config`) Copies the other Config's values into this one.
         - (`dict`) Copies the values from the dict into this Config.
 
@@ -177,7 +177,7 @@ class Config(_ConfigBase):
         path : `str`
             To a persisted config file.
         """
-        if path.endswith('yaml'):
+        if path.endswith("yaml"):
             self.__initFromYamlFile(path)
         else:
             raise RuntimeError("Unhandled config file type:%s" % path)
@@ -190,7 +190,7 @@ class Config(_ConfigBase):
         path : `str`
             To a persisted config file in YAML format.
         """
-        with open(path, 'r') as f:
+        with open(path, "r") as f:
             self.__initFromYaml(f)
 
     def __initFromYaml(self, stream):
@@ -214,7 +214,7 @@ class Config(_ConfigBase):
 
     def __getitem__(self, name):
         data = self.data
-        for key in name.split('.'):
+        for key in name.split("."):
             if data is None:
                 return None
             if key in data:
@@ -230,7 +230,7 @@ class Config(_ConfigBase):
         return data
 
     def __setitem__(self, name, value):
-        keys = name.split('.')
+        keys = name.split(".")
         last = keys.pop()
         if isinstance(value, Config):
             value = copy.deepcopy(value.data)
@@ -248,7 +248,7 @@ class Config(_ConfigBase):
 
     def __contains__(self, key):
         d = self.data
-        keys = key.split('.')
+        keys = key.split(".")
         last = keys.pop()
         for k in keys:
             if isinstance(d, collections.Sequence):
@@ -271,17 +271,17 @@ class Config(_ConfigBase):
         instead of overwriting the nested dict entirely.
 
         For example, for the given code:
-        foo = {'a': {'b': 1}}
-        foo.update({'a': {'c': 2}})
+        foo = {"a": {"b": 1}}
+        foo.update({"a": {"c": 2}})
 
         Parameters
         ----------
         other : `dict` or `Config`
             Source of configuration:
 
-            - If foo is a dict, then after the update foo == {'a': {'c': 2}}
+            - If foo is a dict, then after the update foo == {"a": {"c": 2}}
             - But if foo is a Config, then after the update
-              foo == {'a': {'b': 1, 'c': 2}}
+              foo == {"a": {"b": 1, "c": 2}}
         """
         def doUpdate(d, u):
             for k, v in u.items():
@@ -335,7 +335,7 @@ class Config(_ConfigBase):
         def getKeys(d, keys, base):
             for key in d:
                 val = d[key]
-                levelKey = base + '.' + key if base is not None else key
+                levelKey = base + "." + key if base is not None else key
                 keys.append(levelKey)
                 if isinstance(val, collections.Mapping):
                     getKeys(val, keys, levelKey)
@@ -404,12 +404,12 @@ class Config(_ConfigBase):
         # After the expected/ordered keys are weritten to the stream the
         # remainder of the keys are written to the stream.
         data = copy.copy(self.data)
-        keys = ['defects', 'needCalibRegistry', 'levels', 'defaultLevel', 'defaultSubLevels', 'camera',
-                'exposures', 'calibrations', 'datasets']
+        keys = ["defects", "needCalibRegistry", "levels", "defaultLevel", "defaultSubLevels", "camera",
+                "exposures", "calibrations", "datasets"]
         for key in keys:
             try:
                 yaml.safe_dump({key: data.pop(key)}, output, default_flow_style=False)
-                output.write('\n')
+                output.write("\n")
             except KeyError:
                 pass
         if data:
@@ -423,7 +423,7 @@ class Config(_ConfigBase):
         path : `str`
             Path to the file to use for output.
         """
-        with open(path, 'w') as f:
+        with open(path, "w") as f:
             self.dump(f)
 
     @staticmethod

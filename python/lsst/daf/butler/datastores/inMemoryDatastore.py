@@ -330,7 +330,7 @@ class InMemoryDatastore(Datastore):
             self.addStoredItemInfo(compRef, itemInfo)
 
         if self._transaction is not None:
-            self._transaction.registerUndo('put', self.remove, ref)
+            self._transaction.registerUndo("put", self.remove, ref)
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.
@@ -370,7 +370,7 @@ class InMemoryDatastore(Datastore):
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
             name = "{}#predicted".format(ref.datasetType.name)
         else:
-            name = "{}".format(id(self.datasets[ref.id]))
+            name = '{}'.format(id(self.datasets[ref.id]))
 
         return "mem://{}".format(name)
 

@@ -74,6 +74,6 @@ class SqliteRegistry(SqlRegistry):
                                   toCopy=("cls", ))
 
     def __init__(self, registryConfig, schemaConfig, create=False):
-        if ':memory:' in registryConfig.get('db', ''):
+        if ":memory:" in registryConfig.get("db", ""):
             create = True
         super().__init__(registryConfig, schemaConfig, create)

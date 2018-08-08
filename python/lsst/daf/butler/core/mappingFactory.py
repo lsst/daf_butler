@@ -131,7 +131,7 @@ class MappingFactory:
         """
         if isinstance(typeOrName, str):
             return typeOrName
-        elif hasattr(typeOrName, 'name'):
+        elif hasattr(typeOrName, "name"):
             return typeOrName.name
         else:
             raise ValueError("Cannot extract name from type")
