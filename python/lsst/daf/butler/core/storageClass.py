@@ -316,7 +316,7 @@ class StorageClassFactory(metaclass=Singleton):
         else:
             self._storageClasses[storageClass.name] = storageClass
 
-    def unregisterStorageClass(self, storageClassName):
+    def _unregisterStorageClass(self, storageClassName):
         """Remove the named StorageClass from the factory.
 
         Parameters

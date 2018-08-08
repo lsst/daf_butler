@@ -123,7 +123,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         with self.assertRaises(ValueError):
             factory.registerStorageClass(newclass3)
 
-        factory.unregisterStorageClass(newclass3.name)
+        factory._unregisterStorageClass(newclass3.name)
         self.assertNotIn(newclass3, factory)
         self.assertNotIn(newclass3.name, factory)
         factory.registerStorageClass(newclass3)
