@@ -21,10 +21,12 @@
 
 import os
 import unittest
+import tempfile
+import shutil
 
 import lsst.utils.tests
 
-from lsst.daf.butler import Butler
+from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
@@ -38,6 +40,7 @@ TESTDIR = os.path.dirname(__file__)
 
 
 class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
+    useTempRoot = True
 
     @staticmethod
     def registerDatasetTypes(datasetTypeName, dataUnits, storageClass, registry):
@@ -57,10 +60,24 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
+    def setUp(self):
+        """Create a new butler root for each test."""
+        if self.useTempRoot:
+            self.root = tempfile.mkdtemp(dir=TESTDIR)
+            Butler.makeRepo(self.root, config=Config(self.configFile))
+            self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
+        else:
+            self.root = None
+            self.tmpConfigFile = self.configFile
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
+
     def testExposureCompositePutGet(self):
         example = os.path.join(TESTDIR, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         datasetTypeName = "calexp"
         dataUnits = ("Camera", "Visit")
         storageClass = self.storageClassFactory.getStorageClass("ExposureF")
@@ -99,6 +116,7 @@ class PosixDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
 class InMemoryDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     """InMemoryDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
+    useTempRoot = False
 
 
 class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
