@@ -82,6 +82,13 @@ class SqlRegistry(Registry):
 
     @contextlib.contextmanager
     def transaction(self):
+        """Context manager that implements SQL transactions.
+
+        Will roll back any changes to the `SqlRegistry` database
+        in case an exception is raised in the enclosed block.
+
+        This context manager may be nested.
+        """
         trans = self._connection.begin()
         try:
             yield
@@ -105,14 +112,16 @@ class SqlRegistry(Registry):
     def _validateDataId(self, datasetType, dataId):
         """Check if a dataId is valid for a particular `DatasetType`.
 
-        TODO move this function to some other place once DataUnit relations
-        are implemented.
+        .. todo::
+
+            Move this function to some other place once DataUnit relations are
+            implemented.
 
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+            `DatasetRef` within a collection.
 
         Raises
         ------
@@ -170,12 +179,12 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection : `str`
-            Identifies the Collection to search.
+            Identifies the collection to search.
         datasetType : `DatasetType`
             The `DatasetType`.
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+            `DatasetRef` within a collection.
 
         Returns
         -------
@@ -236,6 +245,8 @@ class SqlRegistry(Registry):
     def registerDatasetType(self, datasetType):
         """
         Add a new `DatasetType` to the SqlRegistry.
+
+        It is not an error to register the same `DatasetType` twice.
 
         Parameters
         ----------
@@ -328,10 +339,10 @@ class SqlRegistry(Registry):
 
     @transactional
     def addDataset(self, datasetType, dataId, run, producer=None):
-        """Add a Dataset to a Collection.
+        """Adds a Dataset entry to the `Registry`
 
         This always adds a new Dataset; to associate an existing Dataset with
-        a new `Collection`, use ``associate``.
+        a new collection, use ``associate``.
 
         Parameters
         ----------
@@ -339,7 +350,7 @@ class SqlRegistry(Registry):
             Name of a `DatasetType`.
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+            `DatasetRef` within a collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -358,7 +369,10 @@ class SqlRegistry(Registry):
         ------
         ValueError
             If a Dataset with the given `DatasetRef` already exists in the
-            given Collection.
+            given collection.
+
+        Exception
+            If ``dataId`` contains unknown or invalid `DataUnit` entries.
         """
         # TODO this is obviously not the most efficient way to check
         # for existence.
@@ -382,12 +396,18 @@ class SqlRegistry(Registry):
         return datasetRef
 
     def getDataset(self, id):
-        """Retrieve an Dataset.
+        """Retrieve a Dataset entry.
 
         Parameters
         ----------
         id : `int`
             The unique identifier for the Dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
         """
         datasetTable = self._schema.tables["Dataset"]
         with self._connection.begin():
@@ -458,13 +478,13 @@ class SqlRegistry(Registry):
 
     @transactional
     def associate(self, collection, refs):
-        r"""Add existing Datasets to a Collection, possibly creating the
-        Collection in the process.
+        """Add existing Datasets to a collection, possibly creating the
+        collection in the process.
 
         Parameters
         ----------
         collection : `str`
-            Indicates the Collection the Datasets should be associated with.
+            Indicates the collection the Datasets should be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
@@ -475,7 +495,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
-        r"""Remove existing Datasets from a Collection.
+        r"""Remove existing Datasets from a collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
@@ -483,13 +503,13 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection : `str`
-            The Collection the Datasets should no longer be associated with.
+            The collection the Datasets should no longer be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
         remove : `bool`
             If `True`, remove Datasets from the `SqlRegistry` if they are not
-            associated with any Collection (including via any composites).
+            associated with any collection (including via any composites).
 
         Returns
         -------
@@ -611,12 +631,20 @@ class SqlRegistry(Registry):
     def addExecution(self, execution):
         """Add a new `Execution` to the `SqlRegistry`.
 
+        If ``execution.id`` is `None` the `SqlRegistry` will update it to
+        that of the newly inserted entry.
+
         Parameters
         ----------
         execution : `Execution`
             Instance to add to the `SqlRegistry`.
             The given `Execution` must not already be present in the
             `SqlRegistry`.
+
+        Raises
+        ------
+        Exception
+            If `Execution` is already present in the `SqlRegistry`.
         """
         executionTable = self._schema.tables["Execution"]
         result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
@@ -656,7 +684,7 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection : `str`
-            The Collection collection used to identify all inputs and outputs
+            The collection used to identify all inputs and outputs
             of the `Run`.
 
         Returns
@@ -684,7 +712,7 @@ class SqlRegistry(Registry):
         Raises
         ------
         ValueError
-            If `run` already exists, but is not identical.
+            If ``run`` already exists, but is not identical.
         """
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
@@ -727,7 +755,7 @@ class SqlRegistry(Registry):
 
     def getRun(self, id=None, collection=None):
         """
-        Get a `Run` corresponding to it's collection or id
+        Get a `Run` corresponding to its collection or id
 
         Parameters
         ----------
@@ -794,7 +822,6 @@ class SqlRegistry(Registry):
             The given `Quantum` must not already be present in the
             `SqlRegistry` (or any other), therefore its:
 
-            - `execution` attribute must be set to an existing `Execution`.
             - `run` attribute must be set to an existing `Run`.
             - `predictedInputs` attribute must be fully populated with
               `DatasetRef`\ s, and its.
@@ -873,10 +900,8 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        ValueError
-            If ``ref`` is not already in the predicted inputs list.
         KeyError
-            If ``ref`` is not a predicted consumer for ``quantum``.
+            If ``quantum`` is not a predicted consumer for ``ref``.
         """
         datasetConsumersTable = self._schema.tables["DatasetConsumers"]
         result = self._connection.execute(datasetConsumersTable.update().where(and_(
@@ -1021,7 +1046,7 @@ class SqlRegistry(Registry):
         ----------
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+            `DatasetRef` within a collection.
 
         Returns
         -------
@@ -1059,7 +1084,7 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collections : `list` of `str`
-            An ordered `list` of collections indicating the Collections to
+            An ordered `list` of collections indicating the collections to
             search for Datasets.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly) the
@@ -1134,38 +1159,19 @@ class SqlRegistry(Registry):
         ts : `TableSet`
             Contains the previously exported content.
         collection : `str`
-            An additional Collection collection assigned to the newly
+            An additional collection assigned to the newly
             imported Datasets.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @transactional
-    def transfer(self, src, expr, collection):
-        r"""Transfer contents from a source `SqlRegistry`, limited to those
-        reachable from the Datasets identified by the expression `expr`,
-        into this `SqlRegistry` and collection them with a Collection.
-
-        Parameters
-        ----------
-        src : `SqlRegistry`
-            The source `SqlRegistry`.
-        expr : `str`
-            An expression that limits the `DataUnit`\ s and (indirectly)
-            the Datasets transferred.
-        collection : `str`
-            An additional Collection collection assigned to the newly
-            imported Datasets.
-        """
-        self.import_(src.export(expr), collection)
-
-    @transactional
     def subset(self, collection, expr, datasetTypes):
-        r"""Create a new `Collection` by subsetting an existing one.
+        r"""Create a new collection by subsetting an existing one.
 
         Parameters
         ----------
         collection : `str`
-            Indicates the input Collection to subset.
+            Indicates the input collection to subset.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly)
             Datasets in the subset.
@@ -1182,7 +1188,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def merge(self, outputCollection, inputCollections):
-        r"""Create a new Collection from a series of existing ones.
+        """Create a new collection from a series of existing ones.
 
         Entries earlier in the list will be used in preference to later
         entries when both contain Datasets with the same `DatasetRef`.
@@ -1190,8 +1196,8 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         outputCollection : `str`
-            collection to use for the new Collection.
+            collection to use for the new collection.
         inputCollections : `list` of `str`
-            A `list` of Collections to combine.
+            A `list` of collections to combine.
         """
         raise NotImplementedError("Must be implemented by subclass")
