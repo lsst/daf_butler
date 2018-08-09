@@ -24,7 +24,8 @@
 
 import os
 import unittest
-from tempfile import TemporaryDirectory
+import tempfile
+import shutil
 import pickle
 
 import lsst.utils.tests
@@ -55,6 +56,7 @@ class TransactionTestError(Exception):
 class ButlerTests:
     """Tests for Butler.
     """
+    useTempRoot = True
 
     @staticmethod
     def addDatasetType(datasetTypeName, dataUnits, storageClass, registry):
@@ -75,14 +77,28 @@ class ButlerTests:
             result = butler.get(compTypeName, dataId)
             self.assertEqual(result, getattr(reference, component))
 
+    def setUp(self):
+        """Create a new butler root for each test."""
+        if self.useTempRoot:
+            self.root = tempfile.mkdtemp(dir=TESTDIR)
+            Butler.makeRepo(self.root, config=Config(self.configFile))
+            self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
+        else:
+            self.root = None
+            self.tmpConfigFile = self.configFile
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
+
     def testConstructor(self):
         """Independent test of constructor.
         """
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         self.assertIsInstance(butler, Butler)
 
     def testBasicPutGet(self):
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         # Create and register a DatasetType
         datasetTypeName = "test_metric"
         dataUnits = ("Camera", "Visit")
@@ -112,7 +128,7 @@ class ButlerTests:
                                  ("summary", "data", "output"), metric)
 
     def testBasicPutGetWithDatasetRef(self):
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         # Create and register a DatasetType
         datasetTypeName = "test_metric"
         dataUnits = ("Camera", "Visit")
@@ -149,7 +165,7 @@ class ButlerTests:
             butler.get(DatasetRef(ref.datasetType, ref.dataId, id=101))
 
     def testCompositePutGet(self):
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         # Create and register a DatasetType
         datasetTypeName = "test_metric_comp"
         dataUnits = ("Camera", "Visit")
@@ -182,13 +198,13 @@ class ButlerTests:
     def testPickle(self):
         """Test pickle support.
         """
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
 
     def testTransaction(self):
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         datasetTypeName = "test_metric"
         dataUnits = ("Camera", "Visit")
         dataUnitEntries = (("Camera", {"camera": "DummyCam"}),
@@ -241,15 +257,16 @@ class ButlerTests:
         if self.fullConfigKey is None:
             return
 
-        with TemporaryDirectory(prefix=TESTDIR + "/") as root:
-            Butler.makeRepo(root, config=Config(self.configFile))
-            limited = Config(self.configFile)
-            print(limited.ppprint())
-            butler1 = Butler(root, collection="ingest")
-            Butler.makeRepo(root, standalone=True, createRegistry=False,
-                            config=Config(self.configFile))
-            full = Config(os.path.join(root, "butler.yaml"))
-            butler2 = Butler(root, collection="ingest")
+        # Remove the file created in setUp
+        os.unlink(self.tmpConfigFile)
+
+        Butler.makeRepo(self.root, config=Config(self.configFile))
+        limited = Config(self.configFile)
+        butler1 = Butler(self.root, collection="ingest")
+        Butler.makeRepo(self.root, standalone=True, createRegistry=False,
+                        config=Config(self.configFile))
+        full = Config(self.tmpConfigFile)
+        butler2 = Butler(self.root, collection="ingest")
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
         self.assertEqual(butler1.config, butler2.config)
@@ -271,6 +288,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """InMemoryDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
     fullConfigKey = None
+    useTempRoot = False
 
 
 class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
