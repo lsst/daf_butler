@@ -80,6 +80,7 @@ class ConversionWriter:
     def __init__(self, config, gen2repos, skyMaps, skyMapRoots, visitInfo):
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         self.config = Config(config)
+        log.debug("Config: \n%s", self.config.ppprint())
         self.skyMaps = skyMaps
         self.visitInfo = visitInfo
         self.repos = OrderedDict()
@@ -96,9 +97,18 @@ class ConversionWriter:
                     log.debug("Using '%s' for SkyMap with hash=%s", skyMapName, hash.hex())
                     self.skyMapNames[hash] = skyMapName
                     break
-            else:
-                for root in skyMapConfig:
-                    log.debug("SkyMap with hash=%s not configured for root '%s'", hash.hex(), root)
+                else:
+                    for root2, skyMapName in skyMapConfig.items():
+                        log.debug("Comparing roots for SkyMap %s: '%s' == '%s': %s",
+                                  skyMapName, root, root2, root == root2)
+                        log.debug("Comparing roots for SkyMap %s: str('%s') == str('%s'): %s",
+                                  skyMapName, root, root2, str(root) == str(root2))
+                        log.debug("Comparing roots for SkyMap %s: type(root): %s",
+                                  skyMapName, type(root))
+                        log.debug("Comparing roots for SkyMap %s: type(root2): %s",
+                                  skyMapName, type(root2))
+                        log.debug("Comparing roots for SkyMap %s: '%s' in skyMapConfig: %s",
+                                  skyMapName, root, root in skyMapConfig)
         for gen2repo in gen2repos.values():
             self._addConvertedRepoSorted(gen2repo)
 
