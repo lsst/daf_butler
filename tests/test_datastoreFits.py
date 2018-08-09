@@ -21,6 +21,8 @@
 
 import os
 import unittest
+import tempfile
+import shutil
 
 import lsst.utils.tests
 
@@ -45,6 +47,7 @@ TESTDIR = os.path.dirname(__file__)
 
 
 class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
+    root = None
 
     @classmethod
     def setUpClass(cls):
@@ -71,6 +74,16 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         # Need to keep ID for each datasetRef since we have no butler
         # for these tests
         self.id = 1
+
+        self.config = DatastoreConfig(self.configFile)
+
+        # Some subclasses override the working root directory
+        if self.root is not None:
+            self.datastoreType.setConfigRoot(self.root, self.config, self.config.copy())
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
     def testConstructor(self):
         datastore = self.datastoreType(config=self.configFile, registry=self.registry)
@@ -245,6 +258,11 @@ class PosixDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     uriScheme = "file:"
     fileExt = ".fits"
 
+    def setUp(self):
+        # Override the working directory before calling the base class
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        super().setUp()
+
 
 class InMemoryDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
@@ -253,11 +271,9 @@ class InMemoryDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     fileExt = None
 
 
-class ChainedDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
+class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
-    uriScheme = "file:"
-    fileExt = ".fits"
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

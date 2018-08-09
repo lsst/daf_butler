@@ -107,11 +107,11 @@ class DatastoreTests(DatasetTestHelper):
 
         # Some subclasses override the working root directory
         if self.root is not None:
-            def cleanup(path):
-                if path is not None and os.path.exists(path):
-                    shutil.rmtree(path)
-            self.addCleanup(cleanup, self.root)
             self.datastoreType.setConfigRoot(self.root, self.config, self.config.copy())
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
     def testConstructor(self):
         datastore = self.makeDatastore()
