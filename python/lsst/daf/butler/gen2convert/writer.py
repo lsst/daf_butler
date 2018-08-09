@@ -88,12 +88,17 @@ class ConversionWriter:
         self.skyMapNames = {}  # mapping from hash to Gen3 SkyMap name
         skyMapConfig = self.config.get("skymaps", {})
         for hash, skyMap in self.skyMaps.items():
+            log.debug("Processing input skyMap with hash=%s", hash.hex())
             for root in skyMapRoots[hash]:
+                log.debug("Processing input skyMapRoot %s", root)
                 skyMapName = skyMapConfig.get(root, None)
                 if skyMapName is not None:
-                    log.debug("Using '%s' for SkyMap with hash=%s", skyMapName, skyMap.getSha1().hex())
-                    self.skyMapNames[skyMap.getSha1()] = skyMapName
+                    log.debug("Using '%s' for SkyMap with hash=%s", skyMapName, hash.hex())
+                    self.skyMapNames[hash] = skyMapName
                     break
+            else:
+                for root in skyMapConfig:
+                    log.debug("SkyMap with hash=%s not configured for root '%s'", hash.hex(), root)
         for gen2repo in gen2repos.values():
             self._addConvertedRepoSorted(gen2repo)
 
