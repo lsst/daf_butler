@@ -80,6 +80,9 @@ class SqlRegistry(Registry):
         if create:
             self._createTables()
 
+    def __str__(self):
+        return self.config["db"]
+
     @contextlib.contextmanager
     def transaction(self):
         """Context manager that implements SQL transactions.

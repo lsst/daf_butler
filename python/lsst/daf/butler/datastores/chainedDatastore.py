@@ -158,6 +158,10 @@ class ChainedDatastore(Datastore):
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
+    def __str__(self):
+        chainName = ", ".join(str(ds) for ds in self.datastores)
+        return chainName
+
     def exists(self, ref):
         """Check if the dataset exists in one of the datastores.
 

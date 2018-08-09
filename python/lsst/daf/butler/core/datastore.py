@@ -29,7 +29,7 @@ import logging
 
 from lsst.daf.butler.core.utils import doImport
 
-from abc import ABCMeta, abstractmethod, abstractproperty
+from abc import ABCMeta, abstractmethod
 from .config import ConfigSubset
 
 __all__ = ("DatastoreConfig", "Datastore")
@@ -197,6 +197,12 @@ class Datastore(metaclass=ABCMeta):
         self.name = "ABCDataStore"
         self._transaction = None
 
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return self.name
+
     @contextlib.contextmanager
     def transaction(self):
         """Context manager supporting `Datastore` transactions.
@@ -358,11 +364,5 @@ class Datastore(metaclass=ABCMeta):
             The external `Datastore` from which to retreive the Dataset.
         datasetRef : `DatasetRef`
             Reference to the required Dataset.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractproperty
-    def root(self):
-        """Root of the `Datastore` (`str`, read-only).
         """
         raise NotImplementedError("Must be implemented by subclass")

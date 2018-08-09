@@ -110,9 +110,8 @@ class InMemoryDatastore(Datastore):
         # where we register multiple components for a single dataset.
         self.records = {}
 
-    @property
-    def root(self):
-        return ":memory:"
+    def __str__(self):
+        return "InMemory"
 
     @classmethod
     def setConfigRoot(cls, root, config, full):
