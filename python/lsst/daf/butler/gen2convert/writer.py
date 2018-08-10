@@ -80,7 +80,6 @@ class ConversionWriter:
     def __init__(self, config, gen2repos, skyMaps, skyMapRoots, visitInfo):
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         self.config = Config(config)
-        log.debug("Config: \n%s", self.config.ppprint())
         self.skyMaps = skyMaps
         self.visitInfo = visitInfo
         self.repos = OrderedDict()
@@ -88,27 +87,19 @@ class ConversionWriter:
         self.runs = {k: Run(id=v, collection=k) for k, v in self.config["runs"].items()}
         self.skyMapNames = {}  # mapping from hash to Gen3 SkyMap name
         skyMapConfig = self.config.get("skymaps", {})
+        # Swap keys and values in skyMapConfig; the original can't be in
+        # the order we want, because roots can have '.', and that gets
+        # interpreted specially by Config when used as a key.
+        rootToSkyMapName = {v: k for k, v in skyMapConfig.items()}
         for hash, skyMap in self.skyMaps.items():
             log.debug("Processing input skyMap with hash=%s", hash.hex())
             for root in skyMapRoots[hash]:
                 log.debug("Processing input skyMapRoot %s", root)
-                skyMapName = skyMapConfig.get(root, None)
+                skyMapName = rootToSkyMapName.get(root, None)
                 if skyMapName is not None:
                     log.debug("Using '%s' for SkyMap with hash=%s", skyMapName, hash.hex())
                     self.skyMapNames[hash] = skyMapName
                     break
-                else:
-                    for root2, skyMapName in skyMapConfig.items():
-                        log.debug("Comparing roots for SkyMap %s: '%s' == '%s': %s",
-                                  skyMapName, root, root2, root == root2)
-                        log.debug("Comparing roots for SkyMap %s: str('%s') == str('%s'): %s",
-                                  skyMapName, root, root2, str(root) == str(root2))
-                        log.debug("Comparing roots for SkyMap %s: type(root): %s",
-                                  skyMapName, type(root))
-                        log.debug("Comparing roots for SkyMap %s: type(root2): %s",
-                                  skyMapName, type(root2))
-                        log.debug("Comparing roots for SkyMap %s: '%s' in skyMapConfig: %s",
-                                  skyMapName, root, root in skyMapConfig)
         for gen2repo in gen2repos.values():
             self._addConvertedRepoSorted(gen2repo)
 
