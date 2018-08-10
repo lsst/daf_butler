@@ -396,7 +396,7 @@ class ConversionWriter:
                 bbox.grow(config["padding"])
                 region = ConvexPolygon([sp.getVector() for sp in wcs.pixelToSky(bbox.getCorners())])
                 value = {k: row[k] for k in ("camera", "visit", "sensor")}
-                registry.setDataUnitRegion(("Visit", "Sensor"), value, region)
+                registry.setDataUnitRegion(("Visit", "Sensor"), value, region, update=False)
                 visits.setdefault((row["camera"], row["visit"]), []).extend(region.getVertices())
             for (camera, visit), vertices in visits.items():
                 region = ConvexPolygon(vertices)
