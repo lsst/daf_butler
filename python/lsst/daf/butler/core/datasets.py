@@ -250,7 +250,6 @@ class DatasetRef:
         used to construct this Dataset from its components.
 
         `None` for datasets that are not virtual composites.
-        Read-only; update via `Registry.setAssembler()`.
         """
         return self._assembler
 

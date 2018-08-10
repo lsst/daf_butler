@@ -82,6 +82,13 @@ class SqlRegistry(Registry):
 
     @contextlib.contextmanager
     def transaction(self):
+        """Context manager that implements SQL transactions.
+
+        Will roll back any changes to the `SqlRegistry` database
+        in case an exception is raised in the enclosed block.
+
+        This context manager may be nested.
+        """
         trans = self._connection.begin()
         try:
             yield
@@ -92,6 +99,120 @@ class SqlRegistry(Registry):
 
     def _createTables(self):
         self._schema._metadata.create_all(self._engine)
+
+    def _isValidDatasetType(self, datasetType):
+        """Check if given `DatasetType` instance is valid for this `Registry`.
+
+        .. todo::
+
+            Insert checks for `storageClass`, `dataUnits` and `template`.
+        """
+        return isinstance(datasetType, DatasetType)
+
+    def _validateDataId(self, datasetType, dataId):
+        """Check if a dataId is valid for a particular `DatasetType`.
+
+        .. todo::
+
+            Move this function to some other place once DataUnit relations are
+            implemented.
+
+        datasetType : `DatasetType`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a collection.
+
+        Raises
+        ------
+        ValueError
+            If the dataId is invalid for the given datasetType.
+        """
+        for name in datasetType.dataUnits:
+            try:
+                self._schema.dataUnits[name].validateId(dataId)
+            except ValueError as err:
+                raise ValueError("Error validating {}".format(datasetType.name)) from err
+
+    def makeDatabaseDict(self, table, types, key, value):
+        """Construct a DatabaseDict backed by a table in the same database as
+        this Registry.
+
+        Parameters
+        ----------
+        table : `table`
+            Name of the table that backs the returned DatabaseDict.  If this
+            table already exists, its schema must include at least everything
+            in `types`.
+        types : `dict`
+            A dictionary mapping `str` field names to type objects, containing
+            all fields to be held in the database.
+        key : `str`
+            The name of the field to be used as the dictionary key.  Must not
+            be present in ``value._fields``.
+        value : `type`
+            The type used for the dictionary's values, typically a
+            `~collections.namedtuple`.  Must have a ``_fields`` class
+            attribute that is a tuple of field names (i.e. as defined by
+            `~collections.namedtuple`); these field names must also appear
+            in the ``types`` arg, and a `_make` attribute to construct it
+            from a sequence of values (again, as defined by
+            `~collections.namedtuple`).
+        """
+        # We need to construct a temporary config for the table value because
+        # SqlRegistryDatabaseDict.__init__ is required to take a config so it
+        # can be called by DatabaseDict.fromConfig as well.
+        # I suppose we could have Registry.makeDatabaseDict take a config as
+        # well, since it"ll also usually be called by DatabaseDict.fromConfig,
+        # but I strongly believe in having signatures that only take what they
+        # really need.
+        config = Config()
+        config["table"] = table
+        return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
+
+    def find(self, collection, datasetType, dataId):
+        """Lookup a dataset.
+
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`.
+
+        Parameters
+        ----------
+        collection : `str`
+            Identifies the collection to search.
+        datasetType : `DatasetType`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a collection.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
+
+        Raises
+        ------
+        ValueError
+            If dataId is invalid.
+        """
+        self._validateDataId(datasetType, dataId)
+        datasetTable = self._schema.tables["Dataset"]
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        dataIdExpression = and_((self._schema.dataUnits.links[name] == dataId[name]
+                                 for name in self._schema.dataUnits.getPrimaryKeyNames(
+                                     datasetType.dataUnits)))
+        result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
+            datasetTable.join(datasetCollectionTable)).where(and_(
+                datasetTable.c.dataset_type_name == datasetType.name,
+                datasetCollectionTable.c.collection == collection,
+                dataIdExpression))).fetchone()
+        # TODO update unit values and add Run, Quantum and assembler?
+        if result is not None:
+            return self.getDataset(result["dataset_id"])
+        else:
+            return None
 
     def query(self, sql, **params):
         """Execute a SQL SELECT statement directly.
@@ -120,19 +241,12 @@ class SqlRegistry(Registry):
         for row in self._connection.execute(t, **params):
             yield dict(row)
 
-    def _isValidDatasetType(self, datasetType):
-        """Check if given `DatasetType` instance is valid for this `Registry`.
-
-        .. todo::
-
-            Insert checks for `storageClass`, `dataUnits` and `template`.
-        """
-        return isinstance(datasetType, DatasetType)
-
     @transactional
     def registerDatasetType(self, datasetType):
         """
         Add a new `DatasetType` to the SqlRegistry.
+
+        It is not an error to register the same `DatasetType` twice.
 
         Parameters
         ----------
@@ -225,10 +339,10 @@ class SqlRegistry(Registry):
 
     @transactional
     def addDataset(self, datasetType, dataId, run, producer=None):
-        """Add a Dataset to a Collection.
+        """Adds a Dataset entry to the `Registry`
 
         This always adds a new Dataset; to associate an existing Dataset with
-        a new `Collection`, use ``associate``.
+        a new collection, use ``associate``.
 
         Parameters
         ----------
@@ -236,7 +350,7 @@ class SqlRegistry(Registry):
             Name of a `DatasetType`.
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+            `DatasetRef` within a collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -255,7 +369,10 @@ class SqlRegistry(Registry):
         ------
         ValueError
             If a Dataset with the given `DatasetRef` already exists in the
-            given Collection.
+            given collection.
+
+        Exception
+            If ``dataId`` contains unknown or invalid `DataUnit` entries.
         """
         # TODO this is obviously not the most efficient way to check
         # for existence.
@@ -279,12 +396,18 @@ class SqlRegistry(Registry):
         return datasetRef
 
     def getDataset(self, id):
-        """Retrieve an Dataset.
+        """Retrieve a Dataset entry.
 
         Parameters
         ----------
         id : `int`
             The unique identifier for the Dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
         """
         datasetTable = self._schema.tables["Dataset"]
         with self._connection.begin():
@@ -316,22 +439,6 @@ class SqlRegistry(Registry):
             return None
 
     @transactional
-    def setAssembler(self, ref, assembler):
-        """Set the assembler to use for a composite dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the dataset for which to set the assembler.
-        assembler : `str`
-            Fully qualified name of the assembler.
-        """
-        datasetTable = self._schema.tables["Dataset"]
-        self._connection.execute(datasetTable.update().where(
-            datasetTable.c.dataset_id == ref.id).values(assembler=assembler))
-        ref._assembler = assembler
-
-    @transactional
     def attachComponent(self, name, parent, component):
         """Attach a component to a dataset.
 
@@ -355,13 +462,13 @@ class SqlRegistry(Registry):
 
     @transactional
     def associate(self, collection, refs):
-        r"""Add existing Datasets to a Collection, possibly creating the
-        Collection in the process.
+        """Add existing Datasets to a collection, possibly creating the
+        collection in the process.
 
         Parameters
         ----------
         collection : `str`
-            Indicates the Collection the Datasets should be associated with.
+            Indicates the collection the Datasets should be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
@@ -372,7 +479,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
-        r"""Remove existing Datasets from a Collection.
+        r"""Remove existing Datasets from a collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
@@ -380,13 +487,13 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection : `str`
-            The Collection the Datasets should no longer be associated with.
+            The collection the Datasets should no longer be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
         remove : `bool`
             If `True`, remove Datasets from the `SqlRegistry` if they are not
-            associated with any Collection (including via any composites).
+            associated with any collection (including via any composites).
 
         Returns
         -------
@@ -508,12 +615,20 @@ class SqlRegistry(Registry):
     def addExecution(self, execution):
         """Add a new `Execution` to the `SqlRegistry`.
 
+        If ``execution.id`` is `None` the `SqlRegistry` will update it to
+        that of the newly inserted entry.
+
         Parameters
         ----------
         execution : `Execution`
             Instance to add to the `SqlRegistry`.
             The given `Execution` must not already be present in the
             `SqlRegistry`.
+
+        Raises
+        ------
+        Exception
+            If `Execution` is already present in the `SqlRegistry`.
         """
         executionTable = self._schema.tables["Execution"]
         result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
@@ -553,7 +668,7 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collection : `str`
-            The Collection collection used to identify all inputs and outputs
+            The collection used to identify all inputs and outputs
             of the `Run`.
 
         Returns
@@ -581,7 +696,7 @@ class SqlRegistry(Registry):
         Raises
         ------
         ValueError
-            If `run` already exists, but is not identical.
+            If ``run`` already exists, but is not identical.
         """
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
@@ -624,7 +739,7 @@ class SqlRegistry(Registry):
 
     def getRun(self, id=None, collection=None):
         """
-        Get a `Run` corresponding to it's collection or id
+        Get a `Run` corresponding to its collection or id
 
         Parameters
         ----------
@@ -691,7 +806,6 @@ class SqlRegistry(Registry):
             The given `Quantum` must not already be present in the
             `SqlRegistry` (or any other), therefore its:
 
-            - `execution` attribute must be set to an existing `Execution`.
             - `run` attribute must be set to an existing `Run`.
             - `predictedInputs` attribute must be fully populated with
               `DatasetRef`\ s, and its.
@@ -770,10 +884,8 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        ValueError
-            If ``ref`` is not already in the predicted inputs list.
         KeyError
-            If ``ref`` is not a predicted consumer for ``quantum``.
+            If ``quantum`` is not a predicted consumer for ``ref``.
         """
         datasetConsumersTable = self._schema.tables["DatasetConsumers"]
         result = self._connection.execute(datasetConsumersTable.update().where(and_(
@@ -821,6 +933,33 @@ class SqlRegistry(Registry):
         if region is not None:
             self.setDataUnitRegion(
                 (dataUnitName,) + tuple(d.name for d in dataUnit.requiredDependencies), v, region)
+
+    def findDataUnitEntry(self, dataUnitName, value):
+        """Return a `DataUnit` entry corresponding to a `value`.
+
+        Parameters
+        ----------
+        dataUnitName : `str`
+            Name of a `DataUnit`
+        value : `dict`
+            A dictionary of values that uniquely identify the `DataUnit`.
+
+        Returns
+        -------
+        dataUnitEntry : `dict`
+            Dictionary with all `DataUnit` values, or `None` if no matching
+            entry is found.
+        """
+        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit.validateId(value)
+        dataUnitTable = dataUnit.table
+        primaryKeyColumns = dataUnit.primaryKeyColumns
+        result = self._connection.execute(select([dataUnitTable]).where(
+            and_((primaryKeyColumns[name] == value[name] for name in primaryKeyColumns)))).fetchone()
+        if result is not None:
+            return dict(result.items())
+        else:
+            return None
 
     @transactional
     def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
@@ -884,115 +1023,6 @@ class SqlRegistry(Registry):
                 parameters.append(dict(value, skypix=skypix))
         self._connection.execute(join.table.insert(), parameters)
 
-    def findDataUnitEntry(self, dataUnitName, value):
-        """Return a `DataUnit` entry corresponding to a `value`.
-
-        Parameters
-        ----------
-        dataUnitName : `str`
-            Name of a `DataUnit`
-        value : `dict`
-            A dictionary of values that uniquely identify the `DataUnit`.
-
-        Returns
-        -------
-        dataUnitEntry : `dict`
-            Dictionary with all `DataUnit` values, or `None` if no matching
-            entry is found.
-        """
-        dataUnit = self._schema.dataUnits[dataUnitName]
-        dataUnit.validateId(value)
-        dataUnitTable = dataUnit.table
-        primaryKeyColumns = dataUnit.primaryKeyColumns
-        result = self._connection.execute(select([dataUnitTable]).where(
-            and_((primaryKeyColumns[name] == value[name] for name in primaryKeyColumns)))).fetchone()
-        if result is not None:
-            return dict(result.items())
-        else:
-            return None
-
-    def expand(self, ref):
-        """Expand a `DatasetRef`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The `DatasetRef` to expand.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            The expanded reference.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def _validateDataId(self, datasetType, dataId):
-        """Check if a dataId is valid for a particular `DatasetType`.
-
-        TODO move this function to some other place once DataUnit relations
-        are implemented.
-
-        datasetType : `DatasetType`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
-
-        Raises
-        ------
-        ValueError
-            If the dataId is invalid for the given datasetType.
-        """
-        for name in datasetType.dataUnits:
-            try:
-                self._schema.dataUnits[name].validateId(dataId)
-            except ValueError as err:
-                raise ValueError("Error validating {}".format(datasetType.name)) from err
-
-    def find(self, collection, datasetType, dataId):
-        """Lookup a dataset.
-
-        This can be used to obtain a `DatasetRef` that permits the dataset to
-        be read from a `Datastore`.
-
-        Parameters
-        ----------
-        collection : `str`
-            Identifies the Collection to search.
-        datasetType : `DatasetType`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A ref to the Dataset, or `None` if no matching Dataset
-            was found.
-
-        Raises
-        ------
-        ValueError
-            If dataId is invalid.
-        """
-        self._validateDataId(datasetType, dataId)
-        datasetTable = self._schema.tables["Dataset"]
-        datasetCollectionTable = self._schema.tables["DatasetCollection"]
-        dataIdExpression = and_((self._schema.dataUnits.links[name] == dataId[name]
-                                 for name in self._schema.dataUnits.getPrimaryKeyNames(
-                                     datasetType.dataUnits)))
-        result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
-            datasetTable.join(datasetCollectionTable)).where(and_(
-                datasetTable.c.dataset_type_name == datasetType.name,
-                datasetCollectionTable.c.collection == collection,
-                dataIdExpression))).fetchone()
-        # TODO update unit values and add Run, Quantum and assembler?
-        if result is not None:
-            return self.getDataset(result["dataset_id"])
-        else:
-            return None
-
     def getRegion(self, dataId):
         """Get region associated with a dataId.
 
@@ -1000,7 +1030,7 @@ class SqlRegistry(Registry):
         ----------
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+            `DatasetRef` within a collection.
 
         Returns
         -------
@@ -1027,44 +1057,6 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    @transactional
-    def subset(self, collection, expr, datasetTypes):
-        r"""Create a new `Collection` by subsetting an existing one.
-
-        Parameters
-        ----------
-        collection : `str`
-            Indicates the input Collection to subset.
-        expr : `str`
-            An expression that limits the `DataUnit`\ s and (indirectly)
-            Datasets in the subset.
-        datasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetType`\ s whose instances should be included
-            in the subset.
-
-        Returns
-        -------
-        collection : `str`
-            The newly created collection.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @transactional
-    def merge(self, outputCollection, inputCollections):
-        r"""Create a new Collection from a series of existing ones.
-
-        Entries earlier in the list will be used in preference to later
-        entries when both contain Datasets with the same `DatasetRef`.
-
-        Parameters
-        ----------
-        outputCollection : `str`
-            collection to use for the new Collection.
-        inputCollections : `list` of `str`
-            A `list` of Collections to combine.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
     def selectDataUnits(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
         r"""Evaluate a filter expression and lists of `DatasetType`\ s and
         return a set of data unit values.
@@ -1076,7 +1068,7 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         collections : `list` of `str`
-            An ordered `list` of collections indicating the Collections to
+            An ordered `list` of collections indicating the collections to
             search for Datasets.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly) the
@@ -1151,62 +1143,45 @@ class SqlRegistry(Registry):
         ts : `TableSet`
             Contains the previously exported content.
         collection : `str`
-            An additional Collection collection assigned to the newly
+            An additional collection assigned to the newly
             imported Datasets.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @transactional
-    def transfer(self, src, expr, collection):
-        r"""Transfer contents from a source `SqlRegistry`, limited to those
-        reachable from the Datasets identified by the expression `expr`,
-        into this `SqlRegistry` and collection them with a Collection.
+    def subset(self, collection, expr, datasetTypes):
+        r"""Create a new collection by subsetting an existing one.
 
         Parameters
         ----------
-        src : `SqlRegistry`
-            The source `SqlRegistry`.
+        collection : `str`
+            Indicates the input collection to subset.
         expr : `str`
             An expression that limits the `DataUnit`\ s and (indirectly)
-            the Datasets transferred.
-        collection : `str`
-            An additional Collection collection assigned to the newly
-            imported Datasets.
-        """
-        self.import_(src.export(expr), collection)
+            Datasets in the subset.
+        datasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances should be included
+            in the subset.
 
-    def makeDatabaseDict(self, table, types, key, value):
-        """Construct a DatabaseDict backed by a table in the same database as
-        this Registry.
+        Returns
+        -------
+        collection : `str`
+            The newly created collection.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @transactional
+    def merge(self, outputCollection, inputCollections):
+        """Create a new collection from a series of existing ones.
+
+        Entries earlier in the list will be used in preference to later
+        entries when both contain Datasets with the same `DatasetRef`.
 
         Parameters
         ----------
-        table : `table`
-            Name of the table that backs the returned DatabaseDict.  If this
-            table already exists, its schema must include at least everything
-            in `types`.
-        types : `dict`
-            A dictionary mapping `str` field names to type objects, containing
-            all fields to be held in the database.
-        key : `str`
-            The name of the field to be used as the dictionary key.  Must not
-            be present in ``value._fields``.
-        value : `type`
-            The type used for the dictionary's values, typically a
-            `~collections.namedtuple`.  Must have a ``_fields`` class
-            attribute that is a tuple of field names (i.e. as defined by
-            `~collections.namedtuple`); these field names must also appear
-            in the ``types`` arg, and a `_make` attribute to construct it
-            from a sequence of values (again, as defined by
-            `~collections.namedtuple`).
+        outputCollection : `str`
+            collection to use for the new collection.
+        inputCollections : `list` of `str`
+            A `list` of collections to combine.
         """
-        # We need to construct a temporary config for the table value because
-        # SqlRegistryDatabaseDict.__init__ is required to take a config so it
-        # can be called by DatabaseDict.fromConfig as well.
-        # I suppose we could have Registry.makeDatabaseDict take a config as
-        # well, since it"ll also usually be called by DatabaseDict.fromConfig,
-        # but I strongly believe in having signatures that only take what they
-        # really need.
-        config = Config()
-        config["table"] = table
-        return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
+        raise NotImplementedError("Must be implemented by subclass")

@@ -20,10 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from abc import ABCMeta, abstractmethod
+import contextlib
 
 from .utils import doImport
 from .config import Config, ConfigSubset
 from .schema import SchemaConfig
+from .utils import transactional
 
 __all__ = ("RegistryConfig", "Registry")
 
@@ -122,6 +124,29 @@ class Registry(metaclass=ABCMeta):
         self.config = registryConfig
         self._pixelization = None
 
+    @contextlib.contextmanager
+    def transaction(self):
+        """Optionally implemented in `Registry` subclasses to provide exception
+        safety guarantees in case an exception is raised in the enclosed block.
+
+        This context manager may be nested (e.g. any implementation by a
+        `Registry` subclass must nest properly).
+
+        .. warning::
+
+            The level of exception safety is not guaranteed by this API.
+            It may implement stong exception safety and roll back any changes
+            leaving the state unchanged, or it may do nothing leaving the
+            underlying `Registry` corrupted.  Depending on the implementation
+            in the subclass.
+
+        .. todo::
+
+            Investigate if we may want to provide a `TransactionalRegistry`
+            subclass that guarantees a particular level of exception safety.
+        """
+        yield
+
     @property
     def pixelization(self):
         """Object that interprets SkyPix DataUnit values (`sphgeom.Pixelization`)."""
@@ -130,4 +155,715 @@ class Registry(metaclass=ABCMeta):
             self._pixelization = pixelizationCls(level=self.config["skypix.level"])
         return self._pixelization
 
-    #  TODO Add back all interfaces (copied from SqlRegistry) once that is stabalized
+    @abstractmethod
+    def makeDatabaseDict(self, table, types, key, value):
+        """Construct a DatabaseDict backed by a table in the same database as
+        this Registry.
+
+        Parameters
+        ----------
+        table : `table`
+            Name of the table that backs the returned DatabaseDict.  If this
+            table already exists, its schema must include at least everything
+            in `types`.
+        types : `dict`
+            A dictionary mapping `str` field names to type objects, containing
+            all fields to be held in the database.
+        key : `str`
+            The name of the field to be used as the dictionary key.  Must not
+            be present in ``value._fields``.
+        value : `type`
+            The type used for the dictionary's values, typically a
+            `~collections.namedtuple`.  Must have a ``_fields`` class
+            attribute that is a tuple of field names (i.e. as defined by
+            `~collections.namedtuple`); these field names must also appear
+            in the ``types`` arg, and a `_make` attribute to construct it
+            from a sequence of values (again, as defined by
+            `~collections.namedtuple`).
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def find(self, collection, datasetType, dataId):
+        """Lookup a dataset.
+
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`.
+
+        Parameters
+        ----------
+        collection : `str`
+            Identifies the collection to search.
+        datasetType : `DatasetType`
+            The `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a collection.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
+
+        Raises
+        ------
+        ValueError
+            If dataId is invalid.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def registerDatasetType(self, datasetType):
+        """
+        Add a new `DatasetType` to the Registry.
+
+        It is not an error to register the same `DatasetType` twice.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType`
+            The `DatasetType` to be added.
+
+        Raises
+        ------
+        ValueError
+            DatasetType is not valid for this registry or is already registered
+            but not identical.
+
+        Returns
+        -------
+        inserted : `bool`
+            ``True`` if ``datasetType`` was inserted, ``False`` if an identical
+            existing `DatsetType` was found.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getDatasetType(self, name):
+        """Get the `DatasetType`.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the type.
+
+        Returns
+        -------
+        type : `DatasetType`
+            The `DatasetType` associated with the given name.
+
+        Raises
+        ------
+        KeyError
+            Requested named DatasetType could not be found in registry.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def addDataset(self, datasetType, dataId, run, producer=None):
+        """Adds a Dataset entry to the `Registry`
+
+        This always adds a new Dataset; to associate an existing Dataset with
+        a new collection, use ``associate``.
+
+        Parameters
+        ----------
+        datasetType : `str`
+            Name of a `DatasetType`.
+        dataId : `dict`
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a collection.
+        run : `Run`
+            The `Run` instance that produced the Dataset.  Ignored if
+            ``producer`` is passed (`producer.run` is then used instead).
+            A Run must be provided by one of the two arguments.
+        producer : `Quantum`
+            Unit of work that produced the Dataset.  May be ``None`` to store
+            no provenance information, but if present the `Quantum` must
+            already have been added to the Registry.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A newly-created `DatasetRef` instance.
+
+        Raises
+        ------
+        ValueError
+            If a Dataset with the given `DatasetRef` already exists in the
+            given collection.
+
+        Exception
+            If ``dataId`` contains unknown or invalid `DataUnit` entries.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getDataset(self, id):
+        """Retrieve a Dataset entry.
+
+        Parameters
+        ----------
+        id : `int`
+            The unique identifier for the Dataset.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def attachComponent(self, name, parent, component):
+        """Attach a component to a dataset.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the component.
+        parent : `DatasetRef`
+            A reference to the parent dataset. Will be updated to reference
+            the component.
+        component : `DatasetRef`
+            A reference to the component dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def associate(self, collection, refs):
+        """Add existing Datasets to a collection, possibly creating the
+        collection in the process.
+
+        Parameters
+        ----------
+        collection : `str`
+            Indicates the collection the Datasets should be associated with.
+        refs : `list` of `DatasetRef`
+            A `list` of `DatasetRef` instances that already exist in this
+            `Registry`.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def disassociate(self, collection, refs, remove=True):
+        r"""Remove existing Datasets from a collection.
+
+        ``collection`` and ``ref`` combinations that are not currently
+        associated are silently ignored.
+
+        Parameters
+        ----------
+        collection : `str`
+            The collection the Datasets should no longer be associated with.
+        refs : `list` of `DatasetRef`
+            A `list` of `DatasetRef` instances that already exist in this
+            `Registry`.
+        remove : `bool`
+            If `True`, remove Datasets from the `Registry` if they are not
+            associated with any collection (including via any composites).
+
+        Returns
+        -------
+        removed : `list` of `DatasetRef`
+            If `remove` is `True`, the `list` of `DatasetRef`\ s that were
+            removed.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def addStorageInfo(self, ref, storageInfo):
+        """Add storage information for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to add storage information.
+        storageInfo : `StorageInfo`
+            Storage information about the dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def updateStorageInfo(self, ref, datastoreName, storageInfo):
+        """Update storage information for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to add storage information.
+        datastoreName : `str`
+            What datastore association to update.
+        storageInfo : `StorageInfo`
+            Storage information about the dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getStorageInfo(self, ref, datastoreName):
+        """Retrieve storage information for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to add storage information.
+        datastoreName : `str`
+            What datastore association to update.
+
+        Returns
+        -------
+        info : `StorageInfo`
+            Storage information about the dataset.
+
+        Raises
+        ------
+        KeyError
+            The requested Dataset does not exist.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def removeStorageInfo(self, datastoreName, ref):
+        """Remove storage information associated with this dataset.
+
+        Typically used by `Datastore` when a dataset is removed.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of this `Datastore`.
+        ref : `DatasetRef`
+            A reference to the dataset for which information is to be removed.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def addExecution(self, execution):
+        """Add a new `Execution` to the `Registry`.
+
+        If ``execution.id`` is `None` the `Registry` will update it to
+        that of the newly inserted entry.
+
+        Parameters
+        ----------
+        execution : `Execution`
+            Instance to add to the `Registry`.
+            The given `Execution` must not already be present in the
+            `Registry`.
+
+        Raises
+        ------
+        Exception
+            If `Execution` is already present in the `Registry`.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getExecution(self, id):
+        """Retrieve an Execution.
+
+        Parameters
+        ----------
+        id : `int`
+            The unique identifier for the Execution.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def makeRun(self, collection):
+        """Create a new `Run` in the `Registry` and return it.
+
+        If a run with this collection already exists, return that instead.
+
+        Parameters
+        ----------
+        collection : `str`
+            The collection used to identify all inputs and outputs
+            of the `Run`.
+
+        Returns
+        -------
+        run : `Run`
+            A new `Run` instance.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def ensureRun(self, run):
+        """Conditionally add a new `Run` to the `Registry`.
+
+        If the ``run.id`` is ``None`` or a `Run` with this `id` doesn't exist
+        in the `Registry` yet, add it.  Otherwise, ensure the provided run is
+        identical to the one already in the registry.
+
+        Parameters
+        ----------
+        run : `Run`
+            Instance to add to the `Registry`.
+
+        Raises
+        ------
+        ValueError
+            If ``run`` already exists, but is not identical.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def addRun(self, run):
+        """Add a new `Run` to the `Registry`.
+
+        Parameters
+        ----------
+        run : `Run`
+            Instance to add to the `Registry`.
+            The given `Run` must not already be present in the `Registry`
+            (or any other).  Therefore its `id` must be `None` and its
+            `collection` must not be associated with any existing `Run`.
+
+        Raises
+        ------
+        ValueError
+            If a run already exists with this collection.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getRun(self, id=None, collection=None):
+        """
+        Get a `Run` corresponding to its collection or id
+
+        Parameters
+        ----------
+        id : `int`, optional
+            Lookup by run `id`, or:
+        collection : `str`
+            If given, lookup by `collection` name instead.
+
+        Returns
+        -------
+        run : `Run`
+            The `Run` instance.
+
+        Raises
+        ------
+        ValueError
+            Must supply one of ``collection`` or ``id``.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def addQuantum(self, quantum):
+        r"""Add a new `Quantum` to the `Registry`.
+
+        Parameters
+        ----------
+        quantum : `Quantum`
+            Instance to add to the `Registry`.
+            The given `Quantum` must not already be present in the
+            `Registry` (or any other), therefore its:
+
+            - `run` attribute must be set to an existing `Run`.
+            - `predictedInputs` attribute must be fully populated with
+              `DatasetRef`\ s, and its.
+            - `actualInputs` and `outputs` will be ignored.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getQuantum(self, id):
+        """Retrieve an Quantum.
+
+        Parameters
+        ----------
+        id : `int`
+            The unique identifier for the Quantum.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def markInputUsed(self, quantum, ref):
+        """Record the given `DatasetRef` as an actual (not just predicted)
+        input of the given `Quantum`.
+
+        This updates both the `Registry`"s `Quantum` table and the Python
+        `Quantum.actualInputs` attribute.
+
+        Parameters
+        ----------
+        quantum : `Quantum`
+            Producer to update.
+            Will be updated in this call.
+        ref : `DatasetRef`
+            To set as actually used input.
+
+        Raises
+        ------
+        KeyError
+            If ``quantum`` is not a predicted consumer for ``ref``.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def addDataUnitEntry(self, dataUnitName, values):
+        """Add a new `DataUnit` entry.
+
+        dataUnitName : `str`
+            Name of the `DataUnit` (e.g. ``"Camera"``).
+        values : `dict`
+            Dictionary of ``columnName, columnValue`` pairs.
+
+        If ``values`` includes a "region" key, `setDataUnitRegion` will
+        automatically be called to set it any associated spatial join
+        tables.
+        Region fields associated with a combination of DataUnits must be
+        explicitly set separately.
+
+        Raises
+        ------
+        TypeError
+            If the given `DataUnit` does not have explicit entries in the
+            registry.
+        ValueError
+            If an entry with the primary-key defined in `values` is already
+            present.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def findDataUnitEntry(self, dataUnitName, value):
+        """Return a `DataUnit` entry corresponding to a `value`.
+
+        Parameters
+        ----------
+        dataUnitName : `str`
+            Name of a `DataUnit`
+        value : `dict`
+            A dictionary of values that uniquely identify the `DataUnit`.
+
+        Returns
+        -------
+        dataUnitEntry : `dict`
+            Dictionary with all `DataUnit` values, or `None` if no matching
+            entry is found.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
+        """Set the region field for a DataUnit instance or a combination
+        thereof and update associated spatial join tables.
+
+        Parameters
+        ----------
+        dataUnitNames : sequence
+            A sequence of DataUnit names whose instances are jointly associated
+            with a region on the sky.
+        value : `dict`
+            A dictionary of values that uniquely identify the DataUnits.
+        region : `sphgeom.ConvexPolygon`
+            Region on the sky.
+        update : `bool`
+            If True, existing region information for these DataUnits is being
+            replaced.  This is usually required because DataUnit entries are
+            assumed to be pre-inserted prior to calling this function.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getRegion(self, dataId):
+        """Get region associated with a dataId.
+
+        Parameters
+        ----------
+        dataId : `dict`
+            A `dict` of `DataUnit` link name, value pairs that label the
+            `DatasetRef` within a collection.
+
+        Returns
+        -------
+        region : `lsst.sphgeom.ConvexPolygon`
+            The region associated with a ``dataId`` or ``None`` if not present.
+
+        Raises
+        ------
+        KeyError
+            If the set of dataunits for the ``dataId`` does not correspond to
+            a unique spatial lookup.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def selectDataUnits(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
+        r"""Evaluate a filter expression and lists of `DatasetType`\ s and
+        return a set of data unit values.
+
+        Returned set consists of combinations of units participating in data
+        transformation from ``neededDatasetTypes`` to ``futureDatasetTypes``,
+        restricted by existing data and filter expression.
+
+        Parameters
+        ----------
+        collections : `list` of `str`
+            An ordered `list` of collections indicating the collections to
+            search for Datasets.
+        expr : `str`
+            An expression that limits the `DataUnit`\ s and (indirectly) the
+            Datasets returned.
+        neededDatasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances should be included
+            in the graph and limit its extent.
+        futureDatasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances may be added to the
+            graph later, which requires that their `DataUnit` types must be
+            present in the graph.
+
+        Returns
+        -------
+        header : `tuple` of `tuple`
+            Length of tuple equals the number of columns in the returned
+            result set. Each item is a tuple with two elements - DataUnit
+            name (e.g. "Visit") and unit value name (e.g. "visit").
+        rows : sequence of `tuple`
+            Result set, this can be a single-pass iterator. Each tuple
+            contains unit values corresponding to units in a header.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def makeProvenanceGraph(self, expr, types=None):
+        """Make a `QuantumGraph` that contains the full provenance of all
+        Datasets matching an expression.
+
+        Parameters
+        ----------
+        expr : `str`
+            An expression (SQL query that evaluates to a list of Dataset
+            primary keys) that selects the Datasets.
+
+        Returns
+        -------
+        graph : `QuantumGraph`
+            Instance (with `units` set to `None`).
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def export(self, expr):
+        """Export contents of the `Registry`, limited to those reachable
+        from the Datasets identified by the expression `expr`, into a
+        `TableSet` format such that it can be imported into a different
+        database.
+
+        Parameters
+        ----------
+        expr : `str`
+            An expression (SQL query that evaluates to a list of Dataset
+            primary keys) that selects the `Datasets, or a `QuantumGraph`
+            that can be similarly interpreted.
+
+        Returns
+        -------
+        ts : `TableSet`
+            Containing all rows, from all tables in the `Registry` that
+            are reachable from the selected Datasets.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def import_(self, tables, collection):
+        """Import (previously exported) contents into the (possibly empty)
+        `Registry`.
+
+        Parameters
+        ----------
+        ts : `TableSet`
+            Contains the previously exported content.
+        collection : `str`
+            An additional collection assigned to the newly
+            imported Datasets.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @transactional
+    def transfer(self, src, expr, collection):
+        r"""Transfer contents from a source `Registry`, limited to those
+        reachable from the Datasets identified by the expression `expr`,
+        into this `Registry` and associate them with a collection.
+
+        Parameters
+        ----------
+        src : `Registry`
+            The source `Registry`.
+        expr : `str`
+            An expression that limits the `DataUnit`\ s and (indirectly)
+            the Datasets transferred.
+        collection : `str`
+            An additional collection assigned to the newly
+            imported Datasets.
+        """
+        self.import_(src.export(expr), collection)
+
+    @abstractmethod
+    @transactional
+    def subset(self, collection, expr, datasetTypes):
+        r"""Create a new collection by subsetting an existing one.
+
+        Parameters
+        ----------
+        collection : `str`
+            Indicates the input collection to subset.
+        expr : `str`
+            An expression that limits the `DataUnit`\ s and (indirectly)
+            Datasets in the subset.
+        datasetTypes : `list` of `DatasetType`
+            The `list` of `DatasetType`\ s whose instances should be included
+            in the subset.
+
+        Returns
+        -------
+        collection : `str`
+            The newly created collection.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def merge(self, outputCollection, inputCollections):
+        """Create a new collection from a series of existing ones.
+
+        Entries earlier in the list will be used in preference to later
+        entries when both contain Datasets with the same `DatasetRef`.
+
+        Parameters
+        ----------
+        outputCollection : `str`
+            collection to use for the new collection.
+        inputCollections : `list` of `str`
+            A `list` of collections to combine.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
