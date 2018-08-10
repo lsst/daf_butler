@@ -320,20 +320,6 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def setAssembler(self, ref, assembler):
-        """Set the assembler to use for a composite dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the dataset for which to set the assembler.
-        assembler : `str`
-            Fully qualified name of the assembler.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
     def attachComponent(self, name, parent, component):
         """Attach a component to a dataset.
 

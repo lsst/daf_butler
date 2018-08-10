@@ -439,22 +439,6 @@ class SqlRegistry(Registry):
             return None
 
     @transactional
-    def setAssembler(self, ref, assembler):
-        """Set the assembler to use for a composite dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the dataset for which to set the assembler.
-        assembler : `str`
-            Fully qualified name of the assembler.
-        """
-        datasetTable = self._schema.tables["Dataset"]
-        self._connection.execute(datasetTable.update().where(
-            datasetTable.c.dataset_id == ref.id).values(assembler=assembler))
-        ref._assembler = assembler
-
-    @transactional
     def attachComponent(self, name, parent, component):
         """Attach a component to a dataset.
 

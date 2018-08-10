@@ -220,21 +220,6 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertNotEqual(outStorageInfo, storageInfo)
         self.assertEqual(outStorageInfo, updatedStorageInfo)
 
-    def testAssembler(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
-        storageClass = StorageClass("testAssembler")
-        registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
-        registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        run = registry.makeRun(collection="test")
-        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
-        self.assertIsNone(ref.assembler)
-        assembler = "some.fully.qualified.assembler"  # TODO replace by actual dummy assember once implemented
-        registry.setAssembler(ref, assembler)
-        self.assertEqual(ref.assembler, assembler)
-        # TODO add check that ref2.assembler is also correct when ref2 is returned by Registry.find()
-
     def testFind(self):
         registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testFind")
