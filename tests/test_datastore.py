@@ -81,6 +81,15 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
+    def testConfigRoot(self):
+        full = DatastoreConfig(self.configFile)
+        config = DatastoreConfig(self.configFile, mergeDefaults=False)
+        newroot = "/random/location"
+        self.datastoreType.setConfigRoot(newroot, config, full)
+        if self.rootKeys:
+            for k in self.rootKeys:
+                self.assertIn(newroot, config[k])
+
     def testConstructor(self):
         datastore = self.makeDatastore()
         self.assertIsNotNone(datastore)
@@ -398,6 +407,7 @@ class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     uriScheme = "file:"
     ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
     isEphemeral = False
+    rootKeys = ("root",)
 
     def setUp(self):
         # Override the working directory before calling the base class
@@ -412,6 +422,7 @@ class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     hasUnsupportedPut = False
     ingestTransferModes = ()
     isEphemeral = True
+    rootKeys = None
 
 
 class ChainedDatastoreTestCase(PosixDatastoreTestCase):
@@ -420,6 +431,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     hasUnsupportedPut = False
     ingestTransferModes = ("copy", "move", "hardlink", "symlink")
     isEphemeral = False
+    rootKeys = ("datastores.1.root", "datastores.2.root")
 
 
 class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
