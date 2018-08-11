@@ -92,6 +92,40 @@ class ConfigTestCls(ConfigTest):
 
 class ConfigTestCase(unittest.TestCase):
     """Tests of simple Config"""
+
+    def testBadConfig(self):
+        for badArg in ([], "file.fits"):
+            with self.assertRaises(RuntimeError):
+                Config(badArg)
+
+    def testOperators(self):
+        c1 = Config({"a": {"b": 1}, "c": 2})
+        c2 = c1.copy()
+        self.assertEqual(c1, c2)
+        c2["a.b"] = 5
+        self.assertNotEqual(c1, c2)
+
+    def testUpdate(self):
+        c = Config({"a": {"b": 1}})
+        c.update({"a": {"c": 2}})
+        self.assertEqual(c["a.b"], 1)
+        self.assertEqual(c["a.c"], 2)
+        c.update({"a": {"d": [3, 4]}})
+        self.assertEqual(c["a.d.0"], 3)
+        c.update({"z": [5, 6, {"g": 2, "h": 3}]})
+        self.assertEqual(c["z.1"], 6)
+
+        # This is detached from parent
+        c2 = c["z.2"]
+        self.assertEqual(c2["g"], 2)
+        c2.update({"h": 4, "j": 5})
+        self.assertEqual(c2["h"], 4)
+        self.assertNotIn("z.2.j", c)
+        self.assertNotEqual(c["z.2.h"], 4)
+
+        with self.assertRaises(RuntimeError):
+            c.update([1, 2, 3])
+
     def testHierarchy(self):
         c = Config()
 
@@ -111,15 +145,35 @@ class ConfigTestCase(unittest.TestCase):
         # Test that we can index into lists
         c["a.b.c"] = [1, "7", 3, {"1": 4, "5": "Five"}, "hello"]
         self.assertIn("a.b.c.3.5", c)
+        self.assertNotIn("a.b.c.10", c)
+        self.assertNotIn("a.b.c.10.d", c)
         self.assertEqual(c["a.b.c.3.5"], "Five")
         # Is the value in the list?
         self.assertIn("a.b.c.hello", c)
+        self.assertNotIn("a.b.c.hello.not", c)
 
         # And assign to an element in the list
         self.assertEqual(c["a.b.c.1"], "7")
         c["a.b.c.1"] = 8
         self.assertEqual(c["a.b.c.1"], 8)
         self.assertIsInstance(c["a.b.c"], collections.Sequence)
+
+        # Test we do get lists back from asArray
+        a = c.asArray("a.b.c")
+        self.assertIsInstance(a, list)
+
+        # Is it the *same* list as in the config
+        a.append("Sentinel")
+        self.assertIn("Sentinel", c["a.b.c"])
+        self.assertIn("a.b.c.Sentinel", c)
+
+        # Test we always get a list
+        for k in c.names():
+            a = c.asArray(k)
+            self.assertIsInstance(a, list)
+
+        # Check we get the same top level keys
+        self.assertEqual(set(c.names(topLevelOnly=True)), set(c.data.keys()))
 
         # Check that lists still work even if assigned a dict
         c = Config({"cls": "lsst.daf.butler",
@@ -129,6 +183,14 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c["datastores.0.datastore.cls"], "datastore1")
         self.assertEqual(c["datastores.1.datastore.cls"], "datastore2modified")
         self.assertIsInstance(c["datastores"], collections.Sequence)
+
+        # Test that we can get all the listed names.
+        # and also that they are marked as "in" the Config
+        # Two distinct loops
+        for n in c.names():
+            val = c[n]
+            self.assertIsNotNone(val)
+            self.assertIn(n, c)
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
@@ -268,10 +330,19 @@ class ConfigSubsetTestCase(unittest.TestCase):
     def testInclude(self):
         """Read a config that has an include directive"""
         c = Config(os.path.join(self.configDir, "testinclude.yaml"))
-        print(c.ppprint())
         self.assertEqual(c["comp1.item1"], 58)
         self.assertEqual(c["comp2.comp.item1"], 1)
         self.assertEqual(c["comp3.1.comp.item1"], "posix")
+        self.assertEqual(c["comp4.0.comp.item1"], "posix")
+        self.assertEqual(c["comp4.1.comp.item1"], 1)
+        self.assertEqual(c["comp5.comp6.comp.item1"], "posix")
+
+        # Test a specific name and then test that all
+        # returned names are "in" the config.
+        names = c.names()
+        self.assertIn("comp3.1.comp.item1", names)
+        for n in names:
+            self.assertIn(n, names)
 
 
 if __name__ == "__main__":

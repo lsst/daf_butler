@@ -4,3 +4,5 @@ comp2: !include testconfig.yaml
 comp3:
   - 52
   - !include viacls.yaml
+comp4: !include [viacls.yaml, testconfig.yaml]
+comp5: !include {comp6: viacls.yaml}
