@@ -70,7 +70,7 @@ class FitsExposureFormatter(Formatter):
             # If we"re reading a non-image component, just read in a
             # single-pixel image for efficiency.
             kwds = {}
-            if component in ("image", "variance", "mask"):
+            if component not in (None, "image", "variance", "mask"):
                 kwds["bbox"] = Box2I(minimum=Point2I(0, 0), maximum=Point2I(0, 0))
                 kwds["origin"] = LOCAL
             elif fileDescriptor.parameters is not None:

@@ -20,8 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import logging
 from collections import defaultdict
+
+from lsst.log import Log
 
 __all__ = ("Gen2DatasetType", "Gen2Dataset", "Gen2Repo", "ConvertedRepo")
 
@@ -136,9 +137,9 @@ class Gen2Repo:
     def mapper(self):
         """Gen2 Mapper that organizes this repository (`obs.base.CameraMapper)."""
         if self._mapper is None:
-            mapperLog = logging.getLogger("CameraMapper")
-            mapperLogLevel = mapperLog.level
-            mapperLog.setLevel("ERROR")
+            mapperLog = Log.getLogger("CameraMapper")
+            mapperLogLevel = mapperLog.getLevel()
+            mapperLog.setLevel(Log.ERROR)
             self._mapper = self.MapperClass(root=self.root)
             mapperLog.setLevel(mapperLogLevel)
         return self._mapper
