@@ -31,7 +31,7 @@ from lsst.daf.butler.datastores.posixDatastore import DatastoreConfig
 
 from lsst.daf.butler.core.utils import doImport
 
-from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
+from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
 
 from dummyRegistry import DummyRegistry
 
@@ -46,7 +46,7 @@ except ImportError:
 TESTDIR = os.path.dirname(__file__)
 
 
-class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
+class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper):
     root = None
 
     @classmethod
@@ -58,7 +58,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         cls.testDir = TESTDIR
 
         # Storage Classes are fixed for all datastores in these tests
-        scConfigFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+        scConfigFile = os.path.join(TESTDIR, "config/basic/storageClasses.yaml")
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(scConfigFile)
 
@@ -69,29 +69,20 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
-        self.registry = DummyRegistry()
-
-        # Need to keep ID for each datasetRef since we have no butler
-        # for these tests
-        self.id = 1
-
-        self.config = DatastoreConfig(self.configFile)
-
-        # Some subclasses override the working root directory
-        if self.root is not None:
-            self.datastoreType.setConfigRoot(self.root, self.config, self.config.copy())
+        self.setUpDatastoreTests(DummyRegistry, DatastoreConfig)
 
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
     def testConstructor(self):
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         self.assertIsNotNone(datastore)
 
     def testBasicPutGet(self):
         catalog = self.makeExampleCatalog()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
+
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 123456, "filter": "blue"}
@@ -121,7 +112,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
 
     def testRemove(self):
         catalog = self.makeExampleCatalog()
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
 
         # Put
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
@@ -159,26 +150,19 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
         ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
 
-        inputConfig = DatastoreConfig(self.configFile)
-        self.datastoreType.setConfigRoot(os.path.join(self.testDir, "test_input_datastore"),
-                                         inputConfig, inputConfig.copy())
-        inputPosixDatastore = self.datastoreType(config=inputConfig, registry=self.registry)
-        outputConfig = inputConfig.copy()
-        self.datastoreType.setConfigRoot(os.path.join(self.testDir, "test_output_datastore"),
-                                         outputConfig, outputConfig.copy())
-        outputPosixDatastore = self.datastoreType(config=outputConfig,
-                                                  registry=DummyRegistry())
+        inputDatastore = self.makeDatastore("test_input_datastore")
+        outputDatastore = self.makeDatastore("test_output_datastore")
 
-        inputPosixDatastore.put(catalog, ref)
-        outputPosixDatastore.transfer(inputPosixDatastore, ref)
+        inputDatastore.put(catalog, ref)
+        outputDatastore.transfer(inputDatastore, ref)
 
-        catalogOut = outputPosixDatastore.get(ref)
+        catalogOut = outputDatastore.get(ref)
         self.assertCatalogEqual(catalog, catalogOut)
 
     def testExposurePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 231, "filter": "Fc"}
@@ -214,7 +198,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
     def testExposureCompositePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        datastore = self.datastoreType(config=self.configFile, registry=self.registry)
+        datastore = self.makeDatastore()
         # Put
         dataUnits = frozenset(("visit", "filter"))
         dataId = {"visit": 23, "filter": "F"}

@@ -32,7 +32,7 @@ from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError
 
 from lsst.daf.butler.core.utils import doImport
 
-from datasetsHelper import DatasetTestHelper
+from datasetsHelper import DatasetTestHelper, DatastoreTestHelper
 from examplePythonTypes import MetricsExample
 
 from dummyRegistry import DummyRegistry
@@ -56,37 +56,15 @@ class TransactionTestError(Exception):
     pass
 
 
-class DatastoreTests(DatasetTestHelper):
+class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     """Some basic tests of a simple POSIX datastore."""
     root = None
     hasUnsupportedPut = True
 
-    def makeDatastore(self, sub=None):
-        """Make a new Datastore instance of the appropriate type.
-
-        Parameters
-        ----------
-        sub : str, optional
-            If not None, the returned Datastore will be distinct from any
-            Datastore constructed with a different value of ``sub``.  For
-            PosixDatastore, for example, the converse is also true, and ``sub``
-            is used as a subdirectory to form the new root.
-
-        Returns
-        -------
-        datastore : `Datastore`
-            Datastore constructed by this routine using the supplied
-            optional subdirectory if supported.
-        """
-        config = self.config.copy()
-        if sub is not None and self.root is not None:
-            self.datastoreType.setConfigRoot(os.path.join(self.root, sub), config, self.config)
-        return self.datastoreType(config=config, registry=self.registry)
-
     @classmethod
     def setUpClass(cls):
         # Storage Classes are fixed for all datastores in these tests
-        scConfigFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+        scConfigFile = os.path.join(TESTDIR, "config/basic/storageClasses.yaml")
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(scConfigFile)
 
@@ -97,21 +75,20 @@ class DatastoreTests(DatasetTestHelper):
         cls.datastoreType = doImport(datastoreConfig["cls"])
 
     def setUp(self):
-        self.registry = DummyRegistry()
-
-        # Need to keep ID for each datasetRef since we have no butler
-        # for these tests
-        self.id = 1
-
-        self.config = DatastoreConfig(self.configFile)
-
-        # Some subclasses override the working root directory
-        if self.root is not None:
-            self.datastoreType.setConfigRoot(self.root, self.config, self.config.copy())
+        self.setUpDatastoreTests(DummyRegistry, DatastoreConfig)
 
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
+
+    def testConfigRoot(self):
+        full = DatastoreConfig(self.configFile)
+        config = DatastoreConfig(self.configFile, mergeDefaults=False)
+        newroot = "/random/location"
+        self.datastoreType.setConfigRoot(newroot, config, full)
+        if self.rootKeys:
+            for k in self.rootKeys:
+                self.assertIn(newroot, config[k])
 
     def testConstructor(self):
         datastore = self.makeDatastore()
@@ -430,6 +407,7 @@ class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     uriScheme = "file:"
     ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
     isEphemeral = False
+    rootKeys = ("root",)
 
     def setUp(self):
         # Override the working directory before calling the base class
@@ -444,6 +422,7 @@ class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
     hasUnsupportedPut = False
     ingestTransferModes = ()
     isEphemeral = True
+    rootKeys = None
 
 
 class ChainedDatastoreTestCase(PosixDatastoreTestCase):
@@ -452,6 +431,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     hasUnsupportedPut = False
     ingestTransferModes = ("copy", "move", "hardlink", "symlink")
     isEphemeral = False
+    rootKeys = ("datastores.1.root", "datastores.2.root")
 
 
 class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):

@@ -70,3 +70,44 @@ class DatasetTestHelper:
             self.id += 1
             id = self.id
         return DatasetRef(datasetType, dataId, id=id)
+
+
+class DatastoreTestHelper:
+    """Helper methods for Datastore tests"""
+
+    def setUpDatastoreTests(self, registryClass, configClass):
+        """Shared setUp code for all Datastore tests"""
+        self.registry = registryClass()
+
+        # Need to keep ID for each datasetRef since we have no butler
+        # for these tests
+        self.id = 1
+
+        self.config = configClass(self.configFile)
+
+        # Some subclasses override the working root directory
+        if self.root is not None:
+            self.datastoreType.setConfigRoot(self.root, self.config, self.config.copy())
+
+    def makeDatastore(self, sub=None):
+        """Make a new Datastore instance of the appropriate type.
+
+        Parameters
+        ----------
+        sub : str, optional
+            If not None, the returned Datastore will be distinct from any
+            Datastore constructed with a different value of ``sub``.  For
+            PosixDatastore, for example, the converse is also true, and ``sub``
+            is used as a subdirectory to form the new root.
+
+        Returns
+        -------
+        datastore : `Datastore`
+            Datastore constructed by this routine using the supplied
+            optional subdirectory if supported.
+        """
+        config = self.config.copy()
+        if sub is not None and self.root is not None:
+            self.datastoreType.setConfigRoot(os.path.join(self.root, sub), config, self.config)
+            print(config)
+        return self.datastoreType(config=config, registry=self.registry)

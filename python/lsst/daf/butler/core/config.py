@@ -85,12 +85,12 @@ class Loader(yaml.CLoader):
         elif isinstance(node, yaml.SequenceNode):
             result = []
             for filename in self.construct_sequence(node):
-                result += self.extractFile(filename)
+                result.append(self.extractFile(filename))
             return result
 
         elif isinstance(node, yaml.MappingNode):
             result = {}
-            for k, v in self.construct_mapping(node).iteritems():
+            for k, v in self.construct_mapping(node).items():
                 result[k] = self.extractFile(v)
             return result
 
@@ -142,10 +142,10 @@ class Config(_ConfigBase):
         if other is None:
             return
 
-        if isinstance(other, collections.Mapping):
-            self.update(other)
-        elif isinstance(other, Config):
+        if isinstance(other, Config):
             self.data = copy.deepcopy(other.data)
+        elif isinstance(other, collections.Mapping):
+            self.update(other)
         elif isinstance(other, str):
             # if other is a string, assume it is a file path.
             self.__initFromFile(other)
@@ -217,7 +217,7 @@ class Config(_ConfigBase):
         for key in name.split("."):
             if data is None:
                 return None
-            if key in data:
+            if key in data and isinstance(data, collections.Mapping):
                 data = data[key]
             else:
                 try:
@@ -250,21 +250,38 @@ class Config(_ConfigBase):
         d = self.data
         keys = key.split(".")
         last = keys.pop()
-        for k in keys:
-            if isinstance(d, collections.Sequence):
+
+        def checkNextItem(k, d):
+            """See if k is in d and if it is return the new child"""
+            nextVal = None
+            isThere = False
+            if d is None:
+                # We have gone past the end of the hierarchy
+                pass
+            elif isinstance(d, collections.Sequence):
                 # Check sequence first because for lists
                 # __contains__ checks whether value is found in list
                 # not whether the index exists in list. When we traverse
                 # the hierarchy we are interested in the index.
                 try:
-                    d = d[int(k)]
+                    nextVal = d[int(k)]
+                    isThere = True
                 except IndexError:
-                    return False
+                    pass
+                except ValueError:
+                    isThere = k in d
             elif k in d:
-                d = d[k]
-            else:
+                nextVal = d[k]
+                isThere = True
+            return nextVal, isThere
+
+        for k in keys:
+            d, isThere = checkNextItem(k, d)
+            if not isThere:
                 return False
-        return last in d
+
+        _, isThere = checkNextItem(last, d)
+        return isThere
 
     def update(self, other):
         """Like dict.update, but will add or modify keys in nested dicts,
@@ -284,25 +301,14 @@ class Config(_ConfigBase):
               foo == {"a": {"b": 1, "c": 2}}
         """
         def doUpdate(d, u):
+            if not isinstance(u, collections.Mapping) or \
+                    not isinstance(d, collections.Mapping):
+                raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
             for k, v in u.items():
-                if isinstance(d, collections.Mapping):
-                    if isinstance(v, collections.Mapping):
-                        r = doUpdate(d.get(k, {}), v)
-                        d[k] = r
-                    else:
-                        d[k] = v
+                if isinstance(v, collections.Mapping):
+                    d[k] = doUpdate(d.get(k, {}), v)
                 else:
-                    if isinstance(d, collections.Sequence):
-                        try:
-                            intk = int(k)
-                        except ValueError:
-                            # This will overwrite the entire sequence
-                            d = {k: v}
-                        else:
-                            r = doUpdate(d[intk], v)
-                            d[intk] = r
-                    else:
-                        d = {k: v}
+                    d[k] = v
             return d
         doUpdate(self.data, other)
 
@@ -324,6 +330,17 @@ class Config(_ConfigBase):
     def names(self, topLevelOnly=False):
         """Get the dot-delimited name of all the keys in the hierarchy.
 
+        Parameters
+        ----------
+        topLevelOnly : `bool`, optional
+            If False, the default, a full hierarchy of names is returned.
+            If True, only the top level are returned.
+
+        Returns
+        -------
+        names : `list`
+            List of all names present in the `Config`.
+
         Notes
         -----
         This is different than the built-in method `dict.keys`, which will
@@ -333,40 +350,44 @@ class Config(_ConfigBase):
             return list(self.keys())
 
         def getKeys(d, keys, base):
-            for key in d:
+            if isinstance(d, collections.Sequence):
+                theseKeys = range(len(d))
+            else:
+                theseKeys = d.keys()
+            for key in theseKeys:
                 val = d[key]
-                levelKey = base + "." + key if base is not None else key
+                levelKey = f"{base}.{key}" if base is not None else key
                 keys.append(levelKey)
-                if isinstance(val, collections.Mapping):
+                if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
                     getKeys(val, keys, levelKey)
         keys = []
         getKeys(self.data, keys, None)
         return keys
 
     def asArray(self, name):
-        """Get a value as an array. May contain one or more elements.
+        """Get a value as an array.
+
+        May contain one or more elements.
 
         Parameters
         ----------
         name : `str`
-            Key
+            Key to use to retrieve value.
+
+        Returns
+        -------
+        array : `collections.Sequence`
+            The value corresponding to name, but guaranteed to be returned
+            as a list with at least one element. If the value is a
+            `~collections.Sequence` (and not a `str`) the value itself will be
+            returned, else the value will be the first element.
         """
         val = self.get(name)
         if isinstance(val, str):
             val = [val]
-        elif not isinstance(val, collections.Container):
+        elif not isinstance(val, collections.Sequence):
             val = [val]
         return val
-
-    def __lt__(self, other):
-        if isinstance(other, Config):
-            other = other.data
-        return self.data < other
-
-    def __le__(self, other):
-        if isinstance(other, Config):
-            other = other.data
-        return self.data <= other
 
     def __eq__(self, other):
         if isinstance(other, Config):
@@ -377,16 +398,6 @@ class Config(_ConfigBase):
         if isinstance(other, Config):
             other = other.data
         return self.data != other
-
-    def __gt__(self, other):
-        if isinstance(other, Config):
-            other = other.data
-        return self.data > other
-
-    def __ge__(self, other):
-        if isinstance(other, Config):
-            other = other.data
-        return self.data >= other
 
     #######
     # i/o #
@@ -404,8 +415,7 @@ class Config(_ConfigBase):
         # After the expected/ordered keys are weritten to the stream the
         # remainder of the keys are written to the stream.
         data = copy.copy(self.data)
-        keys = ["defects", "needCalibRegistry", "levels", "defaultLevel", "defaultSubLevels", "camera",
-                "exposures", "calibrations", "datasets"]
+        keys = []
         for key in keys:
             try:
                 yaml.safe_dump({key: data.pop(key)}, output, default_flow_style=False)
