@@ -231,10 +231,18 @@ class SqlPreFlight:
             # corresponding DataUnit tables, including making all necessary
             # joins for special multi-DataUnit region table(s).
             for connection in (dataUnitJoin.lhs, dataUnitJoin.rhs):
-                regionHolder = self._schema.dataUnits.getRegionHolder(*connection)
+                # For DataUnits like Patch we need to extend list with their required
+                # units which are also spatial.
+                units = []
+                for dataUnitName in connection:
+                    units.append(dataUnitName)
+                    dataUnit = self._schema.dataUnits[dataUnitName]
+                    units += [d.name for d in dataUnit.requiredDependencies if d.spatial]
+                regionHolder = self._schema.dataUnits.getRegionHolder(*units)
                 if len(connection) > 1:
                     # if one of the joins is with Visit/Sensor then also bring
                     # VisitSensorRegion table in and join it with the units
+                    # TODO: need a better way to recognize this special case
                     if regionHolder.name in joinedRegionTables:
                         _LOG.debug("region table already joined with units: %s", regionHolder.name)
                     else:
