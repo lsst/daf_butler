@@ -414,7 +414,7 @@ class DataUnitRegistry:
             requiredDependencies = ()
             optionalDependencies = ()
             table = None
-            spatial = False
+            spatial = dataUnitDescription.get("spatial", False)
             link = ()
             if "dependencies" in dataUnitDescription:
                 dependencies = dataUnitDescription["dependencies"]
@@ -439,7 +439,6 @@ class DataUnitRegistry:
                         if tableName == dataUnitName:
                             # Primary table for this DataUnit
                             table = builder.addTable(tableName, tableDescription)
-                            spatial = dataUnitDescription.get("spatial", False)
                         else:
                             # Secondary table
                             builder.addTable(tableName, tableDescription)
@@ -452,7 +451,7 @@ class DataUnitRegistry:
             self[dataUnitName] = dataUnit
             for linkColumnName in link:
                 self._dataUnitsByLinkColumnName[linkColumnName] = dataUnit
-            if spatial is not None:
+            if spatial:
                 self._spatialDataUnits |= frozenset((dataUnitName, ))
                 # The DataUnit (or DataUnitJoin) instance that can be used
                 # to retreive the region is keyed based on the union
