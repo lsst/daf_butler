@@ -23,7 +23,7 @@ __all__ = ("SqlPreFlight")
 
 import itertools
 import logging
-from sqlalchemy.sql import select, and_, text
+from sqlalchemy.sql import select, and_, text, literal
 
 from lsst.sphgeom import Region
 from lsst.sphgeom.relationship import DISJOINT
@@ -101,6 +101,25 @@ def _filterRegions(rowIter, firstRegionIndex):
             total += 1
             yield tuple(row)
         _LOG.debug("Total %d rows in result set, no region filtering", total)
+
+
+def _unitsTopologicalSort(dataUnits):
+    """Return topologically sorted DataUnits.
+
+    Oredering is based on dependencies, units with no dependencies
+    on other units are returned first.
+
+    Parameters
+    ----------
+    dataUnits : iterable of `DataUnit`
+    """
+    dataUnits = set(dataUnits)
+    while dataUnits:
+        for dataUnit in dataUnits:
+            if dataUnits.isdisjoint(dataUnit.dependencies):
+                dataUnits.remove(dataUnit)
+                yield dataUnit
+                break
 
 
 class SqlPreFlight:
@@ -191,18 +210,28 @@ class SqlPreFlight:
         allDataUnits = {unitName: self._schema.dataUnits[unitName] for unitName in allUnitNames}
 
         # joins for all unit tables
+        fromJoin = None
         where = []
-        for dataUnit in allDataUnits.values():
+        for dataUnit in _unitsTopologicalSort(allDataUnits.values()):
             if dataUnit.table is None:
                 continue
             _LOG.debug("add dataUnit: %s", dataUnit.name)
 
-            # join with tables that we depend upon
-            for otherUnit in dataUnit.dependencies:
-                _LOG.debug("  join with unit: %s", otherUnit.name)
-                for name, col in otherUnit.primaryKeyColumns.items():
-                    _LOG.debug("    joining on column: %s", name)
-                    where.append(dataUnit.table.c[name] == col)
+            if fromJoin is None:
+                fromJoin = dataUnit.table
+            else:
+                # join with tables that we depend upon
+                joinOn = []
+                for otherUnit in dataUnit.dependencies:
+                    _LOG.debug("  join with unit: %s", otherUnit.name)
+                    for name, col in otherUnit.primaryKeyColumns.items():
+                        _LOG.debug("    joining on column: %s", name)
+                        joinOn.append(dataUnit.table.c[name] == col)
+                if joinOn:
+                    fromJoin = fromJoin.join(dataUnit.table, and_(*joinOn))
+                else:
+                    # need explicit cross join here, ugly with SQLAlchemy
+                    fromJoin = fromJoin.join(dataUnit.table, literal(True))
 
         # joins between skymap and camera units
         dataUnitJoins = [dataUnitJoin for dataUnitJoin in self._schema.dataUnits.joins.values()
@@ -230,6 +259,7 @@ class SqlPreFlight:
             # Look at each side of the DataUnitJoin and join it with
             # corresponding DataUnit tables, including making all necessary
             # joins for special multi-DataUnit region table(s).
+            joinOn = []
             for connection in (dataUnitJoin.lhs, dataUnitJoin.rhs):
                 # For DataUnits like Patch we need to extend list with their required
                 # units which are also spatial.
@@ -249,24 +279,28 @@ class SqlPreFlight:
                         _LOG.debug("joining region table with units: %s", regionHolder.name)
                         joinedRegionTables.add(regionHolder.name)
 
+                        joinOnReg = []
                         for dataUnitName in connection:
                             dataUnit = self._schema.dataUnits[dataUnitName]
                             _LOG.debug("  joining region table with %s", dataUnitName)
                             for name, col in dataUnit.primaryKeyColumns.items():
                                 _LOG.debug("    joining on column: %s", name)
-                                where.append(regionHolder.table.c[name] == col)
+                                joinOnReg.append(regionHolder.table.c[name] == col)
+                        fromJoin = fromJoin.join(regionHolder.table, and_(*joinOnReg))
 
                 # now join region table with join table using PKs of all units
                 _LOG.debug("join %s with %s", dataUnitJoin.name, connection)
                 for colName in self._schema.dataUnits.getPrimaryKeyNames(connection):
                     _LOG.debug("  joining on column: %s", colName)
-                    where.append(dataUnitJoin.table.c[colName] == regionHolder.table.c[colName])
+                    joinOn.append(dataUnitJoin.table.c[colName] == regionHolder.table.c[colName])
 
                 # We also have to include regions from each side of the join
                 # into resultset so that we can filter-out non-overlapping
                 # regions.
                 firstRegionIndex = len(header)
                 selectColumns.append(regionHolder.regionColumn)
+
+            fromJoin = fromJoin.join(dataUnitJoin.table, and_(*joinOn))
 
         _LOG.debug("units where: %s", [str(x) for x in where])
 
@@ -278,19 +312,22 @@ class SqlPreFlight:
             dsAlias = dsTable.alias("ds" + dsType.name)
             dsCollAlias = dsCollTable.alias("dsColl" + dsType.name)
 
+            joinOn = []
             for unitName in dsType.dataUnits:
                 dataUnit = allDataUnits[unitName]
                 for link in dataUnit.link:
                     _LOG.debug("joining on link: %s", link)
-                    where.append(dsAlias.c[link] == dataUnit.table.c[link])
+                    joinOn.append(dsAlias.c[link] == dataUnit.table.c[link])
+            fromJoin = fromJoin.join(dsAlias, and_(*joinOn))
+            fromJoin = fromJoin.join(dsCollAlias,
+                                     dsAlias.c["dataset_id"] == dsCollAlias.c["dataset_id"])
 
-            where += [dsAlias.c["dataset_id"] == dsCollAlias.c["dataset_id"],
-                      dsAlias.c["dataset_type_name"] == dsType.name,
+            where += [dsAlias.c["dataset_type_name"] == dsType.name,
                       dsCollAlias.c["collection"] == collection]
         _LOG.debug("datasets where: %s", [str(x) for x in where])
 
         # build full query
-        q = select(selectColumns)
+        q = select(selectColumns).select_from(fromJoin)
         if expr:
             # TODO: potentially transform query from user-friendly expression
             where += [text(expr)]
