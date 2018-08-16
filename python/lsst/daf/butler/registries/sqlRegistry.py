@@ -931,8 +931,7 @@ class SqlRegistry(Registry):
         except IntegrityError as err:
             raise ValueError(str(err))  # TODO this should do an explicit validity check instead
         if region is not None:
-            self.setDataUnitRegion(
-                (dataUnitName,) + tuple(d.name for d in dataUnit.requiredDependencies), v, region)
+            self.setDataUnitRegion((dataUnitName,), v, region)
 
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.
@@ -970,7 +969,9 @@ class SqlRegistry(Registry):
         ----------
         dataUnitNames : sequence
             A sequence of DataUnit names whose instances are jointly associated
-            with a region on the sky.
+            with a region on the sky. This must not include dependencies that
+            are implied, e.g. "Patch" must not include "Tract", but "Sensor"
+            needs to add "Visit".
         value : `dict`
             A dictionary of values that uniquely identify the DataUnits.
         region : `sphgeom.ConvexPolygon`
@@ -981,11 +982,14 @@ class SqlRegistry(Registry):
             assumed to be pre-inserted prior to calling this function.
         """
         primaryKey = set()
+        regionUnitNames = []
         for dataUnitName in dataUnitNames:
             dataUnit = self._schema.dataUnits[dataUnitName]
             dataUnit.validateId(value)
             primaryKey.update(dataUnit.primaryKey)
-        table = self._schema.dataUnits.getRegionHolder(*dataUnitNames).table
+            regionUnitNames.append(dataUnitName)
+            regionUnitNames += [d.name for d in dataUnit.requiredDependencies]
+        table = self._schema.dataUnits.getRegionHolder(*regionUnitNames).table
         if table is None:
             raise TypeError("No region table found for '{}'.".format(dataUnitNames))
         # Update the region for an existing entry

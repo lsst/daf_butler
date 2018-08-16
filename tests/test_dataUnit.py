@@ -44,6 +44,30 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
             for d in dataUnit.dependencies:
                 self.assertIsInstance(d, DataUnit)
 
+        # Tests below depend on the schema.yaml definitions as well
+
+        # check all spatial data units names, Sensor is there because
+        # pair (Visit, Sensor) is a spatial entity
+        self.assertCountEqual(dataUnitRegistry._spatialDataUnits,
+                              ["Tract", "Patch", "Visit", "Sensor", "SkyPix"])
+        self.assertCountEqual(dataUnitRegistry._dataUnitRegions.keys(),
+                              [{'Visit'}, {'SkyPix'}, {'Tract'},
+                               {'Patch', 'Tract'}, {'Sensor', 'Visit'}])
+        self.assertEqual(len(dataUnitRegistry.joins), 11)
+        joins = ((['Exposure'], ['Exposure']),
+                 (['Exposure'], ['ExposureRange']),
+                 (['Patch'], ['SkyPix']),
+                 (['Sensor', 'Visit'], ['Patch']),
+                 (['Sensor', 'Visit'], ['SkyPix']),
+                 (['Sensor', 'Visit'], ['Tract']),
+                 (['Tract'], ['SkyPix']),
+                 (['Visit'], ['Patch']),
+                 (['Visit'], ['Sensor']),
+                 (['Visit'], ['SkyPix']))
+        for lhs, rhs in joins:
+            self.assertIsNotNone(dataUnitRegistry.getJoin(lhs, rhs))
+            self.assertIsNotNone(dataUnitRegistry.getJoin(rhs, lhs))
+
 
 if __name__ == "__main__":
     unittest.main()

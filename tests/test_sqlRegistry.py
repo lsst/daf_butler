@@ -379,6 +379,11 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
                                                         lsst.sphgeom.UnitVector3d(0, 1, 1)))
         for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitSensor), 2):
             self.assertNotEqual(a, b)
+
+        # This depends on current schema.yaml definitions
+        rows = list(registry.query('select count(*) as "cnt" from "PatchSkyPixJoin"'))
+        self.assertEqual(rows[0]["cnt"], 0)
+
         # Add some dataunits
         registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam",
@@ -437,6 +442,9 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
                                 "tract": 1})
         # Check if we can get the region for a skypix
         self.assertIsInstance(registry.getRegion({"skypix": 1000}), lsst.sphgeom.ConvexPolygon)
+        # PatchSkyPixJoin should not be empty
+        rows = list(registry.query('select count(*) as "cnt" from "PatchSkyPixJoin"'))
+        self.assertNotEqual(rows[0]["cnt"], 0)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
