@@ -122,6 +122,46 @@ def _unitsTopologicalSort(dataUnits):
                 break
 
 
+def _joinOnForeignKey(fromClause, dataUnit, otherDataUnits):
+    """Add new table for join clause.
+
+    Assumption here is that this unit table has a foreign key to all other
+    tables and names of columns are the same in both tables, so we just get
+    primary key columns from other tables and join on them.
+
+    Parameters
+    ----------
+    fromClause : `sqlalchemy.FromClause`
+        May be ``None``, in that case ``otherDataUnits`` is expected to be
+        empty and is ignored.
+    dataUnit : `DataUnit`
+        DataUnit to join with ``fromClause``.
+    otherDataUnits : iterable of `DataUnit`
+        DataUnits whose tableshave PKs for ``dataUnit`` table's FK. They all
+        have to be in ``fromClause`` already.
+
+    Returns
+    -------
+    fromClause : `sqlalchemy.FromClause`
+        SQLAlchemy FROM clause extended with new join.
+    """
+    if fromClause is None:
+        # starting point, first table in JOIN
+        return dataUnit.table
+    else:
+        joinOn = []
+        for otherUnit in otherDataUnits:
+            for name, col in otherUnit.primaryKeyColumns.items():
+                joinOn.append(dataUnit.table.c[name] == col)
+            _LOG.debug("join %s with %s on columns %s", dataUnit.name,
+                       otherUnit.name, list(otherUnit.primaryKeyColumns.keys()))
+        if joinOn:
+            return fromClause.join(dataUnit.table, and_(*joinOn))
+        else:
+            # need explicit cross join here, ugly with SQLAlchemy
+            return fromClause.join(dataUnit.table, literal(True))
+
+
 class SqlPreFlight:
     """Class implementing part of preflight solver which extracts
     units data from registry.
@@ -216,22 +256,7 @@ class SqlPreFlight:
             if dataUnit.table is None:
                 continue
             _LOG.debug("add dataUnit: %s", dataUnit.name)
-
-            if fromJoin is None:
-                fromJoin = dataUnit.table
-            else:
-                # join with tables that we depend upon
-                joinOn = []
-                for otherUnit in dataUnit.dependencies:
-                    _LOG.debug("  join with unit: %s", otherUnit.name)
-                    for name, col in otherUnit.primaryKeyColumns.items():
-                        _LOG.debug("    joining on column: %s", name)
-                        joinOn.append(dataUnit.table.c[name] == col)
-                if joinOn:
-                    fromJoin = fromJoin.join(dataUnit.table, and_(*joinOn))
-                else:
-                    # need explicit cross join here, ugly with SQLAlchemy
-                    fromJoin = fromJoin.join(dataUnit.table, literal(True))
+            fromJoin = _joinOnForeignKey(fromJoin, dataUnit, dataUnit.dependencies)
 
         # joins between skymap and camera units
         dataUnitJoins = [dataUnitJoin for dataUnitJoin in self._schema.dataUnits.joins.values()
@@ -259,7 +284,7 @@ class SqlPreFlight:
             # Look at each side of the DataUnitJoin and join it with
             # corresponding DataUnit tables, including making all necessary
             # joins for special multi-DataUnit region table(s).
-            joinOn = []
+            regionHolders = []
             for connection in (dataUnitJoin.lhs, dataUnitJoin.rhs):
                 # For DataUnits like Patch we need to extend list with their required
                 # units which are also spatial.
@@ -279,20 +304,11 @@ class SqlPreFlight:
                         _LOG.debug("joining region table with units: %s", regionHolder.name)
                         joinedRegionTables.add(regionHolder.name)
 
-                        joinOnReg = []
-                        for dataUnitName in connection:
-                            dataUnit = self._schema.dataUnits[dataUnitName]
-                            _LOG.debug("  joining region table with %s", dataUnitName)
-                            for name, col in dataUnit.primaryKeyColumns.items():
-                                _LOG.debug("    joining on column: %s", name)
-                                joinOnReg.append(regionHolder.table.c[name] == col)
-                        fromJoin = fromJoin.join(regionHolder.table, and_(*joinOnReg))
+                        dataUnits = [self._schema.dataUnits[dataUnitName] for dataUnitName in connection]
+                        fromJoin = _joinOnForeignKey(fromJoin, regionHolder, dataUnits)
 
-                # now join region table with join table using PKs of all units
-                _LOG.debug("join %s with %s", dataUnitJoin.name, connection)
-                for colName in self._schema.dataUnits.getPrimaryKeyNames(connection):
-                    _LOG.debug("  joining on column: %s", colName)
-                    joinOn.append(dataUnitJoin.table.c[colName] == regionHolder.table.c[colName])
+                # add to the list of tables that we need to join with
+                regionHolders.append(regionHolder)
 
                 # We also have to include regions from each side of the join
                 # into resultset so that we can filter-out non-overlapping
@@ -300,7 +316,7 @@ class SqlPreFlight:
                 firstRegionIndex = len(header)
                 selectColumns.append(regionHolder.regionColumn)
 
-            fromJoin = fromJoin.join(dataUnitJoin.table, and_(*joinOn))
+            fromJoin = _joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
 
         _LOG.debug("units where: %s", [str(x) for x in where])
 
