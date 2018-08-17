@@ -151,6 +151,10 @@ class FileTemplate:
             if field_name == "component":
                 usedComponent = True
 
+            if format_spec is None:
+                output = output + literal
+                continue
+
             if "?" in format_spec:
                 optional = True
                 # Remove the non-standard character from the spec

@@ -346,8 +346,8 @@ class SqlRegistry(Registry):
 
         Parameters
         ----------
-        datasetType : `str`
-            Name of a `DatasetType`.
+        datasetType : `DatasetType`
+            Type of the Dataset.
         dataId : `dict`
             A `dict` of `DataUnit` link name, value pairs that label the
             `DatasetRef` within a collection.
@@ -381,8 +381,8 @@ class SqlRegistry(Registry):
         # Then again, it is undoubtedly not the only place where
         # this problem occurs. Needs some serious thought.
         if self.find(run.collection, datasetType, dataId) is not None:
-            raise ValueError("A dataset with id: {} already exists in collection {}".format(
-                dataId, run.collection))
+            raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
+                datasetType, dataId, run.collection))
         datasetTable = self._schema.tables["Dataset"]
         datasetRef = None
         # TODO add producer
