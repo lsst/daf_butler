@@ -53,6 +53,10 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(tmplstr,
                             "calexp/00052/U",
                             self.makeDatasetRef("calexp"))
+        tmplstr = "{datasetType}/{visit:05d}/{filter}-trail"
+        self.assertTemplate(tmplstr,
+                            "calexp/00052/U-trail",
+                            self.makeDatasetRef("calexp"))
 
     def testOptional(self):
         """Optional units in templates."""
