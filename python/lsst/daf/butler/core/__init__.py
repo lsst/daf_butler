@@ -17,6 +17,7 @@ from .fileTemplates import *
 from .formatter import *
 from .location import *
 from .mappingFactory import *
+from .preFlight import *
 from .quantum import *
 from .regions import *
 from .registry import *

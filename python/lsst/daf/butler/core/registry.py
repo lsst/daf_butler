@@ -701,8 +701,8 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     def selectDataUnits(self, collections, expr, neededDatasetTypes, futureDatasetTypes):
-        r"""Evaluate a filter expression and lists of `DatasetType`\ s and
-        return a set of data unit values.
+        """Evaluate a filter expression and lists of
+        `DatasetTypes <DatasetType>` and return a set of data unit values.
 
         Returned set consists of combinations of units participating in data
         transformation from ``neededDatasetTypes`` to ``futureDatasetTypes``,
@@ -711,28 +711,26 @@ class Registry(metaclass=ABCMeta):
         Parameters
         ----------
         collections : `list` of `str`
-            An ordered `list` of collections indicating the collections to
+            An ordered `list` of collections indicating the Collections to
             search for Datasets.
         expr : `str`
-            An expression that limits the `DataUnit`\ s and (indirectly) the
-            Datasets returned.
+            An expression that limits the `DataUnits <DataUnit>` and
+            (indirectly) the Datasets returned.
         neededDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetType`\ s whose instances should be included
-            in the graph and limit its extent.
+            The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
+            be included in the returned column set. Output is limited by the
+            the Datasets of these DatasetTypes which already exist in the
+            registry.
         futureDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetType`\ s whose instances may be added to the
-            graph later, which requires that their `DataUnit` types must be
-            present in the graph.
+            The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
+            be included in the returned column set. It is expected that
+            Datasets for these DatasetTypes do not exist in the registry,
+            but presently this is not checked.
 
-        Returns
-        -------
-        header : `tuple` of `tuple`
-            Length of tuple equals the number of columns in the returned
-            result set. Each item is a tuple with two elements - DataUnit
-            name (e.g. "Visit") and unit value name (e.g. "visit").
-        rows : sequence of `tuple`
-            Result set, this can be a single-pass iterator. Each tuple
-            contains unit values corresponding to units in a header.
+        Yields
+        ------
+        row : `PreFlightUnitsRow`
+            Single row is a unique combination of units in a transform.
         """
         raise NotImplementedError("Must be implemented by subclass")
 

@@ -87,52 +87,46 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                 registry.addDataset(rawType, dataId=dataId, run=run)
 
         # with empty expression
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"], expr="",
-                                                       neededDatasetTypes=[rawType],
-                                                       futureDatasetTypes=[calexpType])
-        # order of columns is not defined
-        self.assertCountEqual(headers, (("Camera", "camera"),
-                                        ("Sensor", "sensor"),
-                                        ("Exposure", "exposure"),
-                                        ("Visit", "visit")))
+        rows = self.preFlight.selectDataUnits(collections=["test"], expr="",
+                                              neededDatasetTypes=[rawType],
+                                              futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 sensors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(), ("camera", "sensor", "exposure", "visit"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
 
         # limit to single visit
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="Visit.visit = 10",
-                                                       neededDatasetTypes=[rawType],
-                                                       futureDatasetTypes=[calexpType])
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="Visit.visit = 10",
+                                              neededDatasetTypes=[rawType],
+                                              futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 sensors
 
-        # expression excludes everyhting
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="Visit.visit = 10 and Sensor.sensor > 1",
-                                                       neededDatasetTypes=[rawType],
-                                                       futureDatasetTypes=[calexpType])
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        # more limiting expression
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="Visit.visit = 10 and Sensor.sensor > 1",
+                                              neededDatasetTypes=[rawType],
+                                              futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 sensors
 
         # expression excludes everyhting
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="Visit.visit > 1000",
-                                                       neededDatasetTypes=[rawType],
-                                                       futureDatasetTypes=[calexpType])
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="Visit.visit > 1000",
+                                              neededDatasetTypes=[rawType],
+                                              futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
         # Selecting by PhysicalFilter, this should be done via
         # PhysicalFilter.physical_filter but that is not supported currently,
         # instead we can do Visit.physical_filter (or Exposure.physical_filter)
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="Visit.physical_filter = 'dummy_r'",
-                                                       neededDatasetTypes=[rawType],
-                                                       futureDatasetTypes=[calexpType])
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="PhysicalFilter.physical_filter = 'dummy_r'",
+                                              neededDatasetTypes=[rawType],
+                                              futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 sensors
 
@@ -183,45 +177,37 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                     registry.addDataset(calexpType, dataId=dataId, run=run)
 
         # with empty expression
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"], expr="",
-                                                       neededDatasetTypes=[calexpType, mergeType],
-                                                       futureDatasetTypes=[measType])
-        # order of columns is not defined
-        self.assertCountEqual(headers, (("SkyMap", "skymap"),
-                                        ("Tract", "tract"),
-                                        ("Patch", "patch"),
-                                        ("AbstractFilter", "abstract_filter")))
+        rows = self.preFlight.selectDataUnits(collections=["test"], expr="",
+                                              neededDatasetTypes=[calexpType, mergeType],
+                                              futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
+            self.assertCountEqual(row.datasetRefs.keys(), (calexpType, mergeType, measType))
 
         # limit to 2 tracts and 2 patches
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
-                                                       neededDatasetTypes=[calexpType, mergeType],
-                                                       futureDatasetTypes=[measType])
-        # order of columns is not defined
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
+                                              neededDatasetTypes=[calexpType, mergeType],
+                                              futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
 
         # limit to single filter
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="AbstractFilter.abstract_filter = 'i'",
-                                                       neededDatasetTypes=[calexpType, mergeType],
-                                                       futureDatasetTypes=[measType])
-        # order of columns is not defined
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="AbstractFilter.abstract_filter = 'i'",
+                                              neededDatasetTypes=[calexpType, mergeType],
+                                              futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
 
         # expression excludes everyhting, specifying non-existing skymap is not a
         # fatal error, it's operator error
-        headers, rows = self.preFlight.selectDataUnits(collections=["test"],
-                                                       expr="SkyMap.skymap = 'Mars'",
-                                                       neededDatasetTypes=[calexpType, mergeType],
-                                                       futureDatasetTypes=[measType])
-        # order of columns is not defined
-        self.assertEqual(len(headers), 4)  # headers must be the same
+        rows = self.preFlight.selectDataUnits(collections=["test"],
+                                              expr="SkyMap.skymap = 'Mars'",
+                                              neededDatasetTypes=[calexpType, mergeType],
+                                              futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
