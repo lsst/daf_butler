@@ -98,6 +98,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
         self.assertEqual(ref, outRef)
+        with self.assertRaises(ValueError):
+            ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
 
     def testComponents(self):
         registry = Registry.fromConfig(self.butlerConfig, create=True)
