@@ -149,11 +149,9 @@ class ChainedDatastore(Datastore):
         # they are ephemeral
         isEphemeral = True
         for d in self.datastores:
-            log.debug("Child: %s", d.isEphemeral)
             if not d.isEphemeral:
                 isEphemeral = False
                 break
-        log.debug("Ephmeral: %s", isEphemeral)
         self.isEphemeral = isEphemeral
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
