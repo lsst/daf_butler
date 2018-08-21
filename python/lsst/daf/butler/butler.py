@@ -34,6 +34,7 @@ from .core.run import Run
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
+from .core.composites import CompositesMap
 
 
 __all__ = ("Butler",)
@@ -143,6 +144,7 @@ class Butler:
         self.datastore = Datastore.fromConfig(self.config, self.registry)
         self.storageClasses = StorageClassFactory()
         self.storageClasses.addFromConfig(self.config)
+        self.composites = CompositesMap(self.config)
         if run is None:
             runCollection = self.config.get("run", None)
             self.run = None
@@ -240,8 +242,8 @@ class Butler:
         # Look up storage class to see if this is a composite
         storageClass = datasetType.storageClass
 
-        # Check to see if this storage class has a disassembler
-        if storageClass.components and storageClass.assemblerClass.disassemble is not None:
+        # Check to see if this datasetType requires disassembly
+        if self.composites.doDisassembly(datasetType):
             components = storageClass.assembler().disassemble(obj)
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)

@@ -1,0 +1,17 @@
+composites:
+  # True: concrete composite (composites are disassembled);
+  # False: virtual composite (composites are written monolithically).
+  # default applies to all composites that are not explicitly mentioned
+  # elsewhere.
+  default: False
+  storageClasses:
+    # Use a dict rather than a list to allow easy merging of user config
+    # into default config. Config class has no way of merging lists.
+    ExposureI: False
+    ExposureF: False
+    ExposureCompositeF: True
+    ExposureCompositeF: True
+  datasetTypes:
+    # Same definition as for storage classes, but dataset type explicitly
+    # overrides a storage class definition.
+    calexp: False

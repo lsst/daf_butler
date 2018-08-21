@@ -21,7 +21,7 @@
 
 """Support for reading and writing composite objects."""
 
-__all__ = ("DatasetComponent", "CompositeAssembler", "CompositeAssemblerMonolithic")
+__all__ = ("DatasetComponent", "CompositeAssembler")
 
 import collections
 import logging
@@ -309,8 +309,3 @@ class CompositeAssembler:
             raise ValueError("Unhandled components during disassembly ({})".format(requested))
 
         return components
-
-
-class CompositeAssemblerMonolithic(CompositeAssembler):
-    """Generic assembler class that disables disassembly."""
-    disassemble = None

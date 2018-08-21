@@ -8,6 +8,7 @@ Core code for butler.
 from .assembler import *
 from .butlerConfig import *
 from .config import *
+from .composites import *
 from .datasets import *
 from .datastore import *
 from .exceptions import *

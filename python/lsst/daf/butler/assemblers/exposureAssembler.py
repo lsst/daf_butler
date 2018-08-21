@@ -225,8 +225,3 @@ class ExposureAssembler(CompositeAssembler):
                              " {}".format(list(components.keys())))
 
         return exposure
-
-
-class ExposureAssemblerMonolithic(ExposureAssembler):
-    """Exposure assembler with disassembly disabled."""
-    disassemble = None

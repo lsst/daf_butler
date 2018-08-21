@@ -39,7 +39,7 @@ storageClasses:
     pytype: lsst.daf.base.PropertyList
   Exposure: &Exposure
     pytype: lsst.afw.image.Exposure
-    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssemblerMonolithic
+    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
     components:
       image: ImageF
       mask: MaskX
@@ -51,21 +51,16 @@ storageClasses:
       apCorrMap: TablePersistableApCorr
       coaddInputs: TablePersistableCoaddInputs
       metadata: PropertyList
-  ExposureF:
+  ExposureF: &ExposureF
     <<: *Exposure
     pytype: lsst.afw.image.ExposureF
-  ExposureI:
+  ExposureI: &ExposureI
     <<: *Exposure
     pytype: lsst.afw.image.ExposureI
-  ExposureComposite: &ExposureComposite
-    <<: *Exposure
-    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
   ExposureCompositeF:
-    <<: *ExposureComposite
-    pytype: lsst.afw.image.ExposureF
+    <<: *ExposureF
   ExposureCompositeI:
-    <<: *ExposureComposite
-    pytype: lsst.afw.image.ExposureI
+    <<: *ExposureI
   Background:
     pytype: lsst.afw.math.BackgroundList
   Config:

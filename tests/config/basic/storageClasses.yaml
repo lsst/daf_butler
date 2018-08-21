@@ -15,7 +15,7 @@ storageClasses:
   StructuredData: &StructuredData
     # Data from a simple Python class
     pytype: examplePythonTypes.MetricsExample
-    assembler: lsst.daf.butler.CompositeAssemblerMonolithic
+    assembler: lsst.daf.butler.CompositeAssembler
     # Use YAML formatter by default
     components:
       # Components are those supported by get.

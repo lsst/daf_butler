@@ -1,0 +1,11 @@
+composites:
+  storageClasses:
+    StructuredData: False
+    StructuredDataJson: False
+    StructuredDataPickle: False
+    StructuredComposite: True
+    StructuredCompositeTestA: True
+    StructuredCompositeTestB: True
+  datasetTypes:
+    dummyTrue: True
+    dummyFalse: False
