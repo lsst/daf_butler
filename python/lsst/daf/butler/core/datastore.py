@@ -197,6 +197,12 @@ class Datastore(metaclass=ABCMeta):
         self.name = "ABCDataStore"
         self._transaction = None
 
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return self.name
+
     @contextlib.contextmanager
     def transaction(self):
         """Context manager supporting `Datastore` transactions.

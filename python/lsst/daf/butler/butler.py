@@ -178,6 +178,10 @@ class Butler:
         """
         return (Butler, (self.config, ))
 
+    def __str__(self):
+        return "Butler(collection='{}', datastore='{}', registry='{}')".format(
+            self.collection, self.datastore, self.registry)
+
     @contextlib.contextmanager
     def transaction(self):
         """Context manager supporting `Butler` transactions.

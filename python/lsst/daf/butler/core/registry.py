@@ -124,6 +124,9 @@ class Registry(metaclass=ABCMeta):
         self.config = registryConfig
         self._pixelization = None
 
+    def __str__(self):
+        return "None"
+
     @contextlib.contextmanager
     def transaction(self):
         """Optionally implemented in `Registry` subclasses to provide exception
