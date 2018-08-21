@@ -37,6 +37,8 @@ storageClasses:
     pytype: lsst.skymap.BaseSkyMap
   PropertyList:
     pytype: lsst.daf.base.PropertyList
+  PropertySet:
+    pytype: lsst.daf.base.PropertySet
   Exposure: &Exposure
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler

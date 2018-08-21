@@ -35,3 +35,5 @@ datastore:
     Background: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     Config: lsst.daf.butler.formatters.pexConfigFormatter.PexConfigFormatter
     Packages: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    PropertyList: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    PropertySet: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
