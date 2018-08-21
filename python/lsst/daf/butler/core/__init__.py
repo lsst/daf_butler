@@ -5,8 +5,8 @@ Core code for butler.
 # Do not export the utility routines from safeFileIo and utils
 # Do not export SqlDatabaseDict (should be constructed by other classes).
 
+from .assembler import *
 from .butlerConfig import *
-from .composites import *
 from .config import *
 from .datasets import *
 from .datastore import *

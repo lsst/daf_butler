@@ -21,7 +21,12 @@
 
 """Support for reading and writing composite objects."""
 
+__all__ = ("DatasetComponent", "CompositeAssembler", "CompositeAssemblerMonolithic")
+
 import collections
+import logging
+
+log = logging.getLogger(__name__)
 
 
 class DatasetComponent:

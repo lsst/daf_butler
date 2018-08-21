@@ -25,7 +25,7 @@
 import lsst.afw.detection  # noqa F401
 from lsst.afw.image import makeExposure, makeMaskedImage
 
-from lsst.daf.butler.core.composites import CompositeAssembler
+from lsst.daf.butler import CompositeAssembler
 
 
 class ExposureAssembler(CompositeAssembler):

@@ -26,7 +26,7 @@ import itertools
 import logging
 
 from .utils import doImport, Singleton, getFullTypeName
-from .composites import CompositeAssembler
+from .assembler import CompositeAssembler
 from .config import ConfigSubset
 
 log = logging.getLogger(__name__)
