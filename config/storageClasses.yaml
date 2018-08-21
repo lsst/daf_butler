@@ -63,7 +63,7 @@ storageClasses:
   ExposureCompositeF:
     <<: *ExposureComposite
     pytype: lsst.afw.image.ExposureF
-  ExposureI:
+  ExposureCompositeI:
     <<: *ExposureComposite
     pytype: lsst.afw.image.ExposureI
   Background:
