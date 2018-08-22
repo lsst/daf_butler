@@ -168,8 +168,7 @@ class DatasetRef:
     """
 
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer",
-                 "_predictedConsumers", "_actualConsumers", "_components",
-                 "_assembler")
+                 "_predictedConsumers", "_actualConsumers", "_components")
     __eq__ = slotValuesAreEqual
 
     def __init__(self, datasetType, dataId, id=None):
@@ -181,7 +180,6 @@ class DatasetRef:
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
         self._components = dict()
-        self._assembler = None
 
     @property
     def id(self):
@@ -243,15 +241,6 @@ class DatasetRef:
         Read-only; update via `Registry.attachComponent()`.
         """
         return _safeMakeMappingProxyType(self._components)
-
-    @property
-    def assembler(self):
-        """Fully-qualified name of an importable Assembler object that can be
-        used to construct this Dataset from its components.
-
-        `None` for datasets that are not virtual composites.
-        """
-        return self._assembler
 
     def __str__(self):
         components = ""

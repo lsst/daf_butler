@@ -1,3 +1,4 @@
 run: ingest
 datastore: !include chainedDatastore.yaml
 storageClasses: !include storageClasses.yaml
+composites: !include composites.yaml

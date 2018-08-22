@@ -23,6 +23,7 @@
 
 import collections
 import copy
+import logging
 import pprint
 import os
 import yaml
@@ -36,6 +37,9 @@ from .utils import doImport
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
 __all__ = ("Config", "ConfigSubset")
+
+# Config module logger
+log = logging.getLogger(__name__)
 
 # PATH-like environment variable to use for defaults.
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
@@ -100,6 +104,7 @@ class Loader(yaml.CLoader):
 
     def extractFile(self, filename):
         filepath = os.path.join(self._root, filename)
+        log.debug("Opening YAML file via !include: %s", filepath)
         with open(filepath, "r") as f:
             return yaml.load(f, Loader)
 
@@ -190,6 +195,7 @@ class Config(_ConfigBase):
         path : `str`
             To a persisted config file in YAML format.
         """
+        log.debug("Opening YAML config file: %s", path)
         with open(path, "r") as f:
             self.__initFromYaml(f)
 

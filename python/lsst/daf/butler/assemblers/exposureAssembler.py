@@ -25,7 +25,7 @@
 import lsst.afw.detection  # noqa F401
 from lsst.afw.image import makeExposure, makeMaskedImage
 
-from lsst.daf.butler.core.composites import CompositeAssembler
+from lsst.daf.butler import CompositeAssembler
 
 
 class ExposureAssembler(CompositeAssembler):
@@ -218,6 +218,7 @@ class ExposureAssembler(CompositeAssembler):
             info.setVisitInfo(components.pop("visitInfo"))
         info.setApCorrMap(components.pop("apCorrMap", None))
         info.setCoaddInputs(components.pop("coaddInputs", None))
+        info.setMetadata(components.pop("metadata", None))
 
         # If we have some components left over that is a problem
         if components:
@@ -225,8 +226,3 @@ class ExposureAssembler(CompositeAssembler):
                              " {}".format(list(components.keys())))
 
         return exposure
-
-
-class ExposureAssemblerMonolithic(ExposureAssembler):
-    """Exposure assembler with disassembly disabled."""
-    disassemble = None

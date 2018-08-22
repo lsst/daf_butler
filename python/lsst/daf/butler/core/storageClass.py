@@ -26,7 +26,7 @@ import itertools
 import logging
 
 from .utils import doImport, Singleton, getFullTypeName
-from .composites import CompositeAssembler
+from .assembler import CompositeAssembler
 from .config import ConfigSubset
 
 log = logging.getLogger(__name__)
@@ -172,11 +172,10 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self):
-        components = list(self.components.keys() if self.components else "[]")
         return "{}({}, pytype={}, components={})".format(type(self).__qualname__,
                                                          self.name,
                                                          self.pytype,
-                                                         components)
+                                                         list(self.components.keys()))
 
 
 class StorageClassFactory(metaclass=Singleton):

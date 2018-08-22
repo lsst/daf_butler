@@ -1274,13 +1274,6 @@ schema:
           The ID of the Quantum that produced this Dataset, providing access
           to fine-grained provenance information.
           May be null for Datasets not produced by running a SuperTask.
-      -
-        name: assembler
-        type: string
-        doc: >
-          Fully-qualified name of an importable Assembler object that can be
-          used to construct this Dataset from its components.  Null for
-          datasets that are not virtual composites.
 
       foreignKeys:
       -

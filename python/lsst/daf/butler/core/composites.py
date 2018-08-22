@@ -21,291 +21,93 @@
 
 """Support for reading and writing composite objects."""
 
-import collections
+__all__ = ("CompositesConfig", "CompositesMap")
+
+import logging
+
+from .config import ConfigSubset
+from .datasets import DatasetType
+from .storageClass import StorageClass
+
+log = logging.getLogger(__name__)
 
 
-class DatasetComponent:
+class CompositesConfig(ConfigSubset):
+    component = "composites"
+    requiredKeys = ("default", "storageClasses")
+    defaultConfigFile = "composites.yaml"
 
-    """Component of a dataset and associated information.
+    def validate(self):
+        """Validate entries have the correct type."""
+        super().validate()
+        for n in ("storageClasses", "datasetTypes"):
+            for k in self[n]:
+                key = f"{n}.{k}"
+                if not isinstance(self[key], bool):
+                    raise ValueError(f"CompositesConfig: Key {key} is not a Boolean")
+
+
+class CompositesMap:
+    """Determine whether a specific datasetType or StorageClass should be
+    disassembled.
 
     Parameters
     ----------
-    name : `str`
-        Name of the component.
-    storageClass : `StorageClass`
-        StorageClass to be used when reading or writing this component.
-    component : `object`
-        Component extracted from the composite object.
-
+    config : `str`, `ButlerConfig`, or `CompositesConfig`
+        Configuration to control composites disassembly.
     """
 
-    def __init__(self, name, storageClass, component):
-        self.name = name
-        self.storageClass = storageClass
-        self.component = component
+    def __init__(self, config):
+        if not isinstance(config, type(self)):
+            config = CompositesConfig(config)
+        assert isinstance(config, CompositesConfig)
+        self.config = config
 
-
-class CompositeAssembler:
-    """Class for providing assembler and disassembler support for composites.
-
-    Attributes
-    ----------
-    storageClass : `StorageClass`
-
-    Parameters
-    ----------
-    storageClass : `StorageClass`
-        `StorageClass` to be used with this assembler.
-    """
-
-    def __init__(self, storageClass):
-        self.storageClass = storageClass
-
-    @staticmethod
-    def _attrNames(componentName, getter=True):
-        """Return list of suitable attribute names to attempt to use.
+    def doDisassembly(self, entity):
+        """Given some choices, indicate whether the entity should be
+        disassembled.
 
         Parameters
         ----------
-        componentName : `str`
-            Name of component/attribute to look for.
-        getter : `bool`
-            If true, return getters, else return setters.
+        entity : `StorageClass` or `DatasetType`
+            Thing to test against the configuration. The ``name`` property
+            is used to determine a match.  A `DatasetType` will first check
+            its name, before checking its `StorageClass`.  If there are no
+            matches the default will be returned. If the associated
+            `StorageClass` is not a composite, will always return `False`.
 
         Returns
         -------
-        attrs : `tuple(str)`
-            Tuple of strings to attempt.
-            """
-        root = "get" if getter else "set"
-
-        # Capitalized name for getXxx must only capitalize first letter and not
-        # downcase the rest. getVisitInfo and not getVisitinfo
-        first = componentName[0].upper()
-        if len(componentName) > 1:
-            tail = componentName[1:]
+        disassemble : `bool`
+            Returns `True` if disassembly should occur; `False` otherwise.
+        """
+        components = None
+        datasetTypeName = None
+        storageClassName = None
+        if isinstance(entity, DatasetType):
+            datasetTypeName = entity.name
+            storageClassName = entity.storageClass.name
+            components = entity.storageClass.components
+        elif isinstance(entity, StorageClass):
+            storageClassName = entity.name
+            components = entity.components
         else:
-            tail = ""
-        capitalized = "{}{}{}".format(root, first, tail)
-        return (componentName, "{}_{}".format(root, componentName), capitalized)
+            raise ValueError(f"Unexpected argument: {entity:!r}")
 
-    def assemble(self, components, pytype=None):
-        """Construct an object from components based on storageClass.
+        # We know for a fact this is not a composite
+        if not components:
+            log.debug("%s will not be disassembled (not a composite)", entity)
+            return False
 
-        This generic implementation assumes that instances of objects
-        can be created either by passing all the components to a constructor
-        or by calling setter methods with the name.
+        matchName = "{} (via default)".format(entity)
+        disassemble = self.config["default"]
 
-        Parameters
-        ----------
-        components : `dict`
-            Collection of components from which to assemble a new composite
-            object. Keys correspond to composite names in the `StorageClass`.
-        pytype : `type`, optional
-            Override the type from the :attr:`CompositeAssembler.storageClass`
-            to use when assembling the final object.
+        if datasetTypeName is not None and datasetTypeName in self.config["datasetTypes"]:
+            disassemble = self.config[f"datasetTypes.{datasetTypeName}"]
+            matchName = datasetTypeName
+        elif storageClassName is not None and storageClassName in self.config["storageClasses"]:
+            disassemble = self.config[f"storageClasses.{storageClassName}"]
+            matchName = storageClassName
 
-        Returns
-        -------
-        composite : `object`
-            New composite object assembled from components.
-
-        Raises
-        ------
-        ValueError
-            Some components could not be used to create the object or,
-            alternatively, some components were not defined in the associated
-            StorageClass.
-        """
-        if pytype is not None:
-            cls = pytype
-        else:
-            cls = self.storageClass.pytype
-
-        # Check that the storage class components are consistent
-        understood = set(self.storageClass.components)
-        requested = set(components.keys())
-        unknown = requested - understood
-        if unknown:
-            raise ValueError("Requested component(s) not known to StorageClass: {}".format(unknown))
-
-        # First try to create an instance directly using keyword args
-        try:
-            obj = cls(**components)
-        except TypeError:
-            obj = None
-
-        # Now try to use setters if direct instantiation didn't work
-        if not obj:
-            obj = cls()
-
-            failed = []
-            for name, component in components.items():
-                if component is None:
-                    continue
-                for attr in self._attrNames(name, getter=False):
-                    if hasattr(obj, attr):
-                        if attr == name:  # Real attribute
-                            setattr(obj, attr, component)
-                        else:
-                            setter = getattr(obj, attr)
-                            setter(component)
-                        break
-                    else:
-                        failed.append(name)
-
-            if failed:
-                raise ValueError("Unhandled components during assembly ({})".format(failed))
-
-        return obj
-
-    def getValidComponents(self, composite):
-        """Extract all non-None components from a composite.
-
-        Parameters
-        ----------
-        composite : `object`
-            Composite from which to extract components.
-
-        Returns
-        -------
-        comps : `dict`
-            Non-None components extracted from the composite, indexed by the
-            component name as derived from the
-            `CompositeAssembler.storageClass`.
-        """
-        components = {}
-        if self.storageClass is not None and self.storageClass.components:
-            for c in self.storageClass.components:
-                if isinstance(composite, collections.Mapping):
-                    comp = composite[c]
-                else:
-                    try:
-                        comp = self.getComponent(composite, c)
-                    except AttributeError:
-                        pass
-                    else:
-                        if comp is not None:
-                            components[c] = comp
-        return components
-
-    def getComponent(self, composite, componentName):
-        """Attempt to retrieve component from composite object by heuristic.
-
-        Will attempt a direct attribute retrieval, or else getter methods of
-        the form "get_componentName" and "getComponentName".
-
-        Parameters
-        ----------
-        composite : `object`
-            Item to query for the component.
-        componentName : `str`
-            Name of component to retrieve.
-
-        Returns
-        -------
-        component : `object`
-            Component extracted from composite.
-
-        Raises
-        ------
-        AttributeError
-            The attribute could not be read from the composite.
-        """
-        component = None
-
-        if hasattr(composite, "__contains__") and componentName in composite:
-            component = composite[componentName]
-            return component
-
-        for attr in self._attrNames(componentName, getter=True):
-            if hasattr(composite, attr):
-                component = getattr(composite, attr)
-                if attr != componentName:  # We have a method
-                    component = component()
-                break
-        else:
-            raise AttributeError("Unable to get component {}".format(componentName))
-        return component
-
-    def disassemble(self, composite, subset=None, override=None):
-        """Generic implementation of a disassembler.
-
-        This implementation attempts to extract components from the parent
-        by looking for attributes of the same name or getter methods derived
-        from the component name.
-
-        Parameters
-        ----------
-        composite : `object`
-            Parent composite object consisting of components to be extracted.
-        subset : iterable, optional
-            Iterable containing subset of components to extract from composite.
-            Must be a subset of those defined in
-            `CompositeAssembler.storageClass`.
-        override : `object`, optional
-            Object to use for disassembly instead of parent. This can be useful
-            when called from subclasses that have composites in a hierarchy.
-
-        Returns
-        -------
-        components : `dict`
-            `dict` with keys matching the components defined in
-            `CompositeAssembler.storageClass`
-            and values being `DatasetComponent` instances describing the
-            component. Returns None if this is not a composite
-            `CompositeAssembler.storageClass`.
-
-        Raises
-        ------
-        ValueError
-            A requested component can not be found in the parent using generic
-            lookups.
-        TypeError
-            The parent object does not match the supplied
-            `CompositeAssembler.storageClass`.
-        """
-        if self.storageClass.components is None:
-            return
-
-        if not self.storageClass.validateInstance(composite):
-            raise TypeError("Unexpected type mismatch between parent and StorageClass"
-                            " ({} != {})".format(type(composite), self.storageClass.pytype))
-
-        requested = set(self.storageClass.components)
-
-        if subset is not None:
-            subset = set(subset)
-            diff = subset - requested
-            if diff:
-                raise ValueError("Requested subset is not a subset of supported components: {}".format(diff))
-            requested = subset
-
-        if override is not None:
-            composite = override
-
-        components = {}
-        for c in list(requested):
-            # Try three different ways to get a value associated with the
-            # component name.
-            try:
-                component = self.getComponent(composite, c)
-            except AttributeError:
-                # Defer complaining so we get an idea of how many problems we have
-                pass
-            else:
-                # If we found a match store it in the results dict and remove
-                # it from the list of components we are still looking for.
-                if component is not None:
-                    components[c] = DatasetComponent(c, self.storageClass.components[c], component)
-                requested.remove(c)
-
-        if requested:
-            raise ValueError("Unhandled components during disassembly ({})".format(requested))
-
-        return components
-
-
-class CompositeAssemblerMonolithic(CompositeAssembler):
-    """Generic assembler class that disables disassembly."""
-    disassemble = None
+        log.debug("%s will%s be disassembled", matchName, "" if disassemble else " not")
+        return disassemble
