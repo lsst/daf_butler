@@ -98,9 +98,15 @@ class FileTemplate:
     -----
     The templates use the standard Format Specification Mini-Language
     with the caveat that only named fields can be used. The field names
-    are taken from the DataUnits along with two additional fields:
-    "datasetType" will be replaced with the DatasetType and "component"
-    will be replaced with the component name of a composite.
+    are taken from the DataUnits along with several additional fields:
+
+     - datasetType: `str`, `DatasetType.name`
+     - component: `str`, name of the StorageClass component
+     - collection: `str`, `Run.collection`
+     - run: `int`, `Run.id`
+
+    At least one or both of `run` or `collection` must be provided to ensure
+    unique filenames.
 
     The mini-language is extended to understand a "?" in the format
     specification. This indicates that a field is optional. If that
@@ -142,6 +148,10 @@ class FileTemplate:
         if component is not None:
             fields["component"] = component
 
+        usedRunOrCollection = False
+        fields["collection"] = ref.run.collection
+        fields["run"] = ref.run.id
+
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
         output = ""
@@ -161,6 +171,9 @@ class FileTemplate:
                 format_spec = format_spec.replace("?", "")
             else:
                 optional = False
+
+            if field_name in ("run", "collection"):
+                usedRunOrCollection = True
 
             if field_name in fields:
                 value = fields[field_name]
@@ -182,6 +195,10 @@ class FileTemplate:
         if component is not None and not usedComponent:
             raise KeyError("Component '{}' specified but template {} did not use it".format(component,
                                                                                             self.template))
+
+        # Complain if there's no run or collection
+        if not usedRunOrCollection:
+            raise KeyError("Template does not include 'run' or 'collection'.")
 
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in

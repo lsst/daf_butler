@@ -4,10 +4,10 @@ datastore:
   records:
     table: PosixDatastoreRecords2
   templates:
-    default: "{datasetType}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
-    calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
-    metric: "{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
-    test_metric_comp: "{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{camera}_{component:?}"
+    default: "{run:02d}/{datasetType}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
+    calexp: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
+    metric: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
+    test_metric_comp: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{camera}_{component:?}"
   formatters:
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
