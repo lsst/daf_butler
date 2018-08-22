@@ -261,7 +261,7 @@ class Butler:
 
         return ref
 
-    def getDirect(self, ref):
+    def getDirect(self, ref, parameters=None):
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -272,6 +272,9 @@ class Butler:
         ----------
         ref : `DatasetRef`
             Reference to an already stored dataset.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
 
         Returns
         -------
@@ -280,12 +283,19 @@ class Butler:
         """
         # if the ref exists in the store we return it directly
         if self.datastore.exists(ref):
-            return self.datastore.get(ref)
+            return self.datastore.get(ref, parameters=parameters)
         elif ref.components:
             # Reconstruct the composite
             components = {}
             for compName, compRef in ref.components.items():
-                components[compName] = self.datastore.get(compRef)
+                if parameters is None:
+                    compParams = None
+                else:
+                    # make a dictionary of parameters containing only the subset
+                    # supported by the StorageClass of the components
+                    compParams = {k: v for k, v in parameters.items()
+                                  if k in compRef.datasetType.storageClass.components}
+                components[compName] = self.datastore.get(compRef, parameters=compParams)
 
             # Assemble the components
             return ref.datasetType.storageClass.assembler().assemble(components)
@@ -293,7 +303,7 @@ class Butler:
             # single entity in datastore
             raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
 
-    def get(self, datasetRefOrType, dataId=None):
+    def get(self, datasetRefOrType, dataId=None, parameters=None):
         """Retrieve a stored dataset.
 
         Parameters
@@ -306,6 +316,9 @@ class Butler:
             within a Collection.
             When `None` a `DatasetRef` should be supplied as the second
             argument.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
 
         Returns
         -------
@@ -329,7 +342,7 @@ class Butler:
                               datasetType.name, dataId, self.collection))
         if idNumber is not None and idNumber != ref.id:
             raise ValueError("DatasetRef.id does not match id in registry")
-        return self.getDirect(ref)
+        return self.getDirect(ref, parameters=parameters)
 
     def getUri(self, datasetType, dataId, predict=False):
         """Return the URI to the Dataset.
