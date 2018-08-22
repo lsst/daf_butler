@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-from lsst.daf.butler import DatasetType, DatasetRef
+from lsst.daf.butler import DatasetType, DatasetRef, Run
 
 
 class FitsCatalogDatasetsHelper:
@@ -63,13 +63,15 @@ class FitsCatalogDatasetsHelper:
 class DatasetTestHelper:
     """Helper methods for Datasets"""
 
-    def makeDatasetRef(self, datasetTypeName, dataUnits, storageClass, dataId, id=None):
+    def makeDatasetRef(self, datasetTypeName, dataUnits, storageClass, dataId, id=None, run=None):
         """Make a DatasetType and wrap it in a DatasetRef for a test"""
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         if id is None:
             self.id += 1
             id = self.id
-        return DatasetRef(datasetType, dataId, id=id)
+        if run is None:
+            run = Run(id=1, collection="dummy")
+        return DatasetRef(datasetType, dataId, id=id, run=run)
 
 
 class DatastoreTestHelper:

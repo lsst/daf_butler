@@ -167,11 +167,12 @@ class DatasetRef:
         Normally set to `None` and assigned by `Registry`
     """
 
-    __slots__ = ("_id", "_datasetType", "_dataId", "_producer",
+    __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run",
                  "_predictedConsumers", "_actualConsumers", "_components")
+
     __eq__ = slotValuesAreEqual
 
-    def __init__(self, datasetType, dataId, id=None):
+    def __init__(self, datasetType, dataId, id=None, run=None):
         assert isinstance(datasetType, DatasetType)
         self._id = id
         self._datasetType = datasetType
@@ -180,6 +181,7 @@ class DatasetRef:
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
         self._components = dict()
+        self._run = run
 
     @property
     def id(self):
@@ -213,6 +215,15 @@ class DatasetRef:
         May be `None` if no provenance information is available.
         """
         return self._producer
+
+    @property
+    def run(self):
+        """The `Run` instance that produced (or will produce) the
+        Dataset.
+
+        Read-only; update via `Registry.addDataset()` or `Butler.put()`.
+        """
+        return self._run
 
     @property
     def predictedConsumers(self):

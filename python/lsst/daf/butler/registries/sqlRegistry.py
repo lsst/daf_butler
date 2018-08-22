@@ -392,7 +392,8 @@ class SqlRegistry(Registry):
                                                                        run_id=run.id,
                                                                        quantum_id=None,
                                                                        **dataId))
-        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0])
+        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0],
+                                run=run)
         # A dataset is always associated with its Run collection
         self.associate(run.collection, [datasetRef, ])
         return datasetRef
@@ -417,6 +418,7 @@ class SqlRegistry(Registry):
                 select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
         if result is not None:
             datasetType = self.getDatasetType(result["dataset_type_name"])
+            run = self.getRun(id=result.run_id)
             # dataUnitName gives a `str` key which which is used to lookup
             # the corresponding sqlalchemy.core.Column entry to index the result
             # because the name of the key may not be the name of the name of the
@@ -434,7 +436,7 @@ class SqlRegistry(Registry):
             if results is not None:
                 for result in results:
                     components[result["component_name"]] = self.getDataset(result["component_dataset_id"])
-            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id)
+            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id, run=run)
             ref._components = components
             return ref
         else:
