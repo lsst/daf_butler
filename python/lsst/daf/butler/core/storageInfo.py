@@ -37,34 +37,17 @@ class StorageInfo:
         Size of stored object in bytes.
     """
     __eq__ = slotValuesAreEqual
-    __slots__ = ("_datastoreName", "_checksum", "_size")
+    __slots__ = ("_datastoreName",)
 
     def __str__(self):
-        return "StorageInfo(checksum={}, size={}, datastoreName={})".format(self.checksum, self.size,
-                                                                            self.datastoreName)
+        return "StorageInfo(datastoreName={})".format(self.datastoreName)
 
-    def __init__(self, datastoreName, checksum=None, size=None):
+    def __init__(self, datastoreName):
         assert isinstance(datastoreName, str)
         self._datastoreName = datastoreName
-        assert checksum is None or isinstance(checksum, str)
-        self._checksum = checksum
-        assert size is None or isinstance(size, int)
-        self._size = size
 
     @property
     def datastoreName(self):
         """Name of datastore (`str`).
         """
         return self._datastoreName
-
-    @property
-    def checksum(self):
-        """Checksum (`str`).
-        """
-        return self._checksum
-
-    @property
-    def size(self):
-        """Size of stored object in bytes (`int`).
-        """
-        return self._size

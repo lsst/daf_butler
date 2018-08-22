@@ -37,22 +37,14 @@ class StorageInfoTestCase(lsst.utils.tests.TestCase):
         """Test of constructor.
         """
         datastoreName = "dummy"
-        checksum = "d6fb1c0c8f338044b2faaf328f91f707"
-        size = 512
-        storageInfo = StorageInfo(datastoreName, checksum, size)
+        storageInfo = StorageInfo(datastoreName)
         self.assertEqual(storageInfo.datastoreName, datastoreName)
-        self.assertEqual(storageInfo.checksum, checksum)
-        self.assertEqual(storageInfo.size, size)
 
     def testEquality(self):
-        self.assertEqual(StorageInfo("a", "d6fb1c0c8f338044b2faaf328f91f707", 2),
-                         StorageInfo("a", "d6fb1c0c8f338044b2faaf328f91f707", 2))
-        self.assertNotEqual(StorageInfo("a", "d6fb1c0c8f338044b2faaf328f91f707", 2),
-                            StorageInfo("b", "d6fb1c0c8f338044b2faaf328f91f707", 2))
-        self.assertNotEqual(StorageInfo("a", "d6fb1c0c8f338044b2faaf328f91f707", 2),
-                            StorageInfo("a", "20a38163c50f4aa3aa0f4047674f8ca7", 2))
-        self.assertNotEqual(StorageInfo("a", "d6fb1c0c8f338044b2faaf328f91f707", 2),
-                            StorageInfo("a", "d6fb1c0c8f338044b2faaf328f91f707", 3))
+        self.assertEqual(StorageInfo("a"),
+                         StorageInfo("a",))
+        self.assertNotEqual(StorageInfo("a"),
+                            StorageInfo("b"))
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

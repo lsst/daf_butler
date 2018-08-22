@@ -398,24 +398,6 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @transactional
-    def updateStorageInfo(self, ref, datastoreName, storageInfo):
-        """Update storage information for a given dataset.
-
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to add storage information.
-        datastoreName : `str`
-            What datastore association to update.
-        storageInfo : `StorageInfo`
-            Storage information about the dataset.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
     def getStorageInfo(self, ref, datastoreName):
         """Retrieve storage information for a given dataset.
 

@@ -528,33 +528,8 @@ class SqlRegistry(Registry):
         """
         datasetStorageTable = self._schema.tables["DatasetStorage"]
         values = dict(dataset_id=ref.id,
-                      datastore_name=storageInfo.datastoreName,
-                      checksum=storageInfo.checksum,
-                      size=storageInfo.size)
+                      datastore_name=storageInfo.datastoreName)
         self._connection.execute(datasetStorageTable.insert().values(**values))
-
-    @transactional
-    def updateStorageInfo(self, ref, datastoreName, storageInfo):
-        """Update storage information for a given dataset.
-
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to add storage information.
-        datastoreName : `str`
-            What datastore association to update.
-        storageInfo : `StorageInfo`
-            Storage information about the dataset.
-        """
-        datasetStorageTable = self._schema.tables["DatasetStorage"]
-        self._connection.execute(datasetStorageTable.update().where(and_(
-            datasetStorageTable.c.dataset_id == ref.id,
-            datasetStorageTable.c.datastore_name == datastoreName)).values(
-                datastore_name=storageInfo.datastoreName,
-                checksum=storageInfo.checksum,
-                size=storageInfo.size))
 
     def getStorageInfo(self, ref, datastoreName):
         """Retrieve storage information for a given dataset.
@@ -581,19 +556,15 @@ class SqlRegistry(Registry):
         datasetStorageTable = self._schema.tables["DatasetStorage"]
         storageInfo = None
         result = self._connection.execute(
-            select([datasetStorageTable.c.datastore_name,
-                    datasetStorageTable.c.checksum,
-                    datasetStorageTable.c.size]).where(
-                        and_(datasetStorageTable.c.dataset_id == ref.id,
-                             datasetStorageTable.c.datastore_name == datastoreName))).fetchone()
+            select([datasetStorageTable.c.datastore_name]).where(
+                and_(datasetStorageTable.c.dataset_id == ref.id,
+                     datasetStorageTable.c.datastore_name == datastoreName))).fetchone()
 
         if result is None:
             raise KeyError("Unable to retrieve information associated with "
                            "Dataset {} in datastore {}".format(ref.id, datastoreName))
 
-        storageInfo = StorageInfo(datastoreName=result["datastore_name"],
-                                  checksum=result["checksum"],
-                                  size=result["size"])
+        storageInfo = StorageInfo(datastoreName=result["datastore_name"])
         return storageInfo
 
     @transactional

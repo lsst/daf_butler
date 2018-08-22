@@ -86,7 +86,8 @@ class PosixDatastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path", "storage_class"])
+    RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path", "storage_class",
+                                                      "checksum", "size"])
 
     @classmethod
     def setConfigRoot(cls, root, config, full):
@@ -138,7 +139,8 @@ class PosixDatastore(Datastore):
         self.name = "POSIXDatastore@{}".format(self.root)
 
         # Storage of paths and formatters, keyed by dataset_id
-        types = {"path": str, "formatter": str, "storage_class": str, "dataset_id": int}
+        types = {"path": str, "formatter": str, "storage_class": str,
+                 "size": int, "checksum": str, "dataset_id": int}
         self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
                                                value=self.RecordTuple, key="dataset_id",
                                                registry=registry)
@@ -147,7 +149,8 @@ class PosixDatastore(Datastore):
         return self.root
 
     def addStoredFileInfo(self, ref, info):
-        """Record formatter information associated with this `DatasetRef`
+        """Record internal storage information associated with this
+        `DatasetRef`
 
         Parameters
         ----------
@@ -157,7 +160,8 @@ class PosixDatastore(Datastore):
             Metadata associated with the stored Dataset.
         """
         self.records[ref.id] = self.RecordTuple(formatter=info.formatter, path=info.path,
-                                                storage_class=info.storageClass.name)
+                                                storage_class=info.storageClass.name,
+                                                checksum=info.checksum, size=info.size)
 
     def removeStoredFileInfo(self, ref):
         """Remove information about the file associated with this dataset.
@@ -181,8 +185,7 @@ class PosixDatastore(Datastore):
         Returns
         -------
         info : `StoredFileInfo`
-            Stored information about the internal location of this file
-            and its formatter.
+            Stored information about this file and its formatter.
 
         Raises
         ------
@@ -194,7 +197,8 @@ class PosixDatastore(Datastore):
             raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
-        return StoredFileInfo(record.formatter, record.path, storageClass)
+        return StoredFileInfo(record.formatter, record.path, storageClass,
+                              checksum=record.checksum, size=record.size)
 
     def exists(self, ref):
         """Check if the dataset exists in the datastore.
@@ -247,7 +251,6 @@ class PosixDatastore(Datastore):
 
         # Get file metadata and internal metadata
         try:
-            storageInfo = self.registry.getStorageInfo(ref, self.name)
             storedFileInfo = self.getStoredFileInfo(ref)
         except KeyError:
             raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
@@ -262,9 +265,9 @@ class PosixDatastore(Datastore):
                                     " expected location of {}".format(ref.id, location.path))
         stat = os.stat(location.path)
         size = stat.st_size
-        if size != storageInfo.size:
+        if size != storedFileInfo.size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
-                               " match recorded size of {}".format(location.path, size, storageInfo.size))
+                               " match recorded size of {}".format(location.path, size, storedFileInfo.size))
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites.
@@ -434,11 +437,12 @@ class PosixDatastore(Datastore):
         checksum = self.computeChecksum(fullPath)
         stat = os.stat(fullPath)
         size = stat.st_size
-        info = StorageInfo(self.name, checksum, size)
+        info = StorageInfo(self.name)
         self.registry.addStorageInfo(ref, info)
 
         # Associate this dataset with the formatter for later read.
-        fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass)
+        fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass,
+                                  size=size, checksum=checksum)
         # TODO: this is only transactional if the DatabaseDict uses
         #       self.registry internally.  Probably need to add
         #       transactions to DatabaseDict to do better than that.

@@ -47,9 +47,9 @@ class StoredFileInfo:
     """
 
     __eq__ = slotValuesAreEqual
-    __slots__ = ("_formatter", "_path", "_storageClass")
+    __slots__ = ("_formatter", "_path", "_storageClass", "_checksum", "_size")
 
-    def __init__(self, formatter, path, storageClass):
+    def __init__(self, formatter, path, storageClass, checksum=None, size=None):
         assert isinstance(formatter, str) or isinstance(formatter, Formatter)
         if isinstance(formatter, Formatter):
             formatter = formatter.name()
@@ -58,6 +58,10 @@ class StoredFileInfo:
         self._path = path
         assert isinstance(storageClass, StorageClass)
         self._storageClass = storageClass
+        assert checksum is None or isinstance(checksum, str)
+        self._checksum = checksum
+        assert size is None or isinstance(size, int)
+        self._size = size
 
     @property
     def formatter(self):
@@ -76,3 +80,19 @@ class StoredFileInfo:
         """StorageClass used (`StorageClass`).
         """
         return self._storageClass
+
+    @property
+    def checksum(self):
+        """Checksum (`str`).
+        """
+        return self._checksum
+
+    @property
+    def size(self):
+        """Size of stored object in bytes (`int`).
+        """
+        return self._size
+
+    def __repr__(self):
+        return f"{type(self).__qualname__}(path=\"{self.path}\", formatter=\"{self.formatter}\"" \
+            f" size={self.size}, checksum=\"{self.checksum}\", storageClass=\"{self.storageClass.name}\")"

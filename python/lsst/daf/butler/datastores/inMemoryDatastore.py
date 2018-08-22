@@ -316,9 +316,7 @@ class InMemoryDatastore(Datastore):
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
         # TODO: Add to ephemeral part of registry
-        checksum = str(id(inMemoryDataset))
-        size = 0
-        info = StorageInfo(self.name, checksum, size)
+        info = StorageInfo(self.name)
         self.registry.addStorageInfo(ref, info)
 
         # Store time we received this content, to allow us to optionally

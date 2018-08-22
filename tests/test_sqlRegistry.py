@@ -208,19 +208,11 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         datastoreName = "dummystore"
-        checksum = "d6fb1c0c8f338044b2faaf328f91f707"
-        size = 512
-        storageInfo = StorageInfo(datastoreName, checksum, size)
+        storageInfo = StorageInfo(datastoreName)
         # Test adding information about a new dataset
         registry.addStorageInfo(ref, storageInfo)
         outStorageInfo = registry.getStorageInfo(ref, datastoreName)
         self.assertEqual(outStorageInfo, storageInfo)
-        # Test updating storage information for an existing dataset
-        updatedStorageInfo = StorageInfo(datastoreName, "20a38163c50f4aa3aa0f4047674f8ca7", size+1)
-        registry.updateStorageInfo(ref, datastoreName, updatedStorageInfo)
-        outStorageInfo = registry.getStorageInfo(ref, datastoreName)
-        self.assertNotEqual(outStorageInfo, storageInfo)
-        self.assertEqual(outStorageInfo, updatedStorageInfo)
 
     def testFind(self):
         registry = Registry.fromConfig(self.butlerConfig, create=True)
