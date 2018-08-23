@@ -35,7 +35,6 @@ from lsst.daf.butler.core.location import LocationFactory
 from lsst.daf.butler.core.fileDescriptor import FileDescriptor
 from lsst.daf.butler.core.formatter import FormatterFactory
 from lsst.daf.butler.core.fileTemplates import FileTemplates
-from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
 from lsst.daf.butler.core.utils import getInstanceOf, transactional
 from lsst.daf.butler.core.storageClass import StorageClassFactory
@@ -437,8 +436,7 @@ class PosixDatastore(Datastore):
         checksum = self.computeChecksum(fullPath)
         stat = os.stat(fullPath)
         size = stat.st_size
-        info = StorageInfo(self.name)
-        self.registry.addStorageInfo(ref, info)
+        self.registry.addDatasetLocation(ref, self.name)
 
         # Associate this dataset with the formatter for later read.
         fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass,
@@ -450,7 +448,7 @@ class PosixDatastore(Datastore):
 
         # Register all components with same information
         for compRef in ref.components.values():
-            self.registry.addStorageInfo(compRef, info)
+            self.registry.addDatasetLocation(compRef, self.name)
             self.addStoredFileInfo(compRef, fileInfo)
 
     def getUri(self, ref, predict=False):
@@ -535,9 +533,9 @@ class PosixDatastore(Datastore):
 
         # Remove rows from registries
         self.removeStoredFileInfo(ref)
-        self.registry.removeStorageInfo(self.name, ref)
+        self.registry.removeDatasetLocation(self.name, ref)
         for compRef in ref.components.values():
-            self.registry.removeStorageInfo(self.name, compRef)
+            self.registry.removeDatasetLocation(self.name, compRef)
             self.removeStoredFileInfo(compRef)
 
     def transfer(self, inputDatastore, ref):

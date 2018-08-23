@@ -26,7 +26,6 @@ import logging
 
 from lsst.daf.butler.core.datastore import Datastore
 from lsst.daf.butler.core.storageClass import StorageClassFactory
-from lsst.daf.butler.core.storageInfo import StorageInfo
 
 log = logging.getLogger(__name__)
 
@@ -316,8 +315,7 @@ class InMemoryDatastore(Datastore):
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
         # TODO: Add to ephemeral part of registry
-        info = StorageInfo(self.name)
-        self.registry.addStorageInfo(ref, info)
+        self.registry.addDatasetLocation(ref, self.name)
 
         # Store time we received this content, to allow us to optionally
         # expire it. Instead of storing a filename here, we include the
@@ -327,7 +325,7 @@ class InMemoryDatastore(Datastore):
 
         # Register all components with same information
         for compRef in ref.components.values():
-            self.registry.addStorageInfo(compRef, info)
+            self.registry.addDatasetLocation(compRef, self.name)
             self.addStoredItemInfo(compRef, itemInfo)
 
         if self._transaction is not None:
@@ -395,9 +393,9 @@ class InMemoryDatastore(Datastore):
 
         # Remove rows from registries
         self.removeStoredItemInfo(ref)
-        self.registry.removeStorageInfo(self.name, ref)
+        self.registry.removeDatasetLocation(self.name, ref)
         for compRef in ref.components.values():
-            self.registry.removeStorageInfo(self.name, compRef)
+            self.registry.removeDatasetLocation(self.name, compRef)
             self.removeStoredItemInfo(compRef)
 
     def transfer(self, inputDatastore, ref):

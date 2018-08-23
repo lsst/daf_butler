@@ -94,5 +94,5 @@ class StoredFileInfo:
         return self._size
 
     def __repr__(self):
-        return f"{type(self).__qualname__}(path=\"{self.path}\", formatter=\"{self.formatter}\"" \
-            f" size={self.size}, checksum=\"{self.checksum}\", storageClass=\"{self.storageClass.name}\")"
+        return f'{type(self).__qualname__}(path="{self.path}", formatter="{self.formatter}"' \
+            f' size={self.size}, checksum="{self.checksum}", storageClass="{self.storageClass.name}")'

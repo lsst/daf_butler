@@ -383,23 +383,8 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def addStorageInfo(self, ref, storageInfo):
-        """Add storage information for a given dataset.
-
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to add storage information.
-        storageInfo : `StorageInfo`
-            Storage information about the dataset.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def getStorageInfo(self, ref, datastoreName):
-        """Retrieve storage information for a given dataset.
+    def addDatasetLocation(self, ref, datastoreName):
+        """Add datastore name locating a given dataset.
 
         Typically used by `Datastore`.
 
@@ -408,24 +393,34 @@ class Registry(metaclass=ABCMeta):
         ref : `DatasetRef`
             A reference to the dataset for which to add storage information.
         datastoreName : `str`
-            What datastore association to update.
+            Name of the datastore holding this dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getDatasetLocations(self, ref):
+        """Retrieve datastore locations for a given dataset.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            A reference to the dataset for which to retrieve storage
+            information.
 
         Returns
         -------
-        info : `StorageInfo`
-            Storage information about the dataset.
-
-        Raises
-        ------
-        KeyError
-            The requested Dataset does not exist.
+        datastores : `set` of `str`
+            All the matching datastores holding this dataset. Empty set
+            if the dataset does not exist anywhere.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
     @transactional
-    def removeStorageInfo(self, datastoreName, ref):
-        """Remove storage information associated with this dataset.
+    def removeDatasetLocation(self, datastoreName, ref):
+        """Remove datastore location associated with this dataset.
 
         Typically used by `Datastore` when a dataset is removed.
 
