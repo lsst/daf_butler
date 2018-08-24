@@ -700,8 +700,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def selectDataUnits(self, inputCollections, outputCollection, expression,
-                        neededDatasetTypes, futureDatasetTypes):
+    def selectDataUnits(self, collections, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -711,13 +710,8 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        inputCollections : `list` of `str`
-            An ordered `list` of collections indicating the Collections to
-            search for input Datasets.
-        outputCollection : `str`
-            Name of collection for output Datasets. May be ``None`` or empty
-            if output collection does not exist yet or is guaranteed to be
-            empty.
+        collections : `PreFlightCollections`
+            Object which provides names of the input/output collections.
         expression : `str`
             An expression that limits the `DataUnits <DataUnit>` and
             (indirectly) the Datasets returned.

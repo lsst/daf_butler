@@ -24,10 +24,8 @@ import unittest
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.butlerConfig import ButlerConfig
-from lsst.daf.butler.core.datasets import DatasetType
-from lsst.daf.butler.core.registry import Registry
-from lsst.daf.butler.core.storageClass import StorageClass
+from lsst.daf.butler import (ButlerConfig, DatasetType, Registry,
+                             PreFlightCollectionsDef, StorageClass)
 from lsst.sphgeom import Angle, Box, LonLat, NormalizedAngle
 
 
@@ -42,6 +40,23 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
         self.preFlight = self.registry._preFlight
+
+    def testPreFlightCollectionsDef(self):
+        """Test for PreFlightCollectionsDef class"""
+
+        coll = PreFlightCollectionsDef(defaultInputs=["a", "b"], defaultOutput="out")
+        self.assertEquals(coll.getInputCollections("ds"), ["a", "b"])
+        self.assertEquals(coll.getInputCollections("ds2"), ["a", "b"])
+        self.assertEquals(coll.getOutputCollection("ds"), "out")
+        self.assertEquals(coll.getOutputCollection("ds2"), "out")
+
+        coll = PreFlightCollectionsDef(defaultInputs=["a", "b"], defaultOutput="out",
+                                       inputOverrides=dict(ds2=["c"]),
+                                       outputOverrides=dict(ds2="out2"))
+        self.assertEquals(coll.getInputCollections("ds"), ["a", "b"])
+        self.assertEquals(coll.getInputCollections("ds2"), ["c"])
+        self.assertEquals(coll.getOutputCollection("ds"), "out")
+        self.assertEquals(coll.getOutputCollection("ds2"), "out2")
 
     def testPreFlightCameraUnits(self):
         """Test involving only Camera units, no joins to SkyMap"""
@@ -105,8 +120,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                 registry.addDataset(rawType, dataId=dataId, run=run2)
 
         # with empty expression
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="test",
+        coll = PreFlightCollectionsDef(defaultInputs=["test"], defaultOutput="test")
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -121,8 +136,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3))
 
         # second collection
-        rows = self.preFlight.selectDataUnits(inputCollections=["test2"],
-                                              outputCollection="test",
+        coll = PreFlightCollectionsDef(defaultInputs=["test2"], defaultOutput="test")
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -137,8 +152,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        rows = self.preFlight.selectDataUnits(inputCollections=["test", "test2"],
-                                              outputCollection="test2",
+        coll = PreFlightCollectionsDef(defaultInputs=["test", "test2"], defaultOutput="test2")
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -153,8 +168,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        coll = PreFlightCollectionsDef(defaultInputs=["test"], defaultOutput=None)
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="Visit.visit = 10",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -165,8 +180,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3))
 
         # more limiting expression
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        coll = PreFlightCollectionsDef(defaultInputs=["test"], defaultOutput="")
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="Visit.visit = 10 and Sensor.sensor > 1",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -177,8 +192,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (2, 3))
 
         # expression excludes everyhting
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="Visit.visit > 1000",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -187,8 +201,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # Selecting by PhysicalFilter, this is not in the units, but it is
         # a part of the full expression so it should work too.
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="PhysicalFilter.physical_filter = 'dummy_r'",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -245,8 +258,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                     registry.addDataset(calexpType, dataId=dataId, run=run)
 
         # with empty expression
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        coll = PreFlightCollectionsDef(defaultInputs=["test"], defaultOutput="")
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
@@ -260,8 +273,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
@@ -272,8 +284,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to single filter
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="AbstractFilter.abstract_filter = 'i'",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
@@ -285,8 +296,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # expression excludes everyhting, specifying non-existing skymap is not a
         # fatal error, it's operator error
-        rows = self.preFlight.selectDataUnits(inputCollections=["test"],
-                                              outputCollection="",
+        rows = self.preFlight.selectDataUnits(collections=coll,
                                               expression="SkyMap.skymap = 'Mars'",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])

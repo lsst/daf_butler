@@ -19,7 +19,90 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("PreFlightUnitsRow",)
+__all__ = ("PreFlightCollectionsDef", "PreFlightUnitsRow")
+
+
+from abc import ABCMeta, abstractmethod
+
+
+class PreFlightCollections(metaclass=ABCMeta):
+    """Interface for classes providing collection information for pre-flight.
+
+    Pre-flight supports per-DatasetType collections, multiple collections
+    can be searched for input Datasets and there is one output collection
+    per Dataset. Typically one collection will be used for all inputs and
+    possibly separate single collection will be used for all outputs. Some
+    configurations may need more complex setup, and this interface
+    encapsulates all possible behaviors.
+    """
+
+    @abstractmethod
+    def getInputCollections(self, datasetTypeName):
+        """Return ordered list of input collections for given dataset type.
+
+        Returns
+        -------
+        collections : `list` of `str`
+            Names of input collections.
+        """
+        pass
+
+    @abstractmethod
+    def getOutputCollection(self, datasetTypeName):
+        """Return output collection name for given dataset type.
+
+        Returns
+        -------
+        collection : `str`
+            Name of output collection.
+        """
+        pass
+
+
+class PreFlightCollectionsDef(PreFlightCollections):
+    """Default implementation of the PreFlightCollections.
+
+    Parameters
+    ----------
+    defaultInputs : `list` of `str`
+        Default list of input collections, used for dataset types for which
+        there are no overrides.
+    defaultOutput : `str`
+        Default output collection, used for dataset types for which there is
+        no override.
+    inputOverrides : `dict` {`str`: `list` of `str`}, optional
+        Per-DatasetType overrides for input collections. The key is the name
+        of the DatasetType, the value is a list of input collection names.
+    outputOverrides : `dict` {`str`: `str`}, optional
+        Per-DatasetType overrides for output collections. The key is the name
+        of the DatasetType, the value is output collection name.
+    """
+    def __init__(self, defaultInputs, defaultOutput, inputOverrides=None,
+                 outputOverrides=None):
+        self.defaultInputs = defaultInputs
+        self.defaultOutput = defaultOutput
+        self.inputOverrides = inputOverrides or {}
+        self.outputOverrides = outputOverrides or {}
+
+    def getInputCollections(self, datasetTypeName):
+        """Return ordered list of input collections for given dataset type.
+
+        Returns
+        -------
+        collections : `list` of `str`
+            Names of input collections.
+        """
+        return self.inputOverrides.get(datasetTypeName, self.defaultInputs)
+
+    def getOutputCollection(self, datasetTypeName):
+        """Return output collection name for given dataset type.
+
+        Returns
+        -------
+        collection : `str`
+            Name of output collection.
+        """
+        return self.outputOverrides.get(datasetTypeName, self.defaultOutput)
 
 
 class PreFlightUnitsRow:

@@ -141,8 +141,7 @@ class SqlPreFlight:
         self._schema = schema
         self._connection = connection
 
-    def selectDataUnits(self, inputCollections, outputCollection, expression,
-                        neededDatasetTypes, futureDatasetTypes):
+    def selectDataUnits(self, collections, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -152,13 +151,8 @@ class SqlPreFlight:
 
         Parameters
         ----------
-        inputCollections : `list` of `str`
-            An ordered `list` of collections indicating the Collections to
-            search for input Datasets.
-        outputCollection : `str`
-            Name of collection for output Datasets. May be ``None`` or empty
-            if output collection does not exist yet or is guaranteed to be
-            empty.
+        collections : `PreFlightCollections`
+            Object which provides names of the input/output collections.
         expression : `str`
             An expression that limits the `DataUnits <DataUnit>` and
             (indirectly) the Datasets returned.
@@ -188,10 +182,12 @@ class SqlPreFlight:
         #      have their lhs/rhs links in the above DataUnits set, also
         #      ignore Joins which summarize other Joins
         #    - next join with Dataset for each input dataset type, this
-        #      limits resukt only to existing input dataset
+        #      limits result only to existing input dataset
+        #    - also do outer join with Dataset for each output dataset type
+        #      to see which output datasets are already there
         #    - append user filter expression
-        #    - query returns all DataUnit values and regions for
-        #      region-based Joins
+        #    - query returns all DataUnit values, regions for region-based
+        #      joins, and dataset IDs for all existing datasets
         #  - run this query
         #  - filter out records whose regions do not overlap
         #  - return result as iterator of records containing DataUnit values
@@ -224,7 +220,6 @@ class SqlPreFlight:
 
         # joins for all unit tables
         fromJoin = None
-        where = []
         for dataUnit in _unitsTopologicalSort(allDataUnits.values()):
             if dataUnit.table is None:
                 continue
@@ -291,8 +286,6 @@ class SqlPreFlight:
 
             fromJoin = _joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
 
-        _LOG.debug("units where: %s", [str(x) for x in where])
-
         # join with input datasets to restrict to existing inputs
         dsIdColumns = {}
         dsTable = self._schema._metadata.tables["Dataset"]
@@ -301,14 +294,7 @@ class SqlPreFlight:
                      [(dsType, "output") for dsType in futureDatasetTypes]
         for dsType, inoutType in allDsTypes:
 
-            _LOG.debug("joining %s dataset: %s", inoutType, dsType.name)
-
-            if inoutType == "output" and not outputCollection:
-                # No output collection means no output datasets exist, we do
-                # not need to do any joins here, just pass None as column
-                # index for this dataset type to the code below.
-                dsIdColumns[dsType] = None
-                continue
+            _LOG.debug("joining %s dataset type: %s", inoutType, dsType.name)
 
             # Build a sub-query and join with that subquery (regular join for
             # things that have to exists and LEFT OUTER join for things that
@@ -351,7 +337,7 @@ class SqlPreFlight:
             #    FROM Dataset JOIN DatasetCollection
             #        ON Dataset.dataset_id = DatasetCollection.dataset_id
             #    WHERE Dataset.dataset_type_name = <dsType.name>
-            #        AND DatasetCollection.collection IN (<inputCollections>)
+            #        AND DatasetCollection.collection IN (<collections>)
             #
             # Filtering is complicated, it is simpler to use CTE but not all
             # databases support CTE so we will have to do with the repeating
@@ -365,13 +351,13 @@ class SqlPreFlight:
             #         FROM Dataset JOIN DatasetCollection
             #            ON Dataset.dataset_id = DatasetCollection.dataset_id
             #         WHERE Dataset.dataset_type_name = <dsType.name>
-            #            AND DatasetCollection.collection IN (<inputCollections>)) DS
+            #            AND DatasetCollection.collection IN (<collections>)) DS
             #        INNER JOIN
             #        (SELECT MIN(CASE ... END AS) collorder, Dataset.link1 ...
             #         FROM Dataset JOIN DatasetCollection
             #             ON Dataset.dataset_id = DatasetCollection.dataset_id
             #         WHERE Dataset.dataset_type_name = <dsType.name>
-            #            AND DatasetCollection.collection IN (<inputCollections>)
+            #            AND DatasetCollection.collection IN (<collections>)
             #         GROUP BY Dataset.link1 ...) DSG
             #            ON DS.colpos = DSG.colpos AND DS.link1 = DSG.link1 ...
 
@@ -379,6 +365,22 @@ class SqlPreFlight:
             def _columns(selectable, names):
                 """Return list of columns for given column names"""
                 return [selectable.c[name].label(name) for name in names]
+
+            if inoutType == "output":
+
+                outputCollection = collections.getOutputCollection(dsType.name)
+                if not outputCollection:
+                    # No output collection means no output datasets exist, we do
+                    # not need to do any joins here, just pass None as column
+                    # index for this dataset type to the code below.
+                    dsIdColumns[dsType] = None
+                    continue
+
+                dsCollections = [outputCollection]
+            else:
+                dsCollections = collections.getInputCollections(dsType.name)
+
+            _LOG.debug("using collections: %s", dsCollections)
 
             # full set of link names for this DatasetType
             # TODO: this should be done in DatasetType method.
@@ -388,14 +390,12 @@ class SqlPreFlight:
                 links.update(dataUnit.link)
             links = list(links)
 
-            collections = [outputCollection] if inoutType == "output" else inputCollections
-
-            if len(collections) == 1:
+            if len(dsCollections) == 1:
 
                 # single collection, easy-peasy
                 subJoin = dsTable.join(dsCollTable, dsTable.c.dataset_id == dsCollTable.c.dataset_id)
                 subWhere = and_(dsTable.c.dataset_type_name == dsType.name,
-                                dsCollTable.c.collection == collections[0])
+                                dsCollTable.c.collection == dsCollections[0])
 
                 columns = _columns(dsTable, ["dataset_id"] + links)
                 subquery = select(columns).select_from(subJoin).where(subWhere)
@@ -407,11 +407,11 @@ class SqlPreFlight:
                 subJoin = dsTable.join(dsCollTable,
                                        dsTable.c.dataset_id == dsCollTable.c.dataset_id)
                 subWhere = and_(dsTable.c.dataset_type_name == dsType.name,
-                                dsCollTable.c.collection.in_(collections))
+                                dsCollTable.c.collection.in_(dsCollections))
 
                 # CASE caluse
                 collorder = case([
-                    (dsCollTable.c.collection == coll, pos) for pos, coll in enumerate(collections)
+                    (dsCollTable.c.collection == coll, pos) for pos, coll in enumerate(dsCollections)
                 ])
 
                 # first GROUP BY sub-query
@@ -448,15 +448,11 @@ class SqlPreFlight:
             dsIdColumns[dsType] = len(selectColumns)
             selectColumns.append(subquery.c.dataset_id)
 
-        _LOG.debug("datasets where: %s", [str(x) for x in where])
-
         # build full query
         q = select(selectColumns).select_from(fromJoin)
         if expression:
             # TODO: potentially transform query from user-friendly expression
-            where += [text(expression)]
-        if where:
-            where = and_(*where)
+            where = text(expression)
             _LOG.debug("full where: %s", where)
             q = q.where(where)
         _LOG.debug("full query: %s", q)
