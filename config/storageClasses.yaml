@@ -30,7 +30,7 @@ storageClasses:
   ImageU:
     inheritsFrom: Image
     pytype: lsst.afw.image.ImageU
-  DecoratedImage: &DecoratedImage
+  DecoratedImage:
     pytype: lsst.afw.image.DecoratedImage
   DecoratedImageU:
     inheritsFrom: DecoratedImage
@@ -54,7 +54,7 @@ storageClasses:
     pytype: lsst.daf.base.PropertyList
   PropertySet:
     pytype: lsst.daf.base.PropertySet
-  Exposure: &Exposure
+  Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
     components:
@@ -69,14 +69,14 @@ storageClasses:
       coaddInputs: TablePersistableCoaddInputs
       transmissionCurve: TablePersistableTransmissionCurve
       metadata: PropertyList
-  ExposureF: &ExposureF
+  ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
     components:
       image: ImageF
       mask: MaskX
       variance: ImageF
-  ExposureI: &ExposureI
+  ExposureI:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureI
     components:
