@@ -291,7 +291,6 @@ class StorageClassFactory(metaclass=Singleton):
 
             newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
             newStorageClass = newStorageClassType()
-            print("Registering {}".format(newStorageClass))
             self.registerStorageClass(newStorageClass)
 
         for name in list(sconfig.keys()):
