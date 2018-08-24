@@ -444,77 +444,77 @@ class Config(_ConfigBase):
 
     @staticmethod
     def overrideParameters(configType, config, full, toUpdate=None, toCopy=None):
-            """Generic helper function for overriding specific config parameters
+        """Generic helper function for overriding specific config parameters
 
-            Allows for named parameters to be set to new values in bulk, and
-            for other values to be set by copying from a reference config.
+        Allows for named parameters to be set to new values in bulk, and
+        for other values to be set by copying from a reference config.
 
-            Assumes that the supplied config is compatible with ```configType``
-            and will attach the updated values to the supplied config by
-            looking for the related component key.  It is assumed that
-            ``config`` and ``full`` are from the same part of the
-            configuration hierarchy.
+        Assumes that the supplied config is compatible with ```configType``
+        and will attach the updated values to the supplied config by
+        looking for the related component key.  It is assumed that
+        ``config`` and ``full`` are from the same part of the
+        configuration hierarchy.
 
-            Parameters
-            ----------
-            configType : `ConfigSubset`
-                Config type to use to extract relevant items from ``config``.
-            config : `Config`
-                A `Config` to update. Only the subset understood by
-                the supplied `ConfigSubset` will be modified. Default values
-                will not be inserted and the content will not be validated
-                since mandatory keys are allowed to be missing until
-                populated later by merging.
-            full : `Config`
-                A complete config with all defaults expanded that can be
-                converted to a ``configType``. Read-only and will not be
-                modified by this method. Values are read from here if
-                ``toCopy`` is defined.
+        Parameters
+        ----------
+        configType : `ConfigSubset`
+            Config type to use to extract relevant items from ``config``.
+        config : `Config`
+            A `Config` to update. Only the subset understood by
+            the supplied `ConfigSubset` will be modified. Default values
+            will not be inserted and the content will not be validated
+            since mandatory keys are allowed to be missing until
+            populated later by merging.
+        full : `Config`
+            A complete config with all defaults expanded that can be
+            converted to a ``configType``. Read-only and will not be
+            modified by this method. Values are read from here if
+            ``toCopy`` is defined.
 
-                Repository-specific options that should not be obtained
-                from defaults when Butler instances are constructed
-                should be copied from `full` to `Config`.
-            toUpdate : `dict`, optional
-                A `dict` defining the keys to update and the new value to use.
-                The keys and values can be any supported by `Config`
-                assignment.
-            toCopy : `tuple`, optional
-                `tuple` of keys whose values should be copied from ``full``
-                into ``config``.
+            Repository-specific options that should not be obtained
+            from defaults when Butler instances are constructed
+            should be copied from `full` to `Config`.
+        toUpdate : `dict`, optional
+            A `dict` defining the keys to update and the new value to use.
+            The keys and values can be any supported by `Config`
+            assignment.
+        toCopy : `tuple`, optional
+            `tuple` of keys whose values should be copied from ``full``
+            into ``config``.
 
-            Raises
-            ------
-            ValueError
-                Neither ``toUpdate`` not ``toCopy`` were defined.
-            """
-            if toUpdate is None and toCopy is None:
-                raise ValueError("One of toUpdate or toCopy parameters must be set.")
+        Raises
+        ------
+        ValueError
+            Neither ``toUpdate`` not ``toCopy`` were defined.
+        """
+        if toUpdate is None and toCopy is None:
+            raise ValueError("One of toUpdate or toCopy parameters must be set.")
 
-            # If this is a parent configuration then we need to ensure that
-            # the supplied config has the relevant component key in it.
-            # If this is a parent configuration we add in the stub entry
-            # so that the ConfigSubset constructor will do the right thing.
-            # We check full for this since that is guaranteed to be complete.
-            if configType.component in full and configType.component not in config:
-                config[configType.component] = {}
+        # If this is a parent configuration then we need to ensure that
+        # the supplied config has the relevant component key in it.
+        # If this is a parent configuration we add in the stub entry
+        # so that the ConfigSubset constructor will do the right thing.
+        # We check full for this since that is guaranteed to be complete.
+        if configType.component in full and configType.component not in config:
+            config[configType.component] = {}
 
-            # Extract the part of the config we wish to update
-            localConfig = configType(config, mergeDefaults=False, validate=False)
+        # Extract the part of the config we wish to update
+        localConfig = configType(config, mergeDefaults=False, validate=False)
 
-            if toUpdate:
-                for key, value in toUpdate.items():
-                    localConfig[key] = value
+        if toUpdate:
+            for key, value in toUpdate.items():
+                localConfig[key] = value
 
-            if toCopy:
-                localFullConfig = configType(full, mergeDefaults=False)
-                for key in toCopy:
-                    localConfig[key] = localFullConfig[key]
+        if toCopy:
+            localFullConfig = configType(full, mergeDefaults=False)
+            for key in toCopy:
+                localConfig[key] = localFullConfig[key]
 
-            # Reattach to parent if this is a child config
-            if configType.component in config:
-                config[configType.component] = localConfig
-            else:
-                config.update(localConfig)
+        # Reattach to parent if this is a child config
+        if configType.component in config:
+            config[configType.component] = localConfig
+        else:
+            config.update(localConfig)
 
 
 class ConfigSubset(Config):

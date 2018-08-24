@@ -23,7 +23,6 @@ from .registry import *
 from .run import *
 from .schema import *
 from .storageClass import *
-from .storageInfo import *
 from .storedFileInfo import *
 from .dataUnit import *
 from .databaseDict import *

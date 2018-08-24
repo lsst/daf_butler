@@ -32,21 +32,23 @@ class DummyRegistry:
         self._counter = 0
         self._entries = {}
 
-    def addStorageInfo(self, ref, storageInfo):
+    def addDatasetLocation(self, ref, datastoreName):
         # Only set ID if ID is 0 or None
         incrementCounter = True
         if ref.id is None or ref.id == 0:
             ref._id = self._counter
             incrementCounter = False
-        self._entries[(storageInfo.datastoreName, ref.id)] = storageInfo
+        if ref.id not in self._entries:
+            self._entries[ref.id] = set()
+        self._entries[ref.id].add(datastoreName)
         if incrementCounter:
             self._counter += 1
 
-    def getStorageInfo(self, ref, datastoreName):
-        return self._entries[(datastoreName, ref.id)]
+    def getDatasetLocations(self, ref):
+        return self._entries[ref.id].copy()
 
-    def removeStorageInfo(self, datastoreName, ref):
-        del self._entries[(datastoreName, ref.id)]
+    def removeDatasetLocation(self, datastoreName, ref):
+        self._entries[ref.id].remove(datastoreName)
 
     def makeDatabaseDict(self, table, types, key, value):
         return dict()

@@ -1554,7 +1554,7 @@ schema:
 
     DatasetStorage:
       doc: >
-        A table that provides information on how a Dataset is stored in one
+        A table that provides information on whether a Dataset is stored in one
         or more Datastores.  The presence or absence of a record in this
         table itself indicates whether the Dataset is present in that
         Datastore.
@@ -1572,14 +1572,6 @@ schema:
         nullable: false
         doc: >
           Name of the Datastore this entry corresponds to.
-      - name: checksum
-        type: string
-        doc: >
-          Checksum (e.g. md5) of the stored dataset, if applicable.
-      - name: size
-        type: int
-        doc: >
-          Total size of the stored dataset in bytes, if applicable.
       foreignKeys:
       -
         src: dataset_id

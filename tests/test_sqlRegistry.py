@@ -28,7 +28,6 @@ import lsst.utils.tests
 import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
-from lsst.daf.butler.core.storageInfo import StorageInfo
 from lsst.daf.butler.core.execution import Execution
 from lsst.daf.butler.core.quantum import Quantum
 from lsst.daf.butler.core.run import Run
@@ -198,29 +197,43 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         outQuantum = registry.getQuantum(quantum.id)
         self.assertEqual(outQuantum, quantum)
 
-    def testStorageInfo(self):
+    def testDatasetLocations(self):
         registry = Registry.fromConfig(self.butlerConfig, create=True)
         storageClass = StorageClass("testStorageInfo")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
+        datasetType2 = DatasetType(name="test2", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        registry.registerDatasetType(datasetType2)
         registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+        ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
         datastoreName = "dummystore"
-        checksum = "d6fb1c0c8f338044b2faaf328f91f707"
-        size = 512
-        storageInfo = StorageInfo(datastoreName, checksum, size)
+        datastoreName2 = "dummystore2"
         # Test adding information about a new dataset
-        registry.addStorageInfo(ref, storageInfo)
-        outStorageInfo = registry.getStorageInfo(ref, datastoreName)
-        self.assertEqual(outStorageInfo, storageInfo)
-        # Test updating storage information for an existing dataset
-        updatedStorageInfo = StorageInfo(datastoreName, "20a38163c50f4aa3aa0f4047674f8ca7", size+1)
-        registry.updateStorageInfo(ref, datastoreName, updatedStorageInfo)
-        outStorageInfo = registry.getStorageInfo(ref, datastoreName)
-        self.assertNotEqual(outStorageInfo, storageInfo)
-        self.assertEqual(outStorageInfo, updatedStorageInfo)
+        registry.addDatasetLocation(ref, datastoreName)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertIn(datastoreName, addresses)
+        self.assertEqual(len(addresses), 1)
+        registry.addDatasetLocation(ref, datastoreName2)
+        registry.addDatasetLocation(ref2, datastoreName2)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertEqual(len(addresses), 2)
+        self.assertIn(datastoreName, addresses)
+        self.assertIn(datastoreName2, addresses)
+        registry.removeDatasetLocation(datastoreName, ref)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertEqual(len(addresses), 1)
+        self.assertNotIn(datastoreName, addresses)
+        self.assertIn(datastoreName2, addresses)
+        registry.removeDatasetLocation(datastoreName2, ref)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertEqual(len(addresses), 0)
+        self.assertNotIn(datastoreName2, addresses)
+        addresses = registry.getDatasetLocations(ref2)
+        self.assertEqual(len(addresses), 1)
+        self.assertIn(datastoreName2, addresses)
 
     def testFind(self):
         registry = Registry.fromConfig(self.butlerConfig, create=True)
