@@ -12,7 +12,7 @@ storageClasses:
     pytype: dict
   StructuredDataListPickle:
     pytype: list
-  StructuredData: &StructuredData
+  StructuredData:
     # Data from a simple Python class
     pytype: examplePythonTypes.MetricsExample
     assembler: lsst.daf.butler.CompositeAssembler
@@ -23,24 +23,19 @@ storageClasses:
       output: StructuredDataDictYaml
       data: StructuredDataListYaml
   StructuredDataJson:
-    <<: *StructuredData
+    inheritsFrom: StructuredData
   StructuredDataPickle:
-    <<: *StructuredData
-  StructuredComposite: &StructuredComposite
-    pytype: examplePythonTypes.MetricsExample
-    assembler: lsst.daf.butler.CompositeAssembler
-    components:
-      summary: StructuredDataDictYaml
-      output: StructuredDataDictYaml
-      data: StructuredDataListYaml
+    inheritsFrom: StructuredData
+  StructuredComposite:
+    inheritsFrom: StructuredData
   StructuredCompositeTestA:
-    <<: *StructuredComposite
+    inheritsFrom: StructuredComposite
     components:
       summary: StructuredDataDictJson
       output: StructuredDataDictJson
       data: StructuredDataListJson
   StructuredCompositeTestB:
-    <<: *StructuredComposite
+    inheritsFrom: StructuredComposite
     components:
       summary: StructuredDataDictPickle
       output: StructuredDataDictJson
