@@ -19,12 +19,24 @@ storageClasses:
     pytype: lsst.afw.image.Calib
   TablePersistableTransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
+  Image: &Image
+    pytype: lsst.afw.image.Image
   ImageF:
+    <<: *Image
     pytype: lsst.afw.image.ImageF
+  ImageI:
+    <<: *Image
+    pytype: lsst.afw.image.ImageI
   ImageU:
+    <<: *Image
     pytype: lsst.afw.image.ImageU
+  DecoratedImage: &DecoratedImage
+    pytype: lsst.afw.image.DecoratedImage
   DecoratedImageU:
+    <<: *DecoratedImage
     pytype: lsst.afw.image.DecoratedImageU
+  Mask:
+    pytype: lsst.afw.image.Mask
   MaskX:
     pytype: lsst.afw.image.MaskX
   Catalog:
@@ -35,6 +47,8 @@ storageClasses:
     pytype: lsst.afw.table.SourceCatalog
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
+  PropertySet:
+    pytype: lsst.daf.base.PropertySet
   PropertyList:
     pytype: lsst.daf.base.PropertyList
   PropertySet:
@@ -42,6 +56,21 @@ storageClasses:
   Exposure: &Exposure
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    components:
+      image: Image
+      mask: Mask
+      variance: Image
+      wcs: TablePersistableWcs
+      psf: TablePersistablePsf
+      calib: TablePersistableCalib
+      visitInfo: TablePersistableVisitInfo
+      apCorrMap: TablePersistableApCorr
+      coaddInputs: TablePersistableCoaddInputs
+      transmissionCurve: TablePersistableTransmissionCurve
+      metadata: PropertyList
+  ExposureF: &ExposureF
+    <<: *Exposure
+    pytype: lsst.afw.image.ExposureF
     components:
       image: ImageF
       mask: MaskX
@@ -52,13 +81,25 @@ storageClasses:
       visitInfo: TablePersistableVisitInfo
       apCorrMap: TablePersistableApCorr
       coaddInputs: TablePersistableCoaddInputs
+      transmissionCurve: TablePersistableTransmissionCurve
       metadata: PropertyList
-  ExposureF: &ExposureF
-    <<: *Exposure
-    pytype: lsst.afw.image.ExposureF
   ExposureI: &ExposureI
     <<: *Exposure
     pytype: lsst.afw.image.ExposureI
+    components:
+      image: ImageI
+      mask: MaskX
+      variance: ImageF
+      wcs: TablePersistableWcs
+      psf: TablePersistablePsf
+      calib: TablePersistableCalib
+      visitInfo: TablePersistableVisitInfo
+      apCorrMap: TablePersistableApCorr
+      coaddInputs: TablePersistableCoaddInputs
+      transmissionCurve: TablePersistableTransmissionCurve
+      metadata: PropertyList
+  ExposureComposite:
+    <<: *Exposure
   ExposureCompositeF:
     <<: *ExposureF
   ExposureCompositeI:

@@ -21,7 +21,6 @@
 
 import os
 import re
-import datetime
 from collections import OrderedDict
 
 from lsst.afw.image import bboxFromMetadata
@@ -30,6 +29,7 @@ from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
 from ..core import Config, Run, DatasetType, StorageClassFactory
+from ..instrument import makeExposureEntryFromVisitInfo, makeVisitEntryFromVisitInfo
 from .structures import ConvertedRepo
 from .translators import Translator, NoSkyMapError
 
@@ -262,37 +262,13 @@ class ConversionWriter:
                 visitId, = visitInfoId
                 exposureId, = visitInfoId
                 # TODO: skip insertion if DataUnits already exist.
-                mid = visitInfo.getDate().toPython()
-                offset = datetime.timedelta(seconds=0.5*visitInfo.getExposureTime())
-                commonValues = {
-                    "camera": camera,
-                    "visit": visitId,
-                    "physical_filter": filt,
-                    "datetime_begin": mid - offset,
-                    "exposure_time": visitInfo.getExposureTime(),
-                    "boresight_az": visitInfo.getBoresightAzAlt().getLongitude().asDegrees(),
-                    "boresight_alt": visitInfo.getBoresightAzAlt().getLatitude().asDegrees(),
-                    "rot_angle": visitInfo.getBoresightRotAngle().asDegrees(),
-
-                }
-                exposureValues = commonValues.copy()
-                exposureValues.update({
-                    "exposure": exposureId,
-                    "snap": 0,
-                    "dark_time": visitInfo.getDarkTime()
-                })
-                visitValues = commonValues.copy()
-                visitValues.update({
-                    "datetime_end": mid + offset,
-                    "earth_rotation_angle": visitInfo.getEra().asDegrees(),
-                    "boresight_ra": visitInfo.getBoresightRaDec().getLongitude().asDegrees(),
-                    "boresight_dec": visitInfo.getBoresightRaDec().getLatitude().asDegrees(),
-                    "boresight_parallactic_angle": visitInfo.getBoresightParAngle().asDegrees(),
-                    "local_era": visitInfo.getLocalEra().asDegrees(),
-                })
+                dataId = {"camera": camera, "visit": visitId, "physical_filter": filt}
+                visitEntry = makeVisitEntryFromVisitInfo(dataId, visitInfo)
+                dataId["exposure"] = exposureId
+                exposureEntry = makeExposureEntryFromVisitInfo(dataId, visitInfo)
                 log.debug("Inserting Exposure %d and Visit %d.", exposureId, visitId)
-                registry.addDataUnitEntry("Visit", visitValues)
-                registry.addDataUnitEntry("Exposure", exposureValues)
+                registry.addDataUnitEntry("Visit", visitEntry)
+                registry.addDataUnitEntry("Exposure", exposureEntry)
 
     def insertDatasetTypes(self, registry):
         """Add all necessary DatasetType registrations to the Registry.

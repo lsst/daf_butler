@@ -237,31 +237,28 @@ class Butler:
             if dataId is None:
                 raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
             datasetType = self.registry.getDatasetType(datasetRefOrType)
-        ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
 
-        # Look up storage class to see if this is a composite
-        storageClass = datasetType.storageClass
+        isVirtualComposite = self.composites.doDisassembly(datasetType)
+
+        # Add Registry Dataset entry.  If not a virtual composite, add
+        # and attach components at the same time.
+        ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer,
+                                       recursive=not isVirtualComposite)
 
         # Check to see if this datasetType requires disassembly
-        if self.composites.doDisassembly(datasetType):
-            components = storageClass.assembler().disassemble(obj)
+        if isVirtualComposite:
+            components = datasetType.storageClass.assembler().disassemble(obj)
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)
                 compRef = self.put(info.component, compTypeName, dataId, producer)
                 self.registry.attachComponent(component, ref, compRef)
         else:
             # This is an entity without a disassembler.
-            # If it is a composite we still need to register the components
-            for component in storageClass.components:
-                compTypeName = datasetType.componentTypeName(component)
-                compDatasetType = self.registry.getDatasetType(compTypeName)
-                compRef = self.registry.addDataset(compDatasetType, dataId, run=self.run, producer=producer)
-                self.registry.attachComponent(component, ref, compRef)
             self.datastore.put(obj, ref)
 
         return ref
 
-    def getDirect(self, ref):
+    def getDirect(self, ref, parameters=None):
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -272,6 +269,9 @@ class Butler:
         ----------
         ref : `DatasetRef`
             Reference to an already stored dataset.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
 
         Returns
         -------
@@ -280,12 +280,19 @@ class Butler:
         """
         # if the ref exists in the store we return it directly
         if self.datastore.exists(ref):
-            return self.datastore.get(ref)
+            return self.datastore.get(ref, parameters=parameters)
         elif ref.components:
             # Reconstruct the composite
             components = {}
             for compName, compRef in ref.components.items():
-                components[compName] = self.datastore.get(compRef)
+                if parameters is None:
+                    compParams = None
+                else:
+                    # make a dictionary of parameters containing only the subset
+                    # supported by the StorageClass of the components
+                    compParams = {k: v for k, v in parameters.items()
+                                  if k in compRef.datasetType.storageClass.components}
+                components[compName] = self.datastore.get(compRef, parameters=compParams)
 
             # Assemble the components
             return ref.datasetType.storageClass.assembler().assemble(components)
@@ -293,7 +300,7 @@ class Butler:
             # single entity in datastore
             raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
 
-    def get(self, datasetRefOrType, dataId=None):
+    def get(self, datasetRefOrType, dataId=None, parameters=None):
         """Retrieve a stored dataset.
 
         Parameters
@@ -306,6 +313,9 @@ class Butler:
             within a Collection.
             When `None` a `DatasetRef` should be supplied as the second
             argument.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
 
         Returns
         -------
@@ -324,9 +334,12 @@ class Butler:
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.find(self.collection, datasetType, dataId)
+        if ref is None:
+            raise LookupError("Dataset {} with data ID {} could not be found in {}".format(
+                              datasetType.name, dataId, self.collection))
         if idNumber is not None and idNumber != ref.id:
             raise ValueError("DatasetRef.id does not match id in registry")
-        return self.getDirect(ref)
+        return self.getDirect(ref, parameters=parameters)
 
     def getUri(self, datasetType, dataId, predict=False):
         """Return the URI to the Dataset.

@@ -23,6 +23,7 @@ import sys
 import functools
 import importlib
 from collections import namedtuple
+from collections.abc import Set
 
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "doImport", "getInstanceOf", "Singleton",
@@ -230,7 +231,7 @@ class Singleton(type):
 TopologicalSetNode = namedtuple("TopologicalSetNode", ["element", "sourceElements"])
 
 
-class TopologicalSet:
+class TopologicalSet(Set):
     """A collection that behaves like a builtin `set`, but where
     elements can be interconnected (like a graph).
 
@@ -253,7 +254,13 @@ class TopologicalSet:
         return len(self._nodes)
 
     def __eq__(self, other):
-        return self._nodes == other._nodes
+        try:
+            return self._nodes == other._nodes
+        except AttributeError:
+            return super().__eq__(other)
+
+    def __ne__(self, other):
+        return not (self == other)
 
     def connect(self, sourceElement, targetElement):
         """Connect two elements in the set.
@@ -323,10 +330,19 @@ class TopologicalSet:
 
 def transactional(func):
     """Decorator that wraps a method and makes it transactional.
+
+    This also adds an optional ``transactional`` keyword argument to the
+    decorated function, which can be set to `False` to disable method-level
+    transactions.  This can be useful when the method is being called within
+    a higher-level transaction block but exceptions it raises will be
+    caught before they propagate through the higher-level context manager.
     """
     @functools.wraps(func)
     def inner(self, *args, **kwargs):
-        with self.transaction():
+        if kwargs.pop("transactional", True):
+            with self.transaction():
+                return func(self, *args, **kwargs)
+        else:
             return func(self, *args, **kwargs)
     return inner
 

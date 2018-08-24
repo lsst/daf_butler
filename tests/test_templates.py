@@ -23,7 +23,7 @@
 
 import unittest
 
-from lsst.daf.butler import DatasetType, DatasetRef, FileTemplate, StorageClass
+from lsst.daf.butler import DatasetType, DatasetRef, FileTemplate, StorageClass, Run
 
 
 class TestFileTemplates(unittest.TestCase):
@@ -37,7 +37,7 @@ class TestFileTemplates(unittest.TestCase):
             self.datasetTypes[datasetTypeName] = DatasetType(datasetTypeName, list(dataId.keys()),
                                                              StorageClass(None))
         datasetType = self.datasetTypes[datasetTypeName]
-        return DatasetRef(datasetType, dataId)
+        return DatasetRef(datasetType, dataId, run=Run(id=2, collection="run2"))
 
     def setUp(self):
         self.dataId = {"visit": 52, "filter": "U"}
@@ -49,40 +49,47 @@ class TestFileTemplates(unittest.TestCase):
         self.assertEqual(path, answer)
 
     def testBasic(self):
+        tmplstr = "{run:02d}/{datasetType}/{visit:05d}/{filter}"
+        self.assertTemplate(tmplstr,
+                            "02/calexp/00052/U",
+                            self.makeDatasetRef("calexp"))
+        tmplstr = "{collection}/{datasetType}/{visit:05d}/{filter}-trail"
+        self.assertTemplate(tmplstr,
+                            "run2/calexp/00052/U-trail",
+                            self.makeDatasetRef("calexp"))
+
+    def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{filter}"
-        self.assertTemplate(tmplstr,
-                            "calexp/00052/U",
-                            self.makeDatasetRef("calexp"))
-        tmplstr = "{datasetType}/{visit:05d}/{filter}-trail"
-        self.assertTemplate(tmplstr,
-                            "calexp/00052/U-trail",
-                            self.makeDatasetRef("calexp"))
+        with self.assertRaises(KeyError):
+            self.assertTemplate(tmplstr,
+                                "02/calexp/00052/U",
+                                self.makeDatasetRef("calexp"))
 
     def testOptional(self):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp")
-        tmplstr = "{datasetType}/v{visit:05d}_f{filter:?}"
-        self.assertTemplate(tmplstr, "calexp/v00052_fU",
+        tmplstr = "{run:02d}/{datasetType}/v{visit:05d}_f{filter:?}"
+        self.assertTemplate(tmplstr, "02/calexp/v00052_fU",
                             self.makeDatasetRef("calexp"))
 
         du = {"visit": 48, "tract": 265}
-        self.assertTemplate(tmplstr, "calexpT/v00048",
+        self.assertTemplate(tmplstr, "02/calexpT/v00048",
                             self.makeDatasetRef("calexpT", du))
 
         # Ensure that this returns a relative path even if the first field
         # is optional
-        tmplstr = "{tract:?}/{visit:?}/f{filter}"
-        self.assertTemplate(tmplstr, "52/fU", ref)
+        tmplstr = "{run:02d}/{tract:?}/{visit:?}/f{filter}"
+        self.assertTemplate(tmplstr, "02/52/fU", ref)
 
         # Ensure that // from optionals are converted to singles
-        tmplstr = "{datasetType}/{patch:?}/{tract:?}/f{filter}"
-        self.assertTemplate(tmplstr, "calexp/fU", ref)
+        tmplstr = "{run:02d}/{datasetType}/{patch:?}/{tract:?}/f{filter}"
+        self.assertTemplate(tmplstr, "02/calexp/fU", ref)
 
         # Optionals with some text between fields
-        tmplstr = "{datasetType}/p{patch:?}_t{tract:?}/f{filter}"
-        self.assertTemplate(tmplstr, "calexp/p/fU", ref)
-        tmplstr = "{datasetType}/p{patch:?}_t{visit:04d?}/f{filter}"
-        self.assertTemplate(tmplstr, "calexp/p_t0052/fU", ref)
+        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{tract:?}/f{filter}"
+        self.assertTemplate(tmplstr, "02/calexp/p/fU", ref)
+        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{visit:04d?}/f{filter}"
+        self.assertTemplate(tmplstr, "02/calexp/p_t0052/fU", ref)
 
     def testComponent(self):
         """Test handling of components in templates."""
@@ -91,17 +98,17 @@ class TestFileTemplates(unittest.TestCase):
         refMaskedImage = self.makeDatasetRef("calexp.maskedimage.variance")
         refWcs = self.makeDatasetRef("calexp.wcs")
 
-        tmplstr = "c_{component}_v{visit}"
-        self.assertTemplate(tmplstr, "c_output_v52", refMetricOutput)
+        tmplstr = "{run:02d}_c_{component}_v{visit}"
+        self.assertTemplate(tmplstr, "02_c_output_v52", refMetricOutput)
 
-        tmplstr = "{component:?}_{visit}"
-        self.assertTemplate(tmplstr, "_52", refMetric)
-        self.assertTemplate(tmplstr, "output_52", refMetricOutput)
-        self.assertTemplate(tmplstr, "maskedimage.variance_52", refMaskedImage)
-        self.assertTemplate(tmplstr, "output_52", refMetricOutput)
+        tmplstr = "{run:02d}_{component:?}_{visit}"
+        self.assertTemplate(tmplstr, "02_52", refMetric)
+        self.assertTemplate(tmplstr, "02_output_52", refMetricOutput)
+        self.assertTemplate(tmplstr, "02_maskedimage.variance_52", refMaskedImage)
+        self.assertTemplate(tmplstr, "02_output_52", refMetricOutput)
 
         # Providing a component but not using it
-        tmplstr = "{datasetType}/v{visit:05d}"
+        tmplstr = "{collection}/{datasetType}/v{visit:05d}"
         with self.assertRaises(KeyError):
             self.assertTemplate(tmplstr, "", refWcs)
 

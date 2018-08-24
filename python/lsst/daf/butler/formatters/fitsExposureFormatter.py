@@ -33,6 +33,109 @@ class FitsExposureFormatter(Formatter):
 
     parameters = frozenset(("bbox", "origin"))
 
+    def readImageComponent(self, fileDescriptor, component):
+        """Read the image, mask, or variance component of an Exposure.
+
+        Parameters
+        ----------
+        fileDescriptor : `FileDescriptor`
+            Identifies the file to read and parameters to be used for reading.
+        component : `str`, optional
+            Component to read from the file.  Always one of "image",
+            "variance", or "mask".
+
+        Returns
+        -------
+        image : `~lsst.afw.image.Image` or `~lsst.afw.image.Mask`
+            In-memory image, variance, or mask component.
+        """
+        # TODO: could be made more efficient *if* Exposure type objects
+        # held the class objects of their components.
+        full = self.readFull(fileDescriptor, fileDescriptor.parameters)
+        return fileDescriptor.storageClass.assembler().getComponent(full, component)
+
+    def readMetadata(self, fileDescriptor):
+        """Read all header metadata directly into a PropertyList.
+
+        Parameters
+        ----------
+        fileDescriptor : `FileDescriptor`
+            Identifies the file to read and parameters to be used for reading.
+
+        Returns
+        -------
+        metadata : `~lsst.daf.base.PropertyList`
+            Header metadata.
+        """
+        from lsst.afw.image import readMetadata
+        return readMetadata(fileDescriptor.location.path)
+
+    def stripMetadata(self, metadata):
+        """Remove metadata entries that are parsed into components.
+
+        This is only called when just the metadata is requested; stripping
+        entries there forces code that wants other components to ask for those
+        components directly rather than trying to extract them from the
+        metadata manually, which is fragile.  This behavior is an intentional
+        change from Gen2.
+
+        Parameters
+        ----------
+        metadata : `~lsst.daf.base.PropertyList`
+            Header metadata, to be modified in-place.
+        """
+        # TODO: make sure this covers everything, by delegating to something
+        # that doesn't yet exist in afw.image.ExposureInfo.
+        from lsst.afw.image import bboxFromMetadata
+        from lsst.afw.geom import makeSkyWcs
+        bboxFromMetadata(metadata)  # always strips
+        makeSkyWcs(metadata, strip=True)
+
+    def readInfoComponent(self, fileDescriptor, component):
+        """Read a component held by ExposureInfo.
+
+        Parameters
+        ----------
+        fileDescriptor : `FileDescriptor`
+            Identifies the file to read and parameters to be used for reading.
+        component : `str`, optional
+            Component to read from the file.
+
+        Returns
+        -------
+        obj : component-dependent
+            In-memory component object.
+        """
+        from lsst.afw.image import LOCAL
+        from lsst.geom import Box2I, Point2I
+        parameters = dict(bbox=Box2I(minimum=Point2I(0, 0), maximum=Point2I(0, 0)), origin=LOCAL)
+        tiny = self.readFull(fileDescriptor, parameters)
+        return fileDescriptor.storageClass.assembler().getComponent(tiny, component)
+
+    def readFull(self, fileDescriptor, parameters=None):
+        """Read the full Exposure object.
+
+        Parameters
+        ----------
+        fileDescriptor : `FileDescriptor`
+            Identifies the file to read and parameters to be used for reading.
+        parameters : `dict`, optional
+            If specified a dictionary of slicing parameters that overrides
+            those in ``fileDescriptor`.
+
+        Returns
+        -------
+        exposure : `~lsst.afw.image.Exposure`
+            Complete in-memory exposure.
+        """
+        if parameters is None:
+            parameters = fileDescriptor.parameters
+        if parameters is None:
+            parameters = {}
+        if not self.parameters.issuperset(parameters.keys()):
+            raise KeyError("Unrecognized parameter key(s): {}".format(parameters.keys() - self.parameters))
+        return fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **parameters)
+
     def read(self, fileDescriptor, component=None):
         """Read data from a file.
 
@@ -61,49 +164,20 @@ class FitsExposureFormatter(Formatter):
             Raised when parameters passed with fileDescriptor are not
             supported.
         """
-        from lsst.afw.image import LOCAL, readMetadata
-        from lsst.geom import Box2I, Point2I
-
-        if component == "metadata":
-            data = readMetadata(fileDescriptor.location.path)
-        else:
-            # If we"re reading a non-image component, just read in a
-            # single-pixel image for efficiency.
-            kwds = {}
-            if component not in (None, "image", "variance", "mask"):
-                kwds["bbox"] = Box2I(minimum=Point2I(0, 0), maximum=Point2I(0, 0))
-                kwds["origin"] = LOCAL
-            elif fileDescriptor.parameters is not None:
-                # Just pass parameters into kwargs for constructor, but check that we recognize them.
-                kwds.update(fileDescriptor.parameters)
-                if not self.parameters.issuperset(kwds.keys()):
-                    raise KeyError("Unrecognized parameter key(s): {}".format(kwds.keys() - self.parameters))
-            # Read the file naively
-            data = fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **kwds)
-
-            # TODO: most of the rest of this method has a lot in common with
-            # FileFormatter; some refactoring could probably restore that
-            # inheritance relationship and remove this duplication.
-
-            # if read and write storage classes differ, more work is required
-            readStorageClass = fileDescriptor.readStorageClass
-            if readStorageClass != fileDescriptor.storageClass:
-                if component is None:
-                    raise ValueError("Storage class inconsistency ({} vs {}) but no"
-                                     " component requested".format(readStorageClass.name,
-                                                                   fileDescriptor.storageClass.name))
-
-                # Concrete composite written as a single file (we hope)
-                try:
-                    data = fileDescriptor.storageClass.assembler().getComponent(data, component)
-                except AttributeError:
-                    # Defer the complaint
-                    data = None
-
-        if data is None:
-            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
-
-        return data
+        if fileDescriptor.readStorageClass != fileDescriptor.storageClass:
+            if component == "metadata":
+                md = self.readMetadata(fileDescriptor)
+                self.stripMetadata(md)
+                return md
+            elif component in ("image", "variance", "mask"):
+                return self.readImageComponent(fileDescriptor, component)
+            elif component is not None:
+                return self.readInfoComponent(fileDescriptor, component)
+            else:
+                raise ValueError("Storage class inconsistency ({} vs {}) but no"
+                                 " component requested".format(fileDescriptor.readStorageClass.name,
+                                                               fileDescriptor.storageClass.name))
+        return self.readFull(fileDescriptor)
 
     def write(self, inMemoryDataset, fileDescriptor):
         """Write a Python object to a file.
@@ -130,6 +204,8 @@ class FitsExposureFormatter(Formatter):
         """Return the path that would be returned by write, without actually
         writing.
 
+        Parameters
+        ----------
         location : `Location`
             The location to simulate writing to.
         """
