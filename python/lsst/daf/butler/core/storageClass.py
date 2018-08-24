@@ -22,7 +22,6 @@
 """Support for Storage Classes."""
 
 import builtins
-import itertools
 import logging
 
 from .utils import doImport, Singleton, getFullTypeName
@@ -257,23 +256,14 @@ class StorageClassFactory(metaclass=Singleton):
         self._configs.append(sconfig)
 
         # Since we can not assume that we will get definitions of
-        # components or parents before the definitions of the
-        # composites/parents, we create multiple lists
-        # Children are assumed not to be themselves specifying different
-        # components for now. Ideally this should be recursive.
-        composites = {}
-        simple = {}
-        children = {}
-        for name, info in sconfig.items():
-            if "components" in info:
-                composites[name] = info
-            elif "parents" in info:
-                children[name] = info
-            else:
-                simple[name] = info
-
-        for name in itertools.chain(simple, composites, children):
-            info = sconfig[name]
+        # components or parents before their classes are defined
+        # we have a helper function that we can call recursively
+        # to extract definitions from the configuration.
+        def processStorageClass(name, sconfig):
+            # Maybe we've already processed this through recursion
+            if name not in sconfig:
+                return
+            info = sconfig.pop(name)
 
             # Always create the storage class so we can ensure that
             # we are not trying to overwrite with a different definition
@@ -281,6 +271,8 @@ class StorageClassFactory(metaclass=Singleton):
             if "components" in info:
                 components = {}
                 for cname, ctype in info["components"].items():
+                    if ctype not in self:
+                        processStorageClass(ctype, sconfig)
                     components[cname] = self.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for StorageClass Constructor
@@ -291,13 +283,19 @@ class StorageClassFactory(metaclass=Singleton):
 
             # Create the new storage class and register it
             baseClass = StorageClass
-            if "parent" in info:
-                baseClass = type(self.getStorageClass(info["parent"]))
+            if "inheritsFrom" in info:
+                baseName = info["inheritsFrom"]
+                if baseName not in self:
+                    processStorageClass(baseName, sconfig)
+                baseClass = type(self.getStorageClass(baseName))
 
             newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
             newStorageClass = newStorageClassType()
             print("Registering {}".format(newStorageClass))
             self.registerStorageClass(newStorageClass)
+
+        for name in list(sconfig.keys()):
+            processStorageClass(name, sconfig)
 
     @staticmethod
     def makeNewStorageClass(name, baseClass, **kwargs):
