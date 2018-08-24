@@ -133,6 +133,14 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         # Check you can silently insert something that is already there
         factory.registerStorageClass(newclass3)
 
+    def testFactoryConfig(self):
+        factory = StorageClassFactory()
+        factory.addFromConfig(StorageClassConfig())
+        image = factory.getStorageClass("Image")
+        imageF = factory.getStorageClass("ImageF")
+        self.assertIsInstance(imageF, type(image))
+        self.assertNotEqual(imageF, image)
+
     def testPickle(self):
         """Test that we can pickle storageclasses.
         """

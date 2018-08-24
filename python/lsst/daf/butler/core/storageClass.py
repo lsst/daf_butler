@@ -54,10 +54,22 @@ class StorageClass:
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
+    _cls_name = "BaseStorageClass"
+    _cls_components = None
+    _cls_assembler = None
+    _cls_pytype = None
     defaultAssembler = CompositeAssembler
     defaultAssemblerName = getFullTypeName(defaultAssembler)
 
-    def __init__(self, name, pytype=None, components=None, assembler=None):
+    def __init__(self, name=None, pytype=None, components=None, assembler=None):
+        if name is None:
+            name = self._cls_name
+        if pytype is None:
+            pytype = self._cls_pytype
+        if components is None:
+            components = self._cls_components
+        if assembler is None:
+            assembler = self._cls_assembler
         self.name = name
         self._pytypeName = pytype
         if pytype is None:
@@ -146,7 +158,7 @@ class StorageClass:
         if self.name != other.name:
             return False
 
-        if type(self) != type(other):
+        if not isinstance(other, StorageClass):
             return False
 
         # We must compare pytype and assembler by name since we do not want
@@ -245,17 +257,22 @@ class StorageClassFactory(metaclass=Singleton):
         self._configs.append(sconfig)
 
         # Since we can not assume that we will get definitions of
-        # components before the definitions of the composites, we create
-        # two lists
+        # components or parents before the definitions of the
+        # composites/parents, we create multiple lists
+        # Children are assumed not to be themselves specifying different
+        # components for now. Ideally this should be recursive.
         composites = {}
         simple = {}
+        children = {}
         for name, info in sconfig.items():
             if "components" in info:
                 composites[name] = info
+            elif "parents" in info:
+                children[name] = info
             else:
                 simple[name] = info
 
-        for name in itertools.chain(simple, composites):
+        for name in itertools.chain(simple, composites, children):
             info = sconfig[name]
 
             # Always create the storage class so we can ensure that
@@ -273,8 +290,37 @@ class StorageClassFactory(metaclass=Singleton):
             storageClassKwargs["components"] = components
 
             # Create the new storage class and register it
-            newStorageClass = StorageClass(name, **storageClassKwargs)
+            baseClass = StorageClass
+            if "parent" in info:
+                baseClass = type(self.getStorageClass(info["parent"]))
+
+            newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
+            newStorageClass = newStorageClassType()
+            print("Registering {}".format(newStorageClass))
             self.registerStorageClass(newStorageClass)
+
+    @staticmethod
+    def makeNewStorageClass(name, baseClass, **kwargs):
+        """Create a new Python class as a subclass of `StorageClass`.
+
+        Parameters
+        ----------
+        name : `str`
+            Name to use for this class.
+        baseClass : `type`
+            Base class for this `StorageClass`.
+
+        Returns
+        -------
+        newtype : `type` subclass of `StorageClass`
+            Newly created Python type.
+        """
+
+        # convert the arguments to use different internal names
+        clsargs = {f"_cls_{k}": v for k, v in kwargs.items() if v is not None}
+        clsargs["_cls_name"] = name
+
+        return type(f"StorageClass{name}", (baseClass,), clsargs)
 
     def getStorageClass(self, storageClassName):
         """Get a StorageClass instance associated with the supplied name.
@@ -288,6 +334,11 @@ class StorageClassFactory(metaclass=Singleton):
         -------
         instance : `StorageClass`
             Instance of the correct `StorageClass`.
+
+        Raises
+        ------
+        KeyError
+            The requested storage class name is not registered.
         """
         return self._storageClasses[storageClassName]
 
@@ -311,8 +362,8 @@ class StorageClassFactory(metaclass=Singleton):
         if storageClass.name in self._storageClasses:
             existing = self.getStorageClass(storageClass.name)
             if existing != storageClass:
-                raise ValueError(f"New definition for StorageClass {storageClass.name} differs from current"
-                                 " definition")
+                raise ValueError(f"New definition for StorageClass {storageClass.name} ({storageClass}) "
+                                 f"differs from current definition ({existing})")
         else:
             self._storageClasses[storageClass.name] = storageClass
 
