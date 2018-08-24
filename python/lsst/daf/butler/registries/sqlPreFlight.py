@@ -48,10 +48,11 @@ def _filterSummarizes(dataUnitJoins):
     ----------
     dataUnitJoins : iterable of `DataUnitJoin`
 
-    Returns
-    -------
-    Iterator for DataUnitJoin which do not summarize any of the DataUnitJoins
-    in the input set.
+    Yields
+    ------
+    dataUnitJoin : `DataUnitJoin`
+        DataUnitJoin which do not summarize any of the DataUnitJoins in the
+        input set.
     """
     dataUnitJoins = list(dataUnitJoins)
     dataUnitJoinNames = set(join.name for join in dataUnitJoins)
@@ -288,150 +289,21 @@ class SqlPreFlight:
 
         # join with input datasets to restrict to existing inputs
         dsIdColumns = {}
-        dsTable = self._schema._metadata.tables["Dataset"]
-        dsCollTable = self._schema._metadata.tables["DatasetCollection"]
-        allDsTypes = [(dsType, "input") for dsType in neededDatasetTypes] + \
-                     [(dsType, "output") for dsType in futureDatasetTypes]
-        for dsType, inoutType in allDsTypes:
+        allDsTypes = [(dsType, False) for dsType in neededDatasetTypes] + \
+                     [(dsType, True) for dsType in futureDatasetTypes]
+        for dsType, isOutput in allDsTypes:
 
-            _LOG.debug("joining %s dataset type: %s", inoutType, dsType.name)
+            _LOG.debug("joining %s dataset type: %s",
+                       "output" if isOutput else "input", dsType.name)
 
-            # Build a sub-query and join with that subquery (regular join for
-            # things that have to exists and LEFT OUTER join for things that
-            # may not exist yet).
-            #
-            # If there is only one collection then there is a guarantee that
-            # DataIds are all unique, in that case subquery can be written as
-            #
-            #    SELECT Dataset.dataset_id AS dataset_id, Dataset.link1 AS link1 ...
-            #    FROM Dataset JOIN DatasetCollection
-            #        ON Dataset.dataset_id = DatasetCollection.dataset_id
-            #    WHERE Dataset.dataset_type_name = :dsType_name
-            #        AND DatasetCollection.collection = :collection_name
-            #
-            # If there are multiple collections then there can be multiple
-            # matching Datasets for the same DataId. In that case we need
-            # only one Dataset record which comes from earliest collection
-            # (in the user-provided order). Here things become complicated,
-            # we have to:
-            #   - replace collection names with their order in input list
-            #   - select all combinations of rows from Dataset and
-            #     DatasetCollection which match collection names and dataset
-            #     type name
-            #   - from those only select rows with lowest collection position
-            #     if there are multiple collections for the same DataId
-            #
-            # Replacing collection names with positions is easy:
-            #
-            #    SELECT dataset_id,
-            #        CASE collection
-            #            WHEN 'collection1' THEN 0
-            #            WHEN 'collection2' THEN 1
-            #            ...
-            #        END AS collorder
-            #    FROM ...
-            #
-            # Combined query will look like (CASE ... END is as  above):
-            #
-            #    SELECT Dataset.dataset_id AS dataset_id, CASE ... END AS collorder, Dataset.link1 ...
-            #    FROM Dataset JOIN DatasetCollection
-            #        ON Dataset.dataset_id = DatasetCollection.dataset_id
-            #    WHERE Dataset.dataset_type_name = <dsType.name>
-            #        AND DatasetCollection.collection IN (<collections>)
-            #
-            # Filtering is complicated, it is simpler to use CTE but not all
-            # databases support CTE so we will have to do with the repeating
-            # sub-queries. Use GROUP BY for DataId and MIN(collorder) to find
-            # `collorder` for given DataId, then join it with previous combined
-            # selection:
-            #
-            #    SELECT DS.dataset_id AS dataset_id, DS.link1 AS link1 ...
-            #    FROM
-            #        (SELECT Dataset.dataset_id AS dataset_id, CASE ... END AS collorder, Dataset.link1 ...
-            #         FROM Dataset JOIN DatasetCollection
-            #            ON Dataset.dataset_id = DatasetCollection.dataset_id
-            #         WHERE Dataset.dataset_type_name = <dsType.name>
-            #            AND DatasetCollection.collection IN (<collections>)) DS
-            #        INNER JOIN
-            #        (SELECT MIN(CASE ... END AS) collorder, Dataset.link1 ...
-            #         FROM Dataset JOIN DatasetCollection
-            #             ON Dataset.dataset_id = DatasetCollection.dataset_id
-            #         WHERE Dataset.dataset_type_name = <dsType.name>
-            #            AND DatasetCollection.collection IN (<collections>)
-            #         GROUP BY Dataset.link1 ...) DSG
-            #            ON DS.colpos = DSG.colpos AND DS.link1 = DSG.link1 ...
-
-            # helper method
-            def _columns(selectable, names):
-                """Return list of columns for given column names"""
-                return [selectable.c[name].label(name) for name in names]
-
-            if inoutType == "output":
-
-                outputCollection = collections.getOutputCollection(dsType.name)
-                if not outputCollection:
-                    # No output collection means no output datasets exist, we do
-                    # not need to do any joins here, just pass None as column
-                    # index for this dataset type to the code below.
-                    dsIdColumns[dsType] = None
-                    continue
-
-                dsCollections = [outputCollection]
-            else:
-                dsCollections = collections.getInputCollections(dsType.name)
-
-            _LOG.debug("using collections: %s", dsCollections)
-
-            # full set of link names for this DatasetType
-            # TODO: this should be done in DatasetType method.
-            links = set()
-            for unitName in dsType.dataUnits:
-                dataUnit = allDataUnits[unitName]
-                links.update(dataUnit.link)
-            links = list(links)
-
-            if len(dsCollections) == 1:
-
-                # single collection, easy-peasy
-                subJoin = dsTable.join(dsCollTable, dsTable.c.dataset_id == dsCollTable.c.dataset_id)
-                subWhere = and_(dsTable.c.dataset_type_name == dsType.name,
-                                dsCollTable.c.collection == dsCollections[0])
-
-                columns = _columns(dsTable, ["dataset_id"] + links)
-                subquery = select(columns).select_from(subJoin).where(subWhere)
-                subquery = subquery.alias("ds" + dsType.name)
-
-            else:
-
-                # multiple collections
-                subJoin = dsTable.join(dsCollTable,
-                                       dsTable.c.dataset_id == dsCollTable.c.dataset_id)
-                subWhere = and_(dsTable.c.dataset_type_name == dsType.name,
-                                dsCollTable.c.collection.in_(dsCollections))
-
-                # CASE caluse
-                collorder = case([
-                    (dsCollTable.c.collection == coll, pos) for pos, coll in enumerate(dsCollections)
-                ])
-
-                # first GROUP BY sub-query
-                columns = [functions.min(collorder).label("collorder")] + _columns(dsTable, links)
-                groupSubq = select(columns).select_from(subJoin).where(subWhere)
-                groupSubq = groupSubq.group_by(*links)
-                groupSubq = groupSubq.alias("sub1" + dsType.name)
-
-                # next combined sub-query
-                columns = [collorder.label("collorder")] + _columns(dsTable, ["dataset_id"] + links)
-                combined = select(columns).select_from(subJoin).where(subWhere)
-                combined = combined.alias("sub2" + dsType.name)
-
-                # now join these two
-                joinsOn = [groupSubq.c.collorder == combined.c.collorder] + \
-                          [groupSubq.c[colName] == combined.c[colName] for colName in links]
-                subJoin = combined.join(groupSubq, and_(*joinsOn))
-                columns = _columns(combined, ["dataset_id"] + links)
-                subquery = select(columns).select_from(subJoin)
-                subquery = subquery.alias("ds" + dsType.name)
+            # Build a sub-query.
+            subquery = self._buildDatasetSubquery(dsType, collections, isOutput)
+            if subquery is None:
+                # If there nothing to join (e.g. we know that output
+                # collection is empty) then just pass None as column
+                # index for this dataset type to the code below.
+                dsIdColumns[dsType] = None
+                continue
 
             # Join sub-query with all units on their link names,
             # OUTER JOIN is used for output datasets (they don't usually exist)
@@ -441,8 +313,7 @@ class SqlPreFlight:
                 for link in dataUnit.link:
                     _LOG.debug("  joining on link: %s", link)
                     joinOn.append(subquery.c[link] == dataUnit.table.c[link])
-            isouter = inoutType == "output"
-            fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isouter)
+            fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isOutput)
 
             # remember dataset_id column index for this dataset
             dsIdColumns[dsType] = len(selectColumns)
@@ -460,6 +331,161 @@ class SqlPreFlight:
         # execute and return result iterator
         rows = self._connection.execute(q).fetchall()
         return self._convertResultRows(rows, unitLinkColumns, regionColumns, dsIdColumns)
+
+    def _buildDatasetSubquery(self, dsType, collections, isOutput):
+        """Build a sub-query for a dataset type to be joined with "big join".
+
+        If there is only one collection then there is a guarantee that
+        DataIds are all unique (by DataId I mean combination of all link
+        values relevant for this dataset), in that case subquery can be
+        written as:
+
+            SELECT Dataset.dataset_id AS dataset_id, Dataset.link1 AS link1 ...
+            FROM Dataset JOIN DatasetCollection
+                ON Dataset.dataset_id = DatasetCollection.dataset_id
+            WHERE Dataset.dataset_type_name = :dsType_name
+                AND DatasetCollection.collection = :collection_name
+
+        If there are multiple collections then there can be multiple matching
+        Datasets for the same DataId. In that case we need only one Dataset
+        record which comes from earliest collection (in the user-provided
+        order). Here things become complicated, we have to:
+        - replace collection names with their order in input list
+        - select all combinations of rows from Dataset and DatasetCollection
+          which match collection names and dataset type name
+        - from those only select rows with lowest collection position if
+          there are multiple collections for the same DataId
+
+        Replacing collection names with positions is easy:
+
+            SELECT dataset_id,
+                CASE collection
+                    WHEN 'collection1' THEN 0
+                    WHEN 'collection2' THEN 1
+                    ...
+                END AS collorder
+            FROM DatasetCollection
+
+        Combined query will look like (CASE ... END is as  above):
+
+            SELECT Dataset.dataset_id AS dataset_id,
+                CASE DatasetCollection.collection ... END AS collorder,
+                Dataset.DataId
+            FROM Dataset JOIN DatasetCollection
+                ON Dataset.dataset_id = DatasetCollection.dataset_id
+            WHERE Dataset.dataset_type_name = <dsType.name>
+                AND DatasetCollection.collection IN (<collections>)
+
+        (here ``Dataset.DataId`` means ``Dataset.link1, Dataset.link2, etc.``)
+
+        Filtering is complicated, it is simpler to use CTE but not all
+        databases support CTEs so we will have to do with the repeating
+        sub-queries. Use GROUP BY for DataId and MIN(collorder) to find
+        ``collorder`` for given DataId, then join it with previous combined
+        selection:
+
+            SELECT DS.dataset_id AS dataset_id, DS.link1 AS link1 ...
+            FROM (SELECT Dataset.dataset_id AS dataset_id,
+                    CASE ... END AS collorder,
+                    Dataset.DataId
+                FROM Dataset JOIN DatasetCollection
+                    ON Dataset.dataset_id = DatasetCollection.dataset_id
+                WHERE Dataset.dataset_type_name = <dsType.name>
+                    AND DatasetCollection.collection IN (<collections>)) DS
+            INNER JOIN
+                (SELECT MIN(CASE ... END AS) collorder, Dataset.DataId
+                FROM Dataset JOIN DatasetCollection
+                    ON Dataset.dataset_id = DatasetCollection.dataset_id
+                WHERE Dataset.dataset_type_name = <dsType.name>
+                   AND DatasetCollection.collection IN (<collections>)
+                GROUP BY Dataset.DataId) DSG
+            ON DS.colpos = DSG.colpos AND DS.DataId = DSG.DataId
+
+        Parameters
+        ----------
+        dsType : `DatasetType`
+        collections : `PreFlightCollections`
+            Object which provides names of the input/output collections.
+        isOutput : `bool`
+            ``True`` for output datasets.
+
+        Returns
+        -------
+        subquery : `sqlalchemy.FromClause` or ``None``
+        """
+
+        # helper method
+        def _columns(selectable, names):
+            """Return list of columns for given column names"""
+            return [selectable.c[name].label(name) for name in names]
+
+        if isOutput:
+
+            outputCollection = collections.getOutputCollection(dsType.name)
+            if not outputCollection:
+                # No output collection means no output datasets exist, we do
+                # not need to do any joins here.
+                return None
+
+            dsCollections = [outputCollection]
+        else:
+            dsCollections = collections.getInputCollections(dsType.name)
+
+        _LOG.debug("using collections: %s", dsCollections)
+
+        # full set of link names for this DatasetType
+        links = set()
+        for unitName in dsType.dataUnits:
+            dataUnit = self._schema.dataUnits[unitName]
+            links.update(dataUnit.link)
+        links = list(links)
+
+        dsTable = self._schema._metadata.tables["Dataset"]
+        dsCollTable = self._schema._metadata.tables["DatasetCollection"]
+
+        if len(dsCollections) == 1:
+
+            # single collection, easy-peasy
+            subJoin = dsTable.join(dsCollTable, dsTable.c.dataset_id == dsCollTable.c.dataset_id)
+            subWhere = and_(dsTable.c.dataset_type_name == dsType.name,
+                            dsCollTable.c.collection == dsCollections[0])
+
+            columns = _columns(dsTable, ["dataset_id"] + links)
+            subquery = select(columns).select_from(subJoin).where(subWhere)
+
+        else:
+
+            # multiple collections
+            subJoin = dsTable.join(dsCollTable, dsTable.c.dataset_id == dsCollTable.c.dataset_id)
+            subWhere = and_(dsTable.c.dataset_type_name == dsType.name,
+                            dsCollTable.c.collection.in_(dsCollections))
+
+            # CASE caluse
+            collorder = case([
+                (dsCollTable.c.collection == coll, pos) for pos, coll in enumerate(dsCollections)
+            ])
+
+            # first GROUP BY sub-query, find minimum `collorder` for each DataId
+            columns = [functions.min(collorder).label("collorder")] + _columns(dsTable, links)
+            groupSubq = select(columns).select_from(subJoin).where(subWhere)
+            groupSubq = groupSubq.group_by(*links)
+            groupSubq = groupSubq.alias("sub1" + dsType.name)
+
+            # next combined sub-query
+            columns = [collorder.label("collorder")] + _columns(dsTable, ["dataset_id"] + links)
+            combined = select(columns).select_from(subJoin).where(subWhere)
+            combined = combined.alias("sub2" + dsType.name)
+
+            # now join these two
+            joinsOn = [groupSubq.c.collorder == combined.c.collorder] + \
+                      [groupSubq.c[colName] == combined.c[colName] for colName in links]
+            subJoin = combined.join(groupSubq, and_(*joinsOn))
+            columns = _columns(combined, ["dataset_id"] + links)
+            subquery = select(columns).select_from(subJoin)
+
+        # need a unique alias name for it, otherwise we'll see name conflicts
+        subquery = subquery.alias("ds" + dsType.name)
+        return subquery
 
     def _convertResultRows(self, rowIter, unitLinkColumns, regionColumns, dsIdColumns):
         """Convert query result rows into `PreFlightUnitsRow` instances.

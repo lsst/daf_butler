@@ -45,18 +45,18 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         """Test for PreFlightCollectionsDef class"""
 
         coll = PreFlightCollectionsDef(defaultInputs=["a", "b"], defaultOutput="out")
-        self.assertEquals(coll.getInputCollections("ds"), ["a", "b"])
-        self.assertEquals(coll.getInputCollections("ds2"), ["a", "b"])
-        self.assertEquals(coll.getOutputCollection("ds"), "out")
-        self.assertEquals(coll.getOutputCollection("ds2"), "out")
+        self.assertEqual(coll.getInputCollections("ds"), ["a", "b"])
+        self.assertEqual(coll.getInputCollections("ds2"), ["a", "b"])
+        self.assertEqual(coll.getOutputCollection("ds"), "out")
+        self.assertEqual(coll.getOutputCollection("ds2"), "out")
 
         coll = PreFlightCollectionsDef(defaultInputs=["a", "b"], defaultOutput="out",
                                        inputOverrides=dict(ds2=["c"]),
                                        outputOverrides=dict(ds2="out2"))
-        self.assertEquals(coll.getInputCollections("ds"), ["a", "b"])
-        self.assertEquals(coll.getInputCollections("ds2"), ["c"])
-        self.assertEquals(coll.getOutputCollection("ds"), "out")
-        self.assertEquals(coll.getOutputCollection("ds2"), "out2")
+        self.assertEqual(coll.getInputCollections("ds"), ["a", "b"])
+        self.assertEqual(coll.getInputCollections("ds2"), ["c"])
+        self.assertEqual(coll.getOutputCollection("ds"), "out")
+        self.assertEqual(coll.getOutputCollection("ds2"), "out2")
 
     def testPreFlightCameraUnits(self):
         """Test involving only Camera units, no joins to SkyMap"""
