@@ -23,7 +23,7 @@ import pickle
 import unittest
 import lsst.utils.tests
 
-import lsst.daf.butler.core.storageClass as storageClass
+from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig
 
 """Tests related to the StorageClass infrastructure.
 """
@@ -43,73 +43,73 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
 
         This is critical for testing the factory functions."""
         className = "TestImage"
-        sc = storageClass.StorageClass(className, pytype=dict)
-        self.assertIsInstance(sc, storageClass.StorageClass)
+        sc = StorageClass(className, pytype=dict)
+        self.assertIsInstance(sc, StorageClass)
         self.assertEqual(sc.name, className)
         self.assertFalse(sc.components)
         self.assertTrue(sc.validateInstance({}))
         self.assertFalse(sc.validateInstance(""))
 
         # Allow no definition of python type
-        scn = storageClass.StorageClass(className)
+        scn = StorageClass(className)
         self.assertIs(scn.pytype, object)
 
         # Include some components
-        scc = storageClass.StorageClass(className, pytype=PythonType, components={"comp1": sc})
+        scc = StorageClass(className, pytype=PythonType, components={"comp1": sc})
         self.assertIn("comp1", scc.components)
         self.assertIn("comp1", repr(scc))
 
         # Check we can create a storageClass using the name of an importable
         # type.
-        sc2 = storageClass.StorageClass("TestImage2",
-                                        "lsst.daf.butler.core.storageClass.StorageClassFactory")
-        self.assertIsInstance(sc2.pytype(), storageClass.StorageClassFactory)
+        sc2 = StorageClass("TestImage2",
+                           "lsst.daf.butler.core.storageClass.StorageClassFactory")
+        self.assertIsInstance(sc2.pytype(), StorageClassFactory)
         self.assertIn("butler.core", repr(sc2))
 
     def testEquality(self):
         """Test that StorageClass equality works"""
         className = "TestImage"
-        sc1 = storageClass.StorageClass(className, pytype=dict)
-        sc2 = storageClass.StorageClass(className, pytype=dict)
+        sc1 = StorageClass(className, pytype=dict)
+        sc2 = StorageClass(className, pytype=dict)
         self.assertEqual(sc1, sc2)
-        sc3 = storageClass.StorageClass(className + "2", pytype=str)
+        sc3 = StorageClass(className + "2", pytype=str)
         self.assertNotEqual(sc1, sc3)
 
         # Same StorageClass name but different python type
-        sc4 = storageClass.StorageClass(className, pytype=str)
+        sc4 = StorageClass(className, pytype=str)
         self.assertNotEqual(sc1, sc4)
 
         # Now with components
-        sc5 = storageClass.StorageClass("Composite", pytype=PythonType,
-                                        components={"comp1": sc1, "comp2": sc3})
-        sc6 = storageClass.StorageClass("Composite", pytype=PythonType,
-                                        components={"comp1": sc1, "comp2": sc3})
+        sc5 = StorageClass("Composite", pytype=PythonType,
+                           components={"comp1": sc1, "comp2": sc3})
+        sc6 = StorageClass("Composite", pytype=PythonType,
+                           components={"comp1": sc1, "comp2": sc3})
         self.assertEqual(sc5, sc6)
         self.assertNotEqual(sc5, sc3)
-        sc7 = storageClass.StorageClass("Composite", pytype=PythonType,
-                                        components={"comp1": sc4, "comp2": sc3})
+        sc7 = StorageClass("Composite", pytype=PythonType,
+                           components={"comp1": sc4, "comp2": sc3})
         self.assertNotEqual(sc5, sc7)
-        sc8 = storageClass.StorageClass("Composite", pytype=PythonType,
-                                        components={"comp2": sc3})
+        sc8 = StorageClass("Composite", pytype=PythonType,
+                           components={"comp2": sc3})
         self.assertNotEqual(sc5, sc8)
-        sc9 = storageClass.StorageClass("Composite", pytype=PythonType,
-                                        components={"comp2": sc3}, assembler="lsst.daf.butler.Butler")
+        sc9 = StorageClass("Composite", pytype=PythonType,
+                           components={"comp2": sc3}, assembler="lsst.daf.butler.Butler")
         self.assertNotEqual(sc5, sc9)
 
     def testRegistry(self):
         """Check that storage classes can be created on the fly and stored
         in a registry."""
         className = "TestImage"
-        factory = storageClass.StorageClassFactory()
-        newclass = storageClass.StorageClass(className, pytype=PythonType)
+        factory = StorageClassFactory()
+        newclass = StorageClass(className, pytype=PythonType)
         factory.registerStorageClass(newclass)
         sc = factory.getStorageClass(className)
-        self.assertIsInstance(sc, storageClass.StorageClass)
+        self.assertIsInstance(sc, StorageClass)
         self.assertEqual(sc.name, className)
         self.assertFalse(sc.components)
         self.assertEqual(sc.pytype, PythonType)
         self.assertIn(sc, factory)
-        newclass2 = storageClass.StorageClass("Temporary2", pytype=str)
+        newclass2 = StorageClass("Temporary2", pytype=str)
         self.assertNotIn(newclass2, factory)
         factory.registerStorageClass(newclass2)
         self.assertIn(newclass2, factory)
@@ -119,7 +119,7 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
 
         # Make sure we can't register a storage class with the same name
         # but different values
-        newclass3 = storageClass.StorageClass("Temporary2", pytype=dict)
+        newclass3 = StorageClass("Temporary2", pytype=dict)
         with self.assertRaises(ValueError):
             factory.registerStorageClass(newclass3)
 
@@ -137,8 +137,8 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         """Test that we can pickle storageclasses.
         """
         className = "TestImage"
-        sc = storageClass.StorageClass(className, pytype=dict)
-        self.assertIsInstance(sc, storageClass.StorageClass)
+        sc = StorageClass(className, pytype=dict)
+        self.assertIsInstance(sc, StorageClass)
         self.assertEqual(sc.name, className)
         self.assertFalse(sc.components)
         sc2 = pickle.loads(pickle.dumps(sc))
