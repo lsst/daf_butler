@@ -141,6 +141,17 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(imageF, type(image))
         self.assertNotEqual(imageF, image)
 
+        # Check component inheritance
+        exposure = factory.getStorageClass("Exposure")
+        exposureF = factory.getStorageClass("ExposureF")
+        self.assertIsInstance(exposureF, type(exposure))
+        self.assertIsInstance(exposure.components["image"], type(image))
+        self.assertNotIsInstance(exposure.components["image"], type(imageF))
+        self.assertIsInstance(exposureF.components["image"], type(image))
+        self.assertIsInstance(exposureF.components["image"], type(imageF))
+        self.assertIn("wcs", exposure.components)
+        self.assertIn("wcs", exposureF.components)
+
     def testPickle(self):
         """Test that we can pickle storageclasses.
         """

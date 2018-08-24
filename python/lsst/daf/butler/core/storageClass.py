@@ -318,6 +318,19 @@ class StorageClassFactory(metaclass=Singleton):
         clsargs = {f"_cls_{k}": v for k, v in kwargs.items() if v is not None}
         clsargs["_cls_name"] = name
 
+        # Components are a special case because we want to be able to
+        # combine components here with components in the parent
+        # so the parent can define a component of class Image but the child
+        # can override with ImageF.
+        compKey = "_cls_components"
+        if compKey in clsargs:
+            components = getattr(baseClass, compKey, None)
+            if components is not None:
+                components = components.copy()
+                # Merge with the supplied values
+                components.update(clsargs[compKey])
+                clsargs[compKey] = components
+
         return type(f"StorageClass{name}", (baseClass,), clsargs)
 
     def getStorageClass(self, storageClassName):
