@@ -237,26 +237,23 @@ class Butler:
             if dataId is None:
                 raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
             datasetType = self.registry.getDatasetType(datasetRefOrType)
-        ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer)
 
-        # Look up storage class to see if this is a composite
-        storageClass = datasetType.storageClass
+        isVirtualComposite = self.composites.doDisassembly(datasetType)
+
+        # Add Registry Dataset entry.  If not a virtual composite, add
+        # and attach components at the same time.
+        ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer,
+                                       recursive=not isVirtualComposite)
 
         # Check to see if this datasetType requires disassembly
-        if self.composites.doDisassembly(datasetType):
-            components = storageClass.assembler().disassemble(obj)
+        if isVirtualComposite:
+            components = datasetType.storageClass.assembler().disassemble(obj)
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)
                 compRef = self.put(info.component, compTypeName, dataId, producer)
                 self.registry.attachComponent(component, ref, compRef)
         else:
             # This is an entity without a disassembler.
-            # If it is a composite we still need to register the components
-            for component in storageClass.components:
-                compTypeName = datasetType.componentTypeName(component)
-                compDatasetType = self.registry.getDatasetType(compTypeName)
-                compRef = self.registry.addDataset(compDatasetType, dataId, run=self.run, producer=producer)
-                self.registry.attachComponent(component, ref, compRef)
             self.datastore.put(obj, ref)
 
         return ref

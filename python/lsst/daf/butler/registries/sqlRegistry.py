@@ -340,7 +340,7 @@ class SqlRegistry(Registry):
         return datasetType
 
     @transactional
-    def addDataset(self, datasetType, dataId, run, producer=None):
+    def addDataset(self, datasetType, dataId, run, producer=None, recursive=False):
         """Adds a Dataset entry to the `Registry`
 
         This always adds a new Dataset; to associate an existing Dataset with
@@ -361,6 +361,9 @@ class SqlRegistry(Registry):
             Unit of work that produced the Dataset.  May be ``None`` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the SqlRegistry.
+        recursive : `bool`
+            If True, recursively add Dataset and attach entries for component
+            Datasets as well.
 
         Returns
         -------
@@ -396,6 +399,14 @@ class SqlRegistry(Registry):
                                 run=run)
         # A dataset is always associated with its Run collection
         self.associate(run.collection, [datasetRef, ])
+
+        if recursive:
+            for component in datasetType.storageClass.components:
+                compTypeName = datasetType.componentTypeName(component)
+                compDatasetType = self.getDatasetType(compTypeName)
+                compRef = self.addDataset(compDatasetType, dataId, run=run, producer=producer,
+                                          recursive=True, transactional=False)
+                self.attachComponent(component, datasetRef, compRef)
         return datasetRef
 
     def getDataset(self, id):
