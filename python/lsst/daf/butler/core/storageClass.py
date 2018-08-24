@@ -172,10 +172,11 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self):
-        return "{}({}, pytype={}, components={})".format(type(self).__qualname__,
-                                                         self.name,
-                                                         self.pytype,
-                                                         list(self.components.keys()))
+        return "{}({}, pytype={}, assembler={}, components={})".format(type(self).__qualname__,
+                                                                       self.name,
+                                                                       self._pytypeName,
+                                                                       self._assemblerClassName,
+                                                                       list(self.components.keys()))
 
 
 class StorageClassFactory(metaclass=Singleton):
