@@ -6,6 +6,8 @@ composites:
     StructuredComposite: True
     StructuredCompositeTestA: True
     StructuredCompositeTestB: True
+    ExposureCompositeI: True
+    ExposureCompositeF: True
   datasetTypes:
     dummyTrue: True
     dummyFalse: False
