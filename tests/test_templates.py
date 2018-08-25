@@ -21,9 +21,13 @@
 
 """Test file name templating."""
 
+import os.path
 import unittest
 
-from lsst.daf.butler import DatasetType, DatasetRef, FileTemplate, StorageClass, Run
+from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, \
+    FileTemplate, FileTemplatesConfig, StorageClass, Run
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class TestFileTemplates(unittest.TestCase):
@@ -111,6 +115,42 @@ class TestFileTemplates(unittest.TestCase):
         tmplstr = "{collection}/{datasetType}/v{visit:05d}"
         with self.assertRaises(KeyError):
             self.assertTemplate(tmplstr, "", refWcs)
+
+    def testSimpleConfig(self):
+        """Test reading from config file"""
+        configRoot = os.path.join(TESTDIR, "config", "templates")
+        config1 = FileTemplatesConfig(os.path.join(configRoot, "templates-nodefault.yaml"))
+        templates = FileTemplates(config1)
+        ref = self.makeDatasetRef("calexp")
+        tmpl = templates.getTemplate(ref.datasetType.name)
+        self.assertIsInstance(tmpl, FileTemplate)
+
+        # This config file should not allow defaulting
+        ref2 = self.makeDatasetRef("unknown")
+        with self.assertRaises(KeyError):
+            templates.getTemplate(ref2.datasetType.name)
+
+        # Format config file with defaulting
+        config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
+        templates = FileTemplates(config2)
+        tmpl = templates.getTemplate(ref2.datasetType.name)
+        self.assertIsInstance(tmpl, FileTemplate)
+
+        # Format config file with bad format string
+        with self.assertRaises(ValueError):
+            FileTemplates(os.path.join(configRoot, "templates-bad.yaml"))
+
+        # Config file with no defaulting mentioned
+        config3 = os.path.join(configRoot, "templates-nodefault2.yaml")
+        templates = FileTemplates(config3)
+        with self.assertRaises(KeyError):
+            templates.getTemplate(ref2.datasetType.name)
+
+        # Try again but specify a default in the constructor
+        default = "{datasetType}/{filter}"
+        templates = FileTemplates(config3, default=default)
+        tmpl = templates.getTemplate(ref2.datasetType.name)
+        self.assertEqual(tmpl.template, default)
 
 
 if __name__ == "__main__":

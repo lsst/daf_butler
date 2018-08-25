@@ -21,6 +21,8 @@
 
 """Support for file template string expansion."""
 
+__all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig")
+
 import os.path
 import string
 
@@ -28,6 +30,7 @@ from .config import Config
 
 
 class FileTemplatesConfig(Config):
+    """Configuration information for `FileTemplates`"""
     pass
 
 
@@ -38,20 +41,32 @@ class FileTemplates:
     ----------
     config : `FileTemplatesConfig` or `str`
         Load configuration.
+    default : `str`, optional
+        If not `None`, a default template to use if no template has
+        been specified explicitly in the configuration.
     """
 
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
         self.templates = {}
-        for name, info in self.config.items():
-            self.templates[name] = FileTemplate(info)
+        self.default = FileTemplate(default) if default is not None else None
+        for name, templateStr in self.config.items():
+            # We can disable defaulting with an empty string in a config
+            # or by using a boolean
+            if name == "default":
+                if not templateStr:
+                    self.default = None
+                else:
+                    self.default = FileTemplate(templateStr)
+            else:
+                self.templates[name] = FileTemplate(templateStr)
 
-    def getTemplate(self, datasetType):
+    def getTemplate(self, datasetTypeName):
         """Retrieve the `FileTemplate` associated with the dataset type.
 
         Parameters
         ----------
-        datasetType : `str`
+        datasetTypeName : `str`
             Dataset type name.
 
         Returns
@@ -67,21 +82,20 @@ class FileTemplates:
         # Get a location from the templates
         template = None
         component = None
-        if datasetType is not None:
-            if datasetType in self.templates:
-                template = self.templates[datasetType]
-            elif "." in datasetType:
-                baseType, component = datasetType.split(".", maxsplit=1)
+        if datasetTypeName is not None:
+            if datasetTypeName in self.templates:
+                template = self.templates[datasetTypeName]
+            elif "." in datasetTypeName:
+                baseType, component = datasetTypeName.split(".", maxsplit=1)
                 if baseType in self.templates:
                     template = self.templates[baseType]
 
-        if template is None:
-            if "default" in self.templates:
-                template = self.templates["default"]
+        if template is None and self.default is not None:
+            template = self.default
 
         # if still not template give up for now.
         if template is None:
-            raise KeyError("Unable to determine file template from supplied type [{}]".format(datasetType))
+            raise KeyError(f"Unable to determine file template from supplied type [{datasetTypeName}]")
 
         return template
 
@@ -115,6 +129,8 @@ class FileTemplate:
     """
 
     def __init__(self, template):
+        if not isinstance(template, str) or "{" not in template:
+            raise ValueError(f"Template ({template}) does not contain any format specifiers")
         self.template = template
 
     def format(self, ref):
