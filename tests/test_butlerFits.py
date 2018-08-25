@@ -74,13 +74,19 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
-    def testExposureCompositePutGet(self):
+    def testExposureCompositePutGetConcrete(self):
+        storageClass = self.storageClassFactory.getStorageClass("ExposureF")
+        self.runExposureCompositePutGetTest(storageClass, "calexp")
+
+    def testExposureCompositePutGetVirtual(self):
+        storageClass = self.storageClassFactory.getStorageClass("ExposureCompositeF")
+        self.runExposureCompositePutGetTest(storageClass, "unknown")
+
+    def runExposureCompositePutGetTest(self, storageClass, datasetTypeName):
         example = os.path.join(TESTDIR, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
         butler = Butler(self.tmpConfigFile)
-        datasetTypeName = "calexp"
         dataUnits = ("Camera", "Visit")
-        storageClass = self.storageClassFactory.getStorageClass("ExposureF")
         self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
         dataId = {"visit": 42, "camera": "DummyCam", "physical_filter": "d-r"}
         # Add needed DataUnits
@@ -88,9 +94,9 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
         butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 42,
                                                    "physical_filter": "d-r"})
-        butler.put(exposure, "calexp", dataId)
+        butler.put(exposure, datasetTypeName, dataId)
         # Get the full thing
-        full = butler.get("calexp", dataId)  # noqa F841
+        full = butler.get(datasetTypeName, dataId)  # noqa F841
         # TODO enable check for equality (fix for Exposure type)
         # self.assertEqual(full, exposure)
         # Get a component

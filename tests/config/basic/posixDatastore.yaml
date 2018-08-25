@@ -2,7 +2,7 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: ./butler_test_repository
   templates:
-    default: "{collection}/{datasetType}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
+    default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{filter:?}/{camera:?}_{visit:?}"
     calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
     metric: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{camera}_{component:?}"
@@ -16,3 +16,4 @@ datastore:
     StructuredData: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
     StructuredDataPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    ExposureCompositeF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
