@@ -12,6 +12,9 @@ storageClasses:
     pytype: dict
   StructuredDataListPickle:
     pytype: list
+  StructuredDataNoComponents:
+    # Reading and writing a blob and no components known
+    pytype: examplePythonTypes.MetricsExample
   StructuredData:
     # Data from a simple Python class
     pytype: examplePythonTypes.MetricsExample
