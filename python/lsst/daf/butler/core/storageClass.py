@@ -132,8 +132,15 @@ class StorageClass:
         assembler : `CompositeAssembler`
             Instance of the assembler associated with this `StorageClass`.
             Assembler is constructed with this `StorageClass`.
+
+        Raises
+        ------
+        TypeError
+            This StorageClass has no associated assembler.
         """
         cls = self.assemblerClass
+        if cls is None:
+            raise TypeError(f"No assembler class is associated with StorageClass {self.name}")
         return cls(storageClass=self)
 
     def validateInstance(self, instance):
