@@ -23,7 +23,7 @@ import pickle
 import unittest
 import lsst.utils.tests
 
-from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig
+from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, CompositeAssembler
 
 """Tests related to the StorageClass infrastructure.
 """
@@ -50,6 +50,10 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertTrue(sc.validateInstance({}))
         self.assertFalse(sc.validateInstance(""))
 
+        # Ensure we do not have an assembler
+        with self.assertRaises(TypeError):
+            sc.assembler()
+
         # Allow no definition of python type
         scn = StorageClass(className)
         self.assertIs(scn.pytype, object)
@@ -58,6 +62,9 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         scc = StorageClass(className, pytype=PythonType, components={"comp1": sc})
         self.assertIn("comp1", scc.components)
         self.assertIn("comp1", repr(scc))
+
+        # Ensure that we have an assembler
+        self.assertIsInstance(scc.assembler(), CompositeAssembler)
 
         # Check we can create a storageClass using the name of an importable
         # type.
