@@ -321,9 +321,9 @@ class PosixDatastore(Datastore):
 
         # Work out output file name
         try:
-            template = self.templates.getTemplate(typeName)
+            template = self.templates.getTemplate(datasetType)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find template for {typeName}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find template for {datasetType}") from e
 
         location = self.locationFactory.fromPath(template.format(ref))
 
@@ -406,7 +406,7 @@ class PosixDatastore(Datastore):
                     raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
                 path = os.path.relpath(path, absRoot)
         else:
-            template = self.templates.getTemplate(ref.datasetType.name)
+            template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))
             newPath = formatter.predictPath(location)
             newFullPath = os.path.join(self.root, newPath)
@@ -487,9 +487,7 @@ class PosixDatastore(Datastore):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            datasetType = ref.datasetType
-            typeName = datasetType.name
-            template = self.templates.getTemplate(typeName)
+            template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref) + "#predicted")
         else:
             # If this is a ref that we have written we can get the path.

@@ -61,13 +61,20 @@ class FileTemplates:
             else:
                 self.templates[name] = FileTemplate(templateStr)
 
-    def getTemplate(self, datasetTypeName):
+    def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
+
+        If the lookup name corresponds to a component the base name for
+        the component will be examined if the full component name does
+        not match.
 
         Parameters
         ----------
-        datasetTypeName : `str`
-            Dataset type name.
+        entity : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Instance to use to look for a corresponding template.
+            A `DatasetType` name or a `StorageClass` name will be used
+            depending on the supplied entity. Priority is given to a
+            `DatasetType` name.
 
         Returns
         -------
@@ -79,23 +86,28 @@ class FileTemplates:
         KeyError
             No template could be located for this Dataset type.
         """
+
+        # Get the names to use for lookup
+        names = entity.lookupNames()
+
         # Get a location from the templates
         template = None
-        component = None
-        if datasetTypeName is not None:
-            if datasetTypeName in self.templates:
-                template = self.templates[datasetTypeName]
-            elif "." in datasetTypeName:
-                baseType, component = datasetTypeName.split(".", maxsplit=1)
+        for name in names:
+            if name in self.templates:
+                template = self.templates[name]
+            elif "." in name:
+                baseType, component = name.split(".", maxsplit=1)
                 if baseType in self.templates:
                     template = self.templates[baseType]
+            if template is not None:
+                break
 
         if template is None and self.default is not None:
             template = self.default
 
         # if still not template give up for now.
         if template is None:
-            raise KeyError(f"Unable to determine file template from supplied type [{datasetTypeName}]")
+            raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
 
         return template
 

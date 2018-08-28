@@ -1,3 +1,4 @@
 # This file disables defaulting
 default: False
 calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
+StorageClassX: "StorageClass/{datasetType}"
