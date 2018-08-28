@@ -42,16 +42,15 @@ class TestCompositesConfig(unittest.TestCase):
         c = CompositesConfig(self.configFile)
         self.assertIn("default", c)
         # Check merging has worked
-        self.assertIn("datasetTypes.calexp", c)
-        self.assertIn("datasetTypes.dummyTrue", c)
-        self.assertIn("storageClasses.StructuredComposite", c)
-        self.assertIn("storageClasses.ExposureF", c)
+        self.assertIn("names.calexp", c)
+        self.assertIn("names.dummyTrue", c)
+        self.assertIn("names.StructuredComposite", c)
+        self.assertIn("names.ExposureF", c)
 
         # Check that all entries are booleans (this is meant to be enforced
         # internally)
-        for n in ("storageClasses", "datasetTypes"):
-            for k in c[n]:
-                self.assertIsInstance(c[f"{n}.{k}"], bool, f"Testing {n}.{k}")
+        for k in c["names"]:
+            self.assertIsInstance(c[f"names.{k}"], bool, f"Testing names.{k}")
 
     def testMap(self):
         c = CompositesMap(self.configFile)
