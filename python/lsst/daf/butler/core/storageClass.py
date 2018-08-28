@@ -289,7 +289,7 @@ class StorageClassFactory(metaclass=Singleton):
             storageClassKwargs["components"] = components
 
             # Create the new storage class and register it
-            baseClass = StorageClass
+            baseClass = None
             if "inheritsFrom" in info:
                 baseName = info["inheritsFrom"]
                 if baseName not in self:
@@ -304,21 +304,28 @@ class StorageClassFactory(metaclass=Singleton):
             processStorageClass(name, sconfig)
 
     @staticmethod
-    def makeNewStorageClass(name, baseClass, **kwargs):
+    def makeNewStorageClass(name, baseClass=StorageClass, **kwargs):
         """Create a new Python class as a subclass of `StorageClass`.
 
         Parameters
         ----------
         name : `str`
             Name to use for this class.
-        baseClass : `type`
-            Base class for this `StorageClass`.
+        baseClass : `type`, optional
+            Base class for this `StorageClass`. Must be either `StorageClass`
+            or a subclass of `StorageClass`. If `None`, `StorageClass` will
+            be used.
 
         Returns
         -------
         newtype : `type` subclass of `StorageClass`
             Newly created Python type.
         """
+
+        if baseClass is None:
+            baseClass = StorageClass
+        if not issubclass(baseClass, StorageClass):
+            raise ValueError(f"Base class must be a StorageClass not {baseClass}")
 
         # convert the arguments to use different internal names
         clsargs = {f"_cls_{k}": v for k, v in kwargs.items() if v is not None}

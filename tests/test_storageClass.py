@@ -159,6 +159,14 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIn("wcs", exposure.components)
         self.assertIn("wcs", exposureF.components)
 
+        # Check that we can't have a new StorageClass that does not
+        # inherit from StorageClass
+        with self.assertRaises(ValueError):
+            factory.makeNewStorageClass("ClassName", baseClass=StorageClassFactory)
+
+        sc = factory.makeNewStorageClass("ClassName")
+        self.assertIsInstance(sc(), StorageClass)
+
     def testPickle(self):
         """Test that we can pickle storageclasses.
         """
