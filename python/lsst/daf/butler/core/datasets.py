@@ -159,7 +159,7 @@ class DatasetType:
         """
         return self.storageClass.isComposite()
 
-    def lookupNames(self):
+    def _lookupNames(self):
         """Names to use when looking up this datasetType in a configuration.
 
         The names are returned in order of priority.
@@ -169,7 +169,7 @@ class DatasetType:
         names : `tuple` of `str`
             Tuple of the `DatasetType` name and the `StorageClass` name.
         """
-        return (self.name, *self.storageClass.lookupNames())
+        return (self.name, *self.storageClass._lookupNames())
 
 
 class DatasetRef:
@@ -304,7 +304,7 @@ class DatasetRef:
         """
         return self.datasetType.isComposite()
 
-    def lookupNames(self):
+    def _lookupNames(self):
         """Names to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
@@ -314,4 +314,4 @@ class DatasetRef:
         names : `tuple` of `str`
             Tuple of the `DatasetType` name and the `StorageClass` name.
         """
-        return self.datasetType.lookupNames()
+        return self.datasetType._lookupNames()

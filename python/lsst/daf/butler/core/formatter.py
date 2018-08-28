@@ -108,7 +108,7 @@ class FormatterFactory:
         if isinstance(entity, str):
             names = (entity,)
         else:
-            names = entity.lookupNames()
+            names = entity._lookupNames()
         return self._mappingFactory.getFromRegistry(*names)
 
     def registerFormatter(self, type_, formatter):

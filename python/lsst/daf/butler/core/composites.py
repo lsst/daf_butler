@@ -95,7 +95,7 @@ class CompositesMap:
         matchName = "{} (via default)".format(entity)
         disassemble = self.config["default"]
 
-        for name in (entity.lookupNames()):
+        for name in (entity._lookupNames()):
             if name is not None and name in self.config["disassembled"]:
                 disassemble = self.config[f"disassembled.{name}"]
                 matchName = name

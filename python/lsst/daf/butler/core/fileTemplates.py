@@ -88,7 +88,7 @@ class FileTemplates:
         """
 
         # Get the names to use for lookup
-        names = entity.lookupNames()
+        names = entity._lookupNames()
 
         # Get a location from the templates
         template = None

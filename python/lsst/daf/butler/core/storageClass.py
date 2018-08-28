@@ -157,7 +157,7 @@ class StorageClass:
             return True
         return False
 
-    def lookupNames(self):
+    def _lookupNames(self):
         """Names to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
