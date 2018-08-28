@@ -22,8 +22,7 @@
 import unittest
 import lsst.utils.tests
 
-import lsst.daf.butler.core.formatter as formatter
-import lsst.daf.butler.core.storageClass as storageClass
+from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType
 
 """Tests related to the formatter infrastructure.
 """
@@ -34,7 +33,7 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
     """
 
     def setUp(self):
-        self.factory = formatter.FormatterFactory()
+        self.factory = FormatterFactory()
 
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
@@ -43,7 +42,7 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName)
-        self.assertIsInstance(f, formatter.Formatter)
+        self.assertIsInstance(f, Formatter)
         # Defer the import so that we ensure that the infrastructure loaded it on demand previously
         from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
         self.assertEqual(type(f), FitsCatalogFormatter)
@@ -65,9 +64,6 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
             self.factory.registerFormatter("NotImportable", "not a thing")
 
         with self.assertRaises(KeyError):
-            f = self.factory.getFormatter("Missing", "AlsoMissing")
-
-        with self.assertRaises(KeyError):
             f = self.factory.getFormatter("Missing")
 
     def testRegistryWithStorageClass(self):
@@ -75,14 +71,21 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         """
         formatterTypeName = "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter"
         storageClassName = "TestClass"
-        sc = storageClass.StorageClass(storageClassName, dict, None)
+        sc = StorageClass(storageClassName, dict, None)
+
+        datasetType = DatasetType("calexp", {}, sc)
 
         # Store using an instance
         self.factory.registerFormatter(sc, formatterTypeName)
 
         # Retrieve using the class
         f = self.factory.getFormatter(sc)
-        self.assertIsInstance(f, formatter.Formatter)
+        self.assertIsInstance(f, Formatter)
+
+        # Retrieve using the DatasetType
+        f2 = self.factory.getFormatter(datasetType)
+        self.assertIsInstance(f, Formatter)
+        self.assertEqual(f.name, f2.name)
 
         # This might defer the import, pytest may have already loaded it
         from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter

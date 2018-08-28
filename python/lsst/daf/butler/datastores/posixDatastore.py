@@ -329,7 +329,7 @@ class PosixDatastore(Datastore):
 
         # Get the formatter based on the storage class
         try:
-            formatter = self.formatterFactory.getFormatter(datasetType.storageClass, typeName)
+            formatter = self.formatterFactory.getFormatter(datasetType)
         except KeyError as e:
             raise DatasetTypeNotSupportedError("Unable to find formatter for StorageClass "
                                                f"{datasetType.storageClass.name} or "
@@ -390,8 +390,7 @@ class PosixDatastore(Datastore):
             location computed from the template.
         """
         if formatter is None:
-            formatter = self.formatterFactory.getFormatter(ref.datasetType.storageClass,
-                                                           ref.datasetType.name)
+            formatter = self.formatterFactory.getFormatter(ref)
 
         fullPath = os.path.join(self.root, path)
         if not os.path.exists(fullPath):

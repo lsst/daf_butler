@@ -95,18 +95,21 @@ class FormatterFactory:
     def __init__(self):
         self._mappingFactory = MappingFactory(Formatter)
 
-    def getFormatter(self, storageClass, datasetType=None):
+    def getFormatter(self, entity):
         """Get a new formatter instance.
 
         Parameters
         ----------
-        storageClass : `StorageClass`
-            Get `Formatter` associated with this `StorageClass`, unless.
-        datasetType : `DatasetType` or `str`, optional
-            If given, look if an override has been specified for this
-            `DatasetType` and, if so return that instead.
+        entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
+            Entity to use to determine the formatter to return.
+            `StorageClass` will be used as a last resort if `DatasetRef`
+            or `DatasetType` instance is provided.
         """
-        return self._mappingFactory.getFromRegistry(datasetType, storageClass)
+        if isinstance(entity, str):
+            names = (entity,)
+        else:
+            names = entity.lookupNames()
+        return self._mappingFactory.getFromRegistry(*names)
 
     def registerFormatter(self, type_, formatter):
         """Register a `Formatter`.
