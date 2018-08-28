@@ -22,7 +22,6 @@
 """Support for Storage Classes."""
 
 import builtins
-import itertools
 import logging
 
 from .utils import doImport, Singleton, getFullTypeName
@@ -54,10 +53,22 @@ class StorageClass:
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
+    _cls_name = "BaseStorageClass"
+    _cls_components = None
+    _cls_assembler = None
+    _cls_pytype = None
     defaultAssembler = CompositeAssembler
     defaultAssemblerName = getFullTypeName(defaultAssembler)
 
-    def __init__(self, name, pytype=None, components=None, assembler=None):
+    def __init__(self, name=None, pytype=None, components=None, assembler=None):
+        if name is None:
+            name = self._cls_name
+        if pytype is None:
+            pytype = self._cls_pytype
+        if components is None:
+            components = self._cls_components
+        if assembler is None:
+            assembler = self._cls_assembler
         self.name = name
         self._pytypeName = pytype
         if pytype is None:
@@ -121,8 +132,15 @@ class StorageClass:
         assembler : `CompositeAssembler`
             Instance of the assembler associated with this `StorageClass`.
             Assembler is constructed with this `StorageClass`.
+
+        Raises
+        ------
+        TypeError
+            This StorageClass has no associated assembler.
         """
         cls = self.assemblerClass
+        if cls is None:
+            raise TypeError(f"No assembler class is associated with StorageClass {self.name}")
         return cls(storageClass=self)
 
     def validateInstance(self, instance):
@@ -146,7 +164,7 @@ class StorageClass:
         if self.name != other.name:
             return False
 
-        if type(self) != type(other):
+        if not isinstance(other, StorageClass):
             return False
 
         # We must compare pytype and assembler by name since we do not want
@@ -172,10 +190,11 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self):
-        return "{}({}, pytype={}, components={})".format(type(self).__qualname__,
-                                                         self.name,
-                                                         self.pytype,
-                                                         list(self.components.keys()))
+        return "{}({}, pytype={}, assembler={}, components={})".format(type(self).__qualname__,
+                                                                       self.name,
+                                                                       self._pytypeName,
+                                                                       self._assemblerClassName,
+                                                                       list(self.components.keys()))
 
 
 class StorageClassFactory(metaclass=Singleton):
@@ -244,18 +263,14 @@ class StorageClassFactory(metaclass=Singleton):
         self._configs.append(sconfig)
 
         # Since we can not assume that we will get definitions of
-        # components before the definitions of the composites, we create
-        # two lists
-        composites = {}
-        simple = {}
-        for name, info in sconfig.items():
-            if "components" in info:
-                composites[name] = info
-            else:
-                simple[name] = info
-
-        for name in itertools.chain(simple, composites):
-            info = sconfig[name]
+        # components or parents before their classes are defined
+        # we have a helper function that we can call recursively
+        # to extract definitions from the configuration.
+        def processStorageClass(name, sconfig):
+            # Maybe we've already processed this through recursion
+            if name not in sconfig:
+                return
+            info = sconfig.pop(name)
 
             # Always create the storage class so we can ensure that
             # we are not trying to overwrite with a different definition
@@ -263,6 +278,8 @@ class StorageClassFactory(metaclass=Singleton):
             if "components" in info:
                 components = {}
                 for cname, ctype in info["components"].items():
+                    if ctype not in self:
+                        processStorageClass(ctype, sconfig)
                     components[cname] = self.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for StorageClass Constructor
@@ -272,8 +289,62 @@ class StorageClassFactory(metaclass=Singleton):
             storageClassKwargs["components"] = components
 
             # Create the new storage class and register it
-            newStorageClass = StorageClass(name, **storageClassKwargs)
+            baseClass = None
+            if "inheritsFrom" in info:
+                baseName = info["inheritsFrom"]
+                if baseName not in self:
+                    processStorageClass(baseName, sconfig)
+                baseClass = type(self.getStorageClass(baseName))
+
+            newStorageClassType = self.makeNewStorageClass(name, baseClass, **storageClassKwargs)
+            newStorageClass = newStorageClassType()
             self.registerStorageClass(newStorageClass)
+
+        for name in list(sconfig.keys()):
+            processStorageClass(name, sconfig)
+
+    @staticmethod
+    def makeNewStorageClass(name, baseClass=StorageClass, **kwargs):
+        """Create a new Python class as a subclass of `StorageClass`.
+
+        Parameters
+        ----------
+        name : `str`
+            Name to use for this class.
+        baseClass : `type`, optional
+            Base class for this `StorageClass`. Must be either `StorageClass`
+            or a subclass of `StorageClass`. If `None`, `StorageClass` will
+            be used.
+
+        Returns
+        -------
+        newtype : `type` subclass of `StorageClass`
+            Newly created Python type.
+        """
+
+        if baseClass is None:
+            baseClass = StorageClass
+        if not issubclass(baseClass, StorageClass):
+            raise ValueError(f"Base class must be a StorageClass not {baseClass}")
+
+        # convert the arguments to use different internal names
+        clsargs = {f"_cls_{k}": v for k, v in kwargs.items() if v is not None}
+        clsargs["_cls_name"] = name
+
+        # Components are a special case because we want to be able to
+        # combine components here with components in the parent
+        # so the parent can define a component of class Image but the child
+        # can override with ImageF.
+        compKey = "_cls_components"
+        if compKey in clsargs:
+            components = getattr(baseClass, compKey, None)
+            if components is not None:
+                components = components.copy()
+                # Merge with the supplied values
+                components.update(clsargs[compKey])
+                clsargs[compKey] = components
+
+        return type(f"StorageClass{name}", (baseClass,), clsargs)
 
     def getStorageClass(self, storageClassName):
         """Get a StorageClass instance associated with the supplied name.
@@ -287,6 +358,11 @@ class StorageClassFactory(metaclass=Singleton):
         -------
         instance : `StorageClass`
             Instance of the correct `StorageClass`.
+
+        Raises
+        ------
+        KeyError
+            The requested storage class name is not registered.
         """
         return self._storageClasses[storageClassName]
 
@@ -310,8 +386,8 @@ class StorageClassFactory(metaclass=Singleton):
         if storageClass.name in self._storageClasses:
             existing = self.getStorageClass(storageClass.name)
             if existing != storageClass:
-                raise ValueError(f"New definition for StorageClass {storageClass.name} differs from current"
-                                 " definition")
+                raise ValueError(f"New definition for StorageClass {storageClass.name} ({storageClass}) "
+                                 f"differs from current definition ({existing})")
         else:
             self._storageClasses[storageClass.name] = storageClass
 

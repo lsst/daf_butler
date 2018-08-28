@@ -25,6 +25,7 @@ Butler top level classes.
 
 import os
 import contextlib
+import logging
 
 from .core.utils import doImport, transactional
 from .core.datasets import DatasetRef
@@ -38,6 +39,8 @@ from .core.composites import CompositesMap
 
 
 __all__ = ("Butler",)
+
+log = logging.getLogger(__name__)
 
 
 class Butler:
@@ -224,6 +227,7 @@ class Butler:
             Raised if the butler was not constructed with a Run, and is hence
             read-only.
         """
+        log.debug("Butler put: %s, dataId=%s, producer=%s", datasetRefOrType, dataId, producer)
         if self.run is None:
             raise TypeError("Butler is read-only.")
         if isinstance(datasetRefOrType, DatasetRef):
@@ -322,6 +326,7 @@ class Butler:
         obj : `object`
             The dataset.
         """
+        log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
         if isinstance(datasetRefOrType, DatasetRef):
             if dataId is not None:
                 raise ValueError("DatasetRef given, cannot use dataId as well")

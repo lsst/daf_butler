@@ -9,8 +9,6 @@ composites:
     # into default config. Config class has no way of merging lists.
     ExposureI: False
     ExposureF: False
-    ExposureCompositeI: True
-    ExposureCompositeF: True
   datasetTypes:
     # Same definition as for storage classes, but dataset type explicitly
     # overrides a storage class definition.

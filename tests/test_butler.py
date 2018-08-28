@@ -71,7 +71,9 @@ class ButlerTests:
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
-    def assertGetComponents(self, butler, datasetTypeName, dataId, components, reference):
+    def assertGetComponents(self, butler, datasetRef, components, reference):
+        datasetTypeName = datasetRef.datasetType.name
+        dataId = datasetRef.dataId
         for component in components:
             compTypeName = DatasetType.nameWithComponent(datasetTypeName, component)
             result = butler.get(compTypeName, dataId)
@@ -98,79 +100,28 @@ class ButlerTests:
         self.assertIsInstance(butler, Butler)
 
     def testBasicPutGet(self):
-        butler = Butler(self.tmpConfigFile)
-        # Create and register a DatasetType
-        datasetTypeName = "test_metric"
-        dataUnits = ("Camera", "Visit")
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        self.runPutGetTest(storageClass, "test_metric")
+
+    def testCompositePutGetConcrete(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+        self.runPutGetTest(storageClass, "test_metric")
 
-        # Add needed DataUnits
-        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 42,
-                                                   "physical_filter": "d-r"})
-
-        # Create and store a dataset
-        metric = makeExampleMetrics()
-        dataId = {"camera": "DummyCam", "visit": 42}
-        ref = butler.put(metric, datasetTypeName, dataId)
-        self.assertIsInstance(ref, DatasetRef)
-        # Test getDirect
-        metricOut = butler.getDirect(ref)
-        self.assertEqual(metric, metricOut)
-        # Test get
-        metricOut = butler.get(datasetTypeName, dataId)
-        self.assertEqual(metric, metricOut)
-
-        # Check we can get components
-        self.assertGetComponents(butler, datasetTypeName, dataId,
-                                 ("summary", "data", "output"), metric)
-
-    def testBasicPutGetWithDatasetRef(self):
-        butler = Butler(self.tmpConfigFile)
-        # Create and register a DatasetType
-        datasetTypeName = "test_metric"
-        dataUnits = ("Camera", "Visit")
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
-
-        # Add needed DataUnits
-        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 42,
-                                                   "physical_filter": "d-r"})
-
-        # Create and store a dataset using a DatasetRef
-        metric = makeExampleMetrics()
-        dataId = {"camera": "DummyCam", "visit": 42}
-        datasetType = butler.registry.getDatasetType(datasetTypeName)
-        ref = DatasetRef(datasetType, dataId, id=None)
-        ref = butler.put(metric, ref)
-        self.assertIsInstance(ref, DatasetRef)
-        # Put with a preexisting id should fail
-        with self.assertRaises(ValueError):
-            butler.put(metric, DatasetRef(datasetType, dataId, id=100))
-        # Test regular get
-        metricOut = butler.get(datasetTypeName, dataId)
-        self.assertEqual(metric, metricOut)
-        # Test get with DatasetRef
-        metricOut = butler.get(ref)
-        self.assertEqual(metric, metricOut)
-        # Combining a DatasetRef with a dataId should fail
-        with self.assertRaises(ValueError):
-            butler.get(ref, dataId)
-        # Getting with an explicit ref should fail if the id doesn't match
-        with self.assertRaises(ValueError):
-            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=101))
-
-    def testCompositePutGet(self):
-        butler = Butler(self.tmpConfigFile)
-        # Create and register a DatasetType
-        datasetTypeName = "test_metric_comp"
-        dataUnits = ("Camera", "Visit")
+    def testCompositePutGetVirtual(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
+        self.runPutGetTest(storageClass, "test_metric_comp")
+
+    def runPutGetTest(self, storageClass, datasetTypeName):
+        butler = Butler(self.tmpConfigFile)
+        # Create and register a DatasetType
+        dataUnits = ("Camera", "Visit")
+
+        # We can not delete datasets so for now create two so we can do
+        # two puts.
         self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+
+        datasetTypeName2 = datasetTypeName + "2"
+        self.addDatasetType(datasetTypeName2, dataUnits, storageClass, butler.registry)
 
         # Add needed DataUnits
         butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
@@ -182,18 +133,41 @@ class ButlerTests:
         # Create and store a dataset
         metric = makeExampleMetrics()
         dataId = {"camera": "DummyCamComp", "visit": 423}
-        ref = butler.put(metric, datasetTypeName, dataId)
-        self.assertIsInstance(ref, DatasetRef)
-        # Test getDirect
-        metricOut = butler.getDirect(ref)
-        self.assertEqual(metric, metricOut)
-        # Test get
-        metricOut = butler.get(datasetTypeName, dataId)
-        self.assertEqual(metric, metricOut)
 
-        # Check we can get components
-        self.assertGetComponents(butler, datasetTypeName, dataId,
-                                 ("summary", "data", "output"), metric)
+        # Create a DatasetRef for put
+        datasetType2 = butler.registry.getDatasetType(datasetTypeName2)
+        ref2 = DatasetRef(datasetType2, dataId, id=None)
+
+        # Put with a preexisting id should fail
+        with self.assertRaises(ValueError):
+            butler.put(metric, DatasetRef(datasetType2, dataId, id=100))
+
+        # Put the dataset once as a DatasetRef and once as a dataId
+        for args in ((ref2,), (datasetTypeName, dataId)):
+            ref = butler.put(metric, *args)
+            self.assertIsInstance(ref, DatasetRef)
+
+            # Test getDirect
+            metricOut = butler.getDirect(ref)
+            self.assertEqual(metric, metricOut)
+            # Test get
+            metricOut = butler.get(ref.datasetType.name, dataId)
+            self.assertEqual(metric, metricOut)
+            # Test get with a datasetRef
+            metricOut = butler.get(ref)
+            self.assertEqual(metric, metricOut)
+
+            # Check we can get components
+            if storageClass.components:
+                self.assertGetComponents(butler, ref,
+                                         ("summary", "data", "output"), metric)
+
+        # Combining a DatasetRef with a dataId should fail
+        with self.assertRaises(ValueError):
+            butler.get(ref, dataId)
+        # Getting with an explicit ref should fail if the id doesn't match
+        with self.assertRaises(ValueError):
+            butler.get(DatasetRef(ref.datasetType, ref.dataId, id=101))
 
     def testPickle(self):
         """Test pickle support.
@@ -230,7 +204,7 @@ class ButlerTests:
                 metricOut = butler.get(datasetTypeName, dataId)
                 self.assertEqual(metric, metricOut)
                 # Check we can get components
-                self.assertGetComponents(butler, datasetTypeName, dataId,
+                self.assertGetComponents(butler, ref,
                                          ("summary", "data", "output"), metric)
                 raise TransactionTestError("This should roll back the entire transaction")
 

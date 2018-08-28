@@ -22,22 +22,23 @@ storageClasses:
   Image: &Image
     pytype: lsst.afw.image.Image
   ImageF:
-    <<: *Image
+    inheritsFrom: Image
     pytype: lsst.afw.image.ImageF
   ImageI:
-    <<: *Image
+    inheritsFrom: Image
     pytype: lsst.afw.image.ImageI
   ImageU:
-    <<: *Image
+    inheritsFrom: Image
     pytype: lsst.afw.image.ImageU
-  DecoratedImage: &DecoratedImage
+  DecoratedImage:
     pytype: lsst.afw.image.DecoratedImage
   DecoratedImageU:
-    <<: *DecoratedImage
+    inheritsFrom: DecoratedImage
     pytype: lsst.afw.image.DecoratedImageU
   Mask:
     pytype: lsst.afw.image.Mask
   MaskX:
+    inheritsFrom: Mask
     pytype: lsst.afw.image.MaskX
   Catalog:
     pytype: lsst.afw.table.BaseCatalog
@@ -53,7 +54,7 @@ storageClasses:
     pytype: lsst.daf.base.PropertyList
   PropertySet:
     pytype: lsst.daf.base.PropertySet
-  Exposure: &Exposure
+  Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
     components:
@@ -68,42 +69,20 @@ storageClasses:
       coaddInputs: TablePersistableCoaddInputs
       transmissionCurve: TablePersistableTransmissionCurve
       metadata: PropertyList
-  ExposureF: &ExposureF
-    <<: *Exposure
+  ExposureF:
+    inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
     components:
       image: ImageF
       mask: MaskX
       variance: ImageF
-      wcs: TablePersistableWcs
-      psf: TablePersistablePsf
-      calib: TablePersistableCalib
-      visitInfo: TablePersistableVisitInfo
-      apCorrMap: TablePersistableApCorr
-      coaddInputs: TablePersistableCoaddInputs
-      transmissionCurve: TablePersistableTransmissionCurve
-      metadata: PropertyList
-  ExposureI: &ExposureI
-    <<: *Exposure
+  ExposureI:
+    inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureI
     components:
       image: ImageI
       mask: MaskX
       variance: ImageF
-      wcs: TablePersistableWcs
-      psf: TablePersistablePsf
-      calib: TablePersistableCalib
-      visitInfo: TablePersistableVisitInfo
-      apCorrMap: TablePersistableApCorr
-      coaddInputs: TablePersistableCoaddInputs
-      transmissionCurve: TablePersistableTransmissionCurve
-      metadata: PropertyList
-  ExposureComposite:
-    <<: *Exposure
-  ExposureCompositeF:
-    <<: *ExposureF
-  ExposureCompositeI:
-    <<: *ExposureI
   Background:
     pytype: lsst.afw.math.BackgroundList
   Config:
