@@ -136,6 +136,18 @@ class TestFileTemplates(unittest.TestCase):
         tmpl = templates.getTemplate(ref3)
         self.assertIsInstance(tmpl, FileTemplate)
 
+        # Try with a component: one with defined formatter and one without
+        ref_wcs = self.makeDatasetRef("calexp.wcs")
+        ref_image = self.makeDatasetRef("calexp.image")
+        tmpl_calexp = templates.getTemplate(ref)
+        tmpl_wcs = templates.getTemplate(ref_wcs)  # Should be special
+        tmpl_image = templates.getTemplate(ref_image)
+        self.assertIsInstance(tmpl_calexp, FileTemplate)
+        self.assertIsInstance(tmpl_image, FileTemplate)
+        self.assertIsInstance(tmpl_wcs, FileTemplate)
+        self.assertEqual(tmpl_calexp, tmpl_image)
+        self.assertNotEqual(tmpl_calexp, tmpl_wcs)
+
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
         templates = FileTemplates(config2)
