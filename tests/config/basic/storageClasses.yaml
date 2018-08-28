@@ -47,3 +47,12 @@ storageClasses:
     inheritsFrom: ExposureF
   ExposureCompositeI:
     inheritsFrom: ExposureI
+  ThingOne:
+    pytype: dict
+    parameters:
+      - param1
+      - param2
+  ThingTwo:
+    inheritsFrom: ThingOne
+    parameters:
+      - param3

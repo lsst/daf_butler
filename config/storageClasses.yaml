@@ -57,6 +57,9 @@ storageClasses:
   Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    parameters:
+      - bbox
+      - origin
     components:
       image: Image
       mask: Mask
