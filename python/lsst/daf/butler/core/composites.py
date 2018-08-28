@@ -32,14 +32,14 @@ log = logging.getLogger(__name__)
 
 class CompositesConfig(ConfigSubset):
     component = "composites"
-    requiredKeys = ("default", "names")
+    requiredKeys = ("default", "disassembled")
     defaultConfigFile = "composites.yaml"
 
     def validate(self):
         """Validate entries have the correct type."""
         super().validate()
-        for k in self["names"]:
-            key = f"names.{k}"
+        for k in self["disassembled"]:
+            key = f"disassembled.{k}"
             if not isinstance(self[key], bool):
                 raise ValueError(f"CompositesConfig: Key {key} is not a Boolean")
 
@@ -96,8 +96,8 @@ class CompositesMap:
         disassemble = self.config["default"]
 
         for name in (entity.lookupNames()):
-            if name is not None and name in self.config["names"]:
-                disassemble = self.config[f"names.{name}"]
+            if name is not None and name in self.config["disassembled"]:
+                disassemble = self.config[f"disassembled.{name}"]
                 matchName = name
                 break
 

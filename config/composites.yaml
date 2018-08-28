@@ -7,7 +7,7 @@ composites:
   # Use a dict rather than a list to allow easy merging of user config
   # into default config. Config class has no way of merging lists.
   # Types can be StorageClass names or DatasetType names
-  names:
+  disassembled:
     ExposureI: False
     ExposureF: False
     calexp: False
