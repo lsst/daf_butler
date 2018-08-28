@@ -148,6 +148,17 @@ class DatasetType:
             return self.nameWithComponent(self.name, component)
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
 
+    def isComposite(self):
+        """Boolean indicating whether this `DatasetType` is a composite type.
+
+        Returns
+        -------
+        isComposite : `bool`
+            `True` if this `DatasetType` is a composite type, `False`
+            otherwise.
+        """
+        return self.storageClass.isComposite()
+
     def lookupNames(self):
         """Names to use when looking up this datasetType in a configuration.
 
@@ -281,6 +292,17 @@ class DatasetRef:
         ref = deepcopy(self)
         ref._id = None
         return ref
+
+    def isComposite(self):
+        """Boolean indicating whether this `DatasetRef` is a composite type.
+
+        Returns
+        -------
+        isComposite : `bool`
+            `True` if this `DatasetRef` is a composite type, `False`
+            otherwise.
+        """
+        return self.datasetType.isComposite()
 
     def lookupNames(self):
         """Names to use when looking up this DatasetRef in a configuration.

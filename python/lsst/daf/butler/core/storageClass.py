@@ -143,6 +143,20 @@ class StorageClass:
             raise TypeError(f"No assembler class is associated with StorageClass {self.name}")
         return cls(storageClass=self)
 
+    def isComposite(self):
+        """Boolean indicating whether this `StorageClass` is a composite
+        or not.
+
+        Returns
+        -------
+        isComposite : `bool`
+            `True` if this `StorageClass` is a composite, `False`
+            otherwise.
+        """
+        if self.components:
+            return True
+        return False
+
     def lookupNames(self):
         """Names to use when looking up this DatasetRef in a configuration.
 

@@ -62,6 +62,8 @@ class TestCompositesConfig(unittest.TestCase):
         # These will fail (not a composite)
         sc = StorageClass("StructuredDataJson")
         d = DatasetType("dummyTrue", ("a", "b"), sc)
+        self.assertFalse(sc.isComposite())
+        self.assertFalse(d.isComposite())
         self.assertFalse(c.doDisassembly(d), f"Test with DatasetType: {d}")
         self.assertFalse(c.doDisassembly(sc), f"Test with StorageClass: {sc}")
 
@@ -69,6 +71,8 @@ class TestCompositesConfig(unittest.TestCase):
         sccomp = StorageClass("Dummy")
         sc = StorageClass("StructuredDataJson", components={"dummy": sccomp})
         d = DatasetType("dummyTrue", ("a", "b"), sc)
+        self.assertTrue(sc.isComposite())
+        self.assertTrue(d.isComposite())
         self.assertTrue(c.doDisassembly(d), f"Test with DatasetType: {d}")
         self.assertFalse(c.doDisassembly(sc), f"Test with StorageClass: {sc}")
 

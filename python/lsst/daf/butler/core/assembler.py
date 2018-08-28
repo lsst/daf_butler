@@ -180,7 +180,7 @@ class CompositeAssembler:
             `CompositeAssembler.storageClass`.
         """
         components = {}
-        if self.storageClass is not None and self.storageClass.components:
+        if self.storageClass is not None and self.storageClass.isComposite():
             for c in self.storageClass.components:
                 if isinstance(composite, collections.Mapping):
                     comp = composite[c]

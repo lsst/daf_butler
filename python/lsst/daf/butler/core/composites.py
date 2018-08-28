@@ -26,8 +26,6 @@ __all__ = ("CompositesConfig", "CompositesMap")
 import logging
 
 from .config import ConfigSubset
-from .datasets import DatasetType, DatasetRef
-from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
@@ -79,31 +77,25 @@ class CompositesMap:
         -------
         disassemble : `bool`
             Returns `True` if disassembly should occur; `False` otherwise.
-        """
-        components = None
-        datasetTypeName = None
-        storageClassName = None
-        if isinstance(entity, DatasetRef):
-            entity = entity.datasetType
-        if isinstance(entity, DatasetType):
-            datasetTypeName = entity.name
-            storageClassName = entity.storageClass.name
-            components = entity.storageClass.components
-        elif isinstance(entity, StorageClass):
-            storageClassName = entity.name
-            components = entity.components
-        else:
-            raise ValueError(f"Unexpected argument: {entity:!r}")
 
-        # We know for a fact this is not a composite
-        if not components:
+        Raises
+        ------
+        ValueError
+            The supplied argument is not understood.
+        """
+
+        if not hasattr(entity, "isComposite"):
+            raise ValueError(f"Supplied entity ({entity}) is not understood.")
+
+        # If this is not a composite there is nothing to disassemble.
+        if not entity.isComposite():
             log.debug("%s will not be disassembled (not a composite)", entity)
             return False
 
         matchName = "{} (via default)".format(entity)
         disassemble = self.config["default"]
 
-        for name in (datasetTypeName, storageClassName):
+        for name in (entity.lookupNames()):
             if name is not None and name in self.config["names"]:
                 disassemble = self.config[f"names.{name}"]
                 matchName = name
