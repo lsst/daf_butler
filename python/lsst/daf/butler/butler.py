@@ -285,7 +285,7 @@ class Butler:
         # if the ref exists in the store we return it directly
         if self.datastore.exists(ref):
             return self.datastore.get(ref, parameters=parameters)
-        elif ref.components:
+        elif ref.isComposite():
             # Reconstruct the composite
             components = {}
             for compName, compRef in ref.components.items():

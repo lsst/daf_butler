@@ -1,5 +1,5 @@
 composites:
-  storageClasses:
+  disassembled:
     # This will fail since a str is not a bool
     StructuredData: "False"
     StructuredDataJson: False
@@ -7,5 +7,4 @@ composites:
     StructuredComposite: True
     StructuredCompositeTestA: True
     StructuredCompositeTestB: True
-  datasetTypes:
     dummyTest: True

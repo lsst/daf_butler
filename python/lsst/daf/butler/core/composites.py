@@ -26,25 +26,22 @@ __all__ = ("CompositesConfig", "CompositesMap")
 import logging
 
 from .config import ConfigSubset
-from .datasets import DatasetType
-from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
 
 class CompositesConfig(ConfigSubset):
     component = "composites"
-    requiredKeys = ("default", "storageClasses")
+    requiredKeys = ("default", "disassembled")
     defaultConfigFile = "composites.yaml"
 
     def validate(self):
         """Validate entries have the correct type."""
         super().validate()
-        for n in ("storageClasses", "datasetTypes"):
-            for k in self[n]:
-                key = f"{n}.{k}"
-                if not isinstance(self[key], bool):
-                    raise ValueError(f"CompositesConfig: Key {key} is not a Boolean")
+        for k in self["disassembled"]:
+            key = f"disassembled.{k}"
+            if not isinstance(self[key], bool):
+                raise ValueError(f"CompositesConfig: Key {key} is not a Boolean")
 
 
 class CompositesMap:
@@ -69,7 +66,7 @@ class CompositesMap:
 
         Parameters
         ----------
-        entity : `StorageClass` or `DatasetType`
+        entity : `StorageClass` or `DatasetType` or `DatasetRef`
             Thing to test against the configuration. The ``name`` property
             is used to determine a match.  A `DatasetType` will first check
             its name, before checking its `StorageClass`.  If there are no
@@ -80,34 +77,29 @@ class CompositesMap:
         -------
         disassemble : `bool`
             Returns `True` if disassembly should occur; `False` otherwise.
-        """
-        components = None
-        datasetTypeName = None
-        storageClassName = None
-        if isinstance(entity, DatasetType):
-            datasetTypeName = entity.name
-            storageClassName = entity.storageClass.name
-            components = entity.storageClass.components
-        elif isinstance(entity, StorageClass):
-            storageClassName = entity.name
-            components = entity.components
-        else:
-            raise ValueError(f"Unexpected argument: {entity:!r}")
 
-        # We know for a fact this is not a composite
-        if not components:
+        Raises
+        ------
+        ValueError
+            The supplied argument is not understood.
+        """
+
+        if not hasattr(entity, "isComposite"):
+            raise ValueError(f"Supplied entity ({entity}) is not understood.")
+
+        # If this is not a composite there is nothing to disassemble.
+        if not entity.isComposite():
             log.debug("%s will not be disassembled (not a composite)", entity)
             return False
 
         matchName = "{} (via default)".format(entity)
         disassemble = self.config["default"]
 
-        if datasetTypeName is not None and datasetTypeName in self.config["datasetTypes"]:
-            disassemble = self.config[f"datasetTypes.{datasetTypeName}"]
-            matchName = datasetTypeName
-        elif storageClassName is not None and storageClassName in self.config["storageClasses"]:
-            disassemble = self.config[f"storageClasses.{storageClassName}"]
-            matchName = storageClassName
+        for name in (entity._lookupNames()):
+            if name is not None and name in self.config["disassembled"]:
+                disassemble = self.config[f"disassembled.{name}"]
+                matchName = name
+                break
 
         log.debug("%s will%s be disassembled", matchName, "" if disassemble else " not")
         return disassemble

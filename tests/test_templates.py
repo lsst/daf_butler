@@ -33,13 +33,13 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 class TestFileTemplates(unittest.TestCase):
     """Test creation of paths from templates."""
 
-    def makeDatasetRef(self, datasetTypeName, dataId=None):
+    def makeDatasetRef(self, datasetTypeName, dataId=None, storageClassName="DefaultStorageClass"):
         """Make a simple DatasetRef"""
         if dataId is None:
             dataId = self.dataId
         if datasetTypeName not in self.datasetTypes:
             self.datasetTypes[datasetTypeName] = DatasetType(datasetTypeName, list(dataId.keys()),
-                                                             StorageClass(None))
+                                                             StorageClass(storageClassName))
         datasetType = self.datasetTypes[datasetTypeName]
         return DatasetRef(datasetType, dataId, run=Run(id=2, collection="run2"))
 
@@ -122,18 +122,36 @@ class TestFileTemplates(unittest.TestCase):
         config1 = FileTemplatesConfig(os.path.join(configRoot, "templates-nodefault.yaml"))
         templates = FileTemplates(config1)
         ref = self.makeDatasetRef("calexp")
-        tmpl = templates.getTemplate(ref.datasetType.name)
+        tmpl = templates.getTemplate(ref)
         self.assertIsInstance(tmpl, FileTemplate)
 
         # This config file should not allow defaulting
         ref2 = self.makeDatasetRef("unknown")
         with self.assertRaises(KeyError):
-            templates.getTemplate(ref2.datasetType.name)
+            templates.getTemplate(ref2)
+
+        # This should fall through the datasetTypeName check and use
+        # StorageClass instead
+        ref3 = self.makeDatasetRef("unknown2", storageClassName="StorageClassX")
+        tmpl = templates.getTemplate(ref3)
+        self.assertIsInstance(tmpl, FileTemplate)
+
+        # Try with a component: one with defined formatter and one without
+        ref_wcs = self.makeDatasetRef("calexp.wcs")
+        ref_image = self.makeDatasetRef("calexp.image")
+        tmpl_calexp = templates.getTemplate(ref)
+        tmpl_wcs = templates.getTemplate(ref_wcs)  # Should be special
+        tmpl_image = templates.getTemplate(ref_image)
+        self.assertIsInstance(tmpl_calexp, FileTemplate)
+        self.assertIsInstance(tmpl_image, FileTemplate)
+        self.assertIsInstance(tmpl_wcs, FileTemplate)
+        self.assertEqual(tmpl_calexp, tmpl_image)
+        self.assertNotEqual(tmpl_calexp, tmpl_wcs)
 
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
         templates = FileTemplates(config2)
-        tmpl = templates.getTemplate(ref2.datasetType.name)
+        tmpl = templates.getTemplate(ref2)
         self.assertIsInstance(tmpl, FileTemplate)
 
         # Format config file with bad format string
@@ -144,12 +162,12 @@ class TestFileTemplates(unittest.TestCase):
         config3 = os.path.join(configRoot, "templates-nodefault2.yaml")
         templates = FileTemplates(config3)
         with self.assertRaises(KeyError):
-            templates.getTemplate(ref2.datasetType.name)
+            templates.getTemplate(ref2)
 
         # Try again but specify a default in the constructor
         default = "{datasetType}/{filter}"
         templates = FileTemplates(config3, default=default)
-        tmpl = templates.getTemplate(ref2.datasetType.name)
+        tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)
 
 

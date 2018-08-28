@@ -321,15 +321,15 @@ class PosixDatastore(Datastore):
 
         # Work out output file name
         try:
-            template = self.templates.getTemplate(typeName)
+            template = self.templates.getTemplate(datasetType)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find template for {typeName}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find template for {datasetType}") from e
 
         location = self.locationFactory.fromPath(template.format(ref))
 
         # Get the formatter based on the storage class
         try:
-            formatter = self.formatterFactory.getFormatter(datasetType.storageClass, typeName)
+            formatter = self.formatterFactory.getFormatter(datasetType)
         except KeyError as e:
             raise DatasetTypeNotSupportedError("Unable to find formatter for StorageClass "
                                                f"{datasetType.storageClass.name} or "
@@ -390,8 +390,7 @@ class PosixDatastore(Datastore):
             location computed from the template.
         """
         if formatter is None:
-            formatter = self.formatterFactory.getFormatter(ref.datasetType.storageClass,
-                                                           ref.datasetType.name)
+            formatter = self.formatterFactory.getFormatter(ref)
 
         fullPath = os.path.join(self.root, path)
         if not os.path.exists(fullPath):
@@ -406,7 +405,7 @@ class PosixDatastore(Datastore):
                     raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
                 path = os.path.relpath(path, absRoot)
         else:
-            template = self.templates.getTemplate(ref.datasetType.name)
+            template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))
             newPath = formatter.predictPath(location)
             newFullPath = os.path.join(self.root, newPath)
@@ -487,9 +486,7 @@ class PosixDatastore(Datastore):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            datasetType = ref.datasetType
-            typeName = datasetType.name
-            template = self.templates.getTemplate(typeName)
+            template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref) + "#predicted")
         else:
             # If this is a ref that we have written we can get the path.

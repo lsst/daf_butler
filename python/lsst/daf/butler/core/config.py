@@ -220,7 +220,12 @@ class Config(_ConfigBase):
 
     def __getitem__(self, name):
         data = self.data
-        for key in name.split("."):
+        # Override the split for the simple case
+        if name in data:
+            keys = (name,)
+        else:
+            keys = name.split(".")
+        for key in keys:
             if data is None:
                 return None
             if key in data and isinstance(data, collections.Mapping):

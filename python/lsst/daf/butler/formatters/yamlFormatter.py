@@ -95,7 +95,7 @@ class YamlFormatter(FileFormatter):
             Object of expected type `pytype`.
         """
         if not hasattr(builtins, pytype.__name__):
-            if storageClass.components:
+            if storageClass.isComposite():
                 inMemoryDataset = storageClass.assembler().assemble(inMemoryDataset, pytype=pytype)
             else:
                 # Hope that we can pass the arguments in directly

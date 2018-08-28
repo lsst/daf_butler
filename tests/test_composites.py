@@ -42,16 +42,16 @@ class TestCompositesConfig(unittest.TestCase):
         c = CompositesConfig(self.configFile)
         self.assertIn("default", c)
         # Check merging has worked
-        self.assertIn("datasetTypes.calexp", c)
-        self.assertIn("datasetTypes.dummyTrue", c)
-        self.assertIn("storageClasses.StructuredComposite", c)
-        self.assertIn("storageClasses.ExposureF", c)
+        rootKey = "disassembled"
+        self.assertIn(f"{rootKey}.calexp", c)
+        self.assertIn(f"{rootKey}.dummyTrue", c)
+        self.assertIn(f"{rootKey}.StructuredComposite", c)
+        self.assertIn(f"{rootKey}.ExposureF", c)
 
         # Check that all entries are booleans (this is meant to be enforced
         # internally)
-        for n in ("storageClasses", "datasetTypes"):
-            for k in c[n]:
-                self.assertIsInstance(c[f"{n}.{k}"], bool, f"Testing {n}.{k}")
+        for k in c[rootKey]:
+            self.assertIsInstance(c[f"{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
 
     def testMap(self):
         c = CompositesMap(self.configFile)
@@ -63,6 +63,8 @@ class TestCompositesConfig(unittest.TestCase):
         # These will fail (not a composite)
         sc = StorageClass("StructuredDataJson")
         d = DatasetType("dummyTrue", ("a", "b"), sc)
+        self.assertFalse(sc.isComposite())
+        self.assertFalse(d.isComposite())
         self.assertFalse(c.doDisassembly(d), f"Test with DatasetType: {d}")
         self.assertFalse(c.doDisassembly(sc), f"Test with StorageClass: {sc}")
 
@@ -70,6 +72,8 @@ class TestCompositesConfig(unittest.TestCase):
         sccomp = StorageClass("Dummy")
         sc = StorageClass("StructuredDataJson", components={"dummy": sccomp})
         d = DatasetType("dummyTrue", ("a", "b"), sc)
+        self.assertTrue(sc.isComposite())
+        self.assertTrue(d.isComposite())
         self.assertTrue(c.doDisassembly(d), f"Test with DatasetType: {d}")
         self.assertFalse(c.doDisassembly(sc), f"Test with StorageClass: {sc}")
 

@@ -1,5 +1,5 @@
 composites:
-  storageClasses:
+  disassembled:
     StructuredData: False
     StructuredDataJson: False
     StructuredDataPickle: False
@@ -8,6 +8,5 @@ composites:
     StructuredCompositeTestB: True
     ExposureCompositeI: True
     ExposureCompositeF: True
-  datasetTypes:
     dummyTrue: True
     dummyFalse: False
