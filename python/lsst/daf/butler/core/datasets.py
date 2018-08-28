@@ -148,6 +148,18 @@ class DatasetType:
             return self.nameWithComponent(self.name, component)
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
 
+    def lookupNames(self):
+        """Names to use when looking up this datasetType in a configuration.
+
+        The names are returned in order of priority.
+
+        Returns
+        -------
+        names : `tuple` of `str`
+            Tuple of the `DatasetType` name and the `StorageClass` name.
+        """
+        return (self.name, *self.storageClass.lookupNames())
+
 
 class DatasetRef:
     """Reference to a Dataset in a `Registry`.
@@ -269,3 +281,15 @@ class DatasetRef:
         ref = deepcopy(self)
         ref._id = None
         return ref
+
+    def lookupNames(self):
+        """Names to use when looking up this DatasetRef in a configuration.
+
+        The names are returned in order of priority.
+
+        Returns
+        -------
+        names : `tuple` of `str`
+            Tuple of the `DatasetType` name and the `StorageClass` name.
+        """
+        return self.datasetType.lookupNames()

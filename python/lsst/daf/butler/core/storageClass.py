@@ -143,6 +143,18 @@ class StorageClass:
             raise TypeError(f"No assembler class is associated with StorageClass {self.name}")
         return cls(storageClass=self)
 
+    def lookupNames(self):
+        """Names to use when looking up this DatasetRef in a configuration.
+
+        The names are returned in order of priority.
+
+        Returns
+        -------
+        names : `tuple` of `str`
+            Tuple of solely the `StorageClass` name.
+        """
+        return (self.name, )
+
     def validateInstance(self, instance):
         """Check that the supplied Python object has the expected Python type
 
