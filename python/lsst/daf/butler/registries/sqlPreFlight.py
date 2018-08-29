@@ -146,7 +146,7 @@ class SqlPreFlight:
         self._schema = schema
         self._connection = connection
 
-    def selectDataUnits(self, collections, expression, neededDatasetTypes, futureDatasetTypes):
+    def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -156,7 +156,7 @@ class SqlPreFlight:
 
         Parameters
         ----------
-        collections : `PreFlightCollections`
+        originInfo : `DatasetOriginInfo`
             Object which provides names of the input/output collections.
         expression : `str`
             An expression that limits the `DataUnits <DataUnit>` and
@@ -301,7 +301,7 @@ class SqlPreFlight:
                        "output" if isOutput else "input", dsType.name)
 
             # Build a sub-query.
-            subquery = self._buildDatasetSubquery(dsType, collections, isOutput)
+            subquery = self._buildDatasetSubquery(dsType, originInfo, isOutput)
             if subquery is None:
                 # If there nothing to join (e.g. we know that output
                 # collection is empty) then just pass None as column
@@ -336,7 +336,7 @@ class SqlPreFlight:
         rows = self._connection.execute(q).fetchall()
         return self._convertResultRows(rows, unitLinkColumns, regionColumns, dsIdColumns)
 
-    def _buildDatasetSubquery(self, dsType, collections, isOutput):
+    def _buildDatasetSubquery(self, dsType, originInfo, isOutput):
         """Build a sub-query for a dataset type to be joined with "big join".
 
         If there is only one collection then there is a guarantee that
@@ -411,7 +411,7 @@ class SqlPreFlight:
         Parameters
         ----------
         dsType : `DatasetType`
-        collections : `PreFlightCollections`
+        originInfo : `DatasetOriginInfo`
             Object which provides names of the input/output collections.
         isOutput : `bool`
             ``True`` for output datasets.
@@ -428,7 +428,7 @@ class SqlPreFlight:
 
         if isOutput:
 
-            outputCollection = collections.getOutputCollection(dsType.name)
+            outputCollection = originInfo.getOutputCollection(dsType.name)
             if not outputCollection:
                 # No output collection means no output datasets exist, we do
                 # not need to do any joins here.
@@ -436,7 +436,7 @@ class SqlPreFlight:
 
             dsCollections = [outputCollection]
         else:
-            dsCollections = collections.getInputCollections(dsType.name)
+            dsCollections = originInfo.getInputCollections(dsType.name)
 
         _LOG.debug("using collections: %s", dsCollections)
 

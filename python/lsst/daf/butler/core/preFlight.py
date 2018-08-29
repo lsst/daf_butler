@@ -19,13 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("PreFlightCollectionsDef", "PreFlightUnitsRow")
+__all__ = ("DatasetOriginInfo", "DatasetOriginInfoDef", "PreFlightUnitsRow")
 
 
 from abc import ABCMeta, abstractmethod
 
 
-class PreFlightCollections(metaclass=ABCMeta):
+class DatasetOriginInfo(metaclass=ABCMeta):
     """Interface for classes providing collection information for pre-flight.
 
     Pre-flight supports per-DatasetType collections, multiple collections
@@ -59,8 +59,8 @@ class PreFlightCollections(metaclass=ABCMeta):
         pass
 
 
-class PreFlightCollectionsDef(PreFlightCollections):
-    """Default implementation of the PreFlightCollections.
+class DatasetOriginInfoDef(DatasetOriginInfo):
+    """Default implementation of the DatasetOriginInfo.
 
     Parameters
     ----------

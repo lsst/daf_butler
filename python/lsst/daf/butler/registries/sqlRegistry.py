@@ -1045,7 +1045,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    def selectDataUnits(self, collections, expression, neededDatasetTypes, futureDatasetTypes):
+    def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -1055,7 +1055,7 @@ class SqlRegistry(Registry):
 
         Parameters
         ----------
-        collections : `PreFlightCollections`
+        originInfo : `DatasetOriginInfo`
             Object which provides names of the input/output collections.
         expression : `str`
             An expression that limits the `DataUnits <DataUnit>` and
@@ -1076,7 +1076,7 @@ class SqlRegistry(Registry):
         row : `PreFlightUnitsRow`
             Single row is a unique combination of units in a transform.
         """
-        return self._preFlight.selectDataUnits(collections,
+        return self._preFlight.selectDataUnits(originInfo,
                                                expression,
                                                neededDatasetTypes,
                                                futureDatasetTypes)
