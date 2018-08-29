@@ -68,7 +68,7 @@ def _filterSummarizes(dataUnitJoins):
 def _unitsTopologicalSort(dataUnits):
     """Return topologically sorted DataUnits.
 
-    Oredering is based on dependencies, units with no dependencies
+    Ordering is based on dependencies, units with no dependencies
     on other units are returned first.
 
     Parameters
@@ -99,7 +99,7 @@ def _joinOnForeignKey(fromClause, dataUnit, otherDataUnits):
     dataUnit : `DataUnit`
         DataUnit to join with ``fromClause``.
     otherDataUnits : iterable of `DataUnit`
-        DataUnits whose tableshave PKs for ``dataUnit`` table's FK. They all
+        DataUnits whose tables have PKs for ``dataUnit`` table's FK. They all
         have to be in ``fromClause`` already.
 
     Returns
@@ -120,7 +120,11 @@ def _joinOnForeignKey(fromClause, dataUnit, otherDataUnits):
         if joinOn:
             return fromClause.join(dataUnit.table, and_(*joinOn))
         else:
-            # need explicit cross join here, ugly with SQLAlchemy
+            # Completely unrelated tables, e.g. joining SkyMap and Camera.
+            # We need a cross join here but SQLAlchemy does not have specific
+            # method for that. Using join() without `onclause` will try to
+            # join on FK and will raise an exception for unrelated tables,
+            # so we have to use `onclause` which is always true.
             return fromClause.join(dataUnit.table, literal(True))
 
 
@@ -159,7 +163,7 @@ class SqlPreFlight:
             (indirectly) the Datasets returned.
         neededDatasetTypes : `list` of `DatasetType`
             The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
-            be included in the returned column set. Output is limited by the
+            be included in the returned column set. Output is limited to the
             the Datasets of these DatasetTypes which already exist in the
             registry.
         futureDatasetTypes : `list` of `DatasetType`
@@ -176,9 +180,9 @@ class SqlPreFlight:
 
         # Brief overview of the code below:
         #  - extract all DataUnits used by all input/output dataset types
-        #  - build a complex SQL query to run agains registry database:
+        #  - build a complex SQL query to run against registry database:
         #    - first do (natural) join for all tables for all DataUnits
-        #      involved based on their foreing keys
+        #      involved based on their foreign keys
         #    - then add Join tables to the mix, only use Join tables which
         #      have their lhs/rhs links in the above DataUnits set, also
         #      ignore Joins which summarize other Joins
@@ -346,6 +350,9 @@ class SqlPreFlight:
             WHERE Dataset.dataset_type_name = :dsType_name
                 AND DatasetCollection.collection = :collection_name
 
+        We only have single collection for output DatasetTypes so for them
+        subqueries always look like above.
+
         If there are multiple collections then there can be multiple matching
         Datasets for the same DataId. In that case we need only one Dataset
         record which comes from earliest collection (in the user-provided
@@ -378,11 +385,11 @@ class SqlPreFlight:
 
         (here ``Dataset.DataId`` means ``Dataset.link1, Dataset.link2, etc.``)
 
-        Filtering is complicated, it is simpler to use CTE but not all
-        databases support CTEs so we will have to do with the repeating
-        sub-queries. Use GROUP BY for DataId and MIN(collorder) to find
-        ``collorder`` for given DataId, then join it with previous combined
-        selection:
+        Filtering is complicated, it is simpler to use Common Table Expression
+        (WITH clause) but not all databases support CTEs so we will have to do
+        with the repeating sub-queries. Use GROUP BY for DataId and
+        MIN(collorder) to find ``collorder`` for given DataId, then join it
+        with previous combined selection:
 
             SELECT DS.dataset_id AS dataset_id, DS.link1 AS link1 ...
             FROM (SELECT Dataset.dataset_id AS dataset_id,

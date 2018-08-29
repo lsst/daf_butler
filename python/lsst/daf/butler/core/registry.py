@@ -717,7 +717,7 @@ class Registry(metaclass=ABCMeta):
             (indirectly) the Datasets returned.
         neededDatasetTypes : `list` of `DatasetType`
             The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
-            be included in the returned column set. Output is limited by the
+            be included in the returned column set. Output is limited to the
             the Datasets of these DatasetTypes which already exist in the
             registry.
         futureDatasetTypes : `list` of `DatasetType`
