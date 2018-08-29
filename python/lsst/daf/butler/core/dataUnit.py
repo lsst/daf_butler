@@ -349,9 +349,13 @@ class DataUnitRegistry:
         for dataUnitName in self._dataUnitNames:
             yield (dataUnitName, self[dataUnitName])
 
-    def getRegionHolder(self, *dataUnitNames):
+    def getRegionHolder(self, *dataUnits):
         """Return the DataUnit or DataUnitJoin that holds region for the
         given combination of DataUnits.
+
+        Arguments may be either DataUnit instances or their names (but not
+        link names), and required dependencies may or may not be included.
+        Optional dependencies must not be included.
 
         Returned object can be either `DataUnitJoin` or `DataUnit`. Use
         ``table`` and/or ``regionColumn`` properties of returned object to
@@ -360,8 +364,22 @@ class DataUnitRegistry:
         Returns
         -------
         `DataUnitJoin` or `DataUnit` instance.
+
+        Raises
+        ------
+        KeyError
+            Raised if there is no Region associated with the given combination
+            of DataUnits.
         """
-        return self._dataUnitRegions[frozenset(dataUnitNames) & self._spatialDataUnits]
+        expanded = set()
+        # Add all dependencies, so the caller can say just "Patch" as well as
+        # "SkyMap", "Tract", "Patch" and get the same result.
+        for u in dataUnits:
+            unit = u if isinstance(u, DataUnit) else self[u]
+            expanded.add(unit)
+            expanded |= unit.requiredDependencies
+        dataUnitNames = frozenset(unit.name for unit in expanded)
+        return self._dataUnitRegions[dataUnitNames & self._spatialDataUnits]
 
     def getJoin(self, lhs, rhs):
         """Return the DataUnitJoin that relates the given DataUnit names.

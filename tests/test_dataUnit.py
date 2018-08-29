@@ -68,6 +68,25 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
             self.assertIsNotNone(dataUnitRegistry.getJoin(lhs, rhs))
             self.assertIsNotNone(dataUnitRegistry.getJoin(rhs, lhs))
 
+    def testGetRegionHolder(self):
+        """Test that getRegionHolder works for all DataUnits or combinations
+        of DataUnits that have regions, regardless of whether those are
+        expanded to include required dependencies.
+        """
+        dataUnitRegistry = DataUnitRegistry.fromConfig(self.config)
+        self.assertEqual(dataUnitRegistry.getRegionHolder("Visit"),
+                         dataUnitRegistry.getRegionHolder("Camera", "Visit"))
+        self.assertEqual(dataUnitRegistry.getRegionHolder("Visit", "Sensor"),
+                         dataUnitRegistry.getRegionHolder("Camera", "Visit", "Sensor"))
+        self.assertEqual(dataUnitRegistry.getRegionHolder("Patch"),
+                         dataUnitRegistry.getRegionHolder("Tract", "Patch"))
+        self.assertEqual(dataUnitRegistry.getRegionHolder("Patch"),
+                         dataUnitRegistry.getRegionHolder("SkyMap", "Tract", "Patch"))
+        with self.assertRaises(KeyError):
+            dataUnitRegistry.getRegionHolder("Sensor")
+        with self.assertRaises(KeyError):
+            dataUnitRegistry.getRegionHolder("Camera", "Sensor")
+
 
 if __name__ == "__main__":
     unittest.main()
