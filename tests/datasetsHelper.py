@@ -37,8 +37,7 @@ class FitsCatalogDatasetsHelper:
         inputRecord = inputCatalog[0]
         outputTable = outputCatalog.getTable()
         outputRecord = outputCatalog[0]
-        self.assertEqual(inputTable.getPsfFluxDefinition(), outputTable.getPsfFluxDefinition())
-        self.assertEqual(inputRecord.getPsfFlux(), outputRecord.getPsfFlux())
+        self.assertEqual(inputRecord.getPsfInstFlux(), outputRecord.getPsfInstFlux())
         self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
         self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())
         self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
