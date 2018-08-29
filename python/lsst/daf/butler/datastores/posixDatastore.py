@@ -273,6 +273,9 @@ class PosixDatastore(Datastore):
         readStorageClass = ref.datasetType.storageClass
         writeStorageClass = storedFileInfo.storageClass
 
+        # Check that the supplied parameters are suitable for the type read
+        readStorageClass.validateParameters(parameters)
+
         # Is this a component request?
         component = ref.datasetType.component()
 

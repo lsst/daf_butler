@@ -95,6 +95,20 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
         self.assertIsNotNone(datastore)
         self.assertIs(datastore.isEphemeral, self.isEphemeral)
 
+    def testParameterValidation(self):
+        """Check that parameters are validated"""
+        sc = self.storageClassFactory.getStorageClass("ThingOne")
+        dataUnits = frozenset(("visit", "filter"))
+        dataId = {"visit": 52, "filter": "V"}
+        ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+        datastore = self.makeDatastore()
+        data = {1: 2, 3: 4}
+        datastore.put(data, ref)
+        newdata = datastore.get(ref)
+        self.assertEqual(data, newdata)
+        with self.assertRaises(KeyError):
+            newdata = datastore.get(ref, parameters={"missing": 5})
+
     def testBasicPutGet(self):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()

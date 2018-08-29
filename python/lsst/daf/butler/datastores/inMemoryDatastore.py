@@ -256,6 +256,9 @@ class InMemoryDatastore(Datastore):
         storedItemInfo = self.getStoredItemInfo(ref)
         writeStorageClass = storedItemInfo.storageClass
 
+        # Check that the supplied parameters are suitable for the type read
+        readStorageClass.validateParameters(parameters)
+
         # We might need a parent if we are being asked for a component
         # of a concrete composite
         thisID = ref.id
