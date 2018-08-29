@@ -69,6 +69,15 @@ class DataUnit:
     def __repr__(self):
         return "DataUnit({})".format(self.name)
 
+    def __eq__(self, other):
+        try:
+            return self.name == other.name
+        except AttributeError:
+            return NotImplemented
+
+    def __hash__(self):
+        return hash(self.name)
+
     @property
     def name(self):
         """Name of this `DataUnit` (`str`, read-only).
