@@ -33,6 +33,8 @@ from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 
 try:
     import lsst.afw.image
+    from lsst.afw.image import LOCAL
+    from lsst.geom import Box2I, Point2I
 except ImportError:
     lsst.afw.image = None
 
@@ -112,6 +114,13 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
                                    lsst.afw.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
+
+        # With parameters
+        inBBox = Box2I(minimum=Point2I(0, 0), maximum=Point2I(3, 3))
+        parameters = dict(bbox=inBBox, origin=LOCAL)
+        subset = butler.get(datasetTypeName, dataId, parameters=parameters)
+        outBBox = subset.getBBox()
+        self.assertEqual(inBBox, outBBox)
 
 
 class PosixDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):

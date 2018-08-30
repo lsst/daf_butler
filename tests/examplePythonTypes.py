@@ -25,6 +25,9 @@ large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
 
+import copy
+from lsst.daf.butler import CompositeAssembler
+
 
 class MetricsExample:
     """Smorgasboard of information that might be the result of some
@@ -89,3 +92,63 @@ class MetricsExample:
         if "data" in exportDict:
             data = exportDict["data"]
         return cls(exportDict["summary"], exportDict["output"], data)
+
+
+class ListAssembler(CompositeAssembler):
+    """Parameter handler for list parameters"""
+
+    def handleParameters(self, inMemoryDataset, parameters=None):
+        """Modify the in-memory dataset using the supplied parameters,
+        returning a possibly new object.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to modify based on the parameters.
+        parameters : `dict`
+            Parameters to apply. Values are specific to the parameter.
+            Supported parameters are defined in the associated
+            `StorageClass`.  If no relevant parameters are specified the
+            inMemoryDataset will be return unchanged.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Updated form of supplied in-memory dataset, after parameters
+            have been used.
+        """
+        inMemoryDataset = copy.deepcopy(inMemoryDataset)
+        use = self.storageClass.filterParameters(parameters, subset={"slice"})
+        if use:
+            inMemoryDataset = inMemoryDataset[use["slice"]]
+        return inMemoryDataset
+
+
+class MetricsAssembler(CompositeAssembler):
+    """Parameter handler for parameters using Metrics"""
+
+    def handleParameters(self, inMemoryDataset, parameters=None):
+        """Modify the in-memory dataset using the supplied parameters,
+        returning a possibly new object.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to modify based on the parameters.
+        parameters : `dict`
+            Parameters to apply. Values are specific to the parameter.
+            Supported parameters are defined in the associated
+            `StorageClass`.  If no relevant parameters are specified the
+            inMemoryDataset will be return unchanged.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Updated form of supplied in-memory dataset, after parameters
+            have been used.
+        """
+        inMemoryDataset = copy.deepcopy(inMemoryDataset)
+        use = self.storageClass.filterParameters(parameters, subset={"slice"})
+        if use:
+            inMemoryDataset.data = inMemoryDataset.data[use["slice"]]
+        return inMemoryDataset
