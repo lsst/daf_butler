@@ -286,20 +286,28 @@ class Butler:
         if self.datastore.exists(ref):
             return self.datastore.get(ref, parameters=parameters)
         elif ref.isComposite():
+            # Check that we haven't got any unknown parameters
+            ref.datasetType.storageClass.validateParameters(parameters)
             # Reconstruct the composite
+            usedParams = set()
             components = {}
             for compName, compRef in ref.components.items():
-                if parameters is None:
-                    compParams = None
-                else:
-                    # make a dictionary of parameters containing only the subset
-                    # supported by the StorageClass of the components
-                    compParams = {k: v for k, v in parameters.items()
-                                  if k in compRef.datasetType.storageClass.components}
+                # make a dictionary of parameters containing only the subset
+                # supported by the StorageClass of the components
+                compParams = compRef.datasetType.storageClass.filterParameters(parameters)
+                usedParams.update(set(compParams))
                 components[compName] = self.datastore.get(compRef, parameters=compParams)
 
+            # Any unused parameters will have to be passed to the assembler
+            if parameters:
+                unusedParams = {k: v for k, v in parameters.items() if k not in usedParams}
+            else:
+                unusedParams = {}
+
             # Assemble the components
-            return ref.datasetType.storageClass.assembler().assemble(components)
+            inMemoryDataset = ref.datasetType.storageClass.assembler().assemble(components)
+            return ref.datasetType.storageClass.assembler().handleParameters(inMemoryDataset,
+                                                                             parameters=unusedParams)
         else:
             # single entity in datastore
             raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
