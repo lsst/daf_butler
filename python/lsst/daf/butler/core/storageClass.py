@@ -181,39 +181,79 @@ class StorageClass:
         """
         return (self.name, )
 
+    def knownParameters(self):
+        """Return set of all parameters known to this `StorageClass`
+
+        The set includes parameters understood by components of a composite.
+
+        Returns
+        -------
+        known : `set`
+            All parameter keys of this `StorageClass` and the component
+            storage classes.
+        """
+        known = set(self._parameters)
+        for sc in self.components.values():
+            known.update(sc.knownParameters())
+        return known
+
     def validateParameters(self, parameters=None):
-        """Check that the parameters are known to this StorageClass
+        """Check that the parameters are known to this `StorageClass`
 
         Does not check the values.
 
         Parameters
         ----------
-        parameters : `dict`, optional
+        parameters : `~collections.abc.Collection`, optional
             Collection containing the parameters. Can be `dict`-like or
             `set`-like.  The parameter values are not checked.
-            If no parameters are defined, always returns without error.
+            If no parameters are supplied, always returns without error.
 
         Raises
         ------
         KeyError
             Some parameters are not understood by this `StorageClass`.
         """
-        if parameters is None:
+        # No parameters is always okay
+        if not parameters:
             return
 
         # Extract the important information into a set. Works for dict and
         # list.
-        external = {p for p in parameters}
+        external = set(parameters)
 
-        # no parameters is always okay.
-        if not external:
-            return
-
-        diff = external - self._parameters
+        diff = external - self.knownParameters()
         if diff:
             s = "s" if len(diff) > 1 else ""
             unknown = '\', \''.join(diff)
             raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
+
+    def filterParameters(self, parameters, subset=None):
+        """Filter out parameters that are not known to this StorageClass
+
+        Parameters
+        ----------
+        parameters : `dict`, optional
+            Candidate parameters. Can be `None` if no parameters have
+            been provided.
+        subset : `~collections.abc.Collection`, optional
+            Subset of supported parameters that the caller is interested
+            in using.  The subset must be known to the `StorageClass`
+            if specified.
+
+        Returns
+        -------
+        filtered : `dict`
+            Valid parameters. Empty `dict` if none are suitable.
+        """
+        if not parameters:
+            return {}
+        subset = set(subset) if subset is not None else set()
+        known = self.knownParameters()
+        if not subset.issubset(known):
+            raise ValueError(f"Requested subset ({subset}) is not a subset of"
+                             f" known parameters ({known})")
+        return {k: parameters[k] for k in known if k in parameters}
 
     def validateInstance(self, instance):
         """Check that the supplied Python object has the expected Python type
