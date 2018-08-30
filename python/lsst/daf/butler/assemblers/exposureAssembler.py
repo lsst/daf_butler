@@ -226,3 +226,31 @@ class ExposureAssembler(CompositeAssembler):
                              " {}".format(list(components.keys())))
 
         return exposure
+
+    def handleParameters(self, inMemoryDataset, parameters=None):
+        """Modify the in-memory dataset using the supplied parameters,
+        returning a possibly new object.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to modify based on the parameters.
+        parameters : `dict`, optional
+            Parameters to apply. Values are specific to the parameter.
+            Supported parameters are defined in the associated
+            `StorageClass`.  If no relevant parameters are specified the
+            inMemoryDataset will be return unchanged.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Updated form of supplied in-memory dataset, after parameters
+            have been used.
+        """
+        # Understood by *this* subset command
+        understood = ("bbox", "origin")
+        use = self.storageClass.filterParameters(parameters, subset=understood)
+        if use:
+            inMemoryDataset = inMemoryDataset.subset(**use)
+
+        return inMemoryDataset
