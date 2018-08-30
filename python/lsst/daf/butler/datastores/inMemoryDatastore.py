@@ -245,7 +245,7 @@ class InMemoryDatastore(Datastore):
             Formatter failed to process the dataset.
         """
 
-        log.debug("Retrieve %s from %s", ref, self.name)
+        log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
         if not self.exists(ref):
             raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
@@ -278,6 +278,10 @@ class InMemoryDatastore(Datastore):
 
             # Concrete composite written as a single object (we hope)
             inMemoryDataset = writeStorageClass.assembler().getComponent(inMemoryDataset, component)
+
+        # Handle parameters
+        if parameters:
+            inMemoryDataset = readStorageClass.assembler().handleParameters(inMemoryDataset, parameters)
 
         # Validate the returned data type matches the expected data type
         pytype = readStorageClass.pytype
