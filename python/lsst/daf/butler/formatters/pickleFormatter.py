@@ -34,6 +34,9 @@ class PickleFormatter(FileFormatter):
     """
     extension = ".pickle"
 
+    unsupportedParameters = None
+    """This formatter does not support any parameters"""
+
     def _readFile(self, path, pytype=None):
         """Read a file from the path in pickle format.
 
