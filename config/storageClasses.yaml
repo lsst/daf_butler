@@ -48,6 +48,17 @@ storageClasses:
   MaskX:
     inheritsFrom: Mask
     pytype: lsst.afw.image.MaskX
+  MaskedImage:
+    pytype: lsst.afw.image.MaskedImage
+  MaskedImageF:
+    inheritsFrom: MaskedImage
+    pytype: lsst.afw.image.MaskedImageF
+  MaskedImageU:
+    inheritsFrom: MaskedImage
+    pytype: lsst.afw.image.MaskedImageU
+  MaskedImageI:
+    inheritsFrom: MaskedImage
+    pytype: lsst.afw.image.MaskedImageI
   Catalog:
     pytype: lsst.afw.table.BaseCatalog
   PeakCatalog:

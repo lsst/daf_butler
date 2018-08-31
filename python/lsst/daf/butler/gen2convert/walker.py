@@ -22,6 +22,8 @@
 import os
 import pickle
 import yaml
+import sqlite3
+import datetime
 
 # register YAML loader for repositoryCfg.yaml files.
 import lsst.daf.persistence.repositoryCfg   # noqa F401
@@ -61,6 +63,7 @@ class ConversionWalker:
         self._skyMaps = dict()
         self._skyMapRoots = dict()
         self._visitInfo = dict()
+        self._calibDict = dict()
 
     def scanAll(self):
         """Recursively inspect and scan Gen2 data repositories.
@@ -101,11 +104,24 @@ class ConversionWalker:
         MapperClass = None
         parentPaths = []
         repoCfgPath = os.path.join(root, "repositoryCfg.yaml")
+        calibPath = os.path.join(root, "calibRegistry.sqlite3")
+        isCalib = False
         if os.path.exists(repoCfgPath):
             with open(repoCfgPath, "r") as f:
                 repoCfg = yaml.load(f)
             parentPaths = [parent.root for parent in repoCfg.parents]
             MapperClass = repoCfg.mapper
+        elif os.path.exists(calibPath):
+            # Slurp all the entries into _calibDict
+            self.readCalibInfo(calibPath=calibPath)
+            calibRoot = os.path.dirname(root)
+            mapperFilePath = os.path.join(calibRoot, "_mapper")
+            MapperClass = None
+            if os.path.exists(mapperFilePath):
+                with open(mapperFilePath, "r") as f:
+                    mapperClassPath = f.read().strip()
+                    MapperClass = doImport(mapperClassPath)
+            isCalib = True
         else:
             parentLinkPath = os.path.join(root, "_parent")
             if os.path.exists(parentLinkPath):
@@ -118,7 +134,7 @@ class ConversionWalker:
 
         # This directory has no _mapper, no _parent, and no repositoryCfg.yaml.
         # It probably just isn't a repository root.
-        if not (parentPaths or MapperClass):
+        if not (parentPaths or MapperClass or isCalib):
             log.debug("%s: not a data repository.", root)
             return None
 
@@ -188,7 +204,7 @@ class ConversionWalker:
                            if not self.tryRoot(os.path.join(dirPath, dirName))]
             relative = dirPath[len(repo.root) + 1:]
             for fileName in fileNames:
-                if fileName in ("registry.sqlite3", "_mapper", "repositoryCfg.yaml"):
+                if fileName in ("registry.sqlite3", "_mapper", "repositoryCfg.yaml", "calibRegistry.sqlite3"):
                     continue
                 filePath = os.path.join(relative, fileName)
                 dataset = extractor(filePath)
@@ -198,6 +214,23 @@ class ConversionWalker:
                 else:
                     log.debug("%s: found %s with %s", repo.root, dataset.datasetType.name, dataset.dataId)
                     repo.datasets[dataset.datasetType.name][filePath] = dataset
+
+                    # append date ranges to datasets that have calibDate entries
+                    if "calibDate" in dataset.dataId.keys():
+                        calibRow = self._calibDict.get(
+                            (dataset.datasetType.name, dataset.dataId["calibDate"], dataset.dataId["ccd"]),
+                            None)
+                        if calibRow is not None:
+                            if calibRow["filter"] is None or calibRow["filter"] == dataset.dataId["filter"]:
+                                dataset.dataId["valid_first"] = calibRow["valid_first"]
+                                dataset.dataId["valid_last"] = calibRow["valid_last"]
+                                log.debug("Calib: setting valid date ranges for dataset: (%s %s %s)" %
+                                          (dataset.datasetType.name, dataset.dataId["calibDate"],
+                                           dataset.dataId["ccd"]))
+                            else:
+                                log.warn("Calib expected dataset: (%s %s %s) not found." %
+                                         (dataset.datasetType.name, dataset.dataId["calibDate"],
+                                          dataset.dataId["ccd"]))
 
     def readVisitInfo(self):
         """Load unique VisitInfo objects and filter associations from all scanned repositories.
@@ -213,6 +246,37 @@ class ConversionWalker:
                 md = readMetadata(dataset.fullPath)
                 filt = repo.mapper.queryMetadata(config["DatasetType"], ("filter",), dataset.dataId)[0][0]
                 cameraVisitInfo[visitInfoId] = (repo.mapper.makeRawVisitInfo(md, exposureId=0), filt)
+
+    def readCalibInfo(self, calibPath=None):
+        """Load calibration data directly from the sqlite datababase as it is found.
+        """
+        with sqlite3.connect(calibPath) as calibConn:
+            calibConn.row_factory = sqlite3.Row
+            c = calibConn.cursor()
+
+            queryList = []
+            # This query only includes calibration types that are known at this time
+            for tableRow in c.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN " +
+                    "('bias', 'dark', 'defect', 'flat', 'fringe', 'sky')"):
+                queryList.append("SELECT '%s' AS type,filter,ccd,calibDate,validStart,validEnd FROM %s" %
+                                 (tableRow["name"], tableRow["name"]))
+
+            query = " UNION ".join(queryList)
+
+            for row in c.execute(query):
+                if row["filter"] == "NONE":
+                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])] = {
+                        "filter": None,
+                        "valid_first": datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
+                        "valid_last": datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"),
+                    }
+                else:
+                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])] = {
+                        "filter": row["filter"],
+                        "valid_first": datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
+                        "valid_last": datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"),
+                    }
 
     @property
     def found(self):
