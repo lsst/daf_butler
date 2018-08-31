@@ -314,6 +314,11 @@ class CompositeAssembler:
         """Modify the in-memory dataset using the supplied parameters,
         returning a possibly new object.
 
+        For safety, if any parameters are given to this method an
+        exception will be raised.  This is to protect the user from
+        thinking that parameters have been applied when they have not been
+        applied.
+
         Parameters
         ----------
         inMemoryDataset : `object`
@@ -329,5 +334,13 @@ class CompositeAssembler:
         inMemoryDataset : `object`
             Updated form of supplied in-memory dataset, after parameters
             have been used.
+
+        Raises
+        ------
+        ValueError
+            Parameters have been provided to this default implementation.
         """
+        if parameters:
+            raise ValueError(f"Parameters ({parameters}) provided to default implementation.")
+
         return inMemoryDataset
