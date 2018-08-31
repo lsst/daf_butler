@@ -637,7 +637,7 @@ class ConfigSubset(Config):
         # component.component (since the included files can themselves
         # include the component name)
         if self.component is not None:
-            doubled = "{0}{1}{0}".format(self.component, self.D)
+            doubled = (self.component, ) * 2
             # Must check for double depth first
             if doubled in externalConfig:
                 externalConfig = externalConfig[doubled]
@@ -701,9 +701,9 @@ class ConfigSubset(Config):
 
         if mergeDefaults and containerKey is not None and containerKey in self:
             for idx, subConfig in enumerate(self[containerKey]):
-                self[f"{containerKey}{self.D}{idx}"] = type(self)(other=subConfig, validate=validate,
-                                                                  mergeDefaults=mergeDefaults,
-                                                                  searchPaths=searchPaths)
+                self[(containerKey, idx)] = type(self)(other=subConfig, validate=validate,
+                                                       mergeDefaults=mergeDefaults,
+                                                       searchPaths=searchPaths)
 
         if validate:
             self.validate()

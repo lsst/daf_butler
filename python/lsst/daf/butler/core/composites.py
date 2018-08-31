@@ -38,10 +38,9 @@ class CompositesConfig(ConfigSubset):
     def validate(self):
         """Validate entries have the correct type."""
         super().validate()
-        for k in self["disassembled"]:
-            key = f"disassembled{self.D}{k}"
-            if not isinstance(self[key], bool):
-                raise ValueError(f"CompositesConfig: Key {key} is not a Boolean")
+        for k, v in self["disassembled"].items():
+            if not isinstance(v, bool):
+                raise ValueError(f"CompositesConfig: Key {k} is not a Boolean")
 
 
 class CompositesMap:
@@ -97,7 +96,7 @@ class CompositesMap:
 
         for name in (entity._lookupNames()):
             if name is not None and name in self.config["disassembled"]:
-                disassemble = self.config[f"disassembled{self.config.D}{name}"]
+                disassemble = self.config[("disassembled", name)]
                 matchName = name
                 break
 
