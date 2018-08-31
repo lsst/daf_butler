@@ -142,7 +142,7 @@ class Config(_ConfigBase):
         If `None` is provided an empty `Config` will be created.
     """
 
-    D = "."
+    D = "→"
     """Delimiter to use for components in the hierarchy"""
 
     def __init__(self, other=None):
