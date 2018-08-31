@@ -124,6 +124,16 @@ class Config(_ConfigBase):
 
     The default delimiter is defined in the class variable `Config.D`.
 
+    The default delimiter can be overridden by specifying it as the first
+    character of the string: ``foo[".a.b.c"]`` will us ``.`` as a delimiter
+    regardless of the internal default, but ``foo[":a.b.c"]`` will use ``:``
+    as the delimeter resulting in a single key of ``a.b.c`` being accessed.
+    Using ``foo[":a:b:c"]`` is therefore equivalent to ``foo[".a.b.c"]``.
+    This requires that keys in `Config` instances do not themselves start with
+    non-alphanumeric characters.  If the hierarchy is already availabe in a
+    `list` or `tuple` it can be provided directly without forming it into a
+    string.
+
     Storage formats supported:
 
     - yaml: read and write is supported.
@@ -247,14 +257,16 @@ class Config(_ConfigBase):
                 key = key[1:]
             else:
                 d = self.D
-            print("Result of split:", key.split(d))
             return key.split(d)
         else:
             return list(key)
 
     def __getitem__(self, name):
         data = self.data
-        # Override the split for the simple case
+        # Override the split for the simple case where there is an exact
+        # match.  This allows `Config.items()` to work since `UserDict`
+        # accesses Config.data directly to obtain the keys and every top
+        # level key should always retrieve the top level values.
         if name in data:
             keys = (name,)
         else:
