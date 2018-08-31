@@ -385,7 +385,10 @@ class Config(_ConfigBase):
         self.data = otherCopy.data
 
     def names(self, topLevelOnly=False):
-        """Get the dot-delimited name of all the keys in the hierarchy.
+        """Get the delimited name of all the keys in the hierarchy.
+
+        The values returned from this method are guaranteed to be usable
+        to access items in the configuration object.
 
         Parameters
         ----------
@@ -419,7 +422,9 @@ class Config(_ConfigBase):
                     getKeys(val, keys, levelKey)
         keys = []
         getKeys(self.data, keys, None)
-        return keys
+        # Prepend the delimiter so that access works even if the delimiter is
+        # changed.
+        return [f"{self.D}{k}" for k in keys]
 
     def asArray(self, name):
         """Get a value as an array.
