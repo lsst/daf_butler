@@ -242,7 +242,7 @@ class Butler:
                 raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
             datasetType = self.registry.getDatasetType(datasetRefOrType)
 
-        isVirtualComposite = self.composites.doDisassembly(datasetType)
+        isVirtualComposite = self.composites.shouldBeDisassembled(datasetType)
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.

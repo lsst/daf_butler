@@ -62,7 +62,7 @@ class CompositesMap:
         assert isinstance(config, CompositesConfig)
         self.config = config
 
-    def doDisassembly(self, entity):
+    def shouldBeDisassembled(self, entity):
         """Given some choices, indicate whether the entity should be
         disassembled.
 
