@@ -29,16 +29,19 @@ from .config import ConfigSubset
 
 log = logging.getLogger(__name__)
 
+# Key to access disassembly information
+DISASSEMBLY_KEY = "disassembled"
+
 
 class CompositesConfig(ConfigSubset):
     component = "composites"
-    requiredKeys = ("default", "disassembled")
+    requiredKeys = ("default", DISASSEMBLY_KEY)
     defaultConfigFile = "composites.yaml"
 
     def validate(self):
         """Validate entries have the correct type."""
         super().validate()
-        for k, v in self["disassembled"].items():
+        for k, v in self[DISASSEMBLY_KEY].items():
             if not isinstance(v, bool):
                 raise ValueError(f"CompositesConfig: Key {k} is not a Boolean")
 
@@ -95,8 +98,8 @@ class CompositesMap:
         disassemble = self.config["default"]
 
         for name in (entity._lookupNames()):
-            if name is not None and name in self.config["disassembled"]:
-                disassemble = self.config[("disassembled", name)]
+            if name is not None and name in self.config[DISASSEMBLY_KEY]:
+                disassemble = self.config[(DISASSEMBLY_KEY, name)]
                 matchName = name
                 break
 
