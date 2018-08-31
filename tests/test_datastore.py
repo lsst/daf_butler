@@ -445,7 +445,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     hasUnsupportedPut = False
     ingestTransferModes = ("copy", "move", "hardlink", "symlink")
     isEphemeral = False
-    rootKeys = ("datastores.1.root", "datastores.2.root")
+    rootKeys = (".datastores.1.root", ".datastores.2.root")
 
 
 class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):

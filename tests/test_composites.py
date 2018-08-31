@@ -43,15 +43,15 @@ class TestCompositesConfig(unittest.TestCase):
         self.assertIn("default", c)
         # Check merging has worked
         rootKey = "disassembled"
-        self.assertIn(f"{rootKey}.calexp", c)
-        self.assertIn(f"{rootKey}.dummyTrue", c)
-        self.assertIn(f"{rootKey}.StructuredComposite", c)
-        self.assertIn(f"{rootKey}.ExposureF", c)
+        self.assertIn(f".{rootKey}.calexp", c)
+        self.assertIn(f".{rootKey}.dummyTrue", c)
+        self.assertIn(f".{rootKey}.StructuredComposite", c)
+        self.assertIn(f".{rootKey}.ExposureF", c)
 
         # Check that all entries are booleans (this is meant to be enforced
         # internally)
         for k in c[rootKey]:
-            self.assertIsInstance(c[f"{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
+            self.assertIsInstance(c[f".{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
 
     def testMap(self):
         c = CompositesMap(self.configFile)

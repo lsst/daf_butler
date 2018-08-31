@@ -130,9 +130,9 @@ class Butler:
             os.makedirs(root)
         config = Config(config)
         full = ButlerConfig(config)  # this applies defaults
-        datastoreClass = doImport(full["datastore.cls"])
+        datastoreClass = doImport(full[".datastore.cls"])
         datastoreClass.setConfigRoot(root, config, full)
-        registryClass = doImport(full["registry.cls"])
+        registryClass = doImport(full[".registry.cls"])
         registryClass.setConfigRoot(root, config, full)
         if standalone:
             config.merge(full)
