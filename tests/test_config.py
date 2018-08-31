@@ -180,6 +180,10 @@ class ConfigTestCase(unittest.TestCase):
         # Check we get the same top level keys
         self.assertEqual(set(c.names(topLevelOnly=True)), set(c.data.keys()))
 
+        # Check that we can iterate through items
+        for k, v in c.items():
+            self.assertEqual(c[k], v)
+
         # Check that lists still work even if assigned a dict
         c = Config({"cls": "lsst.daf.butler",
                     "datastores": [{"datastore": {"cls": "datastore1"}},
@@ -196,6 +200,19 @@ class ConfigTestCase(unittest.TestCase):
             val = c[n]
             self.assertIsNotNone(val)
             self.assertIn(n, c)
+
+        # Investigate a possible delimeter in a key
+        c = Config({"formatters": {"calexp.wcs": 2, "calexp": 3}})
+        self.assertEqual(c[":formatters:calexp.wcs"], 2)
+        self.assertEqual(c[":formatters:calexp"], 3)
+        for k, v in c["formatters"].items():
+            self.assertEqual(c[("formatters", k)], v)
+
+        # and now try again by forcing a "." delimiter
+        c2 = c["formatters"]
+        c2.D = "."
+        for k, v in c2.items():
+            self.assertEqual(c[("formatters", k)], v)
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
@@ -345,9 +362,9 @@ class ConfigSubsetTestCase(unittest.TestCase):
         # Test a specific name and then test that all
         # returned names are "in" the config.
         names = c.names()
-        self.assertIn(c.D.join(("comp3", "1", "comp", "item1")), names)
+        self.assertIn(c.D.join(("", "comp3", "1", "comp", "item1")), names)
         for n in names:
-            self.assertIn(n, names)
+            self.assertIn(n, c)
 
 
 if __name__ == "__main__":
