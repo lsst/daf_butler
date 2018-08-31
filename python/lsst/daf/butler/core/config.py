@@ -115,12 +115,14 @@ class Config(_ConfigBase):
 
     It is essentially a `dict` with key/value pairs, including nested dicts
     (as values). In fact, it can be initialized with a `dict`. The only caveat
-    is that keys may **not** contain dots (``.``). This is explained next:
+    is that keys may **not** contain the delimiter. This is explained next:
 
     Config extends the `dict` api so that hierarchical values may be accessed
-    with dot-delimited notation. That is, ``foo.getValue("a.b.c")`` is the
-    same as ``foo["a"]["b"]["c"]`` is the same as ``foo["a.b.c"]``, and either
-    of these syntaxes may be used.
+    with delimited notation. That is, for a delimiter of ``.``,
+    ``foo.getValue("a.b.c")`` is the same as ``foo["a"]["b"]["c"]`` is the
+    same as ``foo["a.b.c"]``, and either of these syntaxes may be used.
+
+    The default delimiter is defined in the class variable `Config.D`.
 
     Storage formats supported:
 
@@ -139,6 +141,9 @@ class Config(_ConfigBase):
 
         If `None` is provided an empty `Config` will be created.
     """
+
+    D = "."
+    """Delimiter to use for components in the hierarchy"""
 
     def __init__(self, other=None):
 
@@ -218,13 +223,42 @@ class Config(_ConfigBase):
         self.data = content
         return self
 
+    def _splitKeys(self, key):
+        """Split the argument for get/set/in into a hierarchical list.
+
+        Parameters
+        ----------
+        key : `str` or iterable
+            Argument given to get/set/in. If an iterable is provided it will
+            be converted to a list.  If a string is provided it will be split
+            on the standard delimiter.  If the first character of the string
+            is not an alphanumeric character then it will be used as the
+            delimiter for the purposes of splitting the remainder of the
+            string.
+
+        Returns
+        -------
+        keys : `list`
+            Hierarchical keys as a `list`.
+        """
+        if isinstance(key, str):
+            if not key[0].isalnum():
+                d = key[0]
+                key = key[1:]
+            else:
+                d = self.D
+            print("Result of split:", key.split(d))
+            return key.split(d)
+        else:
+            return list(key)
+
     def __getitem__(self, name):
         data = self.data
         # Override the split for the simple case
         if name in data:
             keys = (name,)
         else:
-            keys = name.split(".")
+            keys = self._splitKeys(name)
         for key in keys:
             if data is None:
                 return None
@@ -241,7 +275,7 @@ class Config(_ConfigBase):
         return data
 
     def __setitem__(self, name, value):
-        keys = name.split(".")
+        keys = self._splitKeys(name)
         last = keys.pop()
         if isinstance(value, Config):
             value = copy.deepcopy(value.data)
@@ -259,7 +293,7 @@ class Config(_ConfigBase):
 
     def __contains__(self, key):
         d = self.data
-        keys = key.split(".")
+        keys = self._splitKeys(key)
         last = keys.pop()
 
         def checkNextItem(k, d):
@@ -367,7 +401,7 @@ class Config(_ConfigBase):
                 theseKeys = d.keys()
             for key in theseKeys:
                 val = d[key]
-                levelKey = f"{base}.{key}" if base is not None else key
+                levelKey = f"{base}{self.D}{key}" if base is not None else key
                 keys.append(levelKey)
                 if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
                     getKeys(val, keys, levelKey)
@@ -586,7 +620,7 @@ class ConfigSubset(Config):
         # component.component (since the included files can themselves
         # include the component name)
         if self.component is not None:
-            doubled = "{0}.{0}".format(self.component)
+            doubled = "{0}{1}{0}".format(self.component, self.D)
             # Must check for double depth first
             if doubled in externalConfig:
                 externalConfig = externalConfig[doubled]
@@ -650,9 +684,9 @@ class ConfigSubset(Config):
 
         if mergeDefaults and containerKey is not None and containerKey in self:
             for idx, subConfig in enumerate(self[containerKey]):
-                self[f"{containerKey}.{idx}"] = type(self)(other=subConfig, validate=validate,
-                                                           mergeDefaults=mergeDefaults,
-                                                           searchPaths=searchPaths)
+                self[f"{containerKey}{self.D}{idx}"] = type(self)(other=subConfig, validate=validate,
+                                                                  mergeDefaults=mergeDefaults,
+                                                                  searchPaths=searchPaths)
 
         if validate:
             self.validate()
