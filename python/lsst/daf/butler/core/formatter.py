@@ -32,6 +32,12 @@ class Formatter(metaclass=ABCMeta):
     `StorageClass`.
     """
 
+    unsupportedParameters = frozenset()
+    """Set of parameters not understood by this `Formatter`. An empty set means
+    all parameters are supported.  `None` indicates that no parameters
+    are supported.
+    """
+
     @classmethod
     def name(cls):
         """Returns the fully qualified name of the formatter.
@@ -86,6 +92,45 @@ class Formatter(metaclass=ABCMeta):
             The location to simulate writing to.
         """
         raise NotImplementedError("Type does not support writing")
+
+    def segregateParameters(self, parameters):
+        """Segregate the supplied parameters into those understood by the
+        formatter and those not understood by the formatter.
+
+        Any unsupported parameters are assumed to be usable by associated
+        assemblers.
+
+        Parameters
+        ----------
+        parameters : `dict`
+            Parameters with values that have been supplied by the caller
+            and which might be relevant for the formatter.
+
+        Returns
+        -------
+        supported : `dict`
+            Those parameters supported by this formatter.
+        unsupported : `dict`
+            Those parameters not supported by this formatter.
+        """
+
+        if parameters is None:
+            return {}, {}
+
+        if self.unsupportedParameters is None:
+            # Support none of the parameters
+            return {}, parameters.copy()
+
+        # Start by assuming all are supported
+        supported = parameters.copy()
+        unsupported = {}
+
+        # And remove any we know are not supported
+        for p in set(supported):
+            if p in self.unsupportedParameters:
+                unsupported[p] = supported.pop(p)
+
+        return supported, unsupported
 
 
 class FormatterFactory:

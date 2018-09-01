@@ -248,6 +248,8 @@ class PosixDatastore(Datastore):
             Formatter failed to process the dataset.
         """
 
+        log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
+
         # Get file metadata and internal metadata
         try:
             storedFileInfo = self.getStoredFileInfo(ref)
@@ -273,16 +275,24 @@ class PosixDatastore(Datastore):
         readStorageClass = ref.datasetType.storageClass
         writeStorageClass = storedFileInfo.storageClass
 
+        # Check that the supplied parameters are suitable for the type read
+        readStorageClass.validateParameters(parameters)
+
         # Is this a component request?
         component = ref.datasetType.component()
 
         formatter = getInstanceOf(storedFileInfo.formatter)
+        formatterParams, assemblerParams = formatter.segregateParameters(parameters)
         try:
             result = formatter.read(FileDescriptor(location, readStorageClass=readStorageClass,
                                                    storageClass=writeStorageClass, parameters=parameters),
                                     component=component)
         except Exception as e:
             raise ValueError("Failure from formatter for Dataset {}: {}".format(ref.id, e))
+
+        # Process any left over parameters
+        if parameters:
+            result = readStorageClass.assembler().handleParameters(result, assemblerParams)
 
         # Validate the returned data type matches the expected data type
         pytype = readStorageClass.pytype

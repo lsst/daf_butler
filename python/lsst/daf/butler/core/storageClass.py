@@ -49,24 +49,29 @@ class StorageClass:
         Python type (or name of type) to associate with the `StorageClass`
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
+    parameters : `~collections.abc.Sequence` or `~collections.abc.Set`
+        Parameters understood by this `StorageClass`.
     assembler : `str`, optional
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
     _cls_name = "BaseStorageClass"
     _cls_components = None
+    _cls_parameters = None
     _cls_assembler = None
     _cls_pytype = None
     defaultAssembler = CompositeAssembler
     defaultAssemblerName = getFullTypeName(defaultAssembler)
 
-    def __init__(self, name=None, pytype=None, components=None, assembler=None):
+    def __init__(self, name=None, pytype=None, components=None, parameters=None, assembler=None):
         if name is None:
             name = self._cls_name
         if pytype is None:
             pytype = self._cls_pytype
         if components is None:
             components = self._cls_components
+        if parameters is None:
+            parameters = self._cls_parameters
         if assembler is None:
             assembler = self._cls_assembler
         self.name = name
@@ -75,6 +80,7 @@ class StorageClass:
             self._pytypeName = "object"
             self._pytype = object
         self._components = components if components is not None else {}
+        self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the assembler is not None also set it and clear the default
         # assembler
         if assembler is not None:
@@ -97,6 +103,12 @@ class StorageClass:
         """Component names mapped to associated `StorageClass`
         """
         return self._components
+
+    @property
+    def parameters(self):
+        """`set` of names of parameters supported by this `StorageClass`
+        """
+        return set(self._parameters)
 
     @property
     def pytype(self):
@@ -169,6 +181,80 @@ class StorageClass:
         """
         return (self.name, )
 
+    def knownParameters(self):
+        """Return set of all parameters known to this `StorageClass`
+
+        The set includes parameters understood by components of a composite.
+
+        Returns
+        -------
+        known : `set`
+            All parameter keys of this `StorageClass` and the component
+            storage classes.
+        """
+        known = set(self._parameters)
+        for sc in self.components.values():
+            known.update(sc.knownParameters())
+        return known
+
+    def validateParameters(self, parameters=None):
+        """Check that the parameters are known to this `StorageClass`
+
+        Does not check the values.
+
+        Parameters
+        ----------
+        parameters : `~collections.abc.Collection`, optional
+            Collection containing the parameters. Can be `dict`-like or
+            `set`-like.  The parameter values are not checked.
+            If no parameters are supplied, always returns without error.
+
+        Raises
+        ------
+        KeyError
+            Some parameters are not understood by this `StorageClass`.
+        """
+        # No parameters is always okay
+        if not parameters:
+            return
+
+        # Extract the important information into a set. Works for dict and
+        # list.
+        external = set(parameters)
+
+        diff = external - self.knownParameters()
+        if diff:
+            s = "s" if len(diff) > 1 else ""
+            unknown = '\', \''.join(diff)
+            raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
+
+    def filterParameters(self, parameters, subset=None):
+        """Filter out parameters that are not known to this StorageClass
+
+        Parameters
+        ----------
+        parameters : `dict`, optional
+            Candidate parameters. Can be `None` if no parameters have
+            been provided.
+        subset : `~collections.abc.Collection`, optional
+            Subset of supported parameters that the caller is interested
+            in using.  The subset must be known to the `StorageClass`
+            if specified.
+
+        Returns
+        -------
+        filtered : `dict`
+            Valid parameters. Empty `dict` if none are suitable.
+        """
+        if not parameters:
+            return {}
+        subset = set(subset) if subset is not None else set()
+        known = self.knownParameters()
+        if not subset.issubset(known):
+            raise ValueError(f"Requested subset ({subset}) is not a subset of"
+                             f" known parameters ({known})")
+        return {k: parameters[k] for k in known if k in parameters}
+
     def validateInstance(self, instance):
         """Check that the supplied Python object has the expected Python type
 
@@ -204,6 +290,10 @@ class StorageClass:
         if set(self.components.keys()) != set(other.components.keys()):
             return False
 
+        # Same parameters
+        if self.parameters != other.parameters:
+            return False
+
         # Ensure that all the components have the same type
         for k in self.components:
             if self.components[k] != other.components[k]:
@@ -216,11 +306,13 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self):
-        return "{}({}, pytype={}, assembler={}, components={})".format(type(self).__qualname__,
-                                                                       self.name,
-                                                                       self._pytypeName,
-                                                                       self._assemblerClassName,
-                                                                       list(self.components.keys()))
+        return "{}({}, pytype={}, assembler={}, components={}," \
+            " parameters={})".format(type(self).__qualname__,
+                                     self.name,
+                                     self._pytypeName,
+                                     self._assemblerClassName,
+                                     list(self.components.keys()),
+                                     self._parameters)
 
 
 class StorageClassFactory(metaclass=Singleton):
@@ -309,7 +401,7 @@ class StorageClassFactory(metaclass=Singleton):
                     components[cname] = self.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for StorageClass Constructor
-            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler") if k in info}
+            storageClassKwargs = {k: info[k] for k in ("pytype", "assembler", "parameters") if k in info}
 
             # Fill in other items
             storageClassKwargs["components"] = components
@@ -357,18 +449,28 @@ class StorageClassFactory(metaclass=Singleton):
         clsargs = {f"_cls_{k}": v for k, v in kwargs.items() if v is not None}
         clsargs["_cls_name"] = name
 
-        # Components are a special case because we want to be able to
-        # combine components here with components in the parent
-        # so the parent can define a component of class Image but the child
-        # can override with ImageF.
-        compKey = "_cls_components"
-        if compKey in clsargs:
-            components = getattr(baseClass, compKey, None)
-            if components is not None:
-                components = components.copy()
-                # Merge with the supplied values
-                components.update(clsargs[compKey])
-                clsargs[compKey] = components
+        # Some container items need to merge with the base class values
+        # so that a child can inherit but override one bit.
+        # lists (which you get from configs) are treated as sets for this to
+        # work consistently.
+        for k in ("components", "parameters"):
+            classKey = f"_cls_{k}"
+            if classKey in clsargs:
+                baseValue = getattr(baseClass, classKey, None)
+                if baseValue is not None:
+                    currentValue = clsargs[classKey]
+                    if isinstance(currentValue, dict):
+                        newValue = baseValue.copy()
+                    else:
+                        newValue = set(baseValue)
+                    newValue.update(currentValue)
+                    clsargs[classKey] = newValue
+
+        # If we have parameters they should be a frozen set so that the
+        # parameters in the class can not be modified.
+        pk = f"_cls_parameters"
+        if pk in clsargs:
+            clsargs[pk] = frozenset(clsargs[pk])
 
         return type(f"StorageClass{name}", (baseClass,), clsargs)
 

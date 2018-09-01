@@ -21,6 +21,10 @@ storageClasses:
     pytype: lsst.afw.image.TransmissionCurve
   Image: &Image
     pytype: lsst.afw.image.Image
+    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    parameters:
+      - bbox
+      - origin
   ImageF:
     inheritsFrom: Image
     pytype: lsst.afw.image.ImageF
@@ -37,6 +41,10 @@ storageClasses:
     pytype: lsst.afw.image.DecoratedImageU
   Mask:
     pytype: lsst.afw.image.Mask
+    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    parameters:
+      - bbox
+      - origin
   MaskX:
     inheritsFrom: Mask
     pytype: lsst.afw.image.MaskX
@@ -57,6 +65,9 @@ storageClasses:
   Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    parameters:
+      - bbox
+      - origin
     components:
       image: Image
       mask: Mask

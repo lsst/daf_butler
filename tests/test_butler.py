@@ -42,7 +42,7 @@ def makeExampleMetrics():
     return MetricsExample({"AM1": 5.2, "AM2": 30.6},
                           {"a": [1, 2, 3],
                            "b": {"blue": 5, "red": "green"}},
-                          [563, 234, 456.7]
+                          [563, 234, 456.7, 752, 8, 9, 27]
                           )
 
 
@@ -158,9 +158,17 @@ class ButlerTests:
             self.assertEqual(metric, metricOut)
 
             # Check we can get components
-            if storageClass.components:
+            if storageClass.isComposite():
                 self.assertGetComponents(butler, ref,
                                          ("summary", "data", "output"), metric)
+
+        # Get with parameters
+        stop = 4
+        sliced = butler.get(ref2, parameters={"slice": slice(stop)})
+        self.assertNotEqual(metric, sliced)
+        self.assertEqual(metric.summary, sliced.summary)
+        self.assertEqual(metric.output, sliced.output)
+        self.assertEqual(metric.data[:stop], sliced.data)
 
         # Combining a DatasetRef with a dataId should fail
         with self.assertRaises(ValueError):
@@ -168,6 +176,10 @@ class ButlerTests:
         # Getting with an explicit ref should fail if the id doesn't match
         with self.assertRaises(ValueError):
             butler.get(DatasetRef(ref.datasetType, ref.dataId, id=101))
+
+        # Getting a dataset with unknown parameters should fail
+        with self.assertRaises(KeyError):
+            butler.get(ref, parameters={"unsupported": True})
 
     def testPickle(self):
         """Test pickle support.

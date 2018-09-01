@@ -309,3 +309,38 @@ class CompositeAssembler:
             raise ValueError("Unhandled components during disassembly ({})".format(requested))
 
         return components
+
+    def handleParameters(self, inMemoryDataset, parameters=None):
+        """Modify the in-memory dataset using the supplied parameters,
+        returning a possibly new object.
+
+        For safety, if any parameters are given to this method an
+        exception will be raised.  This is to protect the user from
+        thinking that parameters have been applied when they have not been
+        applied.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to modify based on the parameters.
+        parameters : `dict`
+            Parameters to apply. Values are specific to the parameter.
+            Supported parameters are defined in the associated
+            `StorageClass`.  If no relevant parameters are specified the
+            inMemoryDataset will be return unchanged.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Updated form of supplied in-memory dataset, after parameters
+            have been used.
+
+        Raises
+        ------
+        ValueError
+            Parameters have been provided to this default implementation.
+        """
+        if parameters:
+            raise ValueError(f"Parameters ({parameters}) provided to default implementation.")
+
+        return inMemoryDataset

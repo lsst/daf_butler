@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import pickle
 import unittest
 import lsst.utils.tests
@@ -27,6 +28,8 @@ from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfi
 
 """Tests related to the StorageClass infrastructure.
 """
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
 class PythonType:
@@ -73,6 +76,22 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(sc2.pytype(), StorageClassFactory)
         self.assertIn("butler.core", repr(sc2))
 
+    def testParameters(self):
+        """Test that we can set parameters and validate them"""
+        pt = ("a", "b")
+        ps = {"a", "b"}
+        pl = ["a", "b"]
+        for p in (pt, ps, pl):
+            sc1 = StorageClass("ParamClass", pytype=dict, parameters=p)
+            self.assertEqual(sc1.parameters, ps)
+            sc1.validateParameters(p)
+
+        sc1.validateParameters()
+        sc1.validateParameters({"a": None, "b": None})
+        sc1.validateParameters(["a", ])
+        with self.assertRaises(KeyError):
+            sc1.validateParameters({"a", "c"})
+
     def testEquality(self):
         """Test that StorageClass equality works"""
         className = "TestImage"
@@ -85,6 +104,13 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         # Same StorageClass name but different python type
         sc4 = StorageClass(className, pytype=str)
         self.assertNotEqual(sc1, sc4)
+
+        # Parameters
+        scp = StorageClass("Params", pytype=PythonType, parameters=["a", "b", "c"])
+        scp1 = StorageClass("Params", pytype=PythonType, parameters=["a", "b", "c"])
+        scp2 = StorageClass("Params", pytype=PythonType, parameters=["a", "b", "d", "e"])
+        self.assertEqual(scp, scp1)
+        self.assertNotEqual(scp, scp2)
 
         # Now with components
         sc5 = StorageClass("Composite", pytype=PythonType,
@@ -158,6 +184,18 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(exposureF.components["image"], type(imageF))
         self.assertIn("wcs", exposure.components)
         self.assertIn("wcs", exposureF.components)
+
+        # Check parameters
+        factory.addFromConfig(os.path.join(TESTDIR, "config", "basic", "storageClasses.yaml"))
+        thing1 = factory.getStorageClass("ThingOne")
+        thing2 = factory.getStorageClass("ThingTwo")
+        self.assertIsInstance(thing2, type(thing1))
+        param1 = thing1.parameters
+        param2 = thing2.parameters
+        self.assertIn("param3", thing2.parameters)
+        self.assertNotIn("param3", thing1.parameters)
+        param2.remove("param3")
+        self.assertEqual(param1, param2)
 
         # Check that we can't have a new StorageClass that does not
         # inherit from StorageClass

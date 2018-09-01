@@ -31,8 +31,6 @@ class FitsExposureFormatter(Formatter):
     """
     extension = ".fits"
 
-    parameters = frozenset(("bbox", "origin"))
-
     def readImageComponent(self, fileDescriptor, component):
         """Read the image, mask, or variance component of an Exposure.
 
@@ -132,8 +130,7 @@ class FitsExposureFormatter(Formatter):
             parameters = fileDescriptor.parameters
         if parameters is None:
             parameters = {}
-        if not self.parameters.issuperset(parameters.keys()):
-            raise KeyError("Unrecognized parameter key(s): {}".format(parameters.keys() - self.parameters))
+        fileDescriptor.storageClass.validateParameters(parameters)
         return fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **parameters)
 
     def read(self, fileDescriptor, component=None):
