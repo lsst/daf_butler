@@ -44,19 +44,6 @@ log = logging.getLogger(__name__)
 # PATH-like environment variable to use for defaults.
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
-# UserDict and yaml have defined metaclasses and Python 3 does not allow
-# multiple inheritance of classes with distinct metaclasses. We therefore have
-# to create a new baseclass that Config can inherit from. This is because the
-# metaclass syntax differs between versions
-
-
-class _ConfigMeta(type(collections.UserDict), type(yaml.YAMLObject)):
-    pass
-
-
-class _ConfigBase(collections.UserDict, yaml.YAMLObject, metaclass=_ConfigMeta):
-    pass
-
 
 class Loader(yaml.CLoader):
     """YAML Loader that supports file include directives
@@ -109,7 +96,7 @@ class Loader(yaml.CLoader):
             return yaml.load(f, Loader)
 
 
-class Config(_ConfigBase):
+class Config(collections.UserDict):
     """Implements a datatype that is used by `Butler` for configuration
     parameters.
 
