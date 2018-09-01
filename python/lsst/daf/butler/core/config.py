@@ -112,14 +112,15 @@ class Config(collections.UserDict):
     The default delimiter is defined in the class variable `Config.D`.
 
     The default delimiter can be overridden by specifying it as the first
-    character of the string: ``foo[".a.b.c"]`` will us ``.`` as a delimiter
+    character of the string: ``foo[".a.b.c"]`` will use ``.`` as a delimiter
     regardless of the internal default, but ``foo[":a.b.c"]`` will use ``:``
     as the delimeter resulting in a single key of ``a.b.c`` being accessed.
     Using ``foo[":a:b:c"]`` is therefore equivalent to ``foo[".a.b.c"]``.
     This requires that keys in `Config` instances do not themselves start with
-    non-alphanumeric characters.  If the hierarchy is already availabe in a
+    non-alphanumeric characters.  If the hierarchy is already available in a
     `list` or `tuple` it can be provided directly without forming it into a
-    string.
+    string, such that ``foo[("a", "b", "c")]`` is equivalent to
+    ``foot[".a.b.c"]``.
 
     Storage formats supported:
 
