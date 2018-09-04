@@ -120,7 +120,10 @@ class Config(collections.UserDict):
     non-alphanumeric characters.  If the hierarchy is already available in a
     `list` or `tuple` it can be provided directly without forming it into a
     string, such that ``foo[("a", "b", "c")]`` is equivalent to
-    ``foot[".a.b.c"]``.
+    ``foo[".a.b.c"]``.  Finally, the delimiter can be escaped if it should
+    not be used in part of the string: ``foo[r".a.b\.c"]`` results in a two
+    element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
+    always better to use a different delimiter in these cases.
 
     Storage formats supported:
 
@@ -235,7 +238,8 @@ class Config(collections.UserDict):
             on the standard delimiter.  If the first character of the string
             is not an alphanumeric character then it will be used as the
             delimiter for the purposes of splitting the remainder of the
-            string.
+            string. If the delimiter is also in one of the keys then it
+            can be escaped using ``\``.
 
         Returns
         -------
@@ -248,7 +252,20 @@ class Config(collections.UserDict):
                 key = key[1:]
             else:
                 d = self.D
-            return key.split(d)
+            # Allow escaping of the delimiter: .a.foo\.bar -> a foo.bar
+            escaped = f"\\{d}"
+            temp = None
+            if escaped in key:
+                # Replace with a character that won't be in the string
+                temp = "\r"
+                if temp in key or d == "\r":
+                    raise ValueError("Can not use carriage return character in hierarchical key or as"
+                                     " delimiter if escaping the delimiter")
+                key = key.replace(escaped, temp)
+            hierarchy = key.split(d)
+            if temp:
+                hierarchy = [h.replace(temp, d) for h in hierarchy]
+            return hierarchy
         else:
             return list(key)
 

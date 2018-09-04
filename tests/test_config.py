@@ -110,6 +110,17 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
 
+    def testEscape(self):
+        c = Config({"a": {"foo.bar": 1}, "b😂c": {"bar_baz": 2}})
+        self.assertEqual(c[r".a.foo\.bar"], 1)
+        self.assertEqual(c[":a:foo.bar"], 1)
+        self.assertEqual(c[".b😂c.bar_baz"], 2)
+        self.assertEqual(c["😂b\😂c😂bar_baz"], 2)
+        self.assertEqual(c[r"\a\foo.bar"], 1)
+        self.assertEqual(c["\ra\rfoo.bar"], 1)
+        with self.assertRaises(ValueError):
+            c[".a.foo\.bar\r"]
+
     def testOperators(self):
         c1 = Config({"a": {"b": 1}, "c": 2})
         c2 = c1.copy()
