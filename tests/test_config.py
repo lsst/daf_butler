@@ -105,7 +105,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("key3", pretty)
         r = repr(c)
         self.assertIn("key3", r)
-        regex = "^Config\(\{.*\}\)$"
+        regex = r"^Config\(\{.*\}\)$"
         self.assertRegex(r, regex)
         s = str(c)
         self.assertIn("\n", s)
@@ -120,7 +120,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c[r"\a\foo.bar"], 1)
         self.assertEqual(c["\ra\rfoo.bar"], 1)
         with self.assertRaises(ValueError):
-            c[".a.foo\.bar\r"]
+            c[".a.foo\\.bar\r"]
 
     def testOperators(self):
         c1 = Config({"a": {"b": 1}, "c": 2})
