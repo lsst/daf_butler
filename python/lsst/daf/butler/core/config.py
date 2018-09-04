@@ -105,21 +105,19 @@ class Config(collections.UserDict):
     is that keys may **not** contain the delimiter. This is explained next:
 
     Config extends the `dict` api so that hierarchical values may be accessed
-    with delimited notation. That is, for a delimiter of ``.``,
-    ``foo.getValue("a.b.c")`` is the same as ``foo["a"]["b"]["c"]`` is the
-    same as ``foo["a.b.c"]``, and either of these syntaxes may be used.
-
-    The default delimiter is defined in the class variable `Config.D`.
-
-    The default delimiter can be overridden by specifying it as the first
-    character of the string: ``foo[".a.b.c"]`` will use ``.`` as a delimiter
-    regardless of the internal default, but ``foo[":a.b.c"]`` will use ``:``
+    with delimited notation or as a tuple.  If a string is given the delimiter
+    is picked up from the first character in that string. For example,
+    ``foo.getValue(".a.b.c")`` is the same as ``foo["a"]["b"]["c"]`` is the
+    same as ``foo[".a.b.c"]``, and either of these syntaxes may be used.
+    If the first character is alphanumeric, no delimiter will be used.
+    ``foo["a.b.c"]`` will be a single key ``a.b.c` whereas ``foo[".a.b.c"]``
+    will use ``.`` as a delimiter, but ``foo[":a.b.c"]`` will use ``:``
     as the delimeter resulting in a single key of ``a.b.c`` being accessed.
     Using ``foo[":a:b:c"]`` is therefore equivalent to ``foo[".a.b.c"]``.
     This requires that keys in `Config` instances do not themselves start with
     non-alphanumeric characters.  If the hierarchy is already available in a
     `list` or `tuple` it can be provided directly without forming it into a
-    string, such that ``foo[("a", "b", "c")]`` is equivalent to
+    string, such that ``foo["a", "b", "c"]`` is equivalent to
     ``foo[".a.b.c"]``.  Finally, the delimiter can be escaped if it should
     not be used in part of the string: ``foo[r".a.b\.c"]`` results in a two
     element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
@@ -143,8 +141,8 @@ class Config(collections.UserDict):
         If `None` is provided an empty `Config` will be created.
     """
 
-    D = "→"
-    """Delimiter to use for components in the hierarchy"""
+    _D = "→"
+    """Default internal delimiter to use for components in the hierarchy"""
 
     def __init__(self, other=None):
 
@@ -234,12 +232,11 @@ class Config(collections.UserDict):
         ----------
         key : `str` or iterable
             Argument given to get/set/in. If an iterable is provided it will
-            be converted to a list.  If a string is provided it will be split
-            on the standard delimiter.  If the first character of the string
+            be converted to a list.  If the first character of the string
             is not an alphanumeric character then it will be used as the
             delimiter for the purposes of splitting the remainder of the
             string. If the delimiter is also in one of the keys then it
-            can be escaped using ``\``.
+            can be escaped using ``\``. There is no default delimiter.
 
         Returns
         -------
@@ -251,7 +248,7 @@ class Config(collections.UserDict):
                 d = key[0]
                 key = key[1:]
             else:
-                d = self.D
+                return [key, ]
             # Allow escaping of the delimiter: .a.foo\.bar -> a foo.bar
             escaped = f"\\{d}"
             temp = None
@@ -424,7 +421,7 @@ class Config(collections.UserDict):
                 theseKeys = d.keys()
             for key in theseKeys:
                 val = d[key]
-                levelKey = f"{base}{self.D}{key}" if base is not None else key
+                levelKey = f"{base}{self._D}{key}" if base is not None else key
                 keys.append(levelKey)
                 if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
                     getKeys(val, keys, levelKey)
@@ -432,7 +429,7 @@ class Config(collections.UserDict):
         getKeys(self.data, keys, None)
         # Prepend the delimiter so that access works even if the delimiter is
         # changed.
-        return [f"{self.D}{k}" for k in keys]
+        return [f"{self._D}{k}" for k in keys]
 
     def asArray(self, name):
         """Get a value as an array.

@@ -158,9 +158,9 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c[".a.x"], "string")
 
         # Try different delimiters
-        self.assertEqual(c[f"a{c.D}z"], 52)
         self.assertEqual(c["⇛a⇛z"], 52)
         self.assertEqual(c[("a", "z")], 52)
+        self.assertEqual(c["a", "z"], 52)
 
         c[".b.new.thing1"] = "thing1"
         c[".b.new.thing2"] = "thing2"
@@ -229,13 +229,13 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c[":formatters:calexp.wcs"], 2)
         self.assertEqual(c[":formatters:calexp"], 3)
         for k, v in c["formatters"].items():
-            self.assertEqual(c[("formatters", k)], v)
+            self.assertEqual(c["formatters", k], v)
 
         # and now try again by forcing a "." delimiter
         c2 = c["formatters"]
-        c2.D = "."
+        c2._D = "."
         for k, v in c2.items():
-            self.assertEqual(c[("formatters", k)], v)
+            self.assertEqual(c["formatters", k], v)
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
@@ -385,7 +385,7 @@ class ConfigSubsetTestCase(unittest.TestCase):
         # Test a specific name and then test that all
         # returned names are "in" the config.
         names = c.names()
-        self.assertIn(c.D.join(("", "comp3", "1", "comp", "item1")), names)
+        self.assertIn(c._D.join(("", "comp3", "1", "comp", "item1")), names)
         for n in names:
             self.assertIn(n, c)
 
