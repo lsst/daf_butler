@@ -289,6 +289,9 @@ class Config(collections.UserDict):
                     return None
         if isinstance(data, collections.Mapping):
             data = Config(data)
+            # Ensure that child configs inherit the parent internal delimiter
+            if self._D != Config._D:
+                data._D = self._D
         return data
 
     def __setitem__(self, name, value):

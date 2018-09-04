@@ -236,6 +236,16 @@ class ConfigTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             names = c.names(delimiter=".")
 
+        # Use a name that includes the internal default delimiter
+        # to test automatic adjustment of delimiter
+        strangeKey = f"calexp{c._D}wcs"
+        c["formatters", strangeKey] = "dynamic"
+        names = c.names()
+        self.assertIn(strangeKey, "-".join(names))
+        self.assertFalse(names[0].startswith(c._D))
+        for n in names:
+            self.assertIn(n, c)
+
         top = c.nameTuples(topLevelOnly=True)
         self.assertIsInstance(top[0], tuple)
 
@@ -246,11 +256,11 @@ class ConfigTestCase(unittest.TestCase):
         for k, v in c["formatters"].items():
             self.assertEqual(c["formatters", k], v)
 
-        # and now try again by forcing a "." delimiter
+        # Check internal delimiter inheritance
+        c._D = "."
         c2 = c["formatters"]
-        c2._D = "."
-        for k, v in c2.items():
-            self.assertEqual(c["formatters", k], v)
+        self.assertEqual(c._D, c2._D)  # Check that the child inherits
+        self.assertNotEqual(c2._D, Config._D)
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
