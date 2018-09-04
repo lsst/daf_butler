@@ -104,7 +104,11 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("key3", pretty)
         r = repr(c)
         self.assertIn("key3", r)
-        self.assertRegex(r, "^Config\(\{.*\}\)$")
+        regex = "^Config\(\{.*\}\)$"
+        self.assertRegex(r, regex)
+        s = str(c)
+        self.assertIn("\n", s)
+        self.assertNotRegex(s, regex)
 
     def testOperators(self):
         c1 = Config({"a": {"b": 1}, "c": 2})

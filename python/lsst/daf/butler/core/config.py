@@ -177,6 +177,9 @@ class Config(collections.UserDict):
     def __repr__(self):
         return f"{type(self).__name__}({self.data!r})"
 
+    def __str__(self):
+        return self.ppprint()
+
     def __initFromFile(self, path):
         """Load a file from path.
 
