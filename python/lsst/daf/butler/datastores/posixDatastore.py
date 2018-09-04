@@ -111,7 +111,7 @@ class PosixDatastore(Datastore):
         """
         Config.overrideParameters(DatastoreConfig, config, full,
                                   toUpdate={"root": root},
-                                  toCopy=("cls", ".records.table"))
+                                  toCopy=("cls", ("records", "table")))
 
     def __init__(self, config, registry):
         super().__init__(config, registry)
