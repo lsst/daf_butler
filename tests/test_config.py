@@ -23,6 +23,7 @@ import unittest
 import os
 import contextlib
 import collections
+import itertools
 
 from lsst.daf.butler import ConfigSubset, Config
 
@@ -218,11 +219,20 @@ class ConfigTestCase(unittest.TestCase):
 
         # Test that we can get all the listed names.
         # and also that they are marked as "in" the Config
-        # Two distinct loops
-        for n in c.names():
+        # Try delimited names and tuples
+        for n in itertools.chain(c.names(), c.nameTuples()):
             val = c[n]
             self.assertIsNotNone(val)
             self.assertIn(n, c)
+
+        names = c.names()
+        nameTuples = c.nameTuples()
+        self.assertEqual(len(names), len(nameTuples))
+        self.assertGreater(len(names), 5)
+        self.assertGreater(len(nameTuples), 5)
+
+        top = c.nameTuples(topLevelOnly=True)
+        self.assertIsInstance(top[0], tuple)
 
         # Investigate a possible delimeter in a key
         c = Config({"formatters": {"calexp.wcs": 2, "calexp": 3}})

@@ -389,6 +389,42 @@ class Config(collections.UserDict):
         otherCopy.update(self)
         self.data = otherCopy.data
 
+    def nameTuples(self, topLevelOnly=False):
+        """Get tuples representing the name hierarchies of all keys.
+
+        The tuples returned from this method are guaranteed to be usable
+        to access items in the configuration object.
+
+        Parameters
+        ----------
+        topLevelOnly : `bool`, optional
+            If False, the default, a full hierarchy of names is returned.
+            If True, only the top level are returned.
+
+        Returns
+        -------
+        names : `list` of `tuple` of `str`
+            List of all names present in the `Config` where each element
+            in the list is a `tuple` of strings representing the hierarchy.
+        """
+        if topLevelOnly:
+            return list((k,) for k in self)
+
+        def getKeysAsTuples(d, keys, base):
+            if isinstance(d, collections.Sequence):
+                theseKeys = range(len(d))
+            else:
+                theseKeys = d.keys()
+            for key in theseKeys:
+                val = d[key]
+                levelKey = base + (key,) if base is not None else (key,)
+                keys.append(levelKey)
+                if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
+                    getKeysAsTuples(val, keys, levelKey)
+        keys = []
+        getKeysAsTuples(self.data, keys, None)
+        return keys
+
     def names(self, topLevelOnly=False):
         """Get the delimited name of all the keys in the hierarchy.
 
@@ -414,22 +450,12 @@ class Config(collections.UserDict):
         if topLevelOnly:
             return list(self.keys())
 
-        def getKeys(d, keys, base):
-            if isinstance(d, collections.Sequence):
-                theseKeys = range(len(d))
-            else:
-                theseKeys = d.keys()
-            for key in theseKeys:
-                val = d[key]
-                levelKey = f"{base}{self._D}{key}" if base is not None else key
-                keys.append(levelKey)
-                if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
-                    getKeys(val, keys, levelKey)
-        keys = []
-        getKeys(self.data, keys, None)
-        # Prepend the delimiter so that access works even if the delimiter is
-        # changed.
-        return [f"{self._D}{k}" for k in keys]
+        # Get all the tuples of hierarchical keys
+        nameTuples = self.nameTuples()
+
+        delimiter = self._D
+        strings = [delimiter + delimiter.join(str(s) for s in k) for k in nameTuples]
+        return strings
 
     def asArray(self, name):
         """Get a value as an array.
