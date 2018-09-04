@@ -425,7 +425,7 @@ class Config(collections.UserDict):
         getKeysAsTuples(self.data, keys, None)
         return keys
 
-    def names(self, topLevelOnly=False):
+    def names(self, topLevelOnly=False, delimiter=None):
         """Get the delimited name of all the keys in the hierarchy.
 
         The values returned from this method are guaranteed to be usable
@@ -436,6 +436,10 @@ class Config(collections.UserDict):
         topLevelOnly : `bool`, optional
             If False, the default, a full hierarchy of names is returned.
             If True, only the top level are returned.
+        delimiter : `str`, optional
+            Delimiter to use when forming the keys.  The delimiter must
+            not be present in any of the keys.  If `None` given the delimiter
+            will be automatically provided.
 
         Returns
         -------
@@ -446,6 +450,12 @@ class Config(collections.UserDict):
         -----
         This is different than the built-in method `dict.keys`, which will
         return only the first level keys.
+
+        Raises
+        ------
+        ValueError
+            The externally specified delimiter is unsuitable because a key
+            clashes with the value.
         """
         if topLevelOnly:
             return list(self.keys())
@@ -453,7 +463,39 @@ class Config(collections.UserDict):
         # Get all the tuples of hierarchical keys
         nameTuples = self.nameTuples()
 
-        delimiter = self._D
+        # Form big string for easy check of delimiter clash
+        combined = "".join("".join(str(s) for s in k) for k in nameTuples)
+
+        if delimiter is not None:
+            if delimiter in combined:
+                # For better error message we need to report the clashing key
+                def findMatch(names, searchStr):
+                    for n in names:
+                        for s in n:
+                            if searchStr in s:
+                                return s
+                    return None
+
+                raise ValueError(f"Specified delimiter, {delimiter!r} can not be used.  "
+                                 f"Clashes with key {findMatch(nameTuples, delimiter)!r}")
+        else:
+            # Start with something
+            delimiter = self._D
+            ntries = 0
+            while delimiter in combined:
+                log.debug(f"Trying delimiter '{delimiter}'")
+                ntries += 1
+
+                if ntries > 100:
+                    raise ValueError(f"Unable to determine a delimiter for Config {self}")
+
+                # try another one
+                while True:
+                    delimiter = chr(ord(delimiter)+1)
+                    if not delimiter.isalnum():
+                        break
+
+        log.debug(f"Using delimiter {delimiter!r}")
         strings = [delimiter + delimiter.join(str(s) for s in k) for k in nameTuples]
         return strings
 

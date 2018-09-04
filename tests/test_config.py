@@ -210,6 +210,8 @@ class ConfigTestCase(unittest.TestCase):
 
         # Check that lists still work even if assigned a dict
         c = Config({"cls": "lsst.daf.butler",
+                    "formatters": {"calexp.wcs": "{component}",
+                                   "calexp": "{datasetType}"},
                     "datastores": [{"datastore": {"cls": "datastore1"}},
                                    {"datastore": {"cls": "datastore2"}}]})
         c[".datastores.1.datastore"] = {"cls": "datastore2modified"}
@@ -230,6 +232,9 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(len(names), len(nameTuples))
         self.assertGreater(len(names), 5)
         self.assertGreater(len(nameTuples), 5)
+
+        with self.assertRaises(ValueError):
+            names = c.names(delimiter=".")
 
         top = c.nameTuples(topLevelOnly=True)
         self.assertIsInstance(top[0], tuple)
@@ -398,6 +403,11 @@ class ConfigSubsetTestCase(unittest.TestCase):
         self.assertIn(c._D.join(("", "comp3", "1", "comp", "item1")), names)
         for n in names:
             self.assertIn(n, c)
+
+        # Test that override delimiter works
+        delimiter = "-"
+        names = c.names(delimiter=delimiter)
+        self.assertIn(delimiter.join(("", "comp3", "1", "comp", "item1")), names)
 
 
 if __name__ == "__main__":
