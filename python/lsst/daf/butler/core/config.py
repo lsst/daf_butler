@@ -175,7 +175,7 @@ class Config(collections.UserDict):
         return pprint.pformat(self.data, indent=2, width=1)
 
     def __repr__(self):
-        return self.data.__repr__()
+        return f"{type(self).__name__}({self.data!r})"
 
     def __initFromFile(self, path):
         """Load a file from path.

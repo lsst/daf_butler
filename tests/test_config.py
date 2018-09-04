@@ -98,6 +98,14 @@ class ConfigTestCase(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 Config(badArg)
 
+    def testBasics(self):
+        c = Config({1: 2, 3: 4, "key3": 6})
+        pretty = c.ppprint()
+        self.assertIn("key3", pretty)
+        r = repr(c)
+        self.assertIn("key3", r)
+        self.assertRegex(r, "^Config\(\{.*\}\)$")
+
     def testOperators(self):
         c1 = Config({"a": {"b": 1}, "c": 2})
         c2 = c1.copy()
