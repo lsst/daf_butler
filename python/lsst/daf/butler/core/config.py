@@ -777,9 +777,9 @@ class ConfigSubset(Config):
 
         if mergeDefaults and containerKey is not None and containerKey in self:
             for idx, subConfig in enumerate(self[containerKey]):
-                self[(containerKey, idx)] = type(self)(other=subConfig, validate=validate,
-                                                       mergeDefaults=mergeDefaults,
-                                                       searchPaths=searchPaths)
+                self[containerKey, idx] = type(self)(other=subConfig, validate=validate,
+                                                     mergeDefaults=mergeDefaults,
+                                                     searchPaths=searchPaths)
 
         if validate:
             self.validate()

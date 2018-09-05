@@ -99,7 +99,7 @@ class CompositesMap:
 
         for name in (entity._lookupNames()):
             if name is not None and name in self.config[DISASSEMBLY_KEY]:
-                disassemble = self.config[(DISASSEMBLY_KEY, name)]
+                disassemble = self.config[DISASSEMBLY_KEY, name]
                 matchName = name
                 break
 
