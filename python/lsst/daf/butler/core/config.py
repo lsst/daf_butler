@@ -255,8 +255,8 @@ class Config(collections.UserDict):
             if escaped in key:
                 # Replace with a character that won't be in the string
                 temp = "\r"
-                if temp in key or d == "\r":
-                    raise ValueError("Can not use carriage return character in hierarchical key or as"
+                if temp in key or d == temp:
+                    raise ValueError(f"Can not use character {temp!r} in hierarchical key or as"
                                      " delimiter if escaping the delimiter")
                 key = key.replace(escaped, temp)
             hierarchy = key.split(d)
