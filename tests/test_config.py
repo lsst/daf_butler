@@ -237,8 +237,11 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(len(names), 11)
         self.assertEqual(len(nameTuples), 11)
 
-        with self.assertRaises(ValueError):
-            names = c.names(delimiter=".")
+        # Test that delimiter escaping works
+        names = c.names(delimiter=".")
+        for n in names:
+            self.assertIn(n, c)
+        self.assertIn(".formatters.calexp\\.wcs", names)
 
         # Use a name that includes the internal default delimiter
         # to test automatic adjustment of delimiter

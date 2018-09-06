@@ -441,9 +441,9 @@ class Config(collections.UserDict):
             If False, the default, a full hierarchy of names is returned.
             If True, only the top level are returned.
         delimiter : `str`, optional
-            Delimiter to use when forming the keys.  The delimiter must
-            not be present in any of the keys.  If `None` given a delimiter
-            will be automatically provided.
+            Delimiter to use when forming the keys.  If the delimiter is
+            present in any of the keys, it will be escaped in the returned
+            names.  If `None` given a delimiter will be automatically provided.
 
         Returns
         -------
@@ -454,12 +454,6 @@ class Config(collections.UserDict):
         -----
         This is different than the built-in method `dict.keys`, which will
         return only the first level keys.
-
-        Raises
-        ------
-        ValueError
-            The externally specified delimiter is unsuitable because a key
-            clashes with the value.
         """
         if topLevelOnly:
             return list(self.keys())
@@ -467,24 +461,16 @@ class Config(collections.UserDict):
         # Get all the tuples of hierarchical keys
         nameTuples = self.nameTuples()
 
-        # Form big string for easy check of delimiter clash
-        combined = "".join("".join(str(s) for s in k) for k in nameTuples)
-
-        if delimiter is not None:
-            if delimiter in combined:
-                # For better error message we need to report the clashing key
-                def findMatch(names, searchStr):
-                    for n in names:
-                        for s in n:
-                            if searchStr in s:
-                                return n
-                    return None
-
-                raise ValueError(f"Specified delimiter, {delimiter!r} can not be used.  "
-                                 f"Clashes with key {findMatch(nameTuples, delimiter)!r}")
-        else:
-            # Start with something
+        if delimiter is None:
+            # Start with something, and ensure it does not need to be
+            # escaped (it is much easier to understand if not escaped)
             delimiter = self._D
+
+            # Form big string for easy check of delimiter clash
+            combined = "".join("".join(str(s) for s in k) for k in nameTuples)
+
+            # Try a delimiter and keep trying until we get something that
+            # works.
             ntries = 0
             while delimiter in combined:
                 log.debug(f"Delimiter '{delimiter}' could not be used. Trying another.")
@@ -500,7 +486,10 @@ class Config(collections.UserDict):
                         break
 
         log.debug(f"Using delimiter {delimiter!r}")
-        strings = [delimiter + delimiter.join(str(s) for s in k) for k in nameTuples]
+
+        # Form the keys, escaping the delimiter if necessary
+        strings = [delimiter + delimiter.join(str(s).replace(delimiter, f"\\{delimiter}") for s in k)
+                   for k in nameTuples]
         return strings
 
     def asArray(self, name):
