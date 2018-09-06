@@ -100,13 +100,17 @@ class ConfigTestCase(unittest.TestCase):
                 Config(badArg)
 
     def testBasics(self):
-        c = Config({1: 2, 3: 4, "key3": 6})
+        c = Config({1: 2, 3: 4, "key3": 6, "dict": {"a": 1, "b": 2}})
         pretty = c.ppprint()
         self.assertIn("key3", pretty)
         r = repr(c)
         self.assertIn("key3", r)
         regex = r"^Config\(\{.*\}\)$"
         self.assertRegex(r, regex)
+        c2 = eval(r)
+        for n in c.names():
+            self.assertEqual(c2[n], c[n])
+        self.assertEqual(c, c2)
         s = str(c)
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
@@ -230,8 +234,8 @@ class ConfigTestCase(unittest.TestCase):
         names = c.names()
         nameTuples = c.nameTuples()
         self.assertEqual(len(names), len(nameTuples))
-        self.assertGreater(len(names), 5)
-        self.assertGreater(len(nameTuples), 5)
+        self.assertEqual(len(names), 11)
+        self.assertEqual(len(nameTuples), 11)
 
         with self.assertRaises(ValueError):
             names = c.names(delimiter=".")
