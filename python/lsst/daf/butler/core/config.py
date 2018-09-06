@@ -257,7 +257,8 @@ class Config(collections.UserDict):
                 # Complain at the attempt to escape the escape
                 doubled = fr"\{escaped}"
                 if doubled in key:
-                    raise ValueError(f"Escaping an escaped delimiter ({doubled} in {key}) is not yet supported.")
+                    raise ValueError(f"Escaping an escaped delimiter ({doubled} in {key})"
+                                     " is not yet supported.")
                 # Replace with a character that won't be in the string
                 temp = "\r"
                 if temp in key or d == temp:
