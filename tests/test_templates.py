@@ -53,17 +53,17 @@ class TestFileTemplates(unittest.TestCase):
         self.assertEqual(path, answer)
 
     def testBasic(self):
-        tmplstr = "{run:02d}/{datasetType}/{visit:05d}/{filter}"
+        tmplstr = "{run:02d}/{datasetType}/{visit:05d}/{physical_filter}"
         self.assertTemplate(tmplstr,
                             "02/calexp/00052/U",
                             self.makeDatasetRef("calexp"))
-        tmplstr = "{collection}/{datasetType}/{visit:05d}/{filter}-trail"
+        tmplstr = "{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail"
         self.assertTemplate(tmplstr,
                             "run2/calexp/00052/U-trail",
                             self.makeDatasetRef("calexp"))
 
     def testRunOrCollectionNeeded(self):
-        tmplstr = "{datasetType}/{visit:05d}/{filter}"
+        tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
         with self.assertRaises(KeyError):
             self.assertTemplate(tmplstr,
                                 "02/calexp/00052/U",
@@ -72,7 +72,7 @@ class TestFileTemplates(unittest.TestCase):
     def testOptional(self):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp")
-        tmplstr = "{run:02d}/{datasetType}/v{visit:05d}_f{filter:?}"
+        tmplstr = "{run:02d}/{datasetType}/v{visit:05d}_f{physical_filter:?}"
         self.assertTemplate(tmplstr, "02/calexp/v00052_fU",
                             self.makeDatasetRef("calexp"))
 
@@ -82,17 +82,17 @@ class TestFileTemplates(unittest.TestCase):
 
         # Ensure that this returns a relative path even if the first field
         # is optional
-        tmplstr = "{run:02d}/{tract:?}/{visit:?}/f{filter}"
+        tmplstr = "{run:02d}/{tract:?}/{visit:?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/52/fU", ref)
 
         # Ensure that // from optionals are converted to singles
-        tmplstr = "{run:02d}/{datasetType}/{patch:?}/{tract:?}/f{filter}"
+        tmplstr = "{run:02d}/{datasetType}/{patch:?}/{tract:?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/calexp/fU", ref)
 
         # Optionals with some text between fields
-        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{tract:?}/f{filter}"
+        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{tract:?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/calexp/p/fU", ref)
-        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{visit:04d?}/f{filter}"
+        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{visit:04d?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/calexp/p_t0052/fU", ref)
 
     def testComponent(self):
@@ -165,7 +165,7 @@ class TestFileTemplates(unittest.TestCase):
             templates.getTemplate(ref2)
 
         # Try again but specify a default in the constructor
-        default = "{datasetType}/{filter}"
+        default = "{datasetType}/{physical_filter}"
         templates = FileTemplates(config3, default=default)
         tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)
