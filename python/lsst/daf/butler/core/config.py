@@ -448,6 +448,7 @@ class Config(collections.UserDict):
             Delimiter to use when forming the keys.  If the delimiter is
             present in any of the keys, it will be escaped in the returned
             names.  If `None` given a delimiter will be automatically provided.
+            The delimiter can not be alphanumeric.
 
         Returns
         -------
@@ -458,12 +459,20 @@ class Config(collections.UserDict):
         -----
         This is different than the built-in method `dict.keys`, which will
         return only the first level keys.
+
+        Raises
+        ------
+        ValueError:
+            The supplied delimiter is alphanumeric.
         """
         if topLevelOnly:
             return list(self.keys())
 
         # Get all the tuples of hierarchical keys
         nameTuples = self.nameTuples()
+
+        if delimiter is not None and delimiter.isalnum():
+            raise ValueError(f"Supplied delimiter ({delimiter!r}) must not be alphanumeric.")
 
         if delimiter is None:
             # Start with something, and ensure it does not need to be
