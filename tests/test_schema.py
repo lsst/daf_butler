@@ -27,6 +27,7 @@ from sqlalchemy import create_engine, MetaData
 import lsst.utils
 import lsst.utils.tests
 
+from lsst.daf.butler import DataUnitRegistryConfig, DataUnitRegistry
 from lsst.daf.butler.core.utils import iterable
 from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column
 from sqlalchemy.sql.expression import TableClause
@@ -53,7 +54,9 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Independent check for `Schema` constructor.
         """
-        schema = Schema()
+        dataUnitConfig = DataUnitRegistryConfig()
+        dataUnitRegistry = DataUnitRegistry.fromConfig(dataUnitConfig)
+        schema = Schema(dataUnits=dataUnitRegistry)
         self.assertIsInstance(schema, Schema)
 
     def testSchemaCreation(self):
@@ -62,12 +65,6 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(self.schema._metadata, MetaData)
         allTables = {}
         allTables.update(self.config["tables"])
-        for dataUnitDescription in self.config["dataUnits"].values():
-            if "tables" in dataUnitDescription:
-                allTables.update(dataUnitDescription["tables"])
-        for dataUnitJoinDescription in self.config["dataUnitJoins"].values():
-            if "tables" in dataUnitJoinDescription:
-                allTables.update(dataUnitJoinDescription["tables"])
         for tableName, tableDescription in allTables.items():
             if "sql" in tableDescription:
                 self.assertView(tableName, tableDescription)
@@ -77,7 +74,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
     def assertView(self, tableName, tableDescription):
         """Check that a generated view matches its `tableDescription`.
         """
-        table = self.schema.views[tableName]
+        table = self.schema.tables[tableName]
         self.assertIsInstance(table, TableClause)
         for columnDescription in tableDescription["columns"]:
             column = getattr(table.c, columnDescription["name"])

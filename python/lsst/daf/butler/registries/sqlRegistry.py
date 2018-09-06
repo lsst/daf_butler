@@ -57,6 +57,8 @@ class SqlRegistry(Registry):
         Load configuration
     schemaConfig : `SchemaConfig` or `str`
         Definition of the schema to use.
+    dataUnitRegistryConfig : `DataUnitRegistryConfig` or `str`
+        Definition of the DataUnitRegistry to use.
     create : `bool`
         Assume registry is empty and create a new one.
     """
@@ -66,12 +68,12 @@ class SqlRegistry(Registry):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, registryConfig, schemaConfig, create=False):
-        super().__init__(registryConfig)
+    def __init__(self, registryConfig, schemaConfig, dataUnitRegistryConfig, create=False):
+        super().__init__(registryConfig, dataUnitRegistryConfig=dataUnitRegistryConfig)
 
         self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(schemaConfig)
+        self._schema = Schema(dataUnits=self._dataUnits, config=schemaConfig)
         self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
@@ -202,7 +204,7 @@ class SqlRegistry(Registry):
         self._validateDataId(datasetType, dataId)
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
-        dataIdExpression = and_((self._schema.dataUnits.links[name] == dataId[name]
+        dataIdExpression = and_((self._schema.datasetTable.c[name] == dataId[name]
                                  for name in self._schema.dataUnits.getPrimaryKeyNames(
                                      datasetType.dataUnits)))
         result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
@@ -434,7 +436,7 @@ class SqlRegistry(Registry):
             # the corresponding sqlalchemy.core.Column entry to index the result
             # because the name of the key may not be the name of the name of the
             # DataUnit link.
-            dataId = {dataUnitName: result[self._schema.dataUnits.links[dataUnitName]]
+            dataId = {dataUnitName: result[self._schema.datasetTable.c[dataUnitName]]
                       for dataUnitName in self._schema.dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
             # Get components (if present)
             # TODO check against expected components
@@ -905,7 +907,7 @@ class SqlRegistry(Registry):
         """
         dataUnit = self._schema.dataUnits[dataUnitName]
         dataUnit.validateId(values)
-        dataUnitTable = dataUnit.table
+        dataUnitTable = self._schema.tables[dataUnitName]
         v = values.copy()
         region = v.pop("region", None)
         if dataUnitTable is None:
@@ -935,8 +937,8 @@ class SqlRegistry(Registry):
         """
         dataUnit = self._schema.dataUnits[dataUnitName]
         dataUnit.validateId(value)
-        dataUnitTable = dataUnit.table
-        primaryKeyColumns = dataUnit.primaryKeyColumns
+        dataUnitTable = self._schema.tables[dataUnitName]
+        primaryKeyColumns = {k: self._schema.tables[dataUnit.name].c[k] for k in dataUnit.primaryKey}
         result = self._connection.execute(select([dataUnitTable]).where(
             and_((primaryKeyColumns[name] == value[name] for name in primaryKeyColumns)))).fetchone()
         if result is not None:
@@ -973,7 +975,8 @@ class SqlRegistry(Registry):
             primaryKey.update(dataUnit.primaryKey)
             regionUnitNames.append(dataUnitName)
             regionUnitNames += [d.name for d in dataUnit.requiredDependencies]
-        table = self._schema.dataUnits.getRegionHolder(*regionUnitNames).table
+        regionDataUnit = self._schema.dataUnits.getRegionHolder(*dataUnitNames)
+        table = self._schema.tables[regionDataUnit.name]
         if table is None:
             raise TypeError("No region table found for '{}'.".format(dataUnitNames))
         # Update the region for an existing entry
@@ -996,20 +999,20 @@ class SqlRegistry(Registry):
             )
         assert "SkyPix" not in dataUnitNames
         join = self._schema.dataUnits.getJoin(dataUnitNames, "SkyPix")
-        if join is None or join.isView:
+        if join is None or join.name in self._schema._views:
             return
         if update:
             # Delete any old SkyPix join entries for this DataUnit
             self._connection.execute(
-                join.table.delete().where(
-                    and_((join.table.columns[name] == value[name] for name in primaryKey))
+                self._schema.tables[join.name].delete().where(
+                    and_((self._schema.tables[join.name].c[name] == value[name] for name in primaryKey))
                 )
             )
         parameters = []
         for begin, end in self.pixelization.envelope(region).ranges():
             for skypix in range(begin, end):
                 parameters.append(dict(value, skypix=skypix))
-        self._connection.execute(join.table.insert(), parameters)
+        self._connection.execute(self._schema.tables[join.name].insert(), parameters)
 
     def getRegion(self, dataId):
         """Get region associated with a dataId.
@@ -1037,8 +1040,8 @@ class SqlRegistry(Registry):
         if regionHolder == self._schema.dataUnits["SkyPix"]:
             return self.pixelization.pixel(dataId["skypix"])
         # Lookup region
-        primaryKeyColumns = regionHolder.primaryKeyColumns
-        result = self._connection.execute(select([regionHolder.regionColumn]).where(
+        primaryKeyColumns = {k: self._schema.tables[regionHolder.name].c[k] for k in regionHolder.primaryKey}
+        result = self._connection.execute(select([self._schema.tables[regionHolder.name].c["region"]]).where(
             and_((primaryKeyColumns[name] == dataId[name] for name in primaryKeyColumns)))).fetchone()
         if result is not None:
             return ConvexPolygon.decode(result[0])

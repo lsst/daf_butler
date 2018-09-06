@@ -84,50 +84,6 @@ def _unitsTopologicalSort(dataUnits):
                 break
 
 
-def _joinOnForeignKey(fromClause, dataUnit, otherDataUnits):
-    """Add new table for join clause.
-
-    Assumption here is that this unit table has a foreign key to all other
-    tables and names of columns are the same in both tables, so we just get
-    primary key columns from other tables and join on them.
-
-    Parameters
-    ----------
-    fromClause : `sqlalchemy.FromClause`
-        May be ``None``, in that case ``otherDataUnits`` is expected to be
-        empty and is ignored.
-    dataUnit : `DataUnit`
-        DataUnit to join with ``fromClause``.
-    otherDataUnits : iterable of `DataUnit`
-        DataUnits whose tables have PKs for ``dataUnit`` table's FK. They all
-        have to be in ``fromClause`` already.
-
-    Returns
-    -------
-    fromClause : `sqlalchemy.FromClause`
-        SQLAlchemy FROM clause extended with new join.
-    """
-    if fromClause is None:
-        # starting point, first table in JOIN
-        return dataUnit.table
-    else:
-        joinOn = []
-        for otherUnit in otherDataUnits:
-            for name, col in otherUnit.primaryKeyColumns.items():
-                joinOn.append(dataUnit.table.c[name] == col)
-            _LOG.debug("join %s with %s on columns %s", dataUnit.name,
-                       otherUnit.name, list(otherUnit.primaryKeyColumns.keys()))
-        if joinOn:
-            return fromClause.join(dataUnit.table, and_(*joinOn))
-        else:
-            # Completely unrelated tables, e.g. joining SkyMap and Camera.
-            # We need a cross join here but SQLAlchemy does not have specific
-            # method for that. Using join() without `onclause` will try to
-            # join on FK and will raise an exception for unrelated tables,
-            # so we have to use `onclause` which is always true.
-            return fromClause.join(dataUnit.table, literal(True))
-
-
 class SqlPreFlight:
     """Class implementing part of preflight solver which extracts
     units data from registry.
@@ -145,6 +101,51 @@ class SqlPreFlight:
     def __init__(self, schema, connection):
         self._schema = schema
         self._connection = connection
+
+    def _joinOnForeignKey(self, fromClause, dataUnit, otherDataUnits):
+        """Add new table for join clause.
+
+        Assumption here is that this unit table has a foreign key to all other
+        tables and names of columns are the same in both tables, so we just get
+        primary key columns from other tables and join on them.
+
+        Parameters
+        ----------
+        fromClause : `sqlalchemy.FromClause`
+            May be ``None``, in that case ``otherDataUnits`` is expected to be
+            empty and is ignored.
+        dataUnit : `DataUnit`
+            DataUnit to join with ``fromClause``.
+        otherDataUnits : iterable of `DataUnit`
+            DataUnits whose tables have PKs for ``dataUnit`` table's FK. They all
+            have to be in ``fromClause`` already.
+
+        Returns
+        -------
+        fromClause : `sqlalchemy.FromClause`
+            SQLAlchemy FROM clause extended with new join.
+        """
+        if fromClause is None:
+            # starting point, first table in JOIN
+            return self._schema.tables[dataUnit.name]
+        else:
+            joinOn = []
+            for otherUnit in otherDataUnits:
+                primaryKeyColumns = {name: self._schema.tables[otherUnit.name].c[name]
+                                     for name in otherUnit.primaryKey}
+                for name, col in primaryKeyColumns.items():
+                    joinOn.append(self._schema.tables[dataUnit.name].c[name] == col)
+                _LOG.debug("join %s with %s on columns %s", dataUnit.name,
+                           otherUnit.name, list(primaryKeyColumns.keys()))
+            if joinOn:
+                return fromClause.join(self._schema.tables[dataUnit.name], and_(*joinOn))
+            else:
+                # Completely unrelated tables, e.g. joining SkyMap and Camera.
+                # We need a cross join here but SQLAlchemy does not have specific
+                # method for that. Using join() without `onclause` will try to
+                # join on FK and will raise an exception for unrelated tables,
+                # so we have to use `onclause` which is always true.
+                return fromClause.join(self._schema.tables[dataUnit.name], literal(True))
 
     def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
@@ -207,11 +208,11 @@ class SqlPreFlight:
         unitLinkColumns = {}
         for unitName in allUnitNames:
             dataUnit = self._schema.dataUnits[unitName]
-            if dataUnit.table is not None:
+            if self._schema.tables[unitName] is not None:
                 # take link column names, usually there is one
                 for link in dataUnit.link:
                     unitLinkColumns[link] = len(selectColumns)
-                    selectColumns.append(dataUnit.table.c[link])
+                    selectColumns.append(self._schema.tables[unitName].c[link])
         _LOG.debug("selectColumns: %s", selectColumns)
         _LOG.debug("unitLinkColumns: %s", unitLinkColumns)
 
@@ -226,10 +227,10 @@ class SqlPreFlight:
         # joins for all unit tables
         fromJoin = None
         for dataUnit in _unitsTopologicalSort(allDataUnits.values()):
-            if dataUnit.table is None:
+            if self._schema.tables[dataUnit.name] is None:
                 continue
             _LOG.debug("add dataUnit: %s", dataUnit.name)
-            fromJoin = _joinOnForeignKey(fromJoin, dataUnit, dataUnit.dependencies)
+            fromJoin = self._joinOnForeignKey(fromJoin, dataUnit, dataUnit.dependencies)
 
         # joins between skymap and camera units
         dataUnitJoins = [dataUnitJoin for dataUnitJoin in self._schema.dataUnits.joins.values()
@@ -278,7 +279,7 @@ class SqlPreFlight:
                         joinedRegionTables.add(regionHolder.name)
 
                         dataUnits = [self._schema.dataUnits[dataUnitName] for dataUnitName in connection]
-                        fromJoin = _joinOnForeignKey(fromJoin, regionHolder, dataUnits)
+                        fromJoin = self._joinOnForeignKey(fromJoin, regionHolder, dataUnits)
 
                 # add to the list of tables that we need to join with
                 regionHolders.append(regionHolder)
@@ -289,7 +290,7 @@ class SqlPreFlight:
                 regionColumns[regionHolder.name] = len(selectColumns)
                 selectColumns.append(regionHolder.regionColumn)
 
-            fromJoin = _joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
+            fromJoin = self._joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
 
         # join with input datasets to restrict to existing inputs
         dsIdColumns = {}
@@ -316,7 +317,7 @@ class SqlPreFlight:
                 dataUnit = allDataUnits[unitName]
                 for link in dataUnit.link:
                     _LOG.debug("  joining on link: %s", link)
-                    joinOn.append(subquery.c[link] == dataUnit.table.c[link])
+                    joinOn.append(subquery.c[link] == self._schema.tables[dataUnit.name].c[link])
             fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isOutput)
 
             # remember dataset_id column index for this dataset
@@ -543,7 +544,7 @@ class SqlPreFlight:
                 linkNames = set()
                 for unitName in dsType.dataUnits:
                     dataUnit = self._schema.dataUnits[unitName]
-                    if dataUnit.table is not None:
+                    if self._schema.tables[dataUnit.name] is not None:
                         linkNames.update(dataUnit.link)
                 dsDataId = dict((link, row[unitLinkColumns[link]]) for link in linkNames)
                 dsId = None if col is None else row[col]
