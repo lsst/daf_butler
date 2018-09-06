@@ -714,7 +714,7 @@ class ConfigSubset(Config):
         # component.component (since the included files can themselves
         # include the component name)
         if self.component is not None:
-            doubled = (self.component, ) * 2
+            doubled = (self.component, self.component)
             # Must check for double depth first
             if doubled in externalConfig:
                 externalConfig = externalConfig[doubled]
