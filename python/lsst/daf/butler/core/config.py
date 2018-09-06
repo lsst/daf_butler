@@ -226,7 +226,7 @@ class Config(collections.UserDict):
         self.data = content
         return self
 
-    def _splitKeys(self, key):
+    def _splitIntoKeys(self, key):
         """Split the argument for get/set/in into a hierarchical list.
 
         Parameters
@@ -276,7 +276,7 @@ class Config(collections.UserDict):
         if name in data:
             keys = (name,)
         else:
-            keys = self._splitKeys(name)
+            keys = self._splitIntoKeys(name)
         for key in keys:
             if data is None:
                 return None
@@ -296,7 +296,7 @@ class Config(collections.UserDict):
         return data
 
     def __setitem__(self, name, value):
-        keys = self._splitKeys(name)
+        keys = self._splitIntoKeys(name)
         last = keys.pop()
         if isinstance(value, Config):
             value = copy.deepcopy(value.data)
@@ -314,7 +314,7 @@ class Config(collections.UserDict):
 
     def __contains__(self, key):
         d = self.data
-        keys = self._splitKeys(key)
+        keys = self._splitIntoKeys(key)
         last = keys.pop()
 
         def checkNextItem(k, d):
