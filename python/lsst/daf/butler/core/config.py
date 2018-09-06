@@ -226,7 +226,8 @@ class Config(collections.UserDict):
         self.data = content
         return self
 
-    def _splitIntoKeys(self, key):
+    @staticmethod
+    def _splitIntoKeys(key):
         """Split the argument for get/set/in into a hierarchical list.
 
         Parameters
@@ -250,10 +251,13 @@ class Config(collections.UserDict):
                 key = key[1:]
             else:
                 return [key, ]
-            # Allow escaping of the delimiter: .a.foo\.bar -> a foo.bar
             escaped = f"\\{d}"
             temp = None
             if escaped in key:
+                # Complain at the attempt to escape the escape
+                doubled = fr"\{escaped}"
+                if doubled in key:
+                    raise ValueError(f"Escaping an escaped delimiter ({doubled} in {key}) is not yet supported.")
                 # Replace with a character that won't be in the string
                 temp = "\r"
                 if temp in key or d == temp:

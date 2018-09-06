@@ -115,6 +115,37 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
 
+    def assertSplit(self, answer, *args):
+        """Helper function to compare string splitting"""
+        for s in (answer, *args):
+            split = Config._splitIntoKeys(s)
+            print(f"S: {s} -> {split}")
+            self.assertEqual(split, answer)
+
+    def testSplitting(self):
+        """Test of the internal splitting API."""
+        # Try lots of keys that will return the same answer
+        answer = ["a", "b", "c", "d"]
+        self.assertSplit(answer, ".a.b.c.d", ":a:b:c:d", "\ta\tb\tc\td", "\ra\rb\rc\rd")
+
+        answer = ["a", "calexp.wcs", "b"]
+        self.assertSplit(answer, r".a.calexp\.wcs.b", ":a:calexp.wcs:b")
+
+        self.assertSplit(["a.b.c"])
+        self.assertSplit(["a", r"b\.c"], r"_a_b\.c")
+
+        # Escaping a backslash before a delimiter currently fails
+        with self.assertRaises(ValueError):
+            Config._splitIntoKeys(r".a.calexp\\.wcs.b")
+
+        # The next two fail because internally \r is magic when escaping
+        # a delimiter.
+        with self.assertRaises(ValueError):
+            Config._splitIntoKeys("\ra\rcalexp\\\rwcs\rb")
+
+        with self.assertRaises(ValueError):
+            Config._splitIntoKeys(".a.cal\rexp\.wcs.b")
+
     def testEscape(self):
         c = Config({"a": {"foo.bar": 1}, "b😂c": {"bar_baz": 2}})
         self.assertEqual(c[r".a.foo\.bar"], 1)
