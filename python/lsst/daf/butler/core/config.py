@@ -477,7 +477,7 @@ class Config(collections.UserDict):
                     for n in names:
                         for s in n:
                             if searchStr in s:
-                                return s
+                                return n
                     return None
 
                 raise ValueError(f"Specified delimiter, {delimiter!r} can not be used.  "
