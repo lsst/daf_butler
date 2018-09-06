@@ -101,26 +101,26 @@ class Config(collections.UserDict):
     parameters.
 
     It is essentially a `dict` with key/value pairs, including nested dicts
-    (as values). In fact, it can be initialized with a `dict`. The only caveat
-    is that keys may **not** contain the delimiter. This is explained next:
+    (as values). In fact, it can be initialized with a `dict`.
+    This is explained next:
 
     Config extends the `dict` api so that hierarchical values may be accessed
     with delimited notation or as a tuple.  If a string is given the delimiter
     is picked up from the first character in that string. For example,
-    ``foo.getValue(".a.b.c")`` is the same as ``foo["a"]["b"]["c"]`` is the
-    same as ``foo[".a.b.c"]``, and either of these syntaxes may be used.
+    ``foo.getValue(".a.b.c")``, ``foo["a"]["b"]["c"]``, ``foo["a", "b", "c"]``,
+    ``foo[".a.b.c"]``, and ``foo["/a/b/c"]`` all achieve the same outcome.
     If the first character is alphanumeric, no delimiter will be used.
-    ``foo["a.b.c"]`` will be a single key ``a.b.c` whereas ``foo[".a.b.c"]``
-    will use ``.`` as a delimiter, but ``foo[":a.b.c"]`` will use ``:``
-    as the delimeter resulting in a single key of ``a.b.c`` being accessed.
-    Using ``foo[":a:b:c"]`` is therefore equivalent to ``foo[".a.b.c"]``.
-    This requires that keys in `Config` instances do not themselves start with
-    non-alphanumeric characters.  If the hierarchy is already available in a
-    `list` or `tuple` it can be provided directly without forming it into a
-    string, such that ``foo["a", "b", "c"]`` is equivalent to
-    ``foo[".a.b.c"]``.  Finally, the delimiter can be escaped if it should
-    not be used in part of the string: ``foo[r".a.b\.c"]`` results in a two
-    element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
+    ``foo["a.b.c"]`` will be a single key ``a.b.c`` as will ``foo[":a.b.c"]``.
+    Unicode characters can be used as the delimiter for distinctiveness if
+    required.
+
+    If a key in the hierarchy starts with a non-alphanumeric character care
+    should be used to ensure that either the tuple interface is used or
+    a distinct delimiter is always given in string form.
+
+    Finally, the delimiter can be escaped if it is part of a key and also
+    has to be used as a delimiter. For example, ``foo[r".a.b\.c"]`` results in
+    a two element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
     always better to use a different delimiter in these cases.
 
     Storage formats supported:
@@ -142,7 +142,8 @@ class Config(collections.UserDict):
     """
 
     _D = "→"
-    """Default internal delimiter to use for components in the hierarchy"""
+    """Default internal delimiter to use for components in the hierarchy when
+    constructing keys for external use (see `Config.names()`)."""
 
     def __init__(self, other=None):
 
@@ -429,7 +430,7 @@ class Config(collections.UserDict):
         return keys
 
     def names(self, topLevelOnly=False, delimiter=None):
-        """Get the delimited name of all the keys in the hierarchy.
+        """Get a delimited name of all the keys in the hierarchy.
 
         The values returned from this method are guaranteed to be usable
         to access items in the configuration object.
@@ -441,12 +442,12 @@ class Config(collections.UserDict):
             If True, only the top level are returned.
         delimiter : `str`, optional
             Delimiter to use when forming the keys.  The delimiter must
-            not be present in any of the keys.  If `None` given the delimiter
+            not be present in any of the keys.  If `None` given a delimiter
             will be automatically provided.
 
         Returns
         -------
-        names : `list`
+        names : `list` of `str`
             List of all names present in the `Config`.
 
         Notes
@@ -486,7 +487,7 @@ class Config(collections.UserDict):
             delimiter = self._D
             ntries = 0
             while delimiter in combined:
-                log.debug(f"Trying delimiter '{delimiter}'")
+                log.debug(f"Delimiter '{delimiter}' could not be used. Trying another.")
                 ntries += 1
 
                 if ntries > 100:
