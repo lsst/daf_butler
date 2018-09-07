@@ -130,9 +130,9 @@ class Butler:
             os.makedirs(root)
         config = Config(config)
         full = ButlerConfig(config)  # this applies defaults
-        datastoreClass = doImport(full["datastore.cls"])
+        datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(root, config, full)
-        registryClass = doImport(full["registry.cls"])
+        registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(root, config, full)
         if standalone:
             config.merge(full)
@@ -242,7 +242,7 @@ class Butler:
                 raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
             datasetType = self.registry.getDatasetType(datasetRefOrType)
 
-        isVirtualComposite = self.composites.doDisassembly(datasetType)
+        isVirtualComposite = self.composites.shouldBeDisassembled(datasetType)
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.

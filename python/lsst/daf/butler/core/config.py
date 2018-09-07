@@ -44,19 +44,6 @@ log = logging.getLogger(__name__)
 # PATH-like environment variable to use for defaults.
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
-# UserDict and yaml have defined metaclasses and Python 3 does not allow
-# multiple inheritance of classes with distinct metaclasses. We therefore have
-# to create a new baseclass that Config can inherit from. This is because the
-# metaclass syntax differs between versions
-
-
-class _ConfigMeta(type(collections.UserDict), type(yaml.YAMLObject)):
-    pass
-
-
-class _ConfigBase(collections.UserDict, yaml.YAMLObject, metaclass=_ConfigMeta):
-    pass
-
 
 class Loader(yaml.CLoader):
     """YAML Loader that supports file include directives
@@ -109,18 +96,32 @@ class Loader(yaml.CLoader):
             return yaml.load(f, Loader)
 
 
-class Config(_ConfigBase):
+class Config(collections.UserDict):
     """Implements a datatype that is used by `Butler` for configuration
     parameters.
 
     It is essentially a `dict` with key/value pairs, including nested dicts
-    (as values). In fact, it can be initialized with a `dict`. The only caveat
-    is that keys may **not** contain dots (``.``). This is explained next:
+    (as values). In fact, it can be initialized with a `dict`.
+    This is explained next:
 
     Config extends the `dict` api so that hierarchical values may be accessed
-    with dot-delimited notation. That is, ``foo.getValue("a.b.c")`` is the
-    same as ``foo["a"]["b"]["c"]`` is the same as ``foo["a.b.c"]``, and either
-    of these syntaxes may be used.
+    with delimited notation or as a tuple.  If a string is given the delimiter
+    is picked up from the first character in that string. For example,
+    ``foo.getValue(".a.b.c")``, ``foo["a"]["b"]["c"]``, ``foo["a", "b", "c"]``,
+    ``foo[".a.b.c"]``, and ``foo["/a/b/c"]`` all achieve the same outcome.
+    If the first character is alphanumeric, no delimiter will be used.
+    ``foo["a.b.c"]`` will be a single key ``a.b.c`` as will ``foo[":a.b.c"]``.
+    Unicode characters can be used as the delimiter for distinctiveness if
+    required.
+
+    If a key in the hierarchy starts with a non-alphanumeric character care
+    should be used to ensure that either the tuple interface is used or
+    a distinct delimiter is always given in string form.
+
+    Finally, the delimiter can be escaped if it is part of a key and also
+    has to be used as a delimiter. For example, ``foo[r".a.b\.c"]`` results in
+    a two element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
+    always better to use a different delimiter in these cases.
 
     Storage formats supported:
 
@@ -139,6 +140,10 @@ class Config(_ConfigBase):
 
         If `None` is provided an empty `Config` will be created.
     """
+
+    _D = "→"
+    """Default internal delimiter to use for components in the hierarchy when
+    constructing keys for external use (see `Config.names()`)."""
 
     def __init__(self, other=None):
 
@@ -172,7 +177,10 @@ class Config(_ConfigBase):
         return pprint.pformat(self.data, indent=2, width=1)
 
     def __repr__(self):
-        return self.data.__repr__()
+        return f"{type(self).__name__}({self.data!r})"
+
+    def __str__(self):
+        return self.ppprint()
 
     def __initFromFile(self, path):
         """Load a file from path.
@@ -218,13 +226,62 @@ class Config(_ConfigBase):
         self.data = content
         return self
 
+    @staticmethod
+    def _splitIntoKeys(key):
+        """Split the argument for get/set/in into a hierarchical list.
+
+        Parameters
+        ----------
+        key : `str` or iterable
+            Argument given to get/set/in. If an iterable is provided it will
+            be converted to a list.  If the first character of the string
+            is not an alphanumeric character then it will be used as the
+            delimiter for the purposes of splitting the remainder of the
+            string. If the delimiter is also in one of the keys then it
+            can be escaped using ``\``. There is no default delimiter.
+
+        Returns
+        -------
+        keys : `list`
+            Hierarchical keys as a `list`.
+        """
+        if isinstance(key, str):
+            if not key[0].isalnum():
+                d = key[0]
+                key = key[1:]
+            else:
+                return [key, ]
+            escaped = f"\\{d}"
+            temp = None
+            if escaped in key:
+                # Complain at the attempt to escape the escape
+                doubled = fr"\{escaped}"
+                if doubled in key:
+                    raise ValueError(f"Escaping an escaped delimiter ({doubled} in {key})"
+                                     " is not yet supported.")
+                # Replace with a character that won't be in the string
+                temp = "\r"
+                if temp in key or d == temp:
+                    raise ValueError(f"Can not use character {temp!r} in hierarchical key or as"
+                                     " delimiter if escaping the delimiter")
+                key = key.replace(escaped, temp)
+            hierarchy = key.split(d)
+            if temp:
+                hierarchy = [h.replace(temp, d) for h in hierarchy]
+            return hierarchy
+        else:
+            return list(key)
+
     def __getitem__(self, name):
         data = self.data
-        # Override the split for the simple case
+        # Override the split for the simple case where there is an exact
+        # match.  This allows `Config.items()` to work since `UserDict`
+        # accesses Config.data directly to obtain the keys and every top
+        # level key should always retrieve the top level values.
         if name in data:
             keys = (name,)
         else:
-            keys = name.split(".")
+            keys = self._splitIntoKeys(name)
         for key in keys:
             if data is None:
                 return None
@@ -238,10 +295,13 @@ class Config(_ConfigBase):
                     return None
         if isinstance(data, collections.Mapping):
             data = Config(data)
+            # Ensure that child configs inherit the parent internal delimiter
+            if self._D != Config._D:
+                data._D = self._D
         return data
 
     def __setitem__(self, name, value):
-        keys = name.split(".")
+        keys = self._splitIntoKeys(name)
         last = keys.pop()
         if isinstance(value, Config):
             value = copy.deepcopy(value.data)
@@ -259,7 +319,7 @@ class Config(_ConfigBase):
 
     def __contains__(self, key):
         d = self.data
-        keys = key.split(".")
+        keys = self._splitIntoKeys(key)
         last = keys.pop()
 
         def checkNextItem(k, d):
@@ -338,8 +398,11 @@ class Config(_ConfigBase):
         otherCopy.update(self)
         self.data = otherCopy.data
 
-    def names(self, topLevelOnly=False):
-        """Get the dot-delimited name of all the keys in the hierarchy.
+    def nameTuples(self, topLevelOnly=False):
+        """Get tuples representing the name hierarchies of all keys.
+
+        The tuples returned from this method are guaranteed to be usable
+        to access items in the configuration object.
 
         Parameters
         ----------
@@ -349,31 +412,99 @@ class Config(_ConfigBase):
 
         Returns
         -------
-        names : `list`
-            List of all names present in the `Config`.
-
-        Notes
-        -----
-        This is different than the built-in method `dict.keys`, which will
-        return only the first level keys.
+        names : `list` of `tuple` of `str`
+            List of all names present in the `Config` where each element
+            in the list is a `tuple` of strings representing the hierarchy.
         """
         if topLevelOnly:
-            return list(self.keys())
+            return list((k,) for k in self)
 
-        def getKeys(d, keys, base):
+        def getKeysAsTuples(d, keys, base):
             if isinstance(d, collections.Sequence):
                 theseKeys = range(len(d))
             else:
                 theseKeys = d.keys()
             for key in theseKeys:
                 val = d[key]
-                levelKey = f"{base}.{key}" if base is not None else key
+                levelKey = base + (key,) if base is not None else (key,)
                 keys.append(levelKey)
                 if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
-                    getKeys(val, keys, levelKey)
+                    getKeysAsTuples(val, keys, levelKey)
         keys = []
-        getKeys(self.data, keys, None)
+        getKeysAsTuples(self.data, keys, None)
         return keys
+
+    def names(self, topLevelOnly=False, delimiter=None):
+        """Get a delimited name of all the keys in the hierarchy.
+
+        The values returned from this method are guaranteed to be usable
+        to access items in the configuration object.
+
+        Parameters
+        ----------
+        topLevelOnly : `bool`, optional
+            If False, the default, a full hierarchy of names is returned.
+            If True, only the top level are returned.
+        delimiter : `str`, optional
+            Delimiter to use when forming the keys.  If the delimiter is
+            present in any of the keys, it will be escaped in the returned
+            names.  If `None` given a delimiter will be automatically provided.
+            The delimiter can not be alphanumeric.
+
+        Returns
+        -------
+        names : `list` of `str`
+            List of all names present in the `Config`.
+
+        Notes
+        -----
+        This is different than the built-in method `dict.keys`, which will
+        return only the first level keys.
+
+        Raises
+        ------
+        ValueError:
+            The supplied delimiter is alphanumeric.
+        """
+        if topLevelOnly:
+            return list(self.keys())
+
+        # Get all the tuples of hierarchical keys
+        nameTuples = self.nameTuples()
+
+        if delimiter is not None and delimiter.isalnum():
+            raise ValueError(f"Supplied delimiter ({delimiter!r}) must not be alphanumeric.")
+
+        if delimiter is None:
+            # Start with something, and ensure it does not need to be
+            # escaped (it is much easier to understand if not escaped)
+            delimiter = self._D
+
+            # Form big string for easy check of delimiter clash
+            combined = "".join("".join(str(s) for s in k) for k in nameTuples)
+
+            # Try a delimiter and keep trying until we get something that
+            # works.
+            ntries = 0
+            while delimiter in combined:
+                log.debug(f"Delimiter '{delimiter}' could not be used. Trying another.")
+                ntries += 1
+
+                if ntries > 100:
+                    raise ValueError(f"Unable to determine a delimiter for Config {self}")
+
+                # try another one
+                while True:
+                    delimiter = chr(ord(delimiter)+1)
+                    if not delimiter.isalnum():
+                        break
+
+        log.debug(f"Using delimiter {delimiter!r}")
+
+        # Form the keys, escaping the delimiter if necessary
+        strings = [delimiter + delimiter.join(str(s).replace(delimiter, f"\\{delimiter}") for s in k)
+                   for k in nameTuples]
+        return strings
 
     def asArray(self, name):
         """Get a value as an array.
@@ -586,7 +717,7 @@ class ConfigSubset(Config):
         # component.component (since the included files can themselves
         # include the component name)
         if self.component is not None:
-            doubled = "{0}.{0}".format(self.component)
+            doubled = (self.component, self.component)
             # Must check for double depth first
             if doubled in externalConfig:
                 externalConfig = externalConfig[doubled]
@@ -650,9 +781,9 @@ class ConfigSubset(Config):
 
         if mergeDefaults and containerKey is not None and containerKey in self:
             for idx, subConfig in enumerate(self[containerKey]):
-                self[f"{containerKey}.{idx}"] = type(self)(other=subConfig, validate=validate,
-                                                           mergeDefaults=mergeDefaults,
-                                                           searchPaths=searchPaths)
+                self[containerKey, idx] = type(self)(other=subConfig, validate=validate,
+                                                     mergeDefaults=mergeDefaults,
+                                                     searchPaths=searchPaths)
 
         if validate:
             self.validate()

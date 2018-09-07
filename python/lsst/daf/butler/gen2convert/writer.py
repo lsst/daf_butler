@@ -118,11 +118,11 @@ class ConversionWriter:
             return
         # Determine the SkyMaps, Collections, and Runs for this repo.
         collection = gen2repo.root
-        for sub in self.config["collections.substitutions"]:
+        for sub in self.config["collections", "substitutions"]:
             collection = re.sub(sub["pattern"], sub["repl"], collection)
         log.debug("Using collection '%s' for root '%s'", collection, gen2repo.root)
         run = self.runs.setdefault(collection, Run(collection=collection))
-        camera = self.config["mappers"][gen2repo.MapperClass.__name__]["camera"]
+        camera = self.config["mappers", gen2repo.MapperClass.__name__, "camera"]
         skyMapNamesByCoaddName = {}
         for coaddName, skyMap in gen2repo.skyMaps.items():
             log.debug("Using SkyMap with hash=%s for '%s' in '%s'",
@@ -211,7 +211,7 @@ class ConversionWriter:
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         cameras = set()
         for repo in self.repos.values():
-            cameras.add(self.config["mappers"][repo.gen2.MapperClass.__name__]["camera"])
+            cameras.add(self.config["mappers", repo.gen2.MapperClass.__name__, "camera"])
         for camera in cameras:
             log.debug("Looking for preexisting Camera '%s'.", camera)
             if registry.findDataUnitEntry("Camera", {"camera": camera}) is None:
@@ -255,7 +255,7 @@ class ConversionWriter:
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for mapperName, nested in self.visitInfo.items():
-            camera = self.config["mappers"][mapperName]["camera"]
+            camera = self.config["mappers", mapperName, "camera"]
             log.info("Inserting Exposure and Visit DataUnits for Camera '%s'", camera)
             for visitInfoId, (visitInfo, filt) in nested.items():
                 # TODO: generalize this to cameras with snaps and/or compound gen2 visit/exposure IDs
@@ -295,7 +295,7 @@ class ConversionWriter:
                     log.debug("Skipping insertion of '%s' from %s", datasetTypeName, repo.gen2.root)
                     continue
                 log.info("Inserting '%s' from %s", datasetTypeName, repo.gen2.root)
-                collectionTemplate = self.config["collections.overrides"].get(datasetTypeName, None)
+                collectionTemplate = self.config["collections", "overrides"].get(datasetTypeName, None)
                 if collectionTemplate is None:
                     collection = repo.run.collection
                     registry.ensureRun(repo.run)

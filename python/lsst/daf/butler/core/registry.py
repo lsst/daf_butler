@@ -76,7 +76,7 @@ class Registry(metaclass=ABCMeta):
             should be copied from `full` to `Config`.
         """
         Config.overrideParameters(RegistryConfig, config, full,
-                                  toCopy=("skypix.cls", "skypix.level"))
+                                  toCopy=(("skypix", "cls"), ("skypix", "level")))
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, dataUnitRegistryConfig=None, create=False):
@@ -170,8 +170,8 @@ class Registry(metaclass=ABCMeta):
     def pixelization(self):
         """Object that interprets SkyPix DataUnit values (`sphgeom.Pixelization`)."""
         if self._pixelization is None:
-            pixelizationCls = doImport(self.config["skypix.cls"])
-            self._pixelization = pixelizationCls(level=self.config["skypix.level"])
+            pixelizationCls = doImport(self.config["skypix", "cls"])
+            self._pixelization = pixelizationCls(level=self.config["skypix", "level"])
         return self._pixelization
 
     @abstractmethod

@@ -112,7 +112,7 @@ class ChainedDatastore(Datastore):
             datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig)
 
             # Reattach to parent
-            datastoreConfig[f"{containerKey}.{idx}"] = childConfig
+            datastoreConfig[containerKey, idx] = childConfig
 
         # Reattach modified datastore config to parent
         # If this has a datastore key we attach there, otherwise we assume

@@ -188,7 +188,7 @@ class Datastore(metaclass=ABCMeta):
         config : `Config`
             Configuration instance.
         """
-        cls = doImport(config["datastore.cls"])
+        cls = doImport(config["datastore", "cls"])
         return cls(config=config, registry=registry)
 
     def __init__(self, config, registry):

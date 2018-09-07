@@ -43,30 +43,30 @@ class TestCompositesConfig(unittest.TestCase):
         self.assertIn("default", c)
         # Check merging has worked
         rootKey = "disassembled"
-        self.assertIn(f"{rootKey}.calexp", c)
-        self.assertIn(f"{rootKey}.dummyTrue", c)
-        self.assertIn(f"{rootKey}.StructuredComposite", c)
-        self.assertIn(f"{rootKey}.ExposureF", c)
+        self.assertIn(f".{rootKey}.calexp", c)
+        self.assertIn(f".{rootKey}.dummyTrue", c)
+        self.assertIn(f".{rootKey}.StructuredComposite", c)
+        self.assertIn(f".{rootKey}.ExposureF", c)
 
         # Check that all entries are booleans (this is meant to be enforced
         # internally)
         for k in c[rootKey]:
-            self.assertIsInstance(c[f"{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
+            self.assertIsInstance(c[f".{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
 
     def testMap(self):
         c = CompositesMap(self.configFile)
 
         # Check that a str is not supported
         with self.assertRaises(ValueError):
-            c.doDisassembly("fred")
+            c.shouldBeDisassembled("fred")
 
         # These will fail (not a composite)
         sc = StorageClass("StructuredDataJson")
         d = DatasetType("dummyTrue", ("a", "b"), sc)
         self.assertFalse(sc.isComposite())
         self.assertFalse(d.isComposite())
-        self.assertFalse(c.doDisassembly(d), f"Test with DatasetType: {d}")
-        self.assertFalse(c.doDisassembly(sc), f"Test with StorageClass: {sc}")
+        self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
+        self.assertFalse(c.shouldBeDisassembled(sc), f"Test with StorageClass: {sc}")
 
         # Repeat but this time use a composite storage class
         sccomp = StorageClass("Dummy")
@@ -74,21 +74,21 @@ class TestCompositesConfig(unittest.TestCase):
         d = DatasetType("dummyTrue", ("a", "b"), sc)
         self.assertTrue(sc.isComposite())
         self.assertTrue(d.isComposite())
-        self.assertTrue(c.doDisassembly(d), f"Test with DatasetType: {d}")
-        self.assertFalse(c.doDisassembly(sc), f"Test with StorageClass: {sc}")
+        self.assertTrue(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
+        self.assertFalse(c.shouldBeDisassembled(sc), f"Test with StorageClass: {sc}")
 
         # Override with False
         d = DatasetType("dummyFalse", ("a", "b"), sc)
-        self.assertFalse(c.doDisassembly(d), f"Test with DatasetType: {d}")
+        self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
         # DatasetType that has no explicit entry
         d = DatasetType("dummyFred", ("a", "b"), sc)
-        self.assertFalse(c.doDisassembly(d), f"Test with DatasetType: {d}")
+        self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
         # StorageClass that will be disassembled
         sc = StorageClass("StructuredComposite", components={"dummy": sccomp})
         d = DatasetType("dummyFred", ("a", "b"), sc)
-        self.assertTrue(c.doDisassembly(d), f"Test with DatasetType: {d}")
+        self.assertTrue(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
 
 if __name__ == "__main__":

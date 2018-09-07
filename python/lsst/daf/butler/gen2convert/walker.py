@@ -203,7 +203,7 @@ class ConversionWalker:
         """Load unique VisitInfo objects and filter associations from all scanned repositories.
         """
         for repo in self.scanned.values():
-            config = self.config["mappers"][repo.MapperClass.__name__]["VisitInfo"]
+            config = self.config["mappers", repo.MapperClass.__name__, "VisitInfo"]
             cameraVisitInfo = self.visitInfo.setdefault(repo.MapperClass.__name__, {})
             datasets = repo.datasets.get(config["DatasetType"], {})
             for dataset in datasets.values():

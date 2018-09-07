@@ -23,6 +23,7 @@ import unittest
 import os
 import contextlib
 import collections
+import itertools
 
 from lsst.daf.butler import ConfigSubset, Config
 
@@ -98,30 +99,88 @@ class ConfigTestCase(unittest.TestCase):
             with self.assertRaises(RuntimeError):
                 Config(badArg)
 
+    def testBasics(self):
+        c = Config({1: 2, 3: 4, "key3": 6, "dict": {"a": 1, "b": 2}})
+        pretty = c.ppprint()
+        self.assertIn("key3", pretty)
+        r = repr(c)
+        self.assertIn("key3", r)
+        regex = r"^Config\(\{.*\}\)$"
+        self.assertRegex(r, regex)
+        c2 = eval(r)
+        for n in c.names():
+            self.assertEqual(c2[n], c[n])
+        self.assertEqual(c, c2)
+        s = str(c)
+        self.assertIn("\n", s)
+        self.assertNotRegex(s, regex)
+
+    def assertSplit(self, answer, *args):
+        """Helper function to compare string splitting"""
+        for s in (answer, *args):
+            split = Config._splitIntoKeys(s)
+            print(f"S: {s} -> {split}")
+            self.assertEqual(split, answer)
+
+    def testSplitting(self):
+        """Test of the internal splitting API."""
+        # Try lots of keys that will return the same answer
+        answer = ["a", "b", "c", "d"]
+        self.assertSplit(answer, ".a.b.c.d", ":a:b:c:d", "\ta\tb\tc\td", "\ra\rb\rc\rd")
+
+        answer = ["a", "calexp.wcs", "b"]
+        self.assertSplit(answer, r".a.calexp\.wcs.b", ":a:calexp.wcs:b")
+
+        self.assertSplit(["a.b.c"])
+        self.assertSplit(["a", r"b\.c"], r"_a_b\.c")
+
+        # Escaping a backslash before a delimiter currently fails
+        with self.assertRaises(ValueError):
+            Config._splitIntoKeys(r".a.calexp\\.wcs.b")
+
+        # The next two fail because internally \r is magic when escaping
+        # a delimiter.
+        with self.assertRaises(ValueError):
+            Config._splitIntoKeys("\ra\rcalexp\\\rwcs\rb")
+
+        with self.assertRaises(ValueError):
+            Config._splitIntoKeys(".a.cal\rexp\.wcs.b")
+
+    def testEscape(self):
+        c = Config({"a": {"foo.bar": 1}, "b😂c": {"bar_baz": 2}})
+        self.assertEqual(c[r".a.foo\.bar"], 1)
+        self.assertEqual(c[":a:foo.bar"], 1)
+        self.assertEqual(c[".b😂c.bar_baz"], 2)
+        self.assertEqual(c["😂b\😂c😂bar_baz"], 2)
+        self.assertEqual(c[r"\a\foo.bar"], 1)
+        self.assertEqual(c["\ra\rfoo.bar"], 1)
+        with self.assertRaises(ValueError):
+            c[".a.foo\\.bar\r"]
+
     def testOperators(self):
         c1 = Config({"a": {"b": 1}, "c": 2})
         c2 = c1.copy()
         self.assertEqual(c1, c2)
-        c2["a.b"] = 5
+        c2[".a.b"] = 5
         self.assertNotEqual(c1, c2)
 
     def testUpdate(self):
         c = Config({"a": {"b": 1}})
         c.update({"a": {"c": 2}})
-        self.assertEqual(c["a.b"], 1)
-        self.assertEqual(c["a.c"], 2)
+        self.assertEqual(c[".a.b"], 1)
+        self.assertEqual(c[".a.c"], 2)
         c.update({"a": {"d": [3, 4]}})
-        self.assertEqual(c["a.d.0"], 3)
+        self.assertEqual(c[".a.d.0"], 3)
         c.update({"z": [5, 6, {"g": 2, "h": 3}]})
-        self.assertEqual(c["z.1"], 6)
+        self.assertEqual(c[".z.1"], 6)
 
         # This is detached from parent
-        c2 = c["z.2"]
+        c2 = c[".z.2"]
         self.assertEqual(c2["g"], 2)
         c2.update({"h": 4, "j": 5})
         self.assertEqual(c2["h"], 4)
-        self.assertNotIn("z.2.j", c)
-        self.assertNotEqual(c["z.2.h"], 4)
+        self.assertNotIn(".z.2.j", c)
+        self.assertNotEqual(c[".z.2.h"], 4)
 
         with self.assertRaises(RuntimeError):
             c.update([1, 2, 3])
@@ -131,41 +190,46 @@ class ConfigTestCase(unittest.TestCase):
 
         # Simple dict
         c["a"] = {"z": 52, "x": "string"}
-        self.assertIn("a.z", c)
-        self.assertEqual(c["a.x"], "string")
+        self.assertIn(".a.z", c)
+        self.assertEqual(c[".a.x"], "string")
 
-        c["b.new.thing1"] = "thing1"
-        c["b.new.thing2"] = "thing2"
-        c["b.new.thing3.supp"] = "supplemental"
-        self.assertEqual(c["b.new.thing1"], "thing1")
-        tmp = c["b.new"]
+        # Try different delimiters
+        self.assertEqual(c["⇛a⇛z"], 52)
+        self.assertEqual(c[("a", "z")], 52)
+        self.assertEqual(c["a", "z"], 52)
+
+        c[".b.new.thing1"] = "thing1"
+        c[".b.new.thing2"] = "thing2"
+        c[".b.new.thing3.supp"] = "supplemental"
+        self.assertEqual(c[".b.new.thing1"], "thing1")
+        tmp = c[".b.new"]
         self.assertEqual(tmp["thing2"], "thing2")
-        self.assertEqual(c["b.new.thing3.supp"], "supplemental")
+        self.assertEqual(c[".b.new.thing3.supp"], "supplemental")
 
         # Test that we can index into lists
-        c["a.b.c"] = [1, "7", 3, {"1": 4, "5": "Five"}, "hello"]
-        self.assertIn("a.b.c.3.5", c)
-        self.assertNotIn("a.b.c.10", c)
-        self.assertNotIn("a.b.c.10.d", c)
-        self.assertEqual(c["a.b.c.3.5"], "Five")
+        c[".a.b.c"] = [1, "7", 3, {"1": 4, "5": "Five"}, "hello"]
+        self.assertIn(".a.b.c.3.5", c)
+        self.assertNotIn(".a.b.c.10", c)
+        self.assertNotIn(".a.b.c.10.d", c)
+        self.assertEqual(c[".a.b.c.3.5"], "Five")
         # Is the value in the list?
-        self.assertIn("a.b.c.hello", c)
-        self.assertNotIn("a.b.c.hello.not", c)
+        self.assertIn(".a.b.c.hello", c)
+        self.assertNotIn(".a.b.c.hello.not", c)
 
         # And assign to an element in the list
-        self.assertEqual(c["a.b.c.1"], "7")
-        c["a.b.c.1"] = 8
-        self.assertEqual(c["a.b.c.1"], 8)
-        self.assertIsInstance(c["a.b.c"], collections.Sequence)
+        self.assertEqual(c[".a.b.c.1"], "7")
+        c[".a.b.c.1"] = 8
+        self.assertEqual(c[".a.b.c.1"], 8)
+        self.assertIsInstance(c[".a.b.c"], collections.Sequence)
 
         # Test we do get lists back from asArray
-        a = c.asArray("a.b.c")
+        a = c.asArray(".a.b.c")
         self.assertIsInstance(a, list)
 
         # Is it the *same* list as in the config
         a.append("Sentinel")
-        self.assertIn("Sentinel", c["a.b.c"])
-        self.assertIn("a.b.c.Sentinel", c)
+        self.assertIn("Sentinel", c[".a.b.c"])
+        self.assertIn(".a.b.c.Sentinel", c)
 
         # Test we always get a list
         for k in c.names():
@@ -175,22 +239,66 @@ class ConfigTestCase(unittest.TestCase):
         # Check we get the same top level keys
         self.assertEqual(set(c.names(topLevelOnly=True)), set(c.data.keys()))
 
+        # Check that we can iterate through items
+        for k, v in c.items():
+            self.assertEqual(c[k], v)
+
         # Check that lists still work even if assigned a dict
         c = Config({"cls": "lsst.daf.butler",
+                    "formatters": {"calexp.wcs": "{component}",
+                                   "calexp": "{datasetType}"},
                     "datastores": [{"datastore": {"cls": "datastore1"}},
                                    {"datastore": {"cls": "datastore2"}}]})
-        c["datastores.1.datastore"] = {"cls": "datastore2modified"}
-        self.assertEqual(c["datastores.0.datastore.cls"], "datastore1")
-        self.assertEqual(c["datastores.1.datastore.cls"], "datastore2modified")
+        c[".datastores.1.datastore"] = {"cls": "datastore2modified"}
+        self.assertEqual(c[".datastores.0.datastore.cls"], "datastore1")
+        self.assertEqual(c[".datastores.1.datastore.cls"], "datastore2modified")
         self.assertIsInstance(c["datastores"], collections.Sequence)
 
         # Test that we can get all the listed names.
         # and also that they are marked as "in" the Config
-        # Two distinct loops
-        for n in c.names():
+        # Try delimited names and tuples
+        for n in itertools.chain(c.names(), c.nameTuples()):
             val = c[n]
             self.assertIsNotNone(val)
             self.assertIn(n, c)
+
+        names = c.names()
+        nameTuples = c.nameTuples()
+        self.assertEqual(len(names), len(nameTuples))
+        self.assertEqual(len(names), 11)
+        self.assertEqual(len(nameTuples), 11)
+
+        # Test that delimiter escaping works
+        names = c.names(delimiter=".")
+        for n in names:
+            self.assertIn(n, c)
+        self.assertIn(".formatters.calexp\\.wcs", names)
+
+        # Use a name that includes the internal default delimiter
+        # to test automatic adjustment of delimiter
+        strangeKey = f"calexp{c._D}wcs"
+        c["formatters", strangeKey] = "dynamic"
+        names = c.names()
+        self.assertIn(strangeKey, "-".join(names))
+        self.assertFalse(names[0].startswith(c._D))
+        for n in names:
+            self.assertIn(n, c)
+
+        top = c.nameTuples(topLevelOnly=True)
+        self.assertIsInstance(top[0], tuple)
+
+        # Investigate a possible delimeter in a key
+        c = Config({"formatters": {"calexp.wcs": 2, "calexp": 3}})
+        self.assertEqual(c[":formatters:calexp.wcs"], 2)
+        self.assertEqual(c[":formatters:calexp"], 3)
+        for k, v in c["formatters"].items():
+            self.assertEqual(c["formatters", k], v)
+
+        # Check internal delimiter inheritance
+        c._D = "."
+        c2 = c["formatters"]
+        self.assertEqual(c._D, c2._D)  # Check that the child inherits
+        self.assertNotEqual(c2._D, Config._D)
 
 
 class ConfigSubsetTestCase(unittest.TestCase):
@@ -330,19 +438,24 @@ class ConfigSubsetTestCase(unittest.TestCase):
     def testInclude(self):
         """Read a config that has an include directive"""
         c = Config(os.path.join(self.configDir, "testinclude.yaml"))
-        self.assertEqual(c["comp1.item1"], 58)
-        self.assertEqual(c["comp2.comp.item1"], 1)
-        self.assertEqual(c["comp3.1.comp.item1"], "posix")
-        self.assertEqual(c["comp4.0.comp.item1"], "posix")
-        self.assertEqual(c["comp4.1.comp.item1"], 1)
-        self.assertEqual(c["comp5.comp6.comp.item1"], "posix")
+        self.assertEqual(c[".comp1.item1"], 58)
+        self.assertEqual(c[".comp2.comp.item1"], 1)
+        self.assertEqual(c[".comp3.1.comp.item1"], "posix")
+        self.assertEqual(c[".comp4.0.comp.item1"], "posix")
+        self.assertEqual(c[".comp4.1.comp.item1"], 1)
+        self.assertEqual(c[".comp5.comp6.comp.item1"], "posix")
 
         # Test a specific name and then test that all
         # returned names are "in" the config.
         names = c.names()
-        self.assertIn("comp3.1.comp.item1", names)
+        self.assertIn(c._D.join(("", "comp3", "1", "comp", "item1")), names)
         for n in names:
-            self.assertIn(n, names)
+            self.assertIn(n, c)
+
+        # Test that override delimiter works
+        delimiter = "-"
+        names = c.names(delimiter=delimiter)
+        self.assertIn(delimiter.join(("", "comp3", "1", "comp", "item1")), names)
 
 
 if __name__ == "__main__":

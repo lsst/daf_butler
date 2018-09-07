@@ -274,7 +274,7 @@ class ButlerTests:
 class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    fullConfigKey = "datastore.formatters"
+    fullConfigKey = ".datastore.formatters"
 
     datastoreStr = "datastore='./butler_test_repository"
     registryStr = "registry='sqlite:///:memory:'"
@@ -292,7 +292,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
 class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
-    fullConfigKey = "datastore.datastores.1.formatters"
+    fullConfigKey = ".datastore.datastores.1.formatters"
     datastoreStr = "datastore='InMemory, ./butler_test_repository, ./butler_test_repository2'"
     registryStr = "registry='sqlite:///:memory:'"
 
