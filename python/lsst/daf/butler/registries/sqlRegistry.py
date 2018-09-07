@@ -57,7 +57,7 @@ class SqlRegistry(Registry):
         Load configuration
     schemaConfig : `SchemaConfig` or `str`
         Definition of the schema to use.
-    dataUnitRegistryConfig : `DataUnitRegistryConfig` or `str`
+    dataUnitConfig : `DataUnitConfig` or `str`
         Definition of the DataUnitRegistry to use.
     create : `bool`
         Assume registry is empty and create a new one.
@@ -68,8 +68,8 @@ class SqlRegistry(Registry):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, registryConfig, schemaConfig, dataUnitRegistryConfig, create=False):
-        super().__init__(registryConfig, dataUnitRegistryConfig=dataUnitRegistryConfig)
+    def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
+        super().__init__(registryConfig, dataUnitConfig=dataUnitConfig)
 
         self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()

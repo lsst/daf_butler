@@ -24,7 +24,7 @@ from itertools import chain
 from .config import ConfigSubset
 from .utils import TopologicalSet, iterable
 
-__all__ = ("DataUnit", "DataUnitRegistry", "DataUnitRegistryConfig")
+__all__ = ("DataUnit", "DataUnitRegistry", "DataUnitConfig")
 
 
 class DataUnit:
@@ -232,7 +232,7 @@ class DataUnitJoin:
         return None
 
 
-class DataUnitRegistryConfig(ConfigSubset):
+class DataUnitConfig(ConfigSubset):
     component = "dataUnits"
     requiredKeys = ("version", "dimensions")
     defaultConfigFile = "dataUnits.yaml"
@@ -263,7 +263,7 @@ class DataUnitRegistry:
 
         Parameters
         ----------
-        config : `SchemaConfig`
+        config : `DataUnitConfig`
             DataUnit configuration containing "dimensions", "joins" entries.
         """
         dataUnitRegistry = cls()
@@ -376,7 +376,7 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `Config`
-            The `dataUnits` component of a `DataUnitRegistryConfig`.
+            The `dataUnits` component of a `DataUnitConfig`.
         """
         # Visit DataUnits in dependency order
         for dataUnitName in self._dataUnitNames:
@@ -417,7 +417,7 @@ class DataUnitRegistry:
 
         Parameters
         ----------
-        config : `DataUnitRegistryConfig`
+        config : `DataUnitConfig`
             Configuration describing `DataUnit` join relations.
         """
         for dataUnitJoinName, dataUnitJoinDescription in config.items():
