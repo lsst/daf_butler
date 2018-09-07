@@ -96,54 +96,54 @@ schema:
         tgt: quantum.execution_id
       -
         src: camera
-        tgt: camera.camera
+        tgt: Camera.camera
       -
         src:
           - camera
           - physical_filter
         tgt:
-          - physicalfilter.camera
-          - physicalfilter.physical_filter
+          - PhysicalFilter.camera
+          - PhysicalFilter.physical_filter
       -
         src:
           - camera
           - sensor
         tgt:
-          - sensor.camera
-          - sensor.sensor
+          - Sensor.camera
+          - Sensor.sensor
       -
         src:
           - camera
           - visit
         tgt:
-          - visit.camera
-          - visit.visit
+          - Visit.camera
+          - Visit.visit
       -
         src:
           - camera
           - exposure
         tgt:
-          - exposure.camera
-          - exposure.exposure
+          - Exposure.camera
+          - Exposure.exposure
       -
         src: skymap
-        tgt: skymap.skymap
+        tgt: Skymap.skymap
       -
         src:
           - skymap
           - tract
         tgt:
-          - tract.skymap
-          - tract.tract
+          - Tract.skymap
+          - Tract.tract
       -
         src:
           - skymap
           - tract
           - patch
         tgt:
-          - patch.skymap
-          - patch.tract
-          - patch.patch
+          - Patch.skymap
+          - Patch.tract
+          - Patch.patch
 
     DatasetComposition:
       doc: >
@@ -761,7 +761,7 @@ schema:
           A human-readable name for the SkyMap, used as its unique
           identifier.
       -
-        name: hash 
+        name: hash
         type: string
         nullable: false
         doc: >
