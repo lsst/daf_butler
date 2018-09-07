@@ -29,7 +29,7 @@ from sqlite3 import Connection as SQLite3Connection
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registry import RegistryConfig
 
-from .sqlRegistry import SqlRegistry
+from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
 __all__ = ("SqliteRegistry", )
 
@@ -74,6 +74,7 @@ class SqliteRegistry(SqlRegistry):
                                   toCopy=("cls", ))
 
     def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
+        registryConfig = SqlRegistryConfig(registryConfig)
         if ":memory:" in registryConfig.get("db", ""):
             create = True
         super().__init__(registryConfig, schemaConfig, dataUnitConfig, create)

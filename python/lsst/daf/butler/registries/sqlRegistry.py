@@ -69,8 +69,8 @@ class SqlRegistry(Registry):
     """
 
     def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
+        registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dataUnitConfig=dataUnitConfig)
-        self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
         self._schema = Schema(config=schemaConfig)
         self._engine = create_engine(self.config["db"])
