@@ -95,11 +95,14 @@ class SqlPreFlight:
     ----------
     schema : `Schema`
         Schema instance
+    dataUnits : `DataUnitRegistry`
+        Description of DataUnit dimensions and joins.
     connection : `sqlalchmey.Connection`
         Connection to use for database access.
     """
-    def __init__(self, schema, connection):
+    def __init__(self, schema, dataUnits, connection):
         self._schema = schema
+        self._dataUnits = dataUnits
         self._connection = connection
 
     def _joinOnForeignKey(self, fromClause, dataUnit, otherDataUnits):
@@ -207,7 +210,7 @@ class SqlPreFlight:
         selectColumns = []
         unitLinkColumns = {}
         for unitName in allUnitNames:
-            dataUnit = self._schema.dataUnits[unitName]
+            dataUnit = self._dataUnits[unitName]
             if self._schema.tables[unitName] is not None:
                 # take link column names, usually there is one
                 for link in dataUnit.link:
@@ -219,10 +222,10 @@ class SqlPreFlight:
         # Extend units set with the "optional" superset from schema, so that
         # joins work correctly. This may bring more tables into query than
         # really needed, potential for optimization.
-        allUnitNames = set(_scanDataUnits(self._schema.dataUnits[unitName] for unitName in allUnitNames))
+        allUnitNames = set(_scanDataUnits(self._dataUnits[unitName] for unitName in allUnitNames))
 
         # All DataUnit instances in a subset that we need
-        allDataUnits = {unitName: self._schema.dataUnits[unitName] for unitName in allUnitNames}
+        allDataUnits = {unitName: self._dataUnits[unitName] for unitName in allUnitNames}
 
         # joins for all unit tables
         fromJoin = None
@@ -233,7 +236,7 @@ class SqlPreFlight:
             fromJoin = self._joinOnForeignKey(fromJoin, dataUnit, dataUnit.dependencies)
 
         # joins between skymap and camera units
-        dataUnitJoins = [dataUnitJoin for dataUnitJoin in self._schema.dataUnits.joins.values()
+        dataUnitJoins = [dataUnitJoin for dataUnitJoin in self._dataUnits.joins.values()
                          if dataUnitJoin.lhs.issubset(allUnitNames) and
                          dataUnitJoin.rhs.issubset(allUnitNames)]
         _LOG.debug("all dataUnitJoins: %s", [join.name for join in dataUnitJoins])
@@ -265,9 +268,9 @@ class SqlPreFlight:
                 units = []
                 for dataUnitName in connection:
                     units.append(dataUnitName)
-                    dataUnit = self._schema.dataUnits[dataUnitName]
+                    dataUnit = self._dataUnits[dataUnitName]
                     units += [d.name for d in dataUnit.requiredDependencies if d.spatial]
-                regionHolder = self._schema.dataUnits.getRegionHolder(*units)
+                regionHolder = self._dataUnits.getRegionHolder(*units)
                 if len(connection) > 1:
                     # if one of the joins is with Visit/Sensor then also bring
                     # VisitSensorRegion table in and join it with the units
@@ -278,7 +281,7 @@ class SqlPreFlight:
                         _LOG.debug("joining region table with units: %s", regionHolder.name)
                         joinedRegionTables.add(regionHolder.name)
 
-                        dataUnits = [self._schema.dataUnits[dataUnitName] for dataUnitName in connection]
+                        dataUnits = [self._dataUnits[dataUnitName] for dataUnitName in connection]
                         fromJoin = self._joinOnForeignKey(fromJoin, regionHolder, dataUnits)
 
                 # add to the list of tables that we need to join with
@@ -444,7 +447,7 @@ class SqlPreFlight:
         # full set of link names for this DatasetType
         links = set()
         for unitName in dsType.dataUnits:
-            dataUnit = self._schema.dataUnits[unitName]
+            dataUnit = self._dataUnits[unitName]
             links.update(dataUnit.link)
         links = list(links)
 
@@ -543,7 +546,7 @@ class SqlPreFlight:
             for dsType, col in dsIdColumns.items():
                 linkNames = set()
                 for unitName in dsType.dataUnits:
-                    dataUnit = self._schema.dataUnits[unitName]
+                    dataUnit = self._dataUnits[unitName]
                     if self._schema.tables[dataUnit.name] is not None:
                         linkNames.update(dataUnit.link)
                 dsDataId = dict((link, row[unitLinkColumns[link]]) for link in linkNames)

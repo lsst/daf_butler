@@ -43,8 +43,6 @@ class Schema:
 
     Parameters
     ----------
-    dataUnits : `DataUnitsRegistry`
-        Registry of all possible data units.
     config : `SchemaConfig` or `str`, optional
         Load configuration. Defaults will be read if ``config`` is not
         a `SchemaConfig`.
@@ -54,12 +52,11 @@ class Schema:
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
     """
-    def __init__(self, dataUnits, config=None):
+    def __init__(self, config=None):
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
         self.config = config
         self.builder = SchemaBuilder()
-        self.dataUnits = dataUnits
         self.buildFromConfig(config)
 
     def buildFromConfig(self, config):

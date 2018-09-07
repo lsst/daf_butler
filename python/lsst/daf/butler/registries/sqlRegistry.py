@@ -70,14 +70,13 @@ class SqlRegistry(Registry):
 
     def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
         super().__init__(registryConfig, dataUnitConfig=dataUnitConfig)
-
         self.config = SqlRegistryConfig(registryConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(dataUnits=self._dataUnits, config=schemaConfig)
+        self._schema = Schema(config=schemaConfig)
         self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
-        self._preFlight = SqlPreFlight(self._schema, self._connection)
+        self._preFlight = SqlPreFlight(self._schema, self._dataUnits, self._connection)
         if create:
             self._createTables()
 
@@ -134,7 +133,7 @@ class SqlRegistry(Registry):
         """
         for name in datasetType.dataUnits:
             try:
-                self._schema.dataUnits[name].validateId(dataId)
+                self._dataUnits[name].validateId(dataId)
             except ValueError as err:
                 raise ValueError("Error validating {}".format(datasetType.name)) from err
 
@@ -205,7 +204,7 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_((self._schema.datasetTable.c[name] == dataId[name]
-                                 for name in self._schema.dataUnits.getPrimaryKeyNames(
+                                 for name in self._dataUnits.getPrimaryKeyNames(
                                      datasetType.dataUnits)))
         result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
             datasetTable.join(datasetCollectionTable)).where(and_(
@@ -437,7 +436,7 @@ class SqlRegistry(Registry):
             # because the name of the key may not be the name of the name of the
             # DataUnit link.
             dataId = {dataUnitName: result[self._schema.datasetTable.c[dataUnitName]]
-                      for dataUnitName in self._schema.dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
+                      for dataUnitName in self._dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
             # Get components (if present)
             # TODO check against expected components
             components = {}
@@ -879,7 +878,7 @@ class SqlRegistry(Registry):
         dataUnitName : `str`
             Name of the DataUnit, e.g. "Camera", "Tract", etc.
         """
-        return self._schema.dataUnits[dataUnitName]
+        return self._dataUnits[dataUnitName]
 
     @transactional
     def addDataUnitEntry(self, dataUnitName, values):
@@ -905,7 +904,7 @@ class SqlRegistry(Registry):
             If an entry with the primary-key defined in `values` is already
             present.
         """
-        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit = self._dataUnits[dataUnitName]
         dataUnit.validateId(values)
         dataUnitTable = self._schema.tables[dataUnitName]
         v = values.copy()
@@ -935,7 +934,7 @@ class SqlRegistry(Registry):
             Dictionary with all `DataUnit` values, or `None` if no matching
             entry is found.
         """
-        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit = self._dataUnits[dataUnitName]
         dataUnit.validateId(value)
         dataUnitTable = self._schema.tables[dataUnitName]
         primaryKeyColumns = {k: self._schema.tables[dataUnit.name].c[k] for k in dataUnit.primaryKey}
@@ -970,12 +969,12 @@ class SqlRegistry(Registry):
         primaryKey = set()
         regionUnitNames = []
         for dataUnitName in dataUnitNames:
-            dataUnit = self._schema.dataUnits[dataUnitName]
+            dataUnit = self._dataUnits[dataUnitName]
             dataUnit.validateId(value)
             primaryKey.update(dataUnit.primaryKey)
             regionUnitNames.append(dataUnitName)
             regionUnitNames += [d.name for d in dataUnit.requiredDependencies]
-        regionDataUnit = self._schema.dataUnits.getRegionHolder(*dataUnitNames)
+        regionDataUnit = self._dataUnits.getRegionHolder(*dataUnitNames)
         table = self._schema.tables[regionDataUnit.name]
         if table is None:
             raise TypeError("No region table found for '{}'.".format(dataUnitNames))
@@ -998,7 +997,7 @@ class SqlRegistry(Registry):
                 )
             )
         assert "SkyPix" not in dataUnitNames
-        join = self._schema.dataUnits.getJoin(dataUnitNames, "SkyPix")
+        join = self._dataUnits.getJoin(dataUnitNames, "SkyPix")
         if join is None or join.name in self._schema._views:
             return
         if update:
@@ -1034,10 +1033,10 @@ class SqlRegistry(Registry):
             If the set of dataunits for the ``dataId`` does not correspond to
             a unique spatial lookup.
         """
-        dataUnitNames = (self._schema.dataUnits.getByLinkName(linkName).name for linkName in dataId)
-        regionHolder = self._schema.dataUnits.getRegionHolder(*tuple(dataUnitNames))
+        dataUnitNames = (self._dataUnits.getByLinkName(linkName).name for linkName in dataId)
+        regionHolder = self._dataUnits.getRegionHolder(*tuple(dataUnitNames))
         # Skypix does not have a table to lookup the region in, instead generate it
-        if regionHolder == self._schema.dataUnits["SkyPix"]:
+        if regionHolder == self._dataUnits["SkyPix"]:
             return self.pixelization.pixel(dataId["skypix"])
         # Lookup region
         primaryKeyColumns = {k: self._schema.tables[regionHolder.name].c[k] for k in regionHolder.primaryKey}

@@ -27,7 +27,6 @@ from sqlalchemy import create_engine, MetaData
 import lsst.utils
 import lsst.utils.tests
 
-from lsst.daf.butler import DataUnitConfig, DataUnitRegistry
 from lsst.daf.butler.core.utils import iterable
 from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column
 from sqlalchemy.sql.expression import TableClause
@@ -54,9 +53,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
     def testConstructor(self):
         """Independent check for `Schema` constructor.
         """
-        dataUnitConfig = DataUnitConfig()
-        dataUnitRegistry = DataUnitRegistry.fromConfig(dataUnitConfig)
-        schema = Schema(dataUnits=dataUnitRegistry)
+        schema = Schema()
         self.assertIsInstance(schema, Schema)
 
     def testSchemaCreation(self):
