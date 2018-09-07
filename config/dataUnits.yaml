@@ -1,6 +1,6 @@
-dataUnitsConfig:
+dataUnits:
   version: 0
-  dataUnits:
+  dimensions:
     Camera:
       doc: >
         An entity that produces observations.  A Camera defines a set of

@@ -233,8 +233,8 @@ class DataUnitJoin:
 
 
 class DataUnitRegistryConfig(ConfigSubset):
-    component = "dataUnitsConfig"
-    requiredKeys = ("version", "dataUnits")
+    component = "dataUnits"
+    requiredKeys = ("version", "dimensions")
     defaultConfigFile = "dataUnits.yaml"
 
 
@@ -264,12 +264,11 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `SchemaConfig`
-            `Registry` DataUnit configuration containing "dataUnits",
-            "joins" entries.
+            DataUnit configuration containing "dimensions", "joins" entries.
         """
         dataUnitRegistry = cls()
-        dataUnitRegistry._initDataUnitNames(config["dataUnits"])
-        dataUnitRegistry._initDataUnits(config["dataUnits"])
+        dataUnitRegistry._initDataUnitNames(config["dimensions"])
+        dataUnitRegistry._initDataUnits(config["dimensions"])
         dataUnitRegistry._initDataUnitJoins(config["joins"])
         return dataUnitRegistry
 
