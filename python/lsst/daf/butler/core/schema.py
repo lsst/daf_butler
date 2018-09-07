@@ -44,6 +44,9 @@ class Schema:
     config : `SchemaConfig` or `str`, optional
         Load configuration. Defaults will be read if ``config`` is not
         a `SchemaConfig`.
+    limited : `bool`
+        If `True`, ignore tables, views, and associated foreign keys whose
+        config descriptions include a "limited" key set to `False`.
 
     Attributes
     ----------
@@ -56,11 +59,11 @@ class Schema:
         The names of entries in ``tables`` that are actually implemented as
         views.
     """
-    def __init__(self, config=None):
+    def __init__(self, config=None, limited=False):
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
         self.config = config
-        builder = SchemaBuilder()
+        builder = SchemaBuilder(limited=limited)
         for tableName, tableDescription in self.config["tables"].items():
             builder.addTable(tableName, tableDescription)
         self.datasetTable = builder.metadata.tables["Dataset"]
@@ -71,6 +74,12 @@ class Schema:
 
 class SchemaBuilder:
     """Builds a Schema step-by-step.
+
+    Parameters
+    ----------
+    limited : `bool`
+        If `True`, ignore tables, views, and associated foreign keys whose
+        config descriptions include a "limited" key set to `False`.
 
     Attributes
     ----------
@@ -86,10 +95,11 @@ class SchemaBuilder:
     VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
                           "bool": Boolean, "blob": LargeBinary, "datetime": DateTime}
 
-    def __init__(self):
+    def __init__(self, limited=False):
         self.metadata = MetaData()
         self.tables = {}
         self.views = set()
+        self._limited = limited
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -112,6 +122,8 @@ class SchemaBuilder:
         """
         if tableName in self.metadata.tables:
             raise ValueError("Table with name {} already exists".format(tableName))
+        if self._limited and not tableDescription.get("limited", True):
+            return
         # Create a Table object (attaches itself to metadata)
         if "sql" in tableDescription:
             # This table should actually be created as a view
@@ -167,6 +179,8 @@ class SchemaBuilder:
             - src, list of source column names
             - tgt, list of target column names
         """
+        if self._limited and not constraintDescription.get("limited", True):
+            return
         if isinstance(table, str):
             table = self.metadata.tables[table]
         table.append_constraint(self.makeForeignKeyConstraint(constraintDescription))
@@ -219,7 +233,7 @@ class SchemaBuilder:
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
             - src, list of source column names
-            - tgt, list of target column names
+            - tgt, list of (table-qualified) target column names
         """
         src = tuple(iterable(constraintDescription["src"]))
         tgt = tuple(iterable(constraintDescription["tgt"]))

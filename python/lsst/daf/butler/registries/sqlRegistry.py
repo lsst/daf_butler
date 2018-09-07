@@ -31,7 +31,7 @@ from lsst.sphgeom import ConvexPolygon
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
-from ..core.registry import RegistryConfig, Registry
+from ..core.registry import RegistryConfig, Registry, disableWhenLimited
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
@@ -72,11 +72,12 @@ class SqlRegistry(Registry):
         registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dataUnitConfig=dataUnitConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(config=schemaConfig)
+        self._schema = Schema(config=schemaConfig, limited=self.limited)
         self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
-        self._preFlight = SqlPreFlight(self._schema, self._dataUnits, self._connection)
+        if not self.limited:
+            self._preFlight = SqlPreFlight(self._schema, self._dataUnits, self._connection)
         if create:
             self._createTables()
 
@@ -878,8 +879,10 @@ class SqlRegistry(Registry):
         dataUnitName : `str`
             Name of the DataUnit, e.g. "Camera", "Tract", etc.
         """
+        # TODO: remove this when DataUnitRegistry is a singleton
         return self._dataUnits[dataUnitName]
 
+    @disableWhenLimited
     @transactional
     def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
@@ -903,6 +906,8 @@ class SqlRegistry(Registry):
         ValueError
             If an entry with the primary-key defined in `values` is already
             present.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         dataUnit = self._dataUnits[dataUnitName]
         dataUnit.validateId(values)
@@ -918,6 +923,7 @@ class SqlRegistry(Registry):
         if region is not None:
             self.setDataUnitRegion((dataUnitName,), v, region)
 
+    @disableWhenLimited
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.
 
@@ -933,6 +939,8 @@ class SqlRegistry(Registry):
         dataUnitEntry : `dict`
             Dictionary with all `DataUnit` values, or `None` if no matching
             entry is found.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         dataUnit = self._dataUnits[dataUnitName]
         dataUnit.validateId(value)
@@ -945,6 +953,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
+    @disableWhenLimited
     @transactional
     def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
         """Set the region field for a DataUnit instance or a combination
@@ -965,6 +974,11 @@ class SqlRegistry(Registry):
             If True, existing region information for these DataUnits is being
             replaced.  This is usually required because DataUnit entries are
             assumed to be pre-inserted prior to calling this function.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         primaryKey = set()
         regionUnitNames = []
@@ -1013,6 +1027,7 @@ class SqlRegistry(Registry):
                 parameters.append(dict(value, skypix=skypix))
         self._connection.execute(self._schema.tables[join.name].insert(), parameters)
 
+    @disableWhenLimited
     def getRegion(self, dataId):
         """Get region associated with a dataId.
 
@@ -1047,6 +1062,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
+    @disableWhenLimited
     def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
@@ -1077,6 +1093,11 @@ class SqlRegistry(Registry):
         ------
         row : `PreFlightUnitsRow`
             Single row is a unique combination of units in a transform.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         return self._preFlight.selectDataUnits(originInfo,
                                                expression,

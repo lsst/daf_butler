@@ -88,7 +88,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="testtype", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
@@ -106,7 +107,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
         children = {"child1": registry.addDataset(childDatasetType1, dataId={"camera": "DummyCam"}, run=run),
@@ -164,8 +166,9 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(outExecution, execution)
 
     def testQuantum(self):
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         registry = self.makeRegistry()
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testQuantum")
         registry.storageClasses.registerStorageClass(storageClass)
@@ -201,7 +204,8 @@ class RegistryTests(metaclass=ABCMeta):
         datasetType2 = DatasetType(name="test2", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
@@ -237,14 +241,15 @@ class RegistryTests(metaclass=ABCMeta):
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        registry.addDataUnitEntry("Camera", {"camera": "MyCam"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "MyCam", "physical_filter": "m-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 2, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "MyCam", "visit": 2, "physical_filter": "m-r"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("Camera", {"camera": "MyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "MyCam", "physical_filter": "m-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 2, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
         dataId = {"camera": "DummyCam", "visit": 0}
         run = registry.makeRun(collection=collection)
@@ -278,10 +283,11 @@ class RegistryTests(metaclass=ABCMeta):
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
         # TODO: Dataset.physical_filter should be populated as well here
@@ -312,6 +318,10 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         dataUnitName = "Camera"
         dataUnitValue = {"camera": "DummyCam"}
+        if registry.limited:
+            with self.assertRaises(NotImplementedError):
+                registry.addDataUnitEntry(dataUnitName, dataUnitValue)
+            return  # the remainder of this test does not apply to limited Registry
         registry.addDataUnitEntry(dataUnitName, dataUnitValue)
         # Inserting the same value twice should fail
         with self.assertRaises(ValueError):
@@ -357,7 +367,8 @@ class RegistryTests(metaclass=ABCMeta):
             with registry.transaction():
                 registry.registerDatasetType(datasetTypeB)
                 registry.registerDatasetType(datasetTypeC)
-                registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+                if not registry.limited:
+                    registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
                 ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
                 refId = ref.id
                 raise ValueError("Oops, something went wrong")
@@ -372,10 +383,13 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertIsNotNone(refId)
         self.assertIsNone(registry.getDataset(refId))
         # Or the DataUnit entries
-        self.assertIsNone(registry.findDataUnitEntry("Camera", {"camera": "DummyCam"}))
+        if not registry.limited:
+            self.assertIsNone(registry.findDataUnitEntry("Camera", {"camera": "DummyCam"}))
 
     def testGetRegion(self):
         registry = self.makeRegistry()
+        if registry.limited:
+            return
         regionTract = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 1, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 0, 1)))
@@ -472,6 +486,23 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry = self.makeRegistry()
         self.assertIsInstance(registry, SqlRegistry)
         self.assertFalse(registry.limited)
+
+
+class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase):
+    """Test for SqlRegistry with limited=True.
+    """
+
+    def makeRegistry(self):
+        testDir = os.path.dirname(__file__)
+        configFile = os.path.join(testDir, "config/basic/butler.yaml")
+        butlerConfig = ButlerConfig(configFile)
+        butlerConfig["registry", "limited"] = True
+        return Registry.fromConfig(butlerConfig, create=True)
+
+    def testInitFromConfig(self):
+        registry = self.makeRegistry()
+        self.assertIsInstance(registry, SqlRegistry)
+        self.assertTrue(registry.limited)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

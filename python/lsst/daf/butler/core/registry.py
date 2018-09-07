@@ -21,6 +21,7 @@
 
 from abc import ABCMeta, abstractmethod
 import contextlib
+import functools
 
 from .utils import doImport
 from .config import Config, ConfigSubset
@@ -28,7 +29,21 @@ from .dataUnit import DataUnitConfig, DataUnitRegistry
 from .schema import SchemaConfig
 from .utils import transactional
 
-__all__ = ("RegistryConfig", "Registry")
+__all__ = ("RegistryConfig", "Registry", "disableWhenLimited")
+
+
+def disableWhenLimited(func):
+    """Decorator that indicates that a method should raise NotImplementedError
+    on Registries whose ``limited`` attribute is `True`.
+
+    This implements that check and raise for all subclasses.
+    """
+    @functools.wraps(func)
+    def inner(self, *args, **kwargs):
+        if self.limited:
+            raise NotImplementedError("Not implemented for limited Registry.")
+        return func(self, *args, **kwargs)
+    return inner
 
 
 class RegistryConfig(ConfigSubset):
@@ -143,6 +158,12 @@ class Registry(metaclass=ABCMeta):
     def __str__(self):
         return "None"
 
+    @property
+    def limited(self):
+        """If True, this Registry does not maintain DataUnit metadata or
+        relationships (`bool`)."""
+        return self.config.get("limited", False)
+
     @contextlib.contextmanager
     def transaction(self):
         """Optionally implemented in `Registry` subclasses to provide exception
@@ -168,7 +189,12 @@ class Registry(metaclass=ABCMeta):
 
     @property
     def pixelization(self):
-        """Object that interprets SkyPix DataUnit values (`sphgeom.Pixelization`)."""
+        """Object that interprets SkyPix DataUnit values (`lsst.sphgeom.Pixelization`).
+
+        `None` for limited registries.
+        """
+        if self.limited:
+            return None
         if self._pixelization is None:
             pixelizationCls = doImport(self.config["skypix", "cls"])
             self._pixelization = pixelizationCls(level=self.config["skypix", "level"])
@@ -625,6 +651,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     @transactional
     def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
@@ -648,10 +675,13 @@ class Registry(metaclass=ABCMeta):
         ValueError
             If an entry with the primary-key defined in `values` is already
             present.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.
 
@@ -667,10 +697,16 @@ class Registry(metaclass=ABCMeta):
         dataUnitEntry : `dict`
             Dictionary with all `DataUnit` values, or `None` if no matching
             entry is found.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     @transactional
     def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
         """Set the region field for a DataUnit instance or a combination
@@ -689,10 +725,16 @@ class Registry(metaclass=ABCMeta):
             If True, existing region information for these DataUnits is being
             replaced.  This is usually required because DataUnit entries are
             assumed to be pre-inserted prior to calling this function.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     def getRegion(self, dataId):
         """Get region associated with a dataId.
 
@@ -712,10 +754,13 @@ class Registry(metaclass=ABCMeta):
         KeyError
             If the set of dataunits for the ``dataId`` does not correspond to
             a unique spatial lookup.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
@@ -746,5 +791,10 @@ class Registry(metaclass=ABCMeta):
         ------
         row : `PreFlightUnitsRow`
             Single row is a unique combination of units in a transform.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
