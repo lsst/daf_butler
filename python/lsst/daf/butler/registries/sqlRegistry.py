@@ -101,7 +101,7 @@ class SqlRegistry(Registry):
             raise
 
     def _createTables(self):
-        self._schema._metadata.create_all(self._engine)
+        self._schema.metadata.create_all(self._engine)
 
     def _isValidDatasetType(self, datasetType):
         """Check if given `DatasetType` instance is valid for this `Registry`.
@@ -998,7 +998,7 @@ class SqlRegistry(Registry):
             )
         assert "SkyPix" not in dataUnitNames
         join = self._dataUnits.getJoin(dataUnitNames, "SkyPix")
-        if join is None or join.name in self._schema._views:
+        if join is None or join.name in self._schema.views:
             return
         if update:
             # Delete any old SkyPix join entries for this DataUnit

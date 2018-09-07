@@ -48,7 +48,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.config = SchemaConfig()
         self.schema = Schema(self.config)
         self.engine = create_engine("sqlite:///:memory:")
-        self.schema._metadata.create_all(self.engine)
+        self.schema.metadata.create_all(self.engine)
 
     def testConstructor(self):
         """Independent check for `Schema` constructor.
@@ -59,7 +59,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
     def testSchemaCreation(self):
         """Check that the generated `Schema` tables match its description.
         """
-        self.assertIsInstance(self.schema._metadata, MetaData)
+        self.assertIsInstance(self.schema.metadata, MetaData)
         allTables = {}
         allTables.update(self.config["tables"])
         for tableName, tableDescription in allTables.items():

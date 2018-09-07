@@ -451,8 +451,8 @@ class SqlPreFlight:
             links.update(dataUnit.link)
         links = list(links)
 
-        dsTable = self._schema._metadata.tables["Dataset"]
-        dsCollTable = self._schema._metadata.tables["DatasetCollection"]
+        dsTable = self._schema.tables["Dataset"]
+        dsCollTable = self._schema.tables["DatasetCollection"]
 
         if len(dsCollections) == 1:
 

@@ -19,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import itertools
-
 from .utils import iterable
 from .views import makeView
 from .config import ConfigSubset
@@ -51,6 +49,12 @@ class Schema:
     ----------
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
+    tables : `dict`
+        A mapping from table or view name to the associated SQLAlchemy object.
+        Note that this contains both true tables and views.
+    views : `frozenset`
+        The names of entries in ``tables`` that are actually implemented as
+        views.
     """
     def __init__(self, config=None):
         if config is None or not isinstance(config, SchemaConfig):
@@ -60,11 +64,9 @@ class Schema:
         for tableName, tableDescription in self.config["tables"].items():
             builder.addTable(tableName, tableDescription)
         self.datasetTable = builder.metadata.tables["Dataset"]
-        self._metadata = builder.metadata
-        self._tables = builder.tables
-        self._views = builder.views
-        self.tables = {k: v for k, v in itertools.chain(self._tables.items(),
-                                                        self._views.items())}
+        self.metadata = builder.metadata
+        self.views = frozenset(builder.views)
+        self.tables = builder.tables
 
 
 class SchemaBuilder:
@@ -75,9 +77,11 @@ class SchemaBuilder:
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
     tables : `dict`
-        All created tables.
-    views : `dict`
-        All created views.
+        A mapping from table or view name to the associated SQLAlchemy object.
+        Note that this contains both true tables and views.
+    views : `set`
+        The names of all entries in ``tables`` that are actually implemented as
+        views.
     """
     VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
                           "bool": Boolean, "blob": LargeBinary, "datetime": DateTime}
@@ -85,7 +89,7 @@ class SchemaBuilder:
     def __init__(self):
         self.metadata = MetaData()
         self.tables = {}
-        self.views = {}
+        self.views = set()
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -110,9 +114,10 @@ class SchemaBuilder:
             raise ValueError("Table with name {} already exists".format(tableName))
         # Create a Table object (attaches itself to metadata)
         if "sql" in tableDescription:
-            # This table can be materialized as a view
+            # This table should actually be created as a view
             table = makeView(tableName, self.metadata, selectable=tableDescription["sql"])
-            self.views[tableName] = table
+            self.tables[tableName] = table
+            self.views.add(tableName)
             view = True
         else:
             table = Table(tableName, self.metadata)
