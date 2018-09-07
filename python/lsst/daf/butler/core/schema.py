@@ -56,16 +56,13 @@ class Schema:
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
         self.config = config
-        self.builder = SchemaBuilder()
-        self.buildFromConfig(config)
-
-    def buildFromConfig(self, config):
+        builder = SchemaBuilder()
         for tableName, tableDescription in self.config["tables"].items():
-            self.builder.addTable(tableName, tableDescription)
-        self.datasetTable = self.builder.metadata.tables["Dataset"]
-        self._metadata = self.builder.metadata
-        self._tables = self.builder.tables
-        self._views = self.builder.views
+            builder.addTable(tableName, tableDescription)
+        self.datasetTable = builder.metadata.tables["Dataset"]
+        self._metadata = builder.metadata
+        self._tables = builder.tables
+        self._views = builder.views
         self.tables = {k: v for k, v in itertools.chain(self._tables.items(),
                                                         self._views.items())}
 

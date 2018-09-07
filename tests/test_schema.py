@@ -28,7 +28,7 @@ import lsst.utils
 import lsst.utils.tests
 
 from lsst.daf.butler.core.utils import iterable
-from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column
+from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column, SchemaBuilder
 from sqlalchemy.sql.expression import TableClause
 
 """Tests for Schema.
@@ -94,7 +94,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(column, Column)
         self.assertEqual(column.primary_key, columnDescription.get("primary_key", False))
         self.assertEqual(column.nullable, columnDescription.get("nullable", True) and not column.primary_key)
-        self.assertIsInstance(column.type, self.schema.builder.VALID_COLUMN_TYPES[columnDescription["type"]])
+        self.assertIsInstance(column.type, SchemaBuilder.VALID_COLUMN_TYPES[columnDescription["type"]])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
         """Check that foreign-key constraints match the `constraintsDescription`.
