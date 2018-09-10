@@ -21,11 +21,11 @@
 
 from sqlalchemy import MetaData
 from sqlalchemy.schema import DDLElement
-from sqlalchemy.sql import text, select, table
+from sqlalchemy.sql import text, select, TableClause
 from sqlalchemy.ext import compiler
 from sqlalchemy import event
 
-__all__ = ("makeView", )
+__all__ = ("View", )
 
 
 class CreateView(DDLElement):
@@ -50,7 +50,7 @@ def compileDropView(element, compiler, **kw):
     return "DROP VIEW %s" % (element.name)
 
 
-def makeView(name, metadata, selectable):
+class View(TableClause):
     """Make a SQL view.
 
     Parameters
@@ -61,21 +61,30 @@ def makeView(name, metadata, selectable):
         Metadata to attach the view to.
     selectable : `sqlalchemy.sql.select` or `str`
         The SQL ``SELECT`` clause used to generate the view.
+    comment : `str`, optional
+        Text description of the view.  Unlike the comment attribute of
+        actual `sqlalchemy.schema.SchemaItem` instances, this comment is
+        not currently used when creating the view, but it may be in the
+        future.
+    info : `dict`, optional
+        Arbitrary extra information describing the view.
     """
-    t = table(name)
 
-    if isinstance(selectable, str):
-        selectable = select([text(selectable.lstrip("SELECT"))])
+    def __init__(self, name, metadata, selectable, comment=None, info=None):
+        super().__init__(name)
+        self.comment = comment
+        self.info = info
 
-    for c in selectable.c:
-        c._make_proxy(t)
+        if isinstance(selectable, str):
+            selectable = select([text(selectable.lstrip("SELECT"))])
 
-    @event.listens_for(MetaData, "after_create")
-    def receive_after_create(target, connection, **kwargs):
-        connection.execute(CreateView(name, selectable))
+        for c in selectable.c:
+            c._make_proxy(self)
 
-    @event.listens_for(MetaData, "before_drop")
-    def receive_before_drop(target, connection, **kwargs):
-        connection.execute(DropView(name))
+        @event.listens_for(MetaData, "after_create")
+        def receive_after_create(target, connection, **kwargs):
+            connection.execute(CreateView(name, selectable))
 
-    return t
+        @event.listens_for(MetaData, "before_drop")
+        def receive_before_drop(target, connection, **kwargs):
+            connection.execute(DropView(name))

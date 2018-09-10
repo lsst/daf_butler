@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import iterable
-from .views import makeView
+from .views import View
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKeyConstraint, Table, MetaData
@@ -127,7 +127,7 @@ class SchemaBuilder:
         # Create a Table object (attaches itself to metadata)
         if "sql" in tableDescription:
             # This table should actually be created as a view
-            table = makeView(tableName, self.metadata, selectable=tableDescription["sql"])
+            table = View(tableName, self.metadata, selectable=tableDescription["sql"])
             self.tables[tableName] = table
             self.views.add(tableName)
             view = True
