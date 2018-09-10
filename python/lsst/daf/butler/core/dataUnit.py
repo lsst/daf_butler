@@ -214,23 +214,6 @@ class DataUnitJoin:
             keys |= dataUnit.primaryKey
         return keys
 
-    @property
-    def primaryKeyColumns(self):
-        """Dictionary keyed on ``primaryKey`` names with `sqlalchemy.Column`
-        entries into this `DataUnitJoin` primary table as values (`dict`).
-        """
-        return {name: self.table.columns[name] for name in self.primaryKey}
-
-    @property
-    def regionColumn(self):
-        """Table column with encoded region data, `None` if table has no
-        region column (`sqlalchemy.Column`, optional).
-        """
-        table = self.table
-        if table is not None and self.spatial:
-            return table.c["region"]
-        return None
-
 
 class DataUnitConfig(ConfigSubset):
     component = "dataUnits"

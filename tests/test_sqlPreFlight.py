@@ -303,6 +303,40 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
+    def testPreFlightSpatialMatch(self):
+        """Test involving spacial match using join tables.
+
+        Note that realistic test needs a resonably-defined SkyPix and regions
+        in registry tables which is hard to implement in this simple test.
+        So we do not actually fill registry with any data and all queries will
+        return empty result, but this is still useful for coverage of the code
+        that generates query.
+        """
+        registry = self.registry
+
+        # dataset types
+        registry.makeRun(collection="test")
+        storageClass = StorageClass("testDataset")
+        registry.storageClasses.registerStorageClass(storageClass)
+
+        calexpType = DatasetType(name="CALEXP", dataUnits=("Camera", "Visit", "Sensor"),
+                                 storageClass=storageClass)
+        registry.registerDatasetType(calexpType)
+
+        coaddType = DatasetType(name="deepCoadd_calexp", dataUnits=("SkyMap", "Tract", "Patch",
+                                                                    "AbstractFilter"),
+                                storageClass=storageClass)
+        registry.registerDatasetType(coaddType)
+
+        # without data this should run OK but return empty set
+        originInfo = DatasetOriginInfoDef(defaultInputs=["test"], defaultOutput="")
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="",
+                                              neededDatasetTypes=[calexpType],
+                                              futureDatasetTypes=[coaddType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 0)
+
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass

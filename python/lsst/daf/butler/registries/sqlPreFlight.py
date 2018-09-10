@@ -291,7 +291,8 @@ class SqlPreFlight:
                 # into resultset so that we can filter-out non-overlapping
                 # regions.
                 regionColumns[regionHolder.name] = len(selectColumns)
-                selectColumns.append(regionHolder.regionColumn)
+                regionColumn = self._schema.tables[regionHolder.name].c.region
+                selectColumns.append(regionColumn)
 
             fromJoin = self._joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
 
