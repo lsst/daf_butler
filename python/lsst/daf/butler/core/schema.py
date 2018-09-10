@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .utils import iterable
+from .utils import iterable, stripIfNotNone
 from .views import View
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
@@ -124,15 +124,16 @@ class SchemaBuilder:
             raise ValueError("Table with name {} already exists".format(tableName))
         if self._limited and not tableDescription.get("limited", True):
             return
+        doc = stripIfNotNone(tableDescription.get("doc", None))
         # Create a Table object (attaches itself to metadata)
         if "sql" in tableDescription:
             # This table should actually be created as a view
-            table = View(tableName, self.metadata, selectable=tableDescription["sql"])
+            table = View(tableName, self.metadata, selectable=tableDescription["sql"], comment=doc)
             self.tables[tableName] = table
             self.views.add(tableName)
             view = True
         else:
-            table = Table(tableName, self.metadata)
+            table = Table(tableName, self.metadata, comment=doc)
             self.tables[tableName] = table
             view = False
         if "columns" not in tableDescription:
@@ -216,10 +217,11 @@ class SchemaBuilder:
         args = (columnName, self.VALID_COLUMN_TYPES[description.pop("type")])
         # additional optional arguments can be passed through directly
         kwargs = {}
-        for opt in ("nullable", "primary_key", "doc"):
+        for opt in ("nullable", "primary_key"):
             if opt in description:
                 value = description.pop(opt)
                 kwargs[opt] = value
+        kwargs["comment"] = stripIfNotNone(description.pop("doc", None))
         if description:
             raise ValueError("Unhandled extra kwargs: {} for column: {}".format(description, columnName))
         return Column(*args, **kwargs)

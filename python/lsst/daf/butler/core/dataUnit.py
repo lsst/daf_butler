@@ -22,7 +22,7 @@
 from itertools import chain
 
 from .config import ConfigSubset
-from .utils import TopologicalSet, iterable
+from .utils import TopologicalSet, iterable, stripIfNotNone
 
 __all__ = ("DataUnit", "DataUnitRegistry", "DataUnitConfig")
 
@@ -52,16 +52,19 @@ class DataUnit:
     spatial : `bool`, optional
         Is this a spatial `DataUnit`? If so then it either has a ``region``
         column, or some other way to get a region (e.g. ``SkyPix``).
+    doc : `str`, optional
+        Documentation string.
     """
 
     def __init__(self, name, requiredDependencies, optionalDependencies,
-                 link=(), spatial=False):
+                 link=(), spatial=False, doc=None):
         self._name = name
         self._requiredDependencies = frozenset(requiredDependencies)
         self._optionalDependencies = frozenset(optionalDependencies)
         self._link = link
         self._primaryKey = None
         self._spatial = spatial
+        self._doc = stripIfNotNone(doc)
 
     def __repr__(self):
         return "DataUnit({})".format(self.name)
@@ -124,9 +127,15 @@ class DataUnit:
 
     @property
     def spatial(self):
-        """Is this a spatial `DataUnitJoin`?
+        """Is this a spatial `DataUnit`?
         """
         return self._spatial
+
+    @property
+    def doc(self):
+        """Documentation for this `DataUnit` instance.
+        """
+        return self._doc
 
     def validateId(self, dataId):
         """Check if given dataId is valid.
@@ -167,16 +176,19 @@ class DataUnitJoin:
     spatial : `bool`, optional
         Is this a spatial `DataUnit`? If so then it either has a ``region``
         column, or some other way to get a region (e.g. ``SkyPix``).
+    doc : `str`, optional
+        Documentation string.
     """
 
     def __init__(self, name, lhs=None, rhs=None, summarizes=None,
-                 relates=None, spatial=False):
+                 relates=None, spatial=False, doc=None):
         self._name = name
         self._lhs = lhs
         self._rhs = rhs
         self._summarizes = summarizes
         self._relates = relates
         self._spatial = spatial
+        self._doc = doc
 
     @property
     def name(self):
@@ -213,6 +225,12 @@ class DataUnitJoin:
         for dataUnit in self.relates:
             keys |= dataUnit.primaryKey
         return keys
+
+    @property
+    def doc(self):
+        """Documentation for this `DataUnitJoin` instance.
+        """
+        return self._doc
 
 
 class DataUnitConfig(ConfigSubset):
@@ -378,7 +396,8 @@ class DataUnitRegistry:
                                 requiredDependencies=requiredDependencies,
                                 optionalDependencies=optionalDependencies,
                                 link=link,
-                                spatial=spatial)
+                                spatial=spatial,
+                                doc=dataUnitDescription.get("doc", None))
             self[dataUnitName] = dataUnit
             for linkColumnName in link:
                 self._dataUnitsByLinkColumnName[linkColumnName] = dataUnit
@@ -410,12 +429,14 @@ class DataUnitRegistry:
             relates = frozenset(self[name] for name in dataUnitNames)
             summarizes = dataUnitJoinDescription.get("summarizes", None)
             spatial = dataUnitJoinDescription.get("spatial", False)
+            doc = stripIfNotNone(dataUnitJoinDescription.get("doc", None))
             dataUnitJoin = DataUnitJoin(name=dataUnitJoinName,
                                         lhs=lhs,
                                         rhs=rhs,
                                         summarizes=summarizes,
                                         spatial=spatial,
-                                        relates=relates)
+                                        relates=relates,
+                                        doc=doc)
             self.joins[(lhs, rhs)] = dataUnitJoin
             if spatial:
                 self._dataUnitRegions[dataUnitNames] = dataUnitJoin
