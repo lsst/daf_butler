@@ -62,10 +62,7 @@ class Schema:
     def __init__(self, config=None, limited=False):
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
-        self.config = config
-        builder = SchemaBuilder(limited=limited)
-        for tableName, tableDescription in self.config["tables"].items():
-            builder.addTable(tableName, tableDescription)
+        builder = SchemaBuilder(config, limited=limited)
         self.datasetTable = builder.metadata.tables["Dataset"]
         self.metadata = builder.metadata
         self.views = frozenset(builder.views)
@@ -77,6 +74,8 @@ class SchemaBuilder:
 
     Parameters
     ----------
+    config : `SchemaConfig`
+        Configuration to parse.
     limited : `bool`
         If `True`, ignore tables, views, and associated foreign keys whose
         config descriptions include a "limited" key set to `False`.
@@ -95,11 +94,54 @@ class SchemaBuilder:
     VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
                           "bool": Boolean, "blob": LargeBinary, "datetime": DateTime}
 
-    def __init__(self, limited=False):
+    def __init__(self, config, limited=False):
+        self.config = config
         self.metadata = MetaData()
         self.tables = {}
         self.views = set()
         self._limited = limited
+        for tableName, tableDescription in self.config["tables"].items():
+            self.addTable(tableName, tableDescription)
+
+    def isView(self, name):
+        """Return True if the named table should be added / has been added as a view.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of a table or view.  Does not need to have been added.
+
+        Returns
+        -------
+        view : `bool`
+            Whether the table should be added / has been added as a view.
+        """
+        if name in self.views:
+            return True
+        description = self.config["tables"][name]
+        return "sql" in description and not description.get("materialize", False)
+
+    def isIncluded(self, name):
+        """Return True if the named table or view should be included in this schema.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of a table or view.  Does not need to have been added.
+
+        Returns
+        -------
+        included : `bool`
+            Whether the table or view should be included in the schema.
+        """
+        if name in self.tables:
+            return True
+        description = self.config["tables"].get(name, None)
+        if description is None:
+            return False
+        if self._limited:
+            return description.get("limited", True)
+        return True
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -122,25 +164,23 @@ class SchemaBuilder:
         """
         if tableName in self.metadata.tables:
             raise ValueError("Table with name {} already exists".format(tableName))
-        if self._limited and not tableDescription.get("limited", True):
-            return
+        if not self.isIncluded(tableName):
+            return None
         doc = stripIfNotNone(tableDescription.get("doc", None))
         # Create a Table object (attaches itself to metadata)
-        if "sql" in tableDescription:
-            # This table should actually be created as a view
-            table = View(tableName, self.metadata, selectable=tableDescription["sql"], comment=doc)
+        if self.isView(tableName):
+            table = View(tableName, self.metadata, selectable=tableDescription["sql"], comment=doc,
+                         info=tableDescription)
             self.tables[tableName] = table
             self.views.add(tableName)
-            view = True
         else:
-            table = Table(tableName, self.metadata, comment=doc)
+            table = Table(tableName, self.metadata, comment=doc, info=tableDescription)
             self.tables[tableName] = table
-            view = False
         if "columns" not in tableDescription:
             raise ValueError("No columns in table: {}".format(tableName))
         for columnDescription in tableDescription["columns"]:
             self.addColumn(table, columnDescription)
-        if not view and "foreignKeys" in tableDescription:
+        if "foreignKeys" in tableDescription:
             for constraintDescription in tableDescription["foreignKeys"]:
                 self.addForeignKeyConstraint(table, constraintDescription)
         return table
@@ -170,6 +210,9 @@ class SchemaBuilder:
     def addForeignKeyConstraint(self, table, constraintDescription):
         """Add a ForeignKeyConstraint to a table.
 
+        If the table or the ForeignKeyConstraint's target are views, or should
+        not be included in this schema (because it is limited), does nothing.
+
         Parameters
         ----------
         table : `sqlalchemy.Table` or `str`
@@ -180,11 +223,14 @@ class SchemaBuilder:
             - src, list of source column names
             - tgt, list of target column names
         """
-        if self._limited and not constraintDescription.get("limited", True):
-            return
         if isinstance(table, str):
             table = self.metadata.tables[table]
-        table.append_constraint(self.makeForeignKeyConstraint(constraintDescription))
+        src, tgt, tgtTable = self.normalizeForeignKeyConstraint(constraintDescription)
+        if not self.isIncluded(table.name) or not self.isIncluded(tgtTable):
+            return
+        if self.isView(table.name) or self.isView(tgtTable):
+            return
+        table.append_constraint(ForeignKeyConstraint(src, tgt))
 
     def makeColumn(self, columnDescription):
         """Make a Column entry for addition to a Table.
@@ -226,17 +272,29 @@ class SchemaBuilder:
             raise ValueError("Unhandled extra kwargs: {} for column: {}".format(description, columnName))
         return Column(*args, **kwargs)
 
-    def makeForeignKeyConstraint(self, constraintDescription):
-        """Make a ForeignKeyConstraint for addition to a Table.
+    def normalizeForeignKeyConstraint(self, constraintDescription):
+        """Convert configuration for a ForeignKeyConstraint to standard form
+        and return the target table.
 
         Parameters
         ----------
         constraintDescription : `dict`
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
-            - src, list of source column names
-            - tgt, list of (table-qualified) target column names
+            - src, list of source column names or single source column name
+            - tgt, list of (table-qualified) target column names or single target column name
+
+        Returns
+        -------
+        src : `tuple`
+            Sequence of field names in the local table.
+        tgt : `tuple`
+            Sequence of table-qualified field names in the remote table.
+        tgtTable : `str`
+            Name of the target table.
         """
         src = tuple(iterable(constraintDescription["src"]))
         tgt = tuple(iterable(constraintDescription["tgt"]))
-        return ForeignKeyConstraint(src, tgt)
+        tgtTable, _ = tgt[0].split(".")
+        assert all(t.split(".")[0] == tgtTable for t in tgt[1:])
+        return src, tgt, tgtTable

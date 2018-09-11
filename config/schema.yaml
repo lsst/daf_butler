@@ -100,7 +100,6 @@ schema:
       -
         src: camera
         tgt: Camera.camera
-        limited: false
       -
         src:
           - camera
@@ -108,7 +107,6 @@ schema:
         tgt:
           - PhysicalFilter.camera
           - PhysicalFilter.physical_filter
-        limited: false
       -
         src:
           - camera
@@ -116,7 +114,6 @@ schema:
         tgt:
           - Sensor.camera
           - Sensor.sensor
-        limited: false
       -
         src:
           - camera
@@ -124,7 +121,6 @@ schema:
         tgt:
           - Visit.camera
           - Visit.visit
-        limited: false
       -
         src:
           - camera
@@ -132,10 +128,8 @@ schema:
         tgt:
           - Exposure.camera
           - Exposure.exposure
-        limited: false
       -
         src: skymap
-        limited: false
         tgt: SkyMap.skymap
       -
         src:
@@ -144,7 +138,6 @@ schema:
         tgt:
           - Tract.skymap
           - Tract.tract
-        limited: false
       -
         src:
           - skymap
@@ -154,7 +147,6 @@ schema:
           - Patch.skymap
           - Patch.tract
           - Patch.patch
-        limited: false
 
     DatasetComposition:
       doc: >
@@ -475,6 +467,7 @@ schema:
       sql: >
         SELECT DISTINCT abstract_filter
         FROM PhysicalFilter;
+      materialize: false
 
     PhysicalFilter:
       doc: >
@@ -504,6 +497,10 @@ schema:
       -
         src: camera
         tgt: Camera.camera
+      foreignKeys:
+      -
+        src: abstract_filter
+        tgt: AbstractFilter.abstract_filter
 
     Sensor:
       doc: >
@@ -1042,6 +1039,7 @@ schema:
       sql: >
         SELECT DISTINCT camera, visit, skypix
         FROM VisitSensorSkyPixJoin;
+      materialize: false
 
     PatchSkyPixJoin:
       limited: false
@@ -1106,6 +1104,7 @@ schema:
       sql: >
         SELECT DISTINCT skymap, tract, skypix
         FROM PatchSkyPixJoin;
+      materialize: false
 
     VisitSensorPatchJoin:
       limited: false
@@ -1171,6 +1170,7 @@ schema:
           VisitSensorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
             VisitSensorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
           );
+      materialize: false
 
     VisitPatchJoin:
       limited: false
@@ -1228,6 +1228,7 @@ schema:
           VisitSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
             VisitSkyPixJoin.skypix = PatchSkyPixJoin.skypix
           );
+      materialize: false
 
     VisitSensorTractJoin:
       limited: false
@@ -1285,6 +1286,7 @@ schema:
           VisitSensorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
             VisitSensorSkyPixJoin.skypix = TractSkyPixJoin.skypix
           );
+      materialize: false
 
     VisitTractJoin:
       limited: false
@@ -1334,4 +1336,4 @@ schema:
           VisitSkyPixJoin INNER JOIN TractSkyPixJoin ON (
             VisitSkyPixJoin.skypix = TractSkyPixJoin.skypix
           );
-
+      materialize: false
