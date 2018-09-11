@@ -84,16 +84,19 @@ schema:
         type: string
         doc: >
           a string value composed only of letters, numbers, and underscores.
-      foreignkeys:
+      foreignKeys:
       -
         src: dataset_type_name
         tgt: DatasetType.dataset_type_name
       -
         src: run_id
-        tgt: run.execution_id
+        tgt: Run.execution_id
       -
         src: quantum_id
-        tgt: quantum.execution_id
+        tgt: Quantum.execution_id
+      -
+        src: abstract_filter
+        tgt: AbstractFilter.abstract_filter
       -
         src: camera
         tgt: Camera.camera
@@ -132,8 +135,8 @@ schema:
         limited: false
       -
         src: skymap
-        tgt: Skymap.skymap
         limited: false
+        tgt: SkyMap.skymap
       -
         src:
           - skymap
