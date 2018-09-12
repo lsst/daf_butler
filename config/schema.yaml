@@ -803,6 +803,14 @@ schema:
         nullable: false
         doc: >
           Unique (with SkyMap) integer identifier for the Tract.
+      - name: ra
+        type: float
+        doc: >
+          Right ascension of the center of the tract (degrees).
+      - name: dec
+        type: float
+        doc: >
+          Declination of the center of the tract (degrees).
       -
         name: region
         type: region
