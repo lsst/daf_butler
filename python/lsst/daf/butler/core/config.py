@@ -272,6 +272,27 @@ class Config(collections.UserDict):
         else:
             return list(key)
 
+    def _getKeyHierarchy(self, name):
+        """Retrieve the key hierarchy for accessing the Config
+
+        Parameters
+        ----------
+        name : `str` or `tuple`
+            Delimited string or `tuple` of hierarchical keys.
+
+        Returns
+        -------
+        hierarchy : `list` of `str`
+            Hierarchy to use as a `list`.  If the name is available directly
+            as a key in the Config it will be used regardless of the presence
+            of any nominal delimiter.
+        """
+        if name in self.data:
+            keys = [name, ]
+        else:
+            keys = self._splitIntoKeys(name)
+        return keys
+
     def _findInHierarchy(self, keys, create=False):
         """Look for hierarchy of keys in Config
 
@@ -335,15 +356,11 @@ class Config(collections.UserDict):
         return hierarchy, complete
 
     def __getitem__(self, name):
-        data = self.data
         # Override the split for the simple case where there is an exact
         # match.  This allows `Config.items()` to work since `UserDict`
         # accesses Config.data directly to obtain the keys and every top
         # level key should always retrieve the top level values.
-        if name in data:
-            keys = (name,)
-        else:
-            keys = self._splitIntoKeys(name)
+        keys = self._getKeyHierarchy(name)
 
         hierarchy, complete = self._findInHierarchy(keys)
         if not complete:
@@ -358,7 +375,7 @@ class Config(collections.UserDict):
         return data
 
     def __setitem__(self, name, value):
-        keys = self._splitIntoKeys(name)
+        keys = self._getKeyHierarchy(name)
         last = keys.pop()
         if isinstance(value, Config):
             value = copy.deepcopy(value.data)
@@ -375,7 +392,7 @@ class Config(collections.UserDict):
             data[int(last)] = value
 
     def __contains__(self, key):
-        keys = self._splitIntoKeys(key)
+        keys = self._getKeyHierarchy(key)
         hierarchy, complete = self._findInHierarchy(keys)
         return complete
 
