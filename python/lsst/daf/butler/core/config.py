@@ -97,7 +97,7 @@ class Loader(yaml.CLoader):
 
 
 class Config(collections.UserDict):
-    """Implements a datatype that is used by `Butler` for configuration
+    r"""Implements a datatype that is used by `Butler` for configuration
     parameters.
 
     It is essentially a `dict` with key/value pairs, including nested dicts
@@ -228,7 +228,7 @@ class Config(collections.UserDict):
 
     @staticmethod
     def _splitIntoKeys(key):
-        """Split the argument for get/set/in into a hierarchical list.
+        r"""Split the argument for get/set/in into a hierarchical list.
 
         Parameters
         ----------

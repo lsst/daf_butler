@@ -119,7 +119,6 @@ class ConfigTestCase(unittest.TestCase):
         """Helper function to compare string splitting"""
         for s in (answer, *args):
             split = Config._splitIntoKeys(s)
-            print(f"S: {s} -> {split}")
             self.assertEqual(split, answer)
 
     def testSplitting(self):
@@ -144,7 +143,7 @@ class ConfigTestCase(unittest.TestCase):
             Config._splitIntoKeys("\ra\rcalexp\\\rwcs\rb")
 
         with self.assertRaises(ValueError):
-            Config._splitIntoKeys(".a.cal\rexp\.wcs.b")
+            Config._splitIntoKeys(".a.cal\rexp\\.wcs.b")
 
     def testEscape(self):
         c = Config({"a": {"foo.bar": 1}, "b😂c": {"bar_baz": 2}})
