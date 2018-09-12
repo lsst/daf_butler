@@ -266,7 +266,7 @@ class SqlRegistry(Registry):
         Returns
         -------
         inserted : `bool`
-            ``True`` if ``datasetType`` was inserted, ``False`` if an identical
+            `True` if ``datasetType`` was inserted, `False` if an identical
             existing `DatsetType` was found.
         """
         if not self._isValidDatasetType(datasetType):
@@ -360,7 +360,7 @@ class SqlRegistry(Registry):
             ``producer`` is passed (`producer.run` is then used instead).
             A Run must be provided by one of the two arguments.
         producer : `Quantum`
-            Unit of work that produced the Dataset.  May be ``None`` to store
+            Unit of work that produced the Dataset.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the SqlRegistry.
         recursive : `bool`
@@ -660,7 +660,7 @@ class SqlRegistry(Registry):
     def ensureRun(self, run):
         """Conditionally add a new `Run` to the `SqlRegistry`.
 
-        If the ``run.id`` is ``None`` or a `Run` with this `id` doesn't exist
+        If the ``run.id`` is `None` or a `Run` with this `id` doesn't exist
         in the `Registry` yet, add it.  Otherwise, ensure the provided run is
         identical to the one already in the registry.
 
@@ -1040,7 +1040,7 @@ class SqlRegistry(Registry):
         Returns
         -------
         region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or ``None`` if not present.
+            The region associated with a ``dataId`` or `None` if not present.
 
         Raises
         ------

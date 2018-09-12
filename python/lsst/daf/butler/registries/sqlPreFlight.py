@@ -115,7 +115,7 @@ class SqlPreFlight:
         Parameters
         ----------
         fromClause : `sqlalchemy.FromClause`
-            May be ``None``, in that case ``otherDataUnits`` is expected to be
+            May be `None`, in that case ``otherDataUnits`` is expected to be
             empty and is ignored.
         dataUnit : `DataUnit`
             DataUnit to join with ``fromClause``.
@@ -418,11 +418,11 @@ class SqlPreFlight:
         originInfo : `DatasetOriginInfo`
             Object which provides names of the input/output collections.
         isOutput : `bool`
-            ``True`` for output datasets.
+            `True` for output datasets.
 
         Returns
         -------
-        subquery : `sqlalchemy.FromClause` or ``None``
+        subquery : `sqlalchemy.FromClause` or `None`
         """
 
         # helper method

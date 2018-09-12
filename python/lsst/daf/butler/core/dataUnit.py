@@ -223,7 +223,7 @@ class DataUnitJoin:
 
     @property
     def regionColumn(self):
-        """Table column with encoded region data, ``None`` if table has no
+        """Table column with encoded region data, `None` if table has no
         region column (`sqlalchemy.Column`, optional).
         """
         table = self.table

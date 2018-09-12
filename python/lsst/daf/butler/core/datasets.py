@@ -286,7 +286,7 @@ class DatasetRef:
     def detach(self):
         """Obtain a new DatasetRef that is detached from the registry.
 
-        Its ``id`` property will be ``None``.  This can be used for transfers
+        Its ``id`` property will be `None`.  This can be used for transfers
         and similar operations.
         """
         ref = deepcopy(self)

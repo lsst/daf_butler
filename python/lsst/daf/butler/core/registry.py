@@ -280,7 +280,7 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         inserted : `bool`
-            ``True`` if ``datasetType`` was inserted, ``False`` if an identical
+            `True` if ``datasetType`` was inserted, `False` if an identical
             existing `DatsetType` was found.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -326,7 +326,7 @@ class Registry(metaclass=ABCMeta):
             ``producer`` is passed (`producer.run` is then used instead).
             A Run must be provided by one of the two arguments.
         producer : `Quantum`
-            Unit of work that produced the Dataset.  May be ``None`` to store
+            Unit of work that produced the Dataset.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.
         recursive : `bool`
@@ -536,7 +536,7 @@ class Registry(metaclass=ABCMeta):
     def ensureRun(self, run):
         """Conditionally add a new `Run` to the `Registry`.
 
-        If the ``run.id`` is ``None`` or a `Run` with this `id` doesn't exist
+        If the ``run.id`` is `None` or a `Run` with this `id` doesn't exist
         in the `Registry` yet, add it.  Otherwise, ensure the provided run is
         identical to the one already in the registry.
 
@@ -747,7 +747,7 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or ``None`` if not present.
+            The region associated with a ``dataId`` or `None` if not present.
 
         Raises
         ------
