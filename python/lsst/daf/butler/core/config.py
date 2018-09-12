@@ -272,57 +272,29 @@ class Config(collections.UserDict):
         else:
             return list(key)
 
-    def __getitem__(self, name):
-        data = self.data
-        # Override the split for the simple case where there is an exact
-        # match.  This allows `Config.items()` to work since `UserDict`
-        # accesses Config.data directly to obtain the keys and every top
-        # level key should always retrieve the top level values.
-        if name in data:
-            keys = (name,)
-        else:
-            keys = self._splitIntoKeys(name)
-        for key in keys:
-            if data is None:
-                raise KeyError(name)
-            if key in data and isinstance(data, collections.Mapping):
-                data = data[key]
-            else:
-                try:
-                    i = int(key)
-                    data = data[i]
-                except ValueError:
-                    raise KeyError(name)
-        if isinstance(data, collections.Mapping):
-            data = Config(data)
-            # Ensure that child configs inherit the parent internal delimiter
-            if self._D != Config._D:
-                data._D = self._D
-        return data
+    def _findInHierarchy(self, keys, create=False):
+        """Look for hierarchy of keys in Config
 
-    def __setitem__(self, name, value):
-        keys = self._splitIntoKeys(name)
-        last = keys.pop()
-        if isinstance(value, Config):
-            value = copy.deepcopy(value.data)
-        data = self.data
-        for key in keys:
-            # data could be a list
-            if isinstance(data, collections.Sequence):
-                data = data[int(key)]
-            else:
-                data = data.setdefault(key, {})
-        try:
-            data[last] = value
-        except TypeError:
-            data[int(last)] = value
+        Parameters
+        ----------
+        keys : `list` or `tuple`
+            Keys to search in hierarchy.
+        create : `bool`, optional
+            If `True`, if a part of the hierarchy does not exist, insert an empty `dict` into the hierarchy.
 
-    def __contains__(self, key):
+        Returns
+        -------
+        hierarchy : `list`
+            List of the value corresponding to each key in the supplied
+            hierarchy.  Only keys that exist in the hierarchy will have
+            a value.
+        complete : `bool`
+            `True` if the full hierarchy exists and the final element
+            in ``hierarchy`` is the value of relevant value.
+        """
         d = self.data
-        keys = self._splitIntoKeys(key)
-        last = keys.pop()
 
-        def checkNextItem(k, d):
+        def checkNextItem(k, d, create):
             """See if k is in d and if it is return the new child"""
             nextVal = None
             isThere = False
@@ -344,15 +316,68 @@ class Config(collections.UserDict):
             elif k in d:
                 nextVal = d[k]
                 isThere = True
+            elif create:
+                d[k] = {}
+                nextVal = d[k]
+                isThere = True
             return nextVal, isThere
 
+        hierarchy = []
+        complete = True
         for k in keys:
-            d, isThere = checkNextItem(k, d)
-            if not isThere:
-                return False
+            d, isThere = checkNextItem(k, d, create)
+            if isThere:
+                hierarchy.append(d)
+            else:
+                complete = False
+                break
 
-        _, isThere = checkNextItem(last, d)
-        return isThere
+        return hierarchy, complete
+
+    def __getitem__(self, name):
+        data = self.data
+        # Override the split for the simple case where there is an exact
+        # match.  This allows `Config.items()` to work since `UserDict`
+        # accesses Config.data directly to obtain the keys and every top
+        # level key should always retrieve the top level values.
+        if name in data:
+            keys = (name,)
+        else:
+            keys = self._splitIntoKeys(name)
+
+        hierarchy, complete = self._findInHierarchy(keys)
+        if not complete:
+            raise KeyError(f"{name} not found")
+        data = hierarchy[-1]
+
+        if isinstance(data, collections.Mapping):
+            data = Config(data)
+            # Ensure that child configs inherit the parent internal delimiter
+            if self._D != Config._D:
+                data._D = self._D
+        return data
+
+    def __setitem__(self, name, value):
+        keys = self._splitIntoKeys(name)
+        last = keys.pop()
+        if isinstance(value, Config):
+            value = copy.deepcopy(value.data)
+
+        hierarchy, complete = self._findInHierarchy(keys, create=True)
+        if hierarchy:
+            data = hierarchy[-1]
+        else:
+            data = self.data
+
+        try:
+            data[last] = value
+        except TypeError:
+            data[int(last)] = value
+
+    def __contains__(self, key):
+        keys = self._splitIntoKeys(key)
+        hierarchy, complete = self._findInHierarchy(keys)
+        return complete
 
     def update(self, other):
         """Like dict.update, but will add or modify keys in nested dicts,
