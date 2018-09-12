@@ -9,8 +9,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          a unique autoincrement field used as part of the primary key for
-          dataset.
+          a unique autoincrement field used the primary key for dataset.
       -
         name: dataset_type_name
         type: string
@@ -283,7 +282,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          A unique autoincrement field used as part of the primary key for
+          A unique autoincrement field used as the primary key for
           Execution.
       -
         name: start_time
