@@ -84,8 +84,8 @@ def makeExposureEntryFromVisitInfo(dataId, visitInfo, snap=0):
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Exposure
         ("camera", "exposure", optionally "visit" and "physical_filter").
-    visitInfo : `afw.image.VisitInfo`
-        A `VisitInfo` object corresponding to the Exposure.
+    visitInfo : `lsst.afw.image.VisitInfo`
+        A `~lsst.afw.image.VisitInfo` object corresponding to the Exposure.
     snap : `int`
         Snap index of the Exposure.
 
@@ -96,12 +96,11 @@ def makeExposureEntryFromVisitInfo(dataId, visitInfo, snap=0):
     """
     avg = visitInfo.getDate()
     begin = DateTime(int(avg.nsecs(DateTime.TAI) - 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
+    end = DateTime(int(avg.nsecs(DateTime.TAI) + 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
     result = {
         "datetime_begin": begin.toPython(),
+        "datetime_end": end.toPython(),
         "exposure_time": visitInfo.getExposureTime(),
-        "boresight_az": visitInfo.getBoresightAzAlt().getLongitude().asDegrees(),
-        "boresight_alt": visitInfo.getBoresightAzAlt().getLatitude().asDegrees(),
-        "rot_angle": visitInfo.getBoresightRotAngle().asDegrees(),
         "snap": snap,
         "dark_time": visitInfo.getDarkTime()
     }
@@ -117,8 +116,8 @@ def makeVisitEntryFromVisitInfo(dataId, visitInfo):
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Visit ("camera",
         "visit", optionally "physical_filter").
-    visitInfo : `afw.image.VisitInfo`
-        A `VisitInfo` object corresponding to the Visit.
+    visitInfo : `lsst.afw.image.VisitInfo`
+        A `~lsst.afw.image.VisitInfo` object corresponding to the Visit.
 
     Returns
     -------
@@ -133,14 +132,6 @@ def makeVisitEntryFromVisitInfo(dataId, visitInfo):
         "datetime_begin": begin.toPython(),
         "datetime_end": end.toPython(),
         "exposure_time": visitInfo.getExposureTime(),
-        "boresight_az": visitInfo.getBoresightAzAlt().getLongitude().asDegrees(),
-        "boresight_alt": visitInfo.getBoresightAzAlt().getLatitude().asDegrees(),
-        "rot_angle": visitInfo.getBoresightRotAngle().asDegrees(),
-        "earth_rotation_angle": visitInfo.getEra().asDegrees(),
-        "boresight_ra": visitInfo.getBoresightRaDec().getLongitude().asDegrees(),
-        "boresight_dec": visitInfo.getBoresightRaDec().getLatitude().asDegrees(),
-        "boresight_parallactic_angle": visitInfo.getBoresightParAngle().asDegrees(),
-        "local_era": visitInfo.getLocalEra().asDegrees(),
     }
     result.update(dataId)
     return result
