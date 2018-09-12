@@ -526,8 +526,8 @@ schema:
         name: name
         type: string
         doc: >
-          An alternate unique (with Camera) string identifer for the
-          sensor.
+          An alternate string identifer for the sensor; may or may not
+          be unique within a Camera.
       -
         name: group
         type: string
