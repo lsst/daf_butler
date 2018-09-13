@@ -44,19 +44,19 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
     def testDatasetOriginInfoDef(self):
         """Test for DatasetOriginInfoDef class"""
 
-        coll = DatasetOriginInfoDef(defaultInputs=["a", "b"], defaultOutput="out")
-        self.assertEqual(coll.getInputCollections("ds"), ["a", "b"])
-        self.assertEqual(coll.getInputCollections("ds2"), ["a", "b"])
-        self.assertEqual(coll.getOutputCollection("ds"), "out")
-        self.assertEqual(coll.getOutputCollection("ds2"), "out")
+        originInfo = DatasetOriginInfoDef(defaultInputs=["a", "b"], defaultOutput="out")
+        self.assertEqual(originInfo.getInputCollections("ds"), ["a", "b"])
+        self.assertEqual(originInfo.getInputCollections("ds2"), ["a", "b"])
+        self.assertEqual(originInfo.getOutputCollection("ds"), "out")
+        self.assertEqual(originInfo.getOutputCollection("ds2"), "out")
 
-        coll = DatasetOriginInfoDef(defaultInputs=["a", "b"], defaultOutput="out",
-                                    inputOverrides=dict(ds2=["c"]),
-                                    outputOverrides=dict(ds2="out2"))
-        self.assertEqual(coll.getInputCollections("ds"), ["a", "b"])
-        self.assertEqual(coll.getInputCollections("ds2"), ["c"])
-        self.assertEqual(coll.getOutputCollection("ds"), "out")
-        self.assertEqual(coll.getOutputCollection("ds2"), "out2")
+        originInfo = DatasetOriginInfoDef(defaultInputs=["a", "b"], defaultOutput="out",
+                                          inputOverrides=dict(ds2=["c"]),
+                                          outputOverrides=dict(ds2="out2"))
+        self.assertEqual(originInfo.getInputCollections("ds"), ["a", "b"])
+        self.assertEqual(originInfo.getInputCollections("ds2"), ["c"])
+        self.assertEqual(originInfo.getOutputCollection("ds"), "out")
+        self.assertEqual(originInfo.getOutputCollection("ds2"), "out2")
 
     def testPreFlightCameraUnits(self):
         """Test involving only Camera units, no joins to SkyMap"""
@@ -89,8 +89,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                                                    physical_filter="dummy_r"))
 
         # dataset types
-        run = registry.makeRun(collection="test")
-        run2 = registry.makeRun(collection="test2")
+        collection1 = "test"
+        collection2 = "test2"
+        run = registry.makeRun(collection=collection1)
+        run2 = registry.makeRun(collection=collection2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         rawType = DatasetType(name="RAW", dataUnits=("Camera", "Exposure", "Sensor"),
@@ -120,8 +122,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                 registry.addDataset(rawType, dataId=dataId, run=run2)
 
         # with empty expression
-        coll = DatasetOriginInfoDef(defaultInputs=["test"], defaultOutput="test")
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=collection1)
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -136,8 +138,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3))
 
         # second collection
-        coll = DatasetOriginInfoDef(defaultInputs=["test2"], defaultOutput="test")
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection2], defaultOutput=collection1)
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -152,8 +154,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        coll = DatasetOriginInfoDef(defaultInputs=["test", "test2"], defaultOutput="test2")
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection1, collection2], defaultOutput=collection2)
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -168,8 +170,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        coll = DatasetOriginInfoDef(defaultInputs=["test"], defaultOutput=None)
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=None)
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="Visit.visit = 10",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -180,8 +182,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (1, 2, 3))
 
         # more limiting expression
-        coll = DatasetOriginInfoDef(defaultInputs=["test"], defaultOutput="")
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput="")
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="Visit.visit = 10 and Sensor.sensor > 1",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -192,7 +194,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["sensor"] for row in rows), (2, 3))
 
         # expression excludes everyhting
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="Visit.visit > 1000",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -201,7 +203,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # Selecting by PhysicalFilter, this is not in the units, but it is
         # a part of the full expression so it should work too.
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="PhysicalFilter.physical_filter = 'dummy_r'",
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType])
@@ -233,7 +235,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                                                         region=Box(LonLat(NormalizedAngle(0.), Angle(0.)))))
 
         # dataset types
-        run = registry.makeRun(collection="test")
+        collection = "test"
+        run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         calexpType = DatasetType(name="deepCoadd_calexp", dataUnits=("SkyMap", "Tract", "Patch",
@@ -258,8 +261,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                     registry.addDataset(calexpType, dataId=dataId, run=run)
 
         # with empty expression
-        coll = DatasetOriginInfoDef(defaultInputs=["test"], defaultOutput="")
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
@@ -273,7 +276,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
@@ -284,7 +287,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to single filter
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="AbstractFilter.abstract_filter = 'i'",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
@@ -296,10 +299,45 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # expression excludes everyhting, specifying non-existing skymap is not a
         # fatal error, it's operator error
-        rows = self.preFlight.selectDataUnits(originInfo=coll,
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
                                               expression="SkyMap.skymap = 'Mars'",
                                               neededDatasetTypes=[calexpType, mergeType],
                                               futureDatasetTypes=[measType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 0)
+
+    def testPreFlightSpatialMatch(self):
+        """Test involving spacial match using join tables.
+
+        Note that realistic test needs a resonably-defined SkyPix and regions
+        in registry tables which is hard to implement in this simple test.
+        So we do not actually fill registry with any data and all queries will
+        return empty result, but this is still useful for coverage of the code
+        that generates query.
+        """
+        registry = self.registry
+
+        # dataset types
+        collection = "test"
+        registry.makeRun(collection=collection)
+        storageClass = StorageClass("testDataset")
+        registry.storageClasses.registerStorageClass(storageClass)
+
+        calexpType = DatasetType(name="CALEXP", dataUnits=("Camera", "Visit", "Sensor"),
+                                 storageClass=storageClass)
+        registry.registerDatasetType(calexpType)
+
+        coaddType = DatasetType(name="deepCoadd_calexp", dataUnits=("SkyMap", "Tract", "Patch",
+                                                                    "AbstractFilter"),
+                                storageClass=storageClass)
+        registry.registerDatasetType(coaddType)
+
+        # without data this should run OK but return empty set
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="",
+                                              neededDatasetTypes=[calexpType],
+                                              futureDatasetTypes=[coaddType])
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
