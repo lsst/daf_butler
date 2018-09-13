@@ -122,6 +122,15 @@ class ConfigTestCase(unittest.TestCase):
             del c[k]
             self.assertNotIn(k, c)
 
+        # Standard dict methods
+        c["test.default.a"] = "default1"
+        self.assertEqual(c["test.default.a"], "default1")
+        self.assertEqual(c.get("test.default.a"), "default1")
+        self.assertEqual(c.get("test.default.b", "default2"), "default2")
+        self.assertEqual(c.setdefault("test.default.a"), "default1")
+        self.assertEqual(c.setdefault("test.default.b", "default2"), "default2")
+        self.assertEqual(c["test.default.b"], "default2")
+
     def assertSplit(self, answer, *args):
         """Helper function to compare string splitting"""
         for s in (answer, *args):
