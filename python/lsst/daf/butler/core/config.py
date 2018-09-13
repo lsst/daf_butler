@@ -155,13 +155,13 @@ class Config(collections.abc.MutableMapping):
     constructing keys for external use (see `Config.names()`)."""
 
     def __init__(self, other=None):
-        self.data = {}
+        self._data = {}
 
         if other is None:
             return
 
         if isinstance(other, Config):
-            self.data = copy.deepcopy(other.data)
+            self._data = copy.deepcopy(other._data)
         elif isinstance(other, collections.Mapping):
             self.update(other)
         elif isinstance(other, str):
@@ -182,19 +182,19 @@ class Config(collections.abc.MutableMapping):
         s : `str`
             A prettyprint formatted string representing the config
         """
-        return pprint.pformat(self.data, indent=2, width=1)
+        return pprint.pformat(self._data, indent=2, width=1)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.data!r})"
+        return f"{type(self).__name__}({self._data!r})"
 
     def __str__(self):
         return self.ppprint()
 
     def __len__(self):
-        return len(self.data)
+        return len(self._data)
 
     def __iter__(self):
-        return iter(self.data)
+        return iter(self._data)
 
     def copy(self):
         return type(self)(self)
@@ -240,7 +240,7 @@ class Config(collections.abc.MutableMapping):
         content = yaml.load(stream, Loader=Loader)
         if content is None:
             content = {}
-        self.data = content
+        self._data = content
         return self
 
     @staticmethod
@@ -307,7 +307,7 @@ class Config(collections.abc.MutableMapping):
             as a key in the Config it will be used regardless of the presence
             of any nominal delimiter.
         """
-        if name in self.data:
+        if name in self._data:
             keys = [name, ]
         else:
             keys = self._splitIntoKeys(name)
@@ -333,7 +333,7 @@ class Config(collections.abc.MutableMapping):
             `True` if the full hierarchy exists and the final element
             in ``hierarchy`` is the value of relevant value.
         """
-        d = self.data
+        d = self._data
 
         def checkNextItem(k, d, create):
             """See if k is in d and if it is return the new child"""
@@ -379,7 +379,7 @@ class Config(collections.abc.MutableMapping):
         # Override the split for the simple case where there is an exact
         # match.  This allows `Config.items()` to work via a simple
         # __iter__ implementation that returns top level keys of
-        # self.data.
+        # self._data.
         keys = self._getKeyHierarchy(name)
 
         hierarchy, complete = self._findInHierarchy(keys)
@@ -398,13 +398,13 @@ class Config(collections.abc.MutableMapping):
         keys = self._getKeyHierarchy(name)
         last = keys.pop()
         if isinstance(value, Config):
-            value = copy.deepcopy(value.data)
+            value = copy.deepcopy(value._data)
 
         hierarchy, complete = self._findInHierarchy(keys, create=True)
         if hierarchy:
             data = hierarchy[-1]
         else:
-            data = self.data
+            data = self._data
 
         try:
             data[last] = value
@@ -424,7 +424,7 @@ class Config(collections.abc.MutableMapping):
             if hierarchy:
                 data = hierarchy[-1]
             else:
-                data = self.data
+                data = self._data
             del data[last]
         else:
             raise KeyError(f"{key} not found in Config")
@@ -456,7 +456,7 @@ class Config(collections.abc.MutableMapping):
                 else:
                     d[k] = v
             return d
-        doUpdate(self.data, other)
+        doUpdate(self._data, other)
 
     def merge(self, other):
         """Like Config.update, but will add keys & values from other that
@@ -471,7 +471,7 @@ class Config(collections.abc.MutableMapping):
         """
         otherCopy = copy.deepcopy(other)
         otherCopy.update(self)
-        self.data = otherCopy.data
+        self._data = otherCopy._data
 
     def nameTuples(self, topLevelOnly=False):
         """Get tuples representing the name hierarchies of all keys.
@@ -506,7 +506,7 @@ class Config(collections.abc.MutableMapping):
                 if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
                     getKeysAsTuples(val, keys, levelKey)
         keys = []
-        getKeysAsTuples(self.data, keys, None)
+        getKeysAsTuples(self._data, keys, None)
         return keys
 
     def names(self, topLevelOnly=False, delimiter=None):
@@ -608,13 +608,13 @@ class Config(collections.abc.MutableMapping):
 
     def __eq__(self, other):
         if isinstance(other, Config):
-            other = other.data
-        return self.data == other
+            other = other._data
+        return self._data == other
 
     def __ne__(self, other):
         if isinstance(other, Config):
-            other = other.data
-        return self.data != other
+            other = other._data
+        return self._data != other
 
     #######
     # i/o #
@@ -631,7 +631,7 @@ class Config(collections.abc.MutableMapping):
         # specific order for readability.
         # After the expected/ordered keys are weritten to the stream the
         # remainder of the keys are written to the stream.
-        data = copy.copy(self.data)
+        data = copy.copy(self._data)
         keys = []
         for key in keys:
             try:
@@ -797,7 +797,7 @@ class ConfigSubset(Config):
             if doubled in externalConfig:
                 externalConfig = externalConfig[doubled]
             elif self.component in externalConfig:
-                externalConfig.data = externalConfig.data[self.component]
+                externalConfig._data = externalConfig._data[self.component]
 
         # Default files read to create this configuration
         self.filesRead = []
@@ -948,6 +948,6 @@ class ConfigSubset(Config):
 
         Ignored if ``requiredKeys`` is empty."""
         # Validation
-        missing = [k for k in self.requiredKeys if k not in self.data]
+        missing = [k for k in self.requiredKeys if k not in self._data]
         if missing:
             raise KeyError(f"Mandatory keys ({missing}) missing from supplied configuration for {type(self)}")

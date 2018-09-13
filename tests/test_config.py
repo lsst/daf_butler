@@ -288,7 +288,7 @@ class ConfigTestCase(unittest.TestCase):
             self.assertIsInstance(a, list)
 
         # Check we get the same top level keys
-        self.assertEqual(set(c.names(topLevelOnly=True)), set(c.data.keys()))
+        self.assertEqual(set(c.names(topLevelOnly=True)), set(c._data.keys()))
 
         # Check that we can iterate through items
         for k, v in c.items():
