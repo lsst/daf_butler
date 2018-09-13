@@ -269,8 +269,11 @@ class Config(collections.UserDict):
             if temp:
                 hierarchy = [h.replace(temp, d) for h in hierarchy]
             return hierarchy
-        else:
+        elif isinstance(key, collections.abc.Iterable):
             return list(key)
+        else:
+            # Not sure what this is so try it anyway
+            return [key, ]
 
     def _getKeyHierarchy(self, name):
         """Retrieve the key hierarchy for accessing the Config
@@ -395,6 +398,19 @@ class Config(collections.UserDict):
         keys = self._getKeyHierarchy(key)
         hierarchy, complete = self._findInHierarchy(keys)
         return complete
+
+    def __delitem__(self, key):
+        keys = self._getKeyHierarchy(key)
+        last = keys.pop()
+        hierarchy, complete = self._findInHierarchy(keys)
+        if complete:
+            if hierarchy:
+                data = hierarchy[-1]
+            else:
+                data = self.data
+            del data[last]
+        else:
+            raise KeyError(f"{key} not found in Config")
 
     def update(self, other):
         """Like dict.update, but will add or modify keys in nested dicts,

@@ -115,6 +115,16 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
 
+        # Try an integer key
+        self.assertIn(3, c)
+        self.assertEqual(c[3], 4)
+
+        # Check deletion
+        for k in ("key3", ".dict.a", ("dict", "b"), 3):
+            self.assertIn(k, c)
+            del c[k]
+            self.assertNotIn(k, c)
+
     def assertSplit(self, answer, *args):
         """Helper function to compare string splitting"""
         for s in (answer, *args):
