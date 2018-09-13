@@ -96,8 +96,8 @@ class Loader(yaml.CLoader):
             return yaml.load(f, Loader)
 
 
-class Config(collections.UserDict):
-    """Implements a datatype that is used by `Butler` for configuration
+class Config(collections.abc.MutableMapping):
+    r"""Implements a datatype that is used by `Butler` for configuration
     parameters.
 
     It is essentially a `dict` with key/value pairs, including nested dicts
@@ -123,6 +123,15 @@ class Config(collections.UserDict):
     a two element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
     always better to use a different delimiter in these cases.
 
+    Note that adding a multi-level key implicitly creates any nesting levels
+    that do not exist, but removing multi-level keys does not automatically
+    remove empty nesting levels.  As a result::
+        >>> c = Config()
+        >>> c[".a.b"] = 1
+        >>> del c[".a.b"]
+        >>> c["a"]
+        Config({'a': {}})
+
     Storage formats supported:
 
     - yaml: read and write is supported.
@@ -146,14 +155,13 @@ class Config(collections.UserDict):
     constructing keys for external use (see `Config.names()`)."""
 
     def __init__(self, other=None):
-
-        collections.UserDict.__init__(self)
+        self._data = {}
 
         if other is None:
             return
 
         if isinstance(other, Config):
-            self.data = copy.deepcopy(other.data)
+            self._data = copy.deepcopy(other._data)
         elif isinstance(other, collections.Mapping):
             self.update(other)
         elif isinstance(other, str):
@@ -174,13 +182,22 @@ class Config(collections.UserDict):
         s : `str`
             A prettyprint formatted string representing the config
         """
-        return pprint.pformat(self.data, indent=2, width=1)
+        return pprint.pformat(self._data, indent=2, width=1)
 
     def __repr__(self):
-        return f"{type(self).__name__}({self.data!r})"
+        return f"{type(self).__name__}({self._data!r})"
 
     def __str__(self):
         return self.ppprint()
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def copy(self):
+        return type(self)(self)
 
     def __initFromFile(self, path):
         """Load a file from path.
@@ -223,12 +240,12 @@ class Config(collections.UserDict):
         content = yaml.load(stream, Loader=Loader)
         if content is None:
             content = {}
-        self.data = content
+        self._data = content
         return self
 
     @staticmethod
     def _splitIntoKeys(key):
-        """Split the argument for get/set/in into a hierarchical list.
+        r"""Split the argument for get/set/in into a hierarchical list.
 
         Parameters
         ----------
@@ -269,60 +286,56 @@ class Config(collections.UserDict):
             if temp:
                 hierarchy = [h.replace(temp, d) for h in hierarchy]
             return hierarchy
-        else:
+        elif isinstance(key, collections.abc.Iterable):
             return list(key)
+        else:
+            # Not sure what this is so try it anyway
+            return [key, ]
 
-    def __getitem__(self, name):
-        data = self.data
-        # Override the split for the simple case where there is an exact
-        # match.  This allows `Config.items()` to work since `UserDict`
-        # accesses Config.data directly to obtain the keys and every top
-        # level key should always retrieve the top level values.
-        if name in data:
-            keys = (name,)
+    def _getKeyHierarchy(self, name):
+        """Retrieve the key hierarchy for accessing the Config
+
+        Parameters
+        ----------
+        name : `str` or `tuple`
+            Delimited string or `tuple` of hierarchical keys.
+
+        Returns
+        -------
+        hierarchy : `list` of `str`
+            Hierarchy to use as a `list`.  If the name is available directly
+            as a key in the Config it will be used regardless of the presence
+            of any nominal delimiter.
+        """
+        if name in self._data:
+            keys = [name, ]
         else:
             keys = self._splitIntoKeys(name)
-        for key in keys:
-            if data is None:
-                raise KeyError(name)
-            if key in data and isinstance(data, collections.Mapping):
-                data = data[key]
-            else:
-                try:
-                    i = int(key)
-                    data = data[i]
-                except ValueError:
-                    raise KeyError(name)
-        if isinstance(data, collections.Mapping):
-            data = Config(data)
-            # Ensure that child configs inherit the parent internal delimiter
-            if self._D != Config._D:
-                data._D = self._D
-        return data
+        return keys
 
-    def __setitem__(self, name, value):
-        keys = self._splitIntoKeys(name)
-        last = keys.pop()
-        if isinstance(value, Config):
-            value = copy.deepcopy(value.data)
-        data = self.data
-        for key in keys:
-            # data could be a list
-            if isinstance(data, collections.Sequence):
-                data = data[int(key)]
-            else:
-                data = data.setdefault(key, {})
-        try:
-            data[last] = value
-        except TypeError:
-            data[int(last)] = value
+    def _findInHierarchy(self, keys, create=False):
+        """Look for hierarchy of keys in Config
 
-    def __contains__(self, key):
-        d = self.data
-        keys = self._splitIntoKeys(key)
-        last = keys.pop()
+        Parameters
+        ----------
+        keys : `list` or `tuple`
+            Keys to search in hierarchy.
+        create : `bool`, optional
+            If `True`, if a part of the hierarchy does not exist, insert an empty `dict` into the hierarchy.
 
-        def checkNextItem(k, d):
+        Returns
+        -------
+        hierarchy : `list`
+            List of the value corresponding to each key in the supplied
+            hierarchy.  Only keys that exist in the hierarchy will have
+            a value.
+        complete : `bool`
+            `True` if the full hierarchy exists and the final element
+            in ``hierarchy`` is the value of relevant value.
+        """
+        d = self._data
+
+        def checkNextItem(k, d, create):
             """See if k is in d and if it is return the new child"""
             nextVal = None
             isThere = False
@@ -344,15 +357,77 @@ class Config(collections.UserDict):
             elif k in d:
                 nextVal = d[k]
                 isThere = True
+            elif create:
+                d[k] = {}
+                nextVal = d[k]
+                isThere = True
             return nextVal, isThere
 
+        hierarchy = []
+        complete = True
         for k in keys:
-            d, isThere = checkNextItem(k, d)
-            if not isThere:
-                return False
+            d, isThere = checkNextItem(k, d, create)
+            if isThere:
+                hierarchy.append(d)
+            else:
+                complete = False
+                break
 
-        _, isThere = checkNextItem(last, d)
-        return isThere
+        return hierarchy, complete
+
+    def __getitem__(self, name):
+        # Override the split for the simple case where there is an exact
+        # match.  This allows `Config.items()` to work via a simple
+        # __iter__ implementation that returns top level keys of
+        # self._data.
+        keys = self._getKeyHierarchy(name)
+
+        hierarchy, complete = self._findInHierarchy(keys)
+        if not complete:
+            raise KeyError(f"{name} not found")
+        data = hierarchy[-1]
+
+        if isinstance(data, collections.Mapping):
+            data = Config(data)
+            # Ensure that child configs inherit the parent internal delimiter
+            if self._D != Config._D:
+                data._D = self._D
+        return data
+
+    def __setitem__(self, name, value):
+        keys = self._getKeyHierarchy(name)
+        last = keys.pop()
+        if isinstance(value, Config):
+            value = copy.deepcopy(value._data)
+
+        hierarchy, complete = self._findInHierarchy(keys, create=True)
+        if hierarchy:
+            data = hierarchy[-1]
+        else:
+            data = self._data
+
+        try:
+            data[last] = value
+        except TypeError:
+            data[int(last)] = value
+
+    def __contains__(self, key):
+        keys = self._getKeyHierarchy(key)
+        hierarchy, complete = self._findInHierarchy(keys)
+        return complete
+
+    def __delitem__(self, key):
+        keys = self._getKeyHierarchy(key)
+        last = keys.pop()
+        hierarchy, complete = self._findInHierarchy(keys)
+        if complete:
+            if hierarchy:
+                data = hierarchy[-1]
+            else:
+                data = self._data
+            del data[last]
+        else:
+            raise KeyError(f"{key} not found in Config")
 
     def update(self, other):
         """Like dict.update, but will add or modify keys in nested dicts,
@@ -381,7 +456,7 @@ class Config(collections.UserDict):
                 else:
                     d[k] = v
             return d
-        doUpdate(self.data, other)
+        doUpdate(self._data, other)
 
     def merge(self, other):
         """Like Config.update, but will add keys & values from other that
@@ -396,7 +471,7 @@ class Config(collections.UserDict):
         """
         otherCopy = copy.deepcopy(other)
         otherCopy.update(self)
-        self.data = otherCopy.data
+        self._data = otherCopy._data
 
     def nameTuples(self, topLevelOnly=False):
         """Get tuples representing the name hierarchies of all keys.
@@ -431,7 +506,7 @@ class Config(collections.UserDict):
                 if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
                     getKeysAsTuples(val, keys, levelKey)
         keys = []
-        getKeysAsTuples(self.data, keys, None)
+        getKeysAsTuples(self._data, keys, None)
         return keys
 
     def names(self, topLevelOnly=False, delimiter=None):
@@ -533,13 +608,13 @@ class Config(collections.UserDict):
 
     def __eq__(self, other):
         if isinstance(other, Config):
-            other = other.data
-        return self.data == other
+            other = other._data
+        return self._data == other
 
     def __ne__(self, other):
         if isinstance(other, Config):
-            other = other.data
-        return self.data != other
+            other = other._data
+        return self._data != other
 
     #######
     # i/o #
@@ -556,7 +631,7 @@ class Config(collections.UserDict):
         # specific order for readability.
         # After the expected/ordered keys are weritten to the stream the
         # remainder of the keys are written to the stream.
-        data = copy.copy(self.data)
+        data = copy.copy(self._data)
         keys = []
         for key in keys:
             try:
@@ -722,7 +797,7 @@ class ConfigSubset(Config):
             if doubled in externalConfig:
                 externalConfig = externalConfig[doubled]
             elif self.component in externalConfig:
-                externalConfig.data = externalConfig.data[self.component]
+                externalConfig._data = externalConfig._data[self.component]
 
         # Default files read to create this configuration
         self.filesRead = []
@@ -873,6 +948,6 @@ class ConfigSubset(Config):
 
         Ignored if ``requiredKeys`` is empty."""
         # Validation
-        missing = [k for k in self.requiredKeys if k not in self.data]
+        missing = [k for k in self.requiredKeys if k not in self._data]
         if missing:
             raise KeyError(f"Mandatory keys ({missing}) missing from supplied configuration for {type(self)}")

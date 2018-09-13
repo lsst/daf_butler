@@ -100,7 +100,7 @@ class ConfigTestCase(unittest.TestCase):
                 Config(badArg)
 
     def testBasics(self):
-        c = Config({1: 2, 3: 4, "key3": 6, "dict": {"a": 1, "b": 2}})
+        c = Config({"1": 2, "3": 4, "key3": 6, "dict": {"a": 1, "b": 2}})
         pretty = c.ppprint()
         self.assertIn("key3", pretty)
         r = repr(c)
@@ -108,6 +108,7 @@ class ConfigTestCase(unittest.TestCase):
         regex = r"^Config\(\{.*\}\)$"
         self.assertRegex(r, regex)
         c2 = eval(r)
+        self.assertIn("1", c)
         for n in c.names():
             self.assertEqual(c2[n], c[n])
         self.assertEqual(c, c2)
@@ -115,11 +116,60 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
 
+        self.assertCountEqual(c.keys(), ["1", "3", "key3", "dict"])
+        self.assertEqual(list(c), list(c.keys()))
+        self.assertEqual(list(c.values()), [c[k] for k in c.keys()])
+        self.assertEqual(list(c.items()), [(k, c[k]) for k in c.keys()])
+
+        newKeys = ("key4", ".dict.q", ("dict", "r"), "5")
+        oldKeys = ("key3", ".dict.a", ("dict", "b"), "3")
+        remainingKey = "1"
+
+        # Check get with existing key
+        for k in oldKeys:
+            self.assertEqual(c.get(k, "missing"), c[k])
+
+        # Check get, pop with nonexistent key
+        for k in newKeys:
+            self.assertEqual(c.get(k, "missing"), "missing")
+            self.assertEqual(c.pop(k, "missing"), "missing")
+
+        # Check setdefault with existing key
+        for k in oldKeys:
+            c.setdefault(k, 8)
+            self.assertNotEqual(c[k], 8)
+
+        # Check setdefault with nonexistent key (mutates c, adding newKeys)
+        for k in newKeys:
+            c.setdefault(k, 8)
+            self.assertEqual(c[k], 8)
+
+        # Check pop with existing key (mutates c, removing newKeys)
+        for k in newKeys:
+            v = c[k]
+            self.assertEqual(c.pop(k, "missing"), v)
+
+        # Check deletion (mutates c, removing oldKeys)
+        for k in ("key3", ".dict.a", ("dict", "b"), "3"):
+            self.assertIn(k, c)
+            del c[k]
+            self.assertNotIn(k, c)
+
+        # Check that `dict` still exists, but is now empty (then remove it, mutatic c)
+        self.assertIn("dict", c)
+        del c["dict"]
+
+        # Check popitem (mutates c, removing remainingKey)
+        v = c[remainingKey]
+        self.assertEqual(c.popitem(), (remainingKey, v))
+
+        # Check that c is now empty
+        self.assertFalse(c)
+
     def assertSplit(self, answer, *args):
         """Helper function to compare string splitting"""
         for s in (answer, *args):
             split = Config._splitIntoKeys(s)
-            print(f"S: {s} -> {split}")
             self.assertEqual(split, answer)
 
     def testSplitting(self):
@@ -144,7 +194,7 @@ class ConfigTestCase(unittest.TestCase):
             Config._splitIntoKeys("\ra\rcalexp\\\rwcs\rb")
 
         with self.assertRaises(ValueError):
-            Config._splitIntoKeys(".a.cal\rexp\.wcs.b")
+            Config._splitIntoKeys(".a.cal\rexp\\.wcs.b")
 
     def testEscape(self):
         c = Config({"a": {"foo.bar": 1}, "b😂c": {"bar_baz": 2}})
@@ -161,6 +211,7 @@ class ConfigTestCase(unittest.TestCase):
         c1 = Config({"a": {"b": 1}, "c": 2})
         c2 = c1.copy()
         self.assertEqual(c1, c2)
+        self.assertIsInstance(c2, Config)
         c2[".a.b"] = 5
         self.assertNotEqual(c1, c2)
 
@@ -237,7 +288,7 @@ class ConfigTestCase(unittest.TestCase):
             self.assertIsInstance(a, list)
 
         # Check we get the same top level keys
-        self.assertEqual(set(c.names(topLevelOnly=True)), set(c.data.keys()))
+        self.assertEqual(set(c.names(topLevelOnly=True)), set(c._data.keys()))
 
         # Check that we can iterate through items
         for k, v in c.items():
