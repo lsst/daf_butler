@@ -211,6 +211,7 @@ class ConfigTestCase(unittest.TestCase):
         c1 = Config({"a": {"b": 1}, "c": 2})
         c2 = c1.copy()
         self.assertEqual(c1, c2)
+        self.assertIsInstance(c2, Config)
         c2[".a.b"] = 5
         self.assertNotEqual(c1, c2)
 

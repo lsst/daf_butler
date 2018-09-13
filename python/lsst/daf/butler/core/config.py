@@ -96,7 +96,7 @@ class Loader(yaml.CLoader):
             return yaml.load(f, Loader)
 
 
-class Config(collections.UserDict):
+class Config(collections.abc.MutableMapping):
     r"""Implements a datatype that is used by `Butler` for configuration
     parameters.
 
@@ -155,8 +155,7 @@ class Config(collections.UserDict):
     constructing keys for external use (see `Config.names()`)."""
 
     def __init__(self, other=None):
-
-        collections.UserDict.__init__(self)
+        self.data = {}
 
         if other is None:
             return
@@ -190,6 +189,15 @@ class Config(collections.UserDict):
 
     def __str__(self):
         return self.ppprint()
+
+    def __len__(self):
+        return len(self.data)
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def copy(self):
+        return type(self)(self)
 
     def __initFromFile(self, path):
         """Load a file from path.
@@ -369,9 +377,9 @@ class Config(collections.UserDict):
 
     def __getitem__(self, name):
         # Override the split for the simple case where there is an exact
-        # match.  This allows `Config.items()` to work since `UserDict`
-        # accesses Config.data directly to obtain the keys and every top
-        # level key should always retrieve the top level values.
+        # match.  This allows `Config.items()` to work via a simple
+        # __iter__ implementation that returns top level keys of
+        # self.data.
         keys = self._getKeyHierarchy(name)
 
         hierarchy, complete = self._findInHierarchy(keys)
