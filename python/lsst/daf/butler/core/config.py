@@ -123,6 +123,15 @@ class Config(collections.UserDict):
     a two element hierarchy of ``a`` and ``b.c``.  For hard-coded strings it is
     always better to use a different delimiter in these cases.
 
+    Note that adding a multi-level key implicitly creates any nesting levels
+    that do not exist, but removing multi-level keys does not automatically
+    remove empty nesting levels.  As a result::
+        >>> c = Config()
+        >>> c[".a.b"] = 1
+        >>> del c[".a.b"]
+        >>> c["a"]
+        Config({'a': {}})
+
     Storage formats supported:
 
     - yaml: read and write is supported.
