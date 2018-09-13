@@ -116,20 +116,55 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
 
-        # Check deletion
+        self.assertCountEqual(c.keys(), ["1", "3", "key3", "dict"])
+        self.assertEqual(list(c), list(c.keys()))
+        self.assertEqual(list(c.values()), [c[k] for k in c.keys()])
+        self.assertEqual(list(c.items()), [(k, c[k]) for k in c.keys()])
+
+        newKeys = ("key4", ".dict.q", ("dict", "r"), "5")
+        oldKeys = ("key3", ".dict.a", ("dict", "b"), "3")
+        remainingKey = "1"
+
+        # Check get with existing key
+        for k in oldKeys:
+            self.assertEqual(c.get(k, "missing"), c[k])
+
+        # Check get, pop with nonexistent key
+        for k in newKeys:
+            self.assertEqual(c.get(k, "missing"), "missing")
+            self.assertEqual(c.pop(k, "missing"), "missing")
+
+        # Check setdefault with existing key
+        for k in oldKeys:
+            c.setdefault(k, 8)
+            self.assertNotEqual(c[k], 8)
+
+        # Check setdefault with nonexistent key (mutates c, adding newKeys)
+        for k in newKeys:
+            c.setdefault(k, 8)
+            self.assertEqual(c[k], 8)
+
+        # Check pop with existing key (mutates c, removing newKeys)
+        for k in newKeys:
+            v = c[k]
+            self.assertEqual(c.pop(k, "missing"), v)
+
+        # Check deletion (mutates c, removing oldKeys)
         for k in ("key3", ".dict.a", ("dict", "b"), "3"):
             self.assertIn(k, c)
             del c[k]
             self.assertNotIn(k, c)
 
-        # Standard dict methods
-        c["test.default.a"] = "default1"
-        self.assertEqual(c["test.default.a"], "default1")
-        self.assertEqual(c.get("test.default.a"), "default1")
-        self.assertEqual(c.get("test.default.b", "default2"), "default2")
-        self.assertEqual(c.setdefault("test.default.a"), "default1")
-        self.assertEqual(c.setdefault("test.default.b", "default2"), "default2")
-        self.assertEqual(c["test.default.b"], "default2")
+        # Check that `dict` still exists, but is now empty (then remove it, mutatic c)
+        self.assertIn("dict", c)
+        del c["dict"]
+
+        # Check popitem (mutates c, removing remainingKey)
+        v = c[remainingKey]
+        self.assertEqual(c.popitem(), (remainingKey, v))
+
+        # Check that c is now empty
+        self.assertFalse(c)
 
     def assertSplit(self, answer, *args):
         """Helper function to compare string splitting"""
