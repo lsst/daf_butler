@@ -100,7 +100,7 @@ class ConfigTestCase(unittest.TestCase):
                 Config(badArg)
 
     def testBasics(self):
-        c = Config({1: 2, 3: 4, "key3": 6, "dict": {"a": 1, "b": 2}})
+        c = Config({"1": 2, "3": 4, "key3": 6, "dict": {"a": 1, "b": 2}})
         pretty = c.ppprint()
         self.assertIn("key3", pretty)
         r = repr(c)
@@ -108,6 +108,7 @@ class ConfigTestCase(unittest.TestCase):
         regex = r"^Config\(\{.*\}\)$"
         self.assertRegex(r, regex)
         c2 = eval(r)
+        self.assertIn("1", c)
         for n in c.names():
             self.assertEqual(c2[n], c[n])
         self.assertEqual(c, c2)
@@ -115,12 +116,8 @@ class ConfigTestCase(unittest.TestCase):
         self.assertIn("\n", s)
         self.assertNotRegex(s, regex)
 
-        # Try an integer key
-        self.assertIn(3, c)
-        self.assertEqual(c[3], 4)
-
         # Check deletion
-        for k in ("key3", ".dict.a", ("dict", "b"), 3):
+        for k in ("key3", ".dict.a", ("dict", "b"), "3"):
             self.assertIn(k, c)
             del c[k]
             self.assertNotIn(k, c)
