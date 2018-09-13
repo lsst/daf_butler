@@ -96,54 +96,62 @@ schema:
         tgt: quantum.execution_id
       -
         src: camera
-        tgt: camera.camera
+        tgt: Camera.camera
+        limited: false
       -
         src:
           - camera
           - physical_filter
         tgt:
-          - physicalfilter.camera
-          - physicalfilter.physical_filter
+          - PhysicalFilter.camera
+          - PhysicalFilter.physical_filter
+        limited: false
       -
         src:
           - camera
           - sensor
         tgt:
-          - sensor.camera
-          - sensor.sensor
+          - Sensor.camera
+          - Sensor.sensor
+        limited: false
       -
         src:
           - camera
           - visit
         tgt:
-          - visit.camera
-          - visit.visit
+          - Visit.camera
+          - Visit.visit
+        limited: false
       -
         src:
           - camera
           - exposure
         tgt:
-          - exposure.camera
-          - exposure.exposure
+          - Exposure.camera
+          - Exposure.exposure
+        limited: false
       -
         src: skymap
-        tgt: skymap.skymap
+        tgt: Skymap.skymap
+        limited: false
       -
         src:
           - skymap
           - tract
         tgt:
-          - tract.skymap
-          - tract.tract
+          - Tract.skymap
+          - Tract.tract
+        limited: false
       -
         src:
           - skymap
           - tract
           - patch
         tgt:
-          - patch.skymap
-          - patch.tract
-          - patch.patch
+          - Patch.skymap
+          - Patch.tract
+          - Patch.patch
+        limited: false
 
     DatasetComposition:
       doc: >
@@ -440,6 +448,7 @@ schema:
     Camera:
       doc: >
         A definition table containing recognized Camera values.
+      limited: false
       columns:
       -
         name: camera
@@ -452,6 +461,7 @@ schema:
       doc: >
         A view aggregating all distinct AbstractFilters references by any
         PhysicalFilter.
+      limited: false
       columns:
       -
         name: abstract_filter
@@ -467,6 +477,7 @@ schema:
       doc: >
         A Camera-populated table that relates a PhysicalFilter
         to its Camera and optional AbstractFilter.
+      limited: false
       columns:
       -
         name: camera
@@ -495,6 +506,7 @@ schema:
       doc: >
         A Camera-populated table that relates a Sensor to its Camera and
         provides additional labels.
+      limited: false
       columns:
       -
         name: camera
@@ -536,6 +548,7 @@ schema:
     Visit:
       doc: >
         A table containing Camera-generic metadata for a Visit.
+      limited: false
       columns:
       -
         name: camera
@@ -663,6 +676,7 @@ schema:
     Exposure:
       doc: >
         A table containing Camera-generic Exposure metadata.
+      limited: false
       columns:
       -
         name: camera
@@ -751,6 +765,7 @@ schema:
       doc: >
         A table containing registered SkyMaps and the the SHA1 hashes
         used to compare them.
+      limited: false
       columns:
       -
         name: skymap
@@ -761,7 +776,7 @@ schema:
           A human-readable name for the SkyMap, used as its unique
           identifier.
       -
-        name: hash 
+        name: hash
         type: string
         nullable: false
         doc: >
@@ -773,6 +788,7 @@ schema:
       doc: >
         A SkyMap-populated table relating a Tract to its spatial region
         on the sky.
+      limited: false
       columns:
       -
         name: skymap
@@ -808,6 +824,7 @@ schema:
       doc: >
         A table relating a Patch to its position within a Tract and
         on the sky.
+      limited: false
       columns:
       -
         name: skymap
@@ -872,6 +889,7 @@ schema:
         expected to be calculated outside the database and added/updated
         whenever the Visit's region is.  This table contains exactly one
         entry for each Visit+Sensor combination.
+      limited: false
       columns:
       -
         name: camera
@@ -920,6 +938,7 @@ schema:
         - Sensor.sensor
 
     MultiCameraExposureJoin:
+      limited: false
       columns:
       -
         name: camera_1
@@ -958,6 +977,7 @@ schema:
           - Exposure.exposure
 
     VisitSensorSkyPixJoin:
+      limited: false
       columns:
       -
         name: camera
@@ -991,6 +1011,7 @@ schema:
           - VisitSensorRegion.sensor
 
     VisitSkyPixJoin:
+      limited: false
       columns:
       -
         name: camera
@@ -1020,6 +1041,7 @@ schema:
         FROM VisitSensorSkyPixJoin;
 
     PatchSkyPixJoin:
+      limited: false
       columns:
       -
         name: skymap
@@ -1053,6 +1075,7 @@ schema:
           - Patch.patch
 
     TractSkyPixJoin:
+      limited: false
       columns:
       -
         name: skymap
@@ -1082,6 +1105,7 @@ schema:
         FROM PatchSkyPixJoin;
 
     VisitSensorPatchJoin:
+      limited: false
       columns:
       -
         name: camera
@@ -1146,6 +1170,7 @@ schema:
           );
 
     VisitPatchJoin:
+      limited: false
       columns:
       -
         name: camera
@@ -1202,6 +1227,7 @@ schema:
           );
 
     VisitSensorTractJoin:
+      limited: false
       columns:
       -
         name: camera
@@ -1258,6 +1284,7 @@ schema:
           );
 
     VisitTractJoin:
+      limited: false
       columns:
       -
         name: camera

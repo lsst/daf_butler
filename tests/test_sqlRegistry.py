@@ -21,6 +21,7 @@
 
 import os
 import unittest
+from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
 from itertools import combinations
 
@@ -41,21 +42,16 @@ from lsst.daf.butler.core.butlerConfig import ButlerConfig
 """
 
 
-class SqlRegistryTestCase(lsst.utils.tests.TestCase):
-    """Test for SqlRegistry.
+class RegistryTests(metaclass=ABCMeta):
+    """Test helper mixin for generic Registry tests.
     """
 
-    def setUp(self):
-        self.testDir = os.path.dirname(__file__)
-        self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
-        self.butlerConfig = ButlerConfig(self.configFile)
-
-    def testInitFromConfig(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
-        self.assertIsInstance(registry, SqlRegistry)
+    @abstractmethod
+    def makeRegistry(self):
+        raise NotImplementedError()
 
     def testDatasetType(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         # Check valid insert
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
@@ -86,13 +82,14 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outDatasetType, inDatasetType)
 
     def testDataset(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="testtype", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
@@ -101,7 +98,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
             ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
 
     def testComponents(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         storageClass = StorageClass("testComponents")
         registry.storageClasses.registerStorageClass(storageClass)
         parentDatasetType = DatasetType(name="parent", dataUnits=("Camera",), storageClass=storageClass)
@@ -110,7 +107,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
         children = {"child1": registry.addDataset(childDatasetType1, dataId={"camera": "DummyCam"}, run=run),
@@ -122,7 +120,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outParent.components, children)
 
     def testRun(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         # Check insertion and retrieval with two different collections
         for collection in ["one", "two"]:
             run = registry.makeRun(collection)
@@ -156,7 +154,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(run2, registry.getRun(id=run2.id))
 
     def testExecution(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         startTime = datetime(2018, 1, 1)
         endTime = startTime + timedelta(days=1, hours=5)
         host = "localhost"
@@ -168,8 +166,9 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outExecution, execution)
 
     def testQuantum(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        registry = self.makeRegistry()
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testQuantum")
         registry.storageClasses.registerStorageClass(storageClass)
@@ -198,14 +197,15 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outQuantum, quantum)
 
     def testDatasetLocations(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         storageClass = StorageClass("testStorageInfo")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
         datasetType2 = DatasetType(name="test2", dataUnits=("Camera",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
         ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
@@ -236,19 +236,20 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIn(datastoreName2, addresses)
 
     def testFind(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         storageClass = StorageClass("testFind")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        registry.addDataUnitEntry("Camera", {"camera": "MyCam"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "MyCam", "physical_filter": "m-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 2, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "MyCam", "visit": 2, "physical_filter": "m-r"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("Camera", {"camera": "MyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "MyCam", "physical_filter": "m-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 2, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
         dataId = {"camera": "DummyCam", "visit": 0}
         run = registry.makeRun(collection=collection)
@@ -277,15 +278,16 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(registry.find(collection, datasetType, nonExistingDataId))
 
     def testCollections(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         storageClass = StorageClass("testCollections")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
         # TODO: Dataset.physical_filter should be populated as well here
@@ -313,9 +315,13 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(outputRef, inputRef2)
 
     def testDatasetUnit(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         dataUnitName = "Camera"
         dataUnitValue = {"camera": "DummyCam"}
+        if registry.limited:
+            with self.assertRaises(NotImplementedError):
+                registry.addDataUnitEntry(dataUnitName, dataUnitValue)
+            return  # the remainder of this test does not apply to limited Registry
         registry.addDataUnitEntry(dataUnitName, dataUnitValue)
         # Inserting the same value twice should fail
         with self.assertRaises(ValueError):
@@ -339,7 +345,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(registry.findDataUnitEntry(dataUnitName2, dataUnitValue2), dataUnitValue2)
 
     def testBasicTransaction(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
         dataUnits = ("Camera", )
@@ -361,7 +367,8 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
             with registry.transaction():
                 registry.registerDatasetType(datasetTypeB)
                 registry.registerDatasetType(datasetTypeC)
-                registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+                if not registry.limited:
+                    registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
                 ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
                 refId = ref.id
                 raise ValueError("Oops, something went wrong")
@@ -376,10 +383,13 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertIsNotNone(refId)
         self.assertIsNone(registry.getDataset(refId))
         # Or the DataUnit entries
-        self.assertIsNone(registry.findDataUnitEntry("Camera", {"camera": "DummyCam"}))
+        if not registry.limited:
+            self.assertIsNone(registry.findDataUnitEntry("Camera", {"camera": "DummyCam"}))
 
     def testGetRegion(self):
-        registry = Registry.fromConfig(self.butlerConfig, create=True)
+        registry = self.makeRegistry()
+        if registry.limited:
+            return
         regionTract = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 1, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 0, 1)))
@@ -460,6 +470,39 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         # PatchSkyPixJoin should not be empty
         rows = list(registry.query('select count(*) as "cnt" from "PatchSkyPixJoin"'))
         self.assertNotEqual(rows[0]["cnt"], 0)
+
+
+class SqlRegistryTestCase(lsst.utils.tests.TestCase):
+    """Test for SqlRegistry.
+    """
+
+    def makeRegistry(self):
+        testDir = os.path.dirname(__file__)
+        configFile = os.path.join(testDir, "config/basic/butler.yaml")
+        butlerConfig = ButlerConfig(configFile)
+        return Registry.fromConfig(butlerConfig, create=True)
+
+    def testInitFromConfig(self):
+        registry = self.makeRegistry()
+        self.assertIsInstance(registry, SqlRegistry)
+        self.assertFalse(registry.limited)
+
+
+class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase):
+    """Test for SqlRegistry with limited=True.
+    """
+
+    def makeRegistry(self):
+        testDir = os.path.dirname(__file__)
+        configFile = os.path.join(testDir, "config/basic/butler.yaml")
+        butlerConfig = ButlerConfig(configFile)
+        butlerConfig["registry", "limited"] = True
+        return Registry.fromConfig(butlerConfig, create=True)
+
+    def testInitFromConfig(self):
+        registry = self.makeRegistry()
+        self.assertIsInstance(registry, SqlRegistry)
+        self.assertTrue(registry.limited)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

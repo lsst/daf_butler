@@ -24,14 +24,14 @@ import unittest
 import lsst.utils
 import lsst.utils.tests
 
-from lsst.daf.butler import DataUnit, DataUnitRegistryConfig, DataUnitRegistry
+from lsst.daf.butler import DataUnit, DataUnitConfig, DataUnitRegistry
 
 
 class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
     """Tests for `DataUnitRegistry`.
     """
     def setUp(self):
-        self.config = DataUnitRegistryConfig()
+        self.config = DataUnitConfig()
 
     def testConstructor(self):
         """Independent check for `Schema` constructor.

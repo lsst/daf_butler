@@ -27,9 +27,8 @@ from sqlalchemy import create_engine, MetaData
 import lsst.utils
 import lsst.utils.tests
 
-from lsst.daf.butler import DataUnitRegistryConfig, DataUnitRegistry
 from lsst.daf.butler.core.utils import iterable
-from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column
+from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column, SchemaBuilder
 from sqlalchemy.sql.expression import TableClause
 
 """Tests for Schema.
@@ -49,20 +48,18 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.config = SchemaConfig()
         self.schema = Schema(self.config)
         self.engine = create_engine("sqlite:///:memory:")
-        self.schema._metadata.create_all(self.engine)
+        self.schema.metadata.create_all(self.engine)
 
     def testConstructor(self):
         """Independent check for `Schema` constructor.
         """
-        dataUnitConfig = DataUnitRegistryConfig()
-        dataUnitRegistry = DataUnitRegistry.fromConfig(dataUnitConfig)
-        schema = Schema(dataUnits=dataUnitRegistry)
+        schema = Schema()
         self.assertIsInstance(schema, Schema)
 
     def testSchemaCreation(self):
         """Check that the generated `Schema` tables match its description.
         """
-        self.assertIsInstance(self.schema._metadata, MetaData)
+        self.assertIsInstance(self.schema.metadata, MetaData)
         allTables = {}
         allTables.update(self.config["tables"])
         for tableName, tableDescription in allTables.items():
@@ -97,7 +94,7 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(column, Column)
         self.assertEqual(column.primary_key, columnDescription.get("primary_key", False))
         self.assertEqual(column.nullable, columnDescription.get("nullable", True) and not column.primary_key)
-        self.assertIsInstance(column.type, self.schema.builder.VALID_COLUMN_TYPES[columnDescription["type"]])
+        self.assertIsInstance(column.type, SchemaBuilder.VALID_COLUMN_TYPES[columnDescription["type"]])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
         """Check that foreign-key constraints match the `constraintsDescription`.

@@ -284,7 +284,7 @@ class Config(collections.UserDict):
             keys = self._splitIntoKeys(name)
         for key in keys:
             if data is None:
-                return None
+                raise KeyError(name)
             if key in data and isinstance(data, collections.Mapping):
                 data = data[key]
             else:
@@ -292,7 +292,7 @@ class Config(collections.UserDict):
                     i = int(key)
                     data = data[i]
                 except ValueError:
-                    return None
+                    raise KeyError(name)
         if isinstance(data, collections.Mapping):
             data = Config(data)
             # Ensure that child configs inherit the parent internal delimiter

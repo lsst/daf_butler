@@ -33,7 +33,7 @@ class FitsRawFormatterBase(FitsExposureFormatter, metaclass=ABCMeta):
 
     Subclasses must provide implementations of `readImage` and
     `makeRawVisitInfo`.  Other methods may also be overridden to provide
-    additional components (most default to ``None``).
+    additional components (most default to `None`).
     """
 
     @abstractmethod

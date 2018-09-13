@@ -21,14 +21,29 @@
 
 from abc import ABCMeta, abstractmethod
 import contextlib
+import functools
 
 from .utils import doImport
 from .config import Config, ConfigSubset
-from .dataUnit import DataUnitRegistryConfig, DataUnitRegistry
+from .dataUnit import DataUnitConfig, DataUnitRegistry
 from .schema import SchemaConfig
 from .utils import transactional
 
-__all__ = ("RegistryConfig", "Registry")
+__all__ = ("RegistryConfig", "Registry", "disableWhenLimited")
+
+
+def disableWhenLimited(func):
+    """Decorator that indicates that a method should raise NotImplementedError
+    on Registries whose ``limited`` attribute is `True`.
+
+    This implements that check and raise for all subclasses.
+    """
+    @functools.wraps(func)
+    def inner(self, *args, **kwargs):
+        if self.limited:
+            raise NotImplementedError("Not implemented for limited Registry.")
+        return func(self, *args, **kwargs)
+    return inner
 
 
 class RegistryConfig(ConfigSubset):
@@ -79,7 +94,7 @@ class Registry(metaclass=ABCMeta):
                                   toCopy=(("skypix", "cls"), ("skypix", "level")))
 
     @staticmethod
-    def fromConfig(registryConfig, schemaConfig=None, dataUnitRegistryConfig=None, create=False):
+    def fromConfig(registryConfig, schemaConfig=None, dataUnitConfig=None, create=False):
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to
@@ -93,10 +108,10 @@ class Registry(metaclass=ABCMeta):
             Schema configuration. Can be read from supplied registryConfig
             if the relevant component is defined and ``schemaConfig`` is
             `None`.
-        dataUnitRegistryConfig : `DataUnitRegistryConfig` or `Config` or
+        dataUnitConfig : `DataUnitConfig` or `Config` or
             `str`, optional. DataUnitRegistry configuration. Can be read
             from supplied registryConfig if the relevant component is
-            defined and ``dataUnitRegistryConfig`` is `None`.
+            defined and ``dataUnitConfig`` is `None`.
         create : `bool`
             Assume empty Registry and create a new one.
 
@@ -115,15 +130,15 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Schema configuration: {}".format(schemaConfig))
 
-        if dataUnitRegistryConfig is None:
+        if dataUnitConfig is None:
             # Try to instantiate a schema configuration from the supplied
             # registry configuration.
-            dataUnitRegistryConfig = DataUnitRegistryConfig(registryConfig)
-        elif not isinstance(dataUnitRegistryConfig, DataUnitRegistryConfig):
-            if isinstance(dataUnitRegistryConfig, str) or isinstance(dataUnitRegistryConfig, Config):
-                dataUnitRegistryConfig = DataUnitRegistryConfig(dataUnitRegistryConfig)
+            dataUnitConfig = DataUnitConfig(registryConfig)
+        elif not isinstance(dataUnitConfig, DataUnitConfig):
+            if isinstance(dataUnitConfig, str) or isinstance(dataUnitConfig, Config):
+                dataUnitConfig = DataUnitConfig(dataUnitConfig)
             else:
-                raise ValueError("Incompatible Schema configuration: {}".format(dataUnitRegistryConfig))
+                raise ValueError("Incompatible Schema configuration: {}".format(dataUnitConfig))
 
         if not isinstance(registryConfig, RegistryConfig):
             if isinstance(registryConfig, str) or isinstance(registryConfig, Config):
@@ -132,16 +147,22 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
         cls = doImport(registryConfig["cls"])
-        return cls(registryConfig, schemaConfig, dataUnitRegistryConfig, create=create)
+        return cls(registryConfig, schemaConfig, dataUnitConfig, create=create)
 
-    def __init__(self, registryConfig, schemaConfig=None, dataUnitRegistryConfig=None, create=False):
+    def __init__(self, registryConfig, schemaConfig=None, dataUnitConfig=None, create=False):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
         self._pixelization = None
-        self._dataUnits = DataUnitRegistry.fromConfig(dataUnitRegistryConfig)
+        self._dataUnits = DataUnitRegistry.fromConfig(dataUnitConfig)
 
     def __str__(self):
         return "None"
+
+    @property
+    def limited(self):
+        """If True, this Registry does not maintain DataUnit metadata or
+        relationships (`bool`)."""
+        return self.config.get("limited", False)
 
     @contextlib.contextmanager
     def transaction(self):
@@ -168,7 +189,12 @@ class Registry(metaclass=ABCMeta):
 
     @property
     def pixelization(self):
-        """Object that interprets SkyPix DataUnit values (`sphgeom.Pixelization`)."""
+        """Object that interprets SkyPix DataUnit values (`lsst.sphgeom.Pixelization`).
+
+        `None` for limited registries.
+        """
+        if self.limited:
+            return None
         if self._pixelization is None:
             pixelizationCls = doImport(self.config["skypix", "cls"])
             self._pixelization = pixelizationCls(level=self.config["skypix", "level"])
@@ -254,7 +280,7 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         inserted : `bool`
-            ``True`` if ``datasetType`` was inserted, ``False`` if an identical
+            `True` if ``datasetType`` was inserted, `False` if an identical
             existing `DatsetType` was found.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -300,7 +326,7 @@ class Registry(metaclass=ABCMeta):
             ``producer`` is passed (`producer.run` is then used instead).
             A Run must be provided by one of the two arguments.
         producer : `Quantum`
-            Unit of work that produced the Dataset.  May be ``None`` to store
+            Unit of work that produced the Dataset.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.
         recursive : `bool`
@@ -510,7 +536,7 @@ class Registry(metaclass=ABCMeta):
     def ensureRun(self, run):
         """Conditionally add a new `Run` to the `Registry`.
 
-        If the ``run.id`` is ``None`` or a `Run` with this `id` doesn't exist
+        If the ``run.id`` is `None` or a `Run` with this `id` doesn't exist
         in the `Registry` yet, add it.  Otherwise, ensure the provided run is
         identical to the one already in the registry.
 
@@ -625,6 +651,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     @transactional
     def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
@@ -648,10 +675,13 @@ class Registry(metaclass=ABCMeta):
         ValueError
             If an entry with the primary-key defined in `values` is already
             present.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.
 
@@ -667,10 +697,16 @@ class Registry(metaclass=ABCMeta):
         dataUnitEntry : `dict`
             Dictionary with all `DataUnit` values, or `None` if no matching
             entry is found.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     @transactional
     def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
         """Set the region field for a DataUnit instance or a combination
@@ -689,10 +725,16 @@ class Registry(metaclass=ABCMeta):
             If True, existing region information for these DataUnits is being
             replaced.  This is usually required because DataUnit entries are
             assumed to be pre-inserted prior to calling this function.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     def getRegion(self, dataId):
         """Get region associated with a dataId.
 
@@ -705,17 +747,20 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or ``None`` if not present.
+            The region associated with a ``dataId`` or `None` if not present.
 
         Raises
         ------
         KeyError
             If the set of dataunits for the ``dataId`` does not correspond to
             a unique spatial lookup.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    @disableWhenLimited
     def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
@@ -746,120 +791,10 @@ class Registry(metaclass=ABCMeta):
         ------
         row : `PreFlightUnitsRow`
             Single row is a unique combination of units in a transform.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
-    def makeProvenanceGraph(self, expr, types=None):
-        """Make a `QuantumGraph` that contains the full provenance of all
-        Datasets matching an expression.
-
-        Parameters
-        ----------
-        expr : `str`
-            An expression (SQL query that evaluates to a list of Dataset
-            primary keys) that selects the Datasets.
-
-        Returns
-        -------
-        graph : `QuantumGraph`
-            Instance (with `units` set to `None`).
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def export(self, expr):
-        """Export contents of the `Registry`, limited to those reachable
-        from the Datasets identified by the expression `expr`, into a
-        `TableSet` format such that it can be imported into a different
-        database.
-
-        Parameters
-        ----------
-        expr : `str`
-            An expression (SQL query that evaluates to a list of Dataset
-            primary keys) that selects the `Datasets, or a `QuantumGraph`
-            that can be similarly interpreted.
-
-        Returns
-        -------
-        ts : `TableSet`
-            Containing all rows, from all tables in the `Registry` that
-            are reachable from the selected Datasets.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def import_(self, tables, collection):
-        """Import (previously exported) contents into the (possibly empty)
-        `Registry`.
-
-        Parameters
-        ----------
-        ts : `TableSet`
-            Contains the previously exported content.
-        collection : `str`
-            An additional collection assigned to the newly
-            imported Datasets.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @transactional
-    def transfer(self, src, expr, collection):
-        r"""Transfer contents from a source `Registry`, limited to those
-        reachable from the Datasets identified by the expression `expr`,
-        into this `Registry` and associate them with a collection.
-
-        Parameters
-        ----------
-        src : `Registry`
-            The source `Registry`.
-        expr : `str`
-            An expression that limits the `DataUnit`\ s and (indirectly)
-            the Datasets transferred.
-        collection : `str`
-            An additional collection assigned to the newly
-            imported Datasets.
-        """
-        self.import_(src.export(expr), collection)
-
-    @abstractmethod
-    @transactional
-    def subset(self, collection, expr, datasetTypes):
-        r"""Create a new collection by subsetting an existing one.
-
-        Parameters
-        ----------
-        collection : `str`
-            Indicates the input collection to subset.
-        expr : `str`
-            An expression that limits the `DataUnit`\ s and (indirectly)
-            Datasets in the subset.
-        datasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetType`\ s whose instances should be included
-            in the subset.
-
-        Returns
-        -------
-        collection : `str`
-            The newly created collection.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def merge(self, outputCollection, inputCollections):
-        """Create a new collection from a series of existing ones.
-
-        Entries earlier in the list will be used in preference to later
-        entries when both contain Datasets with the same `DatasetRef`.
-
-        Parameters
-        ----------
-        outputCollection : `str`
-            collection to use for the new collection.
-        inputCollections : `list` of `str`
-            A `list` of collections to combine.
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")

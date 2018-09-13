@@ -19,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import itertools
-
 from .utils import iterable
 from .views import makeView
 from .config import ConfigSubset
@@ -43,55 +41,65 @@ class Schema:
 
     Parameters
     ----------
-    dataUnits : `DataUnitsRegistry`
-        Registry of all possible data units.
     config : `SchemaConfig` or `str`, optional
         Load configuration. Defaults will be read if ``config`` is not
         a `SchemaConfig`.
-
-    Attributes
-    ----------
-    metadata : `sqlalchemy.MetaData`
-        The sqlalchemy schema description.
-    """
-    def __init__(self, dataUnits, config=None):
-        if config is None or not isinstance(config, SchemaConfig):
-            config = SchemaConfig(config)
-        self.config = config
-        self.builder = SchemaBuilder()
-        self.dataUnits = dataUnits
-        self.buildFromConfig(config)
-
-    def buildFromConfig(self, config):
-        for tableName, tableDescription in self.config["tables"].items():
-            self.builder.addTable(tableName, tableDescription)
-        self.datasetTable = self.builder.metadata.tables["Dataset"]
-        self._metadata = self.builder.metadata
-        self._tables = self.builder.tables
-        self._views = self.builder.views
-        self.tables = {k: v for k, v in itertools.chain(self._tables.items(),
-                                                        self._views.items())}
-
-
-class SchemaBuilder:
-    """Builds a Schema step-by-step.
+    limited : `bool`
+        If `True`, ignore tables, views, and associated foreign keys whose
+        config descriptions include a "limited" key set to `False`.
 
     Attributes
     ----------
     metadata : `sqlalchemy.MetaData`
         The sqlalchemy schema description.
     tables : `dict`
-        All created tables.
-    views : `dict`
-        All created views.
+        A mapping from table or view name to the associated SQLAlchemy object.
+        Note that this contains both true tables and views.
+    views : `frozenset`
+        The names of entries in ``tables`` that are actually implemented as
+        views.
+    """
+    def __init__(self, config=None, limited=False):
+        if config is None or not isinstance(config, SchemaConfig):
+            config = SchemaConfig(config)
+        self.config = config
+        builder = SchemaBuilder(limited=limited)
+        for tableName, tableDescription in self.config["tables"].items():
+            builder.addTable(tableName, tableDescription)
+        self.datasetTable = builder.metadata.tables["Dataset"]
+        self.metadata = builder.metadata
+        self.views = frozenset(builder.views)
+        self.tables = builder.tables
+
+
+class SchemaBuilder:
+    """Builds a Schema step-by-step.
+
+    Parameters
+    ----------
+    limited : `bool`
+        If `True`, ignore tables, views, and associated foreign keys whose
+        config descriptions include a "limited" key set to `False`.
+
+    Attributes
+    ----------
+    metadata : `sqlalchemy.MetaData`
+        The sqlalchemy schema description.
+    tables : `dict`
+        A mapping from table or view name to the associated SQLAlchemy object.
+        Note that this contains both true tables and views.
+    views : `set`
+        The names of all entries in ``tables`` that are actually implemented as
+        views.
     """
     VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
                           "bool": Boolean, "blob": LargeBinary, "datetime": DateTime}
 
-    def __init__(self):
+    def __init__(self, limited=False):
         self.metadata = MetaData()
         self.tables = {}
-        self.views = {}
+        self.views = set()
+        self._limited = limited
 
     def addTable(self, tableName, tableDescription):
         """Add a table to the schema metadata.
@@ -114,11 +122,14 @@ class SchemaBuilder:
         """
         if tableName in self.metadata.tables:
             raise ValueError("Table with name {} already exists".format(tableName))
+        if self._limited and not tableDescription.get("limited", True):
+            return
         # Create a Table object (attaches itself to metadata)
         if "sql" in tableDescription:
-            # This table can be materialized as a view
+            # This table should actually be created as a view
             table = makeView(tableName, self.metadata, selectable=tableDescription["sql"])
-            self.views[tableName] = table
+            self.tables[tableName] = table
+            self.views.add(tableName)
             view = True
         else:
             table = Table(tableName, self.metadata)
@@ -168,6 +179,8 @@ class SchemaBuilder:
             - src, list of source column names
             - tgt, list of target column names
         """
+        if self._limited and not constraintDescription.get("limited", True):
+            return
         if isinstance(table, str):
             table = self.metadata.tables[table]
         table.append_constraint(self.makeForeignKeyConstraint(constraintDescription))
@@ -220,7 +233,7 @@ class SchemaBuilder:
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
             - src, list of source column names
-            - tgt, list of target column names
+            - tgt, list of (table-qualified) target column names
         """
         src = tuple(iterable(constraintDescription["src"]))
         tgt = tuple(iterable(constraintDescription["tgt"]))

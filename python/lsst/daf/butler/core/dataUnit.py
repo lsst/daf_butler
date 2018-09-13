@@ -24,7 +24,7 @@ from itertools import chain
 from .config import ConfigSubset
 from .utils import TopologicalSet, iterable
 
-__all__ = ("DataUnit", "DataUnitRegistry", "DataUnitRegistryConfig")
+__all__ = ("DataUnit", "DataUnitRegistry", "DataUnitConfig")
 
 
 class DataUnit:
@@ -223,7 +223,7 @@ class DataUnitJoin:
 
     @property
     def regionColumn(self):
-        """Table column with encoded region data, ``None`` if table has no
+        """Table column with encoded region data, `None` if table has no
         region column (`sqlalchemy.Column`, optional).
         """
         table = self.table
@@ -232,9 +232,9 @@ class DataUnitJoin:
         return None
 
 
-class DataUnitRegistryConfig(ConfigSubset):
-    component = "dataUnitsConfig"
-    requiredKeys = ("version", "dataUnits")
+class DataUnitConfig(ConfigSubset):
+    component = "dataUnits"
+    requiredKeys = ("version", "dimensions")
     defaultConfigFile = "dataUnits.yaml"
 
 
@@ -263,13 +263,12 @@ class DataUnitRegistry:
 
         Parameters
         ----------
-        config : `SchemaConfig`
-            `Registry` DataUnit configuration containing "dataUnits",
-            "joins" entries.
+        config : `DataUnitConfig`
+            DataUnit configuration containing "dimensions", "joins" entries.
         """
         dataUnitRegistry = cls()
-        dataUnitRegistry._initDataUnitNames(config["dataUnits"])
-        dataUnitRegistry._initDataUnits(config["dataUnits"])
+        dataUnitRegistry._initDataUnitNames(config["dimensions"])
+        dataUnitRegistry._initDataUnits(config["dimensions"])
         dataUnitRegistry._initDataUnitJoins(config["joins"])
         return dataUnitRegistry
 
@@ -377,7 +376,7 @@ class DataUnitRegistry:
         Parameters
         ----------
         config : `Config`
-            The `dataUnits` component of a `DataUnitRegistryConfig`.
+            The `dataUnits` component of a `DataUnitConfig`.
         """
         # Visit DataUnits in dependency order
         for dataUnitName in self._dataUnitNames:
@@ -418,7 +417,7 @@ class DataUnitRegistry:
 
         Parameters
         ----------
-        config : `DataUnitRegistryConfig`
+        config : `DataUnitConfig`
             Configuration describing `DataUnit` join relations.
         """
         for dataUnitJoinName, dataUnitJoinDescription in config.items():

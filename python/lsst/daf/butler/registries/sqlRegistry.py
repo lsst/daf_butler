@@ -31,7 +31,7 @@ from lsst.sphgeom import ConvexPolygon
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
-from ..core.registry import RegistryConfig, Registry
+from ..core.registry import RegistryConfig, Registry, disableWhenLimited
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
@@ -57,7 +57,7 @@ class SqlRegistry(Registry):
         Load configuration
     schemaConfig : `SchemaConfig` or `str`
         Definition of the schema to use.
-    dataUnitRegistryConfig : `DataUnitRegistryConfig` or `str`
+    dataUnitConfig : `DataUnitConfig` or `str`
         Definition of the DataUnitRegistry to use.
     create : `bool`
         Assume registry is empty and create a new one.
@@ -68,16 +68,16 @@ class SqlRegistry(Registry):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, registryConfig, schemaConfig, dataUnitRegistryConfig, create=False):
-        super().__init__(registryConfig, dataUnitRegistryConfig=dataUnitRegistryConfig)
-
-        self.config = SqlRegistryConfig(registryConfig)
+    def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
+        registryConfig = SqlRegistryConfig(registryConfig)
+        super().__init__(registryConfig, dataUnitConfig=dataUnitConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(dataUnits=self._dataUnits, config=schemaConfig)
+        self._schema = Schema(config=schemaConfig, limited=self.limited)
         self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
-        self._preFlight = SqlPreFlight(self._schema, self._connection)
+        if not self.limited:
+            self._preFlight = SqlPreFlight(self._schema, self._dataUnits, self._connection)
         if create:
             self._createTables()
 
@@ -102,7 +102,7 @@ class SqlRegistry(Registry):
             raise
 
     def _createTables(self):
-        self._schema._metadata.create_all(self._engine)
+        self._schema.metadata.create_all(self._engine)
 
     def _isValidDatasetType(self, datasetType):
         """Check if given `DatasetType` instance is valid for this `Registry`.
@@ -134,7 +134,7 @@ class SqlRegistry(Registry):
         """
         for name in datasetType.dataUnits:
             try:
-                self._schema.dataUnits[name].validateId(dataId)
+                self._dataUnits[name].validateId(dataId)
             except ValueError as err:
                 raise ValueError("Error validating {}".format(datasetType.name)) from err
 
@@ -205,7 +205,7 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_((self._schema.datasetTable.c[name] == dataId[name]
-                                 for name in self._schema.dataUnits.getPrimaryKeyNames(
+                                 for name in self._dataUnits.getPrimaryKeyNames(
                                      datasetType.dataUnits)))
         result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
             datasetTable.join(datasetCollectionTable)).where(and_(
@@ -266,7 +266,7 @@ class SqlRegistry(Registry):
         Returns
         -------
         inserted : `bool`
-            ``True`` if ``datasetType`` was inserted, ``False`` if an identical
+            `True` if ``datasetType`` was inserted, `False` if an identical
             existing `DatsetType` was found.
         """
         if not self._isValidDatasetType(datasetType):
@@ -360,7 +360,7 @@ class SqlRegistry(Registry):
             ``producer`` is passed (`producer.run` is then used instead).
             A Run must be provided by one of the two arguments.
         producer : `Quantum`
-            Unit of work that produced the Dataset.  May be ``None`` to store
+            Unit of work that produced the Dataset.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the SqlRegistry.
         recursive : `bool`
@@ -437,7 +437,7 @@ class SqlRegistry(Registry):
             # because the name of the key may not be the name of the name of the
             # DataUnit link.
             dataId = {dataUnitName: result[self._schema.datasetTable.c[dataUnitName]]
-                      for dataUnitName in self._schema.dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
+                      for dataUnitName in self._dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
             # Get components (if present)
             # TODO check against expected components
             components = {}
@@ -660,7 +660,7 @@ class SqlRegistry(Registry):
     def ensureRun(self, run):
         """Conditionally add a new `Run` to the `SqlRegistry`.
 
-        If the ``run.id`` is ``None`` or a `Run` with this `id` doesn't exist
+        If the ``run.id`` is `None` or a `Run` with this `id` doesn't exist
         in the `Registry` yet, add it.  Otherwise, ensure the provided run is
         identical to the one already in the registry.
 
@@ -879,8 +879,10 @@ class SqlRegistry(Registry):
         dataUnitName : `str`
             Name of the DataUnit, e.g. "Camera", "Tract", etc.
         """
-        return self._schema.dataUnits[dataUnitName]
+        # TODO: remove this when DataUnitRegistry is a singleton
+        return self._dataUnits[dataUnitName]
 
+    @disableWhenLimited
     @transactional
     def addDataUnitEntry(self, dataUnitName, values):
         """Add a new `DataUnit` entry.
@@ -904,8 +906,10 @@ class SqlRegistry(Registry):
         ValueError
             If an entry with the primary-key defined in `values` is already
             present.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
-        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit = self._dataUnits[dataUnitName]
         dataUnit.validateId(values)
         dataUnitTable = self._schema.tables[dataUnitName]
         v = values.copy()
@@ -919,6 +923,7 @@ class SqlRegistry(Registry):
         if region is not None:
             self.setDataUnitRegion((dataUnitName,), v, region)
 
+    @disableWhenLimited
     def findDataUnitEntry(self, dataUnitName, value):
         """Return a `DataUnit` entry corresponding to a `value`.
 
@@ -934,8 +939,10 @@ class SqlRegistry(Registry):
         dataUnitEntry : `dict`
             Dictionary with all `DataUnit` values, or `None` if no matching
             entry is found.
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
-        dataUnit = self._schema.dataUnits[dataUnitName]
+        dataUnit = self._dataUnits[dataUnitName]
         dataUnit.validateId(value)
         dataUnitTable = self._schema.tables[dataUnitName]
         primaryKeyColumns = {k: self._schema.tables[dataUnit.name].c[k] for k in dataUnit.primaryKey}
@@ -946,6 +953,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
+    @disableWhenLimited
     @transactional
     def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
         """Set the region field for a DataUnit instance or a combination
@@ -966,16 +974,21 @@ class SqlRegistry(Registry):
             If True, existing region information for these DataUnits is being
             replaced.  This is usually required because DataUnit entries are
             assumed to be pre-inserted prior to calling this function.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         primaryKey = set()
         regionUnitNames = []
         for dataUnitName in dataUnitNames:
-            dataUnit = self._schema.dataUnits[dataUnitName]
+            dataUnit = self._dataUnits[dataUnitName]
             dataUnit.validateId(value)
             primaryKey.update(dataUnit.primaryKey)
             regionUnitNames.append(dataUnitName)
             regionUnitNames += [d.name for d in dataUnit.requiredDependencies]
-        regionDataUnit = self._schema.dataUnits.getRegionHolder(*dataUnitNames)
+        regionDataUnit = self._dataUnits.getRegionHolder(*dataUnitNames)
         table = self._schema.tables[regionDataUnit.name]
         if table is None:
             raise TypeError("No region table found for '{}'.".format(dataUnitNames))
@@ -998,8 +1011,8 @@ class SqlRegistry(Registry):
                 )
             )
         assert "SkyPix" not in dataUnitNames
-        join = self._schema.dataUnits.getJoin(dataUnitNames, "SkyPix")
-        if join is None or join.name in self._schema._views:
+        join = self._dataUnits.getJoin(dataUnitNames, "SkyPix")
+        if join is None or join.name in self._schema.views:
             return
         if update:
             # Delete any old SkyPix join entries for this DataUnit
@@ -1014,6 +1027,7 @@ class SqlRegistry(Registry):
                 parameters.append(dict(value, skypix=skypix))
         self._connection.execute(self._schema.tables[join.name].insert(), parameters)
 
+    @disableWhenLimited
     def getRegion(self, dataId):
         """Get region associated with a dataId.
 
@@ -1026,7 +1040,7 @@ class SqlRegistry(Registry):
         Returns
         -------
         region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or ``None`` if not present.
+            The region associated with a ``dataId`` or `None` if not present.
 
         Raises
         ------
@@ -1034,10 +1048,10 @@ class SqlRegistry(Registry):
             If the set of dataunits for the ``dataId`` does not correspond to
             a unique spatial lookup.
         """
-        dataUnitNames = (self._schema.dataUnits.getByLinkName(linkName).name for linkName in dataId)
-        regionHolder = self._schema.dataUnits.getRegionHolder(*tuple(dataUnitNames))
+        dataUnitNames = (self._dataUnits.getByLinkName(linkName).name for linkName in dataId)
+        regionHolder = self._dataUnits.getRegionHolder(*tuple(dataUnitNames))
         # Skypix does not have a table to lookup the region in, instead generate it
-        if regionHolder == self._schema.dataUnits["SkyPix"]:
+        if regionHolder == self._dataUnits["SkyPix"]:
             return self.pixelization.pixel(dataId["skypix"])
         # Lookup region
         primaryKeyColumns = {k: self._schema.tables[regionHolder.name].c[k] for k in regionHolder.primaryKey}
@@ -1048,6 +1062,7 @@ class SqlRegistry(Registry):
         else:
             return None
 
+    @disableWhenLimited
     def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
@@ -1078,99 +1093,13 @@ class SqlRegistry(Registry):
         ------
         row : `PreFlightUnitsRow`
             Single row is a unique combination of units in a transform.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
         """
         return self._preFlight.selectDataUnits(originInfo,
                                                expression,
                                                neededDatasetTypes,
                                                futureDatasetTypes)
-
-    def makeProvenanceGraph(self, expr, types=None):
-        """Make a `QuantumGraph` that contains the full provenance of all
-        Datasets matching an expression.
-
-        Parameters
-        ----------
-        expr : `str`
-            An expression (SQL query that evaluates to a list of Dataset
-            primary keys) that selects the Datasets.
-
-        Returns
-        -------
-        graph : `QuantumGraph`
-            Instance (with `units` set to `None`).
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def export(self, expr):
-        """Export contents of the `SqlRegistry`, limited to those reachable
-        from the Datasets identified by the expression `expr`, into a
-        `TableSet` format such that it can be imported into a different
-        database.
-
-        Parameters
-        ----------
-        expr : `str`
-            An expression (SQL query that evaluates to a list of Dataset
-            primary keys) that selects the `Datasets, or a `QuantumGraph`
-            that can be similarly interpreted.
-
-        Returns
-        -------
-        ts : `TableSet`
-            Containing all rows, from all tables in the `SqlRegistry` that
-            are reachable from the selected Datasets.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @transactional
-    def import_(self, tables, collection):
-        """Import (previously exported) contents into the (possibly empty)
-        `SqlRegistry`.
-
-        Parameters
-        ----------
-        ts : `TableSet`
-            Contains the previously exported content.
-        collection : `str`
-            An additional collection assigned to the newly
-            imported Datasets.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @transactional
-    def subset(self, collection, expr, datasetTypes):
-        r"""Create a new collection by subsetting an existing one.
-
-        Parameters
-        ----------
-        collection : `str`
-            Indicates the input collection to subset.
-        expr : `str`
-            An expression that limits the `DataUnit`\ s and (indirectly)
-            Datasets in the subset.
-        datasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetType`\ s whose instances should be included
-            in the subset.
-
-        Returns
-        -------
-        collection : `str`
-            The newly created collection.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @transactional
-    def merge(self, outputCollection, inputCollections):
-        """Create a new collection from a series of existing ones.
-
-        Entries earlier in the list will be used in preference to later
-        entries when both contain Datasets with the same `DatasetRef`.
-
-        Parameters
-        ----------
-        outputCollection : `str`
-            collection to use for the new collection.
-        inputCollections : `list` of `str`
-            A `list` of collections to combine.
-        """
-        raise NotImplementedError("Must be implemented by subclass")

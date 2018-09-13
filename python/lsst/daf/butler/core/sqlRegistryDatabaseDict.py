@@ -79,7 +79,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
             raise TypeError("No type(s) provided for field(s) {}".format(set(value._fields) - types.keys()))
         self._key = key
         self._value = value
-        self._table = Table(config["table"], self.registry._schema._metadata, *allColumns)
+        self._table = Table(config["table"], self.registry._schema.metadata, *allColumns)
         self._table.create(self.registry._engine, checkfirst=True)
         valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
         keyColumn = getattr(self._table.columns, key)
