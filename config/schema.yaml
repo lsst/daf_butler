@@ -9,26 +9,26 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          a unique autoincrement field used the primary key for dataset.
+          A unique autoincrement field used the primary key for dataset.
       -
         name: dataset_type_name
         type: string
         nullable: false
         doc: >
-          the name of the DatasetType associated with this dataset; a
+          The name of the DatasetType associated with this dataset; a
           reference to the DatasetType table.
       -
         name: run_id
         type: int
         nullable: false
         doc: >
-          the id of the run that produced this dataset, providing access to
+          The id of the run that produced this dataset, providing access to
           coarse provenance information.
       -
         name: quantum_id
         type: int
         doc: >
-          the id of the quantum that produced this dataset, providing access
+          The id of the quantum that produced this dataset, providing access
           to fine-grained provenance information.
           may be null for datasets not produced by running a supertask.
       -
@@ -38,7 +38,7 @@ schema:
         name: abstract_filter
         type: string
         doc: >
-          string name for the abstract filter, frequently a single character.
+          String name for the abstract filter, frequently a single character.
       -
         name: physical_filter
         type: string
@@ -55,19 +55,19 @@ schema:
         name: valid_first
         type: int
         doc: >
-          first exposure identifier included in the range (inclusive).  may
+          First exposure identifier included in the range (inclusive).  may
           be zero to indicate an open interval.
       -
         name: valid_last
         type: int
         doc: >
-          last exposure identifier included in the range (inclusive).  may
+          Last exposure identifier included in the range (inclusive).  may
           be max(int) to indicate an open interval.
       -
         name: skypix
         type: int
         doc: >
-          unique id of a pixel in the hierarchical pixelization, using a
+          Unique id of a pixel in the hierarchical pixelization, using a
           numbering scheme that also encodes the level of the pixel.
       -
         name: skymap
@@ -82,7 +82,7 @@ schema:
         name: label
         type: string
         doc: >
-          a string value composed only of letters, numbers, and underscores.
+          A string value composed only of letters, numbers, and underscores.
       foreignKeys:
       -
         src: dataset_type_name
