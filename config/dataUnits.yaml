@@ -155,6 +155,9 @@ dataUnits:
 
   joins:
     VisitSensorRegion:
+      doc: >
+        A many-to-many join table that provides region information for
+        Visit-Sensor combinations.
       lhs: [Visit]
       rhs: [Sensor]
       spatial: true

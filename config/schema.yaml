@@ -9,27 +9,26 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          a unique autoincrement field used as part of the primary key for
-          dataset.
+          A unique autoincrement field used the primary key for dataset.
       -
         name: dataset_type_name
         type: string
         nullable: false
         doc: >
-          the name of the DatasetType associated with this dataset; a
+          The name of the DatasetType associated with this dataset; a
           reference to the DatasetType table.
       -
         name: run_id
         type: int
         nullable: false
         doc: >
-          the id of the run that produced this dataset, providing access to
+          The id of the run that produced this dataset, providing access to
           coarse provenance information.
       -
         name: quantum_id
         type: int
         doc: >
-          the id of the quantum that produced this dataset, providing access
+          The id of the quantum that produced this dataset, providing access
           to fine-grained provenance information.
           may be null for datasets not produced by running a supertask.
       -
@@ -39,7 +38,7 @@ schema:
         name: abstract_filter
         type: string
         doc: >
-          string name for the abstract filter, frequently a single character.
+          String name for the abstract filter, frequently a single character.
       -
         name: physical_filter
         type: string
@@ -56,19 +55,19 @@ schema:
         name: valid_first
         type: int
         doc: >
-          first exposure identifier included in the range (inclusive).  may
+          First exposure identifier included in the range (inclusive).  may
           be zero to indicate an open interval.
       -
         name: valid_last
         type: int
         doc: >
-          last exposure identifier included in the range (inclusive).  may
+          Last exposure identifier included in the range (inclusive).  may
           be max(int) to indicate an open interval.
       -
         name: skypix
         type: int
         doc: >
-          unique id of a pixel in the hierarchical pixelization, using a
+          Unique id of a pixel in the hierarchical pixelization, using a
           numbering scheme that also encodes the level of the pixel.
       -
         name: skymap
@@ -83,21 +82,23 @@ schema:
         name: label
         type: string
         doc: >
-          a string value composed only of letters, numbers, and underscores.
-      foreignkeys:
+          A string value composed only of letters, numbers, and underscores.
+      foreignKeys:
       -
         src: dataset_type_name
         tgt: DatasetType.dataset_type_name
       -
         src: run_id
-        tgt: run.execution_id
+        tgt: Run.execution_id
       -
         src: quantum_id
-        tgt: quantum.execution_id
+        tgt: Quantum.execution_id
+      -
+        src: abstract_filter
+        tgt: AbstractFilter.abstract_filter
       -
         src: camera
         tgt: Camera.camera
-        limited: false
       -
         src:
           - camera
@@ -105,7 +106,6 @@ schema:
         tgt:
           - PhysicalFilter.camera
           - PhysicalFilter.physical_filter
-        limited: false
       -
         src:
           - camera
@@ -113,7 +113,6 @@ schema:
         tgt:
           - Sensor.camera
           - Sensor.sensor
-        limited: false
       -
         src:
           - camera
@@ -121,7 +120,6 @@ schema:
         tgt:
           - Visit.camera
           - Visit.visit
-        limited: false
       -
         src:
           - camera
@@ -129,11 +127,9 @@ schema:
         tgt:
           - Exposure.camera
           - Exposure.exposure
-        limited: false
       -
         src: skymap
-        tgt: Skymap.skymap
-        limited: false
+        tgt: SkyMap.skymap
       -
         src:
           - skymap
@@ -141,7 +137,6 @@ schema:
         tgt:
           - Tract.skymap
           - Tract.tract
-        limited: false
       -
         src:
           - skymap
@@ -151,7 +146,6 @@ schema:
           - Patch.skymap
           - Patch.tract
           - Patch.patch
-        limited: false
 
     DatasetComposition:
       doc: >
@@ -288,7 +282,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          A unique autoincrement field used as part of the primary key for
+          A unique autoincrement field used as the primary key for
           Execution.
       -
         name: start_time
@@ -472,6 +466,7 @@ schema:
       sql: >
         SELECT DISTINCT abstract_filter
         FROM PhysicalFilter;
+      materialize: false
 
     PhysicalFilter:
       doc: >
@@ -501,6 +496,10 @@ schema:
       -
         src: camera
         tgt: Camera.camera
+      foreignKeys:
+      -
+        src: abstract_filter
+        tgt: AbstractFilter.abstract_filter
 
     Sensor:
       doc: >
@@ -526,8 +525,8 @@ schema:
         name: name
         type: string
         doc: >
-          An alternate unique (with Camera) string identifer for the
-          sensor.
+          An alternate string identifer for the sensor; may or may not
+          be unique within a Camera.
       -
         name: group
         type: string
@@ -575,14 +574,14 @@ schema:
         name: datetime_begin
         type: datetime
         doc: >
-          Timestamp of the beginning of the Visit.  This should be the
+          TAI timestamp of the beginning of the Visit.  This should be the
           same as the datetime_begin of the first Exposure associated
           with this Visit.
       -
         name: datetime_end
         type: datetime
         doc: >
-          Timestamp of the end of the Visit.  This should be the
+          TAI timestamp of the end of the Visit.  This should be the
           same as the datetime_end of the last Exposure associated
           with this Visit.
       -
@@ -593,55 +592,6 @@ schema:
           be equal to the sum of the exposure_time values for all
           constituent Exposures (i.e. it should not include time between
           Exposures).
-      -
-        name: earth_rotation_angle
-        type: float
-        doc: Earth rotation angle in degrees.
-      -
-        name: boresight_ra
-        type: float
-        doc: Position of the boresight in right ascension (decimal degrees).
-      -
-        name: boresight_dec
-        type: float
-        doc: Position of the boresight in declination (decimal degrees).
-      -
-        name: boresight_alt
-        type: float
-        doc: Position of the boresight in altitude (decimal degrees).
-      -
-        name: boresight_az
-        type: float
-        doc: Position of the boresight in azimuth (decimal degrees).
-      -
-        name: boresight_hour_angle
-        type: float
-        doc: Hour angle at the boresight.
-      -
-        name: boresight_parallactic_angle
-        type: float
-        doc: >
-          Equal to the angle between the North celestial pole and Zenith at
-          the boresight. Or, the angular separation between two great circle
-          arcs that meet at the object, one passing through the North
-          celestial pole, and the other through zenith. For an object on the
-          meridian the angle is zero if it is South of zenith and pi if it is
-          North of zenith The angle is positive for objects East of the
-          meridian, and negative for objects to the West.
-      -
-        name: boresight_airmass
-        type: float
-        doc: Airmass at the boresight, relative to zenith at sea level.
-      -
-        name: rot_angle
-        type: float
-        doc: Rotation angle of the focal plane w.r.t. nominal.
-      -
-        name: local_era
-        type: float
-        doc: >
-          Local sideral time on the meridian (equivalent, but not
-          equal, to Local Mean Sidereal Time).
       -
         name: seeing
         type: float
@@ -721,7 +671,12 @@ schema:
         name: datetime_begin
         type: datetime
         doc: >
-          Timestamp of the start of the Exposure.
+          TAI timestamp of the start of the Exposure.
+      -
+        name: datetime_end
+        type: datetime
+        doc: >
+          TAI timestamp of the end of the Exposure.
       -
         name: exposure_time
         type: float
@@ -730,18 +685,6 @@ schema:
         name: dark_time
         type: float
         doc: Duration of the Exposure with shutter closed (seconds).
-      -
-        name: rot_angle
-        type: float
-        doc: Rotation angle of the focal plane w.r.t. nominal
-      -
-        name: boresight_alt
-        type: float
-        doc: Position of the boresight in altitude (decimal degrees).
-      -
-        name: boresight_az
-        type: float
-        doc: Position of the boresight in azimuth (decimal degrees).
       foreignKeys:
       -
         src: camera
@@ -804,6 +747,14 @@ schema:
         nullable: false
         doc: >
           Unique (with SkyMap) integer identifier for the Tract.
+      - name: ra
+        type: float
+        doc: >
+          Right ascension of the center of the tract (degrees).
+      - name: dec
+        type: float
+        doc: >
+          Declination of the center of the tract (degrees).
       -
         name: region
         type: region
@@ -1039,6 +990,7 @@ schema:
       sql: >
         SELECT DISTINCT camera, visit, skypix
         FROM VisitSensorSkyPixJoin;
+      materialize: false
 
     PatchSkyPixJoin:
       limited: false
@@ -1103,6 +1055,7 @@ schema:
       sql: >
         SELECT DISTINCT skymap, tract, skypix
         FROM PatchSkyPixJoin;
+      materialize: false
 
     VisitSensorPatchJoin:
       limited: false
@@ -1168,6 +1121,7 @@ schema:
           VisitSensorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
             VisitSensorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
           );
+      materialize: false
 
     VisitPatchJoin:
       limited: false
@@ -1225,6 +1179,7 @@ schema:
           VisitSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
             VisitSkyPixJoin.skypix = PatchSkyPixJoin.skypix
           );
+      materialize: false
 
     VisitSensorTractJoin:
       limited: false
@@ -1282,6 +1237,7 @@ schema:
           VisitSensorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
             VisitSensorSkyPixJoin.skypix = TractSkyPixJoin.skypix
           );
+      materialize: false
 
     VisitTractJoin:
       limited: false
@@ -1331,4 +1287,4 @@ schema:
           VisitSkyPixJoin INNER JOIN TractSkyPixJoin ON (
             VisitSkyPixJoin.skypix = TractSkyPixJoin.skypix
           );
-
+      materialize: false

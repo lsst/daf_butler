@@ -110,6 +110,9 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         for constraint in constraintsDescription:
             src = tuple(sorted(iterable(constraint["src"])))
             tgt = tuple(sorted(iterable(constraint["tgt"])))
+            tgtTable, _ = tgt[0].split(".")
+            if tgtTable in self.schema.views:
+                continue
             self.assertIn(src, tableConstraints)
             self.assertEqual(tableConstraints[src], tgt)
 

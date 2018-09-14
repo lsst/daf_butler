@@ -28,7 +28,7 @@ from collections.abc import Set
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "doImport", "getInstanceOf", "Singleton",
            "TopologicalSet", "TopologicalSetNode", "transactional",
-           "getObjectSize")
+           "getObjectSize", "stripIfNotNone")
 
 
 def iterable(a):
@@ -392,3 +392,22 @@ def getObjectSize(obj, seen=None):
         size += sum([getObjectSize(i, seen) for i in obj])
 
     return size
+
+
+def stripIfNotNone(s):
+    """Strip leading and trailing whitespace if the given object is not None.
+
+    Parameters
+    ----------
+    s : `str`, optional
+        Input string.
+
+    Returns
+    -------
+    r : `str` or `None`
+        A string with leading and trailing whitespace stripped if `s` is not
+        `None`, or `None` if `s` is `None`.
+    """
+    if s is not None:
+        s = s.strip()
+    return s
