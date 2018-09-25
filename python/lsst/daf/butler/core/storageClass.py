@@ -335,6 +335,9 @@ class StorageClassFactory(metaclass=Singleton):
         self._storageClasses = {}
         self._configs = []
 
+        # Always seed with the default config
+        self.addFromConfig(StorageClassConfig())
+
         if config is not None:
             self.addFromConfig(config)
 
