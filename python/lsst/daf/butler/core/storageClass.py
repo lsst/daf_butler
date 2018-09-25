@@ -341,6 +341,22 @@ class StorageClassFactory(metaclass=Singleton):
         if config is not None:
             self.addFromConfig(config)
 
+    def __str__(self):
+        """Return summary of factory.
+
+        Returns
+        -------
+        summary : `str`
+            Summary of the factory status.
+        """
+        sep = "\n"
+        return f"""Number of registered StorageClasses: {len(self._storageClasses)}
+
+StorageClasses
+--------------
+{sep.join(f"{s}: {self._storageClasses[s]}" for s in self._storageClasses)}
+"""
+
     def __contains__(self, storageClassOrName):
         """Indicates whether the storage class exists in the factory.
 
