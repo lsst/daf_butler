@@ -53,16 +53,16 @@ schema:
         type: int
       -
         name: valid_first
-        type: int
+        type: datetime
         doc: >
-          First exposure identifier included in the range (inclusive).  may
-          be zero to indicate an open interval.
+          TAI timestamp of first exposure included in the range (inclusive).
+          May be far in the past to indicate an open interval.
       -
         name: valid_last
-        type: int
+        type: datetime
         doc: >
-          Last exposure identifier included in the range (inclusive).  may
-          be max(int) to indicate an open interval.
+          TAI timestamp of last exposure included in the range (inclusive).
+          May be far in the future to indicate an open interval.
       -
         name: skypix
         type: int
