@@ -23,7 +23,7 @@ from abc import ABCMeta, abstractmethod
 import contextlib
 import functools
 
-from .utils import doImport
+from lsst.utils import doImport
 from .config import Config, ConfigSubset
 from .dataUnit import DataUnitConfig, DataUnitRegistry
 from .schema import SchemaConfig

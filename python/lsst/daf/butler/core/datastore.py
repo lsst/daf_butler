@@ -27,7 +27,7 @@ import contextlib
 from collections import namedtuple
 import logging
 
-from lsst.daf.butler.core.utils import doImport
+from lsst.utils import doImport
 
 from abc import ABCMeta, abstractmethod
 from .config import ConfigSubset

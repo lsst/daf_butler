@@ -22,7 +22,7 @@
 import os.path
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
-from ..core.utils import doImport
+from lsst.utils import doImport
 
 __all__ = ("PexConfigFormatter", )
 
