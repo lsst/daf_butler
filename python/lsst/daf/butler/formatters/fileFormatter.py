@@ -24,7 +24,7 @@
 import copy
 from abc import abstractmethod
 
-from lsst.daf.butler.core.formatter import Formatter
+from lsst.daf.butler import Formatter
 
 __all__ = ("FileFormatter", )
 

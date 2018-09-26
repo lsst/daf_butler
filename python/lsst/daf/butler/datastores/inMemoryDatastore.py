@@ -24,8 +24,7 @@
 import time
 import logging
 
-from lsst.daf.butler.core.datastore import Datastore
-from lsst.daf.butler.core.storageClass import StorageClassFactory
+from lsst.daf.butler import Datastore, StorageClassFactory
 
 log = logging.getLogger(__name__)
 

@@ -24,12 +24,11 @@ Support for generic data stores.
 """
 
 import contextlib
-from collections import namedtuple
 import logging
+from collections import namedtuple
+from abc import ABCMeta, abstractmethod
 
 from lsst.utils import doImport
-
-from abc import ABCMeta, abstractmethod
 from .config import ConfigSubset
 
 __all__ = ("DatastoreConfig", "Datastore")

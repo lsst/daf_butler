@@ -27,19 +27,11 @@ import hashlib
 import logging
 from collections import namedtuple
 
-from lsst.daf.butler.core.config import Config
+from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory,
+                             FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
+                             StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict)
+from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
-from lsst.daf.butler.core.datastore import Datastore
-from lsst.daf.butler.core.datastore import DatastoreConfig
-from lsst.daf.butler.core.location import LocationFactory
-from lsst.daf.butler.core.fileDescriptor import FileDescriptor
-from lsst.daf.butler.core.formatter import FormatterFactory
-from lsst.daf.butler.core.fileTemplates import FileTemplates
-from lsst.daf.butler.core.storedFileInfo import StoredFileInfo
-from lsst.daf.butler.core.utils import getInstanceOf, transactional
-from lsst.daf.butler.core.storageClass import StorageClassFactory
-from lsst.daf.butler.core.exceptions import DatasetTypeNotSupportedError
-from ..core.databaseDict import DatabaseDict
 
 log = logging.getLogger(__name__)
 

@@ -21,8 +21,8 @@
 
 import os.path
 
-from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 from lsst.utils import doImport
+from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
 __all__ = ("PexConfigFormatter", )
 
