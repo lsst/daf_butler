@@ -15,3 +15,4 @@ doc/py-api
 butler_test_repository
 bin/*
 .coverage
+.pytest_cache/
