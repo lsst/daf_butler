@@ -83,7 +83,7 @@ dataUnits:
         required:
         - Camera
       doc: >
-        An inclusive range of Exposures that may be open in either
+        An inclusive range of Exposure dates that may be open in either
         direction, typically used to identify master calibration products.
         There is no SQL table associated with ExposureRanges; there is no
         additional information associated with an ExposureRange besides the
@@ -171,7 +171,7 @@ dataUnits:
       rhs: [ExposureRange]
       sql:
         (lhs.camera = rhs.camera) AND
-        (lhs.exposure BETWEEN rhs.valid_first AND rhs.valid_last)
+        (lhs.datetime_begin BETWEEN rhs.valid_first AND rhs.valid_last)
     MultiCameraExposureJoin:
       doc: >
         A join table that relates Exposures from different Cameras, with
@@ -290,4 +290,3 @@ dataUnits:
         - VisitSensorPatchJoin
         - VisitSensorTractJoin
         - VisitPatchJoin
-
