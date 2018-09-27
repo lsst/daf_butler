@@ -32,7 +32,7 @@ from yaml.representer import Representer
 
 import lsst.utils
 
-from .utils import doImport
+from lsst.utils import doImport
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 

@@ -24,7 +24,8 @@
 import builtins
 import logging
 
-from .utils import doImport, Singleton, getFullTypeName
+from lsst.utils import doImport
+from .utils import Singleton, getFullTypeName
 from .assembler import CompositeAssembler
 from .config import ConfigSubset
 

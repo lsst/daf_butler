@@ -27,7 +27,8 @@ import os
 import contextlib
 import logging
 
-from .core.utils import doImport, transactional
+from lsst.utils import doImport
+from .core.utils import transactional
 from .core.datasets import DatasetRef
 from .core.datastore import Datastore
 from .core.registry import Registry

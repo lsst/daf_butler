@@ -21,7 +21,7 @@
 
 from abc import ABCMeta, abstractmethod
 
-from .fitsExposureFormatter import FitsExposureFormatter
+from lsst.daf.butler.formatters.fitsExposureFormatter import FitsExposureFormatter
 
 
 __all__ = ("FitsRawFormatterBase",)

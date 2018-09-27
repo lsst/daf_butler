@@ -21,7 +21,7 @@
 
 from collections.abc import MutableMapping
 
-from .utils import doImport
+from lsst.utils import doImport
 
 __all__ = ("DatabaseDict",)
 

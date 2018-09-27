@@ -24,12 +24,11 @@ Support for generic data stores.
 """
 
 import contextlib
-from collections import namedtuple
 import logging
-
-from lsst.daf.butler.core.utils import doImport
-
+from collections import namedtuple
 from abc import ABCMeta, abstractmethod
+
+from lsst.utils import doImport
 from .config import ConfigSubset
 
 __all__ = ("DatastoreConfig", "Datastore")

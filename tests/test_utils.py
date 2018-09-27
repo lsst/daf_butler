@@ -20,14 +20,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-import inspect
 import pickle
 from itertools import permutations
 from random import shuffle
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.utils import iterable, doImport, getFullTypeName, Singleton, TopologicalSet
+from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton, TopologicalSet
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
 
@@ -45,45 +44,6 @@ class IterableTestCase(lsst.utils.tests.TestCase):
     def testIterableNoString(self):
         self.assertEqual(list(iterable([0, 1, 2])), [0, 1, 2])
         self.assertEqual(list(iterable(["hello", "world"])), ["hello", "world"])
-
-
-class ImportTestCase(unittest.TestCase):
-    """Basic tests of doImport."""
-
-    def testDoImport(self):
-        c = doImport("lsst.daf.butler.core.formatter.Formatter")
-        self.assertEqual(c, Formatter)
-
-        c = doImport("lsst.daf.butler.core.utils.doImport")
-        self.assertEqual(type(c), type(doImport))
-        self.assertTrue(inspect.isfunction(c))
-
-        c = doImport("lsst.daf.butler")
-        self.assertTrue(inspect.ismodule(c))
-
-        c = doImport("lsst.daf.butler.core.config.Config.ppprint")
-        self.assertTrue(inspect.isfunction(c))
-
-        with self.assertRaises(ImportError):
-            doImport("lsst.daf.butler.core.config.Config.xyprint")
-
-        with self.assertRaises(ImportError):
-            doImport("lsst.daf.butler.nothere")
-
-        with self.assertRaises(ModuleNotFoundError):
-            doImport("missing module")
-
-        with self.assertRaises(ModuleNotFoundError):
-            doImport("lsstdummy.import.fail")
-
-        with self.assertRaises(ImportError):
-            doImport("lsst.import.fail")
-
-        with self.assertRaises(ImportError):
-            doImport("lsst.daf.butler.x")
-
-        with self.assertRaises(TypeError):
-            doImport([])
 
 
 class SingletonTestCase(lsst.utils.tests.TestCase):
@@ -211,7 +171,6 @@ class TestButlerUtils(lsst.utils.tests.TestCase):
     def testTypeNames(self):
         # Check types and also an object
         tests = [(Formatter, "lsst.daf.butler.core.formatter.Formatter"),
-                 (doImport, "lsst.daf.butler.core.utils.doImport"),
                  (int, "builtins.int"),
                  (StorageClass, "lsst.daf.butler.core.storageClass.StorageClass"),
                  (StorageClass(None), "lsst.daf.butler.core.storageClass.StorageClass")]

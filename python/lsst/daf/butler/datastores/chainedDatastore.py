@@ -26,10 +26,8 @@ import logging
 import os
 import warnings
 
-from lsst.daf.butler.core.utils import doImport
-from lsst.daf.butler.core.datastore import Datastore, DatastoreConfig
-from lsst.daf.butler.core.storageClass import StorageClassFactory
-from lsst.daf.butler.core.exceptions import DatasetTypeNotSupportedError
+from lsst.utils import doImport
+from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError
 
 log = logging.getLogger(__name__)
 

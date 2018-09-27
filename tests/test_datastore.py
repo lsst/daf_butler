@@ -30,7 +30,7 @@ import lsst.utils.tests
 from lsst.daf.butler import StorageClassFactory, StorageClass
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError
 
-from lsst.daf.butler.core.utils import doImport
+from lsst.utils import doImport
 
 from datasetsHelper import DatasetTestHelper, DatastoreTestHelper
 from examplePythonTypes import MetricsExample

@@ -28,9 +28,9 @@ import lsst.daf.persistence.repositoryCfg   # noqa F401
 
 from lsst.afw.image import readMetadata
 from lsst.log import Log
+from lsst.utils import doImport
 
 from ..core import Config
-from ..core.utils import doImport
 
 from .structures import Gen2Repo
 from .extractor import Extractor

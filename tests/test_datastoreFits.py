@@ -29,7 +29,7 @@ import lsst.utils.tests
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import DatastoreConfig
 
-from lsst.daf.butler.core.utils import doImport
+from lsst.utils import doImport
 
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
 
