@@ -4,6 +4,7 @@ setupRequired(numpy)
 setupRequired(scons)
 setupRequired(sconsUtils)
 setupRequired(utils)
+setupRequired(obs_metadata)
 
 setupRequired(daf_persistence)
 setupRequired(afw)
