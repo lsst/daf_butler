@@ -29,7 +29,7 @@ import logging
 
 from lsst.utils import doImport
 from .core.utils import transactional
-from .core.datasets import DatasetRef
+from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.run import Run
@@ -241,7 +241,10 @@ class Butler:
         else:
             if dataId is None:
                 raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
-            datasetType = self.registry.getDatasetType(datasetRefOrType)
+            if isinstance(datasetRefOrType, DatasetType):
+                datasetType = datasetRefOrType
+            else:
+                datasetType = self.registry.getDatasetType(datasetRefOrType)
 
         isVirtualComposite = self.composites.shouldBeDisassembled(datasetType)
 

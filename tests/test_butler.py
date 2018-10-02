@@ -123,6 +123,10 @@ class ButlerTests:
         datasetTypeName2 = datasetTypeName + "2"
         self.addDatasetType(datasetTypeName2, dataUnits, storageClass, butler.registry)
 
+        # Add a third type to test putting with a DataSetType
+        datasetTypeName3 = datasetTypeName + "3"
+        self.addDatasetType(datasetTypeName3, dataUnits, storageClass, butler.registry)
+
         # Add needed DataUnits
         butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
         butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCamComp",
@@ -138,12 +142,14 @@ class ButlerTests:
         datasetType2 = butler.registry.getDatasetType(datasetTypeName2)
         ref2 = DatasetRef(datasetType2, dataId, id=None)
 
+        datasetType3 = butler.registry.getDatasetType(datasetTypeName3)
+
         # Put with a preexisting id should fail
         with self.assertRaises(ValueError):
             butler.put(metric, DatasetRef(datasetType2, dataId, id=100))
 
-        # Put the dataset once as a DatasetRef and once as a dataId
-        for args in ((ref2,), (datasetTypeName, dataId)):
+        # Put the dataset once as a DatasetRef, once as a dataId, and once with a DataSetType
+        for args in ((ref2,), (datasetTypeName, dataId), (datasetType3, dataId)):
             ref = butler.put(metric, *args)
             self.assertIsInstance(ref, DatasetRef)
 
