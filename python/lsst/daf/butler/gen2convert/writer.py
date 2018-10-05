@@ -29,7 +29,7 @@ from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
 from ..core import Config, Run, DatasetType, StorageClassFactory
-from ..instrument import makeExposureEntryFromVisitInfo, makeVisitEntryFromVisitInfo
+from ..instrument import makeExposureEntryFromObsInfo, makeVisitEntryFromObsInfo
 from .structures import ConvertedRepo
 from .translators import Translator, NoSkyMapError
 
@@ -63,11 +63,11 @@ class ConversionWriter:
         A dictionary with hashes as keys and lists of repository roots as
         values, usually obtained from the `skyMapRoots` attribute of a
         `ConversionWalker`.
-    visitInfo: dict
-        A nested dictionary of afw.image.VisitInfo objects, with MapperClass
-        names as outer keys and tuples of camera-dependent Gen2 visit/exposure
-        identifiers as inner keys.  Usually obtained from
-        `ConversionWalker.visitInfo`.
+    obsInfo: dict
+        A nested dictionary of `lsst.obs.metadata.ObservationInfo` objects,
+         with MapperClass names as outer keys and tuples of camera-dependent
+         Gen2 visit/exposure dentifiers as inner keys.  Usually obtained from
+        `ConversionWalker.obsInfo`.
     """
 
     @classmethod
@@ -75,13 +75,13 @@ class ConversionWriter:
         """Construct a ConversionWriter from a ConversionWalker."""
         return cls(config=walker.config, gen2repos=walker.scanned,
                    skyMaps=walker.skyMaps, skyMapRoots=walker.skyMapRoots,
-                   visitInfo=walker.visitInfo)
+                   obsInfo=walker.obsInfo)
 
-    def __init__(self, config, gen2repos, skyMaps, skyMapRoots, visitInfo):
+    def __init__(self, config, gen2repos, skyMaps, skyMapRoots, obsInfo):
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         self.config = Config(config)
         self.skyMaps = skyMaps
-        self.visitInfo = visitInfo
+        self.obsInfo = obsInfo
         self.repos = OrderedDict()
         self.datasetTypes = dict()
         self.runs = {k: Run(id=v, collection=k) for k, v in self.config["runs"].items()}
@@ -254,18 +254,18 @@ class ConversionWriter:
         """Add all necessary Visit and Exposure DataUnits to the Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
-        for mapperName, nested in self.visitInfo.items():
+        for mapperName, nested in self.obsInfo.items():
             camera = self.config["mappers", mapperName, "camera"]
             log.info("Inserting Exposure and Visit DataUnits for Camera '%s'", camera)
-            for visitInfoId, (visitInfo, filt) in nested.items():
+            for obsInfoId, (obsInfo, filt) in nested.items():
                 # TODO: generalize this to cameras with snaps and/or compound gen2 visit/exposure IDs
-                visitId, = visitInfoId
-                exposureId, = visitInfoId
+                visitId, = obsInfoId
+                exposureId, = obsInfoId
                 # TODO: skip insertion if DataUnits already exist.
                 dataId = {"camera": camera, "visit": visitId, "physical_filter": filt}
-                visitEntry = makeVisitEntryFromVisitInfo(dataId, visitInfo)
+                visitEntry = makeVisitEntryFromObsInfo(dataId, obsInfo)
                 dataId["exposure"] = exposureId
-                exposureEntry = makeExposureEntryFromVisitInfo(dataId, visitInfo)
+                exposureEntry = makeExposureEntryFromObsInfo(dataId, obsInfo)
                 log.debug("Inserting Exposure %d and Visit %d.", exposureId, visitId)
                 registry.addDataUnitEntry("Visit", visitEntry)
                 registry.addDataUnitEntry("Exposure", exposureEntry)
