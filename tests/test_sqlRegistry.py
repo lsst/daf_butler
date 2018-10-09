@@ -50,6 +50,15 @@ class RegistryTests(metaclass=ABCMeta):
     def makeRegistry(self):
         raise NotImplementedError()
 
+    def assertRowCount(self, registry, table, count, where=None):
+        """Check the number of rows in table
+        """
+        query = 'select count(*) as "cnt" from "{}"'.format(table)
+        if where:
+            query = '{} where {}'.format(query, where)
+        rows = list(registry.query(query))
+        self.assertEqual(rows[0]["cnt"], count)
+
     def testDatasetType(self):
         registry = self.makeRegistry()
         # Check valid insert
@@ -314,6 +323,61 @@ class RegistryTests(metaclass=ABCMeta):
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
 
+    def testAssociate(self):
+        registry = self.makeRegistry()
+        storageClass = StorageClass("testAssociate")
+        registry.storageClasses.registerStorageClass(storageClass)
+        dataUnits = ("Camera", "Visit")
+        datasetType1 = DatasetType(name="dummytype", dataUnits=dataUnits, storageClass=storageClass)
+        registry.registerDatasetType(datasetType1)
+        datasetType2 = DatasetType(name="smartytype", dataUnits=dataUnits, storageClass=storageClass)
+        registry.registerDatasetType(datasetType2)
+        if not registry.limited:
+            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        run1 = registry.makeRun(collection="ingest1")
+        run2 = registry.makeRun(collection="ingest2")
+        run3 = registry.makeRun(collection="ingest3")
+        # TODO: Dataset.physical_filter should be populated as well here
+        # from the Visit DataUnit values.
+        dataId1 = {"camera": "DummyCam", "visit": 0}
+        dataId2 = {"camera": "DummyCam", "visit": 1}
+        ref1_run1 = registry.addDataset(datasetType1, dataId=dataId1, run=run1)
+        ref2_run1 = registry.addDataset(datasetType1, dataId=dataId2, run=run1)
+        ref1_run2 = registry.addDataset(datasetType2, dataId=dataId1, run=run2)
+        ref2_run2 = registry.addDataset(datasetType2, dataId=dataId2, run=run2)
+        ref1_run3 = registry.addDataset(datasetType2, dataId=dataId1, run=run3)
+        ref2_run3 = registry.addDataset(datasetType2, dataId=dataId2, run=run3)
+        # should have exactly 4 rows in Dataset
+        self.assertRowCount(registry, "Dataset", 6)
+        self.assertRowCount(registry, "DatasetCollection", 6)
+        # adding same DatasetRef to the same run is an error
+        with self.assertRaises(ValueError):
+            registry.addDataset(datasetType1, dataId=dataId2, run=run1)
+        # above exception must rollback and not add anything to Dataset
+        self.assertRowCount(registry, "Dataset", 6)
+        self.assertRowCount(registry, "DatasetCollection", 6)
+        # associated refs from run1 with some other collection
+        newCollection = "something"
+        registry.associate(newCollection, [ref1_run1, ref2_run1])
+        self.assertRowCount(registry, "DatasetCollection", 8)
+        # associating same exact DatasetRef is OK (not doing anything),
+        # two cases to test - single-ref and many-refs
+        registry.associate(newCollection, [ref1_run1])
+        registry.associate(newCollection, [ref1_run1, ref2_run1])
+        self.assertRowCount(registry, "DatasetCollection", 8)
+        # associated refs from run2 with same other collection, this should be OK
+        # because thy have different dataset type
+        registry.associate(newCollection, [ref1_run2, ref2_run2])
+        self.assertRowCount(registry, "DatasetCollection", 10)
+        # associating DatasetRef with the same units but different ID is not OK
+        with self.assertRaises(ValueError):
+            registry.associate(newCollection, [ref1_run3])
+        with self.assertRaises(ValueError):
+            registry.associate(newCollection, [ref1_run3, ref2_run3])
+
     def testDatasetUnit(self):
         registry = self.makeRegistry()
         dataUnitName = "Camera"
@@ -472,7 +536,7 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertNotEqual(rows[0]["cnt"], 0)
 
 
-class SqlRegistryTestCase(lsst.utils.tests.TestCase):
+class SqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
     """Test for SqlRegistry.
     """
 
@@ -488,7 +552,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase):
         self.assertFalse(registry.limited)
 
 
-class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase):
+class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
     """Test for SqlRegistry with limited=True.
     """
 
