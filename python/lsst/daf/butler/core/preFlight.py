@@ -122,6 +122,13 @@ class PreFlightUnitsRow:
     to combine multiple `PreFlightUnitsRow` into a suitable structure
     (e.g. QuantumGraph).
 
+    .. note::
+
+        In current implementation of `SqlPreFlight` the instances of
+        `DatasetRef` do not have ``components`` property correctly filled.
+        If you need to know dataset composition you have to re-fetch
+        dataset again using `Registry.getDataset` method.
+
     Attributes
     ----------
     dataId : `dict`
