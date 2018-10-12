@@ -174,49 +174,6 @@ class SqlRegistry(Registry):
         config["table"] = table
         return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
 
-    def _findDatasetId(self, collection, datasetType, dataId):
-        """Lookup a dataset ID.
-
-        This can be used to obtain a ``dataset_id`` that permits the dataset
-        to be read from a `Datastore`.
-
-        Parameters
-        ----------
-        collection : `str`
-            Identifies the collection to search.
-        datasetType : `DatasetType`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
-
-        Returns
-        -------
-        dataset_id : `int` or `None`
-            ``dataset_id`` value, or `None` if no matching Dataset was found.
-
-        Raises
-        ------
-        ValueError
-            If dataId is invalid.
-        """
-        self._validateDataId(datasetType, dataId)
-        datasetTable = self._schema.tables["Dataset"]
-        datasetCollectionTable = self._schema.tables["DatasetCollection"]
-        dataIdExpression = and_((self._schema.datasetTable.c[name] == dataId[name]
-                                 for name in self._dataUnits.getPrimaryKeyNames(
-                                     datasetType.dataUnits)))
-        result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
-            datasetTable.join(datasetCollectionTable)).where(and_(
-                datasetTable.c.dataset_type_name == datasetType.name,
-                datasetCollectionTable.c.collection == collection,
-                dataIdExpression))).fetchone()
-        # TODO update unit values and add Run, Quantum and assembler?
-        if result is not None:
-            return result.dataset_id
-        else:
-            return None
-
     def find(self, collection, datasetType, dataId):
         """Lookup a dataset.
 
@@ -244,10 +201,20 @@ class SqlRegistry(Registry):
         ValueError
             If dataId is invalid.
         """
-        dataset_id = self._findDatasetId(collection, datasetType, dataId)
+        self._validateDataId(datasetType, dataId)
+        datasetTable = self._schema.tables["Dataset"]
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        dataIdExpression = and_((self._schema.datasetTable.c[name] == dataId[name]
+                                 for name in self._dataUnits.getPrimaryKeyNames(
+                                     datasetType.dataUnits)))
+        result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
+            datasetTable.join(datasetCollectionTable)).where(and_(
+                datasetTable.c.dataset_type_name == datasetType.name,
+                datasetCollectionTable.c.collection == collection,
+                dataIdExpression))).fetchone()
         # TODO update unit values and add Run, Quantum and assembler?
-        if dataset_id is not None:
-            return self.getDataset(dataset_id)
+        if result is not None:
+            return self.getDataset(result["dataset_id"])
         else:
             return None
 
@@ -414,9 +381,15 @@ class SqlRegistry(Registry):
         Exception
             If ``dataId`` contains unknown or invalid `DataUnit` entries.
         """
-        # Collection cannot have more than one unique DataId of the same
-        # DatasetType, this constraint is checked in `associate` method
-        # which raises exception causing transaction rollback.
+        # TODO this is obviously not the most efficient way to check
+        # for existence.
+        # TODO also note that this check is not safe
+        # in the presence of concurrent calls to addDataset.
+        # Then again, it is undoubtedly not the only place where
+        # this problem occurs. Needs some serious thought.
+        if self.find(run.collection, datasetType, dataId) is not None:
+            raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
+                datasetType, dataId, run.collection))
         datasetTable = self._schema.tables["Dataset"]
         datasetRef = None
         # TODO add producer
@@ -509,11 +482,6 @@ class SqlRegistry(Registry):
         """Add existing Datasets to a collection, possibly creating the
         collection in the process.
 
-        If a DatasetRef with the same exact `dataset_id`` is already in a
-        collection nothing is changed. If a DatasetRef with the same
-        DatasetType and unit values but with different ``dataset_id`` exists
-        in a collection then exception is raised.
-
         Parameters
         ----------
         collection : `str`
@@ -521,84 +489,10 @@ class SqlRegistry(Registry):
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `SqlRegistry`.
-
-        Raises
-        ------
-        ValueError
-            If a Dataset with the given `DatasetRef` already exists in the
-            given collection.
         """
-        # A collection cannot contain more than one Dataset with the same
-        # DatasetRef. Our SQL schema does not enforce this constraint yet so
-        # checks have to be done in the code:
-        # - read existing collection and try to match its contents with
-        #   new DatasetRefs using units
-        # - if there is a match and dataset_id is different then constraint
-        #   check fails
-        # TODO: This implementation has a race which can violate the
-        # constraint if multiple clients update registry concurrently. Proper
-        # constraint checks have to be implmented in schema.
-
-        def _matchRef(row, ref):
-            """Compare Dataset table row with a DatasetRef.
-
-            Parameters
-            ----------
-            row : `sqlalchemy.RowProxy`
-                Single row from Dataset table.
-            ref : `DatasetRef`
-
-            Returns
-            -------
-            match : `bool`
-                True if Dataset row is identical to ``ref`` (their IDs match),
-                False otherwise.
-
-            Raises
-            ------
-            ValueError
-                If DatasetRef unit values match row data but their IDs differ.
-            """
-            if row.dataset_id == ref.id:
-                return True
-
-            if row.dataset_type_name != ref.datasetType.name:
-                return False
-
-            columns = self._dataUnits.getPrimaryKeyNames(ref.datasetType.dataUnits)
-            dataId = ref.dataId
-            if all(row[col] == dataId[col] for col in columns):
-                raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
-                    ref.datasetType, dataId, collection))
-            return False
-
-        if len(refs) == 1:
-            # small optimization for a single ref
-            ref = refs[0]
-            dataset_id = self._findDatasetId(collection, ref.datasetType, ref.dataId)
-            if dataset_id == ref.id:
-                # already there
-                return
-            elif dataset_id is not None:
-                raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
-                    ref.datasetType, ref.dataId, collection))
-        else:
-            # full scan of a collection to compare DatasetRef units
-            datasetTable = self._schema.tables["Dataset"]
-            datasetCollectionTable = self._schema.tables["DatasetCollection"]
-            query = datasetTable.select()
-            query = query.where(and_(datasetTable.c.dataset_id == datasetCollectionTable.c.dataset_id,
-                                     datasetCollectionTable.c.collection == collection))
-            result = self._connection.execute(query)
-            for row in result:
-                # skip DatasetRefs that are already there
-                refs = [ref for ref in refs if not _matchRef(row, ref)]
-
-        # if any ref is not there yet add it
-        if refs:
-            datasetCollectionTable = self._schema.tables["DatasetCollection"]
-            self._connection.execute(datasetCollectionTable.insert(),
-                                     [{"dataset_id": ref.id, "collection": collection} for ref in refs])
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        self._connection.execute(datasetCollectionTable.insert(),
+                                 [{"dataset_id": ref.id, "collection": collection} for ref in refs])
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
