@@ -463,10 +463,10 @@ class RegistryTests(metaclass=ABCMeta):
         regionVisit = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 1, 1),
                                                   lsst.sphgeom.UnitVector3d(0, 0, 1)))
-        regionVisitSensor = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
-                                                        lsst.sphgeom.UnitVector3d(0, 1, 0),
-                                                        lsst.sphgeom.UnitVector3d(0, 1, 1)))
-        for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitSensor), 2):
+        regionVisitDetector = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
+                                                          lsst.sphgeom.UnitVector3d(0, 1, 0),
+                                                          lsst.sphgeom.UnitVector3d(0, 1, 1)))
+        for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitDetector), 2):
             self.assertNotEqual(a, b)
 
         # This depends on current schema.yaml definitions
@@ -481,8 +481,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam",
                                                      "physical_filter": "dummy_i",
                                                      "abstract_filter": "i"})
-        for sensor in (1, 2, 3, 4, 5):
-            registry.addDataUnitEntry("Sensor", {"camera": "DummyCam", "sensor": sensor})
+        for detector in (1, 2, 3, 4, 5):
+            registry.addDataUnitEntry("Detector", {"camera": "DummyCam", "detector": detector})
         registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "dummy_r"})
         registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "dummy_i"})
         registry.addDataUnitEntry("SkyMap", {"skymap": "DummySkyMap", "hash": bytes()})
@@ -498,9 +498,9 @@ class RegistryTests(metaclass=ABCMeta):
                                    {"camera": "DummyCam", "visit": 0},
                                    regionVisit,
                                    update=True)
-        registry.setDataUnitRegion(("Visit", "Sensor"),
-                                   {"camera": "DummyCam", "visit": 0, "sensor": 2},
-                                   regionVisitSensor,
+        registry.setDataUnitRegion(("Visit", "Detector"),
+                                   {"camera": "DummyCam", "visit": 0, "detector": 2},
+                                   regionVisitDetector,
                                    update=False)
         # Get region for a tract
         self.assertEqual(regionTract, registry.getRegion({"skymap": "DummySkyMap", "tract": 0}))
@@ -514,11 +514,11 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(regionVisit, registry.getRegion({"camera": "DummyCam", "visit": 0}))
         # Attempt to get region for a non-existent visit
         self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 10}))
-        # Get region for a (visit, sensor) combination
-        self.assertEqual(regionVisitSensor,
-                         registry.getRegion({"camera": "DummyCam", "visit": 0, "sensor": 2}))
-        # Attempt to get region for a non-existent (visit, sensor) combination
-        self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 0, "sensor": 3}))
+        # Get region for a (visit, detector) combination
+        self.assertEqual(regionVisitDetector,
+                         registry.getRegion({"camera": "DummyCam", "visit": 0, "detector": 2}))
+        # Attempt to get region for a non-existent (visit, detector) combination
+        self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 0, "detector": 3}))
         # getRegion for a dataId containing no spatial dataunits should fail
         with self.assertRaises(KeyError):
             registry.getRegion({"camera": "DummyCam"})
@@ -526,7 +526,7 @@ class RegistryTests(metaclass=ABCMeta):
         with self.assertRaises(KeyError):
             registry.getRegion({"camera": "DummyCam",
                                 "visit": 0,
-                                "sensor": 2,
+                                "detector": 2,
                                 "skymap": "DummySkyMap",
                                 "tract": 1})
         # Check if we can get the region for a skypix

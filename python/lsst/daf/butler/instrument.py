@@ -41,12 +41,12 @@ class Instrument:
         Name of the camera.  Must be provided by subclass.
     physicalFilters : `list`
         List of PhysicalFilter entries (each entry being a dict).
-    sensors : `list`
-        List of Sensor entries (each entry being a dict).
+    detectors : `list`
+        List of Detector entries (each entry being a dict).
     """
     camera = None
     physicalFilters = []
-    sensors = []
+    detectors = []
 
     def register(self, registry):
         """Register an instance of this `Instrument` with a `Registry`.
@@ -56,7 +56,7 @@ class Instrument:
         assert self.camera is not None
         self._addCamera(registry)
         self._addPhysicalFilters(registry)
-        self._addSensors(registry)
+        self._addDetectors(registry)
 
     def _addCamera(self, registry):
         registry.addDataUnitEntry("Camera", {"camera": self.camera})
@@ -67,11 +67,11 @@ class Instrument:
                 entry["camera"] = self.camera
             registry.addDataUnitEntry("PhysicalFilter", entry)
 
-    def _addSensors(self, registry):
-        for entry in self.sensors:
+    def _addDetectors(self, registry):
+        for entry in self.detectors:
             if 'camera' not in entry:
                 entry['camera'] = self.camera
-            registry.addDataUnitEntry('Sensor', entry)
+            registry.addDataUnitEntry('Detector', entry)
 
 
 def makeExposureEntryFromObsInfo(dataId, obsInfo):

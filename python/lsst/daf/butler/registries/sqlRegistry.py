@@ -1082,7 +1082,7 @@ class SqlRegistry(Registry):
         dataUnitNames : sequence
             A sequence of DataUnit names whose instances are jointly associated
             with a region on the sky. This must not include dependencies that
-            are implied, e.g. "Patch" must not include "Tract", but "Sensor"
+            are implied, e.g. "Patch" must not include "Tract", but "Detector"
             needs to add "Visit".
         value : `dict`
             A dictionary of values that uniquely identify the DataUnits.

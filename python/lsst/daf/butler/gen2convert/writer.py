@@ -194,7 +194,7 @@ class ConversionWriter:
         """Main driver for ConversionWriter.
 
         Runs all steps to create a Gen3 Repo, aside from Camera registration
-        (we merely check that the needed Cameras, Sensors, and PhysicalFilters
+        (we merely check that the needed Cameras, Detectors, and PhysicalFilters
         have already been registered).
         """
         self.checkCameras(registry)
@@ -339,9 +339,9 @@ class ConversionWriter:
                     registry.associate(potentialChildRepo.run.collection, refs)
 
     def insertObservationRegions(self, registry, datastore):
-        """Add spatial regions for Visit-Sensor combinations.
+        """Add spatial regions for Visit-Detector combinations.
         """
-        sql = ("SELECT Wcs.camera AS camera, Wcs.visit AS visit, Wcs.sensor AS sensor, "
+        sql = ("SELECT Wcs.camera AS camera, Wcs.visit AS visit, Wcs.detector AS detector, "
                "        Wcs.dataset_id AS wcs, Metadata.dataset_id AS metadata "
                "    FROM Dataset AS Wcs "
                "        INNER JOIN DatasetCollection AS WcsCollection "
@@ -349,7 +349,7 @@ class ConversionWriter:
                "        INNER JOIN Dataset AS Metadata "
                "            ON (Wcs.camera = Metadata.camera "
                "                AND Wcs.visit = Metadata.visit "
-               "                AND Wcs.sensor = Metadata.sensor) "
+               "                AND Wcs.detector = Metadata.detector) "
                "        INNER JOIN DatasetCollection AS MetadataCollection "
                "            ON (Metadata.dataset_id = MetadataCollection.dataset_id) "
                "    WHERE WcsCollection.collection = :collection "
@@ -371,8 +371,8 @@ class ConversionWriter:
                 bbox = Box2D(bboxFromMetadata(metadata))
                 bbox.grow(config["padding"])
                 region = ConvexPolygon([sp.getVector() for sp in wcs.pixelToSky(bbox.getCorners())])
-                value = {k: row[k] for k in ("camera", "visit", "sensor")}
-                registry.setDataUnitRegion(("Visit", "Sensor"), value, region, update=False)
+                value = {k: row[k] for k in ("camera", "visit", "detector")}
+                registry.setDataUnitRegion(("Visit", "Detector"), value, region, update=False)
                 visits.setdefault((row["camera"], row["visit"]), []).extend(region.getVertices())
             for (camera, visit), vertices in visits.items():
                 region = ConvexPolygon(vertices)

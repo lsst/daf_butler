@@ -17,9 +17,9 @@ mappers:
 regions:
   -
     # The Gen3 DatasetType (Exposure StorageClass) to use when creating
-    # Visit-Sensor regions.
+    # Visit-Detector regions.
     DatasetType: calexp
-    # Padding (in pixels) to add to the edges of each Sensor region
+    # Padding (in pixels) to add to the edges of each Detector region
     # to account for WCS inaccuracies.
     padding: 5.0
     # Collection from which WCSs should be read.

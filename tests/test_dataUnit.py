@@ -45,23 +45,23 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
 
         # Tests below depend on the schema.yaml definitions as well
 
-        # check all spatial data units names, Sensor is there because
-        # pair (Visit, Sensor) is a spatial entity
+        # check all spatial data units names, Detector is there because
+        # pair (Visit, Detector) is a spatial entity
         self.assertCountEqual(dataUnitRegistry._spatialDataUnits,
-                              ["Tract", "Patch", "Visit", "Sensor", "SkyPix"])
+                              ["Tract", "Patch", "Visit", "Detector", "SkyPix"])
         self.assertCountEqual(dataUnitRegistry._dataUnitRegions.keys(),
                               [{'Visit'}, {'SkyPix'}, {'Tract'},
-                               {'Patch', 'Tract'}, {'Sensor', 'Visit'}])
+                               {'Patch', 'Tract'}, {'Detector', 'Visit'}])
         self.assertEqual(len(dataUnitRegistry.joins), 11)
         joins = ((['Exposure'], ['Exposure']),
                  (['Exposure'], ['ExposureRange']),
                  (['Patch'], ['SkyPix']),
-                 (['Sensor', 'Visit'], ['Patch']),
-                 (['Sensor', 'Visit'], ['SkyPix']),
-                 (['Sensor', 'Visit'], ['Tract']),
+                 (['Detector', 'Visit'], ['Patch']),
+                 (['Detector', 'Visit'], ['SkyPix']),
+                 (['Detector', 'Visit'], ['Tract']),
                  (['Tract'], ['SkyPix']),
                  (['Visit'], ['Patch']),
-                 (['Visit'], ['Sensor']),
+                 (['Visit'], ['Detector']),
                  (['Visit'], ['SkyPix']))
         for lhs, rhs in joins:
             self.assertIsNotNone(dataUnitRegistry.getJoin(lhs, rhs))
@@ -75,16 +75,16 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
         dataUnitRegistry = DataUnitRegistry.fromConfig(self.config)
         self.assertEqual(dataUnitRegistry.getRegionHolder("Visit"),
                          dataUnitRegistry.getRegionHolder("Camera", "Visit"))
-        self.assertEqual(dataUnitRegistry.getRegionHolder("Visit", "Sensor"),
-                         dataUnitRegistry.getRegionHolder("Camera", "Visit", "Sensor"))
+        self.assertEqual(dataUnitRegistry.getRegionHolder("Visit", "Detector"),
+                         dataUnitRegistry.getRegionHolder("Camera", "Visit", "Detector"))
         self.assertEqual(dataUnitRegistry.getRegionHolder("Patch"),
                          dataUnitRegistry.getRegionHolder("Tract", "Patch"))
         self.assertEqual(dataUnitRegistry.getRegionHolder("Patch"),
                          dataUnitRegistry.getRegionHolder("SkyMap", "Tract", "Patch"))
         with self.assertRaises(KeyError):
-            dataUnitRegistry.getRegionHolder("Sensor")
+            dataUnitRegistry.getRegionHolder("Detector")
         with self.assertRaises(KeyError):
-            dataUnitRegistry.getRegionHolder("Camera", "Sensor")
+            dataUnitRegistry.getRegionHolder("Camera", "Detector")
 
 
 if __name__ == "__main__":

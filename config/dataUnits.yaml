@@ -4,7 +4,7 @@ dataUnits:
     Camera:
       doc: >
         An entity that produces observations.  A Camera defines a set of
-        PhysicalFilters and Sensors and a numbering system for the Exposures
+        PhysicalFilters and Detectors and a numbering system for the Exposures
         and Visits that represent observations with it.
       link:
       - camera
@@ -30,15 +30,15 @@ dataUnits:
       link:
       - physical_filter
 
-    Sensor:
+    Detector:
       dependencies:
         required:
         - Camera
       doc: >
-        A sensor associated with a particular Camera (not an observation of that
-        sensor; that requires specifying an exposure or visit as well).
+        A detector associated with a particular Camera (not an observation of that
+        detector; that requires specifying an exposure or visit as well).
       link:
-      - sensor
+      - detector
 
     Visit:
       dependencies:
@@ -111,7 +111,7 @@ dataUnits:
         RDMSs.  As a result, we will (at least initially) try to define just a
         single level for all SkyPix values.  Our preliminary guess is that this
         level should have pixels be approximately (within a factor of ~4) of the
-        size of a single Sensor on the sky.
+        size of a single Detector on the sky.
       spatial: true
       link:
       - skypix
@@ -154,12 +154,12 @@ dataUnits:
       - label
 
   joins:
-    VisitSensorRegion:
+    VisitDetectorRegion:
       doc: >
         A many-to-many join table that provides region information for
-        Visit-Sensor combinations.
+        Visit-Detector combinations.
       lhs: [Visit]
-      rhs: [Sensor]
+      rhs: [Detector]
       spatial: true
 
     ExposureRangeJoin:
@@ -183,15 +183,15 @@ dataUnits:
       lhs: [Exposure]
       rhs: [Exposure]
 
-    VisitSensorSkyPixJoin:
+    VisitDetectorSkyPixJoin:
       doc: >
-        A spatial join table that relates Visit+Sensor to SkyPix, also used as an
-        intermediate when relating Visit+Sensor to SkyMap DataUnits.
+        A spatial join table that relates Visit+Detector to SkyPix, also used as an
+        intermediate when relating Visit+Detector to SkyMap DataUnits.
 
         Entries are expected to be calculated outside the database and
-        added/updated whenever VisitSensorRegion is.
+        added/updated whenever VisitDetectorRegion is.
 
-      lhs: [Visit, Sensor]
+      lhs: [Visit, Detector]
       rhs: [SkyPix]
 
     VisitSkyPixJoin:
@@ -200,11 +200,11 @@ dataUnits:
         intermediate when relating Visit to SkyMap DataUnits.
 
         This can and probably should be implemented as a trivial view on
-        VisitSensorSkyPixJoin.
+        VisitDetectorSkyPixJoin.
 
       lhs: [Visit]
       rhs: [SkyPix]
-      summarizes: [VisitSensorSkyPixJoin]
+      summarizes: [VisitDetectorSkyPixJoin]
 
     PatchSkyPixJoin:
       doc: >
@@ -229,9 +229,9 @@ dataUnits:
       rhs: [SkyPix]
       summarizes: [PatchSkyPixJoin]
 
-    VisitSensorPatchJoin:
+    VisitDetectorPatchJoin:
       doc: >
-        A spatial join table that relates Visit+Sensor to Patch via SkyPix.
+        A spatial join table that relates Visit+Detector to Patch via SkyPix.
 
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
@@ -240,7 +240,7 @@ dataUnits:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit, Sensor]
+      lhs: [Visit, Detector]
       rhs: [Patch]
 
     VisitPatchJoin:
@@ -256,11 +256,11 @@ dataUnits:
 
       lhs: [Visit]
       rhs: [Patch]
-      summarizes: [VisitSensorPatchJoin]
+      summarizes: [VisitDetectorPatchJoin]
 
-    VisitSensorTractJoin:
+    VisitDetectorTractJoin:
       doc: >
-        A spatial join table that relates Visit+Sensor to Tract via SkyPix.
+        A spatial join table that relates Visit+Detector to Tract via SkyPix.
 
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
@@ -269,9 +269,9 @@ dataUnits:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit, Sensor]
+      lhs: [Visit, Detector]
       rhs: [Tract]
-      summarizes: [VisitSensorPatchJoin]
+      summarizes: [VisitDetectorPatchJoin]
 
     VisitTractJoin:
       doc: >
@@ -287,6 +287,6 @@ dataUnits:
       lhs: [Visit]
       rhs: [Tract]
       summarizes:
-        - VisitSensorPatchJoin
-        - VisitSensorTractJoin
+        - VisitDetectorPatchJoin
+        - VisitDetectorTractJoin
         - VisitPatchJoin

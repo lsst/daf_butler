@@ -272,8 +272,8 @@ class SqlPreFlight:
                     units += [d.name for d in dataUnit.requiredDependencies if d.spatial]
                 regionHolder = self._dataUnits.getRegionHolder(*units)
                 if len(connection) > 1:
-                    # if one of the joins is with Visit/Sensor then also bring
-                    # VisitSensorRegion table in and join it with the units
+                    # if one of the joins is with Visit/Detector then also bring
+                    # VisitDetectorRegion table in and join it with the units
                     # TODO: need a better way to recognize this special case
                     if regionHolder.name in joinedRegionTables:
                         _LOG.debug("region table already joined with units: %s", regionHolder.name)

@@ -32,7 +32,7 @@ class DataUnit:
     metadata and used to label datasets.
 
     `DataUnit` instances represent concrete units such as e.g. `Camera`,
-    `Sensor`, `Visit` and `SkyMap`.
+    `Detector`, `Visit` and `SkyMap`.
 
     Parameters
     ----------

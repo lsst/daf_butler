@@ -43,7 +43,7 @@ schema:
         name: physical_filter
         type: string
       -
-        name: sensor
+        name: detector
         type: string
       -
         name: visit
@@ -109,10 +109,10 @@ schema:
       -
         src:
           - camera
-          - sensor
+          - detector
         tgt:
-          - Sensor.camera
-          - Sensor.sensor
+          - Detector.camera
+          - Detector.detector
       -
         src:
           - camera
@@ -501,9 +501,9 @@ schema:
         src: abstract_filter
         tgt: AbstractFilter.abstract_filter
 
-    Sensor:
+    Detector:
       doc: >
-        A Camera-populated table that relates a Sensor to its Camera and
+        A Camera-populated table that relates a Detector to its Camera and
         provides additional labels.
       limited: false
       columns:
@@ -513,31 +513,31 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          Name of the Camera with which this Sensor is associated.
+          Name of the Camera with which this Detector is associated.
       -
-        name: sensor
+        name: detector
         type: int
         primary_key: true
         nullable: false
         doc: >
-          A unique (with Camera) integer identifier for the Sensor.
+          A unique (with Camera) integer identifier for the Detector.
       -
         name: name
         type: string
         doc: >
-          An alternate string identifer for the sensor; may or may not
+          An alternate string identifer for the detector; may or may not
           be unique within a Camera.
       -
         name: group
         type: string
         doc: >
-          A string name for a group of sensors with a Camera-dependent
+          A string name for a group of detectors with a Camera-dependent
           interpretation, such as LSST's rafts.
       -
         name: purpose
         type: string
         doc: >
-          Role of the Sensor; typically one of "SCIENCE", "WAVEFRONT",
+          Role of the Detector; typically one of "SCIENCE", "WAVEFRONT",
           or "GUIDE", though Cameras may define additional values.
       foreignKeys:
       -
@@ -606,7 +606,7 @@ schema:
           Visit.  This is expected to be more precise than the region covered
           by the SkyPixels associated with the Visit, but may still be larger
           than the Visit as long as it fully covers it.  Must also fully
-          cover all regions in the VisitSensorRegion entries associated with
+          cover all regions in the VisitDetectorRegion entries associated with
           this Visit.
           Regions are lsst.sphgeom.ConvexPolygon objects persisted as
           portable (but not human-readable) bytestrings using the encode
@@ -833,13 +833,13 @@ schema:
         - Tract.skymap
         - Tract.tract
 
-    VisitSensorRegion:
+    VisitDetectorRegion:
       doc: >
         A one-to-many table join table that stores the spatial region
-        associated with a particular Visit-Sensor combination. Entries are
+        associated with a particular Visit-Detector combination. Entries are
         expected to be calculated outside the database and added/updated
         whenever the Visit's region is.  This table contains exactly one
-        entry for each Visit+Sensor combination.
+        entry for each Visit+Detector combination.
       limited: false
       columns:
       -
@@ -847,7 +847,7 @@ schema:
         type: string
         primary_key: true
         nullable: false
-        doc: Name of the Camera associated with the Visit and Sensor.
+        doc: Name of the Camera associated with the Visit and Detector.
       -
         name: visit
         type: int
@@ -855,19 +855,19 @@ schema:
         nullable: false
         doc: Visit ID
       -
-        name: sensor
+        name: detector
         type: int
         primary_key: true
         nullable: false
-        doc: Sensor ID
+        doc: Detector ID
       -
         name: region
         type: region
         doc: >
           A spatial region on the sky that bounds the area associated with
-          this Visit+Sensor combination.  This is expected to be more
-          precise than the SkyPixels associated with the Visit+Sensor (see
-          VisitSensorSkyPixJoin), but may still be larger than the true
+          this Visit+Detector combination.  This is expected to be more
+          precise than the SkyPixels associated with the Visit+Detector (see
+          VisitDetectorSkyPixJoin), but may still be larger than the true
           region as long as it fully covers it.
           Regions are lsst.sphgeom.ConvexPolygon objects persisted as
           portable (but not human-readable) bytestrings using the encode
@@ -883,10 +883,10 @@ schema:
       -
         src:
         - camera
-        - sensor
+        - detector
         tgt:
-        - Sensor.camera
-        - Sensor.sensor
+        - Detector.camera
+        - Detector.detector
 
     MultiCameraExposureJoin:
       limited: false
@@ -927,39 +927,39 @@ schema:
           - Exposure.camera
           - Exposure.exposure
 
-    VisitSensorSkyPixJoin:
+    VisitDetectorSkyPixJoin:
       limited: false
       columns:
       -
         name: camera
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit and Sensor.
+        doc: Name of the Camera associated with the Visit and Detector.
       -
         name: visit
         type: int
         nullable: false
         doc: Visit ID
       -
-        name: sensor
+        name: detector
         type: int
         nullable: false
-        doc: Sensor ID
+        doc: Detector ID
       -
         name: skypix
         type: int
         nullable: false
-        doc: ID of a SkyPix that overlaps the Visit+Sensor combination.
+        doc: ID of a SkyPix that overlaps the Visit+Detector combination.
       foreignKeys:
       -
         src:
           - camera
           - visit
-          - sensor
+          - detector
         tgt:
-          - VisitSensorRegion.camera
-          - VisitSensorRegion.visit
-          - VisitSensorRegion.sensor
+          - VisitDetectorRegion.camera
+          - VisitDetectorRegion.visit
+          - VisitDetectorRegion.detector
 
     VisitSkyPixJoin:
       limited: false
@@ -989,7 +989,7 @@ schema:
           - Visit.visit
       sql: >
         SELECT DISTINCT camera, visit, skypix
-        FROM VisitSensorSkyPixJoin;
+        FROM VisitDetectorSkyPixJoin;
       materialize: false
 
     PatchSkyPixJoin:
@@ -1057,24 +1057,24 @@ schema:
         FROM PatchSkyPixJoin;
       materialize: false
 
-    VisitSensorPatchJoin:
+    VisitDetectorPatchJoin:
       limited: false
       columns:
       -
         name: camera
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit and Sensor.
+        doc: Name of the Camera associated with the Visit and Detector.
       -
         name: visit
         type: int
         nullable: false
         doc: Visit ID
       -
-        name: sensor
+        name: detector
         type: int
         nullable: false
-        doc: Sensor ID
+        doc: Detector ID
       -
         name: skymap
         type: string
@@ -1095,11 +1095,11 @@ schema:
         src:
           - camera
           - visit
-          - sensor
+          - detector
         tgt:
-          - VisitSensorRegion.camera
-          - VisitSensorRegion.visit
-          - VisitSensorRegion.sensor
+          - VisitDetectorRegion.camera
+          - VisitDetectorRegion.visit
+          - VisitDetectorRegion.detector
       -
         src:
           - skymap
@@ -1111,15 +1111,15 @@ schema:
           - Patch.patch
       sql: >
         SELECT DISTINCT
-          VisitSensorSkyPixJoin.camera,
-          VisitSensorSkyPixJoin.visit,
-          VisitSensorSkyPixJoin.sensor,
+          VisitDetectorSkyPixJoin.camera,
+          VisitDetectorSkyPixJoin.visit,
+          VisitDetectorSkyPixJoin.detector,
           PatchSkyPixJoin.skymap,
           PatchSkyPixJoin.tract,
           PatchSkyPixJoin.patch
         FROM
-          VisitSensorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
-            VisitSensorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+          VisitDetectorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
+            VisitDetectorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
           );
       materialize: false
 
@@ -1181,24 +1181,24 @@ schema:
           );
       materialize: false
 
-    VisitSensorTractJoin:
+    VisitDetectorTractJoin:
       limited: false
       columns:
       -
         name: camera
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit and Sensor.
+        doc: Name of the Camera associated with the Visit and Detector.
       -
         name: visit
         type: int
         nullable: false
         doc: Visit ID
       -
-        name: sensor
+        name: detector
         type: int
         nullable: false
-        doc: Sensor ID
+        doc: Detector ID
       -
         name: skymap
         type: string
@@ -1214,11 +1214,11 @@ schema:
         src:
           - camera
           - visit
-          - sensor
+          - detector
         tgt:
-          - VisitSensorRegion.camera
-          - VisitSensorRegion.visit
-          - VisitSensorRegion.sensor
+          - VisitDetectorRegion.camera
+          - VisitDetectorRegion.visit
+          - VisitDetectorRegion.detector
       -
         src:
           - skymap
@@ -1228,14 +1228,14 @@ schema:
           - Tract.tract
       sql: >
         SELECT DISTINCT
-          VisitSensorSkyPixJoin.camera,
-          VisitSensorSkyPixJoin.visit,
-          VisitSensorSkyPixJoin.sensor,
+          VisitDetectorSkyPixJoin.camera,
+          VisitDetectorSkyPixJoin.visit,
+          VisitDetectorSkyPixJoin.detector,
           TractSkyPixJoin.skymap,
           TractSkyPixJoin.tract
         FROM
-          VisitSensorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
-            VisitSensorSkyPixJoin.skypix = TractSkyPixJoin.skypix
+          VisitDetectorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
+            VisitDetectorSkyPixJoin.skypix = TractSkyPixJoin.skypix
           );
       materialize: false
 
