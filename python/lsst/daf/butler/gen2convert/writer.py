@@ -64,10 +64,10 @@ class ConversionWriter:
         values, usually obtained from the `skyMapRoots` attribute of a
         `ConversionWalker`.
     obsInfo: dict
-        A nested dictionary of `lsst.obs.metadata.ObservationInfo` objects,
-         with MapperClass names as outer keys and tuples of camera-dependent
-         Gen2 visit/exposure dentifiers as inner keys.  Usually obtained from
-        `ConversionWalker.obsInfo`.
+        A nested dictionary of `astro_metadata_translator.ObservationInfo`
+        objects, with MapperClass names as outer keys and tuples of
+        camera-dependent Gen2 visit/exposure dentifiers as inner keys.
+        Usually obtained from `ConversionWalker.obsInfo`.
     """
 
     @classmethod

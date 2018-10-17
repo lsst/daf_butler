@@ -76,15 +76,15 @@ class Instrument:
 
 def makeExposureEntryFromObsInfo(dataId, obsInfo):
     """Construct an Exposure DataUnit entry from
-    `lsst.obs.metadata.ObservationInfo`.
+    `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Exposure
         ("camera", "exposure", optionally "visit" and "physical_filter").
-    obsInfo : `lsst.obs.metadata.ObservationInfo`
-        A `~lsst.obs.metadata.ObservationInfo` object corresponding to the
+    obsInfo : `astro_metadata_translator.ObservationInfo`
+        A `~astro_metadata_translator.ObservationInfo` object corresponding to the
         Exposure.
 
     Returns
@@ -104,15 +104,15 @@ def makeExposureEntryFromObsInfo(dataId, obsInfo):
 
 def makeVisitEntryFromObsInfo(dataId, obsInfo):
     """Construct a Visit DataUnit entry from
-    `lsst.obs.metadata.ObservationInfo`.
+    `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Visit ("camera",
         "visit", optionally "physical_filter").
-    obsInfo : `lsst.obs.metadata.ObservationInfo`
-        A `~lsst.obs.metadata.ObservationInfo` object corresponding to the
+    obsInfo : `astro_metadata_translator.ObservationInfo`
+        A `~astro_metadata_translator.ObservationInfo` object corresponding to the
         Visit.
 
     Returns

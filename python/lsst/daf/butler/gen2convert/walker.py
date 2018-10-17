@@ -28,7 +28,7 @@ import datetime
 # register YAML loader for repositoryCfg.yaml files.
 import lsst.daf.persistence.repositoryCfg   # noqa F401
 
-from lsst.obs.metadata import ObservationInfo
+from astro_metadata_translator import ObservationInfo
 from lsst.afw.image import readMetadata
 from lsst.log import Log
 from lsst.utils import doImport
@@ -328,14 +328,14 @@ class ConversionWalker:
 
     @property
     def obsInfo(self):
-        """All unique `lsst.obs.metadata.ObservationInfo` objects and
+        """All unique `astro_metadata_translator.ObservationInfo` objects and
         visit-filter associations found in any repository (`dict`, nested).
 
         This is a nested dictionary, with mapper class names as outer keys and
         the inner keys a tuple of mapper-specific data ID values determined
         from configuration.  Values are a tuple of
-        (`lsst.obs.metadata.ObservationInfo`, `str)`, with the latter a Gen2
-        filter name.
+        (`astro_metadata_translator.ObservationInfo`, `str)`, with the latter
+        a Gen2 filter name.
         """
         return self._obsInfo
 
