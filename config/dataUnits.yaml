@@ -97,24 +97,25 @@ dataUnits:
     SkyPix:
       doc: >
         A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
-        HEALPix; we will select and support just one, but which is TBD). Has no
-        SQL representation; even a definition table is not necessary, given that
-        the allowable values and the associated spatial regions are best
-        computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e. Tract-
-        Patch) units for Datasets without any overlap regions (e.g. sharded
-        reference catalogs).
+        HEALPix; we will select and support just one, but which is TBD). Has
+        no SQL representation; even a definition table is not necessary, given
+        that the allowable values and the associated spatial regions are best
+        computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e.
+        Tract-Patch) units for Datasets without any overlap regions (e.g.
+        sharded reference catalogs).
 
         There are also considerable advantages to standardizing on just one
-        level of the standard pixelization: if all SkyPix values are at a single
-        level, they can be indexed using standard B-Trees and compared with
-        simple equality comparison.  In contrast, comparing SkyPix values at
-        different levels requires pixelization- specific bit-shifting operations
-        and custom indexes, which are much harder to implement across multiple
-        RDMSs.  As a result, we will (at least initially) try to define just a
-        single level for all SkyPix values.  Our preliminary guess is that this
-        level should have pixels be approximately (within a factor of ~4) of the
-        size of a single Detector on the sky.
-      spatial: true
+        level of the standard pixelization: if all SkyPix values are at a
+        single level, they can be indexed using standard B-Trees and compared
+        with simple equality comparison.  In contrast, comparing SkyPix values
+        at different levels requires pixelization-specific bit-shifting
+        operations and custom indexes, which are much harder to implement
+        across multiple RDMSs.  As a result, we will (at least initially) try
+        to define just a single level for all SkyPix values.  Our preliminary
+        guess is that this level should have pixels be approximately (within a
+        factor of ~4) of the size of a single Detector on the sky.
+      spatial:
+        true
       link:
       - skypix
 
