@@ -64,18 +64,18 @@ class QuantumTestCase(lsst.utils.tests.TestCase):
         # start with empty
         self.assertEqual(quantum.predictedInputs, dict())
 
-        camera = "DummyCam"
+        instrument = "DummyCam"
         datasetTypeName = "test_ds"
         storageClass = StorageClass("testref_StructuredData")
-        datasetType = DatasetType(datasetTypeName, ("camera", "visit"), storageClass)
+        datasetType = DatasetType(datasetTypeName, ("instrument", "visit"), storageClass)
 
         # add one ref
-        ref = DatasetRef(datasetType, dict(camera=camera, visit=42))
+        ref = DatasetRef(datasetType, dict(instrument=instrument, visit=42))
         quantum.addPredictedInput(ref)
         self.assertIn(datasetTypeName, quantum.predictedInputs)
         self.assertEqual(len(quantum.predictedInputs[datasetTypeName]), 1)
         # add second ref
-        ref = DatasetRef(datasetType, dict(camera=camera, visit=43))
+        ref = DatasetRef(datasetType, dict(instrument=instrument, visit=43))
         quantum.addPredictedInput(ref)
         self.assertEqual(len(quantum.predictedInputs[datasetTypeName]), 2)
 
@@ -87,12 +87,12 @@ class QuantumTestCase(lsst.utils.tests.TestCase):
 
         # add couple of outputs too
         self.assertEqual(quantum.outputs, dict())
-        ref = DatasetRef(datasetType, dict(camera=camera, visit=42))
+        ref = DatasetRef(datasetType, dict(instrument=instrument, visit=42))
         quantum.addOutput(ref)
         self.assertIn(datasetTypeName, quantum.outputs)
         self.assertEqual(len(quantum.outputs[datasetTypeName]), 1)
 
-        ref = DatasetRef(datasetType, dict(camera=camera, visit=43))
+        ref = DatasetRef(datasetType, dict(instrument=instrument, visit=43))
         quantum.addOutput(ref)
         self.assertEqual(len(quantum.outputs[datasetTypeName]), 2)
 

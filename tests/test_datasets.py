@@ -43,7 +43,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         """
         datasetTypeName = "test"
         storageClass = StorageClass("test_StructuredData")
-        dataUnits = frozenset(("camera", "visit"))
+        dataUnits = frozenset(("instrument", "visit"))
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
@@ -94,8 +94,8 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         """
         datasetTypeName = "test"
         storageClass = StorageClass("testref_StructuredData")
-        dataUnits = frozenset(("camera", "visit"))
-        dataId = dict(camera="DummyCam", visit=42)
+        dataUnits = frozenset(("instrument", "visit"))
+        dataId = dict(instrument="DummyCam", visit=42)
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         ref = DatasetRef(datasetType, dataId)
         self.assertEqual(ref.datasetType, datasetType)
@@ -108,8 +108,8 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
     def testDetach(self):
         datasetTypeName = "test"
         storageClass = StorageClass("testref_StructuredData")
-        dataUnits = frozenset(("camera", "visit"))
-        dataId = dict(camera="DummyCam", visit=42)
+        dataUnits = frozenset(("instrument", "visit"))
+        dataId = dict(instrument="DummyCam", visit=42)
         datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         ref = DatasetRef(datasetType, dataId, id=1)
         detachedRef = ref.detach()

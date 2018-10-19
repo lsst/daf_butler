@@ -31,7 +31,7 @@ class DataUnit:
     """A discrete abstract unit of data that can be associated with
     metadata and used to label datasets.
 
-    `DataUnit` instances represent concrete units such as e.g. `Camera`,
+    `DataUnit` instances represent concrete units such as e.g. `Instrument`,
     `Detector`, `Visit` and `SkyMap`.
 
     Parameters

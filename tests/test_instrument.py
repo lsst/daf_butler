@@ -34,7 +34,7 @@ from lsst.daf.butler.instrument import Instrument
 
 
 class DummyCam(Instrument):
-    camera = "DummyCam"
+    instrument = "DummyCam"
 
     physicalFilters = [{"physical_filter": "dummy_g"},
                        {"physical_filter": "dummy_u"}]

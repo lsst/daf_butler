@@ -74,9 +74,9 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
         """
         dataUnitRegistry = DataUnitRegistry.fromConfig(self.config)
         self.assertEqual(dataUnitRegistry.getRegionHolder("Visit"),
-                         dataUnitRegistry.getRegionHolder("Camera", "Visit"))
+                         dataUnitRegistry.getRegionHolder("Instrument", "Visit"))
         self.assertEqual(dataUnitRegistry.getRegionHolder("Visit", "Detector"),
-                         dataUnitRegistry.getRegionHolder("Camera", "Visit", "Detector"))
+                         dataUnitRegistry.getRegionHolder("Instrument", "Visit", "Detector"))
         self.assertEqual(dataUnitRegistry.getRegionHolder("Patch"),
                          dataUnitRegistry.getRegionHolder("Tract", "Patch"))
         self.assertEqual(dataUnitRegistry.getRegionHolder("Patch"),
@@ -84,7 +84,7 @@ class DataUnitRegistryTestCase(lsst.utils.tests.TestCase):
         with self.assertRaises(KeyError):
             dataUnitRegistry.getRegionHolder("Detector")
         with self.assertRaises(KeyError):
-            dataUnitRegistry.getRegionHolder("Camera", "Detector")
+            dataUnitRegistry.getRegionHolder("Instrument", "Detector")
 
 
 if __name__ == "__main__":

@@ -1,17 +1,17 @@
 dataUnits:
   version: 0
   dimensions:
-    Camera:
+    Instrument:
       doc: >
-        An entity that produces observations.  A Camera defines a set of
+        An entity that produces observations.  An Instrument defines a set of
         PhysicalFilters and Detectors and a numbering system for the Exposures
         and Visits that represent observations with it.
       link:
-      - camera
+      - instrument
 
     AbstractFilter:
       doc: >
-        A filter that is not associated with a particular Camera.  An
+        A filter that is not associated with a particular Instrument.  An
         abstract filter can be used to relate similar physical filters, and
         is typically the filter associated with coadds.
       link:
@@ -20,11 +20,11 @@ dataUnits:
     PhysicalFilter:
       dependencies:
         required:
-        - Camera
+        - Instrument
         optional:
         - AbstractFilter
       doc: >
-        A filter associated with a particular Camera.  PhysicalFilters are
+        A filter associated with a particular Instrument.  PhysicalFilters are
         used to identify datasets that can only be associated with a single
         observation.
       link:
@@ -33,22 +33,23 @@ dataUnits:
     Detector:
       dependencies:
         required:
-        - Camera
+        - Instrument
       doc: >
-        A detector associated with a particular Camera (not an observation of that
-        detector; that requires specifying an exposure or visit as well).
+        A detector associated with a particular Instrument (not an observation
+        of that detector; that requires specifying an exposure or visit as
+        well).
       link:
       - detector
 
     Visit:
       dependencies:
         required:
-        - Camera
+        - Instrument
         optional:
         - PhysicalFilter
       doc: >
         A sequence of observations processed together, comprised of one or
-        more Exposures from the same Camera with the same pointing and
+        more Exposures from the same Instrument with the same pointing and
         PhysicalFilter.
         The Visit table contains metadata that is both meaningful only for
         science Exposures and the same for all Exposures in a Visit.
@@ -59,17 +60,17 @@ dataUnits:
     Exposure:
       dependencies:
         required:
-        - Camera
+        - Instrument
         optional:
         - Visit
         - PhysicalFilter
       doc: >
-        An observation associated with a particular camera.  All direct
+        An observation associated with a particular instrument.  All direct
         observations are identified with an Exposure, but derived datasets
-        that may be based on more than one Exposure (e.g. multiple snaps)
-        are typically identified with Visits instead, even for cameras that
-        don't have multiple Exposures per Visit.  As a result, Cameras that
-        don't have multiple Exposures per Visit will typically have Visit
+        that may be based on more than one Exposure (e.g. multiple snaps) are
+        typically identified with Visits instead, even for instruments that
+        don't have multiple Exposures per Visit.  As a result, Instruments
+        that don't have multiple Exposures per Visit will typically have Visit
         entries that are essentially duplicates of their Exposure entries.
 
         The Exposure table contains metadata entries that are relevant for
@@ -81,13 +82,14 @@ dataUnits:
     ExposureRange:
       dependencies:
         required:
-        - Camera
+        - Instrument
       doc: >
         An inclusive range of Exposure dates that may be open in either
         direction, typically used to identify master calibration products.
         There is no SQL table associated with ExposureRanges; there is no
         additional information associated with an ExposureRange besides the
-        camera, valid_first, and valid_last fields already present in Dataset.
+        instrument, valid_first, and valid_last fields already present in
+        Dataset.
       link:
       - valid_first
       - valid_last
@@ -165,28 +167,28 @@ dataUnits:
     ExposureRangeJoin:
       doc: >
         A calculated join between Datasets identified with an Exposure
-        (typically raw science frames) and Datasets identified with ExposureRange
-        (typically master calibrations).
+        (typically raw science frames) and Datasets identified with
+        ExposureRange (typically master calibrations).
       lhs: [Exposure]
       rhs: [ExposureRange]
       sql:
-        (lhs.camera = rhs.camera) AND
+        (lhs.instrument = rhs.instrument) AND
         (lhs.datetime_begin BETWEEN rhs.valid_first AND rhs.valid_last)
-    MultiCameraExposureJoin:
+    MultiInstrumentExposureJoin:
       doc: >
-        A join table that relates Exposures from different Cameras, with
+        A join table that relates Exposures from different Instruments, with
         explicitly-created entries.  This is intended to be used primarily in
         calibration products production, to relate auxilliary telescope
-        observations with the main camera observations they support.  It could
-        also be used to relate CBP state (represented as CBP "Exposures") with
-        actual main camera observations of the CBP.
+        observations with the main instrument observations they support.  It
+        could also be used to relate CBP state (represented as CBP
+        "Exposures") with actual main instrument observations of the CBP.
       lhs: [Exposure]
       rhs: [Exposure]
 
     VisitDetectorSkyPixJoin:
       doc: >
-        A spatial join table that relates Visit+Detector to SkyPix, also used as an
-        intermediate when relating Visit+Detector to SkyMap DataUnits.
+        A spatial join table that relates Visit+Detector to SkyPix, also used
+        as an intermediate when relating Visit+Detector to SkyMap DataUnits.
 
         Entries are expected to be calculated outside the database and
         added/updated whenever VisitDetectorRegion is.
@@ -209,7 +211,7 @@ dataUnits:
     PatchSkyPixJoin:
       doc: >
         A spatial join table that relates Patch to SkyPix, also used as an
-        intermediate when relating Patch to Camera DataUnits.
+        intermediate when relating Patch to Instrument DataUnits.
 
         Entries are expected to be calculated outside the database and
         added along with the Patch itself.
@@ -220,7 +222,7 @@ dataUnits:
     TractSkyPixJoin:
       doc: >
         A spatial join table that relates Tract to SkyPix, also used as an
-        intermediate when relating Tract to Camera DataUnits.
+        intermediate when relating Tract to Instrument DataUnits.
 
         This can and probably should be implemented as a trivial view on
         PatchSkyPixJoin.

@@ -215,8 +215,8 @@ class ConvertedRepo:
     ----------
     gen2 : `Gen2Repo`
         Structure describing the Gen2 data repository.
-    camera : `str`
-        Gen3 Camera DataUnit name.
+    instrument : `str`
+        Gen3 Instrument DataUnit name.
     run : `Run`
         Gen3 Run instance Datasets will be added to (unless overridden) at
         the DatasetType or Dataset level.
@@ -224,7 +224,7 @@ class ConvertedRepo:
         Dictionary mapping DatasetType name to `Translator` instance.
     """
 
-    __slots__ = ("gen2", "camera", "run", "translators")
+    __slots__ = ("gen2", "instrument", "run", "translators")
 
     def __eq__(self, rhs):
         if not isinstance(rhs, ConvertedRepo):
@@ -234,8 +234,8 @@ class ConvertedRepo:
     def __ne__(self, rhs):
         return not (self == rhs)
 
-    def __init__(self, gen2, camera, run, translators):
+    def __init__(self, gen2, instrument, run, translators):
         self.gen2 = gen2
-        self.camera = camera
+        self.instrument = instrument
         self.run = run
         self.translators = translators

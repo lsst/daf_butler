@@ -657,7 +657,7 @@ class Registry(metaclass=ABCMeta):
         """Add a new `DataUnit` entry.
 
         dataUnitName : `str`
-            Name of the `DataUnit` (e.g. ``"Camera"``).
+            Name of the `DataUnit` (e.g. ``"Instrument"``).
         values : `dict`
             Dictionary of ``columnName, columnValue`` pairs.
 

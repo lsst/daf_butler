@@ -32,7 +32,7 @@ schema:
           to fine-grained provenance information.
           may be null for datasets not produced by running a supertask.
       -
-        name: camera
+        name: instrument
         type: string
       -
         name: abstract_filter
@@ -97,35 +97,35 @@ schema:
         src: abstract_filter
         tgt: AbstractFilter.abstract_filter
       -
-        src: camera
-        tgt: Camera.camera
+        src: instrument
+        tgt: Instrument.instrument
       -
         src:
-          - camera
+          - instrument
           - physical_filter
         tgt:
-          - PhysicalFilter.camera
+          - PhysicalFilter.instrument
           - PhysicalFilter.physical_filter
       -
         src:
-          - camera
+          - instrument
           - detector
         tgt:
-          - Detector.camera
+          - Detector.instrument
           - Detector.detector
       -
         src:
-          - camera
+          - instrument
           - visit
         tgt:
-          - Visit.camera
+          - Visit.instrument
           - Visit.visit
       -
         src:
-          - camera
+          - instrument
           - exposure
         tgt:
-          - Exposure.camera
+          - Exposure.instrument
           - Exposure.exposure
       -
         src: skymap
@@ -415,8 +415,8 @@ schema:
 
     DatasetStorage:
       doc: >
-        A table that provides information on whether a Dataset is stored in one
-        or more Datastores.  The presence or absence of a record in this
+        A table that provides information on whether a Dataset is stored in
+        one or more Datastores.  The presence or absence of a record in this
         table itself indicates whether the Dataset is present in that
         Datastore.
       columns:
@@ -439,17 +439,17 @@ schema:
         tgt: Dataset.dataset_id
 
 
-    Camera:
+    Instrument:
       doc: >
-        A definition table containing recognized Camera values.
+        A definition table containing recognized Instrument values.
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         primary_key: true
         doc: >
-          Globally unique string indentifier for this Camera.
+          Globally unique string indentifier for this Instrument.
 
     AbstractFilter:
       doc: >
@@ -470,23 +470,23 @@ schema:
 
     PhysicalFilter:
       doc: >
-        A Camera-populated table that relates a PhysicalFilter
-        to its Camera and optional AbstractFilter.
+        An Instrument-populated table that relates a PhysicalFilter
+        to its Instrument and optional AbstractFilter.
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         primary_key: true
         doc: >
-          Name of the Camera with which this filter is associated.
+          Name of the Instrument with which this filter is associated.
       -
         name: physical_filter
         type: string
         primary_key: true
         doc: >
           String name of the filter, typically a multi-letter code in a
-          convention defined by the Camera (e.g. "HSC-I" or "F775W").
+          convention defined by the Instrument (e.g. "HSC-I" or "F775W").
       -
         name: abstract_filter
         type: string
@@ -494,8 +494,8 @@ schema:
           Name of the AbstractFilter with which this filter is associated.
       foreignKeys:
       -
-        src: camera
-        tgt: Camera.camera
+        src: instrument
+        tgt: Instrument.instrument
       foreignKeys:
       -
         src: abstract_filter
@@ -503,59 +503,59 @@ schema:
 
     Detector:
       doc: >
-        A Camera-populated table that relates a Detector to its Camera and
-        provides additional labels.
+        An Instrument-populated table that relates a Detector to its
+        Instrument and provides additional labels.
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         primary_key: true
         nullable: false
         doc: >
-          Name of the Camera with which this Detector is associated.
+          Name of the Instrument with which this Detector is associated.
       -
         name: detector
         type: int
         primary_key: true
         nullable: false
         doc: >
-          A unique (with Camera) integer identifier for the Detector.
+          A unique (with Instrument) integer identifier for the Detector.
       -
         name: name
         type: string
         doc: >
           An alternate string identifer for the detector; may or may not
-          be unique within a Camera.
+          be unique within an Instrument.
       -
         name: group
         type: string
         doc: >
-          A string name for a group of detectors with a Camera-dependent
+          A string name for a group of detectors with an Instrument-dependent
           interpretation, such as LSST's rafts.
       -
         name: purpose
         type: string
         doc: >
           Role of the Detector; typically one of "SCIENCE", "WAVEFRONT",
-          or "GUIDE", though Cameras may define additional values.
+          or "GUIDE", though Instruments may define additional values.
       foreignKeys:
       -
-        src: camera
-        tgt: Camera.camera
+        src: instrument
+        tgt: Instrument.instrument
 
     Visit:
       doc: >
-        A table containing Camera-generic metadata for a Visit.
+        A table containing Instrument-generic metadata for a Visit.
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         primary_key: true
         nullable: false
         doc: >
-          The Camera used to observe the Exposures associated with this
+          The Instrument used to observe the Exposures associated with this
           Visit.
       -
         name: visit
@@ -563,7 +563,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          Unique (with camera) integer identifier for this Visit.
+          Unique (with instrument) integer identifier for this Visit.
       -
         name: physical_filter
         type: string
@@ -613,35 +613,35 @@ schema:
           and decode methods.
       foreignKeys:
       -
-        src: camera
-        tgt: Camera.camera
+        src: instrument
+        tgt: Instrument.instrument
       -
         src:
-        - camera
+        - instrument
         - physical_filter
         tgt:
-        - PhysicalFilter.camera
+        - PhysicalFilter.instrument
         - PhysicalFilter.physical_filter
 
     Exposure:
       doc: >
-        A table containing Camera-generic Exposure metadata.
+        A table containing Instrument-generic Exposure metadata.
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         primary_key: true
         nullable: false
         doc: >
-          The Camera used to observe the Exposure.
+          The Instrument used to observe the Exposure.
       -
         name: exposure
         type: int
         primary_key: true
         nullable: false
         doc: >
-          Unique (with camera) integer identifier for this Exposure.
+          Unique (with instrument) integer identifier for this Exposure.
       -
         name: visit
         type: int
@@ -687,21 +687,21 @@ schema:
         doc: Duration of the Exposure with shutter closed (seconds).
       foreignKeys:
       -
-        src: camera
-        tgt: Camera.camera
+        src: instrument
+        tgt: Instrument.instrument
       -
         src:
-        - camera
+        - instrument
         - visit
         tgt:
-        - Visit.camera
+        - Visit.instrument
         - Visit.visit
       -
         src:
-        - camera
+        - instrument
         - physical_filter
         tgt:
-        - PhysicalFilter.camera
+        - PhysicalFilter.instrument
         - PhysicalFilter.physical_filter
 
     SkyMap:
@@ -843,11 +843,11 @@ schema:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         primary_key: true
         nullable: false
-        doc: Name of the Camera associated with the Visit and Detector.
+        doc: Name of the Instrument associated with the Visit and Detector.
       -
         name: visit
         type: int
@@ -875,37 +875,37 @@ schema:
       foreignKeys:
       -
         src:
-        - camera
+        - instrument
         - visit
         tgt:
-        - Visit.camera
+        - Visit.instrument
         - Visit.visit
       -
         src:
-        - camera
+        - instrument
         - detector
         tgt:
-        - Detector.camera
+        - Detector.instrument
         - Detector.detector
 
-    MultiCameraExposureJoin:
+    MultiInstrumentExposureJoin:
       limited: false
       columns:
       -
-        name: camera_1
+        name: instrument_1
         type: string
         nullable: false
-        doc: Camera name for lhs Dataset.
+        doc: Instrument name for lhs Dataset.
       -
         name: exposure_1
         type: int
         nullable: false
         doc: Exposure ID for lhs Dataset.
       -
-        name: camera_2
+        name: instrument_2
         type: string
         nullable: false
-        doc: Camera name for rhs Dataset.
+        doc: Instrument name for rhs Dataset.
       -
         name: exposure_2
         type: int
@@ -914,27 +914,27 @@ schema:
       foreignKeys:
       -
         src:
-          - camera_1
+          - instrument_1
           - exposure_1
         tgt:
-          - Exposure.camera
+          - Exposure.instrument
           - Exposure.exposure
       -
         src:
-          - camera_1
+          - instrument_1
           - exposure_1
         tgt:
-          - Exposure.camera
+          - Exposure.instrument
           - Exposure.exposure
 
     VisitDetectorSkyPixJoin:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit and Detector.
+        doc: Name of the Instrument associated with the Visit and Detector.
       -
         name: visit
         type: int
@@ -953,11 +953,11 @@ schema:
       foreignKeys:
       -
         src:
-          - camera
+          - instrument
           - visit
           - detector
         tgt:
-          - VisitDetectorRegion.camera
+          - VisitDetectorRegion.instrument
           - VisitDetectorRegion.visit
           - VisitDetectorRegion.detector
 
@@ -965,10 +965,10 @@ schema:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit.
+        doc: Name of the Instrument associated with the Visit.
       -
         name: visit
         type: int
@@ -982,13 +982,13 @@ schema:
       foreignKeys:
       -
         src:
-          - camera
+          - instrument
           - visit
         tgt:
-          - Visit.camera
+          - Visit.instrument
           - Visit.visit
       sql: >
-        SELECT DISTINCT camera, visit, skypix
+        SELECT DISTINCT instrument, visit, skypix
         FROM VisitDetectorSkyPixJoin;
       materialize: false
 
@@ -1061,10 +1061,10 @@ schema:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit and Detector.
+        doc: Name of the Instrument associated with the Visit and Detector.
       -
         name: visit
         type: int
@@ -1093,11 +1093,11 @@ schema:
       foreignKeys:
       -
         src:
-          - camera
+          - instrument
           - visit
           - detector
         tgt:
-          - VisitDetectorRegion.camera
+          - VisitDetectorRegion.instrument
           - VisitDetectorRegion.visit
           - VisitDetectorRegion.detector
       -
@@ -1111,7 +1111,7 @@ schema:
           - Patch.patch
       sql: >
         SELECT DISTINCT
-          VisitDetectorSkyPixJoin.camera,
+          VisitDetectorSkyPixJoin.instrument,
           VisitDetectorSkyPixJoin.visit,
           VisitDetectorSkyPixJoin.detector,
           PatchSkyPixJoin.skymap,
@@ -1127,10 +1127,10 @@ schema:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit.
+        doc: Name of the Instrument associated with the Visit.
       -
         name: visit
         type: int
@@ -1154,10 +1154,10 @@ schema:
       foreignKeys:
       -
         src:
-          - camera
+          - instrument
           - visit
         tgt:
-          - Visit.camera
+          - Visit.instrument
           - Visit.visit
       -
         src:
@@ -1170,7 +1170,7 @@ schema:
           - Patch.patch
       sql: >
         SELECT DISTINCT
-          VisitSkyPixJoin.camera,
+          VisitSkyPixJoin.instrument,
           VisitSkyPixJoin.visit,
           PatchSkyPixJoin.skymap,
           PatchSkyPixJoin.tract,
@@ -1185,10 +1185,10 @@ schema:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit and Detector.
+        doc: Name of the Instrument associated with the Visit and Detector.
       -
         name: visit
         type: int
@@ -1212,11 +1212,11 @@ schema:
       foreignKeys:
       -
         src:
-          - camera
+          - instrument
           - visit
           - detector
         tgt:
-          - VisitDetectorRegion.camera
+          - VisitDetectorRegion.instrument
           - VisitDetectorRegion.visit
           - VisitDetectorRegion.detector
       -
@@ -1228,7 +1228,7 @@ schema:
           - Tract.tract
       sql: >
         SELECT DISTINCT
-          VisitDetectorSkyPixJoin.camera,
+          VisitDetectorSkyPixJoin.instrument,
           VisitDetectorSkyPixJoin.visit,
           VisitDetectorSkyPixJoin.detector,
           TractSkyPixJoin.skymap,
@@ -1243,10 +1243,10 @@ schema:
       limited: false
       columns:
       -
-        name: camera
+        name: instrument
         type: string
         nullable: false
-        doc: Name of the Camera associated with the Visit.
+        doc: Name of the Instrument associated with the Visit.
       -
         name: visit
         type: int
@@ -1265,10 +1265,10 @@ schema:
       foreignKeys:
       -
         src:
-          - camera
+          - instrument
           - visit
         tgt:
-          - Visit.camera
+          - Visit.instrument
           - Visit.visit
       -
         src:
@@ -1279,7 +1279,7 @@ schema:
           - Tract.tract
       sql: >
         SELECT DISTINCT
-          VisitSkyPixJoin.camera,
+          VisitSkyPixJoin.instrument,
           VisitSkyPixJoin.visit,
           TractSkyPixJoin.skymap,
           TractSkyPixJoin.tract

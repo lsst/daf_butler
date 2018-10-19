@@ -114,7 +114,7 @@ class ButlerTests:
     def runPutGetTest(self, storageClass, datasetTypeName):
         butler = Butler(self.tmpConfigFile)
         # Create and register a DatasetType
-        dataUnits = ("Camera", "Visit")
+        dataUnits = ("Instrument", "Visit")
 
         # We can not delete datasets so for now create two so we can do
         # two puts.
@@ -128,15 +128,15 @@ class ButlerTests:
         self.addDatasetType(datasetTypeName3, dataUnits, storageClass, butler.registry)
 
         # Add needed DataUnits
-        butler.registry.addDataUnitEntry("Camera", {"camera": "DummyCamComp"})
-        butler.registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCamComp",
+        butler.registry.addDataUnitEntry("Instrument", {"instrument": "DummyCamComp"})
+        butler.registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCamComp",
                                                             "physical_filter": "d-r"})
-        butler.registry.addDataUnitEntry("Visit", {"camera": "DummyCamComp", "visit": 423,
+        butler.registry.addDataUnitEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
                                                    "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
-        dataId = {"camera": "DummyCamComp", "visit": 423}
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
 
         # Create a DatasetRef for put
         datasetType2 = butler.registry.getDatasetType(datasetTypeName2)
@@ -198,13 +198,13 @@ class ButlerTests:
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
         datasetTypeName = "test_metric"
-        dataUnits = ("Camera", "Visit")
-        dataUnitEntries = (("Camera", {"camera": "DummyCam"}),
-                           ("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"}),
-                           ("Visit", {"camera": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        dataUnits = ("Instrument", "Visit")
+        dataUnitEntries = (("Instrument", {"instrument": "DummyCam"}),
+                           ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
+                           ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
-        dataId = {"camera": "DummyCam", "visit": 42}
+        dataId = {"instrument": "DummyCam", "visit": 42}
         with self.assertRaises(TransactionTestError):
             with butler.transaction():
                 # Create and register a DatasetType

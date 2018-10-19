@@ -134,7 +134,7 @@ class Translator:
     __slots__ = ("handlers", "skyMap", "skyMapName")
 
     # Rules used to match Handlers when constring a Translator.
-    # outer key is camera name, or None for any
+    # outer key is instrument name, or None for any
     # inner key is DatasetType name, or None for any
     # values are 3-tuples of (frozenset(gen2keys), handler, consume)
     _rules = {
@@ -144,7 +144,7 @@ class Translator:
     }
 
     @classmethod
-    def addRule(cls, handler, camera=None, datasetTypeName=None, gen2keys=(), consume=True):
+    def addRule(cls, handler, instrument=None, datasetTypeName=None, gen2keys=(), consume=True):
         """Add a KeyHandler and an associated matching rule.
 
         Parameters
@@ -152,9 +152,9 @@ class Translator:
         handler : `KeyHandler`
             A KeyHandler instance to add to a Translator when this rule
             matches.
-        camera : `str`
-            Gen3 camera name the Gen2 repository must be associated with for
-            this rule to match, or None to match any camera.
+        instrument : `str`
+            Gen3 instrument name the Gen2 repository must be associated with for
+            this rule to match, or None to match any instrument.
         datasetTypeName : `str`
             Name of the DatasetType this rule matches, or None to match any
             DatasetType.
@@ -175,22 +175,22 @@ class Translator:
             consume = frozenset(consume)
         else:
             consume = frozenset()
-        # find the rules for this camera, or if we haven't seen it before,
+        # find the rules for this instrument, or if we haven't seen it before,
         # add a nested dictionary that matches any DatasetType name and then
         # append this rule.
-        rulesForCamera = cls._rules.setdefault(camera, {None: []})
-        rulesForCameraAndDatasetType = rulesForCamera.setdefault(datasetTypeName, [])
-        rulesForCameraAndDatasetType.append((frozenset(gen2keys), handler, consume))
+        rulesForInstrument = cls._rules.setdefault(instrument, {None: []})
+        rulesForInstrumentAndDatasetType = rulesForInstrument.setdefault(datasetTypeName, [])
+        rulesForInstrumentAndDatasetType.append((frozenset(gen2keys), handler, consume))
 
     @classmethod
-    def makeMatching(cls, camera, datasetType, skyMapNames, skyMaps):
+    def makeMatching(cls, instrument, datasetType, skyMapNames, skyMaps):
         """Construct a Translator appropriate for instances of the given
         dataset.
 
         Parameters
         ----------
-        camera : `str`
-            String name of the Gen3 camera associated with the Gen2 repository
+        instrument : `str`
+            String name of the Gen3 instrument associated with the Gen2 repository
             this dataset is being translated from.
         datasetType : `Gen2DatasetType`
             A structure containing information about the Gen2 DatasetType,
@@ -212,13 +212,13 @@ class Translator:
             Raised when the given skyMaps and/or skyMapNames dicts do not
             contain a entry with the "coaddName" associated with this Dataset.
         """
-        rulesForCamera = cls._rules.get(camera, {None: []})
-        rulesForAnyCamera = cls._rules[None]
+        rulesForInstrument = cls._rules.get(instrument, {None: []})
+        rulesForAnyInstrument = cls._rules[None]
         candidateRules = itertools.chain(
-            rulesForCamera.get(datasetType.name, []),     # this camera, this DatasetType
-            rulesForCamera[None],                         # this camera, any DatasetType
-            rulesForAnyCamera.get(datasetType.name, []),  # any camera, this DatasetType
-            rulesForAnyCamera[None],                      # any camera, any DatasetType
+            rulesForInstrument.get(datasetType.name, []),     # this instrument, this DatasetType
+            rulesForInstrument[None],                         # this instrument, any DatasetType
+            rulesForAnyInstrument.get(datasetType.name, []),  # any instrument, this DatasetType
+            rulesForAnyInstrument[None],                      # any instrument, any DatasetType
         )
         matchedHandlers = []
         targetKeys = set(datasetType.keys)
