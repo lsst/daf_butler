@@ -95,8 +95,8 @@ def makeExposureEntryFromObsInfo(dataId, obsInfo):
     result = {
         "datetime_begin": obsInfo.datetime_begin.to_datetime(),
         "datetime_end": obsInfo.datetime_end.to_datetime(),
-        "exposure_time": obsInfo.exposure_time,
-        "dark_time": obsInfo.dark_time
+        "exposure_time": obsInfo.exposure_time.to_value("s"),
+        "dark_time": obsInfo.dark_time.to_value("s")
     }
     result.update(dataId)
     return result
@@ -124,7 +124,7 @@ def makeVisitEntryFromObsInfo(dataId, obsInfo):
     result = {
         "datetime_begin": obsInfo.datetime_begin.to_datetime(),
         "datetime_end": obsInfo.datetime_end.to_datetime(),
-        "exposure_time": obsInfo.exposure_time,
+        "exposure_time": obsInfo.exposure_time.to_value("s"),
     }
     result.update(dataId)
     return result
