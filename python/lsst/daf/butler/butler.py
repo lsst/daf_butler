@@ -143,6 +143,8 @@ class Butler:
         return config
 
     def __init__(self, config=None, collection=None, run=None):
+        # save arguments for pickling
+        self._args = (config, collection, run)
         self.config = ButlerConfig(config)
         self.registry = Registry.fromConfig(self.config)
         self.datastore = Datastore.fromConfig(self.config, self.registry)
@@ -182,7 +184,7 @@ class Butler:
     def __reduce__(self):
         """Support pickling.
         """
-        return (Butler, (self.config, ))
+        return (Butler, self._args)
 
     def __str__(self):
         return "Butler(collection='{}', datastore='{}', registry='{}')".format(

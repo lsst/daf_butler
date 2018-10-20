@@ -303,6 +303,20 @@ class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     registryStr = "registry='sqlite:///:memory:'"
 
 
+class ButlerConfigNoRunTestCase(lsst.utils.tests.TestCase):
+    """Test case for butler config which does not have ``run``.
+    """
+    configFile = os.path.join(TESTDIR, "config/basic/butler-norun.yaml")
+
+    def testPickle(self):
+        """Test pickle support.
+        """
+        butler = Butler(self.configFile, run="ingest")
+        butlerOut = pickle.loads(pickle.dumps(butler))
+        self.assertIsInstance(butlerOut, Butler)
+        self.assertEqual(butlerOut.config, butler.config)
+
+
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
     pass
 

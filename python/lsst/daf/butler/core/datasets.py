@@ -23,7 +23,7 @@ from copy import deepcopy
 
 from types import MappingProxyType
 from .utils import slotValuesAreEqual, slotValuesToHash
-from .storageClass import StorageClass
+from .storageClass import StorageClass, StorageClassFactory
 
 __all__ = ("DatasetType", "DatasetRef")
 
@@ -170,6 +170,50 @@ class DatasetType:
             Tuple of the `DatasetType` name and the `StorageClass` name.
         """
         return (self.name, *self.storageClass._lookupNames())
+
+    def __getstate__(self):
+        """Support for pickling.
+
+        StorageClass instances can not normally be pickled, so we need special
+        code to pickle those. We pickle StorageClass name instead of instance
+        and retrieve the instance using that name when un-pickling.
+
+        Returns
+        -------
+        state : `dict`
+            Instance state to pickle.
+        """
+        return dict(name=self.name,
+                    storageClassName=self.storageClass.name,
+                    dataUnits=self.dataUnits)
+
+    def __setstate__(self, state):
+        """Support for un-pickling.
+
+        Uses state dictionary produced by `__getstate__`.
+
+        This method retrieves StorageClass instance from StorageClassFactory
+        which has to be properly initialized.
+
+        Parameters
+        ----------
+        state : `dict`
+            Pickled instance state.
+        """
+        storageClass = StorageClassFactory().getStorageClass(state["storageClassName"])
+        self.__init__(name=state["name"], dataUnits=state["dataUnits"], storageClass=storageClass)
+
+    def __deepcopy__(self, memo):
+        """Support for deep copy method.
+
+        If ``__getstate__`` and ``__setstate__`` methods are defined
+        ``deepcopy`` will use those methods. We want to avoid that because
+        it would need initialized StorageClassFactory, instead re-implement
+        ``__deepcopy__`` method.
+        """
+        return DatasetType(name=deepcopy(self.name, memo),
+                           dataUnits=deepcopy(self.dataUnits, memo),
+                           storageClass=deepcopy(self.storageClass, memo))
 
 
 class DatasetRef:
