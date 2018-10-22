@@ -19,9 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Instrument", "makeExposureEntryFromVisitInfo", "makeVisitEntryFromVisitInfo")
-
-from lsst.daf.base import DateTime
+__all__ = ("Instrument", "makeExposureEntryFromObsInfo", "makeVisitEntryFromObsInfo")
 
 
 # TODO: all code in this module probably needs to be moved to a higher-level
@@ -76,48 +74,46 @@ class Instrument:
             registry.addDataUnitEntry('Sensor', entry)
 
 
-def makeExposureEntryFromVisitInfo(dataId, visitInfo, snap=0):
-    """Construct an Exposure DataUnit entry from `afw.image.VisitInfo`.
+def makeExposureEntryFromObsInfo(dataId, obsInfo):
+    """Construct an Exposure DataUnit entry from
+    `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Exposure
         ("camera", "exposure", optionally "visit" and "physical_filter").
-    visitInfo : `lsst.afw.image.VisitInfo`
-        A `~lsst.afw.image.VisitInfo` object corresponding to the Exposure.
-    snap : `int`
-        Snap index of the Exposure.
+    obsInfo : `astro_metadata_translator.ObservationInfo`
+        A `~astro_metadata_translator.ObservationInfo` object corresponding to the
+        Exposure.
 
     Returns
     -------
     entry : `dict`
         A dictionary containing all fields in the Exposure table.
     """
-    avg = visitInfo.getDate()
-    begin = DateTime(int(avg.nsecs(DateTime.TAI) - 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
-    end = DateTime(int(avg.nsecs(DateTime.TAI) + 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
     result = {
-        "datetime_begin": begin.toPython(),
-        "datetime_end": end.toPython(),
-        "exposure_time": visitInfo.getExposureTime(),
-        "snap": snap,
-        "dark_time": visitInfo.getDarkTime()
+        "datetime_begin": obsInfo.datetime_begin.to_datetime(),
+        "datetime_end": obsInfo.datetime_end.to_datetime(),
+        "exposure_time": obsInfo.exposure_time.to_value("s"),
+        "dark_time": obsInfo.dark_time.to_value("s")
     }
     result.update(dataId)
     return result
 
 
-def makeVisitEntryFromVisitInfo(dataId, visitInfo):
-    """Construct a Visit DataUnit entry from `afw.image.VisitInfo`.
+def makeVisitEntryFromObsInfo(dataId, obsInfo):
+    """Construct a Visit DataUnit entry from
+    `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Visit ("camera",
         "visit", optionally "physical_filter").
-    visitInfo : `lsst.afw.image.VisitInfo`
-        A `~lsst.afw.image.VisitInfo` object corresponding to the Visit.
+    obsInfo : `astro_metadata_translator.ObservationInfo`
+        A `~astro_metadata_translator.ObservationInfo` object corresponding to the
+        Visit.
 
     Returns
     -------
@@ -125,13 +121,10 @@ def makeVisitEntryFromVisitInfo(dataId, visitInfo):
         A dictionary containing all fields in the Visit table aside from
         "region".
     """
-    avg = visitInfo.getDate()
-    begin = DateTime(int(avg.nsecs(DateTime.TAI) - 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
-    end = DateTime(int(avg.nsecs(DateTime.TAI) + 0.5E9*visitInfo.getExposureTime()), DateTime.TAI)
     result = {
-        "datetime_begin": begin.toPython(),
-        "datetime_end": end.toPython(),
-        "exposure_time": visitInfo.getExposureTime(),
+        "datetime_begin": obsInfo.datetime_begin.to_datetime(),
+        "datetime_end": obsInfo.datetime_end.to_datetime(),
+        "exposure_time": obsInfo.exposure_time.to_value("s"),
     }
     result.update(dataId)
     return result

@@ -4,6 +4,7 @@ setupRequired(numpy)
 setupRequired(scons)
 setupRequired(sconsUtils)
 setupRequired(utils)
+setupRequired(astro_metadata_translator)
 
 setupRequired(daf_persistence)
 setupRequired(afw)

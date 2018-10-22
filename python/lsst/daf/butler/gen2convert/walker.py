@@ -28,6 +28,7 @@ import datetime
 # register YAML loader for repositoryCfg.yaml files.
 import lsst.daf.persistence.repositoryCfg   # noqa F401
 
+from astro_metadata_translator import ObservationInfo
 from lsst.afw.image import readMetadata
 from lsst.log import Log
 from lsst.utils import doImport
@@ -62,7 +63,7 @@ class ConversionWalker:
         self._ignored = set()
         self._skyMaps = dict()
         self._skyMapRoots = dict()
-        self._visitInfo = dict()
+        self._obsInfo = dict()
         self._calibDict = dict()
 
     def scanAll(self):
@@ -232,20 +233,20 @@ class ConversionWalker:
                                          (dataset.datasetType.name, dataset.dataId["calibDate"],
                                           dataset.dataId["ccd"]))
 
-    def readVisitInfo(self):
-        """Load unique VisitInfo objects and filter associations from all scanned repositories.
+    def readObsInfo(self):
+        """Load unique ObservationInfo objects and filter associations from all scanned repositories.
         """
         for repo in self.scanned.values():
             config = self.config["mappers", repo.MapperClass.__name__, "VisitInfo"]
-            cameraVisitInfo = self.visitInfo.setdefault(repo.MapperClass.__name__, {})
+            cameraObsInfo = self.obsInfo.setdefault(repo.MapperClass.__name__, {})
             datasets = repo.datasets.get(config["DatasetType"], {})
             for dataset in datasets.values():
-                visitInfoId = tuple(dataset.dataId[k] for k in config["uniqueKeys"])
-                if visitInfoId in cameraVisitInfo:
+                obsInfoId = tuple(dataset.dataId[k] for k in config["uniqueKeys"])
+                if obsInfoId in cameraObsInfo:
                     continue
                 md = readMetadata(dataset.fullPath)
                 filt = repo.mapper.queryMetadata(config["DatasetType"], ("filter",), dataset.dataId)[0][0]
-                cameraVisitInfo[visitInfoId] = (repo.mapper.makeRawVisitInfo(md, exposureId=0), filt)
+                cameraObsInfo[obsInfoId] = (ObservationInfo(md), filt)
 
     def readCalibInfo(self, calibPath=None):
         """Load calibration data directly from the sqlite datababase as it is found.
@@ -326,16 +327,17 @@ class ConversionWalker:
         return self._skyMapRoots
 
     @property
-    def visitInfo(self):
-        """All unique VisitInfo objects and visit-filter associations
-        found in any repository (`dict`, nested).
+    def obsInfo(self):
+        """All unique `astro_metadata_translator.ObservationInfo` objects and
+        visit-filter associations found in any repository (`dict`, nested).
 
         This is a nested dictionary, with mapper class names as outer keys and
         the inner keys a tuple of mapper-specific data ID values determined
-        from configuration.  Values are a tuple of `(lsst.afw.image.VisitInfo,
-        str)`, with the latter a Gen2 filter name.
+        from configuration.  Values are a tuple of
+        (`astro_metadata_translator.ObservationInfo`, `str)`, with the latter
+        a Gen2 filter name.
         """
-        return self._visitInfo
+        return self._obsInfo
 
     def _ensureMapperClass(self, repo):
         """Make sure self.MapperClass is defined.
