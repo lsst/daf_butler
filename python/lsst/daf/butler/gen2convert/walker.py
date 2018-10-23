@@ -238,15 +238,15 @@ class ConversionWalker:
         """
         for repo in self.scanned.values():
             config = self.config["mappers", repo.MapperClass.__name__, "VisitInfo"]
-            cameraObsInfo = self.obsInfo.setdefault(repo.MapperClass.__name__, {})
+            instrumentObsInfo = self.obsInfo.setdefault(repo.MapperClass.__name__, {})
             datasets = repo.datasets.get(config["DatasetType"], {})
             for dataset in datasets.values():
                 obsInfoId = tuple(dataset.dataId[k] for k in config["uniqueKeys"])
-                if obsInfoId in cameraObsInfo:
+                if obsInfoId in instrumentObsInfo:
                     continue
                 md = readMetadata(dataset.fullPath)
                 filt = repo.mapper.queryMetadata(config["DatasetType"], ("filter",), dataset.dataId)[0][0]
-                cameraObsInfo[obsInfoId] = (ObservationInfo(md), filt)
+                instrumentObsInfo[obsInfoId] = (ObservationInfo(md), filt)
 
     def readCalibInfo(self, calibPath=None):
         """Load calibration data directly from the sqlite datababase as it is found.

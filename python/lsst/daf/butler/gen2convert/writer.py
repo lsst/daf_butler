@@ -66,7 +66,7 @@ class ConversionWriter:
     obsInfo: dict
         A nested dictionary of `astro_metadata_translator.ObservationInfo`
         objects, with MapperClass names as outer keys and tuples of
-        camera-dependent Gen2 visit/exposure dentifiers as inner keys.
+        instrument-dependent Gen2 visit/exposure dentifiers as inner keys.
         Usually obtained from `ConversionWalker.obsInfo`.
     """
 
@@ -122,7 +122,7 @@ class ConversionWriter:
             collection = re.sub(sub["pattern"], sub["repl"], collection)
         log.debug("Using collection '%s' for root '%s'", collection, gen2repo.root)
         run = self.runs.setdefault(collection, Run(collection=collection))
-        camera = self.config["mappers", gen2repo.MapperClass.__name__, "camera"]
+        instrument = self.config["mappers", gen2repo.MapperClass.__name__, "instrument"]
         skyMapNamesByCoaddName = {}
         for coaddName, skyMap in gen2repo.skyMaps.items():
             log.debug("Using SkyMap with hash=%s for '%s' in '%s'",
@@ -136,7 +136,8 @@ class ConversionWriter:
         for datasetTypeName in gen2repo.datasets.keys():
             gen2dst = gen2repo.datasetTypes[datasetTypeName]
             try:
-                translators[datasetTypeName] = Translator.makeMatching(camera=camera, datasetType=gen2dst,
+                translators[datasetTypeName] = Translator.makeMatching(instrument=instrument,
+                                                                       datasetType=gen2dst,
                                                                        skyMaps=gen2repo.skyMaps,
                                                                        skyMapNames=skyMapNamesByCoaddName)
             except NoSkyMapError:
@@ -182,7 +183,7 @@ class ConversionWriter:
                 storageClass=storageClass,
                 dataUnits=translators[datasetTypeName].gen3units
             )
-        converted = ConvertedRepo(gen2repo, camera=camera, run=run, translators=translators)
+        converted = ConvertedRepo(gen2repo, instrument=instrument, run=run, translators=translators)
         # Add parent repositories first, so self.repos is sorted topologically.
         for parent in gen2repo.parents:
             self._addConvertedRepoSorted(parent)
@@ -193,30 +194,30 @@ class ConversionWriter:
     def run(self, registry, datastore):
         """Main driver for ConversionWriter.
 
-        Runs all steps to create a Gen3 Repo, aside from Camera registration
-        (we merely check that the needed Cameras, Sensors, and PhysicalFilters
+        Runs all steps to create a Gen3 Repo, aside from Instrument registration
+        (we merely check that the needed Instruments, Detectors, and PhysicalFilters
         have already been registered).
         """
-        self.checkCameras(registry)
+        self.checkInstruments(registry)
         self.insertSkyMaps(registry)
         self.insertObservations(registry)
         self.insertDatasetTypes(registry)
         self.insertDatasets(registry, datastore)
         self.insertObservationRegions(registry, datastore)
 
-    def checkCameras(self, registry):
-        """Check that all necessary Cameras are already present in the
+    def checkInstruments(self, registry):
+        """Check that all necessary Instruments are already present in the
         Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
-        cameras = set()
+        instruments = set()
         for repo in self.repos.values():
-            cameras.add(self.config["mappers", repo.gen2.MapperClass.__name__, "camera"])
-        for camera in cameras:
-            log.debug("Looking for preexisting Camera '%s'.", camera)
-            if registry.findDataUnitEntry("Camera", {"camera": camera}) is None:
+            instruments.add(self.config["mappers", repo.gen2.MapperClass.__name__, "instrument"])
+        for instrument in instruments:
+            log.debug("Looking for preexisting Instrument '%s'.", instrument)
+            if registry.findDataUnitEntry("Instrument", {"instrument": instrument}) is None:
                 raise LookupError(
-                    "Camera '{}' has not been registered with the given Registry.".format(camera)
+                    "Instrument '{}' has not been registered with the given Registry.".format(instrument)
                 )
 
     def insertSkyMaps(self, registry):
@@ -255,14 +256,14 @@ class ConversionWriter:
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for mapperName, nested in self.obsInfo.items():
-            camera = self.config["mappers", mapperName, "camera"]
-            log.info("Inserting Exposure and Visit DataUnits for Camera '%s'", camera)
+            instrument = self.config["mappers", mapperName, "instrument"]
+            log.info("Inserting Exposure and Visit DataUnits for Instrument '%s'", instrument)
             for obsInfoId, (obsInfo, filt) in nested.items():
-                # TODO: generalize this to cameras with snaps and/or compound gen2 visit/exposure IDs
+                # TODO: generalize this to instruments with snaps and/or compound gen2 visit/exposure IDs
                 visitId, = obsInfoId
                 exposureId, = obsInfoId
                 # TODO: skip insertion if DataUnits already exist.
-                dataId = {"camera": camera, "visit": visitId, "physical_filter": filt}
+                dataId = {"instrument": instrument, "visit": visitId, "physical_filter": filt}
                 visitEntry = makeVisitEntryFromObsInfo(dataId, obsInfo)
                 dataId["exposure"] = exposureId
                 exposureEntry = makeExposureEntryFromObsInfo(dataId, obsInfo)
@@ -339,17 +340,17 @@ class ConversionWriter:
                     registry.associate(potentialChildRepo.run.collection, refs)
 
     def insertObservationRegions(self, registry, datastore):
-        """Add spatial regions for Visit-Sensor combinations.
+        """Add spatial regions for Visit-Detector combinations.
         """
-        sql = ("SELECT Wcs.camera AS camera, Wcs.visit AS visit, Wcs.sensor AS sensor, "
+        sql = ("SELECT Wcs.instrument AS instrument, Wcs.visit AS visit, Wcs.detector AS detector, "
                "        Wcs.dataset_id AS wcs, Metadata.dataset_id AS metadata "
                "    FROM Dataset AS Wcs "
                "        INNER JOIN DatasetCollection AS WcsCollection "
                "            ON (Wcs.dataset_id = WcsCollection.dataset_id) "
                "        INNER JOIN Dataset AS Metadata "
-               "            ON (Wcs.camera = Metadata.camera "
+               "            ON (Wcs.instrument = Metadata.instrument "
                "                AND Wcs.visit = Metadata.visit "
-               "                AND Wcs.sensor = Metadata.sensor) "
+               "                AND Wcs.detector = Metadata.detector) "
                "        INNER JOIN DatasetCollection AS MetadataCollection "
                "            ON (Metadata.dataset_id = MetadataCollection.dataset_id) "
                "    WHERE WcsCollection.collection = :collection "
@@ -371,9 +372,9 @@ class ConversionWriter:
                 bbox = Box2D(bboxFromMetadata(metadata))
                 bbox.grow(config["padding"])
                 region = ConvexPolygon([sp.getVector() for sp in wcs.pixelToSky(bbox.getCorners())])
-                value = {k: row[k] for k in ("camera", "visit", "sensor")}
-                registry.setDataUnitRegion(("Visit", "Sensor"), value, region, update=False)
-                visits.setdefault((row["camera"], row["visit"]), []).extend(region.getVertices())
-            for (camera, visit), vertices in visits.items():
+                value = {k: row[k] for k in ("instrument", "visit", "detector")}
+                registry.setDataUnitRegion(("Visit", "Detector"), value, region, update=False)
+                visits.setdefault((row["instrument"], row["visit"]), []).extend(region.getVertices())
+            for (instrument, visit), vertices in visits.items():
                 region = ConvexPolygon(vertices)
-                registry.setDataUnitRegion(("Visit",), dict(camera=camera, visit=visit), region)
+                registry.setDataUnitRegion(("Visit",), dict(instrument=instrument, visit=visit), region)

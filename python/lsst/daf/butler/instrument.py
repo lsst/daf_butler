@@ -37,41 +37,41 @@ class Instrument:
 
     Attributes
     ----------
-    camera : `str`
-        Name of the camera.  Must be provided by subclass.
+    instrument : `str`
+        Name of the instrument.  Must be provided by subclass.
     physicalFilters : `list`
         List of PhysicalFilter entries (each entry being a dict).
-    sensors : `list`
-        List of Sensor entries (each entry being a dict).
+    detectors : `list`
+        List of Detector entries (each entry being a dict).
     """
-    camera = None
+    instrument = None
     physicalFilters = []
-    sensors = []
+    detectors = []
 
     def register(self, registry):
         """Register an instance of this `Instrument` with a `Registry`.
 
         Creates all relevant `DataUnit` entries.
         """
-        assert self.camera is not None
-        self._addCamera(registry)
+        assert self.instrument is not None
+        self._addInstrument(registry)
         self._addPhysicalFilters(registry)
-        self._addSensors(registry)
+        self._addDetectors(registry)
 
-    def _addCamera(self, registry):
-        registry.addDataUnitEntry("Camera", {"camera": self.camera})
+    def _addInstrument(self, registry):
+        registry.addDataUnitEntry("Instrument", {"instrument": self.instrument})
 
     def _addPhysicalFilters(self, registry):
         for entry in self.physicalFilters:
-            if "camera" not in entry:
-                entry["camera"] = self.camera
+            if "instrument" not in entry:
+                entry["instrument"] = self.instrument
             registry.addDataUnitEntry("PhysicalFilter", entry)
 
-    def _addSensors(self, registry):
-        for entry in self.sensors:
-            if 'camera' not in entry:
-                entry['camera'] = self.camera
-            registry.addDataUnitEntry('Sensor', entry)
+    def _addDetectors(self, registry):
+        for entry in self.detectors:
+            if 'instrument' not in entry:
+                entry['instrument'] = self.instrument
+            registry.addDataUnitEntry('Detector', entry)
 
 
 def makeExposureEntryFromObsInfo(dataId, obsInfo):
@@ -82,10 +82,10 @@ def makeExposureEntryFromObsInfo(dataId, obsInfo):
     ----------
     dataId : `dict`
         Dictionary of DataUnit primary/foreign key values for Exposure
-        ("camera", "exposure", optionally "visit" and "physical_filter").
+        ("instrument", "exposure", optionally "visit" and "physical_filter").
     obsInfo : `astro_metadata_translator.ObservationInfo`
-        A `~astro_metadata_translator.ObservationInfo` object corresponding to the
-        Exposure.
+        A `~astro_metadata_translator.ObservationInfo` object corresponding to
+        the Exposure.
 
     Returns
     -------
@@ -109,7 +109,7 @@ def makeVisitEntryFromObsInfo(dataId, obsInfo):
     Parameters
     ----------
     dataId : `dict`
-        Dictionary of DataUnit primary/foreign key values for Visit ("camera",
+        Dictionary of DataUnit primary/foreign key values for Visit ("instrument",
         "visit", optionally "physical_filter").
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to the

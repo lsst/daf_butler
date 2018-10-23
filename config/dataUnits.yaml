@@ -1,17 +1,17 @@
 dataUnits:
   version: 0
   dimensions:
-    Camera:
+    Instrument:
       doc: >
-        An entity that produces observations.  A Camera defines a set of
-        PhysicalFilters and Sensors and a numbering system for the Exposures
+        An entity that produces observations.  An Instrument defines a set of
+        PhysicalFilters and Detectors and a numbering system for the Exposures
         and Visits that represent observations with it.
       link:
-      - camera
+      - instrument
 
     AbstractFilter:
       doc: >
-        A filter that is not associated with a particular Camera.  An
+        A filter that is not associated with a particular Instrument.  An
         abstract filter can be used to relate similar physical filters, and
         is typically the filter associated with coadds.
       link:
@@ -20,35 +20,36 @@ dataUnits:
     PhysicalFilter:
       dependencies:
         required:
-        - Camera
+        - Instrument
         optional:
         - AbstractFilter
       doc: >
-        A filter associated with a particular Camera.  PhysicalFilters are
+        A filter associated with a particular Instrument.  PhysicalFilters are
         used to identify datasets that can only be associated with a single
         observation.
       link:
       - physical_filter
 
-    Sensor:
+    Detector:
       dependencies:
         required:
-        - Camera
+        - Instrument
       doc: >
-        A sensor associated with a particular Camera (not an observation of that
-        sensor; that requires specifying an exposure or visit as well).
+        A detector associated with a particular Instrument (not an observation
+        of that detector; that requires specifying an exposure or visit as
+        well).
       link:
-      - sensor
+      - detector
 
     Visit:
       dependencies:
         required:
-        - Camera
+        - Instrument
         optional:
         - PhysicalFilter
       doc: >
         A sequence of observations processed together, comprised of one or
-        more Exposures from the same Camera with the same pointing and
+        more Exposures from the same Instrument with the same pointing and
         PhysicalFilter.
         The Visit table contains metadata that is both meaningful only for
         science Exposures and the same for all Exposures in a Visit.
@@ -59,17 +60,17 @@ dataUnits:
     Exposure:
       dependencies:
         required:
-        - Camera
+        - Instrument
         optional:
         - Visit
         - PhysicalFilter
       doc: >
-        An observation associated with a particular camera.  All direct
+        An observation associated with a particular instrument.  All direct
         observations are identified with an Exposure, but derived datasets
-        that may be based on more than one Exposure (e.g. multiple snaps)
-        are typically identified with Visits instead, even for cameras that
-        don't have multiple Exposures per Visit.  As a result, Cameras that
-        don't have multiple Exposures per Visit will typically have Visit
+        that may be based on more than one Exposure (e.g. multiple snaps) are
+        typically identified with Visits instead, even for instruments that
+        don't have multiple Exposures per Visit.  As a result, Instruments
+        that don't have multiple Exposures per Visit will typically have Visit
         entries that are essentially duplicates of their Exposure entries.
 
         The Exposure table contains metadata entries that are relevant for
@@ -81,13 +82,14 @@ dataUnits:
     ExposureRange:
       dependencies:
         required:
-        - Camera
+        - Instrument
       doc: >
         An inclusive range of Exposure dates that may be open in either
         direction, typically used to identify master calibration products.
         There is no SQL table associated with ExposureRanges; there is no
         additional information associated with an ExposureRange besides the
-        camera, valid_first, and valid_last fields already present in Dataset.
+        instrument, valid_first, and valid_last fields already present in
+        Dataset.
       link:
       - valid_first
       - valid_last
@@ -95,24 +97,25 @@ dataUnits:
     SkyPix:
       doc: >
         A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
-        HEALPix; we will select and support just one, but which is TBD). Has no
-        SQL representation; even a definition table is not necessary, given that
-        the allowable values and the associated spatial regions are best
-        computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e. Tract-
-        Patch) units for Datasets without any overlap regions (e.g. sharded
-        reference catalogs).
+        HEALPix; we will select and support just one, but which is TBD). Has
+        no SQL representation; even a definition table is not necessary, given
+        that the allowable values and the associated spatial regions are best
+        computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e.
+        Tract-Patch) units for Datasets without any overlap regions (e.g.
+        sharded reference catalogs).
 
         There are also considerable advantages to standardizing on just one
-        level of the standard pixelization: if all SkyPix values are at a single
-        level, they can be indexed using standard B-Trees and compared with
-        simple equality comparison.  In contrast, comparing SkyPix values at
-        different levels requires pixelization- specific bit-shifting operations
-        and custom indexes, which are much harder to implement across multiple
-        RDMSs.  As a result, we will (at least initially) try to define just a
-        single level for all SkyPix values.  Our preliminary guess is that this
-        level should have pixels be approximately (within a factor of ~4) of the
-        size of a single Sensor on the sky.
-      spatial: true
+        level of the standard pixelization: if all SkyPix values are at a
+        single level, they can be indexed using standard B-Trees and compared
+        with simple equality comparison.  In contrast, comparing SkyPix values
+        at different levels requires pixelization-specific bit-shifting
+        operations and custom indexes, which are much harder to implement
+        across multiple RDMSs.  As a result, we will (at least initially) try
+        to define just a single level for all SkyPix values.  Our preliminary
+        guess is that this level should have pixels be approximately (within a
+        factor of ~4) of the size of a single Detector on the sky.
+      spatial:
+        true
       link:
       - skypix
 
@@ -154,44 +157,44 @@ dataUnits:
       - label
 
   joins:
-    VisitSensorRegion:
+    VisitDetectorRegion:
       doc: >
         A many-to-many join table that provides region information for
-        Visit-Sensor combinations.
+        Visit-Detector combinations.
       lhs: [Visit]
-      rhs: [Sensor]
+      rhs: [Detector]
       spatial: true
 
     ExposureRangeJoin:
       doc: >
         A calculated join between Datasets identified with an Exposure
-        (typically raw science frames) and Datasets identified with ExposureRange
-        (typically master calibrations).
+        (typically raw science frames) and Datasets identified with
+        ExposureRange (typically master calibrations).
       lhs: [Exposure]
       rhs: [ExposureRange]
       sql:
-        (lhs.camera = rhs.camera) AND
+        (lhs.instrument = rhs.instrument) AND
         (lhs.datetime_begin BETWEEN rhs.valid_first AND rhs.valid_last)
-    MultiCameraExposureJoin:
+    MultiInstrumentExposureJoin:
       doc: >
-        A join table that relates Exposures from different Cameras, with
+        A join table that relates Exposures from different Instruments, with
         explicitly-created entries.  This is intended to be used primarily in
         calibration products production, to relate auxilliary telescope
-        observations with the main camera observations they support.  It could
-        also be used to relate CBP state (represented as CBP "Exposures") with
-        actual main camera observations of the CBP.
+        observations with the main instrument observations they support.  It
+        could also be used to relate CBP state (represented as CBP
+        "Exposures") with actual main instrument observations of the CBP.
       lhs: [Exposure]
       rhs: [Exposure]
 
-    VisitSensorSkyPixJoin:
+    VisitDetectorSkyPixJoin:
       doc: >
-        A spatial join table that relates Visit+Sensor to SkyPix, also used as an
-        intermediate when relating Visit+Sensor to SkyMap DataUnits.
+        A spatial join table that relates Visit+Detector to SkyPix, also used
+        as an intermediate when relating Visit+Detector to SkyMap DataUnits.
 
         Entries are expected to be calculated outside the database and
-        added/updated whenever VisitSensorRegion is.
+        added/updated whenever VisitDetectorRegion is.
 
-      lhs: [Visit, Sensor]
+      lhs: [Visit, Detector]
       rhs: [SkyPix]
 
     VisitSkyPixJoin:
@@ -200,16 +203,16 @@ dataUnits:
         intermediate when relating Visit to SkyMap DataUnits.
 
         This can and probably should be implemented as a trivial view on
-        VisitSensorSkyPixJoin.
+        VisitDetectorSkyPixJoin.
 
       lhs: [Visit]
       rhs: [SkyPix]
-      summarizes: [VisitSensorSkyPixJoin]
+      summarizes: [VisitDetectorSkyPixJoin]
 
     PatchSkyPixJoin:
       doc: >
         A spatial join table that relates Patch to SkyPix, also used as an
-        intermediate when relating Patch to Camera DataUnits.
+        intermediate when relating Patch to Instrument DataUnits.
 
         Entries are expected to be calculated outside the database and
         added along with the Patch itself.
@@ -220,7 +223,7 @@ dataUnits:
     TractSkyPixJoin:
       doc: >
         A spatial join table that relates Tract to SkyPix, also used as an
-        intermediate when relating Tract to Camera DataUnits.
+        intermediate when relating Tract to Instrument DataUnits.
 
         This can and probably should be implemented as a trivial view on
         PatchSkyPixJoin.
@@ -229,9 +232,9 @@ dataUnits:
       rhs: [SkyPix]
       summarizes: [PatchSkyPixJoin]
 
-    VisitSensorPatchJoin:
+    VisitDetectorPatchJoin:
       doc: >
-        A spatial join table that relates Visit+Sensor to Patch via SkyPix.
+        A spatial join table that relates Visit+Detector to Patch via SkyPix.
 
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
@@ -240,7 +243,7 @@ dataUnits:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit, Sensor]
+      lhs: [Visit, Detector]
       rhs: [Patch]
 
     VisitPatchJoin:
@@ -256,11 +259,11 @@ dataUnits:
 
       lhs: [Visit]
       rhs: [Patch]
-      summarizes: [VisitSensorPatchJoin]
+      summarizes: [VisitDetectorPatchJoin]
 
-    VisitSensorTractJoin:
+    VisitDetectorTractJoin:
       doc: >
-        A spatial join table that relates Visit+Sensor to Tract via SkyPix.
+        A spatial join table that relates Visit+Detector to Tract via SkyPix.
 
         Should be implemented as a view; it may be materialized as long as it
         can be kept up to date when new Visits or SkyMaps are added.
@@ -269,9 +272,9 @@ dataUnits:
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit, Sensor]
+      lhs: [Visit, Detector]
       rhs: [Tract]
-      summarizes: [VisitSensorPatchJoin]
+      summarizes: [VisitDetectorPatchJoin]
 
     VisitTractJoin:
       doc: >
@@ -287,6 +290,6 @@ dataUnits:
       lhs: [Visit]
       rhs: [Tract]
       summarizes:
-        - VisitSensorPatchJoin
-        - VisitSensorTractJoin
+        - VisitDetectorPatchJoin
+        - VisitDetectorTractJoin
         - VisitPatchJoin

@@ -143,7 +143,7 @@ class SqlPreFlight:
             if joinOn:
                 return fromClause.join(self._schema.tables[dataUnit.name], and_(*joinOn))
             else:
-                # Completely unrelated tables, e.g. joining SkyMap and Camera.
+                # Completely unrelated tables, e.g. joining SkyMap and Instrument.
                 # We need a cross join here but SQLAlchemy does not have specific
                 # method for that. Using join() without `onclause` will try to
                 # join on FK and will raise an exception for unrelated tables,
@@ -235,7 +235,7 @@ class SqlPreFlight:
             _LOG.debug("add dataUnit: %s", dataUnit.name)
             fromJoin = self._joinOnForeignKey(fromJoin, dataUnit, dataUnit.dependencies)
 
-        # joins between skymap and camera units
+        # joins between skymap and instrument units
         dataUnitJoins = [dataUnitJoin for dataUnitJoin in self._dataUnits.joins.values()
                          if dataUnitJoin.lhs.issubset(allUnitNames) and
                          dataUnitJoin.rhs.issubset(allUnitNames)]
@@ -253,7 +253,7 @@ class SqlPreFlight:
             if dataUnitJoin.spatial:
                 continue
 
-            # TODO: do not know yet how to handle MultiCameraExposureJoin,
+            # TODO: do not know yet how to handle MultiInstrumentExposureJoin,
             # skip it for now
             if dataUnitJoin.lhs == dataUnitJoin.rhs:
                 continue
@@ -272,8 +272,8 @@ class SqlPreFlight:
                     units += [d.name for d in dataUnit.requiredDependencies if d.spatial]
                 regionHolder = self._dataUnits.getRegionHolder(*units)
                 if len(connection) > 1:
-                    # if one of the joins is with Visit/Sensor then also bring
-                    # VisitSensorRegion table in and join it with the units
+                    # if one of the joins is with Visit/Detector then also bring
+                    # VisitDetectorRegion table in and join it with the units
                     # TODO: need a better way to recognize this special case
                     if regionHolder.name in joinedRegionTables:
                         _LOG.debug("region table already joined with units: %s", regionHolder.name)

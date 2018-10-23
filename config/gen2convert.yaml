@@ -1,7 +1,7 @@
 mappers:
   HscMapper:
-    # Gen3 Camera name associated with this Gen2 Mapper
-    camera: HSC
+    # Gen3 Instrument name associated with this Gen2 Mapper
+    instrument: HSC
     # VisitInfo objects are used to populate Gen3 Visit and Exposure DataUnit
     # entries; options here say how to get those from a Gen2 repo.
     VisitInfo:
@@ -17,9 +17,9 @@ mappers:
 regions:
   -
     # The Gen3 DatasetType (Exposure StorageClass) to use when creating
-    # Visit-Sensor regions.
+    # Visit-Detector regions.
     DatasetType: calexp
-    # Padding (in pixels) to add to the edges of each Sensor region
+    # Padding (in pixels) to add to the edges of each Detector region
     # to account for WCS inaccuracies.
     padding: 5.0
     # Collection from which WCSs should be read.
@@ -42,13 +42,13 @@ collections:
     # Datasets with that DatasetType into a particular Collection.
     # Collection names can be str.format patterns that utilize any of
     # the Gen3 DataUnits or Gen2 DataIds associated with the Dataset.
-    raw: raw/{camera}
+    raw: raw/{instrument}
     ref_cat: ref/{name}
     ref_cat_config: ref/{name}
-    transmission_filter: transmission/{camera}
-    transmission_sensor: transmission/{camera}
-    transmission_optics: transmission/{camera}
-    transmission_atmosphere: transmission/{camera}
+    transmission_filter: transmission/{instrument}
+    transmission_sensor: transmission/{instrument}
+    transmission_optics: transmission/{instrument}
+    transmission_atmosphere: transmission/{instrument}
 runs:
   # Names of Collections (after processing via the above section)
   # that should be assigned to a particular Run (dict values are integer

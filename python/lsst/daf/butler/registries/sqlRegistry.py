@@ -258,7 +258,7 @@ class SqlRegistry(Registry):
         them with a colon.  Parameter values are provided as additional
         keyword arguments.  For example:
 
-          registry.query("SELECT * FROM Camera WHERE camera=:name", name="HSC")
+          registry.query("SELECT * FROM Instrument WHERE instrument=:name", name="HSC")
 
         Parameters
         ----------
@@ -995,7 +995,7 @@ class SqlRegistry(Registry):
         Parameters
         ----------
         dataUnitName : `str`
-            Name of the DataUnit, e.g. "Camera", "Tract", etc.
+            Name of the DataUnit, e.g. "Instrument", "Tract", etc.
         """
         # TODO: remove this when DataUnitRegistry is a singleton
         return self._dataUnits[dataUnitName]
@@ -1006,7 +1006,7 @@ class SqlRegistry(Registry):
         """Add a new `DataUnit` entry.
 
         dataUnitName : `str`
-            Name of the `DataUnit` (e.g. ``"Camera"``).
+            Name of the `DataUnit` (e.g. ``"Instrument"``).
         values : `dict`
             Dictionary of ``columnName, columnValue`` pairs.
 
@@ -1082,7 +1082,7 @@ class SqlRegistry(Registry):
         dataUnitNames : sequence
             A sequence of DataUnit names whose instances are jointly associated
             with a region on the sky. This must not include dependencies that
-            are implied, e.g. "Patch" must not include "Tract", but "Sensor"
+            are implied, e.g. "Patch" must not include "Tract", but "Detector"
             needs to add "Visit".
         value : `dict`
             A dictionary of values that uniquely identify the DataUnits.

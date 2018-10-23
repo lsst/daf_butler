@@ -65,8 +65,8 @@ class RegistryTests(metaclass=ABCMeta):
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
-        dataUnits = ("Camera", "Visit")
-        differentDataUnits = ("Camera", "Patch")
+        dataUnits = ("Instrument", "Visit")
+        differentDataUnits = ("Instrument", "Patch")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         # Inserting for the first time should return True
         self.assertTrue(registry.registerDatasetType(inDatasetType))
@@ -84,7 +84,7 @@ class RegistryTests(metaclass=ABCMeta):
         datasetTypeName = "testNoneTemplate"
         storageClass = StorageClass("testDatasetType2")
         registry.storageClasses.registerStorageClass(storageClass)
-        dataUnits = ("Camera", "Visit")
+        dataUnits = ("Instrument", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType = registry.getDatasetType(datasetTypeName)
@@ -95,33 +95,35 @@ class RegistryTests(metaclass=ABCMeta):
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="testtype", dataUnits=("Camera",), storageClass=storageClass)
+        datasetType = DatasetType(name="testtype", dataUnits=("Instrument",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
+        ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
         self.assertEqual(ref, outRef)
         with self.assertRaises(ValueError):
-            ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
+            ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
 
     def testComponents(self):
         registry = self.makeRegistry()
         storageClass = StorageClass("testComponents")
         registry.storageClasses.registerStorageClass(storageClass)
-        parentDatasetType = DatasetType(name="parent", dataUnits=("Camera",), storageClass=storageClass)
-        childDatasetType1 = DatasetType(name="child1", dataUnits=("Camera",), storageClass=storageClass)
-        childDatasetType2 = DatasetType(name="child2", dataUnits=("Camera",), storageClass=storageClass)
+        parentDatasetType = DatasetType(name="parent", dataUnits=("Instrument",), storageClass=storageClass)
+        childDatasetType1 = DatasetType(name="child1", dataUnits=("Instrument",), storageClass=storageClass)
+        childDatasetType2 = DatasetType(name="child2", dataUnits=("Instrument",), storageClass=storageClass)
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
         run = registry.makeRun(collection="test")
-        parent = registry.addDataset(parentDatasetType, dataId={"camera": "DummyCam"}, run=run)
-        children = {"child1": registry.addDataset(childDatasetType1, dataId={"camera": "DummyCam"}, run=run),
-                    "child2": registry.addDataset(childDatasetType2, dataId={"camera": "DummyCam"}, run=run)}
+        parent = registry.addDataset(parentDatasetType, dataId={"instrument": "DummyCam"}, run=run)
+        children = {"child1": registry.addDataset(childDatasetType1,
+                                                  dataId={"instrument": "DummyCam"}, run=run),
+                    "child2": registry.addDataset(childDatasetType2,
+                                                  dataId={"instrument": "DummyCam"}, run=run)}
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
@@ -177,17 +179,17 @@ class RegistryTests(metaclass=ABCMeta):
     def testQuantum(self):
         registry = self.makeRegistry()
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testQuantum")
         registry.storageClasses.registerStorageClass(storageClass)
         # Make two predicted inputs
-        datasetType1 = DatasetType(name="dst1", dataUnits=("Camera",), storageClass=storageClass)
+        datasetType1 = DatasetType(name="dst1", dataUnits=("Instrument",), storageClass=storageClass)
         registry.registerDatasetType(datasetType1)
-        ref1 = registry.addDataset(datasetType1, dataId={"camera": "DummyCam"}, run=run)
-        datasetType2 = DatasetType(name="dst2", dataUnits=("Camera",), storageClass=storageClass)
+        ref1 = registry.addDataset(datasetType1, dataId={"instrument": "DummyCam"}, run=run)
+        datasetType2 = DatasetType(name="dst2", dataUnits=("Instrument",), storageClass=storageClass)
         registry.registerDatasetType(datasetType2)
-        ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
+        ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
         # Create and add a Quantum
         quantum = Quantum(run=run,
                           task="some.fully.qualified.SuperTask",
@@ -209,15 +211,15 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testStorageInfo")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="test", dataUnits=("Camera",), storageClass=storageClass)
-        datasetType2 = DatasetType(name="test2", dataUnits=("Camera",), storageClass=storageClass)
+        datasetType = DatasetType(name="test", dataUnits=("Instrument",), storageClass=storageClass)
+        datasetType2 = DatasetType(name="test2", dataUnits=("Instrument",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
         run = registry.makeRun(collection="test")
-        ref = registry.addDataset(datasetType, dataId={"camera": "DummyCam"}, run=run)
-        ref2 = registry.addDataset(datasetType2, dataId={"camera": "DummyCam"}, run=run)
+        ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
+        ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
         datastoreName = "dummystore"
         datastoreName2 = "dummystore2"
         # Test adding information about a new dataset
@@ -248,33 +250,40 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testFind")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
+        datasetType = DatasetType(name="dummytype", dataUnits=("Instrument", "Visit"),
+                                  storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-            registry.addDataUnitEntry("Camera", {"camera": "MyCam"})
-            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-            registry.addDataUnitEntry("PhysicalFilter", {"camera": "MyCam", "physical_filter": "m-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 2, "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "MyCam", "visit": 2, "physical_filter": "m-r"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "MyCam"})
+            registry.addDataUnitEntry("PhysicalFilter",
+                                      {"instrument": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("PhysicalFilter",
+                                      {"instrument": "MyCam", "physical_filter": "m-r"})
+            registry.addDataUnitEntry("Visit",
+                                      {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit",
+                                      {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit",
+                                      {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit",
+                                      {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
-        dataId = {"camera": "DummyCam", "visit": 0}
+        dataId = {"instrument": "DummyCam", "visit": 0}
         run = registry.makeRun(collection=collection)
         inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
         outputRef = registry.find(collection, datasetType, dataId)
         self.assertEqual(outputRef, inputRef)
         # Check that retrieval with invalid dataId raises
         with self.assertRaises(ValueError):
-            dataId = {"camera": "DummyCam", "abstract_filter": "g"}  # should be visit
+            dataId = {"instrument": "DummyCam", "abstract_filter": "g"}  # should be visit
             registry.find(collection, datasetType, dataId)
         # Check that different dataIds match to different datasets
-        dataId1 = {"camera": "DummyCam", "visit": 1}
+        dataId1 = {"instrument": "DummyCam", "visit": 1}
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
-        dataId2 = {"camera": "DummyCam", "visit": 2}
+        dataId2 = {"instrument": "DummyCam", "visit": 2}
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
-        dataId3 = {"camera": "MyCam", "visit": 2}
+        dataId3 = {"instrument": "MyCam", "visit": 2}
         inputRef3 = registry.addDataset(datasetType, dataId=dataId3, run=run)
         self.assertEqual(registry.find(collection, datasetType, dataId1), inputRef1)
         self.assertEqual(registry.find(collection, datasetType, dataId2), inputRef2)
@@ -283,27 +292,30 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertNotEqual(registry.find(collection, datasetType, dataId2), inputRef1)
         self.assertNotEqual(registry.find(collection, datasetType, dataId3), inputRef1)
         # Check that requesting a non-existing dataId returns None
-        nonExistingDataId = {"camera": "DummyCam", "visit": 42}
+        nonExistingDataId = {"instrument": "DummyCam", "visit": 42}
         self.assertIsNone(registry.find(collection, datasetType, nonExistingDataId))
 
     def testCollections(self):
         registry = self.makeRegistry()
         storageClass = StorageClass("testCollections")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="dummytype", dataUnits=("Camera", "Visit"), storageClass=storageClass)
+        datasetType = DatasetType(name="dummytype", dataUnits=("Instrument", "Visit"),
+                                  storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit",
+                                      {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit",
+                                      {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
         # TODO: Dataset.physical_filter should be populated as well here
         # from the Visit DataUnit values.
-        dataId1 = {"camera": "DummyCam", "visit": 0}
+        dataId1 = {"instrument": "DummyCam", "visit": 0}
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
-        dataId2 = {"camera": "DummyCam", "visit": 1}
+        dataId2 = {"instrument": "DummyCam", "visit": 1}
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
         # We should be able to find both datasets in their Run.collection
         outputRef = registry.find(run.collection, datasetType, dataId1)
@@ -327,23 +339,25 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testAssociate")
         registry.storageClasses.registerStorageClass(storageClass)
-        dataUnits = ("Camera", "Visit")
+        dataUnits = ("Instrument", "Visit")
         datasetType1 = DatasetType(name="dummytype", dataUnits=dataUnits, storageClass=storageClass)
         registry.registerDatasetType(datasetType1)
         datasetType2 = DatasetType(name="smartytype", dataUnits=dataUnits, storageClass=storageClass)
         registry.registerDatasetType(datasetType2)
         if not registry.limited:
-            registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-            registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam", "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-            registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
+            registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"instrument": "DummyCam", "visit": 0,
+                                      "physical_filter": "d-r"})
+            registry.addDataUnitEntry("Visit", {"instrument": "DummyCam", "visit": 1,
+                                      "physical_filter": "d-r"})
         run1 = registry.makeRun(collection="ingest1")
         run2 = registry.makeRun(collection="ingest2")
         run3 = registry.makeRun(collection="ingest3")
         # TODO: Dataset.physical_filter should be populated as well here
         # from the Visit DataUnit values.
-        dataId1 = {"camera": "DummyCam", "visit": 0}
-        dataId2 = {"camera": "DummyCam", "visit": 1}
+        dataId1 = {"instrument": "DummyCam", "visit": 0}
+        dataId2 = {"instrument": "DummyCam", "visit": 1}
         ref1_run1 = registry.addDataset(datasetType1, dataId=dataId1, run=run1)
         ref2_run1 = registry.addDataset(datasetType1, dataId=dataId2, run=run1)
         ref1_run2 = registry.addDataset(datasetType2, dataId=dataId1, run=run2)
@@ -380,8 +394,8 @@ class RegistryTests(metaclass=ABCMeta):
 
     def testDatasetUnit(self):
         registry = self.makeRegistry()
-        dataUnitName = "Camera"
-        dataUnitValue = {"camera": "DummyCam"}
+        dataUnitName = "Instrument"
+        dataUnitValue = {"instrument": "DummyCam"}
         if registry.limited:
             with self.assertRaises(NotImplementedError):
                 registry.addDataUnitEntry(dataUnitName, dataUnitValue)
@@ -393,17 +407,17 @@ class RegistryTests(metaclass=ABCMeta):
         # Find should return the entry
         self.assertEqual(registry.findDataUnitEntry(dataUnitName, dataUnitValue), dataUnitValue)
         # Find on a non-existant value should return None
-        self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {"camera": "Unknown"}))
+        self.assertIsNone(registry.findDataUnitEntry(dataUnitName, {"instrument": "Unknown"}))
         # AbstractFilter doesn't have a table; should fail.
         with self.assertRaises(OperationalError):
             registry.addDataUnitEntry("AbstractFilter", {"abstract_filter": "i"})
         dataUnitName2 = "PhysicalFilter"
         dataUnitValue2 = {"physical_filter": "DummyCam_i", "abstract_filter": "i"}
-        # Missing required dependency ("camera") should fail
+        # Missing required dependency ("instrument") should fail
         with self.assertRaises(ValueError):
             registry.addDataUnitEntry(dataUnitName2, dataUnitValue2)
         # Adding required dependency should fix the failure
-        dataUnitValue2["camera"] = "DummyCam"
+        dataUnitValue2["instrument"] = "DummyCam"
         registry.addDataUnitEntry(dataUnitName2, dataUnitValue2)
         # Find should return the entry
         self.assertEqual(registry.findDataUnitEntry(dataUnitName2, dataUnitValue2), dataUnitValue2)
@@ -412,8 +426,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
-        dataUnits = ("Camera", )
-        dataId = {"camera": "DummyCam"}
+        dataUnits = ("Instrument", )
+        dataId = {"instrument": "DummyCam"}
         datasetTypeA = DatasetType(name="A",
                                    dataUnits=dataUnits,
                                    storageClass=storageClass)
@@ -432,7 +446,7 @@ class RegistryTests(metaclass=ABCMeta):
                 registry.registerDatasetType(datasetTypeB)
                 registry.registerDatasetType(datasetTypeC)
                 if not registry.limited:
-                    registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
+                    registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
                 ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
                 refId = ref.id
                 raise ValueError("Oops, something went wrong")
@@ -448,7 +462,7 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertIsNone(registry.getDataset(refId))
         # Or the DataUnit entries
         if not registry.limited:
-            self.assertIsNone(registry.findDataUnitEntry("Camera", {"camera": "DummyCam"}))
+            self.assertIsNone(registry.findDataUnitEntry("Instrument", {"instrument": "DummyCam"}))
 
     def testGetRegion(self):
         registry = self.makeRegistry()
@@ -463,10 +477,10 @@ class RegistryTests(metaclass=ABCMeta):
         regionVisit = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 1, 1),
                                                   lsst.sphgeom.UnitVector3d(0, 0, 1)))
-        regionVisitSensor = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
-                                                        lsst.sphgeom.UnitVector3d(0, 1, 0),
-                                                        lsst.sphgeom.UnitVector3d(0, 1, 1)))
-        for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitSensor), 2):
+        regionVisitDetector = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
+                                                          lsst.sphgeom.UnitVector3d(0, 1, 0),
+                                                          lsst.sphgeom.UnitVector3d(0, 1, 1)))
+        for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitDetector), 2):
             self.assertNotEqual(a, b)
 
         # This depends on current schema.yaml definitions
@@ -474,17 +488,19 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(rows[0]["cnt"], 0)
 
         # Add some dataunits
-        registry.addDataUnitEntry("Camera", {"camera": "DummyCam"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam",
+        registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
+        registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCam",
                                                      "physical_filter": "dummy_r",
                                                      "abstract_filter": "r"})
-        registry.addDataUnitEntry("PhysicalFilter", {"camera": "DummyCam",
+        registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCam",
                                                      "physical_filter": "dummy_i",
                                                      "abstract_filter": "i"})
-        for sensor in (1, 2, 3, 4, 5):
-            registry.addDataUnitEntry("Sensor", {"camera": "DummyCam", "sensor": sensor})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 0, "physical_filter": "dummy_r"})
-        registry.addDataUnitEntry("Visit", {"camera": "DummyCam", "visit": 1, "physical_filter": "dummy_i"})
+        for detector in (1, 2, 3, 4, 5):
+            registry.addDataUnitEntry("Detector", {"instrument": "DummyCam", "detector": detector})
+        registry.addDataUnitEntry("Visit",
+                                  {"instrument": "DummyCam", "visit": 0, "physical_filter": "dummy_r"})
+        registry.addDataUnitEntry("Visit",
+                                  {"instrument": "DummyCam", "visit": 1, "physical_filter": "dummy_i"})
         registry.addDataUnitEntry("SkyMap", {"skymap": "DummySkyMap", "hash": bytes()})
         registry.addDataUnitEntry("Tract", {"skymap": "DummySkyMap", "tract": 0, "region": regionTract})
         registry.addDataUnitEntry("Patch",
@@ -495,12 +511,12 @@ class RegistryTests(metaclass=ABCMeta):
                                    "cell_y": 0,
                                    "region": regionPatch})
         registry.setDataUnitRegion(("Visit",),
-                                   {"camera": "DummyCam", "visit": 0},
+                                   {"instrument": "DummyCam", "visit": 0},
                                    regionVisit,
                                    update=True)
-        registry.setDataUnitRegion(("Visit", "Sensor"),
-                                   {"camera": "DummyCam", "visit": 0, "sensor": 2},
-                                   regionVisitSensor,
+        registry.setDataUnitRegion(("Visit", "Detector"),
+                                   {"instrument": "DummyCam", "visit": 0, "detector": 2},
+                                   regionVisitDetector,
                                    update=False)
         # Get region for a tract
         self.assertEqual(regionTract, registry.getRegion({"skymap": "DummySkyMap", "tract": 0}))
@@ -511,22 +527,22 @@ class RegistryTests(metaclass=ABCMeta):
         # Get region for a non-existent (tract, patch) combination
         self.assertIsNone(registry.getRegion({"skymap": "DummySkyMap", "tract": 0, "patch": 1}))
         # Get region for a visit
-        self.assertEqual(regionVisit, registry.getRegion({"camera": "DummyCam", "visit": 0}))
+        self.assertEqual(regionVisit, registry.getRegion({"instrument": "DummyCam", "visit": 0}))
         # Attempt to get region for a non-existent visit
-        self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 10}))
-        # Get region for a (visit, sensor) combination
-        self.assertEqual(regionVisitSensor,
-                         registry.getRegion({"camera": "DummyCam", "visit": 0, "sensor": 2}))
-        # Attempt to get region for a non-existent (visit, sensor) combination
-        self.assertIsNone(registry.getRegion({"camera": "DummyCam", "visit": 0, "sensor": 3}))
+        self.assertIsNone(registry.getRegion({"instrument": "DummyCam", "visit": 10}))
+        # Get region for a (visit, detector) combination
+        self.assertEqual(regionVisitDetector,
+                         registry.getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2}))
+        # Attempt to get region for a non-existent (visit, detector) combination
+        self.assertIsNone(registry.getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3}))
         # getRegion for a dataId containing no spatial dataunits should fail
         with self.assertRaises(KeyError):
-            registry.getRegion({"camera": "DummyCam"})
+            registry.getRegion({"instrument": "DummyCam"})
         # getRegion for a mix of spatial dataunits should fail
         with self.assertRaises(KeyError):
-            registry.getRegion({"camera": "DummyCam",
+            registry.getRegion({"instrument": "DummyCam",
                                 "visit": 0,
-                                "sensor": 2,
+                                "detector": 2,
                                 "skymap": "DummySkyMap",
                                 "tract": 1})
         # Check if we can get the region for a skypix
