@@ -258,7 +258,7 @@ class ConversionWalker:
             queryList = []
             # This query only includes calibration types that are known at this time
             for tableRow in c.execute(
-                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN " +
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
                     "('bias', 'dark', 'defect', 'flat', 'fringe', 'sky')"):
                 queryList.append("SELECT '%s' AS type,filter,ccd,calibDate,validStart,validEnd FROM %s" %
                                  (tableRow["name"], tableRow["name"]))
