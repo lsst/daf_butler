@@ -201,7 +201,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c[r".a.foo\.bar"], 1)
         self.assertEqual(c[":a:foo.bar"], 1)
         self.assertEqual(c[".b😂c.bar_baz"], 2)
-        self.assertEqual(c["😂b\😂c😂bar_baz"], 2)
+        self.assertEqual(c[r"😂b\😂c😂bar_baz"], 2)
         self.assertEqual(c[r"\a\foo.bar"], 1)
         self.assertEqual(c["\ra\rfoo.bar"], 1)
         with self.assertRaises(ValueError):

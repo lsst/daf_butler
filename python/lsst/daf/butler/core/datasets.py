@@ -94,7 +94,7 @@ class DatasetType:
 
     @property
     def dataUnits(self):
-        """A `frozenset` of `DataUnit` names that defines the `DatasetRef`\ s
+        r"""A `frozenset` of `DataUnit` names that defines the `DatasetRef`\ s
         corresponding to this `DatasetType`.
         """
         return self._dataUnits

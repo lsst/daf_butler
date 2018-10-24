@@ -73,12 +73,12 @@ class Quantum(Execution):
 
     @property
     def predictedInputs(self):
-        """A `dict` of input datasets that were expected to be used,
+        r"""A `dict` of input datasets that were expected to be used,
         with `DatasetType` names as keys and a list of `DatasetRef` instances
         as values.
 
         Input `Datasets` that have already been stored may be
-        `DatasetRef`\s, and in many contexts may be guaranteed to be.
+        `DatasetRef`\ s, and in many contexts may be guaranteed to be.
         Read-only; update via `Quantum.addPredictedInput()`.
         """
         return self._predictedInputs
