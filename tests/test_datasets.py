@@ -20,11 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+import pickle
 
 import lsst.utils.tests
 
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
-from lsst.daf.butler.core.storageClass import StorageClass
+from lsst.daf.butler.core.storageClass import StorageClass, StorageClassFactory
 
 """Tests for datasets module.
 """
@@ -84,6 +85,21 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
+
+    def testPickle(self):
+        """Test pickle support.
+        """
+        storageClass = StorageClass("test_pickle")
+        datasetTypeName = "test"
+        dataUnits = frozenset(("camera", "visit"))
+        # Un-pickling requires that storage class is registered with factory.
+        StorageClassFactory().registerStorageClass(storageClass)
+        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetTypeOut = pickle.loads(pickle.dumps(datasetType))
+        self.assertIsInstance(datasetTypeOut, DatasetType)
+        self.assertEqual(datasetType.name, datasetTypeOut.name)
+        self.assertEqual(datasetType.dataUnits, datasetTypeOut.dataUnits)
+        self.assertEqual(datasetType.storageClass, datasetTypeOut.storageClass)
 
 
 class DatasetRefTestCase(lsst.utils.tests.TestCase):
