@@ -179,21 +179,21 @@ class ParserLexTestCase(unittest.TestCase):
         """Test for more or less complete expression"""
         lexer = parserLex.ParserLex.make_lexer()
 
-        expr = ("((camera='HSC' AND sensor != 9) OR camera='CFHT') "
+        expr = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                 "AND tract=8766 AND patch.cell_x > 5 AND "
                 "patch.cell_y < 4 AND abstract_filter='i'")
         tokens = (("LPAREN", "("),
                   ("LPAREN", "("),
-                  ("IDENTIFIER", "camera"),
+                  ("IDENTIFIER", "instrument"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "HSC"),
                   ("AND", "AND"),
-                  ("IDENTIFIER", "sensor"),
+                  ("IDENTIFIER", "detector"),
                   ("NE", "!="),
                   ("NUMERIC_LITERAL", "9"),
                   ("RPAREN", ")"),
                   ("OR", "OR"),
-                  ("IDENTIFIER", "camera"),
+                  ("IDENTIFIER", "instrument"),
                   ("EQ", "="),
                   ("STRING_LITERAL", "CFHT"),
                   ("RPAREN", ")"),

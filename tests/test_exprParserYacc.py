@@ -223,7 +223,7 @@ class ParserLexTestCase(unittest.TestCase):
         """Test for more or less complete expression"""
         parser = parserYacc.ParserYacc()
 
-        expression = ("((camera='HSC' AND sensor != 9) OR camera='CFHT') "
+        expression = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                       "AND tract=8766 AND patch.cell_x > 5 AND "
                       "patch.cell_y < 4 AND abstract_filter='i'")
 
