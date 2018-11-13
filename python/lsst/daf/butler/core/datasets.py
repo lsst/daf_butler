@@ -22,7 +22,7 @@
 from copy import deepcopy
 
 from types import MappingProxyType
-from .utils import slotValuesAreEqual, slotValuesToHash
+from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
 
 __all__ = ("DatasetType", "DatasetRef")
@@ -53,17 +53,33 @@ class DatasetType:
     dataUnits : `iterable` of `str`
         `DataUnit` names that defines the `DatasetRef`\ s corresponding to
         this `DatasetType`.  The input iterable is copied into a `frozenset`.
-    storageClass : `StorageClass`
-        Instance of a `StorageClass` that defines how this `DatasetType`
-        is persisted.
+    storageClass : `StorageClass` or `str`
+        Instance of a `StorageClass` or name of `StorageClass` that defines
+        how this `DatasetType` is persisted.
     """
 
-    __slots__ = ("_name", "_dataUnits", "_storageClass")
-    __eq__ = slotValuesAreEqual
-    __hash__ = slotValuesToHash
+    __slots__ = ("_name", "_dataUnits", "_storageClass", "_storageClassName")
 
     def __str__(self):
-        return "DatasetType({}, {}, {})".format(self.name, self.storageClass.name, self.dataUnits)
+        return "DatasetType({}, {}, {})".format(self.name, self._storageClassName, self.dataUnits)
+
+    def __eq__(self, other):
+        if self._name != other._name:
+            return False
+        if self._dataUnits != other._dataUnits:
+            return False
+        if self._storageClass is not None and other._storageClass is not None:
+            return self._storageClass == other._storageClass
+        else:
+            return self._storageClassName == other._storageClassName
+
+    def __hash__(self):
+        """Hash DatasetType instance.
+
+        This only uses StorageClass name which is it consistent with the
+        implementation of StorageClass hash method.
+        """
+        return hash((self._name, self._dataUnits, self._storageClassName))
 
     @staticmethod
     def nameWithComponent(datasetTypeName, componentName):
@@ -102,15 +118,24 @@ class DatasetType:
     @property
     def storageClass(self):
         """`StorageClass` instance that defines how this `DatasetType`
-        is persisted.
+        is persisted. Note that if DatasetType was constructed with a name
+        of a StorageClass then Butler has to be initialized before using
+        this property.
         """
+        if self._storageClass is None:
+            self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
 
     def __init__(self, name, dataUnits, storageClass):
         self._name = name
         self._dataUnits = frozenset(dataUnits)
-        assert isinstance(storageClass, StorageClass)
-        self._storageClass = storageClass
+        assert isinstance(storageClass, (StorageClass, str))
+        if isinstance(storageClass, StorageClass):
+            self._storageClass = storageClass
+            self._storageClassName = storageClass.name
+        else:
+            self._storageClass = None
+            self._storageClassName = storageClass
 
     def component(self):
         """Component name (if defined)
@@ -171,49 +196,26 @@ class DatasetType:
         """
         return (self.name, *self.storageClass._lookupNames())
 
-    def __getstate__(self):
-        """Support for pickling.
+    def __reduce__(self):
+        """Support pickling.
 
-        StorageClass instances can not normally be pickled, so we need special
-        code to pickle those. We pickle StorageClass name instead of instance
-        and retrieve the instance using that name when un-pickling.
-
-        Returns
-        -------
-        state : `dict`
-            Instance state to pickle.
+        StorageClass instances can not normally be pickled, so we pickle
+        StorageClass name instead of instance.
         """
-        return dict(name=self.name,
-                    storageClassName=self.storageClass.name,
-                    dataUnits=self.dataUnits)
-
-    def __setstate__(self, state):
-        """Support for un-pickling.
-
-        Uses state dictionary produced by `__getstate__`.
-
-        This method retrieves StorageClass instance from StorageClassFactory
-        which has to be properly initialized.
-
-        Parameters
-        ----------
-        state : `dict`
-            Pickled instance state.
-        """
-        storageClass = StorageClassFactory().getStorageClass(state["storageClassName"])
-        self.__init__(name=state["name"], dataUnits=state["dataUnits"], storageClass=storageClass)
+        return (DatasetType, (self.name, self.dataUnits, self._storageClassName))
 
     def __deepcopy__(self, memo):
         """Support for deep copy method.
 
-        If ``__getstate__`` and ``__setstate__`` methods are defined
-        ``deepcopy`` will use those methods. We want to avoid that because
-        it would need initialized StorageClassFactory, instead re-implement
-        ``__deepcopy__`` method.
+        Normally ``deepcopy`` will use pickle mechanism to make copies.
+        We want to avoid that to support (possibly degenerate) use case when
+        DatasetType is constructed with StorageClass instance which is not
+        registered with StorageClassFactory (this happens in unit tests).
+        Instead we re-implement ``__deepcopy__`` method.
         """
         return DatasetType(name=deepcopy(self.name, memo),
                            dataUnits=deepcopy(self.dataUnits, memo),
-                           storageClass=deepcopy(self.storageClass, memo))
+                           storageClass=deepcopy(self._storageClass or self._storageClassName, memo))
 
 
 class DatasetRef:

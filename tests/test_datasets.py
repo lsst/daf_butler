@@ -50,17 +50,41 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(datasetType.storageClass, storageClass)
         self.assertEqual(datasetType.dataUnits, dataUnits)
 
+    def testConstructor2(self):
+        """Test construction from StorageClass name.
+        """
+        datasetTypeName = "test"
+        storageClass = StorageClass("test_constructor2")
+        StorageClassFactory().registerStorageClass(storageClass)
+        dataUnits = frozenset(("instrument", "visit"))
+        datasetType = DatasetType(datasetTypeName, dataUnits, "test_constructor2")
+        self.assertEqual(datasetType.name, datasetTypeName)
+        self.assertEqual(datasetType.storageClass, storageClass)
+        self.assertEqual(datasetType.dataUnits, dataUnits)
+
     def testEquality(self):
         storageA = StorageClass("test_a")
         storageB = StorageClass("test_b")
         self.assertEqual(DatasetType("a", ("UnitA", ), storageA,),
                          DatasetType("a", ("UnitA", ), storageA,))
+        self.assertEqual(DatasetType("a", ("UnitA", ), "test_a",),
+                         DatasetType("a", ("UnitA", ), storageA,))
+        self.assertEqual(DatasetType("a", ("UnitA", ), storageA,),
+                         DatasetType("a", ("UnitA", ), "test_a",))
+        self.assertEqual(DatasetType("a", ("UnitA", ), "test_a",),
+                         DatasetType("a", ("UnitA", ), "test_a",))
         self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
                             DatasetType("b", ("UnitA", ), storageA,))
         self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
+                            DatasetType("b", ("UnitA", ), "test_a",))
+        self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
                             DatasetType("a", ("UnitA", ), storageB,))
         self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
+                            DatasetType("a", ("UnitA", ), "test_b",))
+        self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
                             DatasetType("a", ("UnitB", ), storageA,))
+        self.assertNotEqual(DatasetType("a", ("UnitA", ), storageA,),
+                            DatasetType("a", ("UnitB", ), "test_a",))
 
     def testHashability(self):
         """Test `DatasetType.__hash__`.
@@ -85,6 +109,19 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
+
+        # also check that hashes of instances constructed with StorageClass
+        # name matches hashes of instances constructed with instances
+        self.assertEqual(hash(DatasetType("a", ("e",), storageC)),
+                         hash(DatasetType("a", ("e",), "test_c")))
+        self.assertEqual(hash(DatasetType("a", ("e",), "test_c")),
+                         hash(DatasetType("a", ("e",), "test_c")))
+        self.assertNotEqual(hash(DatasetType("a", ("e",), storageC)),
+                            hash(DatasetType("a", ("e",), "test_d")))
+        self.assertNotEqual(hash(DatasetType("a", ("e",), storageD)),
+                            hash(DatasetType("a", ("e",), "test_c")))
+        self.assertNotEqual(hash(DatasetType("a", ("e",), "test_c")),
+                            hash(DatasetType("a", ("e",), "test_d")))
 
     def testPickle(self):
         """Test pickle support.
