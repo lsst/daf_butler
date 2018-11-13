@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from datetime import datetime, timedelta
 import os
 import unittest
 
@@ -212,6 +213,164 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (110, 111))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (11,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
+
+    def testPreFlightExposureRange(self):
+        """Test involving only ExposureRange unit"""
+        registry = self.registry
+
+        # need a bunch of units and datasets for test
+        registry.addDataUnitEntry("Instrument", dict(instrument="DummyCam"))
+        registry.addDataUnitEntry("PhysicalFilter", dict(instrument="DummyCam",
+                                                         physical_filter="dummy_r",
+                                                         abstract_filter="r"))
+        for detector in (1, 2, 3, 4, 5):
+            registry.addDataUnitEntry("Detector", dict(instrument="DummyCam", detector=detector))
+
+        # make few visits/exposures
+        now = datetime.now()
+        timestamps = []       # list of start/end time of each exposure
+        for visit in (10, 11, 20):
+            registry.addDataUnitEntry("Visit",
+                                      dict(instrument="DummyCam", visit=visit, physical_filter="dummy_r"))
+            visit_start = now + timedelta(seconds=visit*45)
+            for exposure in (0, 1):
+                start = visit_start + timedelta(seconds=15*exposure)
+                end = start + timedelta(seconds=15)
+                registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam",
+                                                           exposure=visit*10+exposure,
+                                                           visit=visit,
+                                                           physical_filter="dummy_r",
+                                                           datetime_begin=start,
+                                                           datetime_end=end))
+                timestamps += [(start, end)]
+        self.assertEqual(len(timestamps), 6)
+
+        # dataset types
+        collection = "test"
+        run = registry.makeRun(collection=collection)
+        storageClass = StorageClass("testExposureRange")
+        registry.storageClasses.registerStorageClass(storageClass)
+        rawType = DatasetType(name="RAW", dataUnits=("Instrument", "Detector", "Exposure"),
+                              storageClass=storageClass)
+        registry.registerDatasetType(rawType)
+        biasType = DatasetType(name="bias", dataUnits=("Instrument", "Detector", "ExposureRange"),
+                               storageClass=storageClass)
+        registry.registerDatasetType(biasType)
+        flatType = DatasetType(name="flat",
+                               dataUnits=("Instrument", "Detector", "PhysicalFilter", "ExposureRange"),
+                               storageClass=storageClass)
+        registry.registerDatasetType(flatType)
+        calexpType = DatasetType(name="CALEXP", dataUnits=("Instrument", "Visit", "Detector"),
+                                 storageClass=storageClass)
+        registry.registerDatasetType(calexpType)
+
+        # add pre-existing raw datasets
+        for visit in (10, 11, 20):
+            for exposure in (0, 1):
+                for detector in (1, 2, 3, 4, 5):
+                    dataId = dict(instrument="DummyCam", exposure=visit*10+exposure, detector=detector)
+                    registry.addDataset(rawType, dataId=dataId, run=run)
+
+        # add few bias datasets
+        for detector in (1, 2, 3, 4, 5):
+            # from before first exposure to the end of second exposure
+            dataId = dict(instrument="DummyCam", detector=detector,
+                          valid_first=now-timedelta(seconds=3600),
+                          valid_last=timestamps[1][1])
+            registry.addDataset(biasType, dataId=dataId, run=run)
+            # from start of third exposure to the end of last exposure
+            dataId = dict(instrument="DummyCam", detector=detector,
+                          valid_first=timestamps[2][0],
+                          valid_last=timestamps[-1][1])
+            registry.addDataset(biasType, dataId=dataId, run=run)
+
+        # add few flat datasets, only for subset of detectors and exposures
+        for detector in (1, 2, 3):
+            # third and fourth exposures
+            dataId = dict(instrument="DummyCam", detector=detector,
+                          physical_filter="dummy_r",
+                          valid_first=timestamps[2][0],
+                          valid_last=timestamps[3][1])
+            registry.addDataset(flatType, dataId=dataId, run=run)
+            # fifth exposure only
+            dataId = dict(instrument="DummyCam", detector=detector,
+                          physical_filter="dummy_r",
+                          valid_first=timestamps[4][0],
+                          valid_last=timestamps[5][0]-timedelta(seconds=1))
+            registry.addDataset(flatType, dataId=dataId, run=run)
+
+        # without flat/bias
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="",
+                                              neededDatasetTypes=[rawType],
+                                              futureDatasetTypes=[calexpType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 6*5)   # 6 exposures times 5 detectors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
+
+        # use bias
+        originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="",
+                                              neededDatasetTypes=[rawType, biasType],
+                                              futureDatasetTypes=[calexpType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 6*5)  # 6 exposures times 5 detectors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(),
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "bias.valid_first", "bias.valid_last"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, biasType, calexpType))
+
+        # use flat
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="",
+                                              neededDatasetTypes=[rawType, flatType],
+                                              futureDatasetTypes=[calexpType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 3*3)  # 3 exposures times 3 detectors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(),
+                                  ("instrument", "detector", "exposure", "visit", "physical_filter",
+                                   "flat.valid_first", "flat.valid_last"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
+
+        # use both bias and flat, plus expression
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="Detector.detector IN (1, 3)",
+                                              neededDatasetTypes=[rawType, flatType, biasType],
+                                              futureDatasetTypes=[calexpType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 3*2)  # 3 exposures times 2 detectors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(),
+                                  ("instrument", "detector", "exposure", "visit", "physical_filter",
+                                   "bias.valid_first", "bias.valid_last",
+                                   "flat.valid_first", "flat.valid_last"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, biasType, calexpType))
+
+        # select single exposure (third) and detector and check datasetRefs
+        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
+                                              expression="Exposure.exposure = 110 AND Detector.detector = 1",
+                                              neededDatasetTypes=[rawType, flatType, biasType],
+                                              futureDatasetTypes=[calexpType])
+        rows = list(rows)
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertEqual(row.datasetRefs[flatType].dataId,
+                         dict(instrument="DummyCam",
+                              detector=1,
+                              physical_filter="dummy_r",
+                              valid_first=timestamps[2][0],
+                              valid_last=timestamps[3][1]))
+        self.assertEqual(row.datasetRefs[biasType].dataId,
+                         dict(instrument="DummyCam",
+                              detector=1,
+                              valid_first=timestamps[2][0],
+                              valid_last=timestamps[-1][1]))
 
     def testPreFlightSkyMapUnits(self):
         """Test involving only SkyMap units, no joins to Instrument"""

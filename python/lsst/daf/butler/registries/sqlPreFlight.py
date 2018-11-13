@@ -23,7 +23,7 @@ __all__ = ("SqlPreFlight")
 
 import itertools
 import logging
-from sqlalchemy.sql import select, and_, functions, text, literal, case
+from sqlalchemy.sql import select, and_, functions, text, literal, case, between
 
 from lsst.sphgeom import Region
 from lsst.sphgeom.relationship import DISJOINT
@@ -211,7 +211,7 @@ class SqlPreFlight:
         unitLinkColumns = {}
         for unitName in allUnitNames:
             dataUnit = self._dataUnits[unitName]
-            if self._schema.tables[unitName] is not None:
+            if self._schema.tables.get(unitName) is not None:
                 # take link column names, usually there is one
                 for link in dataUnit.link:
                     unitLinkColumns[link] = len(selectColumns)
@@ -230,7 +230,7 @@ class SqlPreFlight:
         # joins for all unit tables
         fromJoin = None
         for dataUnit in _unitsTopologicalSort(allDataUnits.values()):
-            if self._schema.tables[dataUnit.name] is None:
+            if self._schema.tables.get(dataUnit.name) is None:
                 continue
             _LOG.debug("add dataUnit: %s", dataUnit.name)
             fromJoin = self._joinOnForeignKey(fromJoin, dataUnit, dataUnit.dependencies)
@@ -248,14 +248,17 @@ class SqlPreFlight:
         joinedRegionTables = set()
         regionColumns = {}
         for dataUnitJoin in dataUnitJoins:
+            _LOG.debug("processing dataUnitJoin: %s", dataUnitJoin.name)
             # Some `DataUnitJoin`s have an associated region (e.g. they are spatial)
             # in that case they shouldn't be joined separately in the region lookup.
             if dataUnitJoin.spatial:
+                _LOG.debug("%s is spatial, skipping", dataUnitJoin.name)
                 continue
 
             # TODO: do not know yet how to handle MultiInstrumentExposureJoin,
             # skip it for now
             if dataUnitJoin.lhs == dataUnitJoin.rhs:
+                _LOG.debug("%s is unsupported, skipping", dataUnitJoin.name)
                 continue
 
             # Look at each side of the DataUnitJoin and join it with
@@ -270,7 +273,12 @@ class SqlPreFlight:
                     units.append(dataUnitName)
                     dataUnit = self._dataUnits[dataUnitName]
                     units += [d.name for d in dataUnit.requiredDependencies if d.spatial]
-                regionHolder = self._dataUnits.getRegionHolder(*units)
+                try:
+                    regionHolder = self._dataUnits.getRegionHolder(*units)
+                except KeyError:
+                    # means there is no region for these units, want to skip it
+                    _LOG.debug("Units %s are not spatial, skipping", units)
+                    break
                 if len(connection) > 1:
                     # if one of the joins is with Visit/Detector then also bring
                     # VisitDetectorRegion table in and join it with the units
@@ -294,7 +302,8 @@ class SqlPreFlight:
                 regionColumn = self._schema.tables[regionHolder.name].c.region
                 selectColumns.append(regionColumn)
 
-            fromJoin = self._joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
+            if regionHolders:
+                fromJoin = self._joinOnForeignKey(fromJoin, dataUnitJoin, regionHolders)
 
         # join with input datasets to restrict to existing inputs
         dsIdColumns = {}
@@ -319,9 +328,23 @@ class SqlPreFlight:
             joinOn = []
             for unitName in dsType.dataUnits:
                 dataUnit = allDataUnits[unitName]
-                for link in dataUnit.link:
-                    _LOG.debug("  joining on link: %s", link)
-                    joinOn.append(subquery.c[link] == self._schema.tables[dataUnit.name].c[link])
+                if unitName == "ExposureRange":
+                    # very special handling of ExposureRange
+                    # TODO: try to generalize this in some way, maybe using
+                    # sql from ExposureRangeJoin
+                    _LOG.debug("  joining on unit: %s", unitName)
+                    exposureTable = self._schema.tables["Exposure"]
+                    joinOn.append(between(exposureTable.c.datetime_begin,
+                                          subquery.c.valid_first,
+                                          subquery.c.valid_last))
+                    unitLinkColumns[dsType.name + ".valid_first"] = len(selectColumns)
+                    selectColumns.append(subquery.c.valid_first)
+                    unitLinkColumns[dsType.name + ".valid_last"] = len(selectColumns)
+                    selectColumns.append(subquery.c.valid_last)
+                else:
+                    for link in dataUnit.link:
+                        _LOG.debug("  joining on link: %s", link)
+                        joinOn.append(subquery.c[link] == self._schema.tables[dataUnit.name].c[link])
             fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isOutput)
 
             # remember dataset_id column index for this dataset
@@ -545,12 +568,19 @@ class SqlPreFlight:
             # for each dataset get ids DataRef
             datasetRefs = {}
             for dsType, col in dsIdColumns.items():
-                linkNames = set()
+                linkNames = {}  # maps full link name in unitLinkColumns to dataId key
                 for unitName in dsType.dataUnits:
                     dataUnit = self._dataUnits[unitName]
-                    if self._schema.tables[dataUnit.name] is not None:
-                        linkNames.update(dataUnit.link)
-                dsDataId = dict((link, row[unitLinkColumns[link]]) for link in linkNames)
+                    if unitName == "ExposureRange":
+                        # special case of ExposureRange, its columns come from
+                        # Dataset table instead of DataUnit
+                        linkNames[dsType.name + ".valid_first"] = "valid_first"
+                        linkNames[dsType.name + ".valid_last"] = "valid_last"
+                    else:
+                        if self._schema.tables.get(dataUnit.name) is not None:
+                            for link in dataUnit.link:
+                                linkNames[link] = link
+                dsDataId = dict((val, row[unitLinkColumns[key]]) for key, val in linkNames.items())
                 dsId = None if col is None else row[col]
                 datasetRefs[dsType] = DatasetRef(dsType, dsDataId, dsId)
 
