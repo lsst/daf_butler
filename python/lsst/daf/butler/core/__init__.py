@@ -26,4 +26,5 @@ from .schema import *
 from .storageClass import *
 from .storedFileInfo import *
 from .dataUnit import *
+from .dimensions import *
 from .databaseDict import *
