@@ -29,7 +29,7 @@ from lsst.utils import doImport
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton",
            "TopologicalSet", "TopologicalSetNode", "transactional",
-           "getObjectSize", "stripIfNotNone")
+           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta")
 
 
 def iterable(a):
@@ -357,3 +357,58 @@ def stripIfNotNone(s):
     if s is not None:
         s = s.strip()
     return s
+
+
+class PrivateConstructorMeta(type):
+    """A metaclass that disables regular construction syntax.
+
+    A class that uses PrivateConstructorMeta may have an ``__init__`` and/or
+    ``__new__`` method, but these can't be invoked by "calling" the class
+    (that will always raise `TypeError`).  Instead, such classes can be called
+    by calling the metaclass-provided `_construct` class method with the same
+    arguments.
+
+    As is usual in Python, there are no actual prohibitions on what code can
+    call `_construct`; the purpose of this metaclass is just to prevent
+    instances from being created normally when that can't do what users would
+    expect.
+
+    ..note::
+
+        Classes that inherit from PrivateConstructorMeta also inherit
+        the hidden-constructor behavior.  If you just want to disable
+        construction of the base class, `abc.ABCMeta` may be a better
+        option.
+
+    Examples
+    --------
+    Given this class definition::
+        class Hidden(metaclass=PrivateConstructorMeta):
+
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+
+    This doesn't work:
+
+        >>> instance = Hidden(a=1, b="two")
+        NotImplementedError: Foo objects cannot be constructed directly.
+
+    But this does:
+
+        >>> instance = Hidden._construct(a=1, b="two")
+
+    """
+
+    def __call__(cls, *args, **kwds):
+        """Disabled class construction interface; always raises `TypeError.`
+        """
+        raise TypeError(f"{cls.__name__} objects cannot be constructed directly.")
+
+    def _construct(cls, *args, **kwds):
+        """Private class construction interface.
+
+        All arguments are forwarded to ``__init__`` and/or ``__new__``
+        in the usual way.
+        """
+        return type.__call__(cls, *args, **kwds)
