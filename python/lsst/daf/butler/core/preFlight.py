@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DatasetOriginInfo", "DatasetOriginInfoDef", "PreFlightUnitsRow")
+__all__ = ("DatasetOriginInfo", "DatasetOriginInfoDef", "PreFlightDimensionsRow")
 
 
 from abc import ABCMeta, abstractmethod
@@ -105,21 +105,21 @@ class DatasetOriginInfoDef(DatasetOriginInfo):
         return self.outputOverrides.get(datasetTypeName, self.defaultOutput)
 
 
-class PreFlightUnitsRow:
-    """Simple data class holding combination of DataUnit values for one row
+class PreFlightDimensionsRow:
+    """Simple data class holding combination of Dimension values for one row
     returned by pre-flight solver.
 
     Logically instance of this class represents a single "path" connecting a
     set of DatasetRefs which exist or may exist for a given set of
-    DatasetTypes based on the DataUnit relational algebra.
+    DatasetTypes based on the Dimension relational algebra.
 
-    Pre-flight solver returns a sequence of `PreFlightUnitsRow` instances,
+    Pre-flight solver returns a sequence of `PreFlightDimensionsRow` instances,
     each instance will have unique ``dataId``, but `DatasetRef` in
     ``datasetRefs`` are not necessarily unique. For example when pre-flight
     solver generates data for Quantum which has two DatasetRefs on input and
-    one on output it will create two `PreFlightUnitsRow` instances with the
+    one on output it will create two `PreFlightDimensionsRow` instances with the
     same `DatasetRef` for output dataset type. It is caller's responsibility
-    to combine multiple `PreFlightUnitsRow` into a suitable structure
+    to combine multiple `PreFlightDimensionsRow` into a suitable structure
     (e.g. QuantumGraph).
 
     .. note::
@@ -131,8 +131,8 @@ class PreFlightUnitsRow:
 
     Attributes
     ----------
-    dataId : `dict`
-        Maps DataUnit link name to its corresponding value.
+    dataId : `DataId`
+        Maps dimensions link names to their corresponding values.
     datasetRefs : `dict`
         Maps `DatasetType` to its corresponding `DatasetRef`.
     """

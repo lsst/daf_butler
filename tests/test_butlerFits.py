@@ -45,14 +45,14 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
     useTempRoot = True
 
     @staticmethod
-    def registerDatasetTypes(datasetTypeName, dataUnits, storageClass, registry):
+    def registerDatasetTypes(datasetTypeName, dimensions, storageClass, registry):
         """Bulk register DatasetTypes
         """
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(datasetType)
 
         for compName, compStorageClass in storageClass.components.items():
-            compType = DatasetType(datasetType.componentTypeName(compName), dataUnits, compStorageClass)
+            compType = DatasetType(datasetType.componentTypeName(compName), dimensions, compStorageClass)
             registry.registerDatasetType(compType)
 
     @classmethod
@@ -88,15 +88,15 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         example = os.path.join(TESTDIR, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
         butler = Butler(self.tmpConfigFile)
-        dataUnits = ("Instrument", "Visit")
-        self.registerDatasetTypes(datasetTypeName, dataUnits, storageClass, butler.registry)
+        dimensions = ("Instrument", "Visit")
+        self.registerDatasetTypes(datasetTypeName, dimensions, storageClass, butler.registry)
         dataId = {"visit": 42, "instrument": "DummyCam", "physical_filter": "d-r"}
-        # Add needed DataUnits
-        butler.registry.addDataUnitEntry("Instrument", {"instrument": "DummyCam"})
-        butler.registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCam",
-                                         "physical_filter": "d-r"})
-        butler.registry.addDataUnitEntry("Visit", {"instrument": "DummyCam", "visit": 42,
-                                                   "physical_filter": "d-r"})
+        # Add needed Dimensions
+        butler.registry.addDimensionEntry("Instrument", {"instrument": "DummyCam"})
+        butler.registry.addDimensionEntry("PhysicalFilter", {"instrument": "DummyCam",
+                                          "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCam", "visit": 42,
+                                                    "physical_filter": "d-r"})
         butler.put(exposure, datasetTypeName, dataId)
         # Get the full thing
         full = butler.get(datasetTypeName, dataId)  # noqa F841

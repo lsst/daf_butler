@@ -39,16 +39,16 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         """Test construction preserves values.
 
         Note that construction doesn't check for valid storageClass or
-        dataUnits parameters.
+        dimensions parameters.
         These can only be verified for a particular schema.
         """
         datasetTypeName = "test"
         storageClass = StorageClass("test_StructuredData")
-        dataUnits = frozenset(("instrument", "visit"))
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        dimensions = frozenset(("instrument", "visit"))
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
-        self.assertEqual(datasetType.dataUnits, dataUnits)
+        self.assertEqual(datasetType.dimensions.names, dimensions)
 
     def testConstructor2(self):
         """Test construction from StorageClass name.
@@ -56,11 +56,11 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         datasetTypeName = "test"
         storageClass = StorageClass("test_constructor2")
         StorageClassFactory().registerStorageClass(storageClass)
-        dataUnits = frozenset(("instrument", "visit"))
-        datasetType = DatasetType(datasetTypeName, dataUnits, "test_constructor2")
+        dimensions = frozenset(("instrument", "visit"))
+        datasetType = DatasetType(datasetTypeName, dimensions, "test_constructor2")
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
-        self.assertEqual(datasetType.dataUnits, dataUnits)
+        self.assertEqual(datasetType.dimensions.names, dimensions)
 
     def testEquality(self):
         storageA = StorageClass("test_a")
@@ -91,7 +91,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
 
         This test is performed by checking that `DatasetType` entries can
         be inserted into a `set` and that unique values of its
-        (`name`, `storageClass`, `dataUnits`) parameters result in separate
+        (`name`, `storageClass`, `dimensions`) parameters result in separate
         entries (and equal ones don't).
 
         This does not check for uniformity of hashing or the actual values
@@ -103,9 +103,9 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         storageD = StorageClass("test_d")
         for name in ["a", "b"]:
             for storageClass in [storageC, storageD]:
-                for dataUnits in [("e", ), ("f", )]:
-                    datasetType = DatasetType(name, dataUnits, storageClass)
-                    datasetTypeCopy = DatasetType(name, dataUnits, storageClass)
+                for dimensions in [("e", ), ("f", )]:
+                    datasetType = DatasetType(name, dimensions, storageClass)
+                    datasetTypeCopy = DatasetType(name, dimensions, storageClass)
                     types.extend((datasetType, datasetTypeCopy))
                     unique += 1  # datasetType should always equal its copy
         self.assertEqual(len(set(types)), unique)  # all other combinations are unique
@@ -128,14 +128,14 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         """
         storageClass = StorageClass("test_pickle")
         datasetTypeName = "test"
-        dataUnits = frozenset(("camera", "visit"))
+        dimensions = frozenset(("camera", "visit"))
         # Un-pickling requires that storage class is registered with factory.
         StorageClassFactory().registerStorageClass(storageClass)
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         datasetTypeOut = pickle.loads(pickle.dumps(datasetType))
         self.assertIsInstance(datasetTypeOut, DatasetType)
         self.assertEqual(datasetType.name, datasetTypeOut.name)
-        self.assertEqual(datasetType.dataUnits, datasetTypeOut.dataUnits)
+        self.assertEqual(datasetType.dimensions.names, datasetTypeOut.dimensions.names)
         self.assertEqual(datasetType.storageClass, datasetTypeOut.storageClass)
 
 
@@ -147,9 +147,9 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         """
         datasetTypeName = "test"
         storageClass = StorageClass("testref_StructuredData")
-        dataUnits = frozenset(("instrument", "visit"))
+        dimensions = frozenset(("instrument", "visit"))
         dataId = dict(instrument="DummyCam", visit=42)
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         ref = DatasetRef(datasetType, dataId)
         self.assertEqual(ref.datasetType, datasetType)
         self.assertEqual(ref.dataId, dataId)
@@ -161,9 +161,9 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
     def testDetach(self):
         datasetTypeName = "test"
         storageClass = StorageClass("testref_StructuredData")
-        dataUnits = frozenset(("instrument", "visit"))
+        dimensions = frozenset(("instrument", "visit"))
         dataId = dict(instrument="DummyCam", visit=42)
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         ref = DatasetRef(datasetType, dataId, id=1)
         detachedRef = ref.detach()
         self.assertIsNotNone(ref.id)

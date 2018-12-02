@@ -26,8 +26,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.sql import select, and_, exists
 from sqlalchemy.exc import IntegrityError
 
-from lsst.sphgeom import ConvexPolygon
-
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
@@ -39,6 +37,7 @@ from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
+from ..core.dimensions import DataId, DimensionGraph
 from .sqlPreFlight import SqlPreFlight
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
@@ -57,8 +56,8 @@ class SqlRegistry(Registry):
         Load configuration
     schemaConfig : `SchemaConfig` or `str`
         Definition of the schema to use.
-    dataUnitConfig : `DataUnitConfig` or `str`
-        Definition of the DataUnitRegistry to use.
+    dimensionConfig : `DimensionConfig` or `Config` or
+        `DimensionGraph` configuration.
     create : `bool`
         Assume registry is empty and create a new one.
     """
@@ -68,16 +67,16 @@ class SqlRegistry(Registry):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
+    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False):
         registryConfig = SqlRegistryConfig(registryConfig)
-        super().__init__(registryConfig, dataUnitConfig=dataUnitConfig)
+        super().__init__(registryConfig, dimensionConfig=dimensionConfig)
         self.storageClasses = StorageClassFactory()
         self._schema = Schema(config=schemaConfig, limited=self.limited)
         self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
         if not self.limited:
-            self._preFlight = SqlPreFlight(self._schema, self._dataUnits, self._connection)
+            self._preFlight = SqlPreFlight(self._schema, self.dimensions, self._connection)
         if create:
             self._createTables()
 
@@ -109,34 +108,9 @@ class SqlRegistry(Registry):
 
         .. todo::
 
-            Insert checks for `storageClass`, `dataUnits` and `template`.
+            Insert checks for `storageClass`, `dimensions` and `template`.
         """
         return isinstance(datasetType, DatasetType)
-
-    def _validateDataId(self, datasetType, dataId):
-        """Check if a dataId is valid for a particular `DatasetType`.
-
-        .. todo::
-
-            Move this function to some other place once DataUnit relations are
-            implemented.
-
-        datasetType : `DatasetType`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
-
-        Raises
-        ------
-        ValueError
-            If the dataId is invalid for the given datasetType.
-        """
-        for name in datasetType.dataUnits:
-            try:
-                self._dataUnits[name].validateId(dataId)
-            except ValueError as err:
-                raise ValueError("Error validating {}".format(datasetType.name)) from err
 
     def makeDatabaseDict(self, table, types, key, value):
         """Construct a DatabaseDict backed by a table in the same database as
@@ -174,7 +148,7 @@ class SqlRegistry(Registry):
         config["table"] = table
         return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
 
-    def _findDatasetId(self, collection, datasetType, dataId):
+    def _findDatasetId(self, collection, datasetType, dataId, **kwds):
         """Lookup a dataset ID.
 
         This can be used to obtain a ``dataset_id`` that permits the dataset
@@ -186,9 +160,13 @@ class SqlRegistry(Registry):
             Identifies the collection to search.
         datasetType : `DatasetType`
             The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` primary key fields that label a Dataset
+            within a Collection.
+        kwds : `dict`
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
@@ -200,52 +178,26 @@ class SqlRegistry(Registry):
         ValueError
             If dataId is invalid.
         """
-        self._validateDataId(datasetType, dataId)
+        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
-        dataIdExpression = and_((self._schema.datasetTable.c[name] == dataId[name]
-                                 for name in self._dataUnits.getPrimaryKeyNames(
-                                     datasetType.dataUnits)))
+        dataIdExpression = and_(self._schema.datasetTable.c[name] == dataId[name]
+                                for name in dataId.dimensions.links)
         result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
             datasetTable.join(datasetCollectionTable)).where(and_(
                 datasetTable.c.dataset_type_name == datasetType.name,
                 datasetCollectionTable.c.collection == collection,
                 dataIdExpression))).fetchone()
-        # TODO update unit values and add Run, Quantum and assembler?
+        # TODO update dimension values and add Run, Quantum and assembler?
         if result is not None:
             return result.dataset_id
         else:
             return None
 
-    def find(self, collection, datasetType, dataId):
-        """Lookup a dataset.
-
-        This can be used to obtain a `DatasetRef` that permits the dataset to
-        be read from a `Datastore`.
-
-        Parameters
-        ----------
-        collection : `str`
-            Identifies the collection to search.
-        datasetType : `DatasetType`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A ref to the Dataset, or `None` if no matching Dataset
-            was found.
-
-        Raises
-        ------
-        ValueError
-            If dataId is invalid.
-        """
-        dataset_id = self._findDatasetId(collection, datasetType, dataId)
-        # TODO update unit values and add Run, Quantum and assembler?
+    def find(self, collection, datasetType, dataId=None, **kwds):
+        # Docstring inherited from Registry.find
+        dataset_id = self._findDatasetId(collection, datasetType, dataId, **kwds)
+        # TODO update dimension values and add Run, Quantum and assembler?
         if dataset_id is not None:
             return self.getDataset(dataset_id)
         else:
@@ -320,19 +272,26 @@ class SqlRegistry(Registry):
                 raise ValueError("DatasetType: {} != existing {}".format(datasetType, existingDatasetType))
         # Insert it
         datasetTypeTable = self._schema.tables["DatasetType"]
-        datasetTypeUnitsTable = self._schema.tables["DatasetTypeUnits"]
+        datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
         values = {"dataset_type_name": datasetType.name,
                   "storage_class": datasetType.storageClass.name}
+        # If the DatasetType only knows about the names of dimensions, upgrade
+        # that to a full DimensionGraph now.  Doing that before any database
+        # is good because should validate those names.  It's also a desirable
+        # side-effect.
+        if not isinstance(datasetType.dimensions, DimensionGraph):
+            datasetType._dimensions = self.dimensions.extract(datasetType._dimensions)
         self._connection.execute(datasetTypeTable.insert().values(**values))
-        if datasetType.dataUnits:
-            self._connection.execute(datasetTypeUnitsTable.insert(),
-                                     [{"dataset_type_name": datasetType.name, "unit_name": dataUnitName}
-                                      for dataUnitName in datasetType.dataUnits])
+        if datasetType.dimensions:
+            self._connection.execute(datasetTypeDimensionsTable.insert(),
+                                     [{"dataset_type_name": datasetType.name,
+                                       "dimension_name": dimensionName}
+                                      for dimensionName in datasetType.dimensions.names])
         self._datasetTypes[datasetType.name] = datasetType
         # Also register component DatasetTypes (if any)
         for compName, compStorageClass in datasetType.storageClass.components.items():
             compType = DatasetType(datasetType.componentTypeName(compName),
-                                   datasetType.dataUnits,
+                                   datasetType.dimensions,
                                    compStorageClass)
             self.registerDatasetType(compType)
         return True
@@ -356,7 +315,7 @@ class SqlRegistry(Registry):
             Requested named DatasetType could not be found in registry.
         """
         datasetTypeTable = self._schema.tables["DatasetType"]
-        datasetTypeUnitsTable = self._schema.tables["DatasetTypeUnits"]
+        datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
         # Get StorageClass from DatasetType table
         result = self._connection.execute(select([datasetTypeTable.c.storage_class]).where(
             datasetTypeTable.c.dataset_type_name == name)).fetchone()
@@ -365,55 +324,24 @@ class SqlRegistry(Registry):
             raise KeyError("Could not find entry for datasetType {}".format(name))
 
         storageClass = self.storageClasses.getStorageClass(result["storage_class"])
-        # Get DataUnits (if any) from DatasetTypeUnits table
-        result = self._connection.execute(select([datasetTypeUnitsTable.c.unit_name]).where(
-            datasetTypeUnitsTable.c.dataset_type_name == name)).fetchall()
-        dataUnits = (r[0] for r in result) if result else ()
+        # Get Dimensions (if any) from DatasetTypeDimensions table
+        result = self._connection.execute(select([datasetTypeDimensionsTable.c.dimension_name]).where(
+            datasetTypeDimensionsTable.c.dataset_type_name == name)).fetchall()
+        dimensions = self.dimensions.extract((r[0] for r in result) if result else ())
         datasetType = DatasetType(name=name,
                                   storageClass=storageClass,
-                                  dataUnits=dataUnits)
+                                  dimensions=dimensions)
         return datasetType
 
     @transactional
-    def addDataset(self, datasetType, dataId, run, producer=None, recursive=False):
-        """Adds a Dataset entry to the `Registry`
+    def addDataset(self, datasetType, dataId, run, producer=None, recursive=False, **kwds):
+        # Docstring inherited from Registry.addDataset
 
-        This always adds a new Dataset; to associate an existing Dataset with
-        a new collection, use ``associate``.
+        # Make a full DataId up front, so we don't do multiple times
+        # in calls below.  Note that calling DataId with a full DataId
+        # is basically a no-op.
+        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
 
-        Parameters
-        ----------
-        datasetType : `DatasetType`
-            Type of the Dataset.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
-        run : `Run`
-            The `Run` instance that produced the Dataset.  Ignored if
-            ``producer`` is passed (`producer.run` is then used instead).
-            A Run must be provided by one of the two arguments.
-        producer : `Quantum`
-            Unit of work that produced the Dataset.  May be `None` to store
-            no provenance information, but if present the `Quantum` must
-            already have been added to the SqlRegistry.
-        recursive : `bool`
-            If True, recursively add Dataset and attach entries for component
-            Datasets as well.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A newly-created `DatasetRef` instance.
-
-        Raises
-        ------
-        ValueError
-            If a Dataset with the given `DatasetRef` already exists in the
-            given collection.
-
-        Exception
-            If ``dataId`` contains unknown or invalid `DataUnit` entries.
-        """
         # Collection cannot have more than one unique DataId of the same
         # DatasetType, this constraint is checked in `associate` method
         # which raises.
@@ -429,6 +357,7 @@ class SqlRegistry(Registry):
         if self._findDatasetId(run.collection, datasetType, dataId) is not None:
             raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
                 datasetType, dataId, run.collection))
+
         datasetTable = self._schema.tables["Dataset"]
         datasetRef = None
         # TODO add producer
@@ -471,12 +400,10 @@ class SqlRegistry(Registry):
         if result is not None:
             datasetType = self.getDatasetType(result["dataset_type_name"])
             run = self.getRun(id=result.run_id)
-            # dataUnitName gives a `str` key which which is used to lookup
-            # the corresponding sqlalchemy.core.Column entry to index the result
-            # because the name of the key may not be the name of the name of the
-            # DataUnit link.
-            dataId = {dataUnitName: result[self._schema.datasetTable.c[dataUnitName]]
-                      for dataUnitName in self._dataUnits.getPrimaryKeyNames(datasetType.dataUnits)}
+            dataId = DataId({link: result[self._schema.datasetTable.c[link]]
+                             for link in datasetType.dimensions.links},
+                            dimensions=datasetType.dimensions,
+                            universe=self.dimensions)
             # Get components (if present)
             # TODO check against expected components
             components = {}
@@ -523,8 +450,8 @@ class SqlRegistry(Registry):
 
         If a DatasetRef with the same exact `dataset_id`` is already in a
         collection nothing is changed. If a DatasetRef with the same
-        DatasetType and unit values but with different ``dataset_id`` exists
-        in a collection then exception is raised.
+        DatasetType and dimension values but with different ``dataset_id``
+        exists in a collection then exception is raised.
 
         Parameters
         ----------
@@ -544,7 +471,7 @@ class SqlRegistry(Registry):
         # DatasetRef. Our SQL schema does not enforce this constraint yet so
         # checks have to be done in the code:
         # - read existing collection and try to match its contents with
-        #   new DatasetRefs using units
+        #   new DatasetRefs using dimensions
         # - if there is a match and dataset_id is different then constraint
         #   check fails
         # TODO: This implementation has a race which can violate the
@@ -569,7 +496,7 @@ class SqlRegistry(Registry):
             Raises
             ------
             ValueError
-                If DatasetRef unit values match row data but their IDs differ.
+                If DatasetRef dimension values match row data but their IDs differ.
             """
             if row.dataset_id == ref.id:
                 return True
@@ -577,9 +504,12 @@ class SqlRegistry(Registry):
             if row.dataset_type_name != ref.datasetType.name:
                 return False
 
-            columns = self._dataUnits.getPrimaryKeyNames(ref.datasetType.dataUnits)
+            # TODO: factor this operation out, fix use of private member
+            if not isinstance(ref.datasetType.dimensions, DimensionGraph):
+                ref.datasetType._dimensions = self.dimensions.extract(ref.datasetType.dimensions)
+
             dataId = ref.dataId
-            if all(row[col] == dataId[col] for col in columns):
+            if all(row[col] == dataId[col] for col in ref.datasetType.dimensions.links):
                 raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
                     ref.datasetType, dataId, collection))
             return False
@@ -595,7 +525,7 @@ class SqlRegistry(Registry):
                 raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
                     ref.datasetType, ref.dataId, collection))
         else:
-            # full scan of a collection to compare DatasetRef units
+            # full scan of a collection to compare DatasetRef dimensions
             datasetTable = self._schema.tables["Dataset"]
             datasetCollectionTable = self._schema.tables["DatasetCollection"]
             query = datasetTable.select()
@@ -989,83 +919,37 @@ class SqlRegistry(Registry):
             raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
         quantum._markInputUsed(ref)
 
-    def getDataUnitDefinition(self, dataUnitName):
-        """Return the definition of a DataUnit (an actual `DataUnit` object).
-
-        Parameters
-        ----------
-        dataUnitName : `str`
-            Name of the DataUnit, e.g. "Instrument", "Tract", etc.
-        """
-        # TODO: remove this when DataUnitRegistry is a singleton
-        return self._dataUnits[dataUnitName]
-
     @disableWhenLimited
     @transactional
-    def addDataUnitEntry(self, dataUnitName, values):
-        """Add a new `DataUnit` entry.
-
-        dataUnitName : `str`
-            Name of the `DataUnit` (e.g. ``"Instrument"``).
-        values : `dict`
-            Dictionary of ``columnName, columnValue`` pairs.
-
-        If ``values`` includes a "region" key, `setDataUnitRegion` will
-        automatically be called to set it any associated spatial join
-        tables.
-        Region fields associated with a combination of DataUnits must be
-        explicitly set separately.
-
-        Raises
-        ------
-        TypeError
-            If the given `DataUnit` does not have explicit entries in the
-            registry.
-        ValueError
-            If an entry with the primary-key defined in `values` is already
-            present.
-        NotImplementedError
-            Raised if `limited` is `True`.
-        """
-        dataUnit = self._dataUnits[dataUnitName]
-        dataUnit.validateId(values)
-        dataUnitTable = self._schema.tables[dataUnitName]
-        v = values.copy()
-        region = v.pop("region", None)
-        if dataUnitTable is None:
-            raise TypeError("DataUnit '{}' has no table.".format(dataUnitName))
+    def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):
+        # Docstring inherited from Registry.addDimensionEntry.
+        dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
+        # The given dimension should be the only leaf dimension of the graph,
+        # and this should ensure it's a true `Dimension`, not a `str` name.
+        dimension, = dataId.dimensions.leaves
+        if entry is not None:
+            dataId.entries[dimension].update(entry)
+        table = self._schema.tables[dimension.name]
+        if table is None:
+            raise TypeError(f"Dimension '{dimension.name}' has no table.")
         try:
-            self._connection.execute(dataUnitTable.insert().values(**v))
+            self._connection.execute(table.insert().values(**dataId.fields(dimension, region=False)))
         except IntegrityError as err:
             raise ValueError(str(err))  # TODO this should do an explicit validity check instead
-        if region is not None:
-            self.setDataUnitRegion((dataUnitName,), v, region)
+        if dataId.region is not None:
+            self.setDimensionRegion(dataId)
+        return dataId
 
     @disableWhenLimited
-    def findDataUnitEntry(self, dataUnitName, value):
-        """Return a `DataUnit` entry corresponding to a `value`.
-
-        Parameters
-        ----------
-        dataUnitName : `str`
-            Name of a `DataUnit`
-        value : `dict`
-            A dictionary of values that uniquely identify the `DataUnit`.
-
-        Returns
-        -------
-        dataUnitEntry : `dict`
-            Dictionary with all `DataUnit` values, or `None` if no matching
-            entry is found.
-        NotImplementedError
-            Raised if `limited` is `True`.
-        """
-        dataUnit = self._dataUnits[dataUnitName]
-        dataUnit.validateId(value)
-        dataUnitTable = self._schema.tables[dataUnitName]
-        primaryKeyColumns = {k: self._schema.tables[dataUnit.name].c[k] for k in dataUnit.primaryKey}
-        result = self._connection.execute(select([dataUnitTable]).where(
-            and_((primaryKeyColumns[name] == value[name] for name in primaryKeyColumns)))).fetchone()
+    def findDimensionEntry(self, dimension, dataId=None, **kwds):
+        # Docstring inherited from Registry.findDimensionEntry
+        dataId = DataId(dataId, dimension=dimension, universe=self.dimensions)
+        # The given dimension should be the only leaf dimension of the graph,
+        # and this should ensure it's a true `Dimension`, not a `str` name.
+        dimension, = dataId.dimensions.leaves
+        table = self._schema.tables[dimension.name]
+        result = self._connection.execute(select([table]).where(
+            and_(table.c[name] == value for name, value in dataId.items()))).fetchone()
         if result is not None:
             return dict(result.items())
         else:
@@ -1073,50 +957,24 @@ class SqlRegistry(Registry):
 
     @disableWhenLimited
     @transactional
-    def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
-        """Set the region field for a DataUnit instance or a combination
-        thereof and update associated spatial join tables.
-
-        Parameters
-        ----------
-        dataUnitNames : sequence
-            A sequence of DataUnit names whose instances are jointly associated
-            with a region on the sky. This must not include dependencies that
-            are implied, e.g. "Patch" must not include "Tract", but "Detector"
-            needs to add "Visit".
-        value : `dict`
-            A dictionary of values that uniquely identify the DataUnits.
-        region : `sphgeom.ConvexPolygon`
-            Region on the sky.
-        update : `bool`
-            If True, existing region information for these DataUnits is being
-            replaced.  This is usually required because DataUnit entries are
-            assumed to be pre-inserted prior to calling this function.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
-        """
-        primaryKey = set()
-        regionUnitNames = []
-        for dataUnitName in dataUnitNames:
-            dataUnit = self._dataUnits[dataUnitName]
-            dataUnit.validateId(value)
-            primaryKey.update(dataUnit.primaryKey)
-            regionUnitNames.append(dataUnitName)
-            regionUnitNames += [d.name for d in dataUnit.requiredDependencies]
-        regionDataUnit = self._dataUnits.getRegionHolder(*dataUnitNames)
-        table = self._schema.tables[regionDataUnit.name]
-        if table is None:
-            raise TypeError("No region table found for '{}'.".format(dataUnitNames))
+    def setDimensionRegion(self, dataId=None, *, update=True, region=None, **kwds):
+        # Docstring inherited from Registry.setDimensionRegion
+        dataId = DataId(dataId, universe=self.dimensions, region=region, **kwds)
+        if dataId.region is None:
+            raise ValueError("No region provided.")
+        holder = dataId.dimensions.getRegionHolder()
+        if holder.primaryKey != dataId.dimensions.links:
+            raise ValueError(
+                f"Data ID contains superfluous keys: {dataId.dimensions.links - holder.primaryKey}"
+            )
+        table = self._schema.tables[holder.name]
         # Update the region for an existing entry
         if update:
             result = self._connection.execute(
                 table.update().where(
-                    and_((table.columns[name] == value[name] for name in primaryKey))
+                    and_((table.columns[name] == dataId[name] for name in holder.primaryKey))
                 ).values(
-                    region=region.encode()
+                    region=dataId.region.encode()
                 )
             )
             if result.rowcount == 0:
@@ -1124,100 +982,51 @@ class SqlRegistry(Registry):
         else:  # Insert rather than update.
             self._connection.execute(
                 table.insert().values(
-                    region=region.encode(),
-                    **value
+                    region=dataId.region.encode(),
+                    **dataId
                 )
             )
-        assert "SkyPix" not in dataUnitNames
-        join = self._dataUnits.getJoin(dataUnitNames, "SkyPix")
-        if join is None or join.name in self._schema.views:
+        # Update the join table between this Dimension and SkyPix, if it isn't
+        # itself a view.
+        join = dataId.dimensions.union(["SkyPix"]).joins().findIf(
+            lambda join: join != holder and join.name not in self._schema.views
+        )
+        if join is None:
             return
         if update:
-            # Delete any old SkyPix join entries for this DataUnit
+            # Delete any old SkyPix join entries for this Dimension
             self._connection.execute(
                 self._schema.tables[join.name].delete().where(
-                    and_((self._schema.tables[join.name].c[name] == value[name] for name in primaryKey))
+                    and_((self._schema.tables[join.name].c[name] == dataId[name]
+                          for name in holder.primaryKey))
                 )
             )
         parameters = []
-        for begin, end in self.pixelization.envelope(region).ranges():
+        for begin, end in self.pixelization.envelope(dataId.region).ranges():
             for skypix in range(begin, end):
-                parameters.append(dict(value, skypix=skypix))
+                parameters.append(dict(dataId, skypix=skypix))
         self._connection.execute(self._schema.tables[join.name].insert(), parameters)
+        return dataId
 
     @disableWhenLimited
-    def getRegion(self, dataId):
-        """Get region associated with a dataId.
-
-        Parameters
-        ----------
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
-
-        Returns
-        -------
-        region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or `None` if not present.
-
-        Raises
-        ------
-        KeyError
-            If the set of dataunits for the ``dataId`` does not correspond to
-            a unique spatial lookup.
-        """
-        dataUnitNames = (self._dataUnits.getByLinkName(linkName).name for linkName in dataId)
-        regionHolder = self._dataUnits.getRegionHolder(*tuple(dataUnitNames))
-        # Skypix does not have a table to lookup the region in, instead generate it
-        if regionHolder == self._dataUnits["SkyPix"]:
-            return self.pixelization.pixel(dataId["skypix"])
-        # Lookup region
-        primaryKeyColumns = {k: self._schema.tables[regionHolder.name].c[k] for k in regionHolder.primaryKey}
-        result = self._connection.execute(select([self._schema.tables[regionHolder.name].c["region"]]).where(
-            and_((primaryKeyColumns[name] == dataId[name] for name in primaryKeyColumns)))).fetchone()
-        if result is not None:
-            return ConvexPolygon.decode(result[0])
-        else:
-            return None
+    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
+        # Docstring inherited from Registry.selectDimensions
+        return self._preFlight.selectDimensions(originInfo,
+                                                expression,
+                                                neededDatasetTypes,
+                                                futureDatasetTypes)
 
     @disableWhenLimited
-    def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
-        """Evaluate a filter expression and lists of
-        `DatasetTypes <DatasetType>` and return a set of data unit values.
-
-        Returned set consists of combinations of units participating in data
-        transformation from ``neededDatasetTypes`` to ``futureDatasetTypes``,
-        restricted by existing data and filter expression.
-
-        Parameters
-        ----------
-        originInfo : `DatasetOriginInfo`
-            Object which provides names of the input/output collections.
-        expression : `str`
-            An expression that limits the `DataUnits <DataUnit>` and
-            (indirectly) the Datasets returned.
-        neededDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
-            be included in the returned column set. Output is limited to the
-            the Datasets of these DatasetTypes which already exist in the
-            registry.
-        futureDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
-            be included in the returned column set. It is expected that
-            Datasets for these DatasetTypes do not exist in the registry,
-            but presently this is not checked.
-
-        Yields
-        ------
-        row : `PreFlightUnitsRow`
-            Single row is a unique combination of units in a transform.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
-        """
-        return self._preFlight.selectDataUnits(originInfo,
-                                               expression,
-                                               neededDatasetTypes,
-                                               futureDatasetTypes)
+    def _queryMetadata(self, element, dataId, columns):
+        # Docstring inherited from Registry._queryMetadata.
+        table = self._schema.tables[element.name]
+        cols = [table.c[col] for col in columns]
+        row = self._connection.execute(
+            select(cols)
+            .where(
+                and_(table.c[name] == value for name, value in dataId.items())
+            )
+        ).fetchone()
+        if row is None:
+            raise LookupError(f"{element.name} entry for {dataId} not found.")
+        return {c.name: row[c.name] for c in cols}

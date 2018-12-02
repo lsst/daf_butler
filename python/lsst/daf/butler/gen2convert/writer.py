@@ -28,8 +28,8 @@ from lsst.geom import Box2D
 from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
-from ..core import Config, Run, DatasetType, StorageClassFactory
-from ..instrument import makeExposureEntryFromObsInfo, makeVisitEntryFromObsInfo
+from ..core import Config, Run, DatasetType, StorageClassFactory, DataId
+from ..instrument import updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo
 from .structures import ConvertedRepo
 from .translators import Translator, NoSkyMapError
 
@@ -181,7 +181,7 @@ class ConversionWriter:
             self.datasetTypes[datasetTypeName] = DatasetType(
                 name=datasetTypeName,
                 storageClass=storageClass,
-                dataUnits=translators[datasetTypeName].gen3units
+                dimensions=translators[datasetTypeName].gen3units
             )
         converted = ConvertedRepo(gen2repo, instrument=instrument, run=run, translators=translators)
         # Add parent repositories first, so self.repos is sorted topologically.
@@ -215,13 +215,13 @@ class ConversionWriter:
             instruments.add(self.config["mappers", repo.gen2.MapperClass.__name__, "instrument"])
         for instrument in instruments:
             log.debug("Looking for preexisting Instrument '%s'.", instrument)
-            if registry.findDataUnitEntry("Instrument", {"instrument": instrument}) is None:
+            if registry.findDimensionEntry("Instrument", {"instrument": instrument}) is None:
                 raise LookupError(
                     "Instrument '{}' has not been registered with the given Registry.".format(instrument)
                 )
 
     def insertSkyMaps(self, registry):
-        """Add all necessary SkyMap DataUnits (and associated Tracts and
+        """Add all necessary SkyMap Dimensions (and associated Tracts and
         Patches) to the Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
@@ -252,24 +252,24 @@ class ConversionWriter:
             skyMap.register(skyMapName, registry)
 
     def insertObservations(self, registry):
-        """Add all necessary Visit and Exposure DataUnits to the Registry.
+        """Add all necessary Visit and Exposure Dimensions to the Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for mapperName, nested in self.obsInfo.items():
             instrument = self.config["mappers", mapperName, "instrument"]
-            log.info("Inserting Exposure and Visit DataUnits for Instrument '%s'", instrument)
+            log.info("Inserting Exposure and Visit Dimensions for Instrument '%s'", instrument)
             for obsInfoId, (obsInfo, filt) in nested.items():
                 # TODO: generalize this to instruments with snaps and/or compound gen2 visit/exposure IDs
                 visitId, = obsInfoId
                 exposureId, = obsInfoId
-                # TODO: skip insertion if DataUnits already exist.
-                dataId = {"instrument": instrument, "visit": visitId, "physical_filter": filt}
-                visitEntry = makeVisitEntryFromObsInfo(dataId, obsInfo)
-                dataId["exposure"] = exposureId
-                exposureEntry = makeExposureEntryFromObsInfo(dataId, obsInfo)
+                # TODO: skip insertion if Dimensions already exist.
+                dataId = DataId(instrument=instrument, visit=visitId, physical_filter=filt,
+                                exposure=exposureId, universe=registry.dimensions)
+                updateVisitEntryFromObsInfo(dataId, obsInfo)
+                updateExposureEntryFromObsInfo(dataId, obsInfo)
                 log.debug("Inserting Exposure %d and Visit %d.", exposureId, visitId)
-                registry.addDataUnitEntry("Visit", visitEntry)
-                registry.addDataUnitEntry("Exposure", exposureEntry)
+                registry.addDimensionEntry("Visit", dataId)
+                registry.addDimensionEntry("Exposure", dataId)
 
     def insertDatasetTypes(self, registry):
         """Add all necessary DatasetType registrations to the Registry.
@@ -372,9 +372,9 @@ class ConversionWriter:
                 bbox = Box2D(bboxFromMetadata(metadata))
                 bbox.grow(config["padding"])
                 region = ConvexPolygon([sp.getVector() for sp in wcs.pixelToSky(bbox.getCorners())])
-                value = {k: row[k] for k in ("instrument", "visit", "detector")}
-                registry.setDataUnitRegion(("Visit", "Detector"), value, region, update=False)
+                registry.setDimensionRegion({k: row[k] for k in ("instrument", "visit", "detector")},
+                                            region=region, update=False)
                 visits.setdefault((row["instrument"], row["visit"]), []).extend(region.getVertices())
             for (instrument, visit), vertices in visits.items():
                 region = ConvexPolygon(vertices)
-                registry.setDataUnitRegion(("Visit",), dict(instrument=instrument, visit=visit), region)
+                registry.setDimensionRegion(instrument=instrument, visit=visit, region=region)
