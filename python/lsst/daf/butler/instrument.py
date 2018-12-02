@@ -19,7 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Instrument", "makeExposureEntryFromObsInfo", "makeVisitEntryFromObsInfo")
+__all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo")
+
+from lsst.daf.butler import DataId
 
 
 # TODO: all code in this module probably needs to be moved to a higher-level
@@ -51,7 +53,7 @@ class Instrument:
     def register(self, registry):
         """Register an instance of this `Instrument` with a `Registry`.
 
-        Creates all relevant `DataUnit` entries.
+        Creates all relevant `Dimension` entries.
         """
         assert self.instrument is not None
         self._addInstrument(registry)
@@ -59,72 +61,72 @@ class Instrument:
         self._addDetectors(registry)
 
     def _addInstrument(self, registry):
-        registry.addDataUnitEntry("Instrument", {"instrument": self.instrument})
+        registry.addDimensionEntry("Instrument", {"instrument": self.instrument})
 
     def _addPhysicalFilters(self, registry):
         for entry in self.physicalFilters:
             if "instrument" not in entry:
                 entry["instrument"] = self.instrument
-            registry.addDataUnitEntry("PhysicalFilter", entry)
+            registry.addDimensionEntry("PhysicalFilter", entry)
 
     def _addDetectors(self, registry):
         for entry in self.detectors:
             if 'instrument' not in entry:
                 entry['instrument'] = self.instrument
-            registry.addDataUnitEntry('Detector', entry)
+            registry.addDimensionEntry('Detector', entry)
 
 
-def makeExposureEntryFromObsInfo(dataId, obsInfo):
-    """Construct an Exposure DataUnit entry from
+def updateExposureEntryFromObsInfo(dataId, obsInfo):
+    """Construct an Exposure Dimension entry from
     `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
-    dataId : `dict`
-        Dictionary of DataUnit primary/foreign key values for Exposure
-        ("instrument", "exposure", optionally "visit" and "physical_filter").
+    dataId : `dict` or `DataId`
+        Dictionary of Dimension primary/foreign key values for (at least)
+        Exposure. If a true `DataId`, this object will be modified and
+        returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the Exposure.
 
     Returns
     -------
-    entry : `dict`
-        A dictionary containing all fields in the Exposure table.
+    dataId : `DataId`
+        A data ID with the entry for the Exposure dimension updated.
     """
-    result = {
-        "datetime_begin": obsInfo.datetime_begin.to_datetime(),
-        "datetime_end": obsInfo.datetime_end.to_datetime(),
-        "exposure_time": obsInfo.exposure_time.to_value("s"),
-        "dark_time": obsInfo.dark_time.to_value("s")
-    }
-    result.update(dataId)
-    return result
+    dataId = DataId(dataId)
+    dataId.entries[dataId.dimensions["Exposure"]].update(
+        datetime_begin=obsInfo.datetime_begin.to_datetime(),
+        datetime_end=obsInfo.datetime_end.to_datetime(),
+        exposure_time=obsInfo.exposure_time.to_value("s"),
+        dark_time=obsInfo.dark_time.to_value("s")
+    )
+    return dataId
 
 
-def makeVisitEntryFromObsInfo(dataId, obsInfo):
-    """Construct a Visit DataUnit entry from
+def updateVisitEntryFromObsInfo(dataId, obsInfo):
+    """Construct a Visit Dimension entry from
     `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
-    dataId : `dict`
-        Dictionary of DataUnit primary/foreign key values for Visit ("instrument",
-        "visit", optionally "physical_filter").
+    dataId : `dict` or `DataId`
+        Dictionary of Dimension primary/foreign key values for (at least)
+        Visit. If a true `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
-        A `~astro_metadata_translator.ObservationInfo` object corresponding to the
-        Visit.
+        A `~astro_metadata_translator.ObservationInfo` object corresponding to
+        the Exposure.
 
     Returns
     -------
-    entry : `dict`
-        A dictionary containing all fields in the Visit table aside from
-        "region".
+    dataId : `DataId`
+        A data ID with the entry for the Visit dimension updated.
     """
-    result = {
-        "datetime_begin": obsInfo.datetime_begin.to_datetime(),
-        "datetime_end": obsInfo.datetime_end.to_datetime(),
-        "exposure_time": obsInfo.exposure_time.to_value("s"),
-    }
-    result.update(dataId)
-    return result
+    dataId = DataId(dataId)
+    dataId.entries[dataId.dimensions["Exposure"]].update(
+        datetime_begin=obsInfo.datetime_begin.to_datetime(),
+        datetime_end=obsInfo.datetime_end.to_datetime(),
+        exposure_time=obsInfo.exposure_time.to_value("s"),
+    )
+    return dataId

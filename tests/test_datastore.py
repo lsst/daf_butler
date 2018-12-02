@@ -98,9 +98,9 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     def testParameterValidation(self):
         """Check that parameters are validated"""
         sc = self.storageClassFactory.getStorageClass("ThingOne")
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 52, "filter": "V"}
-        ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore = self.makeDatastore()
         data = {1: 2, 3: 4}
         datastore.put(data, ref)
@@ -119,11 +119,11 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
                                      "StructuredDataJson",
                                      "StructuredDataPickle")]
 
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 52, "filter": "V"}
 
         for sc in storageClasses:
-            ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
             print("Using storageClass: {}".format(sc.name))
             datastore.put(metrics, ref)
 
@@ -140,7 +140,7 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
             # Get a component -- we need to construct new refs for them
             # with derived storage classes but with parent ID
             comp = "output"
-            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(comp), dataUnits,
+            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(comp), dimensions,
                                           sc.components[comp], dataId, id=ref.id)
             output = datastore.get(compRef)
             self.assertEqual(output, metricsOut.output)
@@ -153,12 +153,12 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
         # Check that a put fails if the dataset type is not supported
         if self.hasUnsupportedPut:
             sc = StorageClass("UnsupportedSC", pytype=type(metrics))
-            ref = self.makeDatasetRef("unsupportedType", dataUnits, sc, dataId)
+            ref = self.makeDatasetRef("unsupportedType", dimensions, sc, dataId)
             with self.assertRaises(DatasetTypeNotSupportedError):
                 datastore.put(metrics, ref)
 
         # These should raise
-        ref = self.makeDatasetRef("metrics", dataUnits, storageClass, dataId, id=10000)
+        ref = self.makeDatasetRef("metrics", dimensions, storageClass, dataId, id=10000)
         with self.assertRaises(FileNotFoundError):
             # non-existing file
             datastore.get(ref)
@@ -181,19 +181,19 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
                                      "StructuredCompositeTestA",
                                      "StructuredCompositeTestB")]
 
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 428, "filter": "R"}
 
         for sc in storageClasses:
             print("Using storageClass: {}".format(sc.name))
-            ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+            ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
 
             components = sc.assembler().disassemble(metrics)
             self.assertTrue(components)
 
             compsRead = {}
             for compName, compInfo in components.items():
-                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dataUnits,
+                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
                                               components[compName].storageClass, dataId)
 
                 print("Writing component {} with {}".format(compName, compRef.datasetType.storageClass.name))
@@ -212,11 +212,11 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
         # Put
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 638, "filter": "U"}
 
         sc = self.storageClassFactory.getStorageClass("StructuredData")
-        ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore.put(metrics, ref)
 
         # Does it exist?
@@ -245,11 +245,11 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     def testTransfer(self):
         metrics = makeExampleMetrics()
 
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 2048, "filter": "Uprime"}
 
         sc = self.storageClassFactory.getStorageClass("StructuredData")
-        ref = self.makeDatasetRef("metric", dataUnits, sc, dataId)
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
 
         inputDatastore = self.makeDatastore("test_input_datastore")
         outputDatastore = self.makeDatastore("test_output_datastore")
@@ -263,10 +263,10 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     def testBasicTransaction(self):
         datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         nDatasets = 6
         dataIds = [{"visit": i, "filter": "V"} for i in range(nDatasets)]
-        data = [(self.makeDatasetRef("metric", dataUnits, storageClass, dataId), makeExampleMetrics())
+        data = [(self.makeDatasetRef("metric", dimensions, storageClass, dataId), makeExampleMetrics())
                 for dataId in dataIds]
         succeed = data[:nDatasets//2]
         fail = data[nDatasets//2:]
@@ -302,20 +302,20 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     def testNestedTransaction(self):
         datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         metrics = makeExampleMetrics()
 
         dataId = {"visit": 0, "filter": "V"}
-        refBefore = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+        refBefore = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         datastore.put(metrics, refBefore)
         with self.assertRaises(TransactionTestError):
             with datastore.transaction():
                 dataId = {"visit": 1, "filter": "V"}
-                refOuter = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+                refOuter = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
                 datastore.put(metrics, refOuter)
                 with datastore.transaction():
                     dataId = {"visit": 2, "filter": "V"}
-                    refInner = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+                    refInner = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
                     datastore.put(metrics, refInner)
                 # All datasets should exist
                 for ref in (refBefore, refOuter, refInner):
@@ -333,10 +333,10 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
 
     def runIngestTest(self, func, expectOutput=True):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         metrics = makeExampleMetrics()
         dataId = {"visit": 0, "filter": "V"}
-        ref = self.makeDatasetRef("metric", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=expectOutput) as path:
             with open(path, 'w') as fd:
                 yaml.dump(metrics._asdict(), stream=fd)

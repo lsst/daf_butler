@@ -73,8 +73,8 @@ class SqliteRegistry(SqlRegistry):
                                   toUpdate={"db": "sqlite:///{}/gen3.sqlite3".format(root)},
                                   toCopy=("cls", ))
 
-    def __init__(self, registryConfig, schemaConfig, dataUnitConfig, create=False):
+    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False):
         registryConfig = SqlRegistryConfig(registryConfig)
         if ":memory:" in registryConfig.get("db", ""):
             create = True
-        super().__init__(registryConfig, schemaConfig, dataUnitConfig, create)
+        super().__init__(registryConfig, schemaConfig, dimensionConfig, create)

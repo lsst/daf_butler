@@ -39,10 +39,10 @@ class KeyHandler(metaclass=ABCMeta):
     Parameters
     ----------
     gen3key : `str`
-        Name of the Gen3 Data ID key (DataUnit link field name) populated by
+        Name of the Gen3 Data ID key (Dimension link field name) populated by
         this handler (e.g. "visit" or "abstract_filter")
     gen3unit : `str`
-        Name of the Gen3 DataUnit associated with `gen3key` (e.g. "Visit" or
+        Name of the Gen3 Dimension associated with `gen3key` (e.g. "Visit" or
         "AbstractFilter").
     """
 
@@ -125,10 +125,10 @@ class Translator:
     handlers : `list`
         A list of KeyHandlers this Translator should use.
     skyMap : `BaseSkyMap`
-        SkyMap instance used to define any Tract or Patch DataUnits.
+        SkyMap instance used to define any Tract or Patch Dimensions.
     skyMapName : `str`
-        Gen3 SkyMap DataUnit name to be associated with any Tract or Patch
-        DataUnits.
+        Gen3 SkyMap Dimension name to be associated with any Tract or Patch
+        Dimensions.
     """
 
     __slots__ = ("handlers", "skyMap", "skyMapName")
@@ -265,7 +265,7 @@ class Translator:
 
     @property
     def gen3units(self):
-        """The Gen3 DataUnit (names) populated by this Translator (`frozenset`)."""
+        """The Gen3 Dimension (names) populated by this Translator (`frozenset`)."""
         return frozenset(h.gen3unit for h in self.handlers)
 
 

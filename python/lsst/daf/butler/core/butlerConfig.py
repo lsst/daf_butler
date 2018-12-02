@@ -28,15 +28,15 @@ import os.path
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
-from .dataUnit import DataUnitConfig
 from .registry import RegistryConfig
 from .storageClass import StorageClassConfig
+from .dimensions import DimensionConfig
 from .composites import CompositesConfig
 
 __all__ = ("ButlerConfig",)
 
 CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig,
-                            DatastoreConfig, CompositesConfig, DataUnitConfig)
+                            DatastoreConfig, CompositesConfig, DimensionConfig)
 
 
 class ButlerConfig(Config):

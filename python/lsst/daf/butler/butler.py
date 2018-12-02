@@ -212,7 +212,7 @@ class Butler:
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
         dataId : `dict`, optional
-            An identifier with `DataUnit` names and values.
+            An identifier with `Dimension` names and values.
             When `None` a `DatasetRef` should be supplied as the second
             argument.
         producer : `Quantum`, optional
@@ -327,7 +327,7 @@ class Butler:
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
         dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the `DatasetRef`
+            A `dict` of `Dimension` link name, value pairs that label the `DatasetRef`
             within a Collection.
             When `None` a `DatasetRef` should be supplied as the second
             argument.
@@ -368,7 +368,7 @@ class Butler:
         datasetType : `DatasetType` instance or `str`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
+            A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection.
         predict : `bool`
             If `True`, allow URIs to be returned of datasets that have not
@@ -403,7 +403,7 @@ class Butler:
         datasetType : `DatasetType` instance or `str`
             The `DatasetType`.
         dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
+            A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection.
 
         Raises

@@ -62,9 +62,9 @@ class FitsCatalogDatasetsHelper:
 class DatasetTestHelper:
     """Helper methods for Datasets"""
 
-    def makeDatasetRef(self, datasetTypeName, dataUnits, storageClass, dataId, id=None, run=None):
+    def makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, id=None, run=None):
         """Make a DatasetType and wrap it in a DatasetRef for a test"""
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         if id is None:
             self.id += 1
             id = self.id
