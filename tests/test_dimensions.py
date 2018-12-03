@@ -25,7 +25,7 @@ import itertools
 import lsst.utils
 import lsst.utils.tests
 
-from lsst.daf.butler import DimensionGraph, DimensionUnit, DimensionJoin, DimensionJoinSet
+from lsst.daf.butler import DimensionGraph, Dimension, DimensionJoin
 
 
 class DimensionTestCase(lsst.utils.tests.TestCase):
@@ -42,10 +42,22 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
     def checkSetInvariants(self, dimensions):
         """Run tests on DimensionSet that should pass for any instance.
         """
-        copy1 = dimensions.copy()
+        # DimensionSet should be interoperable with regular sets of
+        # DimensionElements and regular sets of their names
+        self.assertEqual(dimensions, set(dimensions))
+        self.assertEqual(dimensions, set(dimensions.names))
+        self.assertLessEqual(dimensions, set(dimensions))
+        self.assertLessEqual(dimensions, set(dimensions.names))
+        self.assertGreaterEqual(dimensions, set(dimensions))
+        self.assertGreaterEqual(dimensions, set(dimensions.names))
+        self.assertFalse(dimensions < set(dimensions))
+        self.assertFalse(dimensions < set(dimensions.names))
+        self.assertFalse(dimensions > set(dimensions))
+        self.assertFalse(dimensions > set(dimensions.names))
+
         copy2 = dimensions.union(dimensions)
         copy3 = dimensions.intersection(dimensions)
-        for name, copy in [("copy", copy1), ("union", copy2), ("intersection", copy3)]:
+        for name, copy in [("union", copy2), ("intersection", copy3)]:
             with self.subTest(copy=name):
                 self.assertLessEqual(dimensions, copy)
                 self.assertGreaterEqual(dimensions, copy)
@@ -57,31 +69,34 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
                 self.assertFalse(dimensions > copy)
                 self.assertTrue(not dimensions.isdisjoint(copy) or not dimensions)
 
-    def checkUnitSetInvariants(self, units):
-        """Run tests on DimensionUnitSet that should pass for any instance.
-        """
-        self.checkSetInvariants(units)
-        self.assertLessEqual(units, self.universe.units)
-        for unit in units:
-            self.assertIn(unit, units)
-            self.assertIn(unit.name, units)
-            self.assertEqual(units[unit.name], unit)
-            self.assertEqual(units.get(unit.name), unit)
-            self.assertIsInstance(unit, DimensionUnit)
-            self.assertGreaterEqual(unit.dependencies(), unit.dependencies(optional=False))
-            self.assertGreaterEqual(unit.dependencies(), unit.dependencies(optional=True))
-            self.assertLessEqual(unit.dependencies(), units)
-
     def checkGraphInvariants(self, graph):
         """Run tests on DimensionGraph that should pass for any instance.
         """
-        self.checkUnitSetInvariants(graph.units)
-        self.checkSetInvariants(graph.joins(summaries=False))
+        self.checkSetInvariants(graph.asSet)
+        self.assertLessEqual(graph, self.universe)
+        for dim in graph:
+            self.assertIn(dim, graph)
+            self.assertIn(dim.name, graph)
+            self.assertEqual(graph[dim.name], dim)
+            self.assertEqual(graph.get(dim.name), dim)
+            self.assertIsInstance(dim, Dimension)
+            self.assertGreaterEqual(dim.dependencies(), dim.dependencies(optional=False))
+            self.assertGreaterEqual(dim.dependencies(), dim.dependencies(optional=True))
+            self.assertLessEqual(dim.dependencies(), graph)
+
         self.checkSetInvariants(graph.joins(summaries=True))
-        copy1 = graph.subgraph(graph.units)
+        for join in graph.joins(summaries=True):
+            self.assertIsInstance(join, DimensionJoin)
+            self.assertGreater(join.dependencies(), join.lhs)
+            self.assertGreater(join.dependencies(), join.rhs)
+            self.assertLessEqual(join.dependencies(), graph)
+        self.checkSetInvariants(graph.joins(summaries=False))
+        for join in graph.joins(summaries=False):
+            self.assertTrue(join.summarizes.isdisjoint(graph.joins()))
+
         copy2 = graph.union(graph)
         copy3 = graph.intersection(graph)
-        for name, copy in [("subgraph", copy1), ("union", copy2), ("intersection", copy3)]:
+        for name, copy in [("union", copy2), ("intersection", copy3)]:
             with self.subTest(copy=name):
                 self.assertLessEqual(graph, copy)
                 self.assertGreaterEqual(graph, copy)
@@ -92,111 +107,102 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
                 self.assertFalse(graph != copy)
                 self.assertFalse(graph < copy)
                 self.assertFalse(graph > copy)
-        self.assertLessEqual(graph, copy)
-        self.assertGreaterEqual(graph, copy)
-        self.assertEqual(graph, copy)
-        self.assertTrue(graph.issubset(copy))
-        self.assertTrue(graph.issuperset(copy))
-        self.assertFalse(graph != copy)
-        self.assertFalse(graph < copy)
-        self.assertFalse(graph > copy)
-        self.assertFalse(graph.isdisjoint(copy))
-        for join in graph.joins(summaries=True):
-            self.assertIsInstance(join, DimensionJoin)
-            self.assertGreater(join.dependencies(), join.lhs)
-            self.assertGreater(join.dependencies(), join.rhs)
-            self.assertLessEqual(join.dependencies(), graph.units)
-        for join in graph.joins(summaries=False):
-            self.assertTrue(join.summarizes.isdisjoint(graph.joins()))
 
-    def testInstrumentUnits(self):
-        """Test that the Instrument units and joins we expect to be defined in
-        ``dimensions.yaml`` are present and related correctly.
+    def testInstrumentDimensions(self):
+        """Test that the Instrument dimensions and joins we expect to be
+        defined in ``dimensions.yaml`` are present and related correctly.
         """
-        graph1 = self.universe.subgraph(where=lambda unit: "Instrument" in unit.dependencies().names)
+        graph1 = self.universe.intersection(
+            dim for dim in self.universe if "Instrument" in dim.dependencies()
+        )
         self.checkGraphInvariants(graph1)
         # AbstractFilter is included below because PhysicalFilter depends on AbstractFilter
-        self.assertCountEqual(graph1.units.names,
+        self.assertCountEqual(graph1.names,
                               ["Instrument", "Detector", "PhysicalFilter", "Visit", "Exposure",
                                "ExposureRange", "AbstractFilter"])
         self.assertCountEqual(graph1.joins().names, ["VisitDetectorRegion"])
         self.assertEqual(graph1.getRegionHolder(), graph1.joins().get("VisitDetectorRegion"))
-        graph2 = graph1.subgraph(["Visit"])
-        self.assertCountEqual(graph2.units.names, ["Instrument", "PhysicalFilter", "Visit", "AbstractFilter"])
-        self.assertEqual(graph2.getRegionHolder(), graph1.units["Visit"])
+        graph2 = graph1.intersection(["Visit"])
+        self.assertCountEqual(graph2.names, ["Instrument", "PhysicalFilter", "Visit", "AbstractFilter"])
+        self.assertEqual(graph2.getRegionHolder(), graph1["Visit"])
         self.assertCountEqual(graph2.joins().names, [])
         self.checkGraphInvariants(graph2)
-        graph3 = graph1.subgraph(["Detector"])
+        graph3 = graph1.intersection(["Detector"])
         self.checkGraphInvariants(graph3)
-        self.assertCountEqual(graph3.units.names, ["Instrument", "Detector"])
+        self.assertCountEqual(graph3.names, ["Instrument", "Detector"])
         self.assertIsNone(graph3.getRegionHolder())
         self.assertCountEqual(graph3.joins(), [])
-        visit = self.universe.units["Visit"]
+        visit = self.universe["Visit"]
         self.assertCountEqual(visit.dependencies(optional=True).names,
                               ["Instrument", "PhysicalFilter", "AbstractFilter"])
         self.assertCountEqual(visit.dependencies(optional=False).names,
                               ["Instrument"])
 
-    def testSkyMapUnits(self):
-        """Test that the SkyMap units and joins we expect to be defined in
-        ``dimensions.yaml`` are present and related correctly.
+    def testSkyMapDimensions(self):
+        """Test that the SkyMap dimensions and joins we expect to be defined
+        in ``dimensions.yaml`` are present and related correctly.
         """
-        patchGraph = self.universe.subgraph(["Patch"])
+        patchGraph = self.universe.intersection(["Patch"])
         self.checkGraphInvariants(patchGraph)
-        self.assertCountEqual(patchGraph.units.names, ["SkyMap", "Tract", "Patch"])
+        self.assertCountEqual(patchGraph.names, ["SkyMap", "Tract", "Patch"])
         self.assertCountEqual(patchGraph.joins(), [])
-        self.assertEqual(patchGraph.getRegionHolder(), patchGraph.units["Patch"])
-        tractGraph = patchGraph.subgraph(["Tract"])
+        self.assertEqual(patchGraph.getRegionHolder(), patchGraph["Patch"])
+        tractGraph = patchGraph.intersection(["Tract"])
         self.checkGraphInvariants(tractGraph)
-        self.assertCountEqual(tractGraph.units.names, ["SkyMap", "Tract"])
-        self.assertEqual(tractGraph.getRegionHolder(), tractGraph.units["Tract"])
+        self.assertCountEqual(tractGraph.names, ["SkyMap", "Tract"])
+        self.assertEqual(tractGraph.getRegionHolder(), tractGraph["Tract"])
         self.assertCountEqual(tractGraph.joins(), [])
-        skyMapOnly = tractGraph.subgraph(["SkyMap"])
+        skyMapOnly = tractGraph.intersection(["SkyMap"])
         self.checkGraphInvariants(skyMapOnly)
-        self.assertCountEqual(skyMapOnly.units.names, ["SkyMap"])
+        self.assertCountEqual(skyMapOnly.names, ["SkyMap"])
         self.assertIsNone(skyMapOnly.getRegionHolder())
         self.assertCountEqual(skyMapOnly.joins(), [])
 
-    def testMiscUnits(self):
-        """Test that the miscalleneous units and joins we expect to be defined
-        in ``dimensions.yaml`` are present and related correctly.
+    def testMiscDimensions(self):
+        """Test that the miscelleneous dimensions and joins we expect to be
+        defined in ``dimensions.yaml`` are present and related correctly.
         """
-        misc = self.universe.subgraph(
-            where=lambda unit: (unit.dependencies().names.isdisjoint(["Instrument", "SkyMap"]) and
-                                unit.name not in ("Instrument", "SkyMap"))
+        def predicate(dim):
+            return ()
+
+        misc = self.universe.intersection(
+            dim for dim in self.universe if (
+                dim.dependencies().names.isdisjoint(["Instrument", "SkyMap"]) and
+                dim.name not in ("Instrument", "SkyMap")
+            )
         )
         self.checkGraphInvariants(misc)
-        self.assertCountEqual(misc.units.names, ["SkyPix", "Label", "AbstractFilter"])
+        self.assertCountEqual(misc.names, ["SkyPix", "Label", "AbstractFilter"])
         self.assertCountEqual(misc.joins(), [])
-        self.assertEqual(misc.getRegionHolder(), misc.units["SkyPix"])
+        self.assertEqual(misc.getRegionHolder(), misc["SkyPix"])
 
     def checkSpatialJoin(self, lhsNames, rhsNames, joinName=None):
-        """Test the spatial join that relates the given units.
+        """Test the spatial join that relates the given dimensions.
 
         Parameters
         ----------
         lhsNames : `list` of `str`
-            Name of the DimensionUnits of the left-hand side of the join.
+            Name of the Dimensions of the left-hand side of the join.
         rhsNames : `list` of `str`
-            Name of the DimensionUnits of the right-hand side of the join.
+            Name of the Dimensions of the right-hand side of the join.
         joinName : `str`, optional
             Name of the DimensionJoin to be tested; if `None`, computed by
             concatenating ``lhsNames`` and ``rhsNames``.
         """
         if joinName is None:
             joinName = "{}{}Join".format("".join(lhsNames), "".join(rhsNames))
-        lhs = self.universe.subgraph(lhsNames)
-        rhs = self.universe.subgraph(rhsNames)
-        both = self.universe.subgraph(joins=[joinName])
+        lhs = self.universe.intersection(lhsNames)
+        rhs = self.universe.intersection(rhsNames)
+        both = DimensionGraph(self.universe, joins=[joinName])
         self.checkGraphInvariants(both)
         join = both.joins().get(joinName)
         self.assertIsNotNone(join)
-        self.assertLess(lhs.units, both.units)
-        self.assertGreater(both.units, rhs.units)
-        self.assertGreaterEqual(lhs.units, join.lhs)  # [lr]hs.units has optionals, join.[lr]hs does not
-        self.assertGreaterEqual(rhs.units, join.rhs)
-        allExpectedJoins = set([join.name]).union(lhs.joins().names, rhs.joins().names)
-        self.assertEqual(both.joins().names, allExpectedJoins)
+        self.assertLess(lhs, both)
+        self.assertGreater(both, rhs)
+        self.assertGreaterEqual(lhs, join.lhs)  # [lr]hs has optionals, join.[lr]hs does not
+        self.assertGreaterEqual(rhs, join.rhs)
+        allExpectedJoins = set([join]).union(lhs.joins(summaries=False), rhs.joins(summaries=False))
+        self.assertEqual(both.joins(summaries=False), allExpectedJoins)
 
     def testSpatialJoins(self):
         """Test that the spatial joins defined in ``dimensions.yaml`` are
@@ -214,22 +220,22 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
     def testGraphSetOperations(self):
         """Test set-like operations on DimensionGraph.
 
-        Also provides test coverage of DimensionUnitSet, because that's what
+        Also provides test coverage of DimensionSet, because that's what
         DimensionGraph delegates to.
         """
         # characters in the keys (interpreted as sets) have same expected
         # relationships as the corresponding values
         graphs = {
             # expands to [Detector, Instrument]
-            "di": self.universe.subgraph(["Detector"]),
+            "di": self.universe.intersection(["Detector"]),
             # expands to [PhysicalFilter, Instrument, AbstractFilter]
-            "pia": self.universe.subgraph(["PhysicalFilter"]),
+            "pia": self.universe.intersection(["PhysicalFilter"]),
             # expands to [Visit, PhysicalFilter, Instrument, AbstractFilter]
-            "vpia": self.universe.subgraph(["Visit"]),
+            "vpia": self.universe.intersection(["Visit"]),
             # expands to [Tract, SkyMap]
-            "ts": self.universe.subgraph(["Tract"]),
+            "ts": self.universe.intersection(["Tract"]),
             # empty
-            "": self.universe.subgraph([]),
+            "": self.universe.intersection([]),
         }
         # A big loop to test all of the combinations we can predict
         # mechanically (many of these are trivial).
@@ -251,29 +257,25 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
 
         # A few more spot-checks for graph-creating operations to make sure
         # we get exactly what we expect in those cases.
-        self.assertEqual(graphs["di"] | graphs["ts"], self.universe.subgraph(["Detector", "Tract"]))
-        self.assertEqual(graphs["di"] & graphs["ts"], self.universe.subgraph([]))
+        self.assertEqual(graphs["di"] | graphs["ts"], self.universe.intersection(["Detector", "Tract"]))
+        self.assertEqual(graphs["di"] & graphs["ts"], self.universe.intersection([]))
         self.assertEqual(graphs["di"] | graphs["pia"],
-                         self.universe.subgraph(["Detector", "PhysicalFilter"]))
-        self.assertEqual(graphs["di"] & graphs["pia"], self.universe.subgraph(["Instrument"]))
+                         self.universe.intersection(["Detector", "PhysicalFilter"]))
+        self.assertEqual(graphs["di"] & graphs["pia"], self.universe.intersection(["Instrument"]))
         self.assertEqual(graphs["vpia"] | graphs["pia"], graphs["vpia"])
         self.assertEqual(graphs["vpia"] & graphs["pia"], graphs["pia"])
 
     def testDimensionJoinSetOperations(self):
-        """Test set-like operations on DimensionJoinSet.
-
-        Also provides some test coverage for DimensionUnitSet because it shares
-        a common base class that provides the vast majority of this
-        functionality.
+        """Test set-like operations on DimensionSet with joins.
         """
         # characters in the keys (interepreted as sets) have same expected
         # relationships as the corresponding values
         joins = {
-            "t": DimensionJoinSet(self.universe, ["TractSkyPixJoin"]),
-            "dt": DimensionJoinSet(self.universe, ["VisitDetectorSkyPixJoin", "TractSkyPixJoin"]),
-            "pt": DimensionJoinSet(self.universe, ["PatchSkyPixJoin", "TractSkyPixJoin"]),
-            "v": DimensionJoinSet(self.universe, ["VisitSkyPixJoin"]),
-            "": DimensionJoinSet(self.universe, []),
+            "t": self.universe.joins().intersection(["TractSkyPixJoin"]),
+            "dt": self.universe.joins().intersection(["VisitDetectorSkyPixJoin", "TractSkyPixJoin"]),
+            "pt": self.universe.joins().intersection(["PatchSkyPixJoin", "TractSkyPixJoin"]),
+            "v": self.universe.joins().intersection(["VisitSkyPixJoin"]),
+            "": self.universe.joins().intersection([]),
         }
         # A big loop to test all of the combinations we can predict
         # mechanically.
@@ -301,25 +303,23 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
         # we get exactly what we expect in those cases.
         self.assertEqual(joins["t"] | joins["pt"], joins["pt"])
         self.assertEqual(joins["t"] & joins["pt"], joins["t"])
-        self.assertEqual(joins["t"] ^ joins["pt"], DimensionJoinSet(self.universe, ["PatchSkyPixJoin"]))
-        self.assertEqual(joins["pt"] - joins["t"], DimensionJoinSet(self.universe, ["PatchSkyPixJoin"]))
-        self.assertEqual(joins["dt"] | joins["pt"], DimensionJoinSet(self.universe,
-                                                                     ["VisitDetectorSkyPixJoin",
-                                                                      "TractSkyPixJoin",
-                                                                      "PatchSkyPixJoin"]))
+        self.assertEqual(joins["t"] ^ joins["pt"], self.universe.joins().intersection(["PatchSkyPixJoin"]))
+        self.assertEqual(joins["pt"] - joins["t"], self.universe.joins().intersection(["PatchSkyPixJoin"]))
+        self.assertEqual(joins["dt"] | joins["pt"],
+                         self.universe.joins().intersection(["VisitDetectorSkyPixJoin", "TractSkyPixJoin",
+                                                             "PatchSkyPixJoin"]))
         self.assertEqual(joins["dt"] & joins["pt"], joins["t"])
-        self.assertEqual(joins["dt"] ^ joins["pt"], DimensionJoinSet(self.universe,
-                                                                     ["VisitDetectorSkyPixJoin",
-                                                                      "PatchSkyPixJoin"]))
+        self.assertEqual(joins["dt"] ^ joins["pt"],
+                         self.universe.joins().intersection(["VisitDetectorSkyPixJoin", "PatchSkyPixJoin"]))
         self.assertEqual(joins["t"] | joins[""], joins["t"])
         self.assertEqual(joins["t"] & joins[""], joins[""])
         self.assertEqual(joins["t"] ^ joins[""], joins["t"])
         self.assertEqual(joins["t"] - joins[""], joins["t"])
-        self.assertEqual(joins["t"] | joins["v"], DimensionJoinSet(self.universe,
-                                                                   ["TractSkyPixJoin", "VisitSkyPixJoin"]))
+        self.assertEqual(joins["t"] | joins["v"],
+                         self.universe.joins().intersection(["TractSkyPixJoin", "VisitSkyPixJoin"]))
         self.assertEqual(joins["t"] & joins["v"], joins[""])
-        self.assertEqual(joins["t"] ^ joins["v"], DimensionJoinSet(self.universe,
-                                                                   ["TractSkyPixJoin", "VisitSkyPixJoin"]))
+        self.assertEqual(joins["t"] ^ joins["v"],
+                         self.universe.joins().intersection(["TractSkyPixJoin", "VisitSkyPixJoin"]))
         self.assertEqual(joins["t"] - joins["v"], joins["t"])
 
 

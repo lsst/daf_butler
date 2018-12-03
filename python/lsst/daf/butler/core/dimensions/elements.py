@@ -19,27 +19,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Dimension", "DimensionUnit", "DimensionJoin")
+__all__ = ("DimensionElement", "Dimension", "DimensionJoin")
 
 from ..utils import PrivateConstructorMeta
-from .sets import DimensionUnitSet
 
 
-class Dimension(metaclass=PrivateConstructorMeta):
+class DimensionElement(metaclass=PrivateConstructorMeta):
     """Base class for elements in the dimension schema.
 
-    `Dimension` objects are not directly constructable; they can only be
-    obtained from a `DimensionGraph`.
+    `DimensionElement` objects are not directly constructable; they can only
+    be obtained from a `DimensionGraph`.
     """
 
     def __init__(self, universe, name, hasRegion, link, required, optional, doc):
+        from .sets import DimensionSet
         self._universe = universe
         self._name = name
         self._hasRegion = hasRegion
         self._link = frozenset(link)
         self._doc = doc
-        self._requiredDependencies = DimensionUnitSet(universe, required, optional=False)
-        self._allDependencies = DimensionUnitSet(universe, set(required) | set(optional), optional=True)
+        self._requiredDependencies = DimensionSet._construct(universe._dimensions, required,
+                                                             expand=True, optional=False)
+        self._allDependencies = DimensionSet._construct(universe._dimensions, set(required) | set(optional),
+                                                        expand=True, optional=True)
         # Compute _primaryKeys dict, used to back primaryKeys property.
         primaryKey = set(self.link)
         for dimension in self.dependencies(optional=False):
@@ -97,7 +99,7 @@ class Dimension(metaclass=PrivateConstructorMeta):
         return self._link
 
     def dependencies(self, optional=True):
-        """Return the set of dimension units this dimension depends on.
+        """Return the set of dimensions this dimension depends on.
 
         Parameters
         ----------
@@ -109,13 +111,13 @@ class Dimension(metaclass=PrivateConstructorMeta):
 
         Returns
         -------
-        dependencies : `DimensionSet` of `DimensionUnit`
+        dependencies : `DimensionSet`
         """
         return self._allDependencies if optional else self._requiredDependencies
 
 
-class DimensionUnit(Dimension):
-    r"""A discrete unit of data used to organize `Dataset`\s and associate
+class Dimension(DimensionElement):
+    r"""A discrete dimension of data used to organize `Dataset`\s and associate
     them with metadata.
 
     `DimensionUnit` instances represent concepts such as "Instrument",
@@ -132,43 +134,36 @@ class DimensionUnit(Dimension):
                          required=config.get(".dependencies.required", ()),
                          optional=config.get(".dependencies.optional", ()),
                          doc=config["doc"])
-        self._graph = None
 
     def __repr__(self):
         return "DimensionUnit({})".format(self.name)
 
-    @property
-    def graph(self):
-        """The minimal graph that contains this `Dimension` (`DimensionGraph`).
-        """
-        if self._graph is None:
-            self._graph = self.universe.subgraph([self])
-        return self._graph
 
-
-class DimensionJoin(Dimension):
-    r"""A join that relates two or more `DimensionUnit`\s.
+class DimensionJoin(DimensionElement):
+    r"""A join that relates two or more `Dimension`\s.
 
     `DimensionJoin`\s usually map to many-to-many join tables or views that
-    relate `DimensionUnit` tables.
+    relate `Dimension` tables.
 
     `DimensionJoin` objects are not directly constructable; they can only be
     obtained from a `DimensionGraph`.
     """
 
     def __init__(self, universe, name, config):
+        from .sets import DimensionSet
+
         lhs = list(config["lhs"])
         rhs = list(config["rhs"])
         super().__init__(universe, name, hasRegion=config.get("hasRegion", False), link=(),
                          required=lhs + rhs, optional=(), doc=config["doc"])
-        self._lhs = DimensionUnitSet(universe, lhs, optional=False)
-        self._rhs = DimensionUnitSet(universe, rhs, optional=False)
+        self._lhs = DimensionSet._construct(universe._dimensions, lhs, optional=False)
+        self._rhs = DimensionSet._construct(universe._dimensions, rhs, optional=False)
         # self._summarizes initialized later in DimensionMeta.fromConfig.
 
     @property
     def lhs(self):
-        r"""The `DimensionUnits`\s on the left hand side of the join
-        (`DimensionUnitSet`).
+        r"""The `Dimension`\s on the left hand side of the join
+        (`DimensionSet`).
 
         Left vs. right is completely arbitrary; the terminology simply provides
         an easy way to distiguish between the two sides.
@@ -177,8 +172,8 @@ class DimensionJoin(Dimension):
 
     @property
     def rhs(self):
-        r"""The `DimensionUnits`\s on the right hand side of the join
-        (`DimensionUnitSet`).
+        r"""The `Dimension`\s on the right hand side of the join
+        (`DimensionSet`).
 
         Left vs. right is completely arbitrary; the terminology simply provides
         an easy way to distiguish between the two sides.
