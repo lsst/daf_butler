@@ -60,6 +60,37 @@ class DatasetType:
 
     __slots__ = ("_name", "_dataUnits", "_storageClass", "_storageClassName")
 
+    @staticmethod
+    def nameWithComponent(datasetTypeName, componentName):
+        """Form a valid DatasetTypeName from a parent and component.
+
+        No validation is performed.
+
+        Parameters
+        ----------
+        datasetTypeName : `str`
+            Base type name.
+        componentName : `str`
+            Name of component.
+
+        Returns
+        -------
+        compTypeName : `str`
+            Name to use for component DatasetType.
+        """
+        return "{}.{}".format(datasetTypeName, componentName)
+
+    def __init__(self, name, dataUnits, storageClass):
+        self._name = name
+        self._dataUnits = frozenset(dataUnits)
+        assert isinstance(storageClass, (StorageClass, str))
+        if isinstance(storageClass, StorageClass):
+            self._storageClass = storageClass
+            self._storageClassName = storageClass.name
+        else:
+            self._storageClass = None
+            self._storageClassName = storageClass
+
     def __str__(self):
         return "DatasetType({}, {}, {})".format(self.name, self._storageClassName, self.dataUnits)
 
@@ -80,26 +111,6 @@ class DatasetType:
         implementation of StorageClass hash method.
         """
         return hash((self._name, self._dataUnits, self._storageClassName))
-
-    @staticmethod
-    def nameWithComponent(datasetTypeName, componentName):
-        """Form a valid DatasetTypeName from a parent and component.
-
-        No validation is performed.
-
-        Parameters
-        ----------
-        datasetTypeName : `str`
-            Base type name.
-        componentName : `str`
-            Name of component.
-
-        Returns
-        -------
-        compTypeName : `str`
-            Name to use for component DatasetType.
-        """
-        return "{}.{}".format(datasetTypeName, componentName)
 
     @property
     def name(self):
@@ -125,17 +136,6 @@ class DatasetType:
         if self._storageClass is None:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
-
-    def __init__(self, name, dataUnits, storageClass):
-        self._name = name
-        self._dataUnits = frozenset(dataUnits)
-        assert isinstance(storageClass, (StorageClass, str))
-        if isinstance(storageClass, StorageClass):
-            self._storageClass = storageClass
-            self._storageClassName = storageClass.name
-        else:
-            self._storageClass = None
-            self._storageClassName = storageClass
 
     def component(self):
         """Component name (if defined)
@@ -239,8 +239,6 @@ class DatasetRef:
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run",
                  "_predictedConsumers", "_actualConsumers", "_components")
 
-    __eq__ = slotValuesAreEqual
-
     def __init__(self, datasetType, dataId, id=None, run=None):
         assert isinstance(datasetType, DatasetType)
         self._id = id
@@ -251,6 +249,8 @@ class DatasetRef:
         self._actualConsumers = dict()
         self._components = dict()
         self._run = run
+
+    __eq__ = slotValuesAreEqual
 
     @property
     def id(self):
