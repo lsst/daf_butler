@@ -125,7 +125,8 @@ class Config(collections.abc.MutableMapping):
 
     Note that adding a multi-level key implicitly creates any nesting levels
     that do not exist, but removing multi-level keys does not automatically
-    remove empty nesting levels.  As a result::
+    remove empty nesting levels.  As a result:
+
         >>> c = Config()
         >>> c[".a.b"] = 1
         >>> del c[".a.b"]
