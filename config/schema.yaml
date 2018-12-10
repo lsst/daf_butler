@@ -888,45 +888,6 @@ schema:
         - Detector.instrument
         - Detector.detector
 
-    MultiInstrumentExposureJoin:
-      limited: false
-      columns:
-      -
-        name: instrument_1
-        type: string
-        nullable: false
-        doc: Instrument name for lhs Dataset.
-      -
-        name: exposure_1
-        type: int
-        nullable: false
-        doc: Exposure ID for lhs Dataset.
-      -
-        name: instrument_2
-        type: string
-        nullable: false
-        doc: Instrument name for rhs Dataset.
-      -
-        name: exposure_2
-        type: int
-        nullable: false
-        doc: Exposure ID for rhs Dataset.
-      foreignKeys:
-      -
-        src:
-          - instrument_1
-          - exposure_1
-        tgt:
-          - Exposure.instrument
-          - Exposure.exposure
-      -
-        src:
-          - instrument_1
-          - exposure_1
-        tgt:
-          - Exposure.instrument
-          - Exposure.exposure
-
     VisitDetectorSkyPixJoin:
       limited: false
       columns:
