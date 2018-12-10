@@ -20,13 +20,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-import pickle
-from itertools import permutations
-from random import shuffle
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton, TopologicalSet
+from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
 
@@ -78,91 +75,6 @@ class SingletonTestCase(lsst.utils.tests.TestCase):
 
         with self.assertRaises(TypeError):
             SingletonTestCase.IsBadSingleton(52)
-
-
-class TopologicalSetTestCase(lsst.utils.tests.TestCase):
-    """Tests of the TopologicalSet class"""
-
-    def testConstructor(self):
-        elements = [1, 5, 7, 3, 10, 11]
-        topologicalSet = TopologicalSet(elements)
-        for e in elements:
-            self.assertIn(e, topologicalSet)
-        self.assertEqual(len(elements), len(topologicalSet))
-
-    def testConnect(self):
-        elements = ["a", "d", "f"]
-        topologicalSet = TopologicalSet(elements)
-        # Adding connections should work
-        topologicalSet.connect("a", "d")
-        topologicalSet.connect("a", "f")
-        # Even when adding cycles (unfortunately)
-        topologicalSet.connect("f", "a")
-        # Adding a connection from or to a non existing element should also fail
-        with self.assertRaises(KeyError):
-            topologicalSet.connect("a", "c")
-        with self.assertRaises(KeyError):
-            topologicalSet.connect("c", "a")
-        with self.assertRaises(KeyError):
-            topologicalSet.connect("c", "g")
-        with self.assertRaises(ValueError):
-            topologicalSet.connect("c", "c")
-
-    def testSetOps(self):
-        """Test that TopologicalSet behaves like a Set.
-        """
-        a = TopologicalSet([1, 2, 3, 4])
-        b = set([3, 4, 5])
-        self.assertNotEqual(a, b)
-        self.assertEqual(a & b, {3, 4})
-        self.assertEqual(a | b, {1, 2, 3, 4, 5})
-        self.assertEqual(a ^ b, {1, 2, 5})
-        self.assertEqual(a - b, {1, 2})
-
-    def testTopologicalOrdering(self):
-        """Iterating over a TopologicalSet should visit the elements
-        in the set in topologically sorted order.
-        """
-        # First check a basic topological ordering
-        elements = ["shoes", "belt", "trousers"]
-        for p in permutations(elements):
-            topologicalSet = TopologicalSet(p)
-            topologicalSet.connect("belt", "shoes")
-            topologicalSet.connect("trousers", "shoes")
-            # Check valid orderings
-            self.assertIn(list(topologicalSet), [["belt", "trousers", "shoes"],
-                                                 ["trousers", "belt", "shoes"]])
-            # Check invalid orderings (probably redundant)
-            self.assertNotIn(list(topologicalSet), [["shoes", "belt", "trousers"],
-                                                    ["shoes", "trousers", "belt"]])
-        # Adding a cycle should cause iteration to fail
-        topologicalSet.connect("shoes", "belt")
-        with self.assertRaises(ValueError):
-            ignore = list(topologicalSet)  # noqa F841
-        # Now check for a larger number of elements.
-        # Here we can't possibly test all possible valid topological orderings,
-        # so instead we connect all elements.
-        # Thus the topological sort should be equivalent to a regular sort
-        # (but less efficient).
-        N = 100
-        elements = list(range(N))
-        unorderedElements = elements.copy()
-        shuffle(unorderedElements)
-        topologicalSet2 = TopologicalSet(unorderedElements)
-        for i in range(N-1):
-            topologicalSet2.connect(i, i+1)
-        self.assertEqual(list(topologicalSet2), elements)
-
-    def testPickle(self):
-        """Should be possible to pickle.
-        """
-        elements = ["a", "d", "f"]
-        topologicalSet = TopologicalSet(elements)
-        # Adding connections should work
-        topologicalSet.connect("a", "d")
-        topologicalSet.connect("a", "f")
-        out = pickle.loads(pickle.dumps(topologicalSet))
-        self.assertEqual(out, topologicalSet)
 
 
 class TestButlerUtils(lsst.utils.tests.TestCase):

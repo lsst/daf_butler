@@ -21,14 +21,11 @@
 
 import sys
 import functools
-from collections import namedtuple
-from collections.abc import Set
 
 from lsst.utils import doImport
 
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
-           "getFullTypeName", "getInstanceOf", "Singleton",
-           "TopologicalSet", "TopologicalSetNode", "transactional",
+           "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta")
 
 
@@ -170,108 +167,6 @@ class Singleton(type):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__()
         return cls._instances[cls]
-
-
-# Helper Node in a TopologicalSet
-# Unfortunately can't be a class member because that breaks pickling
-TopologicalSetNode = namedtuple("TopologicalSetNode", ["element", "sourceElements"])
-
-
-class TopologicalSet(Set):
-    """A collection that behaves like a builtin `set`, but where
-    elements can be interconnected (like a graph).
-
-    Iteration over this collection visits its elements in topologically
-    sorted order.
-
-    Parameters
-    ----------
-    elements : Iterable
-        Any iterable with elements to insert.
-    """
-    def __init__(self, elements):
-        self._nodes = {e: TopologicalSetNode(e, set()) for e in elements}
-        self._ordering = None
-
-    def __contains__(self, element):
-        return element in self._nodes
-
-    def __len__(self):
-        return len(self._nodes)
-
-    def __eq__(self, other):
-        try:
-            return self._nodes == other._nodes
-        except AttributeError:
-            return super().__eq__(other)
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def connect(self, sourceElement, targetElement):
-        """Connect two elements in the set.
-
-        The connection is directed from `sourceElement` to `targetElement` and
-        is distinct from its inverse.
-        Both elements must already be present in the set.
-
-        sourceElement : `object`
-            The source element.
-        targetElement : `object`
-            The target element.
-
-        Raises
-        ------
-        KeyError
-            When either element is not already in the set.
-        ValueError
-            If a self connections between elements would be created.
-        """
-        if sourceElement == targetElement:
-            raise ValueError("Cannot connect {} to itself".format(sourceElement))
-        for element in (sourceElement, targetElement):
-            if element not in self._nodes:
-                raise KeyError("{} not in set".format(element))
-        targetNode = self._nodes[targetElement]
-        targetNode.sourceElements.add(sourceElement)
-        # Adding a connection invalidates previous ordering
-        self._ordering = None
-
-    def __iter__(self):
-        """Iterate over elements in topologically sorted order.
-
-        Raises
-        ------
-        ValueError
-            If a cycle is found and hence no topological order exists.
-        """
-        if self._ordering is None:
-            self.ordering = self._topologicalOrdering()
-        yield from self.ordering
-
-    def _topologicalOrdering(self):
-        """Generate a topological ordering by doing a basic
-        depth-first-search.
-        """
-        seen = set()
-        finished = set()
-        order = []
-
-        def visit(node):
-            if node.element in finished:
-                return
-            if node.element in seen:
-                raise ValueError("Cycle detected")
-            seen.add(node.element)
-            for sourceElement in node.sourceElements:
-                visit(self._nodes[sourceElement])
-            finished.add(node.element)
-            seen.remove(node.element)
-            order.append(node.element)
-
-        for node in self._nodes.values():
-            visit(node)
-        return order
 
 
 def transactional(func):
