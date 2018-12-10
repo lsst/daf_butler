@@ -805,12 +805,12 @@ class Registry(metaclass=ABCMeta):
         expression : `str`
             An expression that limits the `Dimensions <Dimension>` and
             (indirectly) the Datasets returned.
-        neededDatasetTypes : `list` of `DatasetType`
+        neededDatasetTypes : `list` of `DatasetType` or `str`
             The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
             be included in the returned column set. Output is limited to the
             the Datasets of these DatasetTypes which already exist in the
             registry.
-        futureDatasetTypes : `list` of `DatasetType`
+        futureDatasetTypes : `list` of `DatasetType` or `str`
             The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
             be included in the returned column set. It is expected that
             Datasets for these DatasetTypes do not exist in the registry,

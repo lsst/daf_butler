@@ -1016,10 +1016,15 @@ class SqlRegistry(Registry):
     @disableWhenLimited
     def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         # Docstring inherited from Registry.selectDimensions
-        return self._preFlight.selectDimensions(originInfo,
-                                                expression,
-                                                neededDatasetTypes,
-                                                futureDatasetTypes)
+        def standardize(dsType):
+            if not isinstance(dsType, DatasetType):
+                dsType = self.getDatasetType(dsType)
+            elif not isinstance(dsType.dimensions, DimensionGraph):
+                dsType._dimensions = self.dimensions.extract(dsType.dimensions)
+            return dsType
+        needed = [standardize(t) for t in neededDatasetTypes]
+        future = [standardize(t) for t in futureDatasetTypes]
+        return self._preFlight.selectDimensions(originInfo, expression, needed, future)
 
     @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):
