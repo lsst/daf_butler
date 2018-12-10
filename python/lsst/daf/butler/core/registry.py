@@ -243,12 +243,12 @@ class Registry(metaclass=ABCMeta):
         ----------
         collection : `str`
             Identifies the collection to search.
-        datasetType : `DatasetType`
-            The `DatasetType`.
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
         dataId : `dict` or `DataId`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        kwds : `dict`
+        kwds
             Additional keyword arguments passed to the `DataId` constructor
             to convert ``dataId`` to a true `DataId` or augment an existing
             one.
@@ -324,8 +324,8 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasetType : `str`
-            Name of a `DatasetType`.
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
         dataId : `dict` or `DataId`
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
@@ -340,7 +340,7 @@ class Registry(metaclass=ABCMeta):
         recursive : `bool`
             If True, recursively add Dataset and attach entries for component
             Datasets as well.
-        kwds : `dict`
+        kwds
             Additional keyword arguments passed to the `DataId` constructor
             to convert ``dataId`` to a true `DataId` or augment an existing
             one.
@@ -686,9 +686,10 @@ class Registry(metaclass=ABCMeta):
             ``entry`` and then inserted into the `Registry`.
         entry : `dict`
             Dictionary that maps column name to column value.
-        kwds : `dict`
-            Additional keyword arguments used to construct a true `DataId`
-            or augment the one passed in.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         If ``values`` includes a "region" key, `setDimensionRegion` will
         automatically be called to set it any associated spatial join
@@ -729,9 +730,10 @@ class Registry(metaclass=ABCMeta):
             the primary key of the row to retreive.  If this is a full `DataId`
             object, ``dataId.entries[dimension]`` will be updated with the
             entry obtained from the `Registry`.
-        kwds : `dict`
-            Additional keyword arguments used to construct a true `DataId`
-            or augment the one passed in.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
@@ -769,9 +771,10 @@ class Registry(metaclass=ABCMeta):
         region : `lsst.sphgeom.ConvexPolygon`, optional
             The region to update or insert into the `Registry`.  If not present
             ``dataId.region`` must not be `None`.
-        kwds : `dict`
-            Additional keyword arguments used to construct a true `DataId`
-            or augment the one passed in.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
@@ -847,9 +850,10 @@ class Registry(metaclass=ABCMeta):
             If `True` and the given `DataId` is uniquely associated with a
             region on the sky, obtain that region from the `Registry` and
             attach it as ``dataId.region``.
-        kwds : `dict`
-            Additional keyword arguments used to construct a true `DataId`
-            or augment the one passed in.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------

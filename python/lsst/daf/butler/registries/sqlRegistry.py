@@ -158,12 +158,12 @@ class SqlRegistry(Registry):
         ----------
         collection : `str`
             Identifies the collection to search.
-        datasetType : `DatasetType`
-            The `DatasetType`.
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` primary key fields that label a Dataset
             within a Collection.
-        kwds : `dict`
+        kwds
             Additional keyword arguments passed to the `DataId` constructor
             to convert ``dataId`` to a true `DataId` or augment an existing
             one.
@@ -178,6 +178,8 @@ class SqlRegistry(Registry):
         ValueError
             If dataId is invalid.
         """
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
@@ -336,6 +338,9 @@ class SqlRegistry(Registry):
     @transactional
     def addDataset(self, datasetType, dataId, run, producer=None, recursive=False, **kwds):
         # Docstring inherited from Registry.addDataset
+
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
 
         # Make a full DataId up front, so we don't do multiple times
         # in calls below.  Note that calling DataId with a full DataId
