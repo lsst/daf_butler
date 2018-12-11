@@ -34,13 +34,38 @@ from lsst.daf.butler.instrument import Instrument
 
 
 class DummyCam(Instrument):
-    instrument = "DummyCam"
 
-    physicalFilters = [{"physical_filter": "dummy_g"},
-                       {"physical_filter": "dummy_u"}]
+    @classmethod
+    def getName(cls):
+        return "DummyCam"
 
-    detectors = [{"detector": "one"},
-                 {"detector": "two"}]
+    def register(self, registry):
+        """Insert Instrument, PhysicalFilter, and Detector entries into a
+        `Registry`.
+        """
+        dataId = {"instrument": self.getName()}
+        registry.addDimensionEntry("Instrument", dataId)
+        for f in ("dummy_g", "dummy_u"):
+            registry.addDimensionEntry("PhysicalFilter", dataId, physical_filter=f)
+        for d in (1, 2):
+            registry.addDimensionEntry("Detector", dataId, detector=d)
+
+    def getRawFormatter(self, dataId):
+        """Return the Formatter class that should be used to read a particular
+        raw file.
+
+        Parameters
+        ----------
+        dataId : `DataId`
+            Dimension-link identifier for the raw file or files being ingested.
+
+        Returns
+        -------
+        formatter : `Formatter`
+            Object that reads the file into an `lsst.afw.image.Exposure`
+            instance.
+        """
+        return None
 
 
 class InstrumentTestCase(lsst.utils.tests.TestCase):

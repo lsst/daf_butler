@@ -21,6 +21,8 @@
 
 __all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo")
 
+from inspect import isabstract
+from abc import ABCMeta, abstractmethod
 from lsst.daf.butler import DataId
 
 
@@ -29,51 +31,55 @@ from lsst.daf.butler import DataId
 # We should probably move that as well.
 
 
-class Instrument:
-    """A template method class that can register itself with a
-    `Registry.
+class Instrument(metaclass=ABCMeta):
+    """Base class for Instrument-specific logic for the Gen3 Butler.
 
-    This class should be subclassed by various implementations.
-    Subclasses should provide all relevant attributes, as documented
-    below.
-
-    Attributes
-    ----------
-    instrument : `str`
-        Name of the instrument.  Must be provided by subclass.
-    physicalFilters : `list`
-        List of PhysicalFilter entries (each entry being a dict).
-    detectors : `list`
-        List of Detector entries (each entry being a dict).
+    Concrete instrument subclasses should either be directly constructable
+    with no arguments or provide a 'factory' `staticmethod`, `classmethod`, or
+    other callable class attribute that takes no arguments and returns a new
+    `Instrument` instance.
     """
-    instrument = None
-    physicalFilters = []
-    detectors = []
 
+    factories = {}
+    """Global dictionary that maps instrument name used in the registry to
+    a no-argument callable that can be used to construct a Python instance.
+    """
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not isabstract(cls):
+            factory = getattr(cls, "factory", cls)
+            Instrument.factories[cls.getName()] = factory
+
+    @classmethod
+    @abstractmethod
+    def getName(cls):
+        raise NotImplementedError()
+
+    @abstractmethod
     def register(self, registry):
-        """Register an instance of this `Instrument` with a `Registry`.
-
-        Creates all relevant `Dimension` entries.
+        """Insert Instrument, PhysicalFilter, and Detector entries into a
+        `Registry`.
         """
-        assert self.instrument is not None
-        self._addInstrument(registry)
-        self._addPhysicalFilters(registry)
-        self._addDetectors(registry)
+        raise NotImplementedError()
 
-    def _addInstrument(self, registry):
-        registry.addDimensionEntry("Instrument", {"instrument": self.instrument})
+    @abstractmethod
+    def getRawFormatter(self, dataId):
+        """Return the Formatter class that should be used to read a particular
+        raw file.
 
-    def _addPhysicalFilters(self, registry):
-        for entry in self.physicalFilters:
-            if "instrument" not in entry:
-                entry["instrument"] = self.instrument
-            registry.addDimensionEntry("PhysicalFilter", entry)
+        Parameters
+        ----------
+        dataId : `DataId`
+            Dimension-link identifier for the raw file or files being ingested.
 
-    def _addDetectors(self, registry):
-        for entry in self.detectors:
-            if 'instrument' not in entry:
-                entry['instrument'] = self.instrument
-            registry.addDimensionEntry('Detector', entry)
+        Returns
+        -------
+        formatter : `Formatter`
+            Object that reads the file into an `lsst.afw.image.Exposure`
+            instance.
+        """
+        raise NotImplementedError()
 
 
 def updateExposureEntryFromObsInfo(dataId, obsInfo):

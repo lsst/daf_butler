@@ -29,7 +29,7 @@ from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
 from ..core import Config, Run, DatasetType, StorageClassFactory, DataId
-from ..instrument import updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo
+from ..instrument import Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo
 from .structures import ConvertedRepo
 from .translators import Translator, NoSkyMapError
 
@@ -194,20 +194,18 @@ class ConversionWriter:
     def run(self, registry, datastore):
         """Main driver for ConversionWriter.
 
-        Runs all steps to create a Gen3 Repo, aside from Instrument registration
-        (we merely check that the needed Instruments, Detectors, and PhysicalFilters
-        have already been registered).
+        Runs all steps to create a Gen3 Repo.
         """
-        self.checkInstruments(registry)
+        self.insertInstruments(registry)
         self.insertSkyMaps(registry)
         self.insertObservations(registry)
         self.insertDatasetTypes(registry)
         self.insertDatasets(registry, datastore)
         self.insertObservationRegions(registry, datastore)
 
-    def checkInstruments(self, registry):
+    def insertInstruments(self, registry):
         """Check that all necessary Instruments are already present in the
-        Registry.
+        Registry, and insert them if they are not.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         instruments = set()
@@ -216,9 +214,14 @@ class ConversionWriter:
         for instrument in instruments:
             log.debug("Looking for preexisting Instrument '%s'.", instrument)
             if registry.findDimensionEntry("Instrument", {"instrument": instrument}) is None:
-                raise LookupError(
-                    "Instrument '{}' has not been registered with the given Registry.".format(instrument)
-                )
+                factory = Instrument.factories.get(instrument)
+                if factory is None:
+                    raise LookupError(
+                        f"Instrument '{instrument}' has not been registered with the given Registry and "
+                        f"no factory found; please make sure it has been imported."
+                    )
+                instance = factory()
+                instance.register(registry)
 
     def insertSkyMaps(self, registry):
         """Add all necessary SkyMap Dimensions (and associated Tracts and
@@ -288,6 +291,7 @@ class ConversionWriter:
         """Add all Dataset entries to the given Registry and Datastore.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
+        instrumentCache = {}
         for repo in self.repos.values():
             refs = []
             for datasetTypeName, datasets in repo.gen2.datasets.items():
@@ -310,6 +314,19 @@ class ConversionWriter:
                         collection = collectionTemplate.format(**allIds)
                         run = self.runs.setdefault(collection, Run(collection=collection))
                         registry.ensureRun(run)
+                    formatter = None
+                    if datasetTypeName == "raw":
+                        instrument = instrumentCache.get(gen3id["instrument"])
+                        if instrument is None:
+                            factory = Instrument.factories.get(gen3id["instrument"])
+                            if factory is None:
+                                log.warning(
+                                    "Instrument not imported; raw formatter for %s not specialized.",
+                                    dataset.filePath
+                                )
+                            instrument = factory()
+                            instrumentCache[gen3id["instrument"]] = instrument
+                        formatter = instrument.getRawFormatter(gen3id)
                     log.debug("Adding Dataset %s as %s in %s", dataset.filePath, gen3id, repo.run)
                     ref = registry.addDataset(datasetType, gen3id, run)
                     refs.append(ref)
@@ -320,7 +337,8 @@ class ConversionWriter:
                         compRef = registry.addDataset(compDatasetType, gen3id, run=run)
                         registry.attachComponent(component, ref, compRef)
                         refs.append(compRef)
-                    datastore.ingest(path=os.path.relpath(dataset.fullPath, start=datastore.root), ref=ref)
+                    datastore.ingest(path=os.path.relpath(dataset.fullPath, start=datastore.root), ref=ref,
+                                     formatter=formatter)
 
             # Add Datasets to collections associated with any child repos to
             # simulate Gen2 parent lookups.
