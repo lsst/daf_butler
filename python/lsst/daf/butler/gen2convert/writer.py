@@ -146,9 +146,12 @@ class ConversionWriter:
                 continue
             if datasetTypeName in self.datasetTypes:
                 continue
-            log.debug("Looking for StorageClass configured for %s; trying full python '%s'",
-                      gen2dst.name, gen2dst.python)
-            storageClassName = scConfig.get(gen2dst.python, None)
+            log.debug("Looking for StorageClass configured for %s by datasetType", gen2dst.name)
+            storageClassName = scConfig.get(datasetTypeName, None)
+            if storageClassName is None:
+                log.debug("Looking for StorageClass configured for %s; trying python '%s'",
+                          gen2dst.name, gen2dst.python)
+                storageClassName = scConfig.get(gen2dst.python, None)
             if storageClassName is None:
                 log.debug("Looking for StorageClass configured for %s; trying persistable '%s'",
                           gen2dst.name, gen2dst.persistable)

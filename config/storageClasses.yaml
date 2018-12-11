@@ -105,6 +105,13 @@ storageClasses:
       image: ImageI
       mask: MaskX
       variance: ImageF
+  ExposureU:
+    inheritsFrom: Exposure
+    pytype: lsst.afw.image.ExposureU
+    components:
+      image: ImageU
+      mask: MaskX
+      variance: ImageF
   Background:
     pytype: lsst.afw.math.BackgroundList
   Config:
