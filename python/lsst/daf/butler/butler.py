@@ -37,6 +37,7 @@ from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
+from .core.dimensions import DataId
 
 
 __all__ = ("Butler",)
@@ -437,7 +438,15 @@ class Butler:
             guessing is not allowed.
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
+        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.registry.dimensions, **kwds)
+        ref = self.registry.find(self.collection, datasetType, dataId)
+        if ref is None:
+            if predict:
+                if self.run is None:
+                    raise ValueError("Cannot predict location from read-only Butler.")
+                ref = DatasetRef(datasetType, dataId, run=self.run)
+            else:
+                raise FileNotFoundError(f"Dataset {datasetType} {dataId} does not exist in Registry.")
         return self.datastore.getUri(ref, predict)
 
     def datasetExists(self, datasetRefOrType, dataId=None, **kwds):
