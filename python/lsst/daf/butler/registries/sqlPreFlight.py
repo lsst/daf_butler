@@ -286,7 +286,9 @@ class SqlPreFlight:
             where = text(expression)
             _LOG.debug("full where: %s", where)
             q = q.where(where)
-        _LOG.debug("full query: %s", q)
+        _LOG.debug("full query: %s",
+                   q.compile(bind=self._connection.engine,
+                             compile_kwargs={"literal_binds": True}))
 
         # execute and return result iterator
         rows = self._connection.execute(q).fetchall()
