@@ -80,6 +80,14 @@ class Butler:
         config, or if both are provided and are inconsistent.
     """
 
+    GENERATION = 3
+    """This is a Generation 3 Butler.
+
+    This attribute may be removed in the future, once the Generation 2 Butler
+    interface has been fully retired; it should only be used in transitional
+    code.
+    """
+
     @staticmethod
     def makeRepo(root, config=None, standalone=False, createRegistry=True):
         """Create an empty data repository by adding a butler.yaml config
