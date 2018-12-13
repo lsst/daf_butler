@@ -1,6 +1,7 @@
-dataUnits:
+dimensions:
   version: 0
-  dimensions:
+  elements:
+
     Instrument:
       doc: >
         An entity that produces observations.  An Instrument defines a set of
@@ -55,7 +56,7 @@ dataUnits:
         science Exposures and the same for all Exposures in a Visit.
       link:
       - visit
-      spatial: true
+      hasRegion: true
 
     Exposure:
       dependencies:
@@ -99,7 +100,7 @@ dataUnits:
         A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
         HEALPix; we will select and support just one, but which is TBD). Has
         no SQL representation; even a definition table is not necessary, given
-        that the allowable values and the associated spatial regions are best
+        that the allowable values and the associated hasRegion regions are best
         computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e.
         Tract-Patch) units for Datasets without any overlap regions (e.g.
         sharded reference catalogs).
@@ -114,7 +115,7 @@ dataUnits:
         to define just a single level for all SkyPix values.  Our preliminary
         guess is that this level should have pixels be approximately (within a
         factor of ~4) of the size of a single Detector on the sky.
-      spatial:
+      hasRegion:
         true
       link:
       - skypix
@@ -135,7 +136,7 @@ dataUnits:
         projection, associated with a particular SkyMap.
       link:
       - tract
-      spatial: true
+      hasRegion: true
 
     Patch:
       dependencies:
@@ -146,7 +147,7 @@ dataUnits:
         A rectangular region within a Tract.
       link:
       - patch
-      spatial: true
+      hasRegion: true
 
     Label:
       doc: >
@@ -156,35 +157,13 @@ dataUnits:
       link:
       - label
 
-  joins:
     VisitDetectorRegion:
       doc: >
         A many-to-many join table that provides region information for
         Visit-Detector combinations.
       lhs: [Visit]
       rhs: [Detector]
-      spatial: true
-
-    ExposureRangeJoin:
-      doc: >
-        A calculated join between Datasets identified with an Exposure
-        (typically raw science frames) and Datasets identified with
-        ExposureRange (typically master calibrations).
-      lhs: [Exposure]
-      rhs: [ExposureRange]
-      sql:
-        (lhs.instrument = rhs.instrument) AND
-        (lhs.datetime_begin BETWEEN rhs.valid_first AND rhs.valid_last)
-    MultiInstrumentExposureJoin:
-      doc: >
-        A join table that relates Exposures from different Instruments, with
-        explicitly-created entries.  This is intended to be used primarily in
-        calibration products production, to relate auxilliary telescope
-        observations with the main instrument observations they support.  It
-        could also be used to relate CBP state (represented as CBP
-        "Exposures") with actual main instrument observations of the CBP.
-      lhs: [Exposure]
-      rhs: [Exposure]
+      hasRegion: true
 
     VisitDetectorSkyPixJoin:
       doc: >
@@ -199,7 +178,7 @@ dataUnits:
 
     VisitSkyPixJoin:
       doc: >
-        A spatial join table that relates Visitto SkyPix, also used as an
+        A spatial join table that relates Visit to SkyPix, also used as an
         intermediate when relating Visit to SkyMap DataUnits.
 
         This can and probably should be implemented as a trivial view on

@@ -64,30 +64,30 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         registry = self.registry
 
         # need a bunch of units and datasets for test
-        registry.addDataUnitEntry("Instrument", dict(instrument="DummyCam"))
-        registry.addDataUnitEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                         physical_filter="dummy_r",
-                                                         abstract_filter="r"))
-        registry.addDataUnitEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                         physical_filter="dummy_i",
-                                                         abstract_filter="i"))
+        registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
+        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
+                                                          physical_filter="dummy_r",
+                                                          abstract_filter="r"))
+        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
+                                                          physical_filter="dummy_i",
+                                                          abstract_filter="i"))
         for detector in (1, 2, 3, 4, 5):
-            registry.addDataUnitEntry("Detector", dict(instrument="DummyCam", detector=detector))
-        registry.addDataUnitEntry("Visit", dict(instrument="DummyCam", visit=10, physical_filter="dummy_i"))
-        registry.addDataUnitEntry("Visit", dict(instrument="DummyCam", visit=11, physical_filter="dummy_r"))
-        registry.addDataUnitEntry("Visit", dict(instrument="DummyCam", visit=20, physical_filter="dummy_r"))
-        registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam", exposure=100, visit=10,
-                                                   physical_filter="dummy_i"))
-        registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam", exposure=101, visit=10,
-                                                   physical_filter="dummy_i"))
-        registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam", exposure=110, visit=11,
-                                                   physical_filter="dummy_r"))
-        registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam", exposure=111, visit=11,
-                                                   physical_filter="dummy_r"))
-        registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam", exposure=200, visit=20,
-                                                   physical_filter="dummy_r"))
-        registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam", exposure=201, visit=20,
-                                                   physical_filter="dummy_r"))
+            registry.addDimensionEntry("Detector", dict(instrument="DummyCam", detector=detector))
+        registry.addDimensionEntry("Visit", dict(instrument="DummyCam", visit=10, physical_filter="dummy_i"))
+        registry.addDimensionEntry("Visit", dict(instrument="DummyCam", visit=11, physical_filter="dummy_r"))
+        registry.addDimensionEntry("Visit", dict(instrument="DummyCam", visit=20, physical_filter="dummy_r"))
+        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=100, visit=10,
+                                                    physical_filter="dummy_i"))
+        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=101, visit=10,
+                                                    physical_filter="dummy_i"))
+        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=110, visit=11,
+                                                    physical_filter="dummy_r"))
+        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=111, visit=11,
+                                                    physical_filter="dummy_r"))
+        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=200, visit=20,
+                                                    physical_filter="dummy_r"))
+        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=201, visit=20,
+                                                    physical_filter="dummy_r"))
 
         # dataset types
         collection1 = "test"
@@ -96,10 +96,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         run2 = registry.makeRun(collection=collection2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW", dataUnits=("Instrument", "Exposure", "Detector"),
+        rawType = DatasetType(name="RAW", dimensions=("Instrument", "Exposure", "Detector"),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        calexpType = DatasetType(name="CALEXP", dataUnits=("Instrument", "Visit", "Detector"),
+        calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
@@ -124,10 +124,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=collection1)
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for row in rows:
@@ -140,10 +140,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # second collection
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection2], defaultOutput=collection1)
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for row in rows:
@@ -156,10 +156,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with two input datasets
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1, collection2], defaultOutput=collection2)
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 6*3)   # 6 exposures times 3 detectors
         for row in rows:
@@ -172,10 +172,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # limit to single visit
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=None)
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="Visit.visit = 10",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="Visit.visit = 10",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
@@ -184,10 +184,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # more limiting expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput="")
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="Visit.visit = 10 and Detector.detector > 1",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="Visit.visit = 10 and Detector.detector > 1",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
@@ -195,19 +195,19 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (2, 3))
 
         # expression excludes everyhting
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="Visit.visit > 1000",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="Visit.visit > 1000",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
         # Selecting by PhysicalFilter, this is not in the units, but it is
         # a part of the full expression so it should work too.
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="PhysicalFilter.physical_filter = 'dummy_r'",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="PhysicalFilter.physical_filter = 'dummy_r'",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (110, 111))
@@ -219,29 +219,29 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         registry = self.registry
 
         # need a bunch of units and datasets for test
-        registry.addDataUnitEntry("Instrument", dict(instrument="DummyCam"))
-        registry.addDataUnitEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                         physical_filter="dummy_r",
-                                                         abstract_filter="r"))
+        registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
+        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
+                                                          physical_filter="dummy_r",
+                                                          abstract_filter="r"))
         for detector in (1, 2, 3, 4, 5):
-            registry.addDataUnitEntry("Detector", dict(instrument="DummyCam", detector=detector))
+            registry.addDimensionEntry("Detector", dict(instrument="DummyCam", detector=detector))
 
         # make few visits/exposures
         now = datetime.now()
         timestamps = []       # list of start/end time of each exposure
         for visit in (10, 11, 20):
-            registry.addDataUnitEntry("Visit",
-                                      dict(instrument="DummyCam", visit=visit, physical_filter="dummy_r"))
+            registry.addDimensionEntry("Visit",
+                                       dict(instrument="DummyCam", visit=visit, physical_filter="dummy_r"))
             visit_start = now + timedelta(seconds=visit*45)
             for exposure in (0, 1):
                 start = visit_start + timedelta(seconds=15*exposure)
                 end = start + timedelta(seconds=15)
-                registry.addDataUnitEntry("Exposure", dict(instrument="DummyCam",
-                                                           exposure=visit*10+exposure,
-                                                           visit=visit,
-                                                           physical_filter="dummy_r",
-                                                           datetime_begin=start,
-                                                           datetime_end=end))
+                registry.addDimensionEntry("Exposure", dict(instrument="DummyCam",
+                                                            exposure=visit*10+exposure,
+                                                            visit=visit,
+                                                            physical_filter="dummy_r",
+                                                            datetime_begin=start,
+                                                            datetime_end=end))
                 timestamps += [(start, end)]
         self.assertEqual(len(timestamps), 6)
 
@@ -250,17 +250,17 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testExposureRange")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW", dataUnits=("Instrument", "Detector", "Exposure"),
+        rawType = DatasetType(name="RAW", dimensions=("Instrument", "Detector", "Exposure"),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        biasType = DatasetType(name="bias", dataUnits=("Instrument", "Detector", "ExposureRange"),
+        biasType = DatasetType(name="bias", dimensions=("Instrument", "Detector", "ExposureRange"),
                                storageClass=storageClass)
         registry.registerDatasetType(biasType)
         flatType = DatasetType(name="flat",
-                               dataUnits=("Instrument", "Detector", "PhysicalFilter", "ExposureRange"),
+                               dimensions=("Instrument", "Detector", "PhysicalFilter", "ExposureRange"),
                                storageClass=storageClass)
         registry.registerDatasetType(flatType)
-        calexpType = DatasetType(name="CALEXP", dataUnits=("Instrument", "Visit", "Detector"),
+        calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
@@ -301,10 +301,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # without flat/bias
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[rawType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 6*5)   # 6 exposures times 5 detectors
         for row in rows:
@@ -313,50 +313,46 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # use bias
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[rawType, biasType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[rawType, biasType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 6*5)  # 6 exposures times 5 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit",
-                                   "bias.valid_first", "bias.valid_last"))
+                                  ("instrument", "detector", "exposure", "visit"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, biasType, calexpType))
 
         # use flat
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[rawType, flatType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[rawType, flatType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 3*3)  # 3 exposures times 3 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit", "physical_filter",
-                                   "flat.valid_first", "flat.valid_last"))
+                                  ("instrument", "detector", "exposure", "visit", "physical_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
 
         # use both bias and flat, plus expression
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="Detector.detector IN (1, 3)",
-                                              neededDatasetTypes=[rawType, flatType, biasType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="Detector.detector IN (1, 3)",
+                                               neededDatasetTypes=[rawType, flatType, biasType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 3*2)  # 3 exposures times 2 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit", "physical_filter",
-                                   "bias.valid_first", "bias.valid_last",
-                                   "flat.valid_first", "flat.valid_last"))
+                                  ("instrument", "detector", "exposure", "visit", "physical_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, biasType, calexpType))
 
         # select single exposure (third) and detector and check datasetRefs
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="Exposure.exposure = 110 AND Detector.detector = 1",
-                                              neededDatasetTypes=[rawType, flatType, biasType],
-                                              futureDatasetTypes=[calexpType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="Exposure.exposure = 110 AND Detector.detector = 1",
+                                               neededDatasetTypes=[rawType, flatType, biasType],
+                                               futureDatasetTypes=[calexpType])
         rows = list(rows)
         self.assertEqual(len(rows), 1)
         row = rows[0]
@@ -378,35 +374,35 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # need a bunch of units and datasets for test, we want "AbstractFilter"
         # in the test so also have to add PhysicalFilter units
-        registry.addDataUnitEntry("Instrument", dict(instrument="DummyCam"))
-        registry.addDataUnitEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                         physical_filter="dummy_r",
-                                                         abstract_filter="r"))
-        registry.addDataUnitEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                         physical_filter="dummy_i",
-                                                         abstract_filter="i"))
-        registry.addDataUnitEntry("SkyMap", dict(skymap="DummyMap", hash="sha!"))
+        registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
+        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
+                                                          physical_filter="dummy_r",
+                                                          abstract_filter="r"))
+        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
+                                                          physical_filter="dummy_i",
+                                                          abstract_filter="i"))
+        registry.addDimensionEntry("SkyMap", dict(skymap="DummyMap", hash="sha!"))
         for tract in range(10):
-            registry.addDataUnitEntry("Tract", dict(skymap="DummyMap", tract=tract))
+            registry.addDimensionEntry("Tract", dict(skymap="DummyMap", tract=tract))
             for patch in range(10):
-                registry.addDataUnitEntry("Patch", dict(skymap="DummyMap", tract=tract, patch=patch,
-                                                        cell_x=0, cell_y=0,
-                                                        region=Box(LonLat(NormalizedAngle(0.), Angle(0.)))))
+                registry.addDimensionEntry("Patch", dict(skymap="DummyMap", tract=tract, patch=patch,
+                                                         cell_x=0, cell_y=0,
+                                                         region=Box(LonLat(NormalizedAngle(0.), Angle(0.)))))
 
         # dataset types
         collection = "test"
         run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        calexpType = DatasetType(name="deepCoadd_calexp", dataUnits=("SkyMap", "Tract", "Patch",
-                                                                     "AbstractFilter"),
+        calexpType = DatasetType(name="deepCoadd_calexp", dimensions=("SkyMap", "Tract", "Patch",
+                                                                      "AbstractFilter"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
-        mergeType = DatasetType(name="deepCoadd_mergeDet", dataUnits=("SkyMap", "Tract", "Patch"),
+        mergeType = DatasetType(name="deepCoadd_mergeDet", dimensions=("SkyMap", "Tract", "Patch"),
                                 storageClass=storageClass)
         registry.registerDatasetType(mergeType)
-        measType = DatasetType(name="deepCoadd_meas", dataUnits=("SkyMap", "Tract", "Patch",
-                                                                 "AbstractFilter"),
+        measType = DatasetType(name="deepCoadd_meas", dimensions=("SkyMap", "Tract", "Patch",
+                                                                  "AbstractFilter"),
                                storageClass=storageClass)
         registry.registerDatasetType(measType)
 
@@ -421,10 +417,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[calexpType, mergeType],
+                                               futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for row in rows:
@@ -435,10 +431,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
+                                               neededDatasetTypes=[calexpType, mergeType],
+                                               futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 5))
@@ -446,10 +442,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to single filter
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="AbstractFilter.abstract_filter = 'i'",
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="AbstractFilter.abstract_filter = 'i'",
+                                               neededDatasetTypes=[calexpType, mergeType],
+                                               futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 3, 5))
@@ -458,10 +454,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # expression excludes everyhting, specifying non-existing skymap is not a
         # fatal error, it's operator error
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="SkyMap.skymap = 'Mars'",
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="SkyMap.skymap = 'Mars'",
+                                               neededDatasetTypes=[calexpType, mergeType],
+                                               futureDatasetTypes=[measType])
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
@@ -482,21 +478,21 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
 
-        calexpType = DatasetType(name="CALEXP", dataUnits=("Instrument", "Visit", "Detector"),
+        calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
-        coaddType = DatasetType(name="deepCoadd_calexp", dataUnits=("SkyMap", "Tract", "Patch",
-                                                                    "AbstractFilter"),
+        coaddType = DatasetType(name="deepCoadd_calexp", dimensions=("SkyMap", "Tract", "Patch",
+                                                                     "AbstractFilter"),
                                 storageClass=storageClass)
         registry.registerDatasetType(coaddType)
 
         # without data this should run OK but return empty set
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        rows = self.preFlight.selectDataUnits(originInfo=originInfo,
-                                              expression="",
-                                              neededDatasetTypes=[calexpType],
-                                              futureDatasetTypes=[coaddType])
+        rows = self.preFlight.selectDimensions(originInfo=originInfo,
+                                               expression="",
+                                               neededDatasetTypes=[calexpType],
+                                               futureDatasetTypes=[coaddType])
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 

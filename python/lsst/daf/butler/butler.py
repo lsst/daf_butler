@@ -200,23 +200,76 @@ class Butler:
             with self.datastore.transaction():
                 yield
 
+    def _standardizeArgs(self, datasetRefOrType, dataId=None, **kwds):
+        """Standardize the arguments passed to several Butler APIs.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        datasetType : `DatasetType`
+            A `DatasetType` instance extracted from ``datasetRefOrType``.
+        dataId : `dict` or `DataId`, optional
+            Argument that can be used (along with ``kwds``) to construct a
+            `DataId`.
+
+        Notes
+        -----
+        Butler APIs that conceptually need a DatasetRef also allow passing a
+        `DatasetType` (or the name of one) and a `DataId` (or a dict and
+        keyword arguments that can be used to construct one) separately. This
+        method accepts those arguments and always returns a true `DatasetType`
+        and a `DataId` or `dict`.
+
+        Standardization of `dict` vs `DataId` is best handled by passing the
+        returned ``dataId`` (and ``kwds``) to `Registry` APIs, which are
+        generally similarly flexible.
+        """
+        if isinstance(datasetRefOrType, DatasetRef):
+            if dataId is not None or kwds:
+                raise ValueError("DatasetRef given, cannot use dataId as well")
+            datasetType = datasetRefOrType.datasetType
+            dataId = datasetRefOrType.dataId
+        else:
+            # Don't check whether DataId is provided, because Registry APIs
+            # can usually construct a better error message when it wasn't.
+            if isinstance(datasetRefOrType, DatasetType):
+                datasetType = datasetRefOrType
+            else:
+                datasetType = self.registry.getDatasetType(datasetRefOrType)
+        return datasetType, dataId
+
     @transactional
-    def put(self, obj, datasetRefOrType, dataId=None, producer=None):
+    def put(self, obj, datasetRefOrType, dataId=None, producer=None, **kwds):
         """Store and register a dataset.
 
         Parameters
         ----------
         obj : `object`
             The dataset.
-        datasetRefOrType : `DatasetRef`, `DatasetType` instance or `str`
-            When `DatasetRef` the `dataId` should be `None`.
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` is provided, ``dataId`` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict`, optional
-            An identifier with `DataUnit` names and values.
-            When `None` a `DatasetRef` should be supplied as the second
-            argument.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
         producer : `Quantum`, optional
             The producer.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
 
         Returns
         -------
@@ -233,27 +286,16 @@ class Butler:
         log.debug("Butler put: %s, dataId=%s, producer=%s", datasetRefOrType, dataId, producer)
         if self.run is None:
             raise TypeError("Butler is read-only.")
-        if isinstance(datasetRefOrType, DatasetRef):
-            if dataId is not None:
-                raise ValueError("DatasetRef given, cannot use dataId as well")
-            if datasetRefOrType.id is not None:
-                raise ValueError("DatasetRef must not be in registry, must have None id")
-            dataId = datasetRefOrType.dataId
-            datasetType = datasetRefOrType.datasetType
-        else:
-            if dataId is None:
-                raise ValueError("Must provide a dataId if first argument is not a DatasetRef")
-            if isinstance(datasetRefOrType, DatasetType):
-                datasetType = datasetRefOrType
-            else:
-                datasetType = self.registry.getDatasetType(datasetRefOrType)
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
+            raise ValueError("DatasetRef must not be in registry, must have None id")
 
         isVirtualComposite = self.composites.shouldBeDisassembled(datasetType)
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer,
-                                       recursive=not isVirtualComposite)
+                                       recursive=not isVirtualComposite, **kwds)
 
         # Check to see if this datasetType requires disassembly
         if isVirtualComposite:
@@ -318,22 +360,24 @@ class Butler:
             # single entity in datastore
             raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
 
-    def get(self, datasetRefOrType, dataId=None, parameters=None):
+    def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
         """Retrieve a stored dataset.
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType` instance or `str`
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the `DatasetRef`
-            within a Collection.
-            When `None` a `DatasetRef` should be supplied as the second
-            argument.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
 
         Returns
         -------
@@ -341,18 +385,14 @@ class Butler:
             The dataset.
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
         if isinstance(datasetRefOrType, DatasetRef):
-            if dataId is not None:
-                raise ValueError("DatasetRef given, cannot use dataId as well")
-            datasetType = datasetRefOrType.datasetType
-            dataId = datasetRefOrType.dataId
             idNumber = datasetRefOrType.id
         else:
-            datasetType = self.registry.getDatasetType(datasetRefOrType)
             idNumber = None
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.find(self.collection, datasetType, dataId)
+        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
         if ref is None:
             raise LookupError("Dataset {} with data ID {} could not be found in {}".format(
                               datasetType.name, dataId, self.collection))
@@ -360,19 +400,24 @@ class Butler:
             raise ValueError("DatasetRef.id does not match id in registry")
         return self.getDirect(ref, parameters=parameters)
 
-    def getUri(self, datasetType, dataId, predict=False):
+    def getUri(self, datasetRefOrType, dataId=None, predict=False, **kwds):
         """Return the URI to the Dataset.
 
         Parameters
         ----------
-        datasetType : `DatasetType` instance or `str`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
         predict : `bool`
             If `True`, allow URIs to be returned of datasets that have not
             been written.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
 
         Returns
         -------
@@ -391,28 +436,33 @@ class Butler:
             A URI has been requested for a dataset that does not exist and
             guessing is not allowed.
         """
-        datasetType = self.registry.getDatasetType(datasetType)
-        ref = self.registry.find(self.collection, datasetType, dataId)
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
         return self.datastore.getUri(ref, predict)
 
-    def datasetExists(self, datasetType, dataId):
+    def datasetExists(self, datasetRefOrType, dataId=None, **kwds):
         """Return True if the Dataset is actually present in the Datastore.
 
         Parameters
         ----------
-        datasetType : `DatasetType` instance or `str`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
 
         Raises
         ------
         LookupError
             Raised if the Dataset is not even present in the Registry.
         """
-        datasetType = self.registry.getDatasetType(datasetType)
-        ref = self.registry.find(self.collection, datasetType, dataId)
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
         if ref is None:
             raise LookupError(
                 "{} with {} not found in collection {}".format(datasetType, dataId, self.collection)

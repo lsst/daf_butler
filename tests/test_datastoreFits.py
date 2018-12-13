@@ -84,11 +84,11 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         datastore = self.makeDatastore()
 
         # Put
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 123456, "filter": "blue"}
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
 
-        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
 
         datastore.put(catalog, ref)
 
@@ -105,7 +105,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         self.assertCatalogEqual(catalog, catalogOut)
 
         # These should raise
-        ref = self.makeDatasetRef("calexp2", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("calexp2", dimensions, storageClass, dataId)
         with self.assertRaises(FileNotFoundError):
             # non-existing file
             datastore.get(ref, parameters=None)
@@ -116,10 +116,10 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
         # Put
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 1234567, "filter": "blue"}
 
-        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
         datastore.put(catalog, ref)
 
         # Does it exist?
@@ -144,11 +144,11 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
     def testTransfer(self):
         catalog = self.makeExampleCatalog()
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 12345, "filter": "red"}
 
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
-        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
 
         inputDatastore = self.makeDatastore("test_input_datastore")
         outputDatastore = self.makeDatastore("test_output_datastore")
@@ -164,10 +164,10 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         exposure = lsst.afw.image.ExposureF(example)
         datastore = self.makeDatastore()
         # Put
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 231, "filter": "Fc"}
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
-        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
 
         datastore.put(exposure, ref)
 
@@ -180,13 +180,13 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
         # Get some components
         for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
-            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dataUnits,
+            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
                                           storageClass.components[compName], dataId, id=ref.id)
             component = datastore.get(compRef)
             self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
 
         # Get the WCS component to check it
-        wcsRef = self.makeDatasetRef(ref.datasetType.componentTypeName("wcs"), dataUnits,
+        wcsRef = self.makeDatasetRef(ref.datasetType.componentTypeName("wcs"), dimensions,
                                      storageClass.components["wcs"], dataId, id=ref.id)
         wcs = datastore.get(wcsRef)
 
@@ -200,10 +200,10 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         exposure = lsst.afw.image.ExposureF(example)
         datastore = self.makeDatastore()
         # Put
-        dataUnits = frozenset(("visit", "filter"))
+        dimensions = frozenset(("visit", "filter"))
         dataId = {"visit": 23, "filter": "F"}
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureCompositeF")
-        ref = self.makeDatasetRef("calexp", dataUnits, storageClass, dataId)
+        ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
 
         # Get the predicted URI
         self.assertFalse(datastore.exists(ref))
@@ -216,7 +216,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         # Get a component
         compsRead = {}
         for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
-            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dataUnits,
+            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
                                           components[compName].storageClass, dataId)
 
             datastore.put(components[compName].component, compRef)

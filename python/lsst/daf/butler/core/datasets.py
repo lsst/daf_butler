@@ -24,6 +24,7 @@ from copy import deepcopy
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
+from .dimensions import DimensionGraph, DimensionNameSet
 
 __all__ = ("DatasetType", "DatasetRef")
 
@@ -50,36 +51,15 @@ class DatasetType:
     name : `str`
         A string name for the Dataset; must correspond to the same
         `DatasetType` across all Registries.
-    dataUnits : `iterable` of `str`
-        `DataUnit` names that defines the `DatasetRef`\ s corresponding to
-        this `DatasetType`.  The input iterable is copied into a `frozenset`.
+    dimensions : `DimensionGraph` or iterable of `str`
+        Dimensions used to label and relate instances of this DatasetType,
+        or string names thereof.
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
     """
 
-    __slots__ = ("_name", "_dataUnits", "_storageClass", "_storageClassName")
-
-    def __str__(self):
-        return "DatasetType({}, {}, {})".format(self.name, self._storageClassName, self.dataUnits)
-
-    def __eq__(self, other):
-        if self._name != other._name:
-            return False
-        if self._dataUnits != other._dataUnits:
-            return False
-        if self._storageClass is not None and other._storageClass is not None:
-            return self._storageClass == other._storageClass
-        else:
-            return self._storageClassName == other._storageClassName
-
-    def __hash__(self):
-        """Hash DatasetType instance.
-
-        This only uses StorageClass name which is it consistent with the
-        implementation of StorageClass hash method.
-        """
-        return hash((self._name, self._dataUnits, self._storageClassName))
+    __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName")
 
     @staticmethod
     def nameWithComponent(datasetTypeName, componentName):
@@ -101,6 +81,41 @@ class DatasetType:
         """
         return "{}.{}".format(datasetTypeName, componentName)
 
+    def __init__(self, name, dimensions, storageClass):
+        self._name = name
+        if isinstance(dimensions, (DimensionGraph, DimensionNameSet)):
+            self._dimensions = dimensions
+        else:
+            self._dimensions = DimensionNameSet(names=dimensions)
+        assert isinstance(storageClass, (StorageClass, str))
+        if isinstance(storageClass, StorageClass):
+            self._storageClass = storageClass
+            self._storageClassName = storageClass.name
+        else:
+            self._storageClass = None
+            self._storageClassName = storageClass
+
+    def __str__(self):
+        return "DatasetType({}, {}, {})".format(self.name, self._storageClassName, self.dimensions)
+
+    def __eq__(self, other):
+        if self._name != other._name:
+            return False
+        if self._dimensions != other._dimensions:
+            return False
+        if self._storageClass is not None and other._storageClass is not None:
+            return self._storageClass == other._storageClass
+        else:
+            return self._storageClassName == other._storageClassName
+
+    def __hash__(self):
+        """Hash DatasetType instance.
+
+        This only uses StorageClass name which is it consistent with the
+        implementation of StorageClass hash method.
+        """
+        return hash((self._name, self._dimensions, self._storageClassName))
+
     @property
     def name(self):
         """A string name for the Dataset; must correspond to the same
@@ -109,11 +124,16 @@ class DatasetType:
         return self._name
 
     @property
-    def dataUnits(self):
-        r"""A `frozenset` of `DataUnit` names that defines the `DatasetRef`\ s
-        corresponding to this `DatasetType`.
+    def dimensions(self):
+        r"""The `Dimension`\ s that label and relate instances of this
+        `DatasetType` (`DimensionGraph` or `DimensionNameSet`).
+
+        If this `DatasetType` was not obtained from or registered with a
+        `Registry`, this will typically be a `DimensionNameSet`, with much
+        less functionality (just an unsorted ``.names`` and comparison
+        operators) than a full `DimensionGraph`.
         """
-        return self._dataUnits
+        return self._dimensions
 
     @property
     def storageClass(self):
@@ -125,17 +145,6 @@ class DatasetType:
         if self._storageClass is None:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
-
-    def __init__(self, name, dataUnits, storageClass):
-        self._name = name
-        self._dataUnits = frozenset(dataUnits)
-        assert isinstance(storageClass, (StorageClass, str))
-        if isinstance(storageClass, StorageClass):
-            self._storageClass = storageClass
-            self._storageClassName = storageClass.name
-        else:
-            self._storageClass = None
-            self._storageClassName = storageClass
 
     def component(self):
         """Component name (if defined)
@@ -202,7 +211,7 @@ class DatasetType:
         StorageClass instances can not normally be pickled, so we pickle
         StorageClass name instead of instance.
         """
-        return (DatasetType, (self.name, self.dataUnits, self._storageClassName))
+        return (DatasetType, (self.name, self.dimensions, self._storageClassName))
 
     def __deepcopy__(self, memo):
         """Support for deep copy method.
@@ -214,7 +223,7 @@ class DatasetType:
         Instead we re-implement ``__deepcopy__`` method.
         """
         return DatasetType(name=deepcopy(self.name, memo),
-                           dataUnits=deepcopy(self.dataUnits, memo),
+                           dimensions=deepcopy(self.dimensions, memo),
                            storageClass=deepcopy(self._storageClass or self._storageClassName, memo))
 
 
@@ -228,9 +237,9 @@ class DatasetRef:
     ----------
     datasetType : `DatasetType`
         The `DatasetType` for this Dataset.
-    dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a Collection.
+    dataId : `dict` or `DataId`
+        A `dict` of `Dimension` primary key fields that label the
+        `DatasetRef` within a Collection.
     id : `int`, optional
         A unique identifier.
         Normally set to `None` and assigned by `Registry`
@@ -238,8 +247,6 @@ class DatasetRef:
 
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run",
                  "_predictedConsumers", "_actualConsumers", "_components")
-
-    __eq__ = slotValuesAreEqual
 
     def __init__(self, datasetType, dataId, id=None, run=None):
         assert isinstance(datasetType, DatasetType)
@@ -251,6 +258,8 @@ class DatasetRef:
         self._actualConsumers = dict()
         self._components = dict()
         self._run = run
+
+    __eq__ = slotValuesAreEqual
 
     @property
     def id(self):
@@ -269,8 +278,8 @@ class DatasetRef:
 
     @property
     def dataId(self):
-        """A `dict` of `DataUnit` link name, value pairs that label the `DatasetRef`
-        within a Collection.
+        """A `dict` of `Dimension` primary key fields that label the
+        `DatasetRef` within a Collection (`dict` or `DataId`).
         """
         return self._dataId
 

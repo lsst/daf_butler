@@ -124,7 +124,7 @@ class FileTemplate:
     -----
     The templates use the standard Format Specification Mini-Language
     with the caveat that only named fields can be used. The field names
-    are taken from the DataUnits along with several additional fields:
+    are taken from the Dimensions along with several additional fields:
 
      - datasetType: `str`, `DatasetType.name`
      - component: `str`, name of the StorageClass component
@@ -136,7 +136,7 @@ class FileTemplate:
 
     The mini-language is extended to understand a "?" in the format
     specification. This indicates that a field is optional. If that
-    DataUnit is missing the field, along with the text before the field,
+    Dimension is missing the field, along with the text before the field,
     unless it is a path separator, will be removed from the output path.
     """
 

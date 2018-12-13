@@ -216,7 +216,7 @@ class ConvertedRepo:
     gen2 : `Gen2Repo`
         Structure describing the Gen2 data repository.
     instrument : `str`
-        Gen3 Instrument DataUnit name.
+        Gen3 Instrument Dimension name.
     run : `Run`
         Gen3 Run instance Datasets will be added to (unless overridden) at
         the DatasetType or Dataset level.

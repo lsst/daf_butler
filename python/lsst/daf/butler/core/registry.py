@@ -20,12 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Mapping
 import contextlib
 import functools
 
 from lsst.utils import doImport
+from lsst.sphgeom import ConvexPolygon
 from .config import Config, ConfigSubset
-from .dataUnit import DataUnitConfig, DataUnitRegistry
+from .dimensions import DimensionConfig, DimensionGraph, DataId
 from .schema import SchemaConfig
 from .utils import transactional
 
@@ -61,6 +63,8 @@ class Registry(metaclass=ABCMeta):
         Registry configuration.
     schemaConfig : `SchemaConfig`, optional
         Schema configuration.
+    dimensionConfig : `DimensionConfig` or `Config` or
+        `DimensionGraph` configuration.
     """
 
     defaultConfigFile = None
@@ -94,7 +98,7 @@ class Registry(metaclass=ABCMeta):
                                   toCopy=(("skypix", "cls"), ("skypix", "level")))
 
     @staticmethod
-    def fromConfig(registryConfig, schemaConfig=None, dataUnitConfig=None, create=False):
+    def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False):
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to
@@ -108,10 +112,10 @@ class Registry(metaclass=ABCMeta):
             Schema configuration. Can be read from supplied registryConfig
             if the relevant component is defined and ``schemaConfig`` is
             `None`.
-        dataUnitConfig : `DataUnitConfig` or `Config` or
-            `str`, optional. DataUnitRegistry configuration. Can be read
+        dimensionConfig : `DimensionConfig` or `Config` or
+            `str`, optional. `DimensionGraph` configuration. Can be read
             from supplied registryConfig if the relevant component is
-            defined and ``dataUnitConfig`` is `None`.
+            defined and ``dimensionConfig`` is `None`.
         create : `bool`
             Assume empty Registry and create a new one.
 
@@ -130,15 +134,15 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Schema configuration: {}".format(schemaConfig))
 
-        if dataUnitConfig is None:
+        if dimensionConfig is None:
             # Try to instantiate a schema configuration from the supplied
             # registry configuration.
-            dataUnitConfig = DataUnitConfig(registryConfig)
-        elif not isinstance(dataUnitConfig, DataUnitConfig):
-            if isinstance(dataUnitConfig, str) or isinstance(dataUnitConfig, Config):
-                dataUnitConfig = DataUnitConfig(dataUnitConfig)
+            dimensionConfig = DimensionConfig(registryConfig)
+        elif not isinstance(dimensionConfig, DimensionConfig):
+            if isinstance(dimensionConfig, str) or isinstance(dimensionConfig, Config):
+                dimensionConfig = DimensionConfig(dimensionConfig)
             else:
-                raise ValueError("Incompatible Schema configuration: {}".format(dataUnitConfig))
+                raise ValueError("Incompatible Dimension configuration: {}".format(dimensionConfig))
 
         if not isinstance(registryConfig, RegistryConfig):
             if isinstance(registryConfig, str) or isinstance(registryConfig, Config):
@@ -147,20 +151,20 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
         cls = doImport(registryConfig["cls"])
-        return cls(registryConfig, schemaConfig, dataUnitConfig, create=create)
+        return cls(registryConfig, schemaConfig, dimensionConfig, create=create)
 
-    def __init__(self, registryConfig, schemaConfig=None, dataUnitConfig=None, create=False):
+    def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
         self._pixelization = None
-        self._dataUnits = DataUnitRegistry.fromConfig(dataUnitConfig)
+        self.dimensions = DimensionGraph.fromConfig(dimensionConfig)
 
     def __str__(self):
         return "None"
 
     @property
     def limited(self):
-        """If True, this Registry does not maintain DataUnit metadata or
+        """If True, this Registry does not maintain Dimension metadata or
         relationships (`bool`)."""
         return self.config.get("limited", False)
 
@@ -189,7 +193,7 @@ class Registry(metaclass=ABCMeta):
 
     @property
     def pixelization(self):
-        """Object that interprets SkyPix DataUnit values (`lsst.sphgeom.Pixelization`).
+        """Object that interprets SkyPix Dimension values (`lsst.sphgeom.Pixelization`).
 
         `None` for limited registries.
         """
@@ -229,7 +233,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def find(self, collection, datasetType, dataId):
+    def find(self, collection, datasetType, dataId=None, **kwds):
         """Lookup a dataset.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
@@ -239,11 +243,15 @@ class Registry(metaclass=ABCMeta):
         ----------
         collection : `str`
             Identifies the collection to search.
-        datasetType : `DatasetType`
-            The `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
+        dataId : `dict` or `DataId`, optional
+            A `dict`-like object containing the `Dimension` links that identify
+            the dataset within a collection.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
@@ -308,7 +316,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def addDataset(self, datasetType, dataId, run, producer=None, recursive=False):
+    def addDataset(self, datasetType, dataId, run, producer=None, recursive=False, **kwds):
         """Adds a Dataset entry to the `Registry`
 
         This always adds a new Dataset; to associate an existing Dataset with
@@ -316,11 +324,11 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        datasetType : `str`
-            Name of a `DatasetType`.
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
+        dataId : `dict` or `DataId`
+            A `dict`-like object containing the `Dimension` links that identify
+            the dataset within a collection.
         run : `Run`
             The `Run` instance that produced the Dataset.  Ignored if
             ``producer`` is passed (`producer.run` is then used instead).
@@ -332,6 +340,10 @@ class Registry(metaclass=ABCMeta):
         recursive : `bool`
             If True, recursively add Dataset and attach entries for component
             Datasets as well.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
@@ -345,7 +357,7 @@ class Registry(metaclass=ABCMeta):
             given collection.
 
         Exception
-            If ``dataId`` contains unknown or invalid `DataUnit` entries.
+            If ``dataId`` contains unknown or invalid `Dimension` entries.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -440,6 +452,9 @@ class Registry(metaclass=ABCMeta):
         datastoreName : `str`
             Name of the datastore holding this dataset.
         """
+        # TODO: this requires `ref.dataset_id` to be not None, and probably
+        # doesn't use anything else from `ref`.  Should it just take a
+        # `dataset_id`?
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
@@ -460,6 +475,9 @@ class Registry(metaclass=ABCMeta):
             All the matching datastores holding this dataset. Empty set
             if the dataset does not exist anywhere.
         """
+        # TODO: this requires `ref.dataset_id` to be not None, and probably
+        # doesn't use anything else from `ref`.  Should it just take a
+        # `dataset_id`?
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
@@ -476,6 +494,9 @@ class Registry(metaclass=ABCMeta):
         ref : `DatasetRef`
             A reference to the dataset for which information is to be removed.
         """
+        # TODO: this requires `ref.dataset_id` to be not None, and probably
+        # doesn't use anything else from `ref`.  Should it just take a
+        # `dataset_id`?
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
@@ -653,24 +674,39 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     @disableWhenLimited
     @transactional
-    def addDataUnitEntry(self, dataUnitName, values):
-        """Add a new `DataUnit` entry.
+    def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):
+        """Add a new `Dimension` entry.
 
-        dataUnitName : `str`
-            Name of the `DataUnit` (e.g. ``"Instrument"``).
-        values : `dict`
-            Dictionary of ``columnName, columnValue`` pairs.
+        dimension : `str` or `Dimension`
+            Either a `Dimension` object or the name of one.
+        dataId : `dict` or `DataId`, optional
+            A `dict`-like object containing the `Dimension` links that form
+            the primary key of the row to insert.  If this is a full `DataId`
+            object, ``dataId.entries[dimension]`` will be updated with
+            ``entry`` and then inserted into the `Registry`.
+        entry : `dict`
+            Dictionary that maps column name to column value.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
-        If ``values`` includes a "region" key, `setDataUnitRegion` will
+        If ``values`` includes a "region" key, `setDimensionRegion` will
         automatically be called to set it any associated spatial join
         tables.
-        Region fields associated with a combination of DataUnits must be
+        Region fields associated with a combination of Dimensions must be
         explicitly set separately.
+
+        Returns
+        -------
+        dataId : `DataId`
+            A Data ID for exactly the given dimension that includes the added
+            entry.
 
         Raises
         ------
         TypeError
-            If the given `DataUnit` does not have explicit entries in the
+            If the given `Dimension` does not have explicit entries in the
             registry.
         ValueError
             If an entry with the primary-key defined in `values` is already
@@ -682,21 +718,29 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @disableWhenLimited
-    def findDataUnitEntry(self, dataUnitName, value):
-        """Return a `DataUnit` entry corresponding to a `value`.
+    def findDimensionEntry(self, dimension, dataId=None, **kwds):
+        """Return a `Dimension` entry corresponding to a `DataId`.
 
         Parameters
         ----------
-        dataUnitName : `str`
-            Name of a `DataUnit`
-        value : `dict`
-            A dictionary of values that uniquely identify the `DataUnit`.
+        dimension : `str` or `Dimension`
+            Either a `Dimension` object or the name of one.
+        dataId : `dict` or `DataId`, optional
+            A `dict`-like object containing the `Dimension` links that form
+            the primary key of the row to retreive.  If this is a full `DataId`
+            object, ``dataId.entries[dimension]`` will be updated with the
+            entry obtained from the `Registry`.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
-        dataUnitEntry : `dict`
-            Dictionary with all `DataUnit` values, or `None` if no matching
-            entry is found.
+        entry : `dict`
+            Dictionary with all `Dimension` values, or `None` if no matching
+            entry is found.  `None` if there is no entry for the given
+            `DataId`.
 
         Raises
         ------
@@ -708,52 +752,37 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     @disableWhenLimited
     @transactional
-    def setDataUnitRegion(self, dataUnitNames, value, region, update=True):
-        """Set the region field for a DataUnit instance or a combination
+    def setDimensionRegion(self, dataId=None, *, update=True, region=None, **kwds):
+        """Set the region field for a Dimension instance or a combination
         thereof and update associated spatial join tables.
 
         Parameters
         ----------
-        dataUnitNames : sequence
-            A sequence of DataUnit names whose instances are jointly associated
-            with a region on the sky.
-        value : `dict`
-            A dictionary of values that uniquely identify the DataUnits.
-        region : `sphgeom.ConvexPolygon`
-            Region on the sky.
+        dataId : `dict` or `DataId`
+            A `dict`-like object containing the `Dimension` links that form
+            the primary key of the row to insert or update.  If this is a full
+            `DataId`, ``dataId.region`` will be set to ``region`` (if
+            ``region`` is not `None`) and then used to update or insert into
+            the `Registry`.
         update : `bool`
-            If True, existing region information for these DataUnits is being
-            replaced.  This is usually required because DataUnit entries are
+            If True, existing region information for these Dimensions is being
+            replaced.  This is usually required because Dimension entries are
             assumed to be pre-inserted prior to calling this function.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @disableWhenLimited
-    def getRegion(self, dataId):
-        """Get region associated with a dataId.
-
-        Parameters
-        ----------
-        dataId : `dict`
-            A `dict` of `DataUnit` link name, value pairs that label the
-            `DatasetRef` within a collection.
+        region : `lsst.sphgeom.ConvexPolygon`, optional
+            The region to update or insert into the `Registry`.  If not present
+            ``dataId.region`` must not be `None`.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
 
         Returns
         -------
-        region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or `None` if not present.
+        dataId : `DataId`
+            A Data ID with its ``region`` attribute set.
 
         Raises
         ------
-        KeyError
-            If the set of dataunits for the ``dataId`` does not correspond to
-            a unique spatial lookup.
         NotImplementedError
             Raised if `limited` is `True`.
         """
@@ -761,7 +790,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @disableWhenLimited
-    def selectDataUnits(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
+    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -774,15 +803,15 @@ class Registry(metaclass=ABCMeta):
         originInfo : `DatasetOriginInfo`
             Object which provides names of the input/output collections.
         expression : `str`
-            An expression that limits the `DataUnits <DataUnit>` and
+            An expression that limits the `Dimensions <Dimension>` and
             (indirectly) the Datasets returned.
-        neededDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
+        neededDatasetTypes : `list` of `DatasetType` or `str`
+            The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
             be included in the returned column set. Output is limited to the
             the Datasets of these DatasetTypes which already exist in the
             registry.
-        futureDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetTypes <DatasetType>` whose DataUnits will
+        futureDatasetTypes : `list` of `DatasetType` or `str`
+            The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
             be included in the returned column set. It is expected that
             Datasets for these DatasetTypes do not exist in the registry,
             but presently this is not checked.
@@ -794,6 +823,146 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
+        NotImplementedError
+            Raised if `limited` is `True`.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @disableWhenLimited
+    def queryDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, **kwds):
+        """Expand a data ID to include additional information.
+
+        Parameters
+        ----------
+        dataId : `dict` or `DataId`
+            A `dict`-like object containing the `Dimension` links that include
+            the primary keys of the rows to query.  If this is a true `DataId`,
+            the object will be updated in-place.
+        dimension : `Dimension` or `str`
+            A dimension passed to the `DataId` constructor to create a true
+            `DataId` or augment an existing one.
+        metadata : `collections.abc.Mapping`, optional
+            A mapping from `Dimension` or `str` name to column name, indicating
+            fields to read into ``dataId.entries``.
+            If ``dimension`` is provided, may instead be a sequence of column
+            names for that dimension.
+        region : `bool`
+            If `True` and the given `DataId` is uniquely associated with a
+            region on the sky, obtain that region from the `Registry` and
+            attach it as ``dataId.region``.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
+
+        Returns
+        -------
+        dataId : `DataId`
+            A Data ID with its ``region`` attribute set.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
+        """
+        dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
+
+        if region:
+            holder = dataId.dimensions.getRegionHolder()
+            if holder is not None:
+                dataId.region = self._queryRegion(holder, DataId(dataId, dimensions=holder.graph()))
+
+        if metadata is not None:
+            # By the time we get here 'dimension' and 'dataId.dimension'
+            # correspond to the same thing, but:
+            #  - 'dimension' might be a string or a `DimensionElement`
+            #  - 'dataId.dimension' is definitely a `Dimension`
+            #  - 'dataId.dimension' may not be None even if 'dimension' is
+            if dimension is not None and not isinstance(metadata, Mapping):
+                # If a single dimension was passed explicitly, permit 'metadata' to
+                # be a sequence corresponding to just that dimension.
+                result = self._queryMetadata(dataId.dimension, dataId, metadata)
+                dataId.entries[dataId.dimension].update(result)
+            else:
+                for element, columns in metadata.items():
+                    subDataId = DataId(dataId, dimension=element)
+                    result = self._queryMetadata(element, subDataId, columns)
+                    dataId.entries[element].update(result)
+
+        return dataId
+
+    @disableWhenLimited
+    def _queryRegion(self, dimension, dataId):
+        """Get the region associated with a dataId.
+
+        This is conceptually a "protected" method that may be overridden by
+        subclasses but should not be called directly by users, who should use
+        ``queryDataId(..., region=True)`` instead.
+
+        Parameters
+        ----------
+        dimension : `DimensionElement`
+            The `Dimension` or `DimensionJoin` that holds the region.  Must
+            be equal to ``dataId.dimensions.getRegionHolder()``.
+        dataId : `DataId`
+            A dictionary of primary key name-value pairs that uniquely identify
+            a row in the table for ``dimension``.  Note that this must be a
+            true `DataId` instance, not a `dict`, unlike more flexible
+            public `Registry` methods.
+
+        Returns
+        -------
+        region : `lsst.sphgeom.ConvexPolygon`
+            The region associated with a ``dataId`` or `None` if not present.
+
+        Raises
+        ------
+        LookupError
+            Raised if no entry for the given data ID exists.
+        NotImplementedError
+            Raised if `limited` is `True`.
+        """
+        if dimension.name == "SkyPix":
+            # SkyPix is special; we always obtain those regions from
+            # self.pixelization
+            return self.pixelization.pixel(dataId["skypix"])
+        metadata = self._queryMetadata(dimension, dataId, ["region"])
+        encoded = metadata["region"]
+        if encoded is None:
+            return None
+        return ConvexPolygon.decode(encoded)
+
+    @abstractmethod
+    @disableWhenLimited
+    def _queryMetadata(self, element, dataId, columns):
+        """Get metadata associated with a dataId.
+
+        This is conceptually a "protected" method that must be overridden by
+        subclasses but should not be called directly by users, who should use
+        ``queryDataId(..., columns={...})`` instead.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            The `Dimension` or `DimensionJoin` to query for column values.
+        dataId : `DataId`
+            A dictionary of primary key name-value pairs that uniquely identify
+            a row in the table for ``element``.  Note that this must be a
+            true `DataId` instance, not a `dict`, unlike more flexible
+            public `Registry` methods.
+        columns : iterable of `str`
+            String column names to query values for.
+
+        Returns
+        -------
+        metadata : `dict`
+            Dictionary that maps column name to value, or `None` if there is
+            no row for the given `DataId`.
+
+        Raises
+        ------
+        LookupError
+            Raised if no entry for the given data ID exists.
         NotImplementedError
             Raised if `limited` is `True`.
         """

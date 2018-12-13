@@ -59,10 +59,10 @@ class ButlerTests:
     useTempRoot = True
 
     @staticmethod
-    def addDatasetType(datasetTypeName, dataUnits, storageClass, registry):
+    def addDatasetType(datasetTypeName, dimensions, storageClass, registry):
         """Create a DatasetType and register it
         """
-        datasetType = DatasetType(datasetTypeName, dataUnits, storageClass)
+        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(datasetType)
         return datasetType
 
@@ -114,25 +114,25 @@ class ButlerTests:
     def runPutGetTest(self, storageClass, datasetTypeName):
         butler = Butler(self.tmpConfigFile)
         # Create and register a DatasetType
-        dataUnits = ("Instrument", "Visit")
+        dimensions = ("Instrument", "Visit")
 
         # We can not delete datasets so for now create two so we can do
         # two puts.
-        self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
+        self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
         datasetTypeName2 = datasetTypeName + "2"
-        self.addDatasetType(datasetTypeName2, dataUnits, storageClass, butler.registry)
+        self.addDatasetType(datasetTypeName2, dimensions, storageClass, butler.registry)
 
         # Add a third type to test putting with a DataSetType
         datasetTypeName3 = datasetTypeName + "3"
-        self.addDatasetType(datasetTypeName3, dataUnits, storageClass, butler.registry)
+        self.addDatasetType(datasetTypeName3, dimensions, storageClass, butler.registry)
 
-        # Add needed DataUnits
-        butler.registry.addDataUnitEntry("Instrument", {"instrument": "DummyCamComp"})
-        butler.registry.addDataUnitEntry("PhysicalFilter", {"instrument": "DummyCamComp",
-                                                            "physical_filter": "d-r"})
-        butler.registry.addDataUnitEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
-                                                   "physical_filter": "d-r"})
+        # Add needed Dimensions
+        butler.registry.addDimensionEntry("Instrument", {"instrument": "DummyCamComp"})
+        butler.registry.addDimensionEntry("PhysicalFilter", {"instrument": "DummyCamComp",
+                                                             "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
+                                                    "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -198,20 +198,20 @@ class ButlerTests:
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
         datasetTypeName = "test_metric"
-        dataUnits = ("Instrument", "Visit")
-        dataUnitEntries = (("Instrument", {"instrument": "DummyCam"}),
-                           ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
-                           ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        dimensions = ("Instrument", "Visit")
+        dimensionEntries = (("Instrument", {"instrument": "DummyCam"}),
+                            ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
+                            ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
         dataId = {"instrument": "DummyCam", "visit": 42}
         with self.assertRaises(TransactionTestError):
             with butler.transaction():
                 # Create and register a DatasetType
-                datasetType = self.addDatasetType(datasetTypeName, dataUnits, storageClass, butler.registry)
-                # Add needed DataUnits
-                for name, value in dataUnitEntries:
-                    butler.registry.addDataUnitEntry(name, value)
+                datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
+                # Add needed Dimensions
+                for name, value in dimensionEntries:
+                    butler.registry.addDimensionEntry(name, value)
                 # Store a dataset
                 ref = butler.put(metric, datasetTypeName, dataId)
                 self.assertIsInstance(ref, DatasetRef)
@@ -228,8 +228,8 @@ class ButlerTests:
 
         with self.assertRaises(KeyError):
             butler.registry.getDatasetType(datasetTypeName)
-        for name, value in dataUnitEntries:
-            self.assertIsNone(butler.registry.findDataUnitEntry(name, value))
+        for name, value in dimensionEntries:
+            self.assertIsNone(butler.registry.findDimensionEntry(name, value))
         # Should raise KeyError for missing DatasetType
         with self.assertRaises(KeyError):
             butler.get(datasetTypeName, dataId)

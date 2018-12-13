@@ -203,10 +203,10 @@ schema:
           so the set of allowed StorageClasses and their properties is
           maintained in the registry Python code rather than the database.
 
-    DatasetTypeUnits:
+    DatasetTypeDimensions:
       doc: >
-        A Definition table indicating which unit link fields in Dataset are
-        non-NULL for Datasets with this DatasetType.
+        A Definition table indicating which dimension link fields in Dataset
+        are non-NULL for Datasets with this DatasetType.
       columns:
       -
         name: dataset_type_name
@@ -215,11 +215,11 @@ schema:
         doc: >
           The name of the DatasetType.
       -
-        name: unit_name
+        name: dimension_name
         type: string
         nullable: false
         doc: >
-          The name of a DataUnit associated with this DatasetType.
+          The name of a Dimension associated with this DatasetType.
       foreignKeys:
       -
         src: dataset_type_name
@@ -887,45 +887,6 @@ schema:
         tgt:
         - Detector.instrument
         - Detector.detector
-
-    MultiInstrumentExposureJoin:
-      limited: false
-      columns:
-      -
-        name: instrument_1
-        type: string
-        nullable: false
-        doc: Instrument name for lhs Dataset.
-      -
-        name: exposure_1
-        type: int
-        nullable: false
-        doc: Exposure ID for lhs Dataset.
-      -
-        name: instrument_2
-        type: string
-        nullable: false
-        doc: Instrument name for rhs Dataset.
-      -
-        name: exposure_2
-        type: int
-        nullable: false
-        doc: Exposure ID for rhs Dataset.
-      foreignKeys:
-      -
-        src:
-          - instrument_1
-          - exposure_1
-        tgt:
-          - Exposure.instrument
-          - Exposure.exposure
-      -
-        src:
-          - instrument_1
-          - exposure_1
-        tgt:
-          - Exposure.instrument
-          - Exposure.exposure
 
     VisitDetectorSkyPixJoin:
       limited: false

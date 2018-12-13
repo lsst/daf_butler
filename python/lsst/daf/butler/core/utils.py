@@ -21,15 +21,12 @@
 
 import sys
 import functools
-from collections import namedtuple
-from collections.abc import Set
 
 from lsst.utils import doImport
 
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
-           "getFullTypeName", "getInstanceOf", "Singleton",
-           "TopologicalSet", "TopologicalSetNode", "transactional",
-           "getObjectSize", "stripIfNotNone")
+           "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
+           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta")
 
 
 def iterable(a):
@@ -172,108 +169,6 @@ class Singleton(type):
         return cls._instances[cls]
 
 
-# Helper Node in a TopologicalSet
-# Unfortunately can't be a class member because that breaks pickling
-TopologicalSetNode = namedtuple("TopologicalSetNode", ["element", "sourceElements"])
-
-
-class TopologicalSet(Set):
-    """A collection that behaves like a builtin `set`, but where
-    elements can be interconnected (like a graph).
-
-    Iteration over this collection visits its elements in topologically
-    sorted order.
-
-    Parameters
-    ----------
-    elements : Iterable
-        Any iterable with elements to insert.
-    """
-    def __init__(self, elements):
-        self._nodes = {e: TopologicalSetNode(e, set()) for e in elements}
-        self._ordering = None
-
-    def __contains__(self, element):
-        return element in self._nodes
-
-    def __len__(self):
-        return len(self._nodes)
-
-    def __eq__(self, other):
-        try:
-            return self._nodes == other._nodes
-        except AttributeError:
-            return super().__eq__(other)
-
-    def __ne__(self, other):
-        return not (self == other)
-
-    def connect(self, sourceElement, targetElement):
-        """Connect two elements in the set.
-
-        The connection is directed from `sourceElement` to `targetElement` and
-        is distinct from its inverse.
-        Both elements must already be present in the set.
-
-        sourceElement : `object`
-            The source element.
-        targetElement : `object`
-            The target element.
-
-        Raises
-        ------
-        KeyError
-            When either element is not already in the set.
-        ValueError
-            If a self connections between elements would be created.
-        """
-        if sourceElement == targetElement:
-            raise ValueError("Cannot connect {} to itself".format(sourceElement))
-        for element in (sourceElement, targetElement):
-            if element not in self._nodes:
-                raise KeyError("{} not in set".format(element))
-        targetNode = self._nodes[targetElement]
-        targetNode.sourceElements.add(sourceElement)
-        # Adding a connection invalidates previous ordering
-        self._ordering = None
-
-    def __iter__(self):
-        """Iterate over elements in topologically sorted order.
-
-        Raises
-        ------
-        ValueError
-            If a cycle is found and hence no topological order exists.
-        """
-        if self._ordering is None:
-            self.ordering = self._topologicalOrdering()
-        yield from self.ordering
-
-    def _topologicalOrdering(self):
-        """Generate a topological ordering by doing a basic
-        depth-first-search.
-        """
-        seen = set()
-        finished = set()
-        order = []
-
-        def visit(node):
-            if node.element in finished:
-                return
-            if node.element in seen:
-                raise ValueError("Cycle detected")
-            seen.add(node.element)
-            for sourceElement in node.sourceElements:
-                visit(self._nodes[sourceElement])
-            finished.add(node.element)
-            seen.remove(node.element)
-            order.append(node.element)
-
-        for node in self._nodes.values():
-            visit(node)
-        return order
-
-
 def transactional(func):
     """Decorator that wraps a method and makes it transactional.
 
@@ -357,3 +252,58 @@ def stripIfNotNone(s):
     if s is not None:
         s = s.strip()
     return s
+
+
+class PrivateConstructorMeta(type):
+    """A metaclass that disables regular construction syntax.
+
+    A class that uses PrivateConstructorMeta may have an ``__init__`` and/or
+    ``__new__`` method, but these can't be invoked by "calling" the class
+    (that will always raise `TypeError`).  Instead, such classes can be called
+    by calling the metaclass-provided `_construct` class method with the same
+    arguments.
+
+    As is usual in Python, there are no actual prohibitions on what code can
+    call `_construct`; the purpose of this metaclass is just to prevent
+    instances from being created normally when that can't do what users would
+    expect.
+
+    ..note::
+
+        Classes that inherit from PrivateConstructorMeta also inherit
+        the hidden-constructor behavior.  If you just want to disable
+        construction of the base class, `abc.ABCMeta` may be a better
+        option.
+
+    Examples
+    --------
+    Given this class definition::
+        class Hidden(metaclass=PrivateConstructorMeta):
+
+            def __init__(self, a, b):
+                self.a = a
+                self.b = b
+
+    This doesn't work:
+
+        >>> instance = Hidden(a=1, b="two")
+        TypeError: Hidden objects cannot be constructed directly.
+
+    But this does:
+
+        >>> instance = Hidden._construct(a=1, b="two")
+
+    """
+
+    def __call__(cls, *args, **kwds):
+        """Disabled class construction interface; always raises `TypeError.`
+        """
+        raise TypeError(f"{cls.__name__} objects cannot be constructed directly.")
+
+    def _construct(cls, *args, **kwds):
+        """Private class construction interface.
+
+        All arguments are forwarded to ``__init__`` and/or ``__new__``
+        in the usual way.
+        """
+        return type.__call__(cls, *args, **kwds)
