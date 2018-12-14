@@ -19,6 +19,8 @@ storageClasses:
     pytype: lsst.afw.image.Calib
   TablePersistableTransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
+  TablePersistableCamera:
+    pytype: lsst.afw.cameraGeom.Camera
   Image: &Image
     pytype: lsst.afw.image.Image
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
@@ -103,6 +105,13 @@ storageClasses:
     pytype: lsst.afw.image.ExposureI
     components:
       image: ImageI
+      mask: MaskX
+      variance: ImageF
+  ExposureU:
+    inheritsFrom: Exposure
+    pytype: lsst.afw.image.ExposureU
+    components:
+      image: ImageU
       mask: MaskX
       variance: ImageF
   Background:

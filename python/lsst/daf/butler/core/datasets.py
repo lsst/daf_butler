@@ -95,8 +95,8 @@ class DatasetType:
             self._storageClass = None
             self._storageClassName = storageClass
 
-    def __str__(self):
-        return "DatasetType({}, {}, {})".format(self.name, self._storageClassName, self.dimensions)
+    def __repr__(self):
+        return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)
 
     def __eq__(self, other):
         if self._name != other._name:

@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import itertools
+from datetime import datetime
 from abc import ABCMeta, abstractmethod
 
 __all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler")
@@ -277,3 +278,11 @@ Translator.addRule(PatchKeyHandler(), gen2keys=("patch",))
 
 # Copy Gen2 "tract" to Gen3 "tract".
 Translator.addRule(CopyKeyHandler("tract", "Tract"), gen2keys=("tract",))
+
+# Add valid_first, valid_last to Instrument-level transmission/ datasets;
+# these are considered calibration products in Gen3.
+for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmission_filter"):
+    Translator.addRule(ConstantKeyHandler("valid_first", "ExposureRange", datetime.min),
+                       datasetTypeName=datasetTypeName)
+    Translator.addRule(ConstantKeyHandler("valid_last", "ExposureRange", datetime.max),
+                       datasetTypeName=datasetTypeName)

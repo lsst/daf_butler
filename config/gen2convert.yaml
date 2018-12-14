@@ -37,18 +37,21 @@ collections:
     -
       pattern: "^(.+)/rerun/"
       repl: "shared/"
+    -
+      pattern: "^(.+)/CALIB"
+      repl : "calib"
   overrides:
     # A dictionary of DatasetType -> Collection mappings that force all
     # Datasets with that DatasetType into a particular Collection.
     # Collection names can be str.format patterns that utilize any of
     # the Gen3 DataUnits or Gen2 DataIds associated with the Dataset.
-    raw: raw/{instrument}
+    raw: raw
     ref_cat: ref/{name}
     ref_cat_config: ref/{name}
-    transmission_filter: transmission/{instrument}
-    transmission_sensor: transmission/{instrument}
-    transmission_optics: transmission/{instrument}
-    transmission_atmosphere: transmission/{instrument}
+    transmission_filter: calib
+    transmission_sensor: calib
+    transmission_optics: calib
+    transmission_atmosphere: calib
 runs:
   # Names of Collections (after processing via the above section)
   # that should be assigned to a particular Run (dict values are integer
@@ -61,8 +64,8 @@ runs:
 skymaps: {}  # dictionary mapping Gen3 SkyMap names to repository roots
 
 storageClasses:
-  # dictionary mapping Gen2 Mapping.persistable, Mapping.python, or just the
-  # last term in Mapping.python (the unqualified type name) to Gen3
+  # dictionary mapping Gen2 Mapping.persistable, Mapping.python, the last term
+  # in Mapping.python (the unqualified type name), or DatasetType to Gen3
   # StorageClass name.
   # If nothing matches, we try the persistable and unqualified type names as
   # StorageClass names themselves.
@@ -71,3 +74,4 @@ storageClasses:
   TransmissionCurve: TablePersistableTransmissionCurve
   BackgroundList: Background
   Config: Config
+  raw: ExposureU
