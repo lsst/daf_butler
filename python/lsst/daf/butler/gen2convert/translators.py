@@ -273,6 +273,10 @@ class Translator:
 # Add "skymap" to Gen3 ID if Gen2 ID has a "tract" key.
 Translator.addRule(SkyMapKeyHandler(), gen2keys=("tract",), consume=False)
 
+# Add "skymap" to Gen3 Id if DatasetType is one of a few specific ones
+for coaddName in ("deep", "goodSeeing", "psfMatched", "dcr"):
+    Translator.addRule(SkyMapKeyHandler(), datasetTypeName=f"{coaddName}Coadd_skyMap")
+
 # Translate Gen2 str patch IDs to Gen3 sequential integers.
 Translator.addRule(PatchKeyHandler(), gen2keys=("patch",))
 
