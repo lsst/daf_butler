@@ -44,7 +44,7 @@ schema:
         type: string
       -
         name: detector
-        type: string
+        type: int
       -
         name: visit
         type: int
