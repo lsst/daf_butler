@@ -78,7 +78,7 @@ class PosixDatastore(Datastore):
     """
 
     RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path", "storage_class",
-                                                      "checksum", "size"])
+                                                      "checksum", "file_size"])
 
     @classmethod
     def setConfigRoot(cls, root, config, full):
@@ -131,7 +131,7 @@ class PosixDatastore(Datastore):
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
-                 "size": int, "checksum": str, "dataset_id": int}
+                 "file_size": int, "checksum": str, "dataset_id": int}
         self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
                                                value=self.RecordTuple, key="dataset_id",
                                                registry=registry)
@@ -152,7 +152,7 @@ class PosixDatastore(Datastore):
         """
         self.records[ref.id] = self.RecordTuple(formatter=info.formatter, path=info.path,
                                                 storage_class=info.storageClass.name,
-                                                checksum=info.checksum, size=info.size)
+                                                checksum=info.checksum, file_size=info.size)
 
     def removeStoredFileInfo(self, ref):
         """Remove information about the file associated with this dataset.
@@ -189,7 +189,7 @@ class PosixDatastore(Datastore):
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
         return StoredFileInfo(record.formatter, record.path, storageClass,
-                              checksum=record.checksum, size=record.size)
+                              checksum=record.checksum, size=record.file_size)
 
     def exists(self, ref):
         """Check if the dataset exists in the datastore.

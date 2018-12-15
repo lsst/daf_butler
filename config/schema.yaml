@@ -44,7 +44,7 @@ schema:
         type: string
       -
         name: detector
-        type: string
+        type: int
       -
         name: visit
         type: int
@@ -528,11 +528,11 @@ schema:
           An alternate string identifer for the detector; may or may not
           be unique within an Instrument.
       -
-        name: group
+        name: raft
         type: string
         doc: >
           A string name for a group of detectors with an Instrument-dependent
-          interpretation, such as LSST's rafts.
+          interpretation.
       -
         name: purpose
         type: string
