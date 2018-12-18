@@ -68,14 +68,9 @@ class DimensionSetBase(metaclass=ABCMeta):
         return "{{{}}}".format(", ".join(self.names))
 
     def __hash__(self):
-        # Two possibilities in practice:
-        try:
-            # self.names is a frozenset, which is hashable but not sorted.
-            return hash(self.names)
-        except TypeError:
-            # self.names is an OrderedDict keys view, which is not hashable
-            # but is sorted.
-            return hash(tuple(self.names))
+        # self.names can be either a frozenset or OrderedDict keys view,
+        # make sure that hash is always consistent by converting to frozenset
+        return hash(frozenset(self.names))
 
     def __eq__(self, other):
         return self.names == toNameSet(other).names
