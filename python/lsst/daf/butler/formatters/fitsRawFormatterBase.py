@@ -210,8 +210,8 @@ class FitsRawFormatterBase(FitsExposureFormatter, metaclass=ABCMeta):
             full.setVariance(variance)
         metadata = self.readMetadata(fileDescriptor)
         info = full.getInfo()
-        info.setVisitInfo(self.makeVisitInfo(metadata))
         info.setWcs(self.makeWcs(metadata))
+        info.setVisitInfo(self.makeVisitInfo(metadata))
         # We shouldn't have to call stripMetadata() here because that should
         # have been done by makeVisitInfo and makeWcs (or by subclasses that
         # strip metadata for other components when constructing them).
