@@ -339,3 +339,23 @@ class DataId(Mapping):
             return entries
         return {k: v for k, v in entries.items()
                 if (metadata or k in self.keys()) and (region or k != "region")}
+
+    def __getnewargs_ex__(self):
+        """Support special pickling for DataId.
+
+        Default unpickling code calls `__new__` without arguments which does
+        not work for this class, need to provide minimal set of arguments to
+        to support logic in `__new__` and to run it without error. Pickle
+        still executes its regular logic to save instance attributes and
+        restore their state (after creating new instance with `__new__`).
+
+        Returns
+        -------
+        args : `tuple`
+            Positional arguments for `__new__`.
+        kwargs : `dict`
+            Keyword arguments for `__new__`.
+        """
+        args = (None,)
+        kwargs = dict(dimensions=self.dimensions)
+        return (args, kwargs)
