@@ -285,6 +285,38 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     datastoreStr = "datastore='./butler_test_repository"
     registryStr = "registry='sqlite:///:memory:'"
 
+    def testPutTemplates(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        butler = Butler(self.tmpConfigFile)
+
+        # Add needed Dimensions
+        butler.registry.addDimensionEntry("Instrument", {"instrument": "DummyCamComp"})
+        butler.registry.addDimensionEntry("PhysicalFilter", {"instrument": "DummyCamComp",
+                                                             "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
+                                                    "physical_filter": "d-r"})
+
+        # Create and store a dataset
+        metric = makeExampleMetrics()
+
+        # Create two almost-identical DatasetTypes (both will use default template)
+        dimensions = ("Instrument", "Visit")
+        butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
+        butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
+
+        dataId1 = {"instrument": "DummyCamComp", "visit": 423}
+        dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
+
+        # Put with exactly the data ID keys needed
+        butler.put(metric, "metric1", dataId1)
+        self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
+
+        # Put with extra data ID keys (physical_filter is an optional dependency);
+        # should not change template (at least the way we're defining them
+        # to behave now; the important thing is that they must be consistent).
+        butler.put(metric, "metric2", dataId2)
+        self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
+
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     """InMemoryDatastore specialization of a butler"""
