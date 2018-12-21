@@ -1,2 +1,2 @@
 # This file defines a default
-default: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
+default: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"

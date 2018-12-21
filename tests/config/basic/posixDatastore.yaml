@@ -2,9 +2,9 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: ./butler_test_repository
   templates:
-    default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{filter:?}/{instrument:?}_{visit:?}"
-    calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{filter:?}_{component:?}"
-    metric: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{filter}_{component:?}"
+    default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
+    calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
+    metric: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
   formatters:
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
