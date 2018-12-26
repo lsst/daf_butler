@@ -347,6 +347,22 @@ class SqlRegistry(Registry):
         # is basically a no-op.
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
 
+        # Expand Dimension links to insert into the table to include optional
+        # dependencies.
+        if not self.limited:
+            self.queryDataId(dataId, optionals=True)
+        links = dict(dataId)
+        for link in dataId.dimensions.optionals.links:
+            if link in links:
+                continue
+            for dim in dataId.dimensions.withLink(link):
+                if dim not in dataId.dimensions:
+                    continue
+                try:
+                    links[link] = dataId.entries[dim][link]
+                except KeyError:
+                    raise LookupError(f"'{link}' not provided in data ID, but Registry is limited.")
+
         # Collection cannot have more than one unique DataId of the same
         # DatasetType, this constraint is checked in `associate` method
         # which raises.
@@ -369,7 +385,7 @@ class SqlRegistry(Registry):
         result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
                                                                        run_id=run.id,
                                                                        quantum_id=None,
-                                                                       **dataId))
+                                                                       **links))
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0],
                                 run=run)
         # A dataset is always associated with its Run collection
