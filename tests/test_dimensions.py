@@ -72,7 +72,7 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
     def checkGraphInvariants(self, graph):
         """Run tests on DimensionGraph that should pass for any instance.
         """
-        self.checkSetInvariants(graph.asSet)
+        self.checkSetInvariants(graph.toSet())
         self.assertLessEqual(graph, self.universe)
         for dim in graph:
             self.assertIn(dim, graph)

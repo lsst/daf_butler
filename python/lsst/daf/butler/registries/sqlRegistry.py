@@ -352,7 +352,7 @@ class SqlRegistry(Registry):
         if not self.limited:
             self.queryDataId(dataId, implied=True)
         links = dict(dataId)
-        for link in dataId.dimensions.implied.links:
+        for link in dataId.dimensions.implied().links:
             if link in links:
                 continue
             for dim in dataId.dimensions.withLink(link):

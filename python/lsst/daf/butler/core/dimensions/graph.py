@@ -203,20 +203,31 @@ class DimensionGraph:
         """
         return self._universe
 
-    @property
-    def asSet(self):
-        """A set view of the `Dimensions` in ``self`` (`DimensionSet`).
+    def toSet(self):
+        """Return a `DimensionSet` with the same dimensions as ``self``.
         """
         return self._dimensions
 
-    @property
-    def implied(self):
-        """A set containing all (recursive) implied dependencies of the
-        dimensions in this graph that are not included in the graph itself
-        (`DimensionSet`).
+    def implied(self, only=True):
+        """Return the (recursive) implied dependencies of the dimensions in
+        this graph.
+
+        Parameters
+        ----------
+        only : `bool`
+            If `True` (default), do not include dimensions in ``self``.
+
+        Return
+        ------
+        set : `DimensionSet`
+            A set containing dimensions that are implied dependencies of those
+            in the graph, possibly (if ``only`` is `False`) along with those
+            in the graph.
         """
-        everything = self.asSet.expanded(implied=True)
-        return everything - self.asSet
+        everything = self._dimensions.expanded(implied=True)
+        if only:
+            everything -= self._dimensions
+        return everything
 
     @property
     def elements(self):

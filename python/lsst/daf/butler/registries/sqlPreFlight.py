@@ -176,7 +176,7 @@ class SqlPreFlight:
         # Extend dimensions with the "implied" superset, so that joins work
         # correctly. This may bring more tables into query than really needed,
         # potential for optimization.
-        dimensions = dimensions.union(dimensions.implied)
+        dimensions = dimensions.union(dimensions.implied())
 
         fromJoin = None
         for dimension in dimensions:
