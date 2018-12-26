@@ -80,8 +80,8 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
             self.assertIs(graph[dim.name], dim)
             self.assertIs(graph.get(dim.name), dim)
             self.assertIsInstance(dim, Dimension)
-            self.assertEqual(dim.dependencies(), dim.dependencies(optional=False))
-            self.assertLessEqual(dim.dependencies(), dim.dependencies(optional=True))
+            self.assertEqual(dim.dependencies(), dim.dependencies(implied=False))
+            self.assertLessEqual(dim.dependencies(), dim.dependencies(implied=True))
             self.assertLessEqual(dim.dependencies(), graph)
 
         self.checkSetInvariants(graph.joins(summaries=True))
@@ -132,9 +132,9 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
         self.assertIsNone(graph3.getRegionHolder())
         self.assertCountEqual(graph3.joins(), [])
         visit = self.universe["Visit"]
-        self.assertCountEqual(visit.dependencies(optional=True).names,
+        self.assertCountEqual(visit.dependencies(implied=True).names,
                               ["Instrument", "PhysicalFilter"])
-        self.assertCountEqual(visit.dependencies(optional=False).names, ["Instrument"])
+        self.assertCountEqual(visit.dependencies(implied=False).names, ["Instrument"])
 
     def testSkyMapDimensions(self):
         """Test that the SkyMap dimensions and joins we expect to be defined
@@ -183,7 +183,7 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
             Name of the Dimensions of the left-hand side of the join.
         rhsNames : `list` of `str`
             Name of the Dimensions of the right-hand side of the join.
-        joinName : `str`, optional
+        joinName : `str`, implied
             Name of the DimensionJoin to be tested; if `None`, computed by
             concatenating ``lhsNames`` and ``rhsNames``.
         """
@@ -197,7 +197,7 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
         self.assertIsNotNone(join)
         self.assertLess(lhs, both)
         self.assertGreater(both, rhs)
-        self.assertGreaterEqual(lhs, join.lhs)  # [lr]hs has optionals, join.[lr]hs does not
+        self.assertGreaterEqual(lhs, join.lhs)  # [lr]hs has implieds, join.[lr]hs does not
         self.assertGreaterEqual(rhs, join.rhs)
         allExpectedJoins = set([join]).union(lhs.joins(summaries=False), rhs.joins(summaries=False))
         self.assertEqual(both.joins(summaries=False), allExpectedJoins)
@@ -227,9 +227,9 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
             # expands to [Detector, Instrument]
             "di": self.universe.extract(["Detector"]),
             # expands to [PhysicalFilter, Instrument, AbstractFilter]
-            "pia": self.universe.extract(["PhysicalFilter"], optional=True),
+            "pia": self.universe.extract(["PhysicalFilter"], implied=True),
             # expands to [Visit, PhysicalFilter, Instrument, AbstractFilter]
-            "vpia": self.universe.extract(["Visit"], optional=True),
+            "vpia": self.universe.extract(["Visit"], implied=True),
             # expands to [Tract, SkyMap]
             "ts": self.universe.extract(["Tract"]),
             # empty
@@ -260,7 +260,7 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(graphs["di"] & graphs["ts"],
                          self.universe.extract([]))
         self.assertEqual(graphs["di"] | graphs["pia"],
-                         self.universe.extract(["Detector", "PhysicalFilter"], optional=True))
+                         self.universe.extract(["Detector", "PhysicalFilter"], implied=True))
         self.assertEqual(graphs["di"] & graphs["pia"], self.universe.extract(["Instrument"]))
         self.assertEqual(graphs["vpia"] | graphs["pia"], graphs["vpia"])
         self.assertEqual(graphs["vpia"] & graphs["pia"], graphs["pia"])

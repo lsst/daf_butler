@@ -829,7 +829,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @disableWhenLimited
-    def queryDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, optionals=False,
+    def queryDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, implied=False,
                     update=False, **kwds):
         """Expand a data ID to include additional information.
 
@@ -851,9 +851,9 @@ class Registry(metaclass=ABCMeta):
             If `True` and the given `DataId` is uniquely associated with a
             region on the sky, obtain that region from the `Registry` and
             attach it as ``dataId.region``.
-        optionals : `bool`
-            If `True`, ensure all link fields of optional
-            dependencies have values in entries.
+        implied : `bool`
+            If `True`, ensure all link fields of implied dependencies have
+            values in entries.
         update : `bool`
             If `True`, assume existing entries and regions in the given
             `DataId` are out-of-date and should be updated by values in the
@@ -894,8 +894,8 @@ class Registry(metaclass=ABCMeta):
         else:
             metadata = {}
 
-        if optionals:
-            for link in dataId.dimensions.optionals.links:
+        if implied:
+            for link in dataId.dimensions.implied.links:
                 for dim in dataId.dimensions.withLink(link):
                     if dim not in dataId.dimensions:
                         continue

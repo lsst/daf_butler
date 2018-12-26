@@ -173,16 +173,16 @@ class SqlPreFlight:
         _LOG.debug("selectColumns: %s", selectColumns)
         _LOG.debug("linkColumnIndices: %s", linkColumnIndices)
 
-        # Extend dimensions with the "optional" superset, so that joins work
+        # Extend dimensions with the "implied" superset, so that joins work
         # correctly. This may bring more tables into query than really needed,
         # potential for optimization.
-        dimensions = dimensions.union(dimensions.optionals)
+        dimensions = dimensions.union(dimensions.implied)
 
         fromJoin = None
         for dimension in dimensions:
             _LOG.debug("processing Dimension: %s", dimension.name)
             if dimension.name in self._schema.tables:
-                fromJoin = self._joinOnForeignKey(fromJoin, dimension, dimension.dependencies(optional=True))
+                fromJoin = self._joinOnForeignKey(fromJoin, dimension, dimension.dependencies(implied=True))
 
         joinedRegionTables = set()
         regionColumnIndices = {}

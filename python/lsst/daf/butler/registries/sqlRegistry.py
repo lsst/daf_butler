@@ -347,12 +347,12 @@ class SqlRegistry(Registry):
         # is basically a no-op.
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
 
-        # Expand Dimension links to insert into the table to include optional
+        # Expand Dimension links to insert into the table to include implied
         # dependencies.
         if not self.limited:
-            self.queryDataId(dataId, optionals=True)
+            self.queryDataId(dataId, implied=True)
         links = dict(dataId)
-        for link in dataId.dimensions.optionals.links:
+        for link in dataId.dimensions.implied.links:
             if link in links:
                 continue
             for dim in dataId.dimensions.withLink(link):
