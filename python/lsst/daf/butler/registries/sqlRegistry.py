@@ -1034,7 +1034,8 @@ class SqlRegistry(Registry):
         row = self._connection.execute(
             select(cols)
             .where(
-                and_(table.c[name] == value for name, value in dataId.items())
+                and_(table.c[name] == value for name, value in dataId.items()
+                     if name in element.primaryKey)
             )
         ).fetchone()
         if row is None:

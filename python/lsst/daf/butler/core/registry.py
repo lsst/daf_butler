@@ -829,7 +829,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @disableWhenLimited
-    def queryDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, **kwds):
+    def queryDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, optionals=False,
+                    update=False, **kwds):
         """Expand a data ID to include additional information.
 
         Parameters
@@ -850,6 +851,15 @@ class Registry(metaclass=ABCMeta):
             If `True` and the given `DataId` is uniquely associated with a
             region on the sky, obtain that region from the `Registry` and
             attach it as ``dataId.region``.
+        optionals : `bool`
+            If `True`, ensure all link fields of optional
+            dependencies have values in entries.
+        update : `bool`
+            If `True`, assume existing entries and regions in the given
+            `DataId` are out-of-date and should be updated by values in the
+            database.  If `False`, existing values will be assumed to be
+            correct and database queries will only be executed if they are
+            missing.
         kwds
             Additional keyword arguments passed to the `DataId` constructor
             to convert ``dataId`` to a true `DataId` or augment an existing
@@ -867,27 +877,39 @@ class Registry(metaclass=ABCMeta):
         """
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
 
-        if region:
+        if region and (update or dataId.region is None):
             holder = dataId.dimensions.getRegionHolder()
             if holder is not None:
                 dataId.region = self._queryRegion(holder, DataId(dataId, dimensions=holder.graph()))
 
         if metadata is not None:
-            # By the time we get here 'dimension' and 'dataId.dimension'
-            # correspond to the same thing, but:
-            #  - 'dimension' might be a string or a `DimensionElement`
-            #  - 'dataId.dimension' is definitely a `Dimension`
-            #  - 'dataId.dimension' may not be None even if 'dimension' is
             if dimension is not None and not isinstance(metadata, Mapping):
-                # If a single dimension was passed explicitly, permit 'metadata' to
-                # be a sequence corresponding to just that dimension.
-                result = self._queryMetadata(dataId.dimension, dataId, metadata)
-                dataId.entries[dataId.dimension].update(result)
+                # If a single dimension was passed explicitly, permit
+                # 'metadata' to be a sequence corresponding to just that
+                # dimension (by normalizing it into a dict-of-sets now).
+                metadata = {dimension: set(metadata)}
             else:
-                for element, columns in metadata.items():
-                    subDataId = DataId(dataId, dimension=element)
-                    result = self._queryMetadata(element, subDataId, columns)
-                    dataId.entries[element].update(result)
+                # we may mutate this later; make a true dict-of-sets copy
+                metadata = {element: set(fields) for element, fields in metadata.items()}
+        else:
+            metadata = {}
+
+        if optionals:
+            for link in dataId.dimensions.optionals.links:
+                for dim in dataId.dimensions.withLink(link):
+                    if dim not in dataId.dimensions:
+                        continue
+                    metadata.setdefault(dim, set()).add(link)
+
+        for element, fields in metadata.items():
+            # make sure we have a DimensionElement instance, not a str name
+            element = dataId.dimensions.elements[element]
+            if not update:
+                fields -= dataId.entries[element].keys()
+            if fields:
+                result = self._queryMetadata(element, dataId, fields)
+                for k, v in result.items():
+                    dataId.entries[element][k] = v
 
         return dataId
 
@@ -949,7 +971,8 @@ class Registry(metaclass=ABCMeta):
             A dictionary of primary key name-value pairs that uniquely identify
             a row in the table for ``element``.  Note that this must be a
             true `DataId` instance, not a `dict`, unlike more flexible
-            public `Registry` methods.
+            public `Registry` methods.  May include link fields beyond those
+            needed to identify ``element``.
         columns : iterable of `str`
             String column names to query values for.
 
