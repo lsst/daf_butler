@@ -238,8 +238,8 @@ class DatasetRef:
     datasetType : `DatasetType`
         The `DatasetType` for this Dataset.
     dataId : `dict` or `DataId`
-        A `dict` of `Dimension` primary key fields that label the
-        `DatasetRef` within a Collection.
+        A `dict` of `Dimension` link fields that labels the Dataset within a
+        Collection.
     id : `int`, optional
         A unique identifier.
         Normally set to `None` and assigned by `Registry`
@@ -278,8 +278,8 @@ class DatasetRef:
 
     @property
     def dataId(self):
-        """A `dict` of `Dimension` primary key fields that label the
-        `DatasetRef` within a Collection (`dict` or `DataId`).
+        """A `dict` of `Dimension` link fields that labels the Dataset
+        within a Collection (`dict` or `DataId`).
         """
         return self._dataId
 

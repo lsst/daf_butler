@@ -341,12 +341,15 @@ class DimensionSet(DimensionSetBase, Set):
         """
         return self._elements.keys()
 
-    @property
     def links(self):
-        """The names of all fields that uniquely identify these dimensions in
-        a data ID dict (`frozenset` of `str`).
+        """Return the names of all fields that uniquely identify these
+        dimensions in a data ID dict.
+
+        Returns
+        -------
+        links : `frozenset` of `str`
         """
-        return frozenset().union(*(d.primaryKey for d in self))
+        return frozenset().union(*(d.links() for d in self))
 
     def expanded(self, implied=False):
         """Return a new `DimensionSet` that has been expanded to include

@@ -89,9 +89,8 @@ def updateExposureEntryFromObsInfo(dataId, obsInfo):
     Parameters
     ----------
     dataId : `dict` or `DataId`
-        Dictionary of Dimension primary/foreign key values for (at least)
-        Exposure. If a true `DataId`, this object will be modified and
-        returned.
+        Dictionary of Dimension link fields for (at least) Exposure. If a true
+        `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the Exposure.
@@ -118,8 +117,8 @@ def updateVisitEntryFromObsInfo(dataId, obsInfo):
     Parameters
     ----------
     dataId : `dict` or `DataId`
-        Dictionary of Dimension primary/foreign key values for (at least)
-        Visit. If a true `DataId`, this object will be modified and returned.
+        Dictionary of Dimension link fields for (at least) Visit. If a true
+        `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the Exposure.

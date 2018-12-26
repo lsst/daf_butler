@@ -136,7 +136,8 @@ class DataId(Mapping):
                 if extra is not None:
                     allLinks.update(extra)
                 allLinks.update(kwds)
-                dimensions = universe.extract(dim for dim in universe if dim.link.issubset(allLinks))
+                dimensions = universe.extract(dim for dim in universe
+                                              if dim.links(expand=False).issubset(allLinks))
             else:
                 # Set DimensionGraph to the full set of dependencies for the
                 # single Dimension that was provided.
@@ -163,7 +164,7 @@ class DataId(Mapping):
         self._links = {
             linkName: linkValue for linkName, linkValue
             in itertools.chain(dataId.items(), extra.items(), kwds.items())
-            if linkName in self._dimensions.links
+            if linkName in self._dimensions.links()
         }
 
         # Transfer more stuff if we're starting from a real DataId
@@ -205,7 +206,7 @@ class DataId(Mapping):
             for element, subdict in entries.items():
                 self.entries[element].update(subdict)
 
-        missing = self.dimensions.links - self._links.keys()
+        missing = self.dimensions.links() - self._links.keys()
         for linkName in missing:
             # Didn't get enough key-value pairs to identify all dimensions
             # from the links; look in entries for those.

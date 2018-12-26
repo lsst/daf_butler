@@ -895,7 +895,7 @@ class Registry(metaclass=ABCMeta):
             metadata = {}
 
         if implied:
-            for link in dataId.dimensions.implied().links:
+            for link in dataId.dimensions.implied().links():
                 for dim in dataId.dimensions.withLink(link):
                     if dim not in dataId.dimensions:
                         continue

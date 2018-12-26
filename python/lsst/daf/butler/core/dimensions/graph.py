@@ -132,9 +132,9 @@ class DimensionGraph:
                     universe._dimensions._elements[elementName] = element
                 universe._elements._elements[elementName] = element
 
-                for link in element.primaryKey:
+                for link in element.links():
                     backrefs.setdefault(link, set()).add(elementName)
-                for link in element.dependencies(implied=True, required=False).links:
+                for link in element.dependencies(implied=True, required=False).links():
                     backrefs.setdefault(link, set()).add(elementName)
                 del elementsToDo[elementName]
 
@@ -288,12 +288,15 @@ class DimensionGraph:
         """
         return self._dimensions.names
 
-    @property
     def links(self):
-        """The names of all fields that uniquely identify these dimensions in
-        a data ID dict (`frozenset` of `str`).
+        """Return the names of all fields that uniquely identify these
+        dimensions in a data ID dict.
+
+        Returns
+        -------
+        links : `frozenset` of `str`
         """
-        return self._dimensions.links
+        return self._dimensions.links()
 
     def __hash__(self):
         return hash(self._dimensions)
@@ -452,7 +455,7 @@ class DimensionGraph:
         Parameters
         ----------
         link : `str`
-            Primary key field name.
+            Key field name.
 
         Returns
         -------

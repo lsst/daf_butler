@@ -48,7 +48,7 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
     # hasRegion : `bool`
     #     Whether entries for this dimension are associated with a region
     #     on the sky.
-    # link : iterable of `str`
+    # links : iterable of `str`
     #     The names of primary key fields used by this element but not any of
     #     its dependencies.
     # required : iterable of `str`
@@ -60,20 +60,20 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
     # doc : `str`
     #     Documentation string for this element.
     #
-    def __init__(self, universe, name, hasRegion, link, required, implied, doc):
+    def __init__(self, universe, name, hasRegion, links, required, implied, doc):
         from .sets import DimensionSet
         self._universe = universe
         self._name = name
         self._hasRegion = hasRegion
-        self._link = frozenset(link)
+        self._localLinks = frozenset(links)
         self._doc = doc
         self._requiredDependencies = DimensionSet(universe, required, expand=True, implied=False)
         self._impliedDependencies = DimensionSet(universe, implied, expand=False)
         # Compute _primaryKeys dict, used to back primaryKeys property.
-        primaryKey = set(self.link)
+        expandedLinks = set(self._localLinks)
         for dimension in self.dependencies(implied=False):
-            primaryKey |= dimension.link
-        self._primaryKey = frozenset(primaryKey)
+            expandedLinks |= dimension.links(expand=True)
+        self._expandedLinks = frozenset(expandedLinks)
 
     def __eq__(self, other):
         try:
@@ -111,19 +111,25 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         """
         return self._doc
 
-    @property
-    def primaryKey(self):
-        """The names of fields that uniquely identify this dimension in a
-        data ID dict (`frozenset` of `str`).
-        """
-        return self._primaryKey
+    def links(self, expand=True):
+        """Return the names of fields that uniquely identify this dimension in
+        a data ID dict.
 
-    @property
-    def link(self):
-        """Primary key fields that are used only by this dimension, not any
-        dependencies (`frozenset` of `str`).
+        Parameters
+        ----------
+        expand: `bool`
+            If `True` (default) include links associated with required
+            dependencies.
+
+        Returns
+        -------
+        links : `frozenset` of `str`
+            Set of field names.
         """
-        return self._link
+        if expand:
+            return self._expandedLinks
+        else:
+            return self._localLinks
 
     def dependencies(self, required=True, implied=False):
         """Return the set of dimensions this dimension depends on.
@@ -191,7 +197,7 @@ class Dimension(DimensionElement):
     #     Sub-config corresponding to this `Dimension`.
     #
     def __init__(self, universe, name, config):
-        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), link=config["link"],
+        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), links=config["link"],
                          required=config.get(".dependencies.required", ()),
                          implied=config.get(".dependencies.implied", ()),
                          doc=config["doc"])
@@ -228,7 +234,7 @@ class DimensionJoin(DimensionElement):
 
         lhs = list(config["lhs"])
         rhs = list(config["rhs"])
-        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), link=(),
+        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), links=(),
                          required=lhs + rhs, implied=(), doc=config["doc"])
         self._lhs = DimensionSet(universe, lhs, implied=False)
         self._rhs = DimensionSet(universe, rhs, implied=False)
