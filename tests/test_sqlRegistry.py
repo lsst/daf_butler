@@ -405,7 +405,7 @@ class RegistryTests(metaclass=ABCMeta):
     def testDatasetUnit(self):
         registry = self.makeRegistry()
         dimensionName = "Instrument"
-        dimensionValue = {"instrument": "DummyCam"}
+        dimensionValue = {"instrument": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
         if registry.limited:
             with self.assertRaises(NotImplementedError):
                 registry.addDimensionEntry(dimensionName, dimensionValue)
