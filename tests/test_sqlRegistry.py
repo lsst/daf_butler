@@ -269,7 +269,7 @@ class RegistryTests(metaclass=ABCMeta):
             registry.addDimensionEntry("Visit",
                                        {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
-        dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"}
+        dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
         run = registry.makeRun(collection=collection)
         inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
         outputRef = registry.find(collection, datasetType, dataId)
@@ -279,11 +279,11 @@ class RegistryTests(metaclass=ABCMeta):
             dataId = {"instrument": "DummyCam", "abstract_filter": "g"}  # should be visit
             registry.find(collection, datasetType, dataId)
         # Check that different dataIds match to different datasets
-        dataId1 = {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"}
+        dataId1 = {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r", "abstract_filter": None}
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
-        dataId2 = {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r"}
+        dataId2 = {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r", "abstract_filter": None}
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
-        dataId3 = {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"}
+        dataId3 = {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r", "abstract_filter": None}
         inputRef3 = registry.addDataset(datasetType, dataId=dataId3, run=run)
         self.assertEqual(registry.find(collection, datasetType, dataId1), inputRef1)
         self.assertEqual(registry.find(collection, datasetType, dataId2), inputRef2)
@@ -373,6 +373,7 @@ class RegistryTests(metaclass=ABCMeta):
         ref2_run3 = registry.addDataset(datasetType2, dataId=dataId2, run=run3)
         for ref in (ref1_run1, ref2_run1, ref1_run2, ref2_run2, ref1_run3, ref2_run3):
             self.assertEqual(ref.dataId.entries[registry.dimensions["Visit"]]["physical_filter"], "d-r")
+            self.assertIsNone(ref.dataId.entries[registry.dimensions["PhysicalFilter"]]["abstract_filter"])
         # should have exactly 4 rows in Dataset
         self.assertRowCount(registry, "Dataset", 6)
         self.assertRowCount(registry, "DatasetCollection", 6)
@@ -529,7 +530,7 @@ class RegistryTests(metaclass=ABCMeta):
         )
 
         def getRegion(dataId):
-            return registry.queryDataId(dataId, region=True).region
+            return registry.expandDataId(dataId, region=True).region
 
         # Get region for a tract
         self.assertEqual(regionTract, getRegion({"skymap": "DummySkyMap", "tract": 0}))

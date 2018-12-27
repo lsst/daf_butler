@@ -512,7 +512,7 @@ class SqlPreFlight:
                                                if dim.links().issubset(rowDataIdDict.keys()))
             # Remove all of the link columns that weren't needed by the
             # Dimensions we selected (in practice this is just ExposureRange
-            # links right now, so this step might not be needed one we make
+            # links right now, so this step might not be needed once we make
             # that less of a special case).
             dataId = DataId(
                 {k: v for k, v in rowDataIdDict.items() if k in rowDimensions.links()},

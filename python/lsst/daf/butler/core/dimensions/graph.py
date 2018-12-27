@@ -151,6 +151,7 @@ class DimensionGraph:
         # names into true DimensionSets in unverse._backrefs
         for linkName, nameSet in backrefs.items():
             universe._backrefs[linkName] = DimensionSet(universe, nameSet)
+
         return universe
 
     def __init__(self, universe, dimensions=(), joins=(), implied=False):

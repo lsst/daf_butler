@@ -101,7 +101,7 @@ def updateExposureEntryFromObsInfo(dataId, obsInfo):
         A data ID with the entry for the Exposure dimension updated.
     """
     dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions["Exposure"]].update(
+    dataId.entries[dataId.dimensions()["Exposure"]].update(
         datetime_begin=obsInfo.datetime_begin.to_datetime(),
         datetime_end=obsInfo.datetime_end.to_datetime(),
         exposure_time=obsInfo.exposure_time.to_value("s"),
@@ -129,7 +129,7 @@ def updateVisitEntryFromObsInfo(dataId, obsInfo):
         A data ID with the entry for the Visit dimension updated.
     """
     dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions["Exposure"]].update(
+    dataId.entries[dataId.dimensions()["Visit"]].update(
         datetime_begin=obsInfo.datetime_begin.to_datetime(),
         datetime_end=obsInfo.datetime_end.to_datetime(),
         exposure_time=obsInfo.exposure_time.to_value("s"),

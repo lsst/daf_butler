@@ -184,7 +184,7 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_(self._schema.datasetTable.c[name] == dataId[name]
-                                for name in dataId.dimensions.links())
+                                for name in dataId.dimensions().links())
         result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
             datasetTable.join(datasetCollectionTable)).where(and_(
                 datasetTable.c.dataset_type_name == datasetType.name,
@@ -350,18 +350,8 @@ class SqlRegistry(Registry):
         # Expand Dimension links to insert into the table to include implied
         # dependencies.
         if not self.limited:
-            self.queryDataId(dataId, implied=True)
-        links = dict(dataId)
-        for link in dataId.dimensions.implied().links():
-            if link in links:
-                continue
-            for dim in dataId.dimensions.withLink(link):
-                if dim not in dataId.dimensions:
-                    continue
-                try:
-                    links[link] = dataId.entries[dim][link]
-                except KeyError:
-                    raise LookupError(f"'{link}' not provided in data ID, but Registry is limited.")
+            self.expandDataId(dataId)
+        links = dataId.implied()
 
         # Collection cannot have more than one unique DataId of the same
         # DatasetType, this constraint is checked in `associate` method
@@ -947,7 +937,7 @@ class SqlRegistry(Registry):
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
         # The given dimension should be the only leaf dimension of the graph,
         # and this should ensure it's a true `Dimension`, not a `str` name.
-        dimension, = dataId.dimensions.leaves
+        dimension, = dataId.dimensions().leaves
         if entry is not None:
             dataId.entries[dimension].update(entry)
         table = self._schema.tables[dimension.name]
@@ -967,7 +957,7 @@ class SqlRegistry(Registry):
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions)
         # The given dimension should be the only leaf dimension of the graph,
         # and this should ensure it's a true `Dimension`, not a `str` name.
-        dimension, = dataId.dimensions.leaves
+        dimension, = dataId.dimensions().leaves
         table = self._schema.tables[dimension.name]
         result = self._connection.execute(select([table]).where(
             and_(table.c[name] == value for name, value in dataId.items()))).fetchone()
@@ -983,10 +973,10 @@ class SqlRegistry(Registry):
         dataId = DataId(dataId, universe=self.dimensions, region=region, **kwds)
         if dataId.region is None:
             raise ValueError("No region provided.")
-        holder = dataId.dimensions.getRegionHolder()
-        if holder.links() != dataId.dimensions.links():
+        holder = dataId.dimensions().getRegionHolder()
+        if holder.links() != dataId.dimensions().links():
             raise ValueError(
-                f"Data ID contains superfluous keys: {dataId.dimensions.links() - holder.links()}"
+                f"Data ID contains superfluous keys: {dataId.dimensions().links() - holder.links()}"
             )
         table = self._schema.tables[holder.name]
         # Update the region for an existing entry
@@ -1009,7 +999,7 @@ class SqlRegistry(Registry):
             )
         # Update the join table between this Dimension and SkyPix, if it isn't
         # itself a view.
-        join = dataId.dimensions.union(["SkyPix"]).joins().findIf(
+        join = dataId.dimensions().union(["SkyPix"]).joins().findIf(
             lambda join: join != holder and join.name not in self._schema.views
         )
         if join is None:

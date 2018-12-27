@@ -829,9 +829,12 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @disableWhenLimited
-    def queryDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, implied=False,
-                    update=False, **kwds):
+    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False, **kwds):
         """Expand a data ID to include additional information.
+
+        `expandDataId` always returns a true `DataId` and ensures that its
+        `~DataId.entries` dict contains (at least) values for all implied
+        dependencies.
 
         Parameters
         ----------
@@ -851,9 +854,6 @@ class Registry(metaclass=ABCMeta):
             If `True` and the given `DataId` is uniquely associated with a
             region on the sky, obtain that region from the `Registry` and
             attach it as ``dataId.region``.
-        implied : `bool`
-            If `True`, ensure all link fields of implied dependencies have
-            values in entries.
         update : `bool`
             If `True`, assume existing entries and regions in the given
             `DataId` are out-of-date and should be updated by values in the
@@ -877,82 +877,100 @@ class Registry(metaclass=ABCMeta):
         """
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
 
-        if region and (update or dataId.region is None):
-            holder = dataId.dimensions.getRegionHolder()
-            if holder is not None:
-                dataId.region = self._queryRegion(holder, DataId(dataId, dimensions=holder.graph()))
-
+        # Interpret the 'metadata' argument and initialize the 'fieldsToGet'
+        # dict, which maps each DimensionElement instance to a set of field
+        # names.
         if metadata is not None:
             if dimension is not None and not isinstance(metadata, Mapping):
                 # If a single dimension was passed explicitly, permit
                 # 'metadata' to be a sequence corresponding to just that
                 # dimension (by normalizing it into a dict-of-sets now).
-                metadata = {dimension: set(metadata)}
+                fieldsToGet = {self.universe[dimension]: set(metadata)}
             else:
                 # we may mutate this later; make a true dict-of-sets copy
-                metadata = {element: set(fields) for element, fields in metadata.items()}
+                fieldsToGet = {self.universe.elements[element]: set(fields)
+                               for element, fields in metadata.items()}
         else:
-            metadata = {}
+            fieldsToGet = {}
 
-        if implied:
-            for link in dataId.dimensions.implied().links():
-                for dim in dataId.dimensions.withLink(link):
-                    if dim not in dataId.dimensions:
-                        continue
-                    metadata.setdefault(dim, set()).add(link)
+        # If 'region' was passed, add a query for that to fieldsToGet as well.
+        if region and (update or dataId.region is None):
+            holder = dataId.dimensions().getRegionHolder()
+            if holder is not None:
+                if holder.name == "SkyPix":
+                    # SkyPix is special; we always obtain those regions from
+                    # self.pixelization
+                    dataId.region = self.pixelization.pixel(dataId["skypix"])
+                else:
+                    fieldsToGet.setdefault(holder, set()).add("region")
 
-        for element, fields in metadata.items():
-            # make sure we have a DimensionElement instance, not a str name
-            element = dataId.dimensions.elements[element]
+        # We now process fieldsToGet with calls to _queryMetadata via a
+        # depth-first traversal of the dependency graph.  As we traverse, we
+        # update...
+
+        # A dictionary containing all link values.  This starts with the given
+        # dataId, but we'll update it to include links for optional
+        # dependencies.
+        allLinks = dict(dataId)
+
+        # A set of DimensionElement names recording the vertices we've
+        # processed:
+        visited = set()
+
+        def visit(element):
+            assert element.links() <= allLinks.keys()
+            if element.name in visited:
+                return
+            entries = dataId.entries[element]
+            dependencies = element.dependencies(implied=True)
+            # Get the dictionary of fields we want to retrieve.
+            fieldsToGetNow = fieldsToGet.setdefault(element, set())
+            # Note which links to dependencies we need to query for and which
+            # we already know.  Make sure the ones we know are in the entries
+            # dict for this element.
+            linksWeKnow = dependencies.links().intersection(allLinks.keys())
+            linksWeNeed = dependencies.links() - linksWeKnow
+            fieldsToGetNow |= linksWeNeed
+            entries.update((link, allLinks[link]) for link in linksWeKnow)
+            # Remove fields that are already present in the dataId.
             if not update:
-                fields -= dataId.entries[element].keys()
-            if fields:
-                result = self._queryMetadata(element, dataId, fields)
-                for k, v in result.items():
-                    dataId.entries[element][k] = v
+                fieldsToGetNow -= entries.keys()
+            # Remove fields that are part of the primary key of this element;
+            # we have to already know those if the query is going to work.
+            # (and we asserted that we do know them up at the top).
+            fieldsToGetNow -= element.links()
+            # Actually do the query - only if there's actually anything left
+            # to query.  Put the results in the entries dict.
+            if fieldsToGetNow:
+                result = self._queryMetadata(element, allLinks, fieldsToGetNow)
+                if "region" in result:
+                    encoded = result.pop("region")
+                    if encoded is None:
+                        dataId.region = None
+                    else:
+                        dataId.region = ConvexPolygon.decode(encoded)
+                entries.update(result)
+            # Update the running dictionary of link values and the marker set.
+            allLinks.update((link, entries[link]) for link in dependencies.links())
+            visited.add(element.name)
+            # Recurse to dependencies.  Note that at this point we know that
+            # allLinks has all of the links for any element we're recursing to,
+            # either because we started with them in the data ID, they were
+            # already in the entries dict, or we queried for them above.
+            for other in dependencies:
+                visit(other)
+
+        # Kick off the traversal with joins, which are never dependencies of
+        # any other elements.
+        for join in dataId.dimensions().joins():
+            visit(join)
+
+        # Now traverse over the dimensions that are not dependencies of any
+        # other dependencies in this particular graph.
+        for dim in dataId.dimensions().leaves:
+            visit(dim)
 
         return dataId
-
-    @disableWhenLimited
-    def _queryRegion(self, dimension, dataId):
-        """Get the region associated with a dataId.
-
-        This is conceptually a "protected" method that may be overridden by
-        subclasses but should not be called directly by users, who should use
-        ``queryDataId(..., region=True)`` instead.
-
-        Parameters
-        ----------
-        dimension : `DimensionElement`
-            The `Dimension` or `DimensionJoin` that holds the region.  Must
-            be equal to ``dataId.dimensions.getRegionHolder()``.
-        dataId : `DataId`
-            A dictionary of primary key name-value pairs that uniquely identify
-            a row in the table for ``dimension``.  Note that this must be a
-            true `DataId` instance, not a `dict`, unlike more flexible
-            public `Registry` methods.
-
-        Returns
-        -------
-        region : `lsst.sphgeom.ConvexPolygon`
-            The region associated with a ``dataId`` or `None` if not present.
-
-        Raises
-        ------
-        LookupError
-            Raised if no entry for the given data ID exists.
-        NotImplementedError
-            Raised if `limited` is `True`.
-        """
-        if dimension.name == "SkyPix":
-            # SkyPix is special; we always obtain those regions from
-            # self.pixelization
-            return self.pixelization.pixel(dataId["skypix"])
-        metadata = self._queryMetadata(dimension, dataId, ["region"])
-        encoded = metadata["region"]
-        if encoded is None:
-            return None
-        return ConvexPolygon.decode(encoded)
 
     @abstractmethod
     @disableWhenLimited
@@ -961,18 +979,16 @@ class Registry(metaclass=ABCMeta):
 
         This is conceptually a "protected" method that must be overridden by
         subclasses but should not be called directly by users, who should use
-        ``queryDataId(..., columns={...})`` instead.
+        ``expandDataId(dataId, dimension=element, metadata={...})`` instead.
 
         Parameters
         ----------
         element : `DimensionElement`
             The `Dimension` or `DimensionJoin` to query for column values.
-        dataId : `DataId`
-            A dictionary of primary key name-value pairs that uniquely identify
-            a row in the table for ``element``.  Note that this must be a
-            true `DataId` instance, not a `dict`, unlike more flexible
-            public `Registry` methods.  May include link fields beyond those
-            needed to identify ``element``.
+        dataId : `dict` or `DataId`
+            A `dict`-like object containing the `Dimension` links that include
+            the primary keys of the rows to query.  May include link fields
+            beyond those needed to identify ``element``.
         columns : iterable of `str`
             String column names to query values for.
 
