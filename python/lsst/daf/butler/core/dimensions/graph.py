@@ -218,8 +218,8 @@ class DimensionGraph:
         only : `bool`
             If `True` (default), do not include dimensions in ``self``.
 
-        Return
-        ------
+        Returns
+        -------
         set : `DimensionSet`
             A set containing dimensions that are implied dependencies of those
             in the graph, possibly (if ``only`` is `False`) along with those
@@ -396,8 +396,8 @@ class DimensionGraph:
             If `True`, expand the result to include implied dependencies as
             well as required dependencies.
 
-        Return
-        ------
+        Returns
+        -------
         subgraph : `DimensionGraph`
             A new graph containing at least the elements and their
             dependencies.
