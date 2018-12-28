@@ -27,7 +27,7 @@ import functools
 from lsst.utils import doImport
 from lsst.sphgeom import ConvexPolygon
 from .config import Config, ConfigSubset
-from .dimensions import DimensionConfig, DimensionGraph, DataId
+from .dimensions import DimensionConfig, DimensionGraph, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
 
@@ -880,6 +880,8 @@ class Registry(metaclass=ABCMeta):
         """
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
 
+        fieldsToGet = DimensionKeyDict(keys=dataId.dimensions(implied=True).elements, factory=set)
+
         # Interpret the 'metadata' argument and initialize the 'fieldsToGet'
         # dict, which maps each DimensionElement instance to a set of field
         # names.
@@ -888,13 +890,11 @@ class Registry(metaclass=ABCMeta):
                 # If a single dimension was passed explicitly, permit
                 # 'metadata' to be a sequence corresponding to just that
                 # dimension (by normalizing it into a dict-of-sets now).
-                fieldsToGet = {self.universe[dimension]: set(metadata)}
+                fieldsToGet[dimension].update(metadata)
             else:
                 # we may mutate this later; make a true dict-of-sets copy
-                fieldsToGet = {self.universe.elements[element]: set(fields)
-                               for element, fields in metadata.items()}
-        else:
-            fieldsToGet = {}
+                for element, fields in metadata.items():
+                    fieldsToGet[element].update(fields)
 
         # If 'region' was passed, add a query for that to fieldsToGet as well.
         if region and (update or dataId.region is None):
@@ -905,7 +905,7 @@ class Registry(metaclass=ABCMeta):
                     # self.pixelization
                     dataId.region = self.pixelization.pixel(dataId["skypix"])
                 else:
-                    fieldsToGet.setdefault(holder, set()).add("region")
+                    fieldsToGet[holder].add("region")
 
         # We now process fieldsToGet with calls to _queryMetadata via a
         # depth-first traversal of the dependency graph.  As we traverse, we
@@ -926,8 +926,8 @@ class Registry(metaclass=ABCMeta):
                 return
             entries = dataId.entries[element]
             dependencies = element.dependencies(implied=True)
-            # Get the dictionary of fields we want to retrieve.
-            fieldsToGetNow = fieldsToGet.setdefault(element, set())
+            # Get the set of fields we want to retrieve.
+            fieldsToGetNow = fieldsToGet[element]
             # Note which links to dependencies we need to query for and which
             # we already know.  Make sure the ones we know are in the entries
             # dict for this element.

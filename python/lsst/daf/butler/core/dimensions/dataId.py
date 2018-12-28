@@ -19,12 +19,155 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DataId",)
+__all__ = ("DimensionKeyDict", "DataId",)
 
 import itertools
 from collections.abc import Mapping
+from collections import OrderedDict
 from .graph import DimensionGraph
 from .elements import Dimension
+from .sets import DimensionSet
+
+
+class DimensionKeyDict(Mapping):
+    """An immutable mapping that uses `DimensionElement` instances as keys.
+
+    Parameters
+    ----------
+    other : `~collections.abc.Mapping`
+        Another mapping from which to copy keys and values.  Keys that
+        are string names will be converted into `DimensionElement` instances.
+    universe : `DimensionGraph`, optional
+        All known dimensions; must be provided if ``keys`` is not a
+        `DimensionGraph` or `DimensionSet` and ``other`` is not itself a
+        `DimensionKeyDict`.
+    keys : iterable of `DimensionElement`, optional
+        The exact keys that should be present in the constructed dictionary.
+        If not provided, defaults to the keys in ``other``.  If provided,
+        keys in ``other`` that are not in ``keys`` will be ignored, and keys
+        missing from ``other`` will associated with values constructed by
+        calling ``factory``.
+    factory : callable, optional
+        A no-argument callable that should be used to construct values for
+        keys not provided.
+    where : callable, optional
+        A predicate taking a single `DimensionElement` argument that indicates
+        (by returning `True`) whether a value for that element should be
+        copied from ``other`` or (by returning `False`) constructed by calling
+        ``factory``.  Passing `None` (default) uses a callable that always
+        returns `True`.
+
+    Notes
+    -----
+    As with most other operations involving dimension objects, string names
+    can be used lieu of `DimensionElement` instances in lookup (`get`,
+    `__getitem__`, `__contains__`).
+
+    Because `DimensionKeyDict` instances are immutable, they are frequently
+    used to hold mutable values, such as `set` or `dict` objects.
+    """
+
+    def __init__(self, other=None, *, universe=None, keys=None, factory=None, where=None):
+        byName = {}
+        if other is not None:
+            # Transform keys of input mappings from str-or-DimensionElement to
+            # str
+            for k, v in other.items():
+                byName[getattr(k, "name", k)] = v
+            universe = getattr(other, "universe", universe)
+
+        # Make or get a DimensionSet for the keys, which sets the order of
+        # values and items as well.
+        if keys is not None:
+            if isinstance(keys, DimensionSet):
+                self._keys = keys
+            elif isinstance(keys, DimensionGraph):
+                self._keys = keys.toSet()
+            else:
+                self._keys = DimensionSet(universe, keys)
+        else:
+            self._keys = DimensionSet(universe, byName.keys())
+
+        if where is None:
+            where = lambda x: True  # noqa
+
+        # Make a new dictionary keyed by DimensionElement in the right order,
+        # using factory() when no value is available.
+        self._dict = OrderedDict()
+        for element in self._keys:
+            if element.name in byName and where(element):
+                self._dict[element] = byName[element.name]
+            else:
+                self._dict[element] = factory()
+
+    def __str__(self):
+        return str(self._dict)
+
+    def __repr__(self):
+        return f"DimensionKeyDict({self})"
+
+    @property
+    def universe(self):
+        """All known dimensions, including those not represented by this
+        dict (`DimensionGraph`).
+        """
+        return self._keys.universe
+
+    def keys(self):
+        return self._keys
+
+    def values(self):
+        return self._dict.values()
+
+    def items(self):
+        return self._dict.items()
+
+    def __getitem__(self, key):
+        return self._dict[self._keys[key]]
+
+    def __iter__(self):
+        return iter(self._keys)
+
+    def __len__(self):
+        return len(self._keys)
+
+    def __eq__(self, other):
+        try:
+            return self._dict == other._dict
+        except AttributeError:
+            return NotImplemented
+
+    def updateValues(self, other):
+        """Update nested dictionaries or sets from those in another nested
+        mapping.
+
+        Parameters
+        ----------
+        other : `~collections.abc.Mapping`
+            Mapping containing values that should be used to update the
+            corresponding values in ``self``.  May have either
+            `DimensionElement` or `str` names (or both) as keys.
+
+        Returns
+        -------
+        missing : `set`
+            Any keys present in ``other`` that were not present in ``self``.
+
+        Notes
+        -----
+        This method assumes the values of ``self`` are objects with an
+        `update` method (such as `dict` or `set`), and that the values of
+        ``other`` are appropriate arguments to those `update` methods (i.e.
+        typically also `dict` or `set`).
+        """
+        missing = set()
+        for k, v in other.items():
+            v2 = self.get(k, None)
+            if v2 is not None:
+                v2.update(v)
+            else:
+                missing.add(k)
+        return missing
 
 
 class DataId(Mapping):
@@ -181,13 +324,13 @@ class DataId(Mapping):
             # second-level dictionaries, because these correspond to the same
             # rows in the Registry and updates to those rows are rare, so it
             # doesn't make sense to worry about conflicts here.
-            self._entries = {element: dataId.entries.get(element, {})
-                             for element in self._allDimensions.elements}
+            self._entries = DimensionKeyDict(dataId.entries, keys=self._allDimensions.elements, factory=dict)
+
         else:
             # Create appropriately empty regions and entries if we're not
             # starting from a real DataId.
             self.region = None
-            self._entries = {element: {} for element in self._allDimensions.elements}
+            self._entries = DimensionKeyDict(keys=self._allDimensions.elements, factory=dict)
 
         # Return the new instance, invoking __init__ to do further updates.
         return self
@@ -277,7 +420,7 @@ class DataId(Mapping):
     @property
     def entries(self):
         r"""A nested dictionary of additional values associated with the
-        identified dimension entries (`dict`).
+        identified dimension entries (`DimensionKeyDict`).
 
         The outer dictionary maps `DimensionElement` objects to dictionaries
         of field names and values.
