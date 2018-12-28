@@ -22,6 +22,7 @@
 __all__ = ("DimensionGraph", "DimensionConfig")
 
 import itertools
+
 from ..config import ConfigSubset
 from .sets import DimensionSet, toNameSet
 from .elements import Dimension, DimensionJoin
@@ -146,9 +147,9 @@ class DimensionGraph:
             names = config["elements", join.name].get("summarizes", ())
             join._summarizes = DimensionSet(universe, names)
 
-        # Finish setting up dictionary linking link names to dimension
+        # Finish setting up dictionary mapping link names to dimension
         # elements by transforming local 'backrefs' variable's sets string
-        # names into true DimensionSets in unverse._backrefs
+        # names into true DimensionSets in universe._backrefs
         for linkName, nameSet in backrefs.items():
             universe._backrefs[linkName] = DimensionSet(universe, nameSet)
 
