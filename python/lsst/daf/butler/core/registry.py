@@ -43,7 +43,10 @@ def disableWhenLimited(func):
     @functools.wraps(func)
     def inner(self, *args, **kwargs):
         if self.limited:
-            raise NotImplementedError("Not implemented for limited Registry.")
+            raise NotImplementedError(
+                "Operation not implemented for limited Registry; note that data IDs may need to be expanded "
+                "by a full Registry before being used for some operations on a limited Registry."
+            )
         return func(self, *args, **kwargs)
     return inner
 
