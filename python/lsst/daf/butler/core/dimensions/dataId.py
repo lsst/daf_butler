@@ -162,7 +162,7 @@ class DataId(Mapping):
         self = super().__new__(cls)
         self._requiredDimensions = dimensions
         self._allDimensions = DimensionGraph(dimensions.universe, dimensions=dimensions, implied=True)
-        self._links = {
+        self._linkValues = {
             linkName: linkValue for linkName, linkValue
             in itertools.chain(dataId.items(), extra.items(), kwds.items())
             if linkName in self._requiredDimensions.links()
@@ -207,13 +207,13 @@ class DataId(Mapping):
             for element, subdict in entries.items():
                 self.entries[element].update(subdict)
 
-        missing = self.dimensions().links() - self._links.keys()
+        missing = self.dimensions().links() - self._linkValues.keys()
         for linkName in missing:
             # Didn't get enough key-value pairs to identify all dimensions
             # from the links; look in entries for those.
             for element in self.dimensions().withLink(linkName):
                 try:
-                    self._links[linkName] = self.entries[element][linkName]
+                    self._linkValues[linkName] = self.entries[element][linkName]
                     break
                 except KeyError:
                     pass
@@ -300,35 +300,35 @@ class DataId(Mapping):
         return f"DataId({self}, dimensions={self.dimensions()})"
 
     def __iter__(self):
-        return iter(self._links)
+        return iter(self._linkValues)
 
     def __contains__(self, key):
-        return key in self._links
+        return key in self._linkValues
 
     def __len__(self):
-        return len(self._links)
+        return len(self._linkValues)
 
     def __getitem__(self, key):
-        return self._links[key]
+        return self._linkValues[key]
 
     def keys(self):
-        return self._links.keys()
+        return self._linkValues.keys()
 
     def values(self):
-        return self._links.values()
+        return self._linkValues.values()
 
     def items(self):
-        return self._links.items()
+        return self._linkValues.items()
 
     def __eq__(self, other):
         try:
-            return self._links == other._links
+            return self._linkValues == other._linkValues
         except AttributeError:
             # also compare equal to regular dicts with the same keys and values
-            return self._links == other
+            return self._linkValues == other
 
     def __hash__(self):
-        return hash(frozenset(self._links.items()))
+        return hash(frozenset(self._linkValues.items()))
 
     def fields(self, element, region=True, metadata=True):
         """Return the entries for a particular `DimensionElement`.
