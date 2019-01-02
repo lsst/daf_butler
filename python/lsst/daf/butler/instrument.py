@@ -19,11 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo")
+__all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo",
+           "ObservationDataIdPacker")
 
 from inspect import isabstract
 from abc import ABCMeta, abstractmethod
-from lsst.daf.butler import DataId
+from lsst.daf.butler import DataId, DataIdPacker
 
 
 # TODO: all code in this module probably needs to be moved to a higher-level
@@ -80,6 +81,59 @@ class Instrument(metaclass=ABCMeta):
             instance.
         """
         raise NotImplementedError()
+
+
+class ObservationDataIdPacker(DataIdPacker):
+    """A `DataIdPacker` for Visit+Detector or Exposure+Detector, given an
+    Instrument.
+
+    Parameters
+    ----------
+    dimensions : `DataIdPackerDimensions`
+        Struct containing dimensions related to this `DataIdPacker`.  Must
+        have Instrument as the only given dimension, Detector as one of the
+        covered dimensions, and either Exposure or Visit as the other
+        covered dimension.  The required dimensions must be Instrument,
+        Detector, and one of Exposure or Visit.
+    dataId : `DataId`
+        `DataId` that uniquely identifies (at least) the Instrument.
+    observationLink : `str`
+        Either "visit" or "exposure".
+    """
+
+    @classmethod
+    def configure(cls, dimensions):
+        # Docstring inherited from DataIdPacker.configure
+        assert dimensions.given == ["Instrument"]
+        observationDim = dimensions.covered.findIf(lambda dim: dim.name != "Detector")
+        assert observationDim.name in ("Visit", "Exposure")
+        observationLink, = observationDim.links(expand=False)
+        metadata = {"Instrument": [f"{observationLink}_max", "detector_max"]}
+        return metadata, dict(observationLink=observationLink)
+
+    def __init__(self, dimensions, dataId, observationLink):
+        self._instrumentName = dataId["instrument"]
+        self._observationLink = observationLink
+        obsMax = dataId.entries["Instrument"][f"{self._observationLink}_max"]
+        self._detectorMax = dataId.entries["Instrument"]["detector_max"]
+        self._maxBits = (obsMax*self._detectorMax).bit_length()
+
+    @property
+    def maxBits(self):
+        # Docstring inherited from DataIdPacker.maxBits
+        return self._maxBits
+
+    def pack(self, dataId, **kwds):
+        # Docstring inherited from DataIdPacker.pack
+        dataId = DataId(dataId, dimensions=self.dimensions.required, **kwds)
+        return dataId["detector"] + self._detectorMax*dataId[self._observationLink]
+
+    def unpack(self, packedId):
+        # Docstring inherited from DataIdPacker.unpack
+        return DataId({"instrument": self._instrumentName,
+                       "detector": packedId % self._detectorMax,
+                       self._observationLink: packedId // self._detectorMax},
+                      dimensions=self.dimensions.required)
 
 
 def updateExposureEntryFromObsInfo(dataId, obsInfo):

@@ -29,14 +29,9 @@ import lsst.utils.tests
 import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
-from lsst.daf.butler.core.execution import Execution
-from lsst.daf.butler.core.quantum import Quantum
-from lsst.daf.butler.core.run import Run
-from lsst.daf.butler.core.datasets import DatasetType
-from lsst.daf.butler.core.registry import Registry
+from lsst.daf.butler import (Execution, Quantum, Run, DatasetType, Registry,
+                             StorageClass, ButlerConfig, DataId)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
-from lsst.daf.butler.core.storageClass import StorageClass
-from lsst.daf.butler.core.butlerConfig import ButlerConfig
 
 """Tests for SqlRegistry.
 """
@@ -566,6 +561,42 @@ class RegistryTests(metaclass=ABCMeta):
         # PatchSkyPixJoin should not be empty
         rows = list(registry.query('select count(*) as "cnt" from "PatchSkyPixJoin"'))
         self.assertNotEqual(rows[0]["cnt"], 0)
+
+    def testDataIdPacker(self):
+        registry = self.makeRegistry()
+        if registry.limited:
+            return
+        registry.addDimensionEntry(
+            "Instrument",
+            {"instrument": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+        )
+        registry.addDimensionEntry(
+            "PhysicalFilter",
+            {"instrument": "DummyCam", "physical_filter": "R", "abstract_filter": "r"}
+        )
+        registry.addDimensionEntry(
+            "Visit",
+            {"instrument": "DummyCam", "visit": 5, "physical_filter": "R"}
+        )
+        registry.addDimensionEntry(
+            "Exposure",
+            {"instrument": "DummyCam", "exposure": 4, "visit": 5, "physical_filter": "R"}
+        )
+        dataId0 = registry.expandDataId(instrument="DummyCam", packers=True)
+        self.assertIn("VisitDetector", dataId0.packers)
+        self.assertIn("ExposureDetector", dataId0.packers)
+        with self.assertRaises(LookupError):
+            dataId0.packers["VisitDetector"].pack(dataId0)
+            dataId0.packers["ExposureDetector"].pack(dataId0)
+        dataId1 = DataId(dataId0, visit=5, detector=1)
+        self.assertEqual(dataId1.pack("VisitDetector"), 11)
+        packer = dataId0.packers["ExposureDetector"]
+        dataId2 = DataId(dataId0, exposure=4, detector=0)
+        self.assertEqual(packer.pack(dataId0, exposure=4, detector=0), 8)
+        self.assertEqual(packer.pack(dataId2), 8)
+        self.assertEqual(dataId2.pack("ExposureDetector"), 8)
+        dataId2a = packer.unpack(8)
+        self.assertEqual(dataId2, dataId2a)
 
 
 class SqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):

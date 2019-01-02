@@ -30,6 +30,7 @@ from .config import Config, ConfigSubset
 from .dimensions import DimensionConfig, DimensionGraph, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
+from .dataIdPacker import DataIdPackerLibrary
 
 __all__ = ("RegistryConfig", "Registry", "disableWhenLimited")
 
@@ -161,6 +162,7 @@ class Registry(metaclass=ABCMeta):
         self.config = registryConfig
         self._pixelization = None
         self.dimensions = DimensionGraph.fromConfig(dimensionConfig)
+        self._dataIdPackers = DataIdPackerLibrary(self.dimensions, registryConfig.get("dataIdPackers", {}))
 
     def __str__(self):
         return "None"
@@ -832,7 +834,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @disableWhenLimited
-    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False, **kwds):
+    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, packers=False,
+                     update=False, **kwds):
         """Expand a data ID to include additional information.
 
         `expandDataId` always returns a true `DataId` and ensures that its
@@ -857,6 +860,17 @@ class Registry(metaclass=ABCMeta):
             If `True` and the given `DataId` is uniquely associated with a
             region on the sky, obtain that region from the `Registry` and
             attach it as ``dataId.region``.
+        packers : `bool`
+            If `True`, attach any relevant `DataIdPacker` instances that were
+            configured with this `Registry`.  A packer is considered relevant
+            if its "given" dimensions (those needed to construct it) are a
+            subset of the dimensions identified by the data ID.  Note that
+            this means the data ID may not have enough information to *use*
+            all such packers.  For example, a `DataIdPacker` that mangles
+            ("covers") the "Visit" and "Detector" IDs into a single integer
+            given an "Instrument" will be attached to a `DataId` that only
+            identifies the "Instrument" dimension.  A packer with no given
+            dimensions is considered relevant for any data IDs.
         update : `bool`
             If `True`, assume existing entries and regions in the given
             `DataId` are out-of-date and should be updated by values in the
@@ -892,9 +906,7 @@ class Registry(metaclass=ABCMeta):
                 # dimension (by normalizing it into a dict-of-sets now).
                 fieldsToGet[dimension].update(metadata)
             else:
-                # we may mutate this later; make a true dict-of-sets copy
-                for element, fields in metadata.items():
-                    fieldsToGet[element].update(fields)
+                fieldsToGet.updateValues(metadata)
 
         # If 'region' was passed, add a query for that to fieldsToGet as well.
         if region and (update or dataId.region is None):
@@ -906,6 +918,11 @@ class Registry(metaclass=ABCMeta):
                     dataId.region = self.pixelization.pixel(dataId["skypix"])
                 else:
                     fieldsToGet[holder].add("region")
+
+        # Figure out what metadata fields the DataIdPackers relevant for these
+        # Dimensions need, and add them to the ones we plan to query for.
+        if packers:
+            fieldsToGet.updateValues(self._dataIdPackers.load(fieldsToGet.keys()))
 
         # We now process fieldsToGet with calls to _queryMetadata via a
         # depth-first traversal of the dependency graph.  As we traverse, we
@@ -972,6 +989,10 @@ class Registry(metaclass=ABCMeta):
         # other dependencies in this particular graph.
         for dim in dataId.dimensions().leaves:
             visit(dim)
+
+        # Create and attach relevant DataIdPacker instances.
+        if packers:
+            dataId.packers.update(self._dataIdPackers.extract(dataId))
 
         return dataId
 

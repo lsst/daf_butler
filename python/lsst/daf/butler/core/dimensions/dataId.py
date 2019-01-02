@@ -244,7 +244,7 @@ class DataId(Mapping):
     """
 
     def __new__(cls, dataId=None, *, dimensions=None, dimension=None, universe=None, region=None,
-                entries=None, extra=None, **kwds):
+                packers=None, entries=None, extra=None, **kwds):
 
         if isinstance(dataId, DataId):
             if universe is not None and universe != dataId.dimensions().universe:
@@ -325,17 +325,20 @@ class DataId(Mapping):
             # doesn't make sense to worry about conflicts here.
             self._entries = DimensionKeyDict(dataId.entries, keys=self._allDimensions.elements, factory=dict)
 
+            self._packers = {name: packer for name, packer in dataId._packers.items()
+                             if packer.dimensions.given.issubset(self._allDimensions.elements)}
         else:
             # Create appropriately empty regions and entries if we're not
             # starting from a real DataId.
             self.region = None
             self._entries = DimensionKeyDict(keys=self._allDimensions.elements, factory=dict)
+            self._packers = {}
 
         # Return the new instance, invoking __init__ to do further updates.
         return self
 
     def __init__(self, dataId=None, *, dimensions=None, dimension=None, universe=None, region=None,
-                 entries=None, extra=None, **kwds):
+                 packers=None, entries=None, extra=None, **kwds):
         if dataId is None:
             dataId = {}
 
@@ -346,21 +349,23 @@ class DataId(Mapping):
             dimension, = self.dimensions().leaves
 
         if entries is not None:
-            for element, subdict in entries.items():
-                self.entries[element].update(subdict)
+            self.entries.updateValues(entries)
 
-        missing = self.dimensions().links() - self._linkValues.keys()
-        for linkName in missing:
-            # Didn't get enough key-value pairs to identify all dimensions
-            # from the links; look in entries for those.
-            for element in self.dimensions().withLink(linkName):
-                try:
-                    self._linkValues[linkName] = self.entries[element][linkName]
-                    break
-                except KeyError:
-                    pass
-            else:
-                raise LookupError(f"No value found for link '{linkName}'")
+        if dataId is not self:
+            # Look for missing links (not necessary if this is just an
+            # augmentation of an already-validated data ID)
+            missing = self.dimensions().links() - self._linkValues.keys()
+            for linkName in missing:
+                # Didn't get enough key-value pairs to identify all dimensions
+                # from the links; look in entries for those.
+                for element in self.dimensions().withLink(linkName):
+                    try:
+                        self._linkValues[linkName] = self.entries[element][linkName]
+                        break
+                    except KeyError:
+                        pass
+                else:
+                    raise LookupError(f"No value found for link '{linkName}'")
 
         # If we got an explicit region argument, use it.
         if region is not None:
@@ -428,6 +433,30 @@ class DataId(Mapping):
         against any actual `Registry` schema.
         """
         return self._entries
+
+    @property
+    def packers(self):
+        """A dictionary of `DataIdPacker` instances specialized for this
+        `DataId` (`dict` mapping `str` name to `DataIdPacker` instance).
+        """
+        return self._packers
+
+    def pack(self, name):
+        """Pack the data ID into a single integer or `bytes` blob.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the `DataIdPacker` to use; this must have been configured
+            with the `Registry` and added to the `DataId` by
+            `Registry.expandDataId`.
+
+        Returns
+        -------
+        packed : `int` or `bytes`
+            Packed ID.
+        """
+        return self.packers[name].pack(self)
 
     def implied(self):
         """Return a new `DataId` with all implied dimensions of ``self``

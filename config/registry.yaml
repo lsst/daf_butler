@@ -6,3 +6,14 @@ registry:
   skypix:
     cls: lsst.sphgeom.HtmPixelization
     level: 7
+  dataIdPackers:
+    VisitDetector:
+      given: [Instrument]
+      covered: [Visit, Detector]
+      required: [Instrument, Visit, Detector]
+      cls: lsst.daf.butler.instrument.ObservationDataIdPacker
+    ExposureDetector:
+      given: [Instrument]
+      covered: [Exposure, Detector]
+      required: [Instrument, Exposure, Detector]
+      cls: lsst.daf.butler.instrument.ObservationDataIdPacker
