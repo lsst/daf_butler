@@ -17,3 +17,13 @@ registry:
       covered: [Exposure, Detector]
       required: [Instrument, Exposure, Detector]
       cls: lsst.daf.butler.instrument.ObservationDataIdPacker
+    TractPatch:
+      given: [SkyMap]
+      covered: [Tract, Patch]
+      required: [SkyMap, Tract, Patch]
+      cls: lsst.skymap.packers.SkyMapDataIdPacker
+    TractPatchAbstractFilter:
+      given: [SkyMap]
+      covered: [Tract, Patch, AbstractFilter]
+      required: [SkyMap, Tract, Patch, AbstractFilter]
+      cls: lsst.skymap.packers.SkyMapDataIdPacker
