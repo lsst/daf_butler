@@ -745,6 +745,21 @@ schema:
           duplicate SkyMaps with the different names from being
           registered.
 
+      - name: tract_max
+        type: int
+        doc: >
+          Maximum ID for tracts in this SkyMap, exclusive.
+
+      - name: patch_nx_max
+        type: int
+        doc: >
+          Number of patches in the x direction in each Tract.
+
+      - name: patch_ny_max
+        type: int
+        doc: >
+          Number of patches in the y direction in each Tract.
+
     Tract:
       doc: >
         A SkyMap-populated table relating a Tract to its spatial region
