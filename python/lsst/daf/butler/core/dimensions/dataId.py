@@ -247,12 +247,6 @@ class DataId(Mapping):
                 entries=None, extra=None, **kwds):
 
         if isinstance(dataId, DataId):
-            if dimensions is None and dimension is None:
-                # Shortcut the case where we already have a true DataId and the
-                # dimensions are not changing.
-                # Note that this still invokes __init__, which may update
-                # the region and/or entries.
-                return dataId
             if universe is not None and universe != dataId.dimensions().universe:
                 raise ValueError("Input DataId has dimensions from a different universe.")
             universe = dataId.dimensions().universe
@@ -268,7 +262,11 @@ class DataId(Mapping):
         # Transform 'dimensions' arg into a DimensionGraph object if it isn't already
         if dimensions is not None and not isinstance(dimensions, DimensionGraph):
             if universe is None:
-                raise ValueError(f"Cannot use {type(dimensions)} as 'dimensions' argument without universe.")
+                universe = getattr(dimensions, "universe", None)
+                if universe is None:
+                    raise ValueError(
+                        f"Cannot use {type(dimensions)} as 'dimensions' argument without universe."
+                    )
             dimensions = universe.extract(dimensions)
 
         if dimensions is None:
@@ -292,9 +290,10 @@ class DataId(Mapping):
 
         assert isinstance(dimensions, DimensionGraph), "should be set by earlier logic"
 
-        # One more attempt to shortcut by returning the original object: if
-        # caller provided a true DataId and explicit dimensions, but they
-        # already agree. As above, __init__ will still fire.
+        # Attempt to shortcut by returning the original object: if caller
+        # provided a true DataId and the dimensions are not changing. Note that
+        # __init__ will still fire, allowing us to update the DataId with
+        # new information provided via other arguments.
         if isinstance(dataId, DataId) and dataId.dimensions() == dimensions:
             return dataId
 
