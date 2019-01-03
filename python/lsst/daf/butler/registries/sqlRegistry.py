@@ -161,7 +161,7 @@ class SqlRegistry(Registry):
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
         dataId : `dict` or `DataId`
-            A `dict` of `Dimension` primary key fields that label a Dataset
+            A `dict` of `Dimension` link fields that label a Dataset
             within a Collection.
         kwds
             Additional keyword arguments passed to the `DataId` constructor
@@ -184,7 +184,7 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_(self._schema.datasetTable.c[name] == dataId[name]
-                                for name in dataId.dimensions.links)
+                                for name in dataId.dimensions().links())
         result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
             datasetTable.join(datasetCollectionTable)).where(and_(
                 datasetTable.c.dataset_type_name == datasetType.name,
@@ -347,6 +347,12 @@ class SqlRegistry(Registry):
         # is basically a no-op.
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
 
+        # Expand Dimension links to insert into the table to include implied
+        # dependencies.
+        if not self.limited:
+            self.expandDataId(dataId)
+        links = dataId.implied()
+
         # Collection cannot have more than one unique DataId of the same
         # DatasetType, this constraint is checked in `associate` method
         # which raises.
@@ -369,7 +375,7 @@ class SqlRegistry(Registry):
         result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
                                                                        run_id=run.id,
                                                                        quantum_id=None,
-                                                                       **dataId))
+                                                                       **links))
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0],
                                 run=run)
         # A dataset is always associated with its Run collection
@@ -406,7 +412,7 @@ class SqlRegistry(Registry):
             datasetType = self.getDatasetType(result["dataset_type_name"])
             run = self.getRun(id=result.run_id)
             dataId = DataId({link: result[self._schema.datasetTable.c[link]]
-                             for link in datasetType.dimensions.links},
+                             for link in datasetType.dimensions.links()},
                             dimensions=datasetType.dimensions,
                             universe=self.dimensions)
             # Get components (if present)
@@ -514,7 +520,7 @@ class SqlRegistry(Registry):
                 ref.datasetType._dimensions = self.dimensions.extract(ref.datasetType.dimensions)
 
             dataId = ref.dataId
-            if all(row[col] == dataId[col] for col in ref.datasetType.dimensions.links):
+            if all(row[col] == dataId[col] for col in ref.datasetType.dimensions.links()):
                 raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
                     ref.datasetType, dataId, collection))
             return False
@@ -931,7 +937,7 @@ class SqlRegistry(Registry):
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
         # The given dimension should be the only leaf dimension of the graph,
         # and this should ensure it's a true `Dimension`, not a `str` name.
-        dimension, = dataId.dimensions.leaves
+        dimension, = dataId.dimensions().leaves
         if entry is not None:
             dataId.entries[dimension].update(entry)
         table = self._schema.tables[dimension.name]
@@ -951,7 +957,7 @@ class SqlRegistry(Registry):
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions)
         # The given dimension should be the only leaf dimension of the graph,
         # and this should ensure it's a true `Dimension`, not a `str` name.
-        dimension, = dataId.dimensions.leaves
+        dimension, = dataId.dimensions().leaves
         table = self._schema.tables[dimension.name]
         result = self._connection.execute(select([table]).where(
             and_(table.c[name] == value for name, value in dataId.items()))).fetchone()
@@ -967,17 +973,17 @@ class SqlRegistry(Registry):
         dataId = DataId(dataId, universe=self.dimensions, region=region, **kwds)
         if dataId.region is None:
             raise ValueError("No region provided.")
-        holder = dataId.dimensions.getRegionHolder()
-        if holder.primaryKey != dataId.dimensions.links:
+        holder = dataId.dimensions().getRegionHolder()
+        if holder.links() != dataId.dimensions().links():
             raise ValueError(
-                f"Data ID contains superfluous keys: {dataId.dimensions.links - holder.primaryKey}"
+                f"Data ID contains superfluous keys: {dataId.dimensions().links() - holder.links()}"
             )
         table = self._schema.tables[holder.name]
         # Update the region for an existing entry
         if update:
             result = self._connection.execute(
                 table.update().where(
-                    and_((table.columns[name] == dataId[name] for name in holder.primaryKey))
+                    and_((table.columns[name] == dataId[name] for name in holder.links()))
                 ).values(
                     region=dataId.region.encode()
                 )
@@ -993,7 +999,7 @@ class SqlRegistry(Registry):
             )
         # Update the join table between this Dimension and SkyPix, if it isn't
         # itself a view.
-        join = dataId.dimensions.union(["SkyPix"]).joins().findIf(
+        join = dataId.dimensions().union(["SkyPix"]).joins().findIf(
             lambda join: join != holder and join.name not in self._schema.views
         )
         if join is None:
@@ -1003,7 +1009,7 @@ class SqlRegistry(Registry):
             self._connection.execute(
                 self._schema.tables[join.name].delete().where(
                     and_((self._schema.tables[join.name].c[name] == dataId[name]
-                          for name in holder.primaryKey))
+                          for name in holder.links()))
                 )
             )
         parameters = []
@@ -1034,7 +1040,8 @@ class SqlRegistry(Registry):
         row = self._connection.execute(
             select(cols)
             .where(
-                and_(table.c[name] == value for name, value in dataId.items())
+                and_(table.c[name] == value for name, value in dataId.items()
+                     if name in element.links())
             )
         ).fetchone()
         if row is None:

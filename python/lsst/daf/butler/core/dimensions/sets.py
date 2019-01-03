@@ -252,8 +252,8 @@ class DimensionSet(DimensionSetBase, Set):
         Elements to include in the set, or names thereof.
     expand : `bool`
         If `True`, recursively expand the set to include dependencies.
-    optional : `bool`
-        If `True`, include optional dependencies in expansion.  Ignored
+    implied : `bool`
+        If `True`, include implied dependencies in expansion.  Ignored
         if ``expand`` is `False`.
 
     Notes
@@ -278,7 +278,7 @@ class DimensionSet(DimensionSetBase, Set):
     obtained (possibly indirectly) from a special "universe" `DimensionGraph`
     loaded from configuration.
     """
-    def __init__(self, universe, elements, expand=False, optional=False):
+    def __init__(self, universe, elements, expand=False, implied=False):
         self._universe = universe
         self._elements = OrderedDict()
 
@@ -288,7 +288,7 @@ class DimensionSet(DimensionSetBase, Set):
                     elem = self._universe.elements[elem]
                 yield (elem.name, elem)
                 if expand:
-                    yield from toPairs(elem.dependencies(optional=optional))
+                    yield from toPairs(elem.dependencies(implied=implied))
 
         names = dict(toPairs(elements))
         if names:
@@ -341,23 +341,26 @@ class DimensionSet(DimensionSetBase, Set):
         """
         return self._elements.keys()
 
-    @property
     def links(self):
-        """The names of all fields that uniquely identify these dimensions in
-        a data ID dict (`frozenset` of `str`).
-        """
-        return frozenset().union(*(d.primaryKey for d in self))
+        """Return the names of all fields that uniquely identify these
+        dimensions in a data ID dict.
 
-    def expanded(self, optional=False):
+        Returns
+        -------
+        links : `frozenset` of `str`
+        """
+        return frozenset().union(*(d.links() for d in self))
+
+    def expanded(self, implied=False):
         """Return a new `DimensionSet` that has been expanded to include
         dependencies.
 
         Parameters
         ----------
-        optional : `bool`
-            Whether to include optional as well as required dependencies.
+        implied : `bool`
+            Whether to include implied as well as required dependencies.
         """
-        return DimensionSet(self.universe, self, expand=True, optional=optional)
+        return DimensionSet(self.universe, self, expand=True, implied=implied)
 
     def findIf(self, predicate, default=None):
         """Return the element in ``self`` that matches the given predicate.

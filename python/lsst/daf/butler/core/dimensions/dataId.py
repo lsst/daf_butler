@@ -110,9 +110,9 @@ class DataId(Mapping):
                 # Note that this still invokes __init__, which may update
                 # the region and/or entries.
                 return dataId
-            if universe is not None and universe != dataId.dimensions.universe:
+            if universe is not None and universe != dataId.dimensions().universe:
                 raise ValueError("Input DataId has dimensions from a different universe.")
-            universe = dataId.dimensions.universe
+            universe = dataId.dimensions().universe
         elif dataId is None:
             dataId = {}
 
@@ -136,7 +136,8 @@ class DataId(Mapping):
                 if extra is not None:
                     allLinks.update(extra)
                 allLinks.update(kwds)
-                dimensions = universe.extract(dim for dim in universe if dim.link.issubset(allLinks))
+                dimensions = universe.extract(dim for dim in universe
+                                              if dim.links(expand=False).issubset(allLinks))
             else:
                 # Set DimensionGraph to the full set of dependencies for the
                 # single Dimension that was provided.
@@ -146,12 +147,12 @@ class DataId(Mapping):
             # disagree.
             raise ValueError(f"Dimension conflict: {dimension.graph()} != {dimensions}")
 
-        assert dimensions is not None, "should be set by earlier logic"
+        assert isinstance(dimensions, DimensionGraph), "should be set by earlier logic"
 
         # One more attempt to shortcut by returning the original object: if
         # caller provided a true DataId and explicit dimensions, but they
         # already agree. As above, __init__ will still fire.
-        if isinstance(dataId, DataId) and dataId.dimensions == dimensions:
+        if isinstance(dataId, DataId) and dataId.dimensions() == dimensions:
             return dataId
 
         if extra is None:
@@ -159,17 +160,18 @@ class DataId(Mapping):
 
         # Make a new instance with the dimensions and links we've identified.
         self = super().__new__(cls)
-        self._dimensions = dimensions
-        self._links = {
+        self._requiredDimensions = dimensions
+        self._allDimensions = DimensionGraph(dimensions.universe, dimensions=dimensions, implied=True)
+        self._linkValues = {
             linkName: linkValue for linkName, linkValue
             in itertools.chain(dataId.items(), extra.items(), kwds.items())
-            if linkName in self._dimensions.links
+            if linkName in self._requiredDimensions.links()
         }
 
         # Transfer more stuff if we're starting from a real DataId
         if isinstance(dataId, DataId):
             # Transfer the region if it's the right one.
-            if self._dimensions.getRegionHolder() == dataId.dimensions.getRegionHolder():
+            if self._requiredDimensions.getRegionHolder() == dataId.dimensions().getRegionHolder():
                 self.region = dataId.region
             else:
                 self.region = None
@@ -180,12 +182,12 @@ class DataId(Mapping):
             # rows in the Registry and updates to those rows are rare, so it
             # doesn't make sense to worry about conflicts here.
             self._entries = {element: dataId.entries.get(element, {})
-                             for element in self._dimensions.elements}
+                             for element in self._allDimensions.elements}
         else:
             # Create appropriately empty regions and entries if we're not
             # starting from a real DataId.
             self.region = None
-            self._entries = {element: {} for element in self._dimensions.elements}
+            self._entries = {element: {} for element in self._allDimensions.elements}
 
         # Return the new instance, invoking __init__ to do further updates.
         return self
@@ -196,22 +198,22 @@ class DataId(Mapping):
             dataId = {}
 
         if dimension is not None:
-            # If a single dimension was explicitly provided, it's must be the
+            # If a single dimension was explicitly provided, it must be the
             # only leaf dimension in the graph; extract that to ensure that
             # the 'dimension' is in fact a `Dimension`, not a `str` name.
-            dimension, = self.dimensions.leaves
+            dimension, = self.dimensions().leaves
 
         if entries is not None:
             for element, subdict in entries.items():
                 self.entries[element].update(subdict)
 
-        missing = self.dimensions.links - self._links.keys()
+        missing = self.dimensions().links() - self._linkValues.keys()
         for linkName in missing:
             # Didn't get enough key-value pairs to identify all dimensions
             # from the links; look in entries for those.
-            for element in self.dimensions.withLink(linkName):
+            for element in self.dimensions().withLink(linkName):
                 try:
-                    self._links[linkName] = self.entries[element][linkName]
+                    self._linkValues[linkName] = self.entries[element][linkName]
                     break
                 except KeyError:
                     pass
@@ -221,7 +223,7 @@ class DataId(Mapping):
         # If we got an explicit region argument, use it.
         if region is not None:
             self.region = region
-            self.entries[self.dimensions.getRegionHolder()]["region"] = region
+            self.entries[self.dimensions().getRegionHolder()]["region"] = region
 
         # Entries should contain link fields as well, so transfer them from
         # 'extra' + 'kwds'.  Also transfer from 'links' iff it's not a DataId;
@@ -230,7 +232,7 @@ class DataId(Mapping):
         def addLinksToEntries(items):
             for linkName, linkValue in items:
                 try:
-                    associated = self.dimensions.withLink(linkName)
+                    associated = self.dimensions(implied=True).withLink(linkName)
                 except KeyError:
                     # This isn't a link. If an explicit dimension was
                     # provided, assume these fields are metadata for that
@@ -240,7 +242,7 @@ class DataId(Mapping):
                     else:
                         raise
                 for element in associated:
-                    if element in self.dimensions:
+                    if element in self.dimensions(implied=True):
                         self.entries[element][linkName] = linkValue
 
         if extra is not None:
@@ -251,15 +253,26 @@ class DataId(Mapping):
 
         # If we still haven't got a region, look for one in entries.
         if self.region is None:
-            holder = self.dimensions.getRegionHolder()
+            holder = self.dimensions().getRegionHolder()
             if holder is not None:
                 self.region = self.entries[holder].get("region", None)
 
-    @property
-    def dimensions(self):
-        """The dimensions this `DataId` identifies (`DimensionGraph`).
+    def dimensions(self, implied=False):
+        """Return dimensions this `DataId` identifies.
+
+        Parameters
+        ----------
+        implied : `bool`
+            If `True`, include implied dependencies as well.
+
+        Returns
+        -------
+        graph : `DimensionGraph`
         """
-        return self._dimensions
+        if implied:
+            return self._allDimensions
+        else:
+            return self._requiredDimensions
 
     @property
     def entries(self):
@@ -274,42 +287,48 @@ class DataId(Mapping):
         """
         return self._entries
 
+    def implied(self):
+        """Return a new `DataId` with all implied dimensions of ``self``
+        "upgraded" to required.
+        """
+        return DataId(self, dimensions=self.dimensions(implied=True))
+
     def __str__(self):
         return "{{{}}}".format(", ".join(f"{k}: {v}" for k, v in self.items()))
 
     def __repr__(self):
-        return f"DataId({self}, dimensions={self.dimensions})"
+        return f"DataId({self}, dimensions={self.dimensions()})"
 
     def __iter__(self):
-        return iter(self._links)
+        return iter(self._linkValues)
 
     def __contains__(self, key):
-        return key in self._links
+        return key in self._linkValues
 
     def __len__(self):
-        return len(self._links)
+        return len(self._linkValues)
 
     def __getitem__(self, key):
-        return self._links[key]
+        return self._linkValues[key]
 
     def keys(self):
-        return self._links.keys()
+        return self._linkValues.keys()
 
     def values(self):
-        return self._links.values()
+        return self._linkValues.values()
 
     def items(self):
-        return self._links.items()
+        return self._linkValues.items()
 
     def __eq__(self, other):
         try:
-            return self._links == other._links
+            return self._linkValues == other._linkValues
         except AttributeError:
             # also compare equal to regular dicts with the same keys and values
-            return self._links == other
+            return self._linkValues == other
 
     def __hash__(self):
-        return hash(frozenset(self._links.items()))
+        return hash(frozenset(self._linkValues.items()))
 
     def fields(self, element, region=True, metadata=True):
         """Return the entries for a particular `DimensionElement`.
@@ -333,7 +352,7 @@ class DataId(Mapping):
         fields : `dict`
             A dictionary of column name-value pairs.
         """
-        element = self.dimensions.universe.elements[element]
+        element = self.dimensions().universe.elements[element]
         entries = self.entries[element]
         if region and metadata:
             return entries
@@ -357,5 +376,5 @@ class DataId(Mapping):
             Keyword arguments for `__new__`.
         """
         args = (None,)
-        kwargs = dict(dimensions=self.dimensions)
+        kwargs = dict(dimensions=self.dimensions())
         return (args, kwargs)

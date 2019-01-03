@@ -269,7 +269,7 @@ class RegistryTests(metaclass=ABCMeta):
             registry.addDimensionEntry("Visit",
                                        {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
-        dataId = {"instrument": "DummyCam", "visit": 0}
+        dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
         run = registry.makeRun(collection=collection)
         inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
         outputRef = registry.find(collection, datasetType, dataId)
@@ -279,11 +279,11 @@ class RegistryTests(metaclass=ABCMeta):
             dataId = {"instrument": "DummyCam", "abstract_filter": "g"}  # should be visit
             registry.find(collection, datasetType, dataId)
         # Check that different dataIds match to different datasets
-        dataId1 = {"instrument": "DummyCam", "visit": 1}
+        dataId1 = {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r", "abstract_filter": None}
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
-        dataId2 = {"instrument": "DummyCam", "visit": 2}
+        dataId2 = {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r", "abstract_filter": None}
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
-        dataId3 = {"instrument": "MyCam", "visit": 2}
+        dataId3 = {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r", "abstract_filter": None}
         inputRef3 = registry.addDataset(datasetType, dataId=dataId3, run=run)
         self.assertEqual(registry.find(collection, datasetType, dataId1), inputRef1)
         self.assertEqual(registry.find(collection, datasetType, dataId2), inputRef2)
@@ -311,11 +311,15 @@ class RegistryTests(metaclass=ABCMeta):
                                        {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
-        # TODO: Dataset.physical_filter should be populated as well here
-        # from the Visit Dimension values.
+        # Dataset.physical_filter should be populated as well here from the
+        # Visit Dimension values, if the Registry isn't limited.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
+        if registry.limited:
+            dataId1.update(physical_filter="d-r", abstract_filter=None)
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
         dataId2 = {"instrument": "DummyCam", "visit": 1}
+        if registry.limited:
+            dataId2.update(physical_filter="d-r", abstract_filter=None)
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
         # We should be able to find both datasets in their Run.collection
         outputRef = registry.find(run.collection, datasetType, dataId1)
@@ -354,16 +358,22 @@ class RegistryTests(metaclass=ABCMeta):
         run1 = registry.makeRun(collection="ingest1")
         run2 = registry.makeRun(collection="ingest2")
         run3 = registry.makeRun(collection="ingest3")
-        # TODO: Dataset.physical_filter should be populated as well here
-        # from the Visit Dimension values.
+        # Dataset.physical_filter should be populated as well here
+        # from the Visit Dimension values, if the Registry isn't limited.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
         dataId2 = {"instrument": "DummyCam", "visit": 1}
+        if registry.limited:
+            dataId1.update(physical_filter="d-r", abstract_filter=None)
+            dataId2.update(physical_filter="d-r", abstract_filter=None)
         ref1_run1 = registry.addDataset(datasetType1, dataId=dataId1, run=run1)
         ref2_run1 = registry.addDataset(datasetType1, dataId=dataId2, run=run1)
         ref1_run2 = registry.addDataset(datasetType2, dataId=dataId1, run=run2)
         ref2_run2 = registry.addDataset(datasetType2, dataId=dataId2, run=run2)
         ref1_run3 = registry.addDataset(datasetType2, dataId=dataId1, run=run3)
         ref2_run3 = registry.addDataset(datasetType2, dataId=dataId2, run=run3)
+        for ref in (ref1_run1, ref2_run1, ref1_run2, ref2_run2, ref1_run3, ref2_run3):
+            self.assertEqual(ref.dataId.entries[registry.dimensions["Visit"]]["physical_filter"], "d-r")
+            self.assertIsNone(ref.dataId.entries[registry.dimensions["PhysicalFilter"]]["abstract_filter"])
         # should have exactly 4 rows in Dataset
         self.assertRowCount(registry, "Dataset", 6)
         self.assertRowCount(registry, "DatasetCollection", 6)
@@ -520,7 +530,7 @@ class RegistryTests(metaclass=ABCMeta):
         )
 
         def getRegion(dataId):
-            return registry.queryDataId(dataId, region=True).region
+            return registry.expandDataId(dataId, region=True).region
 
         # Get region for a tract
         self.assertEqual(regionTract, getRegion({"skymap": "DummySkyMap", "tract": 0}))

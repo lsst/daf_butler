@@ -48,8 +48,8 @@ class DimensionGraph:
     joins : iterable of `DimensionJoin` or `str`.
         `DimensionJoin` objects that should be included in the graph, or their
         string names.
-    optional : `bool`
-        If `True`, expand the graph to (recursively) include optional
+    implied : `bool`
+        If `True`, expand the graph to (recursively) include implied
         dependencies as well as required dependencies.
 
     Notes
@@ -82,7 +82,7 @@ class DimensionGraph:
 
         Parameters
         ----------
-        config : `DimensionConfig`, optional
+        config : `DimensionConfig`, implied
             Configuration specifying the elements and their relationships.
             If not provided, will be loaded from the default search path
             (see `ConfigSubset`).
@@ -106,7 +106,7 @@ class DimensionGraph:
         for elementName, subconfig in config["elements"].items():
             elementsToDo[elementName] = frozenset().union(
                 subconfig.get(".dependencies.required", ()),
-                subconfig.get(".dependencies.optional", ()),
+                subconfig.get(".dependencies.implied", ()),
                 subconfig.get(".lhs", ()),
                 subconfig.get(".rhs", ()),
             )
@@ -132,9 +132,9 @@ class DimensionGraph:
                     universe._dimensions._elements[elementName] = element
                 universe._elements._elements[elementName] = element
 
-                for link in element.primaryKey:
+                for link in element.links():
                     backrefs.setdefault(link, set()).add(elementName)
-                for link in element.dependencies(optional=True, required=False).links:
+                for link in element.dependencies(implied=True, required=False).links():
                     backrefs.setdefault(link, set()).add(elementName)
                 del elementsToDo[elementName]
 
@@ -151,9 +151,10 @@ class DimensionGraph:
         # names into true DimensionSets in unverse._backrefs
         for linkName, nameSet in backrefs.items():
             universe._backrefs[linkName] = DimensionSet(universe, nameSet)
+
         return universe
 
-    def __init__(self, universe, dimensions=(), joins=(), optional=False):
+    def __init__(self, universe, dimensions=(), joins=(), implied=False):
         if universe is None:
             self._universe = self
             self._elements = DimensionSet(self, elements=())
@@ -178,7 +179,7 @@ class DimensionGraph:
                 dimensionNames |= join.dependencies().names
 
             # Make the Dimension set, expanding to include dependencies
-            self._dimensions = DimensionSet(universe, dimensionNames, expand=True, optional=optional)
+            self._dimensions = DimensionSet(universe, dimensionNames, expand=True, implied=implied)
 
             # Add to the join set any joins that are implied by the set of dimensions.
             for join in self.universe._joins:
@@ -203,20 +204,31 @@ class DimensionGraph:
         """
         return self._universe
 
-    @property
-    def asSet(self):
-        """A set view of the `Dimensions` in ``self`` (`DimensionSet`).
+    def toSet(self):
+        """Return a `DimensionSet` with the same dimensions as ``self``.
         """
         return self._dimensions
 
-    @property
-    def optionals(self):
-        """A set containing all (recursive) optional dependencies of the
-        dimensions in this graph that are not included in the graph itself
-        (`DimensionSet`).
+    def implied(self, only=True):
+        """Return the (recursive) implied dependencies of the dimensions in
+        this graph.
+
+        Parameters
+        ----------
+        only : `bool`
+            If `True` (default), do not include dimensions in ``self``.
+
+        Returns
+        -------
+        set : `DimensionSet`
+            A set containing dimensions that are implied dependencies of those
+            in the graph, possibly (if ``only`` is `False`) along with those
+            in the graph.
         """
-        everything = self.asSet.expanded(optional=True)
-        return everything - self.asSet
+        everything = self._dimensions.expanded(implied=True)
+        if only:
+            everything -= self._dimensions
+        return everything
 
     @property
     def elements(self):
@@ -277,12 +289,15 @@ class DimensionGraph:
         """
         return self._dimensions.names
 
-    @property
     def links(self):
-        """The names of all fields that uniquely identify these dimensions in
-        a data ID dict (`frozenset` of `str`).
+        """Return the names of all fields that uniquely identify these
+        dimensions in a data ID dict.
+
+        Returns
+        -------
+        links : `frozenset` of `str`
         """
-        return self._dimensions.links
+        return self._dimensions.links()
 
     def __hash__(self):
         return hash(self._dimensions)
@@ -327,7 +342,7 @@ class DimensionGraph:
         """
         return self._dimensions.isdisjoint(other)
 
-    def union(self, *others, optional=False):
+    def union(self, *others, implied=False):
         """Return a new graph containing all elements that are in ``self`` or
         any of the other given graphs.
 
@@ -341,9 +356,9 @@ class DimensionGraph:
         result : `DimensionGraph`
             Graph containing any elements in any of the inputs.
         """
-        return DimensionGraph(self.universe, self._dimensions.union(*others), optional=optional)
+        return DimensionGraph(self.universe, self._dimensions.union(*others), implied=implied)
 
-    def intersection(self, *others, optional=False):
+    def intersection(self, *others, implied=False):
         """Return a new graph containing all elements that are in both  ``self``
         and all of the other given graphs.
 
@@ -357,7 +372,7 @@ class DimensionGraph:
         result : `DimensionGraph`
             Graph containing all elements in all of the inputs.
         """
-        return DimensionGraph(self.universe, self._dimensions.intersection(*others), optional=optional)
+        return DimensionGraph(self.universe, self._dimensions.intersection(*others), implied=implied)
 
     def __or__(self, other):
         if isinstance(other, DimensionGraph):
@@ -369,7 +384,7 @@ class DimensionGraph:
             return self.intersection(other)
         return NotImplemented
 
-    def extract(self, elements, optional=False):
+    def extract(self, elements, implied=False):
         r"""Return a new graph containing the given elements.
 
         Parameters
@@ -377,17 +392,17 @@ class DimensionGraph:
         elements : iterable of `DimensionElement` or `str`
             `Dimension`\s, `DimensionJoin`\s, or names thereof.  These must be
             in ``self`` or ``self.joins()``.
-        optional : `bool`
-            If `True`, expand the result to include optional dependencies as
+        implied : `bool`
+            If `True`, expand the result to include implied dependencies as
             well as required dependencies.
 
-        Return
-        ------
+        Returns
+        -------
         subgraph : `DimensionGraph`
             A new graph containing at least the elements and their
             dependencies.
         """
-        if isinstance(elements, DimensionGraph) and not optional and self.issuperset(elements):
+        if isinstance(elements, DimensionGraph) and not implied and self.issuperset(elements):
             return elements
         elements = toNameSet(elements)
         if not self.elements.issuperset(elements):
@@ -397,7 +412,7 @@ class DimensionGraph:
         return DimensionGraph(self.universe,
                               dimensions=self._dimensions.intersection(elements),
                               joins=self._joins.intersection(elements),
-                              optional=optional)
+                              implied=implied)
 
     def getRegionHolder(self):
         """Return the Dimension that provides the spatial region for this
@@ -441,7 +456,7 @@ class DimensionGraph:
         Parameters
         ----------
         link : `str`
-            Primary key field name.
+            Key field name.
 
         Returns
         -------
@@ -477,10 +492,10 @@ class DimensionGraph:
 
     @property
     def leaves(self):
-        """Dimensions that are not required or optional dependencies of any
+        """Dimensions that are not required or implied dependencies of any
         other dimension in the graph (`DimensionSet`).
         """
         leafNames = set(self.names)
         for dim in self:
-            leafNames -= dim.dependencies(optional=True).names
+            leafNames -= dim.dependencies(implied=True).names
         return DimensionSet(self.universe, leafNames)

@@ -48,32 +48,32 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
     # hasRegion : `bool`
     #     Whether entries for this dimension are associated with a region
     #     on the sky.
-    # link : iterable of `str`
+    # links : iterable of `str`
     #     The names of primary key fields used by this element but not any of
     #     its dependencies.
     # required : iterable of `str`
     #     The names of the `Dimension`\ s whose primary keys are a subset of
     #     this element's primary key.
-    # optional : iterable of `str`
+    # implied : iterable of `str`
     #     The names of the `Dimension`\ s whose primary keys are specified by
     #     foreign keys in this element.
     # doc : `str`
     #     Documentation string for this element.
     #
-    def __init__(self, universe, name, hasRegion, link, required, optional, doc):
+    def __init__(self, universe, name, hasRegion, links, required, implied, doc):
         from .sets import DimensionSet
         self._universe = universe
         self._name = name
         self._hasRegion = hasRegion
-        self._link = frozenset(link)
+        self._localLinks = frozenset(links)
         self._doc = doc
-        self._requiredDependencies = DimensionSet(universe, required, expand=True, optional=False)
-        self._optionalDependencies = DimensionSet(universe, optional, expand=False)
+        self._requiredDependencies = DimensionSet(universe, required, expand=True, implied=False)
+        self._impliedDependencies = DimensionSet(universe, implied, expand=False)
         # Compute _primaryKeys dict, used to back primaryKeys property.
-        primaryKey = set(self.link)
-        for dimension in self.dependencies(optional=False):
-            primaryKey |= dimension.link
-        self._primaryKey = frozenset(primaryKey)
+        expandedLinks = set(self._localLinks)
+        for dimension in self.dependencies(implied=False):
+            expandedLinks |= dimension.links(expand=True)
+        self._expandedLinks = frozenset(expandedLinks)
 
     def __eq__(self, other):
         try:
@@ -111,21 +111,27 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         """
         return self._doc
 
-    @property
-    def primaryKey(self):
-        """The names of fields that uniquely identify this dimension in a
-        data ID dict (`frozenset` of `str`).
-        """
-        return self._primaryKey
+    def links(self, expand=True):
+        """Return the names of fields that uniquely identify this dimension in
+        a data ID dict.
 
-    @property
-    def link(self):
-        """Primary key fields that are used only by this dimension, not any
-        dependencies (`frozenset` of `str`).
-        """
-        return self._link
+        Parameters
+        ----------
+        expand: `bool`
+            If `True` (default) include links associated with required
+            dependencies.
 
-    def dependencies(self, required=True, optional=False):
+        Returns
+        -------
+        links : `frozenset` of `str`
+            Set of field names.
+        """
+        if expand:
+            return self._expandedLinks
+        else:
+            return self._localLinks
+
+    def dependencies(self, required=True, implied=False):
         """Return the set of dimensions this dimension depends on.
 
         Parameters
@@ -133,35 +139,35 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         required : `bool`
             If `True` (default), include required dependencies.  Required
             dependences are always expanded recursively.
-        optional : `bool`
-            If `True`, return optional dependencies.
+        implied : `bool`
+            If `True`, return implied dependencies.
 
         Returns
         -------
         dependencies : `DimensionSet`
         """
         if required:
-            if optional:
-                return self._requiredDependencies | self._optionalDependencies
+            if implied:
+                return self._requiredDependencies | self._impliedDependencies
             else:
                 return self._requiredDependencies
-        elif optional:
-            return self._optionalDependencies
-        raise ValueError("At least one of 'required' and 'optional' must be True.")
+        elif implied:
+            return self._impliedDependencies
+        raise ValueError("At least one of 'required' and 'implied' must be True.")
 
-    def graph(self, optional=False):
+    def graph(self, implied=False):
         """Return the minimal `DimensionGraph` that contains ``self``.
 
         Parameters
         ----------
-        optional : `bool`
-            If `True`, include optional as well as required dependencies.
+        implied : `bool`
+            If `True`, include implied as well as required dependencies.
 
         Returns
         -------
         graph : `DimensionGraph`
         """
-        return self.universe.extract([self], optional=optional)
+        return self.universe.extract([self], implied=implied)
 
 
 class Dimension(DimensionElement):
@@ -191,9 +197,9 @@ class Dimension(DimensionElement):
     #     Sub-config corresponding to this `Dimension`.
     #
     def __init__(self, universe, name, config):
-        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), link=config["link"],
+        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), links=config["link"],
                          required=config.get(".dependencies.required", ()),
-                         optional=config.get(".dependencies.optional", ()),
+                         implied=config.get(".dependencies.implied", ()),
                          doc=config["doc"])
 
     def __repr__(self):
@@ -228,10 +234,10 @@ class DimensionJoin(DimensionElement):
 
         lhs = list(config["lhs"])
         rhs = list(config["rhs"])
-        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), link=(),
-                         required=lhs + rhs, optional=(), doc=config["doc"])
-        self._lhs = DimensionSet(universe, lhs, optional=False)
-        self._rhs = DimensionSet(universe, rhs, optional=False)
+        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), links=(),
+                         required=lhs + rhs, implied=(), doc=config["doc"])
+        self._lhs = DimensionSet(universe, lhs, implied=False)
+        self._rhs = DimensionSet(universe, rhs, implied=False)
         # self._summarizes initialized later in DimensionGraph.fromConfig.
 
     @property

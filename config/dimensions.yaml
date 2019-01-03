@@ -22,7 +22,7 @@ dimensions:
       dependencies:
         required:
         - Instrument
-        optional:
+        implied:
         - AbstractFilter
       doc: >
         A filter associated with a particular Instrument.  PhysicalFilters are
@@ -46,7 +46,7 @@ dimensions:
       dependencies:
         required:
         - Instrument
-        optional:
+        implied:
         - PhysicalFilter
       doc: >
         A sequence of observations processed together, comprised of one or
@@ -62,7 +62,7 @@ dimensions:
       dependencies:
         required:
         - Instrument
-        optional:
+        implied:
         - Visit
         - PhysicalFilter
       doc: >

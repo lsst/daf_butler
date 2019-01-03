@@ -84,7 +84,7 @@ class SqlPreFlight:
             joinOn = []
             for otherDimension in otherDimensions:
                 primaryKeyColumns = {name: self._schema.tables[otherDimension.name].c[name]
-                                     for name in otherDimension.primaryKey}
+                                     for name in otherDimension.links()}
                 for name, col in primaryKeyColumns.items():
                     joinOn.append(self._schema.tables[dimension.name].c[name] == col)
                 _LOG.debug("join %s with %s on columns %s", dimension.name,
@@ -167,22 +167,22 @@ class SqlPreFlight:
             table = self._schema.tables.get(dimension.name)
             if table is not None:
                 # take link column names, usually there is one
-                for link in dimension.link:
+                for link in dimension.links(expand=False):
                     linkColumnIndices[link] = len(selectColumns)
                     selectColumns.append(table.c[link])
         _LOG.debug("selectColumns: %s", selectColumns)
         _LOG.debug("linkColumnIndices: %s", linkColumnIndices)
 
-        # Extend dimensions with the "optional" superset, so that joins work
+        # Extend dimensions with the "implied" superset, so that joins work
         # correctly. This may bring more tables into query than really needed,
         # potential for optimization.
-        dimensions = dimensions.union(dimensions.optionals)
+        dimensions = dimensions.union(dimensions.implied())
 
         fromJoin = None
         for dimension in dimensions:
             _LOG.debug("processing Dimension: %s", dimension.name)
             if dimension.name in self._schema.tables:
-                fromJoin = self._joinOnForeignKey(fromJoin, dimension, dimension.dependencies(optional=True))
+                fromJoin = self._joinOnForeignKey(fromJoin, dimension, dimension.dependencies(implied=True))
 
         joinedRegionTables = set()
         regionColumnIndices = {}
@@ -270,7 +270,7 @@ class SqlPreFlight:
                     linkColumnIndices[dsType.name + ".valid_last"] = len(selectColumns)
                     selectColumns.append(subquery.c.valid_last)
                 else:
-                    for link in dimension.primaryKey:
+                    for link in dimension.links():
                         _LOG.debug("  joining on link: %s", link)
                         joinOn.append(subquery.c[link] == self._schema.tables[dimension.name].c[link])
             fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isOutput)
@@ -399,7 +399,7 @@ class SqlPreFlight:
         _LOG.debug("using collections: %s", dsCollections)
 
         # full set of link names for this DatasetType
-        links = list(dsType.dimensions.links)
+        links = list(dsType.dimensions.links())
 
         dsTable = self._schema.tables["Dataset"]
         dsCollTable = self._schema.tables["DatasetCollection"]
@@ -509,13 +509,13 @@ class SqlPreFlight:
             # Find all of the Dimensions we can uniquely identify with the
             # non-NULL link columns.
             rowDimensions = dimensions.extract(dim for dim in dimensions
-                                               if dim.primaryKey.issubset(rowDataIdDict.keys()))
+                                               if dim.links().issubset(rowDataIdDict.keys()))
             # Remove all of the link columns that weren't needed by the
             # Dimensions we selected (in practice this is just ExposureRange
-            # links right now, so this step might not be needed one we make
+            # links right now, so this step might not be needed once we make
             # that less of a special case).
             dataId = DataId(
-                {k: v for k, v in rowDataIdDict.items() if k in rowDimensions.links},
+                {k: v for k, v in rowDataIdDict.items() if k in rowDimensions.links()},
                 dimensions=rowDimensions,
                 region=extractRegion(rowDimensions)
             )
@@ -532,7 +532,7 @@ class SqlPreFlight:
                         linkNames[dsType.name + ".valid_last"] = "valid_last"
                     else:
                         if self._schema.tables.get(dimension.name) is not None:
-                            linkNames.update((s, s) for s in dimension.link)
+                            linkNames.update((s, s) for s in dimension.links(expand=False))
                 dsDataId = DataId({val: row[linkColumnIndices[key]] for key, val in linkNames.items()},
                                   dimensions=dsType.dimensions,
                                   region=extractRegion(dsType.dimensions))

@@ -89,9 +89,8 @@ def updateExposureEntryFromObsInfo(dataId, obsInfo):
     Parameters
     ----------
     dataId : `dict` or `DataId`
-        Dictionary of Dimension primary/foreign key values for (at least)
-        Exposure. If a true `DataId`, this object will be modified and
-        returned.
+        Dictionary of Dimension link fields for (at least) Exposure. If a true
+        `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the Exposure.
@@ -102,7 +101,7 @@ def updateExposureEntryFromObsInfo(dataId, obsInfo):
         A data ID with the entry for the Exposure dimension updated.
     """
     dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions["Exposure"]].update(
+    dataId.entries[dataId.dimensions()["Exposure"]].update(
         datetime_begin=obsInfo.datetime_begin.to_datetime(),
         datetime_end=obsInfo.datetime_end.to_datetime(),
         exposure_time=obsInfo.exposure_time.to_value("s"),
@@ -118,8 +117,8 @@ def updateVisitEntryFromObsInfo(dataId, obsInfo):
     Parameters
     ----------
     dataId : `dict` or `DataId`
-        Dictionary of Dimension primary/foreign key values for (at least)
-        Visit. If a true `DataId`, this object will be modified and returned.
+        Dictionary of Dimension link fields for (at least) Visit. If a true
+        `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the Exposure.
@@ -130,7 +129,7 @@ def updateVisitEntryFromObsInfo(dataId, obsInfo):
         A data ID with the entry for the Visit dimension updated.
     """
     dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions["Exposure"]].update(
+    dataId.entries[dataId.dimensions()["Visit"]].update(
         datetime_begin=obsInfo.datetime_begin.to_datetime(),
         datetime_end=obsInfo.datetime_end.to_datetime(),
         exposure_time=obsInfo.exposure_time.to_value("s"),

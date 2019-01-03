@@ -5,7 +5,7 @@ datastore:
     table: PosixDatastoreRecords
   create: true
   templates:
-    default: "{collection}/{datasetType}/{tract:?}/{patch:?}/{filter:?}/{instrument:?}_{visit:?}"
+    default: "{collection}/{datasetType}/{skymap:?}/{tract:?}/{patch:?}/{label:?}/{abstract_filter:?}/{instrument:?}/{physical_filter:?}/{visit:?}/{exposure:?}/{detector:?}"
   formatters:
     TablePersistable: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableWcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
