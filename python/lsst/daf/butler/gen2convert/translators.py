@@ -290,3 +290,8 @@ for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmiss
                        datasetTypeName=datasetTypeName)
     Translator.addRule(ConstantKeyHandler("valid_last", "ExposureRange", datetime.max),
                        datasetTypeName=datasetTypeName)
+
+# Translate Gen2 pixel_id to Gen3 skypix.
+# For now, we just assume that the Gen3 Registry's pixelization happens to be
+# the same as what the ref_cat indexer uses.
+Translator.addRule(CopyKeyHandler("skypix", "SkyPix", gen2key="pixel_id"), gen2keys=("pixel_id",))
