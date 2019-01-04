@@ -93,7 +93,8 @@ class SqlPreFlight:
                 # so we have to use `onclause` which is always true.
                 return fromClause.join(self.registry._schema.tables[dimension.name], literal(True))
 
-    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
+    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
+                         expandDataIds=True):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of dimension values.
 
@@ -119,6 +120,8 @@ class SqlPreFlight:
             be included in the returned column set. It is expected that
             Datasets for these DatasetTypes do not exist in the registry,
             but presently this is not checked.
+        expandDataIds : `bool`
+            If `True` (default), expand all data IDs when returning them.
 
         Yields
         ------
@@ -286,8 +289,9 @@ class SqlPreFlight:
                              compile_kwargs={"literal_binds": True}))
 
         # execute and return result iterator
-        return self._convertResultRows(rows, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns)
         rows = self.registry._connection.execute(q).fetchall()
+        return self._convertResultRows(rows, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns,
+                                       expandDataIds=expandDataIds)
 
     def _buildDatasetSubquery(self, dsType, originInfo, isOutput):
         """Build a sub-query for a dataset type to be joined with "big join".
@@ -443,7 +447,8 @@ class SqlPreFlight:
         subquery = subquery.alias("ds" + dsType.name)
         return subquery
 
-    def _convertResultRows(self, rowIter, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns):
+    def _convertResultRows(self, rowIter, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns,
+                           expandDataIds=True):
         """Convert query result rows into `PreFlightDimensionsRow` instances.
 
         Parameters
@@ -461,6 +466,8 @@ class SqlPreFlight:
         dsIdColumns : `dict`
             Dictionary of (DatasetType, column index), column contains
             dataset Id, or None if dataset does not exist
+        expandDataIds : `bool`
+            If `True` (default), expand all data IDs when returning them.
 
         Yields
         ------
@@ -514,6 +521,8 @@ class SqlPreFlight:
                 dimensions=rowDimensions,
                 region=extractRegion(rowDimensions)
             )
+            if expandDataIds:
+                self.registry.expandDataId(dataId, packers=True)
 
             # for each dataset get ids DataRef
             datasetRefs = {}
@@ -531,6 +540,8 @@ class SqlPreFlight:
                 dsDataId = DataId({val: row[linkColumnIndices[key]] for key, val in linkNames.items()},
                                   dimensions=dsType.dimensions,
                                   region=extractRegion(dsType.dimensions))
+                if expandDataIds:
+                    self.registry.expandDataId(dsDataId, packers=True)
                 dsId = None if col is None else row[col]
                 datasetRefs[dsType] = DatasetRef(dsType, dsDataId, dsId)
 
