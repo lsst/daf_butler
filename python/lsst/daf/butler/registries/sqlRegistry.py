@@ -76,7 +76,7 @@ class SqlRegistry(Registry):
         self._datasetTypes = {}
         self._connection = self._engine.connect()
         if not self.limited:
-            self._preFlight = SqlPreFlight(self._schema, self.dimensions, self._connection)
+            self._preFlight = SqlPreFlight(self)
         if create:
             self._createTables()
 
