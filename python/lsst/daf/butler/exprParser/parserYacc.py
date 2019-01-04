@@ -1,4 +1,4 @@
-# This file is part of pipe_supertask.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
@@ -21,6 +21,8 @@
 
 """Syntax definition for user expression parser.
 """
+
+__all__ = ["ParserYacc", "ParserYaccError", "ParseError", "ParserEOFError"]
 
 # -------------------------------
 #  Imports of standard modules --

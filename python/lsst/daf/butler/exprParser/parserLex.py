@@ -1,4 +1,4 @@
-# This file is part of pipe_supertask.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
@@ -22,9 +22,7 @@
 """Module which defines PLY lexer for user expressions parsed by pre-flight.
 """
 
-from __future__ import absolute_import, division, print_function
-
-__all__ = []
+__all__ = ["ParserLex", "ParserLexError"]
 
 # -------------------------------
 #  Imports of standard modules --

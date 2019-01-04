@@ -1,9 +1,10 @@
+# This file is part of daf_butler.
 #
-# LSST Data Management System
-# Copyright 2018 AURA/LSST.
-#
-# This product includes software developed by the
-# LSST Project (http://www.lsst.org/).
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,18 +16,15 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the LSST License Statement and
-# the GNU General Public License along with this program.  If not,
-# see <http://www.lsstcorp.org/LegalNotices/>.
-#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Simple unit test for expr_parser/parserLex module.
+"""Simple unit test for expr_parser/parserYacc module.
 """
 
 import unittest
 
-from lsst.pipe.supertask.expr_parser import exprTree
-from lsst.pipe.supertask.expr_parser import parserYacc
+from lsst.daf.butler.exprParser import exprTree, ParserYacc, ParseError
 import lsst.utils.tests
 
 
@@ -43,12 +41,12 @@ class ParserLexTestCase(unittest.TestCase):
     def testInstantiate(self):
         """Tests for making ParserLex instances
         """
-        parser = parserYacc.ParserYacc()  # noqa: F841
+        parser = ParserYacc()  # noqa: F841
 
     def testEmpty(self):
         """Tests for empty expression
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         # empty expression is allowed, returns None
         tree = parser.parse("")
@@ -57,7 +55,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testParseLiteral(self):
         """Tests for literals (strings/numbers)
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse('1')
         self.assertIsInstance(tree, exprTree.NumericLiteral)
@@ -74,7 +72,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testParseIdentifiers(self):
         """Tests for identifiers
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse('a')
         self.assertIsInstance(tree, exprTree.Identifier)
@@ -87,7 +85,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testParseParens(self):
         """Tests for identifiers
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse('(a)')
         self.assertIsInstance(tree, exprTree.Parens)
@@ -97,7 +95,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testUnaryOps(self):
         """Tests for unary plus and minus
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse('+a')
         self.assertIsInstance(tree, exprTree.UnaryOp)
@@ -114,7 +112,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testBinaryOps(self):
         """Tests for binary operators
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse('a + b')
         self.assertIsInstance(tree, exprTree.BinaryOp)
@@ -159,7 +157,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testIsIn(self):
         """Tests for IN
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse("a in (1,2,'X')")
         self.assertIsInstance(tree, exprTree.IsIn)
@@ -188,7 +186,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testCompareOps(self):
         """Tests for comparison operators
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         for op in ('=', '!=', '<', '<=', '>', '>='):
             tree = parser.parse('a {} 10'.format(op))
@@ -202,7 +200,7 @@ class ParserLexTestCase(unittest.TestCase):
     def testBoolOps(self):
         """Tests for boolean operators
         """
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         for op in ('OR', 'XOR', 'AND'):
             tree = parser.parse('a {} b'.format(op))
@@ -221,7 +219,7 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testExpression(self):
         """Test for more or less complete expression"""
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         expression = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                       "AND tract=8766 AND patch.cell_x > 5 AND "
@@ -251,21 +249,21 @@ class ParserLexTestCase(unittest.TestCase):
             self.assertEqual(exc.lineno, lineno)
             self.assertEqual(exc.posInLine, posInLine)
 
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         expression = "(1, 2, 3)"
-        with self.assertRaises(parserYacc.ParseError) as catcher:
+        with self.assertRaises(ParseError) as catcher:
             parser.parse(expression)
         _assertExc(catcher.exception, expression, ",", 2, 1, 2)
 
         expression = "\n(1\n,\n 2, 3)"
-        with self.assertRaises(parserYacc.ParseError) as catcher:
+        with self.assertRaises(ParseError) as catcher:
             parser.parse(expression)
         _assertExc(catcher.exception, expression, ",", 4, 3, 0)
 
     def testStr(self):
         """Test for formatting"""
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse("(a+b)")
         self.assertEqual(str(tree), '(a + b)')
@@ -285,7 +283,7 @@ class ParserLexTestCase(unittest.TestCase):
         def _visitor(node, nodes):
             nodes.append(node)
 
-        parser = parserYacc.ParserYacc()
+        parser = ParserYacc()
 
         tree = parser.parse("(a+b)")
 

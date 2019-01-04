@@ -1,9 +1,10 @@
+# This file is part of daf_butler.
 #
-# LSST Data Management System
-# Copyright 2018 AURA/LSST.
-#
-# This product includes software developed by the
-# LSST Project (http://www.lsst.org/).
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (https://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,10 +16,8 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
-# You should have received a copy of the LSST License Statement and
-# the GNU General Public License along with this program.  If not,
-# see <http://www.lsstcorp.org/LegalNotices/>.
-#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 """Simple unit test for expr_parser/parserLex module.
 """
@@ -26,7 +25,7 @@
 import re
 import unittest
 
-from lsst.pipe.supertask.expr_parser import parserLex
+from lsst.daf.butler.exprParser import ParserLex, ParserLexError
 import lsst.utils.tests
 
 
@@ -54,15 +53,15 @@ class ParserLexTestCase(unittest.TestCase):
         """
 
         default_reflags = re.IGNORECASE | re.VERBOSE
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
         self.assertEqual(lexer.lexreflags, default_reflags)
 
-        lexer = parserLex.ParserLex.make_lexer(reflags=re.DOTALL)
+        lexer = ParserLex.make_lexer(reflags=re.DOTALL)
         self.assertEqual(lexer.lexreflags, re.DOTALL | default_reflags)
 
     def testSimpleTokens(self):
         """Test for simple tokens"""
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
 
         lexer.input("=!= <<= >>= +-*/()")
         self._assertToken(lexer.token(), 'EQ', '=')
@@ -81,7 +80,7 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testReservedTokens(self):
         """Test for reserved words"""
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
 
 #         tokens = "IS NOT IN NULL OR XOR AND BETWEEN LIKE ESCAPE REGEXP"
         tokens = "NOT IN OR XOR AND"
@@ -105,7 +104,7 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testStringLiteral(self):
         """Test for string literals"""
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
 
         lexer.input("''")
         self._assertToken(lexer.token(), "STRING_LITERAL", "")
@@ -123,16 +122,16 @@ class ParserLexTestCase(unittest.TestCase):
 
         # odd newline inside string
         lexer.input("'string\nstring'")
-        with self.assertRaises(parserLex.ParserLexError):
+        with self.assertRaises(ParserLexError):
             lexer.token()
 
         lexer.input("'string")
-        with self.assertRaises(parserLex.ParserLexError):
+        with self.assertRaises(ParserLexError):
             lexer.token()
 
     def testNumericLiteral(self):
         """Test for numeric literals"""
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
 
         lexer.input("0 100 999. 100.1 1e10 1e-10 1.e+20 .2E5")
         self._assertToken(lexer.token(), "NUMERIC_LITERAL", "0")
@@ -147,7 +146,7 @@ class ParserLexTestCase(unittest.TestCase):
 
     def testIdentifier(self):
         """Test for numeric literals"""
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
 
         lexer.input("ID id _012 a_b_C")
         self._assertToken(lexer.token(), "IDENTIFIER", "ID")
@@ -162,22 +161,22 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsNone(lexer.token())
 
         lexer.input(".id")
-        with self.assertRaises(parserLex.ParserLexError):
+        with self.assertRaises(ParserLexError):
             lexer.token()
 
         lexer.input("id.")
         self._assertToken(lexer.token(), "IDENTIFIER", "id")
-        with self.assertRaises(parserLex.ParserLexError):
+        with self.assertRaises(ParserLexError):
             lexer.token()
 
         lexer.input("id.id.id")
         self._assertToken(lexer.token(), "IDENTIFIER", "id.id")
-        with self.assertRaises(parserLex.ParserLexError):
+        with self.assertRaises(ParserLexError):
             lexer.token()
 
     def testExpression(self):
         """Test for more or less complete expression"""
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
 
         expr = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                 "AND tract=8766 AND patch.cell_x > 5 AND "
@@ -228,29 +227,29 @@ class ParserLexTestCase(unittest.TestCase):
             self.assertEqual(exc.pos, pos)
             self.assertEqual(exc.lineno, lineno)
 
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
         expr = "a.b.c"
         lexer.input(expr)
         self._assertToken(lexer.token(), "IDENTIFIER", "a.b")
-        with self.assertRaises(parserLex.ParserLexError) as catcher:
+        with self.assertRaises(ParserLexError) as catcher:
             lexer.token()
         _assertExc(catcher.exception, expr, ".c", 3, 1)
 
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
         expr = "a \n& b"
         lexer.input(expr)
         self._assertToken(lexer.token(), "IDENTIFIER", "a")
-        with self.assertRaises(parserLex.ParserLexError) as catcher:
+        with self.assertRaises(ParserLexError) as catcher:
             lexer.token()
         _assertExc(catcher.exception, expr, "& b", 3, 2)
 
-        lexer = parserLex.ParserLex.make_lexer()
+        lexer = ParserLex.make_lexer()
         expr = "a\n=\n1e5.e2"
         lexer.input(expr)
         self._assertToken(lexer.token(), "IDENTIFIER", "a")
         self._assertToken(lexer.token(), "EQ", "=")
         self._assertToken(lexer.token(), "NUMERIC_LITERAL", "1e5")
-        with self.assertRaises(parserLex.ParserLexError) as catcher:
+        with self.assertRaises(ParserLexError) as catcher:
             lexer.token()
         _assertExc(catcher.exception, expr, ".e2", 7, 3)
 
