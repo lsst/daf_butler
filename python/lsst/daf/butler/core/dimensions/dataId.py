@@ -199,8 +199,8 @@ class DataId(Mapping):
         with these dimensions, with `DimensionElement` instances or `str`
         names as the outer keys, `str` column names as inner keys, and
         column values as inner dictionary values.
-    extra : `dict`, optional
-        Additional key-value pairs to update ``dataId`` with.
+        If the ``dimension`` argument is provided, may also be a non-nested
+        dict containing metadata column values for just that dimension.
     kwds : `dict`, optional
         Additional key-value pairs to update ``dataId`` with.
 
@@ -244,7 +244,7 @@ class DataId(Mapping):
     """
 
     def __new__(cls, dataId=None, *, dimensions=None, dimension=None, universe=None, region=None,
-                packers=None, entries=None, extra=None, **kwds):
+                packers=None, entries=None, **kwds):
 
         if isinstance(dataId, DataId):
             if universe is not None and universe != dataId.dimensions().universe:
@@ -269,16 +269,16 @@ class DataId(Mapping):
                     )
             dimensions = universe.extract(dimensions)
 
+        allLinkValues = None
+
         if dimensions is None:
             if dimension is None:
                 if universe is None:
                     raise ValueError(f"Cannot infer dimensions without universe.")
-                allLinks = dict(dataId)
-                if extra is not None:
-                    allLinks.update(extra)
-                allLinks.update(kwds)
+                allLinkValues = dict(dataId)
+                allLinkValues.update(kwds)
                 dimensions = universe.extract(dim for dim in universe
-                                              if dim.links(expand=False).issubset(allLinks))
+                                              if dim.links(expand=False).issubset(allLinkValues))
             else:
                 # Set DimensionGraph to the full set of dependencies for the
                 # single Dimension that was provided.
@@ -290,23 +290,45 @@ class DataId(Mapping):
 
         assert isinstance(dimensions, DimensionGraph), "should be set by earlier logic"
 
-        # Attempt to shortcut by returning the original object: if caller
-        # provided a true DataId and the dimensions are not changing. Note that
-        # __init__ will still fire, allowing us to update the DataId with
-        # new information provided via other arguments.
-        if isinstance(dataId, DataId) and dataId.dimensions() == dimensions:
-            return dataId
+        allDimensions = DimensionGraph(dimensions.universe, dimensions=dimensions, implied=True)
 
-        if extra is None:
-            extra = {}
+        if isinstance(dataId, DataId):
+
+            def hasLinkValueChanged(linkName):
+                value = kwds.get(linkName)
+                if value is not None:
+                    oldValue = dataId.get(linkName)
+                    if oldValue is not None and value != oldValue:
+                        return True
+                return False
+
+            changedLinkValues = frozenset(
+                linkName for linkName in dimensions.links().intersection(kwds.keys())
+                if hasLinkValueChanged(linkName)
+            )
+
+            if changedLinkValues:
+                constantDimensions = DimensionGraph(
+                    dimensions.universe,
+                    dimensions=[d for d in dimensions if d.links().isdisjoint(changedLinkValues)],
+                    implied=True
+                )
+            else:
+                # Attempt to shortcut by returning the original object: if caller
+                # provided a true DataId and the dimensions are not changing. Note that
+                # __init__ will still fire, allowing us to update the DataId with
+                # new information provided via other arguments.
+                if dataId.dimensions() == dimensions:
+                    return dataId
+                constantDimensions = allDimensions
 
         # Make a new instance with the dimensions and links we've identified.
         self = super().__new__(cls)
         self._requiredDimensions = dimensions
-        self._allDimensions = DimensionGraph(dimensions.universe, dimensions=dimensions, implied=True)
+        self._allDimensions = allDimensions
+        changedLinkValues = set()
         self._linkValues = {
-            linkName: linkValue for linkName, linkValue
-            in itertools.chain(dataId.items(), extra.items(), kwds.items())
+            linkName: linkValue for linkName, linkValue in itertools.chain(dataId.items(), kwds.items())
             if linkName in self._requiredDimensions.links()
         }
 
@@ -323,10 +345,12 @@ class DataId(Mapping):
             # second-level dictionaries, because these correspond to the same
             # rows in the Registry and updates to those rows are rare, so it
             # doesn't make sense to worry about conflicts here.
-            self._entries = DimensionKeyDict(dataId.entries, keys=self._allDimensions.elements, factory=dict)
+
+            self._entries = DimensionKeyDict(dataId.entries, keys=self._allDimensions.elements, factory=dict,
+                                             where=lambda element: element in constantDimensions.elements)
 
             self._packers = {name: packer for name, packer in dataId._packers.items()
-                             if packer.dimensions.given.issubset(self._allDimensions.elements)}
+                             if packer.dimensions.given.issubset(constantDimensions.elements)}
         else:
             # Create appropriately empty regions and entries if we're not
             # starting from a real DataId.
@@ -338,7 +362,7 @@ class DataId(Mapping):
         return self
 
     def __init__(self, dataId=None, *, dimensions=None, dimension=None, universe=None, region=None,
-                 packers=None, entries=None, extra=None, **kwds):
+                 packers=None, entries=None, **kwds):
         if dataId is None:
             dataId = {}
 
@@ -349,7 +373,17 @@ class DataId(Mapping):
             dimension, = self.dimensions().leaves
 
         if entries is not None:
-            self.entries.updateValues(entries)
+            unused = self.entries.updateValues(entries)
+            if unused:
+                if dimension is not None:
+                    # If caller passed a single dimension explicitly, we also
+                    # allow entries to be a non-nested dict corresponding to
+                    # that dimension.
+                    self.entries[dimension].update(entries)
+                else:
+                    unrecognized = unused - self.dimensions().universe.elements.names
+                    if unrecognized:
+                        raise ValueError(f"Unrecognized keys {unrecognized} for entries dict.")
 
         if dataId is not self:
             # Look for missing links (not necessary if this is just an
@@ -373,7 +407,7 @@ class DataId(Mapping):
             self.entries[self.dimensions().getRegionHolder()]["region"] = region
 
         # Entries should contain link fields as well, so transfer them from
-        # 'extra' + 'kwds'.  Also transfer from 'links' iff it's not a DataId;
+        # 'kwds'.  Also transfer from 'dataId' iff it's not a DataId;
         # if it is, we can safely assume the transfer has already been done.
 
         def addLinksToEntries(items):
@@ -392,8 +426,6 @@ class DataId(Mapping):
                     if element in self.dimensions(implied=True):
                         self.entries[element][linkName] = linkValue
 
-        if extra is not None:
-            addLinksToEntries(extra.items())
         addLinksToEntries(kwds.items())
         if not isinstance(dataId, DataId):
             addLinksToEntries(dataId.items())
