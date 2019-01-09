@@ -394,7 +394,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
                                                           physical_filter="dummy_i",
                                                           abstract_filter="i"))
-        registry.addDimensionEntry("SkyMap", dict(skymap="DummyMap", hash="sha!"))
+        registry.addDimensionEntry("SkyMap", dict(skymap="DummyMap", hash="sha!".encode("utf8")))
         for tract in range(10):
             registry.addDimensionEntry("Tract", dict(skymap="DummyMap", tract=tract))
             for patch in range(10):

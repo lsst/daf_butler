@@ -771,7 +771,8 @@ schema:
           identifier.
       -
         name: hash
-        type: string
+        type: hash
+        nbytes: 40
         nullable: false
         doc: >
           A hash of the SkyMap's parameters, used to prevent
