@@ -19,15 +19,49 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from base64 import b64encode, b64decode
+from math import ceil
+
 from .utils import iterable, stripIfNotNone
 from .views import View
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
-    Float, ForeignKeyConstraint, Table, MetaData
+    Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
 __all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
+
+
+class Base64Bytes(TypeDecorator):
+    """A SQLAlchemy custom type that maps Python `bytes` to a base64-encoded
+    `sqlalchemy.String`.
+    """
+
+    impl = String
+
+    def __init__(self, nbytes, *args, **kwds):
+        length = 4*ceil(nbytes/3)
+        TypeDecorator.__init__(self, *args, length=length, **kwds)
+        self.nbytes = nbytes
+
+    def process_bind_param(self, value, dialect):
+        # 'value' is native `bytes`.  We want to encode that to base64 `bytes`
+        # and then ASCII `str`, because `str` is what SQLAlchemy expects for
+        # String fields.
+        if value is None:
+            return None
+        if not isinstance(value, bytes):
+            raise TypeError(
+                f"Base64Bytes fields require 'bytes' values; got {value} with type {type(value)}"
+            )
+        return b64encode(value).decode('ascii')
+
+    def process_result_value(self, value, dialect):
+        # 'value' is a `str` that must be ASCII because it's base64-encoded.
+        # We want to transform that to base64-encoded `bytes` and then
+        # native `bytes`.
+        return b64decode(value.encode('ascii')) if value is not None else None
 
 
 class SchemaConfig(ConfigSubset):
@@ -92,7 +126,8 @@ class SchemaBuilder:
         views.
     """
     VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
-                          "bool": Boolean, "blob": LargeBinary, "datetime": DateTime}
+                          "bool": Boolean, "blob": LargeBinary, "datetime": DateTime,
+                          "hash": Base64Bytes}
 
     def __init__(self, config, limited=False):
         self.config = config
@@ -202,6 +237,7 @@ class SchemaBuilder:
             - primary_key, mark this column as primary key
             - foreign_key, link to other table
             - length, length of the field
+            - nbytes, length of decoded string (only for `type=='hash'`)
             - doc, docstring
         """
         if isinstance(table, str):
@@ -247,6 +283,7 @@ class SchemaBuilder:
             - nullable, entry can be null
             - primary_key, mark this column as primary key
             - length, length of the field
+            - nbytes, length of decoded string (only for `type=='hash'`)
             - doc, docstring
 
         Returns
@@ -265,7 +302,7 @@ class SchemaBuilder:
         columnType = self.VALID_COLUMN_TYPES[description.pop("type")]
         # extract kwargs for type object constructor, if any
         typeKwargs = {}
-        for opt in ("length",):
+        for opt in ("length", "nbytes"):
             if opt in description:
                 value = description.pop(opt)
                 typeKwargs[opt] = value
