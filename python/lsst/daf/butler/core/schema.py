@@ -201,6 +201,7 @@ class SchemaBuilder:
             - nullable, entry can be null
             - primary_key, mark this column as primary key
             - foreign_key, link to other table
+            - length, length of the field
             - doc, docstring
         """
         if isinstance(table, str):
@@ -245,6 +246,7 @@ class SchemaBuilder:
             May contain:
             - nullable, entry can be null
             - primary_key, mark this column as primary key
+            - length, length of the field
             - doc, docstring
 
         Returns
@@ -260,8 +262,17 @@ class SchemaBuilder:
         description = columnDescription.copy()
         # required
         columnName = description.pop("name")
-        args = (columnName, self.VALID_COLUMN_TYPES[description.pop("type")])
-        # additional optional arguments can be passed through directly
+        columnType = self.VALID_COLUMN_TYPES[description.pop("type")]
+        # extract kwargs for type object constructor, if any
+        typeKwargs = {}
+        for opt in ("length",):
+            if opt in description:
+                value = description.pop(opt)
+                typeKwargs[opt] = value
+        if typeKwargs:
+            columnType = columnType(**typeKwargs)
+        args = (columnName, columnType)
+        # extract kwargs for Column contructor.
         kwargs = {}
         for opt in ("nullable", "primary_key"):
             if opt in description:
