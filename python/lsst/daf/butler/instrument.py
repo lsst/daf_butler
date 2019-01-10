@@ -90,32 +90,27 @@ class ObservationDataIdPacker(DataIdPacker):
     Parameters
     ----------
     dimensions : `DataIdPackerDimensions`
-        Struct containing dimensions related to this `DataIdPacker`.  Must
-        have Instrument as the only given dimension, Detector as one of the
-        covered dimensions, and either Exposure or Visit as the other
-        covered dimension.  The required dimensions must be Instrument,
-        Detector, and one of Exposure or Visit.
-    dataId : `DataId`
-        `DataId` that uniquely identifies (at least) the Instrument.
-    observationLink : `str`
-        Either "visit" or "exposure".
+        Struct defining the "given" (at contructoin) and "required" (for
+        packing) dimensions of this packer.
+    instrument : `str`
+        Name of the Instrument for which this packer packs IDs.
+    obsMax : `int`
+        Maximum (exclusive) value for either Visit or Exposure IDs for this
+        Instrument, depending on which of those is present in
+        ``dimensions.required``.
+    detectorMax : `int
+        Maximum (exclusive) value for Detectors for this Instrument.
     """
 
-    @classmethod
-    def configure(cls, dimensions):
-        # Docstring inherited from DataIdPacker.configure
-        assert dimensions.given == ["Instrument"]
-        observationDim = dimensions.covered.findIf(lambda dim: dim.name != "Detector")
-        assert observationDim.name in ("Visit", "Exposure")
-        observationLink, = observationDim.links(expand=False)
-        metadata = {"Instrument": [f"{observationLink}_max", "detector_max"]}
-        return metadata, dict(observationLink=observationLink)
-
-    def __init__(self, dimensions, dataId, observationLink):
-        self._instrumentName = dataId["instrument"]
-        self._observationLink = observationLink
-        obsMax = dataId.entries["Instrument"][f"{self._observationLink}_max"]
-        self._detectorMax = dataId.entries["Instrument"]["detector_max"]
+    def __init__(self, dimensions, instrument, obsMax, detectorMax):
+        self._instrumentName = instrument
+        if dimensions.required == ("Instrument", "Visit", "Detector"):
+            self._observationLink = "visit"
+        elif dimensions.required == ("Instrument", "Exposure", "Detector"):
+            self._observationLink = "exposure"
+        else:
+            raise ValueError(f"Invalid dimensions for ObservationDataIdPacker: {dimensions.required}")
+        self._detectorMax = detectorMax
         self._maxBits = (obsMax*self._detectorMax).bit_length()
 
     @property
@@ -123,9 +118,8 @@ class ObservationDataIdPacker(DataIdPacker):
         # Docstring inherited from DataIdPacker.maxBits
         return self._maxBits
 
-    def pack(self, dataId, **kwds):
-        # Docstring inherited from DataIdPacker.pack
-        dataId = DataId(dataId, dimensions=self.dimensions.required, **kwds)
+    def _pack(self, dataId):
+        # Docstring inherited from DataIdPacker._pack
         return dataId["detector"] + self._detectorMax*dataId[self._observationLink]
 
     def unpack(self, packedId):

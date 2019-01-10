@@ -522,7 +522,7 @@ class SqlPreFlight:
                 region=extractRegion(rowDimensions)
             )
             if expandDataIds:
-                self.registry.expandDataId(dataId, packers=True)
+                self.registry.expandDataId(dataId)
 
             # for each dataset get ids DataRef
             datasetRefs = {}
@@ -541,7 +541,7 @@ class SqlPreFlight:
                                   dimensions=dsType.dimensions,
                                   region=extractRegion(dsType.dimensions))
                 if expandDataIds:
-                    self.registry.expandDataId(dsDataId, packers=True)
+                    self.registry.expandDataId(dsDataId)
                 dsId = None if col is None else row[col]
                 datasetRefs[dsType] = DatasetRef(dsType, dsDataId, dsId)
 

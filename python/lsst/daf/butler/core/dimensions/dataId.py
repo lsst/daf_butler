@@ -250,7 +250,7 @@ class DataId(Mapping):
     """
 
     def __new__(cls, dataId=None, *, dimensions=None, dimension=None, universe=None, region=None,
-                packers=None, entries=None, **kwds):
+                entries=None, **kwds):
 
         if isinstance(dataId, DataId):
             if universe is not None and universe != dataId.dimensions().universe:
@@ -354,21 +354,17 @@ class DataId(Mapping):
 
             self._entries = DimensionKeyDict(dataId.entries, keys=self._allDimensions.elements, factory=dict,
                                              where=lambda element: element in constantDimensions.elements)
-
-            self._packers = {name: packer for name, packer in dataId._packers.items()
-                             if packer.dimensions.given.issubset(constantDimensions.elements)}
         else:
             # Create appropriately empty regions and entries if we're not
             # starting from a real DataId.
             self.region = None
             self._entries = DimensionKeyDict(keys=self._allDimensions.elements, factory=dict)
-            self._packers = {}
 
         # Return the new instance, invoking __init__ to do further updates.
         return self
 
     def __init__(self, dataId=None, *, dimensions=None, dimension=None, universe=None, region=None,
-                 packers=None, entries=None, **kwds):
+                 entries=None, **kwds):
         if dataId is None:
             dataId = {}
 
@@ -471,30 +467,6 @@ class DataId(Mapping):
         against any actual `Registry` schema.
         """
         return self._entries
-
-    @property
-    def packers(self):
-        """A dictionary of `DataIdPacker` instances specialized for this
-        `DataId` (`dict` mapping `str` name to `DataIdPacker` instance).
-        """
-        return self._packers
-
-    def pack(self, name):
-        """Pack the data ID into a single integer or `bytes` blob.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the `DataIdPacker` to use; this must have been configured
-            with the `Registry` and added to the `DataId` by
-            `Registry.expandDataId`.
-
-        Returns
-        -------
-        packed : `int` or `bytes`
-            Packed ID.
-        """
-        return self.packers[name].pack(self)
 
     def implied(self):
         """Return a new `DataId` with all implied dimensions of ``self``

@@ -582,19 +582,17 @@ class RegistryTests(metaclass=ABCMeta):
             "Exposure",
             {"instrument": "DummyCam", "exposure": 4, "visit": 5, "physical_filter": "R"}
         )
-        dataId0 = registry.expandDataId(instrument="DummyCam", packers=True)
-        self.assertIn("VisitDetector", dataId0.packers)
-        self.assertIn("ExposureDetector", dataId0.packers)
+        dataId0 = registry.expandDataId(instrument="DummyCam")
         with self.assertRaises(LookupError):
-            dataId0.packers["VisitDetector"].pack(dataId0)
-            dataId0.packers["ExposureDetector"].pack(dataId0)
+            registry.packDataId("VisitDetector", dataId0)
+            registry.packDataId("ExposureDetector", dataId0)
         dataId1 = DataId(dataId0, visit=5, detector=1)
-        self.assertEqual(dataId1.pack("VisitDetector"), 11)
-        packer = dataId0.packers["ExposureDetector"]
+        self.assertEqual(registry.packDataId("VisitDetector", dataId1), 11)
+        packer = registry.makeDataIdPacker("ExposureDetector", dataId0)
         dataId2 = DataId(dataId0, exposure=4, detector=0)
         self.assertEqual(packer.pack(dataId0, exposure=4, detector=0), 8)
         self.assertEqual(packer.pack(dataId2), 8)
-        self.assertEqual(dataId2.pack("ExposureDetector"), 8)
+        self.assertEqual(registry.packDataId("ExposureDetector", dataId2), 8)
         dataId2a = packer.unpack(8)
         self.assertEqual(dataId2, dataId2a)
 

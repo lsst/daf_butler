@@ -9,21 +9,35 @@ registry:
   dataIdPackers:
     VisitDetector:
       given: [Instrument]
-      covered: [Visit, Detector]
       required: [Instrument, Visit, Detector]
       cls: lsst.daf.butler.instrument.ObservationDataIdPacker
+      parameters:
+        instrument: Instrument.instrument
+        obsMax: Instrument.visit_max
+        detectorMax: Instrument.detector_max
     ExposureDetector:
       given: [Instrument]
-      covered: [Exposure, Detector]
       required: [Instrument, Exposure, Detector]
       cls: lsst.daf.butler.instrument.ObservationDataIdPacker
+      parameters:
+        instrument: Instrument.instrument
+        obsMax: Instrument.exposure_max
+        detectorMax: Instrument.detector_max
     TractPatch:
       given: [SkyMap]
-      covered: [Tract, Patch]
       required: [SkyMap, Tract, Patch]
       cls: lsst.skymap.packers.SkyMapDataIdPacker
+      parameters:
+        skymap: SkyMap.skymap
+        tractMax: SkyMap.tract_max
+        patchNxMax: SkyMap.patch_nx_max
+        patchNyMax: SkyMap.patch_ny_max
     TractPatchAbstractFilter:
       given: [SkyMap]
-      covered: [Tract, Patch, AbstractFilter]
       required: [SkyMap, Tract, Patch, AbstractFilter]
       cls: lsst.skymap.packers.SkyMapDataIdPacker
+      parameters:
+        skymap: SkyMap.skymap
+        tractMax: SkyMap.tract_max
+        patchNxMax: SkyMap.patch_nx_max
+        patchNyMax: SkyMap.patch_ny_max

@@ -30,7 +30,7 @@ from .config import Config, ConfigSubset
 from .dimensions import DimensionConfig, DimensionGraph, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
-from .dataIdPacker import DataIdPackerLibrary
+from .dataIdPacker import DataIdPackerFactory
 
 __all__ = ("RegistryConfig", "Registry", "disableWhenLimited")
 
@@ -162,7 +162,13 @@ class Registry(metaclass=ABCMeta):
         self.config = registryConfig
         self._pixelization = None
         self.dimensions = DimensionGraph.fromConfig(dimensionConfig)
-        self._dataIdPackers = DataIdPackerLibrary(self.dimensions, registryConfig.get("dataIdPackers", {}))
+        self._dataIdPackerFactories = {
+            name: DataIdPackerFactory.fromConfig(self.dimensions, subconfig)
+            for name, subconfig in registryConfig.get("dataIdPackers", {}).items()
+        }
+        self._fieldsToAlwaysGet = DimensionKeyDict(keys=self.dimensions.elements, factory=set)
+        for packerFactory in self._dataIdPackerFactories.values():
+            packerFactory.updateFieldsToGet(self._fieldsToAlwaysGet)
 
     def __str__(self):
         return "None"
@@ -837,8 +843,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @disableWhenLimited
-    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, packers=False,
-                     update=False, **kwds):
+    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False,
+                     **kwds):
         """Expand a data ID to include additional information.
 
         `expandDataId` always returns a true `DataId` and ensures that its
@@ -863,17 +869,6 @@ class Registry(metaclass=ABCMeta):
             If `True` and the given `DataId` is uniquely associated with a
             region on the sky, obtain that region from the `Registry` and
             attach it as ``dataId.region``.
-        packers : `bool`
-            If `True`, attach any relevant `DataIdPacker` instances that were
-            configured with this `Registry`.  A packer is considered relevant
-            if its "given" dimensions (those needed to construct it) are a
-            subset of the dimensions identified by the data ID.  Note that
-            this means the data ID may not have enough information to *use*
-            all such packers.  For example, a `DataIdPacker` that mangles
-            ("covers") the "Visit" and "Detector" IDs into a single integer
-            given an "Instrument" will be attached to a `DataId` that only
-            identifies the "Instrument" dimension.  A packer with no given
-            dimensions is considered relevant for any data IDs.
         update : `bool`
             If `True`, assume existing entries and regions in the given
             `DataId` are out-of-date and should be updated by values in the
@@ -898,6 +893,7 @@ class Registry(metaclass=ABCMeta):
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
 
         fieldsToGet = DimensionKeyDict(keys=dataId.dimensions(implied=True).elements, factory=set)
+        fieldsToGet.updateValues(self._fieldsToAlwaysGet)
 
         # Interpret the 'metadata' argument and initialize the 'fieldsToGet'
         # dict, which maps each DimensionElement instance to a set of field
@@ -921,11 +917,6 @@ class Registry(metaclass=ABCMeta):
                     dataId.region = self.pixelization.pixel(dataId["skypix"])
                 else:
                     fieldsToGet[holder].add("region")
-
-        # Figure out what metadata fields the DataIdPackers relevant for these
-        # Dimensions need, and add them to the ones we plan to query for.
-        if packers:
-            fieldsToGet.updateValues(self._dataIdPackers.load(fieldsToGet.keys()))
 
         # We now process fieldsToGet with calls to _queryMetadata via a
         # depth-first traversal of the dependency graph.  As we traverse, we
@@ -993,10 +984,6 @@ class Registry(metaclass=ABCMeta):
         for dim in dataId.dimensions().leaves:
             visit(dim)
 
-        # Create and attach relevant DataIdPacker instances.
-        if packers:
-            dataId.packers.update(self._dataIdPackers.extract(dataId))
-
         return dataId
 
     @abstractmethod
@@ -1033,3 +1020,53 @@ class Registry(metaclass=ABCMeta):
             Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
+
+    def makeDataIdPacker(self, name, dataId=None, **kwds):
+        """Create an object that can pack certain data IDs into integers.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the packer, as given in the `Registry` configuration.
+        dataId : `dict` or `DataId`, optional
+            Data ID that identifies at least the "given" dimensions of the
+            packer.
+        kwds
+            Addition keyword arguments used to augment or override the given
+            data ID.
+
+        Returns
+        -------
+        packer : `DataIdPacker`
+            Instance of a subclass of `DataIdPacker`.
+        """
+        factory = self._dataIdPackerFactories[name]
+        givenDataId = self.expandDataId(dataId, dimensions=factory.dimensions.given, **kwds)
+        return factory.makePacker(givenDataId)
+
+    def packDataId(self, name, dataId=None, *, returnMaxBits=False, **kwds):
+        """Pack the given `DataId` into an integer.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the packer, as given in the `Registry` configuration.
+        dataId : `dict` or `DataId`, optional
+            Data ID that identifies at least the "required" dimensions of the
+            packer.
+        returnMaxBits : `bool`
+            If `True`, return a tuple of ``(packed, self.maxBits)``.
+        kwds
+            Addition keyword arguments used to augment or override the given
+            data ID.
+
+        Returns
+        -------
+        packed : `int`
+            Packed integer ID.
+        maxBits : `int`, optional
+            Maximum number of nonzero bits in ``packed``.  Not returned unless
+            ``returnMaxBits`` is `True`.
+        """
+        packer = self.makeDataIdPacker(name, dataId, **kwds)
+        return packer.pack(dataId, returnMaxBits=returnMaxBits, **kwds)

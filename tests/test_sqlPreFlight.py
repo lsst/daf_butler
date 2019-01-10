@@ -134,8 +134,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         for row in rows:
             self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
-            packer1 = row.dataId.packers["VisitDetector"]
-            packer2 = row.dataId.packers["ExposureDetector"]
+            packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
+            packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
             self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
                              DataId(row.dataId, dimensions=packer1.dimensions.required))
             self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
