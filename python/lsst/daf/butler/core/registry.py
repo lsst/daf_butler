@@ -906,7 +906,7 @@ class Registry(metaclass=ABCMeta):
             if dimension is not None and not isinstance(metadata, Mapping):
                 # If a single dimension was passed explicitly, permit
                 # 'metadata' to be a sequence corresponding to just that
-                # dimension (by normalizing it into a dict-of-sets now).
+                # dimension by updating our mapping-of-sets for that dimension.
                 fieldsToGet[dimension].update(metadata)
             else:
                 fieldsToGet.updateValues(metadata)
