@@ -63,8 +63,14 @@ class DimensionKeyDict(Mapping):
     can be used lieu of `DimensionElement` instances in lookup (`get`,
     `__getitem__`, `__contains__`).
 
-    Because `DimensionKeyDict` instances are immutable, they are frequently
-    used to hold mutable values, such as `set` or `dict` objects.
+    Because `DimensionKeyDict` instances are themselves immutable (in that new
+    keys and values cannot be added, and the value associated with a key cannot
+    be modified), they are frequently used to hold mutable values, such as
+    `set` or `dict` objects, giving them a specific and limited kind of
+    overall mutability (sometimes referred to as "interior" mutability).
+    This is particularly useful in the dimension system, where in many contexts
+    the set of relevant dimensions cannot change but the information associated
+    with them can.
     """
 
     def __init__(self, other=None, *, universe=None, keys=None, factory=None, where=None):
@@ -89,7 +95,7 @@ class DimensionKeyDict(Mapping):
             self._keys = DimensionSet(universe, byName.keys())
 
         if where is None:
-            where = lambda x: True  # noqa
+            where = lambda x: True  # noqa E731; better than shadowing via def
 
         # Make a new dictionary keyed by DimensionElement in the right order,
         # using factory() when no value is available.
