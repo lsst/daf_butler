@@ -47,6 +47,7 @@ class SqlPreFlight:
     """
     def __init__(self, registry):
         self.registry = registry
+        self.tables = self.registry._schema.tables.copy()
 
     def _joinOnForeignKey(self, fromClause, dimension, otherDimensions):
         """Add new table for join clause.
@@ -73,25 +74,25 @@ class SqlPreFlight:
         """
         if fromClause is None:
             # starting point, first table in JOIN
-            return self.registry._schema.tables[dimension.name]
+            return self.tables[dimension.name]
         else:
             joinOn = []
             for otherDimension in otherDimensions:
-                primaryKeyColumns = {name: self.registry._schema.tables[otherDimension.name].c[name]
+                primaryKeyColumns = {name: self.tables[otherDimension.name].c[name]
                                      for name in otherDimension.links()}
                 for name, col in primaryKeyColumns.items():
-                    joinOn.append(self.registry._schema.tables[dimension.name].c[name] == col)
+                    joinOn.append(self.tables[dimension.name].c[name] == col)
                 _LOG.debug("join %s with %s on columns %s", dimension.name,
                            dimension.name, list(primaryKeyColumns.keys()))
             if joinOn:
-                return fromClause.join(self.registry._schema.tables[dimension.name], and_(*joinOn))
+                return fromClause.join(self.tables[dimension.name], and_(*joinOn))
             else:
                 # Completely unrelated tables, e.g. joining SkyMap and Instrument.
                 # We need a cross join here but SQLAlchemy does not have specific
                 # method for that. Using join() without `onclause` will try to
                 # join on FK and will raise an exception for unrelated tables,
                 # so we have to use `onclause` which is always true.
-                return fromClause.join(self.registry._schema.tables[dimension.name], literal(True))
+                return fromClause.join(self.tables[dimension.name], literal(True))
 
     def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
                          expandDataIds=True):
@@ -161,7 +162,7 @@ class SqlPreFlight:
         selectColumns = []
         linkColumnIndices = {}
         for dimension in dimensions:
-            table = self.registry._schema.tables.get(dimension.name)
+            table = self.tables.get(dimension.name)
             if table is not None:
                 # take link column names, usually there is one
                 for link in dimension.links(expand=False):
@@ -178,7 +179,7 @@ class SqlPreFlight:
         fromJoin = None
         for dimension in dimensions:
             _LOG.debug("processing Dimension: %s", dimension.name)
-            if dimension.name in self.registry._schema.tables:
+            if dimension.name in self.tables:
                 fromJoin = self._joinOnForeignKey(fromJoin, dimension, dimension.dependencies(implied=True))
 
         joinedRegionTables = set()
@@ -225,7 +226,7 @@ class SqlPreFlight:
                 # into resultset so that we can filter-out non-overlapping
                 # regions.
                 regionColumnIndices[regionHolder.name] = len(selectColumns)
-                regionColumn = self.registry._schema.tables[regionHolder.name].c.region
+                regionColumn = self.tables[regionHolder.name].c.region
                 selectColumns.append(regionColumn)
 
             if regionHolders:
@@ -258,7 +259,7 @@ class SqlPreFlight:
                     # TODO: try to generalize this in some way, maybe using
                     # sql from ExposureRangeJoin
                     _LOG.debug("  joining on dimension: %s", dimension.name)
-                    exposureTable = self.registry._schema.tables["Exposure"]
+                    exposureTable = self.tables["Exposure"]
                     joinOn.append(between(exposureTable.c.datetime_begin,
                                           subquery.c.valid_first,
                                           subquery.c.valid_last))
@@ -270,7 +271,7 @@ class SqlPreFlight:
                     for link in dimension.links():
                         _LOG.debug("  joining on link: %s", link)
                         joinOn.append(subquery.c[link] ==
-                                      self.registry._schema.tables[dimension.name].c[link])
+                                      self.tables[dimension.name].c[link])
             fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isOutput)
 
             # remember dataset_id column index for this dataset
@@ -400,8 +401,8 @@ class SqlPreFlight:
         # full set of link names for this DatasetType
         links = list(dsType.dimensions.links())
 
-        dsTable = self.registry._schema.tables["Dataset"]
-        dsCollTable = self.registry._schema.tables["DatasetCollection"]
+        dsTable = self.tables["Dataset"]
+        dsCollTable = self.tables["DatasetCollection"]
 
         if len(dsCollections) == 1:
 
@@ -535,7 +536,7 @@ class SqlPreFlight:
                         linkNames[dsType.name + ".valid_first"] = "valid_first"
                         linkNames[dsType.name + ".valid_last"] = "valid_last"
                     else:
-                        if self.registry._schema.tables.get(dimension.name) is not None:
+                        if self.tables.get(dimension.name) is not None:
                             linkNames.update((s, s) for s in dimension.links(expand=False))
                 dsDataId = DataId({val: row[linkColumnIndices[key]] for key, val in linkNames.items()},
                                   dimensions=dsType.dimensions,
