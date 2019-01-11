@@ -260,9 +260,15 @@ class SqlPreFlight:
                 # We also have to include regions from each side of the join
                 # into result set so that we can filter-out non-overlapping
                 # regions.
-                regionColumnIndices[regionHolder.name] = len(selectColumns)
-                regionColumn = self.tables[regionHolder.name].c.region
-                selectColumns.append(regionColumn)
+                # Note that a region holder may have already appeared in this
+                # loop because it's a connection of multiple different join
+                # tables (e.g. Visit for both VisitTractJoin and
+                # VisitSkyPixJoin).  In that case we've already put its region
+                # in the query output fields.
+                if regionHolder.name not in regionColumnIndices:
+                    regionColumnIndices[regionHolder.name] = len(selectColumns)
+                    regionColumn = self.tables[regionHolder.name].c.region
+                    selectColumns.append(regionColumn)
 
             if regionHolders:
                 fromJoin = self._joinOnForeignKey(fromJoin, dimensionJoin, regionHolders)
