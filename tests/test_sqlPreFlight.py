@@ -27,6 +27,7 @@ import lsst.utils.tests
 
 from lsst.daf.butler import (ButlerConfig, DatasetType, Registry, DataId,
                              DatasetOriginInfoDef, StorageClass)
+from lsst.daf.butler.registries.sqlPreFlight import SqlPreFlight
 from lsst.sphgeom import Angle, Box, LonLat, NormalizedAngle
 
 
@@ -40,7 +41,7 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         # easiest way to make SqlPreFlight instance is to ask SqlRegistry to do it
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
-        self.preFlight = self.registry._preFlight
+        self.preFlight = SqlPreFlight(self.registry)
 
     def testDatasetOriginInfoDef(self):
         """Test for DatasetOriginInfoDef class"""
