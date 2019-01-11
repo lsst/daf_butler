@@ -26,7 +26,7 @@ from .utils import iterable, stripIfNotNone
 from .views import View
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
-    Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator
+    Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator, UniqueConstraint
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
@@ -218,6 +218,9 @@ class SchemaBuilder:
         if "foreignKeys" in tableDescription:
             for constraintDescription in tableDescription["foreignKeys"]:
                 self.addForeignKeyConstraint(table, constraintDescription)
+        if "unique" in tableDescription:
+            for columns in tableDescription["unique"]:
+                table.append_constraint(UniqueConstraint(*columns))
         return table
 
     def addColumn(self, table, columnDescription):
