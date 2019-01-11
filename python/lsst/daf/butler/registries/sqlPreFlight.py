@@ -47,6 +47,8 @@ class SqlPreFlight:
     """
     def __init__(self, registry):
         self.registry = registry
+        # Make a copy of the tables in the schema so we can modify it to fake
+        # nonexistent tables without modifying registry state.
         self.tables = self.registry._schema.tables.copy()
 
     def _joinOnForeignKey(self, fromClause, dimension, otherDimensions):
@@ -158,16 +160,35 @@ class SqlPreFlight:
         )
         _LOG.debug("dimensions: %s", dimensions)
 
+        def findSkyPixSubstitute():
+            # SkyPix doesn't have its own table; if it's included in the
+            # dimensions we care about, find a join table that we'll
+            # henceforth treat as the dimension table for SkyPix.  Note
+            # that there may be multiple SkyPix join tables, and we only
+            # reserve one for this role, but we don't actually care which.
+            for dimensionJoin in dimensions.joins(summaries=False):
+                if "SkyPix" in dimensionJoin.dependencies():
+                    _LOG.debug("Using %s as primary table for SkyPix", dimensionJoin.name)
+                    return dimensionJoin
+            raise AssertionError("At least one SkyPix join should be present if SkyPix dimension is.")
+
         # Build select column list
         selectColumns = []
         linkColumnIndices = {}
+        skyPixSubstitute = None
         for dimension in dimensions:
+            if dimension.name == "SkyPix":
+                # Find a SkyPix join table to use in place of the (nonexistent)
+                # SkyPix table, by adding it to our copy of the dict of tables.
+                skyPixSubstitute = findSkyPixSubstitute()
+                self.tables[dimension.name] = self.tables[skyPixSubstitute.name]
             table = self.tables.get(dimension.name)
             if table is not None:
                 # take link column names, usually there is one
                 for link in dimension.links(expand=False):
                     linkColumnIndices[link] = len(selectColumns)
                     selectColumns.append(table.c[link])
+
         _LOG.debug("selectColumns: %s", selectColumns)
         _LOG.debug("linkColumnIndices: %s", linkColumnIndices)
 
@@ -179,12 +200,17 @@ class SqlPreFlight:
         fromJoin = None
         for dimension in dimensions:
             _LOG.debug("processing Dimension: %s", dimension.name)
+            if dimension.name == "SkyPix" and skyPixSubstitute is None:
+                skyPixSubstitute = findSkyPixSubstitute()
+                self.tables[dimension.name] = self.tables[skyPixSubstitute.name]
             if dimension.name in self.tables:
                 fromJoin = self._joinOnForeignKey(fromJoin, dimension, dimension.dependencies(implied=True))
 
         joinedRegionTables = set()
         regionColumnIndices = {}
         for dimensionJoin in dimensions.joins(summaries=False):
+            if dimensionJoin == skyPixSubstitute:  # this table has already been included
+                continue
             _LOG.debug("processing DimensionJoin: %s", dimensionJoin.name)
             # Some `DimensionJoin`s have an associated region in that case
             # they shouldn't be joined separately in the region lookup.
@@ -204,6 +230,14 @@ class SqlPreFlight:
                     # means there is no region for these dimensions, want to skip it
                     _LOG.debug("Dimensions %s are not spatial, skipping", connection)
                     break
+                if regionHolder.name == "SkyPix":
+                    # SkyPix regions are constructed in Python as needed, not
+                    # stored in the database.
+                    # Note that by the time we've processed both connections,
+                    # regionHolders should still be non-empty, since at least
+                    # one of the connections will be to something other than
+                    # SkyPix.
+                    continue
                 if isinstance(regionHolder, DimensionJoin):
                     # If one of the connections is with a DimensionJoin, then
                     # it must be one with a region (and hence one we skip
@@ -223,7 +257,7 @@ class SqlPreFlight:
                 regionHolders.append(regionHolder)
 
                 # We also have to include regions from each side of the join
-                # into resultset so that we can filter-out non-overlapping
+                # into result set so that we can filter-out non-overlapping
                 # regions.
                 regionColumnIndices[regionHolder.name] = len(selectColumns)
                 regionColumn = self.tables[regionHolder.name].c.region
@@ -490,6 +524,14 @@ class SqlPreFlight:
             # filtered if any of two regions are disjoint.
             disjoint = False
             regions = {holder: Region.decode(row[col]) for holder, col in regionColumnIndices.items()}
+
+            # SkyPix regions aren't in the query because they aren't in the
+            # database.  If the data IDs we yield include a skypix key,
+            # calculate their regions using sphgeom.
+            if "skypix" in linkColumnIndices:
+                skypix = row[linkColumnIndices["skypix"]]
+                regions["SkyPix"] = self.registry.pixelization.pixel(skypix)
+
             for reg1, reg2 in itertools.combinations(regions.values(), 2):
                 if reg1.relate(reg2) == DISJOINT:
                     disjoint = True
