@@ -237,6 +237,7 @@ class SqlPreFlight:
                     # regionHolders should still be non-empty, since at least
                     # one of the connections will be to something other than
                     # SkyPix.
+                    _LOG.debug("Dimension is SkyMap, continuing.")
                     continue
                 if isinstance(regionHolder, DimensionJoin):
                     # If one of the connections is with a DimensionJoin, then
@@ -265,6 +266,10 @@ class SqlPreFlight:
 
             if regionHolders:
                 fromJoin = self._joinOnForeignKey(fromJoin, dimensionJoin, regionHolders)
+
+        _LOG.debug("selectColumns: %s", selectColumns)
+        _LOG.debug("linkColumnIndices: %s", linkColumnIndices)
+        _LOG.debug("regionColumnIndices: %s", regionColumnIndices)
 
         # join with input datasets to restrict to existing inputs
         dsIdColumns = {}
