@@ -794,6 +794,9 @@ schema:
         doc: >
           Number of patches in the y direction in each Tract.
 
+      unique:
+        - [hash]
+
     Tract:
       doc: >
         A SkyMap-populated table relating a Tract to its spatial region
