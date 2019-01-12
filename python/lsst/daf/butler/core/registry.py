@@ -27,9 +27,10 @@ import functools
 from lsst.utils import doImport
 from lsst.sphgeom import ConvexPolygon
 from .config import Config, ConfigSubset
-from .dimensions import DimensionConfig, DimensionGraph, DataId
+from .dimensions import DimensionConfig, DimensionGraph, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
+from .dataIdPacker import DataIdPackerFactory
 
 __all__ = ("RegistryConfig", "Registry", "disableWhenLimited")
 
@@ -161,6 +162,13 @@ class Registry(metaclass=ABCMeta):
         self.config = registryConfig
         self._pixelization = None
         self.dimensions = DimensionGraph.fromConfig(dimensionConfig)
+        self._dataIdPackerFactories = {
+            name: DataIdPackerFactory.fromConfig(self.dimensions, subconfig)
+            for name, subconfig in registryConfig.get("dataIdPackers", {}).items()
+        }
+        self._fieldsToAlwaysGet = DimensionKeyDict(keys=self.dimensions.elements, factory=set)
+        for packerFactory in self._dataIdPackerFactories.values():
+            packerFactory.updateFieldsToGet(self._fieldsToAlwaysGet)
 
     def __str__(self):
         return "None"
@@ -793,7 +801,8 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @disableWhenLimited
-    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes):
+    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
+                         expandDataIds=True):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -818,6 +827,8 @@ class Registry(metaclass=ABCMeta):
             be included in the returned column set. It is expected that
             Datasets for these DatasetTypes do not exist in the registry,
             but presently this is not checked.
+        expandDataIds : `bool`
+            If `True` (default), expand all data IDs when returning them.
 
         Yields
         ------
@@ -832,7 +843,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @disableWhenLimited
-    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False, **kwds):
+    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False,
+                     **kwds):
         """Expand a data ID to include additional information.
 
         `expandDataId` always returns a true `DataId` and ensures that its
@@ -880,6 +892,9 @@ class Registry(metaclass=ABCMeta):
         """
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
 
+        fieldsToGet = DimensionKeyDict(keys=dataId.dimensions(implied=True).elements, factory=set)
+        fieldsToGet.updateValues(self._fieldsToAlwaysGet)
+
         # Interpret the 'metadata' argument and initialize the 'fieldsToGet'
         # dict, which maps each DimensionElement instance to a set of field
         # names.
@@ -887,14 +902,10 @@ class Registry(metaclass=ABCMeta):
             if dimension is not None and not isinstance(metadata, Mapping):
                 # If a single dimension was passed explicitly, permit
                 # 'metadata' to be a sequence corresponding to just that
-                # dimension (by normalizing it into a dict-of-sets now).
-                fieldsToGet = {self.universe[dimension]: set(metadata)}
+                # dimension by updating our mapping-of-sets for that dimension.
+                fieldsToGet[dimension].update(metadata)
             else:
-                # we may mutate this later; make a true dict-of-sets copy
-                fieldsToGet = {self.universe.elements[element]: set(fields)
-                               for element, fields in metadata.items()}
-        else:
-            fieldsToGet = {}
+                fieldsToGet.updateValues(metadata)
 
         # If 'region' was passed, add a query for that to fieldsToGet as well.
         if region and (update or dataId.region is None):
@@ -905,7 +916,7 @@ class Registry(metaclass=ABCMeta):
                     # self.pixelization
                     dataId.region = self.pixelization.pixel(dataId["skypix"])
                 else:
-                    fieldsToGet.setdefault(holder, set()).add("region")
+                    fieldsToGet[holder].add("region")
 
         # We now process fieldsToGet with calls to _queryMetadata via a
         # depth-first traversal of the dependency graph.  As we traverse, we
@@ -926,8 +937,8 @@ class Registry(metaclass=ABCMeta):
                 return
             entries = dataId.entries[element]
             dependencies = element.dependencies(implied=True)
-            # Get the dictionary of fields we want to retrieve.
-            fieldsToGetNow = fieldsToGet.setdefault(element, set())
+            # Get the set of fields we want to retrieve.
+            fieldsToGetNow = fieldsToGet[element]
             # Note which links to dependencies we need to query for and which
             # we already know.  Make sure the ones we know are in the entries
             # dict for this element.
@@ -1009,3 +1020,53 @@ class Registry(metaclass=ABCMeta):
             Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
+
+    def makeDataIdPacker(self, name, dataId=None, **kwds):
+        """Create an object that can pack certain data IDs into integers.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the packer, as given in the `Registry` configuration.
+        dataId : `dict` or `DataId`, optional
+            Data ID that identifies at least the "given" dimensions of the
+            packer.
+        kwds
+            Addition keyword arguments used to augment or override the given
+            data ID.
+
+        Returns
+        -------
+        packer : `DataIdPacker`
+            Instance of a subclass of `DataIdPacker`.
+        """
+        factory = self._dataIdPackerFactories[name]
+        givenDataId = self.expandDataId(dataId, dimensions=factory.dimensions.given, **kwds)
+        return factory.makePacker(givenDataId)
+
+    def packDataId(self, name, dataId=None, *, returnMaxBits=False, **kwds):
+        """Pack the given `DataId` into an integer.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the packer, as given in the `Registry` configuration.
+        dataId : `dict` or `DataId`, optional
+            Data ID that identifies at least the "required" dimensions of the
+            packer.
+        returnMaxBits : `bool`
+            If `True`, return a tuple of ``(packed, self.maxBits)``.
+        kwds
+            Addition keyword arguments used to augment or override the given
+            data ID.
+
+        Returns
+        -------
+        packed : `int`
+            Packed integer ID.
+        maxBits : `int`, optional
+            Maximum number of nonzero bits in ``packed``.  Not returned unless
+            ``returnMaxBits`` is `True`.
+        """
+        packer = self.makeDataIdPacker(name, dataId, **kwds)
+        return packer.pack(dataId, returnMaxBits=returnMaxBits, **kwds)

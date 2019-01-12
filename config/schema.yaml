@@ -450,6 +450,24 @@ schema:
         primary_key: true
         doc: >
           Globally unique string indentifier for this Instrument.
+      -
+        name: visit_max
+        type: int
+        doc: >
+          Maximum value for the 'visit' field for Visits associated with
+          this instrument (exclusive).
+      -
+        name: exposure_max
+        type: int
+        doc: >
+          Maximum value for the 'exposure' field for Exposures associated with
+          this instrument (exclusive).
+      -
+        name: detector_max
+        type: int
+        doc: >
+          Maximum value for the 'detector' field for Detectors associated with
+          this instrument (exclusive).
 
     AbstractFilter:
       doc: >
@@ -726,6 +744,21 @@ schema:
           A hash of the SkyMap's parameters, used to prevent
           duplicate SkyMaps with the different names from being
           registered.
+
+      - name: tract_max
+        type: int
+        doc: >
+          Maximum ID for tracts in this SkyMap, exclusive.
+
+      - name: patch_nx_max
+        type: int
+        doc: >
+          Number of patches in the x direction in each Tract.
+
+      - name: patch_ny_max
+        type: int
+        doc: >
+          Number of patches in the y direction in each Tract.
 
     Tract:
       doc: >

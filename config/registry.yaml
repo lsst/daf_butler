@@ -6,3 +6,38 @@ registry:
   skypix:
     cls: lsst.sphgeom.HtmPixelization
     level: 7
+  dataIdPackers:
+    VisitDetector:
+      given: [Instrument]
+      required: [Instrument, Visit, Detector]
+      cls: lsst.daf.butler.instrument.ObservationDataIdPacker
+      parameters:
+        instrument: Instrument.instrument
+        obsMax: Instrument.visit_max
+        detectorMax: Instrument.detector_max
+    ExposureDetector:
+      given: [Instrument]
+      required: [Instrument, Exposure, Detector]
+      cls: lsst.daf.butler.instrument.ObservationDataIdPacker
+      parameters:
+        instrument: Instrument.instrument
+        obsMax: Instrument.exposure_max
+        detectorMax: Instrument.detector_max
+    TractPatch:
+      given: [SkyMap]
+      required: [SkyMap, Tract, Patch]
+      cls: lsst.skymap.packers.SkyMapDataIdPacker
+      parameters:
+        skymap: SkyMap.skymap
+        tractMax: SkyMap.tract_max
+        patchNxMax: SkyMap.patch_nx_max
+        patchNyMax: SkyMap.patch_ny_max
+    TractPatchAbstractFilter:
+      given: [SkyMap]
+      required: [SkyMap, Tract, Patch, AbstractFilter]
+      cls: lsst.skymap.packers.SkyMapDataIdPacker
+      parameters:
+        skymap: SkyMap.skymap
+        tractMax: SkyMap.tract_max
+        patchNxMax: SkyMap.patch_nx_max
+        patchNyMax: SkyMap.patch_ny_max
