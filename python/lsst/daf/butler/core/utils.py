@@ -172,18 +172,12 @@ class Singleton(type):
 def transactional(func):
     """Decorator that wraps a method and makes it transactional.
 
-    This also adds an optional ``transactional`` keyword argument to the
-    decorated function, which can be set to `False` to disable method-level
-    transactions.  This can be useful when the method is being called within
-    a higher-level transaction block but exceptions it raises will be
-    caught before they propagate through the higher-level context manager.
+    This depends on the class also defining a `transaction` method
+    that takes no arguments and acts as a context manager.
     """
     @functools.wraps(func)
     def inner(self, *args, **kwargs):
-        if kwargs.pop("transactional", True):
-            with self.transaction():
-                return func(self, *args, **kwargs)
-        else:
+        with self.transaction():
             return func(self, *args, **kwargs)
     return inner
 
