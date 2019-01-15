@@ -26,7 +26,7 @@ from sqlalchemy import Table, Column, \
 from sqlalchemy.sql import select, bindparam, func
 from sqlalchemy.exc import IntegrityError, StatementError
 
-from .databaseDict import DatabaseDict
+from lsst.daf.butler import DatabaseDict
 
 
 class SqlRegistryDatabaseDict(DatabaseDict):
