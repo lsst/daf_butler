@@ -23,6 +23,7 @@ import itertools
 import contextlib
 
 from sqlalchemy import create_engine, text
+from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import select, and_, exists
 from sqlalchemy.exc import IntegrityError
 
@@ -71,12 +72,12 @@ class SqlRegistry(Registry):
         registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dimensionConfig=dimensionConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(config=schemaConfig, limited=self.limited)
-        self._engine = create_engine(self.config["db"])
+        self._schema = self._createSchema(schemaConfig)
         self._datasetTypes = {}
-        self._connection = self._engine.connect()
+        self._engine = self._createEngine()
+        self._connection = self._createConnection(self._engine)
         if create:
-            self._createTables()
+            self._createTables(self._schema, self._connection)
 
     def __str__(self):
         return self.config["db"]
@@ -98,8 +99,53 @@ class SqlRegistry(Registry):
             trans.rollback()
             raise
 
-    def _createTables(self):
-        self._schema.metadata.create_all(self._engine)
+    def _createSchema(self, schemaConfig):
+        """Create and return an `lsst.daf.butler.Schema` object containing
+        SQLAlchemy table definitions.
+
+        This is a hook provided for customization by subclasses, but it is
+        known to be insufficient for that purpose and is expected to change in
+        the future.
+
+        Note that this method should not actually create any tables or views
+        in the database - it is called even when an existing database is used
+        in order to construct the SQLAlchemy representation of the expected
+        schema.
+        """
+        return Schema(config=schemaConfig, limited=self.limited)
+
+    def _createEngine(self):
+        """Create and return a `sqlalchemy.Engine` for this `Registry`.
+
+        This is a hook provided for customization by subclasses.
+
+        SQLAlchemy generally expects engines to be created at module scope,
+        with a pool of connections used by different parts of an application.
+        Because our `Registry` instances don't know what database they'll
+        connect to until they are constructed, that is impossible for us, so
+        the engine is connected with the `Registry` instance.  In addition,
+        we do not expect concurrent usage of the same `Registry`, and hence
+        don't gain anything from connection pooling.  As a result, the default
+        implementation of this function uses `sqlalchemy.pool.NullPool` to
+        associate just a single connection with the engine.  Unless they
+        have a very good reason not to, subclasses that override this method
+        should do the same.
+        """
+        return create_engine(self.config["db"], poolclass=NullPool)
+
+    def _createConnection(self, engine):
+        """Create and return a `sqlalchemy.Connection` for this `Registry`.
+
+        This is a hook provided for customization by subclasses.
+        """
+        return engine.connect()
+
+    def _createTables(self, schema, connection):
+        """Create all tables in the given schema, using the given connection.
+
+        This is a hook provided for customization by subclasses.
+        """
+        schema.metadata.create_all(connection)
 
     def _isValidDatasetType(self, datasetType):
         """Check if given `DatasetType` instance is valid for this `Registry`.

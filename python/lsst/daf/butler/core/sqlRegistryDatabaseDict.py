@@ -80,7 +80,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         self._key = key
         self._value = value
         self._table = Table(config["table"], self.registry._schema.metadata, *allColumns)
-        self._table.create(self.registry._engine, checkfirst=True)
+        self._table.create(self.registry._connection, checkfirst=True)
         valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
         keyColumn = getattr(self._table.columns, key)
         self._getSql = select(valueColumns).where(keyColumn == bindparam("key"))
