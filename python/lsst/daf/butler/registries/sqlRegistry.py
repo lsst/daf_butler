@@ -370,14 +370,14 @@ class SqlRegistry(Registry):
                 datasetType, dataId, run.collection))
 
         datasetTable = self._schema.tables["Dataset"]
-        datasetRef = None
+        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
         # TODO add producer
         result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
                                                                        run_id=run.id,
+                                                                       dataset_ref_hash=datasetRef.hash,
                                                                        quantum_id=None,
                                                                        **links))
-        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0],
-                                run=run)
+        datasetRef._id = result.inserted_primary_key[0]
         # A dataset is always associated with its Run collection
         self.associate(run.collection, [datasetRef, ], transactional=False)
 
@@ -411,6 +411,7 @@ class SqlRegistry(Registry):
         if result is not None:
             datasetType = self.getDatasetType(result["dataset_type_name"])
             run = self.getRun(id=result.run_id)
+            datasetRefHash = result["dataset_ref_hash"]
             dataId = DataId({link: result[self._schema.datasetTable.c[link]]
                              for link in datasetType.dimensions.links()},
                             dimensions=datasetType.dimensions,
@@ -426,7 +427,7 @@ class SqlRegistry(Registry):
             if results is not None:
                 for result in results:
                     components[result["component_name"]] = self.getDataset(result["component_dataset_id"])
-            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id, run=run)
+            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id, run=run, hash=datasetRefHash)
             ref._components = components
             return ref
         else:
@@ -551,7 +552,8 @@ class SqlRegistry(Registry):
         if refs:
             datasetCollectionTable = self._schema.tables["DatasetCollection"]
             self._connection.execute(datasetCollectionTable.insert(),
-                                     [{"dataset_id": ref.id, "collection": collection} for ref in refs])
+                                     [{"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                       "collection": collection} for ref in refs])
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
