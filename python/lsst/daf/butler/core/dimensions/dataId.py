@@ -22,6 +22,7 @@
 __all__ = ("DimensionKeyDict", "DataId",)
 
 import itertools
+import datetime
 from collections.abc import Mapping
 from collections import OrderedDict
 from .graph import DimensionGraph
@@ -510,6 +511,26 @@ class DataId(Mapping):
 
     def __hash__(self):
         return hash(frozenset(self._linkValues.items()))
+
+    def updateHash(self, message):
+        """Add this data ID to a secure hash.
+
+        Parameters
+        ----------
+        `message` : `hashlib` message instance
+            Object with an ``update`` method that takes a single `bytes`
+            argument to update the hash.
+        """
+        for k, v in self.items():
+            message.update(k.encode())
+            if isinstance(v, int):
+                message.update(v.to_bytes(64, byteorder='little'))
+            elif isinstance(v, str):
+                message.update(v.encode())
+            elif isinstance(v, datetime.datetime):
+                message.update(v.isoformat().encode())
+            else:
+                raise TypeError(f"Data ID value type not supported in hash: {type(v)}")
 
     def fields(self, element, region=True, metadata=True):
         """Return the entries for a particular `DimensionElement`.

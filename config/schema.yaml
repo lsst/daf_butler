@@ -33,6 +33,14 @@ schema:
           to fine-grained provenance information.
           may be null for datasets not produced by running a supertask.
       -
+        name: dataset_ref_hash
+        type: hash
+        nbytes: 32
+        nullable: false
+        doc: >
+          Secure hash of the data ID (i.e. dimension link values) and
+          dataset_type_name.
+      -
         name: instrument
         type: string
         length: 8
@@ -274,6 +282,14 @@ schema:
         doc: >
           Link to a unique record in the Dataset table.
       -
+        name: dataset_ref_hash
+        type: hash
+        nbytes: 32
+        nullable: false
+        doc: >
+          Secure hash of the data ID (i.e. dimension link values) and
+          dataset_type_name.
+      -
         name: collection
         type: string
         length: 128
@@ -285,6 +301,8 @@ schema:
       -
         src: dataset_id
         tgt: Dataset.dataset_id
+      unique:
+      - [dataset_ref_hash, collection]
 
     Execution:
       doc: >
