@@ -21,12 +21,14 @@
 
 from contextlib import closing
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 
 from sqlite3 import Connection as SQLite3Connection
+from sqlalchemy.exc import IntegrityError
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.utils import transactional
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
@@ -93,3 +95,18 @@ class SqliteRegistry(SqlRegistry):
         event.listen(engine, "connect", _onSqlite3Connect)
         event.listen(engine, "begin", _onSqlite3Begin)
         return engine
+
+    @transactional
+    def associate(self, collection, refs):
+        # Docstring inherited from Registry.associate
+        query = text(
+            'INSERT INTO DatasetCollection ("dataset_id", "dataset_ref_hash", "collection") '
+            'VALUES (:dataset_id, :dataset_ref_hash, :collection) '
+            'ON CONFLICT ("dataset_id", "collection") DO NOTHING'
+        )
+        try:
+            self._connection.execute(query,
+                                     [{"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                       "collection": collection} for ref in refs])
+        except IntegrityError as err:
+            raise ValueError("INSERT into DatasetCollection failed") from err
