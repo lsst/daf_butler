@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from copy import deepcopy
+import hashlib
 
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
@@ -245,10 +246,10 @@ class DatasetRef:
         Normally set to `None` and assigned by `Registry`
     """
 
-    __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run",
+    __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run", "_hash",
                  "_predictedConsumers", "_actualConsumers", "_components")
 
-    def __init__(self, datasetType, dataId, id=None, run=None):
+    def __init__(self, datasetType, dataId, id=None, run=None, hash=None):
         assert isinstance(datasetType, DatasetType)
         self._id = id
         self._datasetType = datasetType
@@ -258,6 +259,7 @@ class DatasetRef:
         self._actualConsumers = dict()
         self._components = dict()
         self._run = run
+        self._hash = hash
 
     __eq__ = slotValuesAreEqual
 
@@ -268,6 +270,17 @@ class DatasetRef:
         Typically assigned by `Registry`.
         """
         return self._id
+
+    @property
+    def hash(self):
+        """Secure hash of the `DatasetType` name and `DataId` (`bytes`).
+        """
+        if self._hash is None:
+            message = hashlib.blake2b(digest_size=32)
+            message.update(self.datasetType.name.encode("utf8"))
+            self.dataId.updateHash(message)
+            self._hash = message.digest()
+        return self._hash
 
     @property
     def datasetType(self):
