@@ -37,8 +37,8 @@ from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from ..core.dimensions import DataId, DimensionGraph
+from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from .sqlPreFlight import SqlPreFlight
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
