@@ -612,6 +612,30 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
         self.assertIsInstance(registry, SqlRegistry)
         self.assertFalse(registry.limited)
 
+    def testNestedTransaction(self):
+        registry = self.makeRegistry()
+        dimension = "Instrument"
+        dataId1 = {"instrument": "DummyCam"}
+        dataId2 = {"instrument": "DummyCam2"}
+        checkpointReached = False
+        with registry.transaction():
+            # This should be added and (ultimately) committed.
+            registry.addDimensionEntry(dimension, dataId1)
+            with self.assertRaises(ValueError):
+                with registry.transaction():
+                    # This does not conflict, and should succeed (but not
+                    # be committed).
+                    registry.addDimensionEntry(dimension, dataId2)
+                    checkpointReached = True
+                    # This should conflict and raise, triggerring a rollback
+                    # of the previous insertion within the same transaction
+                    # context, but not the original insertion in the outer
+                    # block.
+                    registry.addDimensionEntry(dimension, dataId1)
+        self.assertTrue(checkpointReached)
+        self.assertIsNotNone(registry.findDimensionEntry(dimension, dataId1))
+        self.assertIsNone(registry.findDimensionEntry(dimension, dataId2))
+
 
 class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
     """Test for SqlRegistry with limited=True.
