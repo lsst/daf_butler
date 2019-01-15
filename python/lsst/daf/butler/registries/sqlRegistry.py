@@ -91,7 +91,7 @@ class SqlRegistry(Registry):
 
         This context manager may be nested.
         """
-        trans = self._connection.begin()
+        trans = self._connection.begin_nested()
         try:
             yield
             trans.commit()
@@ -423,14 +423,14 @@ class SqlRegistry(Registry):
                                                                        **links))
         datasetRef._id = result.inserted_primary_key[0]
         # A dataset is always associated with its Run collection
-        self.associate(run.collection, [datasetRef, ], transactional=False)
+        self.associate(run.collection, [datasetRef, ])
 
         if recursive:
             for component in datasetType.storageClass.components:
                 compTypeName = datasetType.componentTypeName(component)
                 compDatasetType = self.getDatasetType(compTypeName)
                 compRef = self.addDataset(compDatasetType, dataId, run=run, producer=producer,
-                                          recursive=True, transactional=False)
+                                          recursive=True)
                 self.attachComponent(component, datasetRef, compRef)
         return datasetRef
 
