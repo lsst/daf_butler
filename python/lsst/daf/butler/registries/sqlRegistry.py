@@ -75,8 +75,6 @@ class SqlRegistry(Registry):
         self._engine = create_engine(self.config["db"])
         self._datasetTypes = {}
         self._connection = self._engine.connect()
-        if not self.limited:
-            self._preFlight = SqlPreFlight(self)
         if create:
             self._createTables()
 
@@ -1031,8 +1029,9 @@ class SqlRegistry(Registry):
             return dsType
         needed = [standardize(t) for t in neededDatasetTypes]
         future = [standardize(t) for t in futureDatasetTypes]
-        return self._preFlight.selectDimensions(originInfo, expression, needed, future,
-                                                expandDataIds=expandDataIds)
+        preFlight = SqlPreFlight(self)
+        return preFlight.selectDimensions(originInfo, expression, needed, future,
+                                          expandDataIds=expandDataIds)
 
     @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):

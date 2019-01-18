@@ -200,7 +200,7 @@ class ConversionWalker:
         repo.datasetTypes.update(extractor.getDatasetTypes())
 
         log.info("%s: walking datasets.", repo.root)
-        for dirPath, dirNames, fileNames in os.walk(repo.root):
+        for dirPath, dirNames, fileNames in os.walk(repo.root, followlinks=True):
             dirNames[:] = [dirName for dirName in dirNames
                            if not self.tryRoot(os.path.join(dirPath, dirName))]
             relative = dirPath[len(repo.root) + 1:]

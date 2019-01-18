@@ -65,6 +65,8 @@ storageClasses:
     pytype: lsst.afw.table.BaseCatalog
   PeakCatalog:
     pytype: lsst.afw.detection.PeakCatalog
+  SimpleCatalog:
+    pytype: lsst.afw.table.SimpleCatalog
   SourceCatalog:
     pytype: lsst.afw.table.SourceCatalog
   SkyMap:
