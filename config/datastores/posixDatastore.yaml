@@ -28,6 +28,7 @@ datastore:
     PeakCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     SimpleCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     SourceCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    ObjectMaskCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     ImageF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
     ImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
     DecoratedImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
