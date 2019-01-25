@@ -23,7 +23,8 @@ import itertools
 import contextlib
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.sql import select, and_, exists
+from sqlalchemy.pool import NullPool
+from sqlalchemy.sql import select, and_, exists, bindparam
 from sqlalchemy.exc import IntegrityError
 
 from ..core.utils import transactional
@@ -36,8 +37,8 @@ from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from ..core.dimensions import DataId, DimensionGraph
+from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from .sqlPreFlight import SqlPreFlight
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
@@ -71,12 +72,12 @@ class SqlRegistry(Registry):
         registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dimensionConfig=dimensionConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = Schema(config=schemaConfig, limited=self.limited)
-        self._engine = create_engine(self.config["db"])
+        self._schema = self._createSchema(schemaConfig)
         self._datasetTypes = {}
-        self._connection = self._engine.connect()
+        self._engine = self._createEngine()
+        self._connection = self._createConnection(self._engine)
         if create:
-            self._createTables()
+            self._createTables(self._schema, self._connection)
 
     def __str__(self):
         return self.config["db"]
@@ -90,7 +91,7 @@ class SqlRegistry(Registry):
 
         This context manager may be nested.
         """
-        trans = self._connection.begin()
+        trans = self._connection.begin_nested()
         try:
             yield
             trans.commit()
@@ -98,8 +99,53 @@ class SqlRegistry(Registry):
             trans.rollback()
             raise
 
-    def _createTables(self):
-        self._schema.metadata.create_all(self._engine)
+    def _createSchema(self, schemaConfig):
+        """Create and return an `lsst.daf.butler.Schema` object containing
+        SQLAlchemy table definitions.
+
+        This is a hook provided for customization by subclasses, but it is
+        known to be insufficient for that purpose and is expected to change in
+        the future.
+
+        Note that this method should not actually create any tables or views
+        in the database - it is called even when an existing database is used
+        in order to construct the SQLAlchemy representation of the expected
+        schema.
+        """
+        return Schema(config=schemaConfig, limited=self.limited)
+
+    def _createEngine(self):
+        """Create and return a `sqlalchemy.Engine` for this `Registry`.
+
+        This is a hook provided for customization by subclasses.
+
+        SQLAlchemy generally expects engines to be created at module scope,
+        with a pool of connections used by different parts of an application.
+        Because our `Registry` instances don't know what database they'll
+        connect to until they are constructed, that is impossible for us, so
+        the engine is connected with the `Registry` instance.  In addition,
+        we do not expect concurrent usage of the same `Registry`, and hence
+        don't gain anything from connection pooling.  As a result, the default
+        implementation of this function uses `sqlalchemy.pool.NullPool` to
+        associate just a single connection with the engine.  Unless they
+        have a very good reason not to, subclasses that override this method
+        should do the same.
+        """
+        return create_engine(self.config["db"], poolclass=NullPool)
+
+    def _createConnection(self, engine):
+        """Create and return a `sqlalchemy.Connection` for this `Registry`.
+
+        This is a hook provided for customization by subclasses.
+        """
+        return engine.connect()
+
+    def _createTables(self, schema, connection):
+        """Create all tables in the given schema, using the given connection.
+
+        This is a hook provided for customization by subclasses.
+        """
+        schema.metadata.create_all(connection)
 
     def _isValidDatasetType(self, datasetType):
         """Check if given `DatasetType` instance is valid for this `Registry`.
@@ -368,23 +414,23 @@ class SqlRegistry(Registry):
                 datasetType, dataId, run.collection))
 
         datasetTable = self._schema.tables["Dataset"]
-        datasetRef = None
+        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
         # TODO add producer
         result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
                                                                        run_id=run.id,
+                                                                       dataset_ref_hash=datasetRef.hash,
                                                                        quantum_id=None,
                                                                        **links))
-        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, id=result.inserted_primary_key[0],
-                                run=run)
+        datasetRef._id = result.inserted_primary_key[0]
         # A dataset is always associated with its Run collection
-        self.associate(run.collection, [datasetRef, ], transactional=False)
+        self.associate(run.collection, [datasetRef, ])
 
         if recursive:
             for component in datasetType.storageClass.components:
                 compTypeName = datasetType.componentTypeName(component)
                 compDatasetType = self.getDatasetType(compTypeName)
                 compRef = self.addDataset(compDatasetType, dataId, run=run, producer=producer,
-                                          recursive=True, transactional=False)
+                                          recursive=True)
                 self.attachComponent(component, datasetRef, compRef)
         return datasetRef
 
@@ -409,6 +455,7 @@ class SqlRegistry(Registry):
         if result is not None:
             datasetType = self.getDatasetType(result["dataset_type_name"])
             run = self.getRun(id=result.run_id)
+            datasetRefHash = result["dataset_ref_hash"]
             dataId = DataId({link: result[self._schema.datasetTable.c[link]]
                              for link in datasetType.dimensions.links()},
                             dimensions=datasetType.dimensions,
@@ -424,7 +471,7 @@ class SqlRegistry(Registry):
             if results is not None:
                 for result in results:
                     components[result["component_name"]] = self.getDataset(result["component_dataset_id"])
-            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id, run=run)
+            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id, run=run, hash=datasetRefHash)
             ref._components = components
             return ref
         else:
@@ -476,80 +523,40 @@ class SqlRegistry(Registry):
             If a Dataset with the given `DatasetRef` already exists in the
             given collection.
         """
-        # A collection cannot contain more than one Dataset with the same
-        # DatasetRef. Our SQL schema does not enforce this constraint yet so
-        # checks have to be done in the code:
-        # - read existing collection and try to match its contents with
-        #   new DatasetRefs using dimensions
-        # - if there is a match and dataset_id is different then constraint
-        #   check fails
-        # TODO: This implementation has a race which can violate the
-        # constraint if multiple clients update registry concurrently. Proper
-        # constraint checks have to be implmented in schema.
 
-        def _matchRef(row, ref):
-            """Compare Dataset table row with a DatasetRef.
+        # Most SqlRegistry subclass implementations should replace this
+        # implementation with special "UPSERT" or "MERGE" syntax.  This
+        # implementation is only concurrency-safe for databases that implement
+        # transactions with database- or table-wide locks (e.g. SQLite).
 
-            Parameters
-            ----------
-            row : `sqlalchemy.RowProxy`
-                Single row from Dataset table.
-            ref : `DatasetRef`
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        query = datasetCollectionTable.select(datasetCollectionTable.c.dataset_id).where(
+            and_(datasetCollectionTable.c.collection == collection,
+                 datasetCollectionTable.c.dataset_ref_hash == bindparam("hash"))
+        )
 
-            Returns
-            -------
-            match : `bool`
-                True if Dataset row is identical to ``ref`` (their IDs match),
-                False otherwise.
-
-            Raises
-            ------
-            ValueError
-                If DatasetRef dimension values match row data but their IDs differ.
-            """
-            if row.dataset_id == ref.id:
-                return True
-
-            if row.dataset_type_name != ref.datasetType.name:
-                return False
+        for ref in refs:
 
             # TODO: factor this operation out, fix use of private member
             if not isinstance(ref.datasetType.dimensions, DimensionGraph):
                 ref.datasetType._dimensions = self.dimensions.extract(ref.datasetType.dimensions)
 
-            dataId = ref.dataId
-            if all(row[col] == dataId[col] for col in ref.datasetType.dimensions.links()):
-                raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
-                    ref.datasetType, dataId, collection))
-            return False
-
-        if len(refs) == 1:
-            # small optimization for a single ref
-            ref = refs[0]
-            dataset_id = self._findDatasetId(collection, ref.datasetType, ref.dataId)
-            if dataset_id == ref.id:
-                # already there
-                return
-            elif dataset_id is not None:
-                raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
-                    ref.datasetType, ref.dataId, collection))
-        else:
-            # full scan of a collection to compare DatasetRef dimensions
-            datasetTable = self._schema.tables["Dataset"]
-            datasetCollectionTable = self._schema.tables["DatasetCollection"]
-            query = datasetTable.select()
-            query = query.where(and_(datasetTable.c.dataset_id == datasetCollectionTable.c.dataset_id,
-                                     datasetCollectionTable.c.collection == collection))
-            result = self._connection.execute(query)
-            for row in result:
-                # skip DatasetRefs that are already there
-                refs = [ref for ref in refs if not _matchRef(row, ref)]
-
-        # if any ref is not there yet add it
-        if refs:
-            datasetCollectionTable = self._schema.tables["DatasetCollection"]
-            self._connection.execute(datasetCollectionTable.insert(),
-                                     [{"dataset_id": ref.id, "collection": collection} for ref in refs])
+            row = self._connection.execute(query, hash=ref.hash).fetchone()
+            if row is None:
+                # No Dataset with this DatasetType and Data ID in collection;
+                # insert it now.
+                self._connection.execute(datasetCollectionTable.insert(),
+                                         [{"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                           "collection": collection} for ref in refs])
+            elif row.dataset_id != ref.id:
+                # A different Dataset with this DatasetType and Data ID already
+                # exists in this collection.
+                raise ValueError(
+                    "A dataset of type {} with id: {} already exists in collection {}".format(
+                        ref.datasetType, ref.dataId, collection
+                    )
+                )
+            # If the same Dataset is already in this collection, do nothing.
 
     @transactional
     def disassociate(self, collection, refs, remove=True):

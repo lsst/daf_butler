@@ -13,6 +13,7 @@ schema:
       -
         name: dataset_type_name
         type: string
+        length: 128
         nullable: false
         doc: >
           The name of the DatasetType associated with this dataset; a
@@ -32,15 +33,26 @@ schema:
           to fine-grained provenance information.
           may be null for datasets not produced by running a supertask.
       -
+        name: dataset_ref_hash
+        type: hash
+        nbytes: 32
+        nullable: false
+        doc: >
+          Secure hash of the data ID (i.e. dimension link values) and
+          dataset_type_name.
+      -
         name: instrument
         type: string
+        length: 8
       -
         name: abstract_filter
         type: string
+        length: 8
         doc: >
           String name for the abstract filter, frequently a single character.
       -
         name: physical_filter
+        length: 16
         type: string
       -
         name: detector
@@ -72,6 +84,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 32
       -
         name: tract
         type: int
@@ -81,6 +94,7 @@ schema:
       -
         name: label
         type: string
+        length: 32
         doc: >
           A string value composed only of letters, numbers, and underscores.
       foreignKeys:
@@ -170,6 +184,7 @@ schema:
       -
         name: component_name
         type: string
+        length: 32
         nullable: false
         doc: >
           Name of this component within this composite.
@@ -189,6 +204,7 @@ schema:
       -
         name: dataset_type_name
         type: string
+        length: 128
         primary_key: true
         nullable: false
         doc: >
@@ -196,6 +212,7 @@ schema:
       -
         name: storage_class
         type: string
+        length: 32
         nullable: false
         doc: >
           Name of the StorageClass associated with this DatasetType.  All
@@ -211,12 +228,14 @@ schema:
       -
         name: dataset_type_name
         type: string
+        length: 128
         nullable: false
         doc: >
           The name of the DatasetType.
       -
         name: dimension_name
         type: string
+        length: 32
         nullable: false
         doc: >
           The name of a Dimension associated with this DatasetType.
@@ -233,12 +252,14 @@ schema:
       -
         name: dataset_type_name
         type: string
+        length: 128
         nullable: false
         doc: >
           The name of the DatasetType.
       -
         name: metadata_name
         type: string
+        length: 32
         nullable: false
         doc: >
           The name of a Metadata table that has a record for every Dataset
@@ -261,8 +282,17 @@ schema:
         doc: >
           Link to a unique record in the Dataset table.
       -
+        name: dataset_ref_hash
+        type: hash
+        nbytes: 32
+        nullable: false
+        doc: >
+          Secure hash of the data ID (i.e. dimension link values) and
+          dataset_type_name.
+      -
         name: collection
         type: string
+        length: 128
         primary_key: true
         nullable: false
         doc: >
@@ -271,6 +301,8 @@ schema:
       -
         src: dataset_id
         tgt: Dataset.dataset_id
+      unique:
+      - [dataset_ref_hash, collection]
 
     Execution:
       doc: >
@@ -301,6 +333,7 @@ schema:
       -
         name: host
         type: string
+        length: 64
         nullable: true
         doc: >
           The system on which the execution was run.  May have a different
@@ -324,6 +357,7 @@ schema:
       -
         name: collection
         type: string
+        length: 128
         doc: >
           A Collection name with which all Datasets in this Run are initially
           associated, also used as a human-readable name for this Run.
@@ -367,6 +401,7 @@ schema:
       -
         name: task
         type: string
+        length: 256
         doc: >
           Fully-qualified name of the SuperTask that executed this Quantum.
       -
@@ -429,6 +464,7 @@ schema:
           Link to the Dataset table.
       - name: datastore_name
         type: string
+        length: 256
         primary_key: true
         nullable: false
         doc: >
@@ -447,6 +483,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         primary_key: true
         doc: >
           Globally unique string indentifier for this Instrument.
@@ -478,6 +515,7 @@ schema:
       -
         name: abstract_filter
         type: string
+        length: 8
         primary_key: true
         doc: >
           Name of the filter.
@@ -495,12 +533,14 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         primary_key: true
         doc: >
           Name of the Instrument with which this filter is associated.
       -
         name: physical_filter
         type: string
+        length: 16
         primary_key: true
         doc: >
           String name of the filter, typically a multi-letter code in a
@@ -508,6 +548,7 @@ schema:
       -
         name: abstract_filter
         type: string
+        length: 8
         doc: >
           Name of the AbstractFilter with which this filter is associated.
       foreignKeys:
@@ -528,6 +569,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         primary_key: true
         nullable: false
         doc: >
@@ -542,18 +584,21 @@ schema:
       -
         name: name
         type: string
+        length: 32
         doc: >
           An alternate string identifer for the detector; may or may not
           be unique within an Instrument.
       -
         name: raft
         type: string
+        length: 32
         doc: >
           A string name for a group of detectors with an Instrument-dependent
           interpretation.
       -
         name: purpose
         type: string
+        length: 32
         doc: >
           Role of the Detector; typically one of "SCIENCE", "WAVEFRONT",
           or "GUIDE", though Instruments may define additional values.
@@ -570,6 +615,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         primary_key: true
         nullable: false
         doc: >
@@ -585,6 +631,7 @@ schema:
       -
         name: physical_filter
         type: string
+        length: 16
         nullable: false
         doc: >
           The bandpass filter used for all exposures in this Visit.
@@ -649,6 +696,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         primary_key: true
         nullable: false
         doc: >
@@ -670,12 +718,7 @@ schema:
       -
         name: physical_filter
         type: string
-        nullable: false
-        doc: >
-          The bandpass filter used for all exposures in this Visit.
-      -
-        name: physical_filter
-        type: string
+        length: 16
         nullable: false
         doc: >
           The bandpass filter used for all exposures in this Visit.
@@ -731,6 +774,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         primary_key: true
         nullable: false
         doc: >
@@ -738,7 +782,8 @@ schema:
           identifier.
       -
         name: hash
-        type: string
+        type: hash
+        nbytes: 40
         nullable: false
         doc: >
           A hash of the SkyMap's parameters, used to prevent
@@ -760,6 +805,9 @@ schema:
         doc: >
           Number of patches in the y direction in each Tract.
 
+      unique:
+        - [hash]
+
     Tract:
       doc: >
         A SkyMap-populated table relating a Tract to its spatial region
@@ -769,6 +817,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         primary_key: true
         nullable: false
         doc: >
@@ -813,6 +862,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         primary_key: true
         nullable: false
         doc: >
@@ -878,6 +928,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 64
         primary_key: true
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
@@ -927,6 +978,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
       -
@@ -961,6 +1013,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         nullable: false
         doc: Name of the Instrument associated with the Visit.
       -
@@ -992,6 +1045,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         nullable: false
         doc: Name of the SkyMap associated with the Patch.
       -
@@ -1026,6 +1080,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         nullable: false
         doc: Name of the SkyMap associated with the Tract.
       -
@@ -1057,6 +1112,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
       -
@@ -1072,6 +1128,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         nullable: false
         doc: Name of the SkyMap associated with the Patch.
       -
@@ -1123,6 +1180,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         nullable: false
         doc: Name of the Instrument associated with the Visit.
       -
@@ -1133,6 +1191,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         nullable: false
         doc: Name of the SkyMap associated with the Patch.
       -
@@ -1181,6 +1240,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
       -
@@ -1196,6 +1256,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         nullable: false
         doc: Name of the SkyMap associated with the Tract.
       -
@@ -1239,6 +1300,7 @@ schema:
       -
         name: instrument
         type: string
+        length: 8
         nullable: false
         doc: Name of the Instrument associated with the Visit.
       -
@@ -1249,6 +1311,7 @@ schema:
       -
         name: skymap
         type: string
+        length: 64
         nullable: false
         doc: Name of the SkyMap associated with the Tract.
       -

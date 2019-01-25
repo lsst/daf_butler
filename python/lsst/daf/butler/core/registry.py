@@ -409,16 +409,27 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     @transactional
     def associate(self, collection, refs):
-        """Add existing Datasets to a collection, possibly creating the
-        collection in the process.
+        """Add existing Datasets to a collection, implicitly creating the
+        collection if it does not already exist.
+
+        If a DatasetRef with the same exact ``dataset_id`` is already in a
+        collection nothing is changed. If a `DatasetRef` with the same
+        `DatasetType1` and dimension values but with different ``dataset_id``
+        exists in the collection, `ValueError` is raised.
 
         Parameters
         ----------
         collection : `str`
             Indicates the collection the Datasets should be associated with.
-        refs : `list` of `DatasetRef`
-            A `list` of `DatasetRef` instances that already exist in this
+        refs : iterable of `DatasetRef`
+            An iterable of `DatasetRef` instances that already exist in this
             `Registry`.
+
+        Raises
+        ------
+        ValueError
+            If a Dataset with the given `DatasetRef` already exists in the
+            given collection.
         """
         raise NotImplementedError("Must be implemented by subclass")
 

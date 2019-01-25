@@ -21,7 +21,6 @@
 
 from contextlib import closing
 
-from sqlalchemy.engine import Engine
 from sqlalchemy import event
 
 from sqlite3 import Connection as SQLite3Connection
@@ -34,11 +33,21 @@ from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 __all__ = ("SqliteRegistry", )
 
 
-@event.listens_for(Engine, "connect")
-def _enableForeignKeysOnSqlite3(dbapiConnection, connectionRecord):
-    if isinstance(dbapiConnection, SQLite3Connection):
-        with closing(dbapiConnection.cursor()) as cursor:
-            cursor.execute("PRAGMA foreign_keys=ON;")
+def _onSqlite3Connect(dbapiConnection, connectionRecord):
+    assert isinstance(dbapiConnection, SQLite3Connection)
+    # Prevent pysqlite from emitting BEGIN and COMMIT statements.
+    dbapiConnection.isolation_level = None
+    # Enable foreign keys
+    with closing(dbapiConnection.cursor()) as cursor:
+        cursor.execute("PRAGMA foreign_keys=ON;")
+
+
+def _onSqlite3Begin(connection):
+    assert connection.dialect.name == "sqlite"
+    # Replace pysqlite's buggy transaction handling that never BEGINs with
+    # our own that does.
+    connection.execute("BEGIN")
+    return connection
 
 
 class SqliteRegistry(SqlRegistry):
@@ -78,3 +87,9 @@ class SqliteRegistry(SqlRegistry):
         if ":memory:" in registryConfig.get("db", ""):
             create = True
         super().__init__(registryConfig, schemaConfig, dimensionConfig, create)
+
+    def _createEngine(self):
+        engine = super()._createEngine()
+        event.listen(engine, "connect", _onSqlite3Connect)
+        event.listen(engine, "begin", _onSqlite3Begin)
+        return engine

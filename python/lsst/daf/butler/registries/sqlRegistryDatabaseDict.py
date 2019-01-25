@@ -21,24 +21,19 @@
 
 from datetime import datetime
 
-from sqlalchemy import create_engine, Table, MetaData, Column, \
+from sqlalchemy import Table, Column, \
     String, Integer, Boolean, LargeBinary, DateTime, Float
 from sqlalchemy.sql import select, bindparam, func
 from sqlalchemy.exc import IntegrityError, StatementError
 
-from .databaseDict import DatabaseDict
-
-__all__ = ("SqlDatabaseDict", )
+from lsst.daf.butler import DatabaseDict
 
 
-class SqlDatabaseDict(DatabaseDict):
+class SqlRegistryDatabaseDict(DatabaseDict):
     """A DatabaseDict backed by a SQL database.
 
-    Configuration for SqlDatabaseDict must have the following entries:
+    Configuration for SqlRegistryDatabaseDict must have the following entry:
 
-    ``db``
-        A database connection URI of the form accepted by SQLAlchemy.
-        Ignored if the ``engine`` argument is not None.
     ``table``
         Name of the database table used to store the data in the
         dictionary.
@@ -57,28 +52,25 @@ class SqlDatabaseDict(DatabaseDict):
     key : `str`
         The name of the field to be used as the dictionary key.  Must not be
         present in ``value._fields``.
-    value : `type` (`~collections.namedtuple`)
-        The type used for the dictionary's values, typically a
-        `~collections.namedtuple`. Must have a ``_fields`` class attribute
-        that is a tuple of field names (i.e. as defined by
-        `~collections.namedtuple`); these field names must also appear
+    value : `type` (`namedtuple`)
+        The type used for the dictionary's values, typically a `namedtuple`.
+        Must have a ``_fields`` class attribute that is a tuple of field names
+        (i.e. as defined by `namedtuple`); these field names must also appear
         in the ``types`` arg, and a `_make` attribute to construct it from a
-        sequence of values (again, as defined by `~collections.namedtuple`).
-    engine : `sqlalchemy.engine.Engine`
-        A SQLAlchemy connection object.  If not None, ``config["db"]`` is
-        ignored.
+        sequence of values (again, as defined by `namedtuple`).
+    registry : `SqlRegistry`
+        A registry object with an open connection and a schema.
     """
 
     COLUMN_TYPES = {str: String, int: Integer, float: Float,
                     bool: Boolean, bytes: LargeBinary, datetime: DateTime}
 
-    def __init__(self, config, types, key, value, engine=None):
+    def __init__(self, config, types, key, value, registry):
+        self.registry = registry
         allColumns = []
         for name, type_ in types.items():
             column = Column(name, self.COLUMN_TYPES.get(type_, type_), primary_key=(name == key))
             allColumns.append(column)
-        if engine is None:
-            engine = create_engine(config["db"])
         if key in value._fields:
             raise ValueError("DatabaseDict's key field may not be a part of the value tuple")
         if key not in types.keys():
@@ -87,10 +79,8 @@ class SqlDatabaseDict(DatabaseDict):
             raise TypeError("No type(s) provided for field(s) {}".format(set(value._fields) - types.keys()))
         self._key = key
         self._value = value
-        self._engine = engine
-        metadata = MetaData()
-        self._table = Table(config["table"], metadata, *allColumns)
-        self._table.create(self._engine, checkfirst=True)
+        self._table = Table(config["table"], self.registry._schema.metadata, *allColumns)
+        self._table.create(self.registry._connection, checkfirst=True)
         valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
         keyColumn = getattr(self._table.columns, key)
         self._getSql = select(valueColumns).where(keyColumn == bindparam("key"))
@@ -100,8 +90,8 @@ class SqlDatabaseDict(DatabaseDict):
         self._lenSql = select([func.count(keyColumn)])
 
     def __getitem__(self, key):
-        with self._engine.begin() as connection:
-            row = connection.execute(self._getSql, key=key).fetchone()
+        with self.registry._connection.begin():
+            row = self.registry._connection.execute(self._getSql, key=key).fetchone()
             if row is None:
                 raise KeyError("{} not found".format(key))
             return self._value._make(row)
@@ -112,11 +102,15 @@ class SqlDatabaseDict(DatabaseDict):
         # pattern.
         kwds = value._asdict()
         kwds[self._key] = key
-        with self._engine.begin() as connection:
+        with self.registry._connection.begin():
             try:
-                connection.execute(self._table.insert(), **kwds)
+                self.registry._connection.execute(self._table.insert(), **kwds)
                 return
             except IntegrityError:
+                # Swallow the expected IntegrityError (due to i.e. duplicate
+                # primary key values)
+                # TODO: would be better to explicitly inspect the error, but
+                # this is tricky.
                 pass
             except StatementError as err:
                 raise TypeError("Bad data types in value: {}".format(err))
@@ -124,9 +118,9 @@ class SqlDatabaseDict(DatabaseDict):
         # If we fail due to an IntegrityError (i.e. duplicate primary key
         # values), try to do an update instead.
         kwds.pop(self._key, None)
-        with self._engine.begin() as connection:
+        with self.registry._connection.begin():
             try:
-                connection.execute(self._updateSql, key=key, **kwds)
+                self.registry._connection.execute(self._updateSql, key=key, **kwds)
             except StatementError as err:
                 # n.b. we can't rely on a failure in the insert attempt above
                 # to have caught this case, because we trap for IntegrityError
@@ -135,19 +129,19 @@ class SqlDatabaseDict(DatabaseDict):
                 raise TypeError("Bad data types in value: {}".format(err))
 
     def __delitem__(self, key):
-        with self._engine.begin() as connection:
-            result = connection.execute(self._delSql, key=key)
+        with self.registry._connection.begin():
+            result = self.registry._connection.execute(self._delSql, key=key)
             if result.rowcount == 0:
                 raise KeyError("{} not found".format(key))
 
     def __iter__(self):
-        with self._engine.begin() as connection:
-            for row in connection.execute(self._keysSql).fetchall():
+        with self.registry._connection.begin():
+            for row in self.registry._connection.execute(self._keysSql).fetchall():
                 yield row[0]
 
     def __len__(self):
-        with self._engine.begin() as connection:
-            return connection.execute(self._lenSql).scalar()
+        with self.registry._connection.begin():
+            return self.registry._connection.execute(self._lenSql).scalar()
 
     # TODO: add custom view objects for at views() and items(), so we don't
     # invoke a __getitem__ call for every key.

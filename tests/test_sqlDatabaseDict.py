@@ -19,14 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import unittest
 from collections import namedtuple
 
 import lsst.utils.tests
 
-from lsst.daf.butler.core.butlerConfig import ButlerConfig
-from lsst.daf.butler.core import Config, DatabaseDict, Registry
+from lsst.daf.butler.core import RegistryConfig, Registry
 
 """Tests for SqlDatabaseDict.
 """
@@ -37,10 +35,9 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
     """
 
     def setUp(self):
-        self.config = Config()
-        self.config["cls"] = "lsst.daf.butler.core.sqlDatabaseDict.SqlDatabaseDict"
-        self.config["db"] = "sqlite:///:memory:"
-        self.config["table"] = "TestTable"
+        registryConfig = RegistryConfig()
+        registryConfig["db"] = "sqlite:///:memory:"
+        self.registry = Registry.fromConfig(registryConfig, create=True)
         self.types = {"x": int, "y": str, "z": float}
         self.key = "x"
 
@@ -76,7 +73,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         """Test that the key is not permitted to be part of the value."""
         value = namedtuple("TestValue", ["x", "y", "z"])
         with self.assertRaises(ValueError):
-            DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
+            self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
 
     def testKeyNotInValue(self):
         """Test when the value does not include the key."""
@@ -85,7 +82,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
             0: value(y="zero", z=0.0),
             1: value(y="one", z=0.1),
         }
-        d = DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
         self.checkDatabaseDict(d, data)
 
     def testBadValueTypes(self):
@@ -94,7 +91,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         data = {
             0: value(y=0, z="zero"),
         }
-        d = DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
         with self.assertRaises(TypeError):
             d[0] = data[0]
 
@@ -104,7 +101,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         data = {
             0: value(y="zero", z=0.0),
         }
-        d = DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
         d["zero"] = data[0]
 
     def testExtraFieldsInTable(self):
@@ -118,7 +115,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
             0: value(y="zero"),
             1: value(y="one"),
         }
-        d = DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
         self.checkDatabaseDict(d, data)
 
     def testExtraFieldsInValue(self):
@@ -128,21 +125,7 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         """
         value = namedtuple("TestValue", ["y", "a"])
         with self.assertRaises(TypeError):
-            DatabaseDict.fromConfig(self.config, key=self.key, types=self.types, value=value)
-
-    def testFromRegistry(self):
-        """Test that we can obtain a DatabaseDict from a SqlRegistry."""
-        testDir = os.path.dirname(__file__)
-        configFile = os.path.join(testDir, "config/basic/butler.yaml")
-        registry = Registry.fromConfig(ButlerConfig(configFile))
-        value = namedtuple("TestValue", ["y", "z"])
-        data = {
-            0: value(y="zero", z=0.0),
-            1: value(y="one", z=0.1),
-        }
-        d = registry.makeDatabaseDict(table="TestRegistryTable", key=self.key, types=self.types,
-                                      value=value)
-        self.checkDatabaseDict(d, data)
+            self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):
