@@ -42,3 +42,4 @@ datastore:
     Packages: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
     PropertyList: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
     PropertySet: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    NumpyArray: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
