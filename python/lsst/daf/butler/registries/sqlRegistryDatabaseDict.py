@@ -80,7 +80,8 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         self._key = key
         self._value = value
         self._table = Table(config["table"], self.registry._schema.metadata, *allColumns)
-        self._table.create(self.registry._connection, checkfirst=True)
+        with self.registry.withConnection() as conn:
+            self._table.create(conn, checkfirst=True)
         valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
         keyColumn = getattr(self._table.columns, key)
         self._getSql = select(valueColumns).where(keyColumn == bindparam("key"))
@@ -90,11 +91,12 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         self._lenSql = select([func.count(keyColumn)])
 
     def __getitem__(self, key):
-        with self.registry._connection.begin():
-            row = self.registry._connection.execute(self._getSql, key=key).fetchone()
-            if row is None:
-                raise KeyError("{} not found".format(key))
-            return self._value._make(row)
+        with self.registry.withConnection() as conn:
+            with conn.begin():
+                row = conn.execute(self._getSql, key=key).fetchone()
+                if row is None:
+                    raise KeyError("{} not found".format(key))
+                return self._value._make(row)
 
     def __setitem__(self, key, value):
         assert isinstance(value, self._value)
@@ -102,46 +104,51 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         # pattern.
         kwds = value._asdict()
         kwds[self._key] = key
-        with self.registry._connection.begin():
-            try:
-                self.registry._connection.execute(self._table.insert(), **kwds)
-                return
-            except IntegrityError:
-                # Swallow the expected IntegrityError (due to i.e. duplicate
-                # primary key values)
-                # TODO: would be better to explicitly inspect the error, but
-                # this is tricky.
-                pass
-            except StatementError as err:
-                raise TypeError("Bad data types in value: {}".format(err))
+        with self.registry.withConnection() as conn:
+            with conn.begin():
+                try:
+                    conn.execute(self._table.insert(), **kwds)
+                    return
+                except IntegrityError:
+                    # Swallow the expected IntegrityError (due to i.e. duplicate
+                    # primary key values)
+                    # TODO: would be better to explicitly inspect the error, but
+                    # this is tricky.
+                    pass
+                except StatementError as err:
+                    raise TypeError("Bad data types in value: {}".format(err))
 
         # If we fail due to an IntegrityError (i.e. duplicate primary key
         # values), try to do an update instead.
         kwds.pop(self._key, None)
-        with self.registry._connection.begin():
-            try:
-                self.registry._connection.execute(self._updateSql, key=key, **kwds)
-            except StatementError as err:
-                # n.b. we can't rely on a failure in the insert attempt above
-                # to have caught this case, because we trap for IntegrityError
-                # first.  And we have to do that because IntegrityError is a
-                # StatementError.
-                raise TypeError("Bad data types in value: {}".format(err))
+        with self.registry.withConnection() as conn:
+            with conn.begin():
+                try:
+                    conn.execute(self._updateSql, key=key, **kwds)
+                except StatementError as err:
+                    # n.b. we can't rely on a failure in the insert attempt above
+                    # to have caught this case, because we trap for IntegrityError
+                    # first.  And we have to do that because IntegrityError is a
+                    # StatementError.
+                    raise TypeError("Bad data types in value: {}".format(err))
 
     def __delitem__(self, key):
-        with self.registry._connection.begin():
-            result = self.registry._connection.execute(self._delSql, key=key)
-            if result.rowcount == 0:
-                raise KeyError("{} not found".format(key))
+        with self.regstry.withConnection() as conn:
+            with conn.begin():
+                result = conn.execute(self._delSql, key=key)
+                if result.rowcount == 0:
+                    raise KeyError("{} not found".format(key))
 
     def __iter__(self):
-        with self.registry._connection.begin():
-            for row in self.registry._connection.execute(self._keysSql).fetchall():
-                yield row[0]
+        with self.registry.withConnection() as conn:
+            with conn.begin():
+                for row in conn.execute(self._keysSql).fetchall():
+                    yield row[0]
 
     def __len__(self):
-        with self.registry._connection.begin():
-            return self.registry._connection.execute(self._lenSql).scalar()
+        with self.registry.withConnection() as conn:
+            with conn.begin():
+                return conn.execute(self._lenSql).scalar()
 
     # TODO: add custom view objects for at views() and items(), so we don't
     # invoke a __getitem__ call for every key.

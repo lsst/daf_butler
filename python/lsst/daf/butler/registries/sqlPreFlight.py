@@ -331,11 +331,12 @@ class SqlPreFlight:
             _LOG.debug("full where: %s", where)
             q = q.where(where)
         _LOG.debug("full query: %s",
-                   q.compile(bind=self.registry._connection.engine,
+                   q.compile(bind=self.registry._engine,
                              compile_kwargs={"literal_binds": True}))
 
         # execute and return result iterator
-        rows = self.registry._connection.execute(q).fetchall()
+        with self.registry.withConnection() as conn:
+            rows = conn.execute(q).fetchall()
         return self._convertResultRows(rows, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns,
                                        expandDataIds=expandDataIds)
 
