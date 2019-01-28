@@ -546,8 +546,8 @@ class SqlRegistry(Registry):
                 # No Dataset with this DatasetType and Data ID in collection;
                 # insert it now.
                 self._connection.execute(datasetCollectionTable.insert(),
-                                         [{"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
-                                           "collection": collection} for ref in refs])
+                                         {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                          "collection": collection})
             elif row.dataset_id != ref.id:
                 # A different Dataset with this DatasetType and Data ID already
                 # exists in this collection.
