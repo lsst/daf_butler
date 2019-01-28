@@ -75,12 +75,21 @@ class SqlRegistry(Registry):
         self._schema = self._createSchema(schemaConfig)
         self._datasetTypes = {}
         self._engine = self._createEngine()
-        self._connection = self._createConnection(self._engine)
+        # self._connection = self._createConnection(self._engine)
         if create:
             self._createTables(self._schema, self._connection)
 
     def __str__(self):
         return self.config["db"]
+
+    @contextlib.contextmanager
+    def withConnection(self):
+        conn = self._engine.connect()
+        try:
+            yield conn
+            conn.close()
+        except Exception:
+            raise
 
     @contextlib.contextmanager
     def transaction(self):
@@ -91,13 +100,14 @@ class SqlRegistry(Registry):
 
         This context manager may be nested.
         """
-        trans = self._connection.begin_nested()
-        try:
-            yield
-            trans.commit()
-        except BaseException:
-            trans.rollback()
-            raise
+        with self.withConnection() as conn:
+            trans = conn.begin_nested()
+            try:
+                yield
+                trans.commit()
+            except BaseException:
+                trans.rollback()
+                raise
 
     def _createSchema(self, schemaConfig):
         """Create and return an `lsst.daf.butler.Schema` object containing
@@ -131,14 +141,14 @@ class SqlRegistry(Registry):
         have a very good reason not to, subclasses that override this method
         should do the same.
         """
-        return create_engine(self.config["db"], poolclass=NullPool)
+        return create_engine(self.config["db"], poolclass=NullPool, connect_args={'timeout': 20000})
 
     def _createConnection(self, engine):
         """Create and return a `sqlalchemy.Connection` for this `Registry`.
 
         This is a hook provided for customization by subclasses.
         """
-        return engine.connect()
+        # return engine.connect()
 
     def _createTables(self, schema, connection):
         """Create all tables in the given schema, using the given connection.
@@ -229,11 +239,12 @@ class SqlRegistry(Registry):
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_(self._schema.datasetTable.c[name] == dataId[name]
                                 for name in dataId.dimensions().links())
-        result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
-            datasetTable.join(datasetCollectionTable)).where(and_(
-                datasetTable.c.dataset_type_name == datasetType.name,
-                datasetCollectionTable.c.collection == collection,
-                dataIdExpression))).fetchone()
+        with self.withConnection() as conn:
+            result = conn.execute(select([datasetTable.c.dataset_id]).select_from(
+                datasetTable.join(datasetCollectionTable)).where(and_(
+                    datasetTable.c.dataset_type_name == datasetType.name,
+                    datasetCollectionTable.c.collection == collection,
+                    dataIdExpression))).fetchone()
         # TODO update dimension values and add Run, Quantum and assembler?
         if result is not None:
             return result.dataset_id
@@ -273,8 +284,9 @@ class SqlRegistry(Registry):
         """
         # TODO: make this guard against non-SELECT queries.
         t = text(sql)
-        for row in self._connection.execute(t, **params):
-            yield dict(row)
+        with self.withConnection() as conn:
+            for row in conn.execute(t, **params):
+                yield dict(row)
 
     @transactional
     def registerDatasetType(self, datasetType):
@@ -327,12 +339,14 @@ class SqlRegistry(Registry):
         # side-effect.
         if not isinstance(datasetType.dimensions, DimensionGraph):
             datasetType._dimensions = self.dimensions.extract(datasetType._dimensions)
-        self._connection.execute(datasetTypeTable.insert().values(**values))
+        with self.withConnection() as conn:
+            conn.execute(datasetTypeTable.insert().values(**values))
         if datasetType.dimensions:
-            self._connection.execute(datasetTypeDimensionsTable.insert(),
-                                     [{"dataset_type_name": datasetType.name,
-                                       "dimension_name": dimensionName}
-                                      for dimensionName in datasetType.dimensions.names])
+            with self.withConnection() as conn:
+                conn.execute(datasetTypeDimensionsTable.insert(),
+                             [{"dataset_type_name": datasetType.name,
+                               "dimension_name": dimensionName}
+                              for dimensionName in datasetType.dimensions.names])
         self._datasetTypes[datasetType.name] = datasetType
         # Also register component DatasetTypes (if any)
         for compName, compStorageClass in datasetType.storageClass.components.items():
@@ -363,16 +377,18 @@ class SqlRegistry(Registry):
         datasetTypeTable = self._schema.tables["DatasetType"]
         datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
         # Get StorageClass from DatasetType table
-        result = self._connection.execute(select([datasetTypeTable.c.storage_class]).where(
-            datasetTypeTable.c.dataset_type_name == name)).fetchone()
+        with self.withConnection() as conn:
+            result = conn.execute(select([datasetTypeTable.c.storage_class]).where(
+                datasetTypeTable.c.dataset_type_name == name)).fetchone()
 
         if result is None:
             raise KeyError("Could not find entry for datasetType {}".format(name))
 
         storageClass = self.storageClasses.getStorageClass(result["storage_class"])
         # Get Dimensions (if any) from DatasetTypeDimensions table
-        result = self._connection.execute(select([datasetTypeDimensionsTable.c.dimension_name]).where(
-            datasetTypeDimensionsTable.c.dataset_type_name == name)).fetchall()
+        with self.withConnection() as conn:
+            result = conn.execute(select([datasetTypeDimensionsTable.c.dimension_name]).where(
+                datasetTypeDimensionsTable.c.dataset_type_name == name)).fetchall()
         dimensions = self.dimensions.extract((r[0] for r in result) if result else ())
         datasetType = DatasetType(name=name,
                                   storageClass=storageClass,
@@ -416,11 +432,13 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.tables["Dataset"]
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
         # TODO add producer
-        result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
-                                                                       run_id=run.id,
-                                                                       dataset_ref_hash=datasetRef.hash,
-                                                                       quantum_id=None,
-                                                                       **links))
+        with self.withConnection() as conn:
+            result = conn.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
+                                                               run_id=run.id,
+                                                               dataset_ref_hash=datasetRef.hash,
+                                                               quantum_id=None,
+                                                               **links))
+
         datasetRef._id = result.inserted_primary_key[0]
         # A dataset is always associated with its Run collection
         self.associate(run.collection, [datasetRef, ])
@@ -449,9 +467,10 @@ class SqlRegistry(Registry):
             was found.
         """
         datasetTable = self._schema.tables["Dataset"]
-        with self._connection.begin():
-            result = self._connection.execute(
-                select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
+        with self.withConnection() as conn:
+            with conn.begin():
+                result = conn.execute(
+                    select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
         if result is not None:
             datasetType = self.getDatasetType(result["dataset_type_name"])
             run = self.getRun(id=result.run_id)
@@ -464,10 +483,11 @@ class SqlRegistry(Registry):
             # TODO check against expected components
             components = {}
             datasetCompositionTable = self._schema.tables["DatasetComposition"]
-            results = self._connection.execute(
-                select([datasetCompositionTable.c.component_name,
-                        datasetCompositionTable.c.component_dataset_id]).where(
-                            datasetCompositionTable.c.parent_dataset_id == id)).fetchall()
+            with self.withConnection() as conn:
+                results = conn.execute(
+                    select([datasetCompositionTable.c.component_name,
+                            datasetCompositionTable.c.component_dataset_id]).where(
+                                datasetCompositionTable.c.parent_dataset_id == id)).fetchall()
             if results is not None:
                 for result in results:
                     components[result["component_name"]] = self.getDataset(result["component_dataset_id"])
@@ -496,7 +516,8 @@ class SqlRegistry(Registry):
         values = dict(component_name=name,
                       parent_dataset_id=parent.id,
                       component_dataset_id=component.id)
-        self._connection.execute(datasetCompositionTable.insert().values(**values))
+        with self.withConnection() as conn:
+            conn.execute(datasetCompositionTable.insert().values(**values))
         parent._components[name] = component
 
     @transactional
@@ -541,13 +562,15 @@ class SqlRegistry(Registry):
             if not isinstance(ref.datasetType.dimensions, DimensionGraph):
                 ref.datasetType._dimensions = self.dimensions.extract(ref.datasetType.dimensions)
 
-            row = self._connection.execute(query, hash=ref.hash).fetchone()
+            with self.withConnection() as conn:
+                row = conn.execute(query, hash=ref.hash).fetchone()
             if row is None:
                 # No Dataset with this DatasetType and Data ID in collection;
                 # insert it now.
-                self._connection.execute(datasetCollectionTable.insert(),
-                                         [{"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
-                                           "collection": collection} for ref in refs])
+                with self.withConnection() as conn:
+                    conn.execute(datasetCollectionTable.insert(),
+                                 [{"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                   "collection": collection} for ref in refs])
             elif row.dataset_id != ref.id:
                 # A different Dataset with this DatasetType and Data ID already
                 # exists in this collection.
@@ -586,9 +609,10 @@ class SqlRegistry(Registry):
             raise NotImplementedError("Cleanup of datasets not yet implemented")
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         for ref in refs:
-            self._connection.execute(datasetCollectionTable.delete().where(
-                and_(datasetCollectionTable.c.dataset_id == ref.id,
-                     datasetCollectionTable.c.collection == collection)))
+            with self.withConnection() as conn:
+                conn.execute(datasetCollectionTable.delete().where(
+                             and_(datasetCollectionTable.c.dataset_id == ref.id,
+                                  datasetCollectionTable.c.collection == collection)))
         return []
 
     @transactional
@@ -607,7 +631,8 @@ class SqlRegistry(Registry):
         datasetStorageTable = self._schema.tables["DatasetStorage"]
         values = dict(dataset_id=ref.id,
                       datastore_name=datastoreName)
-        self._connection.execute(datasetStorageTable.insert().values(**values))
+        with self.withConnection() as conn:
+            conn.execute(datasetStorageTable.insert().values(**values))
 
     def getDatasetLocations(self, ref):
         """Retrieve datastore locations for a given dataset.
@@ -627,9 +652,10 @@ class SqlRegistry(Registry):
             if the dataset does not exist anywhere.
         """
         datasetStorageTable = self._schema.tables["DatasetStorage"]
-        result = self._connection.execute(
-            select([datasetStorageTable.c.datastore_name]).where(
-                and_(datasetStorageTable.c.dataset_id == ref.id))).fetchall()
+        with self.withConnection() as conn:
+            result = conn.execute(
+                select([datasetStorageTable.c.datastore_name]).where(
+                    and_(datasetStorageTable.c.dataset_id == ref.id))).fetchall()
 
         return {r["datastore_name"] for r in result}
 
@@ -647,9 +673,10 @@ class SqlRegistry(Registry):
             A reference to the dataset for which information is to be removed.
         """
         datasetStorageTable = self._schema.tables["DatasetStorage"]
-        self._connection.execute(datasetStorageTable.delete().where(
-            and_(datasetStorageTable.c.dataset_id == ref.id,
-                 datasetStorageTable.c.datastore_name == datastoreName)))
+        with self.withConnection() as conn:
+            conn.execute(datasetStorageTable.delete().where(
+                and_(datasetStorageTable.c.dataset_id == ref.id,
+                     datasetStorageTable.c.datastore_name == datastoreName)))
 
     @transactional
     def addExecution(self, execution):
@@ -671,10 +698,11 @@ class SqlRegistry(Registry):
             If `Execution` is already present in the `SqlRegistry`.
         """
         executionTable = self._schema.tables["Execution"]
-        result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
-                                                                         start_time=execution.startTime,
-                                                                         end_time=execution.endTime,
-                                                                         host=execution.host))
+        with self.withConnection() as conn:
+            result = conn.execute(executionTable.insert().values(execution_id=execution.id,
+                                                                 start_time=execution.startTime,
+                                                                 end_time=execution.endTime,
+                                                                 host=execution.host))
         # Reassign id, may have been `None`
         execution._id = result.inserted_primary_key[0]
 
@@ -687,10 +715,11 @@ class SqlRegistry(Registry):
             The unique identifier for the Execution.
         """
         executionTable = self._schema.tables["Execution"]
-        result = self._connection.execute(
-            select([executionTable.c.start_time,
-                    executionTable.c.end_time,
-                    executionTable.c.host]).where(executionTable.c.execution_id == id)).fetchone()
+        with self.withConnection() as conn:
+            result = conn.execute(
+                select([executionTable.c.start_time,
+                        executionTable.c.end_time,
+                        executionTable.c.host]).where(executionTable.c.execution_id == id)).fetchone()
         if result is not None:
             return Execution(startTime=result["start_time"],
                              endTime=result["end_time"],
@@ -766,14 +795,16 @@ class SqlRegistry(Registry):
         # TODO: this check is probably undesirable, as we may want to have multiple Runs output
         # to the same collection.  Fixing this requires (at least) modifying getRun() accordingly.
         selection = select([exists().where(runTable.c.collection == run.collection)])
-        if self._connection.execute(selection).scalar():
-            raise ValueError("A run already exists with this collection: {}".format(run.collection))
+        with self.withConnection() as conn:
+            if conn.execute(selection).scalar():
+                raise ValueError("A run already exists with this collection: {}".format(run.collection))
         # First add the Execution part
         self.addExecution(run)
         # Then the Run specific part
-        self._connection.execute(runTable.insert().values(execution_id=run.id,
-                                                          collection=run.collection,
-                                                          environment_id=None,  # TODO add environment
+        with self.withConnection() as conn:
+            conn.execute(runTable.insert().values(execution_id=run.id,
+                                                  collection=run.collection,
+                                                  environment_id=None,  # TODO add environment
                                                           pipeline_id=None))    # TODO add pipeline
         # TODO: set given Run's "id" attribute.
 
@@ -803,26 +834,28 @@ class SqlRegistry(Registry):
         run = None
         # Retrieve by id
         if (id is not None) and (collection is None):
-            result = self._connection.execute(select([executionTable.c.execution_id,
-                                                      executionTable.c.start_time,
-                                                      executionTable.c.end_time,
-                                                      executionTable.c.host,
-                                                      runTable.c.collection,
-                                                      runTable.c.environment_id,
-                                                      runTable.c.pipeline_id]).select_from(
-                runTable.join(executionTable)).where(
-                runTable.c.execution_id == id)).fetchone()
+            with self.withConnection() as conn:
+                result = conn.execute(select([executionTable.c.execution_id,
+                                      executionTable.c.start_time,
+                                      executionTable.c.end_time,
+                                      executionTable.c.host,
+                                      runTable.c.collection,
+                                      runTable.c.environment_id,
+                                      runTable.c.pipeline_id]).select_from(
+                    runTable.join(executionTable)).where(
+                    runTable.c.execution_id == id)).fetchone()
         # Retrieve by collection
         elif (collection is not None) and (id is None):
-            result = self._connection.execute(select([executionTable.c.execution_id,
-                                                      executionTable.c.start_time,
-                                                      executionTable.c.end_time,
-                                                      executionTable.c.host,
-                                                      runTable.c.collection,
-                                                      runTable.c.environment_id,
-                                                      runTable.c.pipeline_id]).select_from(
-                runTable.join(executionTable)).where(
-                runTable.c.collection == collection)).fetchone()
+            with self.withConnection() as conn:
+                result = conn.execute(select([executionTable.c.execution_id,
+                                              executionTable.c.start_time,
+                                              executionTable.c.end_time,
+                                              executionTable.c.host,
+                                              runTable.c.collection,
+                                              runTable.c.environment_id,
+                                              runTable.c.pipeline_id]).select_from(
+                    runTable.join(executionTable)).where(
+                    runTable.c.collection == collection)).fetchone()
         else:
             raise ValueError("Either collection or id must be given")
         if result is not None:
@@ -856,17 +889,19 @@ class SqlRegistry(Registry):
         # First add the Execution part
         self.addExecution(quantum)
         # Then the Quantum specific part
-        self._connection.execute(quantumTable.insert().values(execution_id=quantum.id,
-                                                              task=quantum.task,
-                                                              run_id=quantum.run.id))
+        with self.withConnection() as conn:
+            conn.execute(quantumTable.insert().values(execution_id=quantum.id,
+                                                      task=quantum.task,
+                                                      run_id=quantum.run.id))
         # Attach dataset consumers
         # We use itertools.chain here because quantum.predictedInputs is a
         # dict of ``name : [DatasetRef, ...]`` and we need to flatten it
         # for inserting.
         flatInputs = itertools.chain.from_iterable(quantum.predictedInputs.values())
-        self._connection.execute(datasetConsumersTable.insert(),
-                                 [{"quantum_id": quantum.id, "dataset_id": ref.id, "actual": False}
-                                     for ref in flatInputs])
+        with self.withConnection() as conn:
+            conn.execute(datasetConsumersTable.insert(),
+                         [{"quantum_id": quantum.id, "dataset_id": ref.id, "actual": False}
+                          for ref in flatInputs])
 
     def getQuantum(self, id):
         """Retrieve an Quantum.
@@ -878,13 +913,14 @@ class SqlRegistry(Registry):
         """
         executionTable = self._schema.tables["Execution"]
         quantumTable = self._schema.tables["Quantum"]
-        result = self._connection.execute(
-            select([quantumTable.c.task,
-                    quantumTable.c.run_id,
-                    executionTable.c.start_time,
-                    executionTable.c.end_time,
-                    executionTable.c.host]).select_from(quantumTable.join(executionTable)).where(
-                quantumTable.c.execution_id == id)).fetchone()
+        with self.withConnection() as conn:
+            result = conn.execute(
+                select([quantumTable.c.task,
+                        quantumTable.c.run_id,
+                        executionTable.c.start_time,
+                        executionTable.c.end_time,
+                        executionTable.c.host]).select_from(quantumTable.join(executionTable)).where(
+                    quantumTable.c.execution_id == id)).fetchone()
         if result is not None:
             run = self.getRun(id=result["run_id"])
             quantum = Quantum(task=result["task"],
@@ -895,13 +931,14 @@ class SqlRegistry(Registry):
                               id=id)
             # Add predicted and actual inputs to quantum
             datasetConsumersTable = self._schema.tables["DatasetConsumers"]
-            for result in self._connection.execute(select([datasetConsumersTable.c.dataset_id,
-                                                           datasetConsumersTable.c.actual]).where(
-                    datasetConsumersTable.c.quantum_id == id)):
-                ref = self.getDataset(result["dataset_id"])
-                quantum.addPredictedInput(ref)
-                if result["actual"]:
-                    quantum._markInputUsed(ref)
+            with self.withConnection() as conn:
+                for result in conn.execute(select([datasetConsumersTable.c.dataset_id,
+                                                   datasetConsumersTable.c.actual]).where(
+                        datasetConsumersTable.c.quantum_id == id)):
+                    ref = self.getDataset(result["dataset_id"])
+                    quantum.addPredictedInput(ref)
+                    if result["actual"]:
+                        quantum._markInputUsed(ref)
             return quantum
         else:
             return None
@@ -928,11 +965,12 @@ class SqlRegistry(Registry):
             If ``quantum`` is not a predicted consumer for ``ref``.
         """
         datasetConsumersTable = self._schema.tables["DatasetConsumers"]
-        result = self._connection.execute(datasetConsumersTable.update().where(and_(
-            datasetConsumersTable.c.quantum_id == quantum.id,
-            datasetConsumersTable.c.dataset_id == ref.id)).values(actual=True))
-        if result.rowcount != 1:
-            raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
+        with self.withConnection() as conn:
+            result = conn.execute(datasetConsumersTable.update().where(and_(
+                datasetConsumersTable.c.quantum_id == quantum.id,
+                datasetConsumersTable.c.dataset_id == ref.id)).values(actual=True))
+            if result.rowcount != 1:
+                raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
         quantum._markInputUsed(ref)
 
     @disableWhenLimited
@@ -949,7 +987,8 @@ class SqlRegistry(Registry):
         if table is None:
             raise TypeError(f"Dimension '{dimension.name}' has no table.")
         try:
-            self._connection.execute(table.insert().values(**dataId.fields(dimension, region=False)))
+            with self.withConnection() as conn:
+                conn.execute(table.insert().values(**dataId.fields(dimension, region=False)))
         except IntegrityError as err:
             raise ValueError(str(err))  # TODO this should do an explicit validity check instead
         if dataId.region is not None:
@@ -964,8 +1003,9 @@ class SqlRegistry(Registry):
         # and this should ensure it's a true `Dimension`, not a `str` name.
         dimension, = dataId.dimensions().leaves
         table = self._schema.tables[dimension.name]
-        result = self._connection.execute(select([table]).where(
-            and_(table.c[name] == value for name, value in dataId.items()))).fetchone()
+        with self.withConnection() as conn:
+            result = conn.execute(select([table]).where(
+                and_(table.c[name] == value for name, value in dataId.items()))).fetchone()
         if result is not None:
             return dict(result.items())
         else:
@@ -986,22 +1026,24 @@ class SqlRegistry(Registry):
         table = self._schema.tables[holder.name]
         # Update the region for an existing entry
         if update:
-            result = self._connection.execute(
-                table.update().where(
-                    and_((table.columns[name] == dataId[name] for name in holder.links()))
-                ).values(
-                    region=dataId.region.encode()
+            with self.withConnection() as conn:
+                result = conn.execute(
+                    table.update().where(
+                        and_((table.columns[name] == dataId[name] for name in holder.links()))
+                    ).values(
+                        region=dataId.region.encode()
+                    )
                 )
-            )
             if result.rowcount == 0:
                 raise ValueError("No records were updated when setting region, did you forget update=False?")
         else:  # Insert rather than update.
-            self._connection.execute(
-                table.insert().values(
-                    region=dataId.region.encode(),
-                    **dataId
+            with self.withConnection() as conn:
+                conn.execute(
+                    table.insert().values(
+                        region=dataId.region.encode(),
+                        **dataId
+                    )
                 )
-            )
         # Update the join table between this Dimension and SkyPix, if it isn't
         # itself a view.
         join = dataId.dimensions().union(["SkyPix"]).joins().findIf(
@@ -1011,17 +1053,19 @@ class SqlRegistry(Registry):
             return
         if update:
             # Delete any old SkyPix join entries for this Dimension
-            self._connection.execute(
-                self._schema.tables[join.name].delete().where(
-                    and_((self._schema.tables[join.name].c[name] == dataId[name]
-                          for name in holder.links()))
+            with self.withConnection() as conn:
+                conn.execute(
+                    self._schema.tables[join.name].delete().where(
+                        and_((self._schema.tables[join.name].c[name] == dataId[name]
+                              for name in holder.links()))
+                    )
                 )
-            )
         parameters = []
         for begin, end in self.pixelization.envelope(dataId.region).ranges():
             for skypix in range(begin, end):
                 parameters.append(dict(dataId, skypix=skypix))
-        self._connection.execute(self._schema.tables[join.name].insert(), parameters)
+        with self.withConnection() as conn:
+            conn.execute(self._schema.tables[join.name].insert(), parameters)
         return dataId
 
     @disableWhenLimited
@@ -1045,13 +1089,14 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry._queryMetadata.
         table = self._schema.tables[element.name]
         cols = [table.c[col] for col in columns]
-        row = self._connection.execute(
-            select(cols)
-            .where(
-                and_(table.c[name] == value for name, value in dataId.items()
-                     if name in element.links())
-            )
-        ).fetchone()
+        with self.withConnection() as conn:
+            row = conn.execute(
+                select(cols)
+                .where(
+                    and_(table.c[name] == value for name, value in dataId.items()
+                         if name in element.links())
+                )
+            ).fetchone()
         if row is None:
             raise LookupError(f"{element.name} entry for {dataId} not found.")
         return {c.name: row[c.name] for c in cols}
