@@ -135,6 +135,21 @@ class FitsRawFormatterBase(FitsExposureFormatter, metaclass=ABCMeta):
         from lsst.afw.geom import makeSkyWcs
         return makeSkyWcs(metadata, strip=True)
 
+    def makeFilter(self, metadata):
+        """Construct a Filter from metadata.
+
+        Parameters
+        ----------
+        metadata : `~lsst.daf.base.PropertyList`
+            Header metadata.  May be modified in-place.
+
+        Returns
+        -------
+        filter : `~lsst.afw.image.Filter`
+            Object that identifies the filter for this image.
+        """
+        raise NotImplementedError("Must be implemented by subclasses.")
+
     def readImageComponent(self, fileDescriptor, component):
         """Read the image, mask, or variance component of an Exposure.
 
@@ -178,7 +193,9 @@ class FitsRawFormatterBase(FitsExposureFormatter, metaclass=ABCMeta):
         obj : component-dependent
             In-memory component object.
         """
-        if component == "visitInfo":
+        if component == "filter":
+            return self.makeFilter(self.readMetadata(fileDescriptor))
+        elif component == "visitInfo":
             return self.makeVisitInfo(self.readMetadata(fileDescriptor))
         elif component == "wcs":
             return self.makeWcs(self.readMetadata(fileDescriptor))
@@ -211,6 +228,7 @@ class FitsRawFormatterBase(FitsExposureFormatter, metaclass=ABCMeta):
         metadata = self.readMetadata(fileDescriptor)
         info = full.getInfo()
         info.setWcs(self.makeWcs(metadata))
+        info.setFilter(self.makeFilter(metadata))
         info.setVisitInfo(self.makeVisitInfo(metadata))
         # We shouldn't have to call stripMetadata() here because that should
         # have been done by makeVisitInfo and makeWcs (or by subclasses that
