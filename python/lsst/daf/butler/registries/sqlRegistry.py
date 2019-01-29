@@ -30,7 +30,8 @@ from sqlalchemy.exc import IntegrityError
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
-from ..core.registry import RegistryConfig, Registry, disableWhenLimited
+from ..core.registry import (RegistryConfig, Registry, disableWhenLimited,
+                             ConflictingDefinitionError, AmbiguousDatasetError)
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
@@ -219,7 +220,7 @@ class SqlRegistry(Registry):
 
         Raises
         ------
-        ValueError
+        LookupError
             If dataId is invalid.
         """
         if not isinstance(datasetType, DatasetType):
@@ -280,28 +281,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def registerDatasetType(self, datasetType):
-        """
-        Add a new `DatasetType` to the SqlRegistry.
-
-        It is not an error to register the same `DatasetType` twice.
-
-        Parameters
-        ----------
-        datasetType : `DatasetType`
-            The `DatasetType` to be added.
-
-        Raises
-        ------
-        ValueError
-            DatasetType is not valid for this registry or is already registered
-            but not identical.
-
-        Returns
-        -------
-        inserted : `bool`
-            `True` if ``datasetType`` was inserted, `False` if an identical
-            existing `DatsetType` was found.
-        """
+        # Docstring inherited from Registry.getDatasetType.
         datasetType.normalize(universe=self.dimensions)
         # If a DatasetType is already registered it must be identical
         try:
@@ -316,7 +296,8 @@ class SqlRegistry(Registry):
             if datasetType == existingDatasetType:
                 return False
             else:
-                raise ValueError("DatasetType: {} != existing {}".format(datasetType, existingDatasetType))
+                raise ConflictingDefinitionError(f"Conflicting definition for {datasetType} found.")
+        datasetType.normalize(universe=self.dimensions)
         # Insert it
         datasetTypeTable = self._schema.tables["DatasetType"]
         datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
@@ -338,23 +319,7 @@ class SqlRegistry(Registry):
         return True
 
     def getDatasetType(self, name):
-        """Get the `DatasetType`.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the type.
-
-        Returns
-        -------
-        type : `DatasetType`
-            The `DatasetType` associated with the given name.
-
-        Raises
-        ------
-        KeyError
-            Requested named DatasetType could not be found in registry.
-        """
+        # Docstring inherited from Registry.getDatasetType.
         datasetTypeTable = self._schema.tables["DatasetType"]
         datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
         # Get StorageClass from DatasetType table
@@ -407,8 +372,10 @@ class SqlRegistry(Registry):
         # Then again, it is undoubtedly not the only place where
         # this problem occurs. Needs some serious thought.
         if self._findDatasetId(run.collection, datasetType, dataId) is not None:
-            raise ValueError("A dataset of type {} with id: {} already exists in collection {}".format(
-                datasetType, dataId, run.collection))
+            raise ConflictingDefinitionError(
+                f"A dataset of type {datasetType} with id: {dataId} already "
+                f"exists in collection {run.collection}"
+            )
 
         datasetTable = self._schema.tables["Dataset"]
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
@@ -432,19 +399,7 @@ class SqlRegistry(Registry):
         return datasetRef
 
     def getDataset(self, id):
-        """Retrieve a Dataset entry.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the Dataset.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A ref to the Dataset, or `None` if no matching Dataset
-            was found.
-        """
+        # Docstring inherited from Registry.getDataset
         datasetTable = self._schema.tables["Dataset"]
         with self._connection.begin():
             result = self._connection.execute(
@@ -476,19 +431,12 @@ class SqlRegistry(Registry):
 
     @transactional
     def attachComponent(self, name, parent, component):
-        """Attach a component to a dataset.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the component.
-        parent : `DatasetRef`
-            A reference to the parent dataset. Will be updated to reference
-            the component.
-        component : `DatasetRef`
-            A reference to the component dataset.
-        """
+        # Docstring inherited from Registry.attachComponent.
         # TODO Insert check for component name and type against parent.storageClass specified components
+        if parent.id is None:
+            raise AmbiguousDatasetError(f"Cannot attach component to dataset {parent} without ID.")
+        if component.id is None:
+            raise AmbiguousDatasetError(f"Cannot attach component {component} without ID.")
         datasetCompositionTable = self._schema.tables["DatasetComposition"]
         values = dict(component_name=name,
                       parent_dataset_id=parent.id,
@@ -498,28 +446,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def associate(self, collection, refs):
-        """Add existing Datasets to a collection, possibly creating the
-        collection in the process.
-
-        If a DatasetRef with the same exact `dataset_id`` is already in a
-        collection nothing is changed. If a DatasetRef with the same
-        DatasetType and dimension values but with different ``dataset_id``
-        exists in a collection then exception is raised.
-
-        Parameters
-        ----------
-        collection : `str`
-            Indicates the collection the Datasets should be associated with.
-        refs : `list` of `DatasetRef`
-            A `list` of `DatasetRef` instances that already exist in this
-            `SqlRegistry`.
-
-        Raises
-        ------
-        ValueError
-            If a Dataset with the given `DatasetRef` already exists in the
-            given collection.
-        """
+        # Docstring inherited from Registry.associate.
 
         # Most SqlRegistry subclass implementations should replace this
         # implementation with special "UPSERT" or "MERGE" syntax.  This
@@ -546,7 +473,7 @@ class SqlRegistry(Registry):
             elif row.dataset_id != ref.id:
                 # A different Dataset with this DatasetType and Data ID already
                 # exists in this collection.
-                raise ValueError(
+                raise ConflictingDefinitionError(
                     "A dataset of type {} with id: {} already exists in collection {}".format(
                         ref.datasetType, ref.dataId, collection
                     )
@@ -555,32 +482,13 @@ class SqlRegistry(Registry):
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
-        r"""Remove existing Datasets from a collection.
-
-        ``collection`` and ``ref`` combinations that are not currently
-        associated are silently ignored.
-
-        Parameters
-        ----------
-        collection : `str`
-            The collection the Datasets should no longer be associated with.
-        refs : `list` of `DatasetRef`
-            A `list` of `DatasetRef` instances that already exist in this
-            `SqlRegistry`.
-        remove : `bool`
-            If `True`, remove Datasets from the `SqlRegistry` if they are not
-            associated with any collection (including via any composites).
-
-        Returns
-        -------
-        removed : `list` of `DatasetRef`
-            If `remove` is `True`, the `list` of `DatasetRef`\ s that were
-            removed.
-        """
+        # Docstring inherited from Registry.disassociate.
         if remove:
             raise NotImplementedError("Cleanup of datasets not yet implemented")
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         for ref in refs:
+            if ref.id is None:
+                raise AmbiguousDatasetError(f"Cannot disassociate dataset {ref} without ID.")
             self._connection.execute(datasetCollectionTable.delete().where(
                 and_(datasetCollectionTable.c.dataset_id == ref.id,
                      datasetCollectionTable.c.collection == collection)))
@@ -588,39 +496,18 @@ class SqlRegistry(Registry):
 
     @transactional
     def addDatasetLocation(self, ref, datastoreName):
-        """Add datastore name locating a given dataset.
-
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to add storage information.
-        datastoreName : `str`
-            Name of the datastore holding this dataset.
-        """
+        # Docstring inherited from Registry.addDatasetLocation.
+        if ref.id is None:
+            raise AmbiguousDatasetError(f"Cannot add location for dataset {ref} without ID.")
         datasetStorageTable = self._schema.tables["DatasetStorage"]
         values = dict(dataset_id=ref.id,
                       datastore_name=datastoreName)
         self._connection.execute(datasetStorageTable.insert().values(**values))
 
     def getDatasetLocations(self, ref):
-        """Retrieve datastore locations for a given dataset.
-
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to retrieve storage
-            information.
-
-        Returns
-        -------
-        datastores : `set` of `str`
-            All the matching datastores holding this dataset. Empty set
-            if the dataset does not exist anywhere.
-        """
+        # Docstring inherited from Registry.getDatasetLocation.
+        if ref.id is None:
+            raise AmbiguousDatasetError(f"Cannot add location for dataset {ref} without ID.")
         datasetStorageTable = self._schema.tables["DatasetStorage"]
         result = self._connection.execute(
             select([datasetStorageTable.c.datastore_name]).where(
@@ -630,17 +517,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def removeDatasetLocation(self, datastoreName, ref):
-        """Remove datastore location associated with this dataset.
-
-        Typically used by `Datastore` when a dataset is removed.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of this `Datastore`.
-        ref : `DatasetRef`
-            A reference to the dataset for which information is to be removed.
-        """
+        # Docstring inherited from Registry.getDatasetLocation.
         datasetStorageTable = self._schema.tables["DatasetStorage"]
         self._connection.execute(datasetStorageTable.delete().where(
             and_(datasetStorageTable.c.dataset_id == ref.id,
@@ -648,23 +525,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def addExecution(self, execution):
-        """Add a new `Execution` to the `SqlRegistry`.
-
-        If ``execution.id`` is `None` the `SqlRegistry` will update it to
-        that of the newly inserted entry.
-
-        Parameters
-        ----------
-        execution : `Execution`
-            Instance to add to the `SqlRegistry`.
-            The given `Execution` must not already be present in the
-            `SqlRegistry`.
-
-        Raises
-        ------
-        Exception
-            If `Execution` is already present in the `SqlRegistry`.
-        """
+        # Docstring inherited from Registry.addExecution
         executionTable = self._schema.tables["Execution"]
         result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
                                                                          start_time=execution.startTime,
@@ -674,13 +535,7 @@ class SqlRegistry(Registry):
         execution._id = result.inserted_primary_key[0]
 
     def getExecution(self, id):
-        """Retrieve an Execution.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the Execution.
-        """
+        # Docstring inherited from Registry.getExecution
         executionTable = self._schema.tables["Execution"]
         result = self._connection.execute(
             select([executionTable.c.start_time,
@@ -696,73 +551,30 @@ class SqlRegistry(Registry):
 
     @transactional
     def makeRun(self, collection):
-        """Create a new `Run` in the `SqlRegistry` and return it.
-
-        If a run with this collection already exists, return that instead.
-
-        Parameters
-        ----------
-        collection : `str`
-            The collection used to identify all inputs and outputs
-            of the `Run`.
-
-        Returns
-        -------
-        run : `Run`
-            A new `Run` instance.
-        """
+        # Docstring inherited from Registry.makeRun
         run = Run(collection=collection)
         self.addRun(run)
         return run
 
     @transactional
     def ensureRun(self, run):
-        """Conditionally add a new `Run` to the `SqlRegistry`.
-
-        If the ``run.id`` is `None` or a `Run` with this `id` doesn't exist
-        in the `Registry` yet, add it.  Otherwise, ensure the provided run is
-        identical to the one already in the registry.
-
-        Parameters
-        ----------
-        run : `Run`
-            Instance to add to the `SqlRegistry`.
-
-        Raises
-        ------
-        ValueError
-            If ``run`` already exists, but is not identical.
-        """
+        # Docstring inherited from Registry.ensureRun
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
             if run != existingRun:
-                raise ValueError("{} != existing: {}".format(run, existingRun))
+                raise ConflictingDefinitionError(f"{run} != existing: {existingRun}")
             return
         self.addRun(run)
 
     @transactional
     def addRun(self, run):
-        """Add a new `Run` to the `SqlRegistry`.
-
-        Parameters
-        ----------
-        run : `Run`
-            Instance to add to the `SqlRegistry`.
-            The given `Run` must not already be present in the `SqlRegistry`
-            (or any other).  Therefore its `id` must be `None` and its
-            `collection` must not be associated with any existing `Run`.
-
-        Raises
-        ------
-        ValueError
-            If a run already exists with this collection.
-        """
+        # Docstring inherited from Registry.addRun
         runTable = self._schema.tables["Run"]
         # TODO: this check is probably undesirable, as we may want to have multiple Runs output
         # to the same collection.  Fixing this requires (at least) modifying getRun() accordingly.
         selection = select([exists().where(runTable.c.collection == run.collection)])
         if self._connection.execute(selection).scalar():
-            raise ValueError("A run already exists with this collection: {}".format(run.collection))
+            raise ConflictingDefinitionError(f"A run already exists with this collection: {run.collection}")
         # First add the Execution part
         self.addExecution(run)
         # Then the Run specific part
@@ -773,26 +585,7 @@ class SqlRegistry(Registry):
         # TODO: set given Run's "id" attribute.
 
     def getRun(self, id=None, collection=None):
-        """
-        Get a `Run` corresponding to its collection or id
-
-        Parameters
-        ----------
-        id : `int`, optional
-            Lookup by run `id`, or:
-        collection : `str`
-            If given, lookup by `collection` name instead.
-
-        Returns
-        -------
-        run : `Run`
-            The `Run` instance.
-
-        Raises
-        ------
-        ValueError
-            Must supply one of ``collection`` or ``id``.
-        """
+        # Docstring inherited from Registry.getRun
         executionTable = self._schema.tables["Execution"]
         runTable = self._schema.tables["Run"]
         run = None
@@ -832,20 +625,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def addQuantum(self, quantum):
-        r"""Add a new `Quantum` to the `SqlRegistry`.
-
-        Parameters
-        ----------
-        quantum : `Quantum`
-            Instance to add to the `SqlRegistry`.
-            The given `Quantum` must not already be present in the
-            `SqlRegistry` (or any other), therefore its:
-
-            - `run` attribute must be set to an existing `Run`.
-            - `predictedInputs` attribute must be fully populated with
-              `DatasetRef`\ s, and its.
-            - `actualInputs` and `outputs` will be ignored.
-        """
+        # Docstring inherited from Registry.addQuantum.
         quantumTable = self._schema.tables["Quantum"]
         datasetConsumersTable = self._schema.tables["DatasetConsumers"]
         # First add the Execution part
@@ -864,13 +644,7 @@ class SqlRegistry(Registry):
                                      for ref in flatInputs])
 
     def getQuantum(self, id):
-        """Retrieve an Quantum.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the Quantum.
-        """
+        # Docstring inherited from Registry.getQuantum.
         executionTable = self._schema.tables["Execution"]
         quantumTable = self._schema.tables["Quantum"]
         result = self._connection.execute(
@@ -903,25 +677,7 @@ class SqlRegistry(Registry):
 
     @transactional
     def markInputUsed(self, quantum, ref):
-        """Record the given `DatasetRef` as an actual (not just predicted)
-        input of the given `Quantum`.
-
-        This updates both the `SqlRegistry`"s `Quantum` table and the Python
-        `Quantum.actualInputs` attribute.
-
-        Parameters
-        ----------
-        quantum : `Quantum`
-            Producer to update.
-            Will be updated in this call.
-        ref : `DatasetRef`
-            To set as actually used input.
-
-        Raises
-        ------
-        KeyError
-            If ``quantum`` is not a predicted consumer for ``ref``.
-        """
+        # Docstring inherited from Registry.markInputUsed.
         datasetConsumersTable = self._schema.tables["DatasetConsumers"]
         result = self._connection.execute(datasetConsumersTable.update().where(and_(
             datasetConsumersTable.c.quantum_id == quantum.id,
@@ -945,8 +701,9 @@ class SqlRegistry(Registry):
             raise TypeError(f"Dimension '{dimension.name}' has no table.")
         try:
             self._connection.execute(table.insert().values(**dataId.fields(dimension, region=False)))
-        except IntegrityError as err:
-            raise ValueError(str(err))  # TODO this should do an explicit validity check instead
+        except IntegrityError:
+            # TODO check for conflict, not just existence.
+            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry with {dataId}.")
         if dataId.region is not None:
             self.setDimensionRegion(dataId)
         return dataId

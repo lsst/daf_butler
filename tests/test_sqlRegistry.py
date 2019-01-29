@@ -30,7 +30,8 @@ import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
 from lsst.daf.butler import (Execution, Quantum, Run, DatasetType, Registry,
-                             StorageClass, ButlerConfig, DataId)
+                             StorageClass, ButlerConfig, DataId,
+                             ConflictingDefinitionError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
 
 """Tests for SqlRegistry.
@@ -71,7 +72,7 @@ class RegistryTests(metaclass=ABCMeta):
         # Re-inserting should work
         self.assertFalse(registry.registerDatasetType(inDatasetType))
         # Except when they are not identical
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             nonIdenticalDatasetType = DatasetType(datasetTypeName, differentDimensions, storageClass)
             registry.registerDatasetType(nonIdenticalDatasetType)
 
@@ -98,7 +99,7 @@ class RegistryTests(metaclass=ABCMeta):
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
         self.assertEqual(ref, outRef)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
 
     def testComponents(self):
@@ -143,7 +144,7 @@ class RegistryTests(metaclass=ABCMeta):
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
         # Inserting with a preexisting collection should fail
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             registry.makeRun("one")
         # Insert a new Run and check that ensureRun silently ignores it
         collection = "dummy"
@@ -152,7 +153,7 @@ class RegistryTests(metaclass=ABCMeta):
         # Calling ensureRun with a different Run with the same id should fail
         run2 = Run(collection="hello")
         run2._id = run.id
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             registry.ensureRun(run2)
         run2._id = None
         # Now it should work
@@ -373,7 +374,7 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertRowCount(registry, "Dataset", 6)
         self.assertRowCount(registry, "DatasetCollection", 6)
         # adding same DatasetRef to the same run is an error
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             registry.addDataset(datasetType1, dataId=dataId2, run=run1)
         # above exception must rollback and not add anything to Dataset
         self.assertRowCount(registry, "Dataset", 6)
@@ -392,9 +393,9 @@ class RegistryTests(metaclass=ABCMeta):
         registry.associate(newCollection, [ref1_run2, ref2_run2])
         self.assertRowCount(registry, "DatasetCollection", 10)
         # associating DatasetRef with the same units but different ID is not OK
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             registry.associate(newCollection, [ref1_run3])
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             registry.associate(newCollection, [ref1_run3, ref2_run3])
 
     def testDatasetUnit(self):
@@ -407,7 +408,7 @@ class RegistryTests(metaclass=ABCMeta):
             return  # the remainder of this test does not apply to limited Registry
         registry.addDimensionEntry(dimensionName, dimensionValue)
         # Inserting the same value twice should fail
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ConflictingDefinitionError):
             registry.addDimensionEntry(dimensionName, dimensionValue)
         # Find should return the entry
         self.assertEqual(registry.findDimensionEntry(dimensionName, dimensionValue), dimensionValue)
@@ -547,7 +548,7 @@ class RegistryTests(metaclass=ABCMeta):
                          getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2}))
         # Attempt to get region for a non-existent (visit, detector) combination
         with self.assertRaises(LookupError):
-            self.assertIsNone(getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3}))
+            getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3})
         # getRegion for a dataId containing no spatial dimensions should return None
         self.assertIsNone(getRegion({"instrument": "DummyCam"}))
         # getRegion for a mix of spatial dimensions should return None
@@ -621,7 +622,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
         with registry.transaction():
             # This should be added and (ultimately) committed.
             registry.addDimensionEntry(dimension, dataId1)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(ConflictingDefinitionError):
                 with registry.transaction():
                     # This does not conflict, and should succeed (but not
                     # be committed).
