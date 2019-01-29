@@ -47,22 +47,6 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
         self.assertEqual(type(f), FitsCatalogFormatter)
 
-        with self.assertRaises(ValueError):
-            # Try to store something that is not a Formatter but is a class
-            self.factory.registerFormatter("NotFormatter", "lsst.daf.butler.core.formatter.FormatterFactory")
-
-        with self.assertRaises(ValueError):
-            # Try to store something that is not a Formatter but is a module
-            self.factory.registerFormatter("NotFormatter", "lsst.daf.butler")
-
-        with self.assertRaises(ValueError):
-            # Try to store something that is not a Formatter and does not exist
-            self.factory.registerFormatter("NotFormatter", "lsst.daf.butler.x")
-
-        with self.assertRaises(ValueError):
-            # Try to store something that is not importable
-            self.factory.registerFormatter("NotImportable", "not a thing")
-
         with self.assertRaises(KeyError):
             f = self.factory.getFormatter("Missing")
 

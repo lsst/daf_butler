@@ -69,6 +69,8 @@ storageClasses:
     pytype: lsst.afw.table.SimpleCatalog
   SourceCatalog:
     pytype: lsst.afw.table.SourceCatalog
+  ObjectMaskCatalog:
+    pytype: lsst.pipe.tasks.objectMasks.ObjectMaskCatalog
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:

@@ -84,9 +84,6 @@ class MappingFactory:
     def placeInRegistry(self, registryKey, typeName):
         """Register a class name with the associated type.
 
-        The type name provided is validated against the reference
-        class, `refType` attribute, if defined.
-
         Parameters
         ----------
         registryKey : `str` or object supporting ``name`` attribute.
@@ -96,13 +93,9 @@ class MappingFactory:
 
         Raises
         ------
-        ValueError
-            If instance of class is not of the expected type.
         KeyError
             If item is already registered and has different value.
         """
-        if not self._isValidStr(typeName):
-            raise ValueError("Not a valid class string: {}".format(typeName))
         keyString = self._getName(registryKey)
         if keyString in self._registry:
             # Compare the class strings since dynamic classes can be the
@@ -135,17 +128,3 @@ class MappingFactory:
             return typeOrName.name
         else:
             raise ValueError("Cannot extract name from type")
-
-    def _isValidStr(self, typeName):
-        """Validate that the class type name provided does create instances of
-        objects that are of the expected type, as stored in the `refType`
-        attribute.
-        """
-        if self.refType is None:
-            return True
-        try:
-            c = getInstanceOf(typeName)
-        except (ImportError, TypeError, AttributeError):
-            return False
-        else:
-            return isinstance(c, self.refType)
