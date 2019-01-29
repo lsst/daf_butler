@@ -463,7 +463,8 @@ class SqlRegistry(Registry):
         # transactions with database- or table-wide locks (e.g. SQLite).
 
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
-        query = datasetCollectionTable.select(datasetCollectionTable.c.dataset_id).where(
+        insertQuery = datasetCollectionTable.insert()
+        checkQuery = datasetCollectionTable.select(datasetCollectionTable.c.dataset_id).where(
             and_(datasetCollectionTable.c.collection == collection,
                  datasetCollectionTable.c.dataset_ref_hash == bindparam("hash"))
         )
@@ -472,22 +473,24 @@ class SqlRegistry(Registry):
 
             ref.datasetType.normalize(universe=self.dimensions)
 
-            row = self._connection.execute(query, hash=ref.hash).fetchone()
-            if row is None:
-                # No Dataset with this DatasetType and Data ID in collection;
-                # insert it now.
-                self._connection.execute(datasetCollectionTable.insert(),
-                                         {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
-                                          "collection": collection})
-            elif row.dataset_id != ref.id:
-                # A different Dataset with this DatasetType and Data ID already
-                # exists in this collection.
-                raise ConflictingDefinitionError(
-                    "A dataset of type {} with id: {} already exists in collection {}".format(
-                        ref.datasetType, ref.dataId, collection
+            if ref.id is None:
+                raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
+
+            try:
+                self._connection.execute(insertQuery, {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                                       "collection": collection})
+            except IntegrityError:
+                # Did we clash with a completely duplicate entry (because this
+                # dataset is already in this collection)?  Or is there already
+                # a different dataset with the same DatasetType and data ID in
+                # this collection?  Only the latter is an error.
+                row = self._connection.execute(checkQuery, hash=ref.hash).fetchone()
+                if row.dataset_id != ref.id:
+                    raise ConflictingDefinitionError(
+                        "A dataset of type {} with id: {} already exists in collection {}".format(
+                            ref.datasetType, ref.dataId, collection
+                        )
                     )
-                )
-            # If the same Dataset is already in this collection, do nothing.
 
     @transactional
     def disassociate(self, collection, refs, remove=True):
