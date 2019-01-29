@@ -227,6 +227,34 @@ class DatasetType:
                            dimensions=deepcopy(self.dimensions, memo),
                            storageClass=deepcopy(self._storageClass or self._storageClassName, memo))
 
+    def normalize(self, universe):
+        """Ensure the dimensions and storage class name are valid, and make
+        ``self.dimensions`` a true `DimensionGraph` instance if it isn't
+        already.
+
+        Parameters
+        ----------
+        universe : `DimensionGraph`
+            The set of all known dimensions.
+
+        Raises
+        ------
+        ValueError
+            Raised if the DatasetType is invalid, either because one or more
+            dimensions in ``self.dimensions`` is not in ``universe``, or the
+            storage class name is not recognized.
+        """
+        if not isinstance(self._dimensions, DimensionGraph):
+            self._dimensions = universe.extract(self._dimensions)
+        try:
+            # Trigger lookup of StorageClass instance from StorageClass name.
+            # KeyError (sort of) makes sense in that context, but it doesn't
+            # make as much sense in the context in which normalize() is called,
+            # so we translate it to ValueError.
+            self.storageClass
+        except KeyError:
+            raise ValueError(f"Storage class '{self._storageClassName}' not recognized.")
+
 
 class DatasetRef:
     """Reference to a Dataset in a `Registry`.

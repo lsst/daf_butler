@@ -37,7 +37,7 @@ from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.dimensions import DataId, DimensionGraph
+from ..core.dimensions import DataId
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from .sqlPreFlight import SqlPreFlight
 
@@ -224,6 +224,8 @@ class SqlRegistry(Registry):
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
+        else:
+            datasetType.normalize(universe=self.dimensions)
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
         datasetTable = self._schema.tables["Dataset"]
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
@@ -300,8 +302,7 @@ class SqlRegistry(Registry):
             `True` if ``datasetType`` was inserted, `False` if an identical
             existing `DatsetType` was found.
         """
-        if not self._isValidDatasetType(datasetType):
-            raise ValueError("DatasetType is not valid for this registry")
+        datasetType.normalize(universe=self.dimensions)
         # If a DatasetType is already registered it must be identical
         try:
             # A DatasetType entry with this name may exist, get it first.
@@ -321,12 +322,6 @@ class SqlRegistry(Registry):
         datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
         values = {"dataset_type_name": datasetType.name,
                   "storage_class": datasetType.storageClass.name}
-        # If the DatasetType only knows about the names of dimensions, upgrade
-        # that to a full DimensionGraph now.  Doing that before any database
-        # is good because should validate those names.  It's also a desirable
-        # side-effect.
-        if not isinstance(datasetType.dimensions, DimensionGraph):
-            datasetType._dimensions = self.dimensions.extract(datasetType._dimensions)
         self._connection.execute(datasetTypeTable.insert().values(**values))
         if datasetType.dimensions:
             self._connection.execute(datasetTypeDimensionsTable.insert(),
@@ -385,6 +380,8 @@ class SqlRegistry(Registry):
 
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
+        else:
+            datasetType.normalize(universe=self.dimensions)
 
         # Make a full DataId up front, so we don't do multiple times
         # in calls below.  Note that calling DataId with a full DataId
@@ -537,9 +534,7 @@ class SqlRegistry(Registry):
 
         for ref in refs:
 
-            # TODO: factor this operation out, fix use of private member
-            if not isinstance(ref.datasetType.dimensions, DimensionGraph):
-                ref.datasetType._dimensions = self.dimensions.extract(ref.datasetType.dimensions)
+            ref.datasetType.normalize(universe=self.dimensions)
 
             row = self._connection.execute(query, hash=ref.hash).fetchone()
             if row is None:
@@ -1031,8 +1026,8 @@ class SqlRegistry(Registry):
         def standardize(dsType):
             if not isinstance(dsType, DatasetType):
                 dsType = self.getDatasetType(dsType)
-            elif not isinstance(dsType.dimensions, DimensionGraph):
-                dsType._dimensions = self.dimensions.extract(dsType.dimensions)
+            else:
+                dsType.normalize(universe=self.dimensions)
             return dsType
         needed = [standardize(t) for t in neededDatasetTypes]
         future = [standardize(t) for t in futureDatasetTypes]
