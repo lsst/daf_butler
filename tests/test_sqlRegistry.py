@@ -104,11 +104,18 @@ class RegistryTests(metaclass=ABCMeta):
 
     def testComponents(self):
         registry = self.makeRegistry()
-        storageClass = StorageClass("testComponents")
-        registry.storageClasses.registerStorageClass(storageClass)
-        parentDatasetType = DatasetType(name="parent", dimensions=("Instrument",), storageClass=storageClass)
-        childDatasetType1 = DatasetType(name="child1", dimensions=("Instrument",), storageClass=storageClass)
-        childDatasetType2 = DatasetType(name="child2", dimensions=("Instrument",), storageClass=storageClass)
+        childStorageClass = StorageClass("testComponentsChild")
+        registry.storageClasses.registerStorageClass(childStorageClass)
+        parentStorageClass = StorageClass("testComponentsParent",
+                                          components={"child1": childStorageClass,
+                                                      "child2": childStorageClass})
+        registry.storageClasses.registerStorageClass(parentStorageClass)
+        parentDatasetType = DatasetType(name="parent", dimensions=("Instrument",),
+                                        storageClass=parentStorageClass)
+        childDatasetType1 = DatasetType(name="parent.child1", dimensions=("Instrument",),
+                                        storageClass=childStorageClass)
+        childDatasetType2 = DatasetType(name="parent.child2", dimensions=("Instrument",),
+                                        storageClass=childStorageClass)
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)

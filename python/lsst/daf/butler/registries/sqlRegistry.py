@@ -193,36 +193,76 @@ class SqlRegistry(Registry):
         config["table"] = table
         return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
 
-    def _findDatasetId(self, collection, datasetType, dataId, **kwds):
-        """Lookup a dataset ID.
-
-        This can be used to obtain a ``dataset_id`` that permits the dataset
-        to be read from a `Datastore`.
+    def _makeDatasetRefFromRow(self, row, datasetType=None):
+        """Construct a DatasetRef from the result of a query on the Dataset
+        table.
 
         Parameters
         ----------
-        collection : `str`
-            Identifies the collection to search.
-        datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.
-        dataId : `dict` or `DataId`
-            A `dict` of `Dimension` link fields that label a Dataset
-            within a Collection.
-        kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
+        row : `sqlalchemy.engine.RowProxy`.
+            Row of a query that contains all columns from the `Dataset` table.
+            May include additional fields (which will be ignored).
+        datasetType : `DatasetType`, optional
+            `DatasetType` associated with this dataset.  Will be retrieved
+            if not provided.  If provided, the caller guarantees that it is
+            already consistent with what would have been retrieved from the
+            database.
 
         Returns
         -------
-        dataset_id : `int` or `None`
-            ``dataset_id`` value, or `None` if no matching Dataset was found.
-
-        Raises
-        ------
-        LookupError
-            If dataId is invalid.
+        ref : `DatasetRef`.
+            A new `DatasetRef` instance.
         """
+        if datasetType is None:
+            datasetType = self.getDatasetType(row["dataset_type_name"])
+        else:
+            datasetType.normalize(universe=self.dimensions)
+        run = self.getRun(id=row.run_id)
+        datasetRefHash = row["dataset_ref_hash"]
+        dataId = DataId({link: row[self._schema.datasetTable.c[link]]
+                         for link in datasetType.dimensions.links()},
+                        dimensions=datasetType.dimensions,
+                        universe=self.dimensions)
+        # Get components (if present)
+        components = {}
+        if datasetType.storageClass.isComposite():
+            datasetCompositionTable = self._schema.tables["DatasetComposition"]
+            datasetTable = self._schema.tables["Dataset"]
+            columns = list(datasetTable.c)
+            columns.append(datasetCompositionTable.c.component_name)
+            results = self._connection.execute(
+                select(
+                    columns
+                ).select_from(
+                    datasetTable.join(
+                        datasetCompositionTable,
+                        datasetTable.c.dataset_id == datasetCompositionTable.c.component_dataset_id
+                    )
+                ).where(
+                    datasetCompositionTable.c.parent_dataset_id == row["dataset_id"]
+                )
+            ).fetchall()
+            for result in results:
+                componentName = result["component_name"]
+                componentDatasetType = DatasetType(
+                    DatasetType.nameWithComponent(datasetType.name, componentName),
+                    dimensions=datasetType.dimensions,
+                    storageClass=datasetType.storageClass.components[componentName]
+                )
+                components[componentName] = self._makeDatasetRefFromRow(result,
+                                                                        datasetType=componentDatasetType)
+            if not components.keys() <= datasetType.storageClass.components.keys():
+                raise RuntimeError(
+                    f"Inconsistency detected between dataset and storage class definitions: "
+                    f"{datasetType.storageClass.name} has components "
+                    f"{set(datasetType.storageClass.components.keys())}, "
+                    f"but dataset has components {set(components.keys())}"
+                )
+        return DatasetRef(datasetType=datasetType, dataId=dataId, id=row["dataset_id"], run=run,
+                          hash=datasetRefHash, components=components)
+
+    def find(self, collection, datasetType, dataId=None, **kwds):
+        # Docstring inherited from Registry.find
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         else:
@@ -232,25 +272,21 @@ class SqlRegistry(Registry):
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         dataIdExpression = and_(self._schema.datasetTable.c[name] == dataId[name]
                                 for name in dataId.dimensions().links())
-        result = self._connection.execute(select([datasetTable.c.dataset_id]).select_from(
-            datasetTable.join(datasetCollectionTable)).where(and_(
-                datasetTable.c.dataset_type_name == datasetType.name,
-                datasetCollectionTable.c.collection == collection,
-                dataIdExpression))).fetchone()
+        result = self._connection.execute(
+            datasetTable.select().select_from(
+                datasetTable.join(datasetCollectionTable)
+            ).where(
+                and_(
+                    datasetTable.c.dataset_type_name == datasetType.name,
+                    datasetCollectionTable.c.collection == collection,
+                    dataIdExpression
+                )
+            )
+        ).fetchone()
         # TODO update dimension values and add Run, Quantum and assembler?
-        if result is not None:
-            return result.dataset_id
-        else:
+        if result is None:
             return None
-
-    def find(self, collection, datasetType, dataId=None, **kwds):
-        # Docstring inherited from Registry.find
-        dataset_id = self._findDatasetId(collection, datasetType, dataId, **kwds)
-        # TODO update dimension values and add Run, Quantum and assembler?
-        if dataset_id is not None:
-            return self.getDataset(dataset_id)
-        else:
-            return None
+        return self._makeDatasetRefFromRow(result, datasetType=datasetType)
 
     def query(self, sql, **params):
         """Execute a SQL SELECT statement directly.
@@ -396,33 +432,11 @@ class SqlRegistry(Registry):
     def getDataset(self, id):
         # Docstring inherited from Registry.getDataset
         datasetTable = self._schema.tables["Dataset"]
-        with self._connection.begin():
-            result = self._connection.execute(
-                select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
-        if result is not None:
-            datasetType = self.getDatasetType(result["dataset_type_name"])
-            run = self.getRun(id=result.run_id)
-            datasetRefHash = result["dataset_ref_hash"]
-            dataId = DataId({link: result[self._schema.datasetTable.c[link]]
-                             for link in datasetType.dimensions.links()},
-                            dimensions=datasetType.dimensions,
-                            universe=self.dimensions)
-            # Get components (if present)
-            # TODO check against expected components
-            components = {}
-            datasetCompositionTable = self._schema.tables["DatasetComposition"]
-            results = self._connection.execute(
-                select([datasetCompositionTable.c.component_name,
-                        datasetCompositionTable.c.component_dataset_id]).where(
-                            datasetCompositionTable.c.parent_dataset_id == id)).fetchall()
-            if results is not None:
-                for result in results:
-                    components[result["component_name"]] = self.getDataset(result["component_dataset_id"])
-            ref = DatasetRef(datasetType=datasetType, dataId=dataId, id=id, run=run, hash=datasetRefHash)
-            ref._components = components
-            return ref
-        else:
+        result = self._connection.execute(
+            select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
+        if result is None:
             return None
+        return self._makeDatasetRefFromRow(result)
 
     @transactional
     def attachComponent(self, name, parent, component):
