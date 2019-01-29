@@ -368,24 +368,9 @@ class SqlRegistry(Registry):
             self.expandDataId(dataId)
         links = dataId.implied()
 
-        # Collection cannot have more than one unique DataId of the same
-        # DatasetType, this constraint is checked in `associate` method
-        # which raises.
-        # NOTE: Client code (e.g. `lsst.obs.base.ingest`) has some assumptions
-        # about behavior of this code, in particular that it should not modify
-        # database contents if exception is raised. This is why we have to
-        # make additional check for uniqueness before we add a row to Dataset
-        # table.
-        # TODO also note that this check is not safe
-        # in the presence of concurrent calls to addDataset.
-        # Then again, it is undoubtedly not the only place where
-        # this problem occurs. Needs some serious thought.
-        if self._findDatasetId(run.collection, datasetType, dataId) is not None:
-            raise ConflictingDefinitionError(
-                f"A dataset of type {datasetType} with id: {dataId} already "
-                f"exists in collection {run.collection}"
-            )
-
+        # Add the Dataset table entry itself.  Note that this will get rolled
+        # back if the subsequent call to associate raises, which is what we
+        # want.
         datasetTable = self._schema.tables["Dataset"]
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
         # TODO add producer
@@ -395,7 +380,8 @@ class SqlRegistry(Registry):
                                                                        quantum_id=None,
                                                                        **links))
         datasetRef._id = result.inserted_primary_key[0]
-        # A dataset is always associated with its Run collection
+
+        # A dataset is always initially associated with its Run collection.
         self.associate(run.collection, [datasetRef, ])
 
         if recursive:
