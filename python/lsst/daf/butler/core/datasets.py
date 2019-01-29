@@ -277,7 +277,7 @@ class DatasetRef:
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run", "_hash",
                  "_predictedConsumers", "_actualConsumers", "_components")
 
-    def __init__(self, datasetType, dataId, id=None, run=None, hash=None):
+    def __init__(self, datasetType, dataId, id=None, run=None, hash=None, components=None):
         assert isinstance(datasetType, DatasetType)
         self._id = id
         self._datasetType = datasetType
@@ -286,10 +286,15 @@ class DatasetRef:
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
         self._components = dict()
+        if components is not None:
+            self._components.update(components)
         self._run = run
         self._hash = hash
 
     __eq__ = slotValuesAreEqual
+
+    def __repr__(self):
+        return f"DatasetRef({self.datasetType}, {self.dataId}, id={self.id}, run={self.run})"
 
     @property
     def id(self):
