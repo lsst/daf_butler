@@ -44,9 +44,11 @@ def _onSqlite3Connect(dbapiConnection, connectionRecord):
 
 def _onSqlite3Begin(connection):
     assert connection.dialect.name == "sqlite"
-    # Replace pysqlite's buggy transaction handling that never BEGINs with
-    # our own that does.
-    connection.execute("BEGIN")
+    # Replace pysqlite's buggy transaction handling that never BEGINs with our
+    # own that does, and tell SQLite not to try to acquire a lock as soon as
+    # we start a transaction (this should lead to more blocking and fewer
+    # deadlocks).
+    connection.execute("BEGIN IMMEDIATE")
     return connection
 
 
