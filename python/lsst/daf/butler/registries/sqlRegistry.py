@@ -283,40 +283,49 @@ class SqlRegistry(Registry):
     def registerDatasetType(self, datasetType):
         # Docstring inherited from Registry.getDatasetType.
         datasetType.normalize(universe=self.dimensions)
-        # If a DatasetType is already registered it must be identical
-        try:
-            # A DatasetType entry with this name may exist, get it first.
-            # Note that we can't just look in the cache, because it may not be there yet.
-            existingDatasetType = self.getDatasetType(datasetType.name)
-        except KeyError:
-            # No registered DatasetType with this name exists, move on to inserting it
-            pass
-        else:
-            # A DatasetType with this name exists, check if is equal
-            if datasetType == existingDatasetType:
-                return False
+        # If the DatasetType is already in the cache, we assume it's already in
+        # the DB (note that we don't actually provide a way to remove them from
+        # the DB).
+        existingDatasetType = self._datasetTypes.get(datasetType.name, None)
+        # If it's not in the cache, try to insert it.
+        if existingDatasetType is None:
+            try:
+                self._connection.execute(
+                    self._schema.tables["DatasetType"].insert().values(
+                        dataset_type_name=datasetType.name,
+                        storage_class=datasetType.storageClass.name
+                    )
+                )
+            except IntegrityError:
+                # Insert failed on the only unique constraint on this table:
+                # dataset_type_name.  So now the question is whether the one in
+                # there is the same as the one we tried to insert.
+                existingDatasetType = self.getDatasetType(datasetType.name)
             else:
-                raise ConflictingDefinitionError(f"Conflicting definition for {datasetType} found.")
-        datasetType.normalize(universe=self.dimensions)
-        # Insert it
-        datasetTypeTable = self._schema.tables["DatasetType"]
-        datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
-        values = {"dataset_type_name": datasetType.name,
-                  "storage_class": datasetType.storageClass.name}
-        self._connection.execute(datasetTypeTable.insert().values(**values))
-        if datasetType.dimensions:
-            self._connection.execute(datasetTypeDimensionsTable.insert(),
-                                     [{"dataset_type_name": datasetType.name,
-                                       "dimension_name": dimensionName}
-                                      for dimensionName in datasetType.dimensions.names])
-        self._datasetTypes[datasetType.name] = datasetType
-        # Also register component DatasetTypes (if any)
-        for compName, compStorageClass in datasetType.storageClass.components.items():
-            compType = DatasetType(datasetType.componentTypeName(compName),
-                                   datasetType.dimensions,
-                                   compStorageClass)
-            self.registerDatasetType(compType)
-        return True
+                # If adding the DatasetType record itself succeeded, add its
+                # dimensions (if any).  We don't guard this in a try block
+                # because a problem with this insert means the database
+                # content must be corrupted.
+                if datasetType.dimensions:
+                    self._connection.execute(
+                        self._schema.tables["DatasetTypeDimensions"].insert(),
+                        [{"dataset_type_name": datasetType.name,
+                          "dimension_name": dimensionName}
+                         for dimensionName in datasetType.dimensions.names]
+                    )
+                # Also register component DatasetTypes (if any).
+                for compName, compStorageClass in datasetType.storageClass.components.items():
+                    compType = DatasetType(datasetType.componentTypeName(compName),
+                                           dimensions=datasetType.dimensions,
+                                           storageClass=compStorageClass)
+                    self.registerDatasetType(compType)
+                # Inserts succeeded, nothing left to do here.
+                return True
+        # A DatasetType with this name exists, check if is equal
+        if datasetType == existingDatasetType:
+            return False
+        else:
+            raise ConflictingDefinitionError(f"DatasetType: {datasetType} != existing {existingDatasetType}")
 
     def getDatasetType(self, name):
         # Docstring inherited from Registry.getDatasetType.
