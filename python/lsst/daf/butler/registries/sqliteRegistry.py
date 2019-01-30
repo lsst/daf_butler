@@ -40,6 +40,7 @@ def _onSqlite3Connect(dbapiConnection, connectionRecord):
     # Enable foreign keys
     with closing(dbapiConnection.cursor()) as cursor:
         cursor.execute("PRAGMA foreign_keys=ON;")
+        cursor.execute("PRAGMA busy_timeout = 300000;")  # in ms, so 5min (way longer than should be needed)
 
 
 def _onSqlite3Begin(connection):
