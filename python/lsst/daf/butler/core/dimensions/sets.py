@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DimensionSet", "DimensionNameSet", "toNameSet")
+__all__ = ("DimensionSet", "DimensionNameSet", "conformSet")
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Set, MutableSet
@@ -27,21 +27,20 @@ from collections import OrderedDict
 from .elements import DimensionElement
 
 
-def toNameSet(container):
-    """Transform an iterable of `DimensionElement` or names thereof into a
-    `DimensionNameSet`.
+def conformSet(container):
+    """Transform an iterable of `DimensionElement` or names thereof into an
+    object with a set-like ``.names`` attribute.
 
     Also accepts objects with a ``.names`` attribute that are not themselves
     iterable, such as `DimensionNameSet` itself.
     """
-    if isinstance(container, str):
+    from .graph import DimensionGraph
+    if isinstance(container, (DimensionGraph, DimensionSetBase)):
+        return container
+    elif isinstance(container, str):
         # Friendlier error for easy mistake, e.g. union("Name") instead of
         # union(["Name"])
         raise TypeError("Argument must be an *iterable* over `DimensionElement` or `str`; got `str`")
-    try:
-        return DimensionNameSet(container.names)
-    except AttributeError:
-        pass
     return DimensionNameSet(element.name if isinstance(element, DimensionElement) else element
                             for element in container)
 
@@ -73,19 +72,19 @@ class DimensionSetBase(metaclass=ABCMeta):
         return hash(frozenset(self.names))
 
     def __eq__(self, other):
-        return self.names == toNameSet(other).names
+        return self.names == conformSet(other).names
 
     def __le__(self, other):
-        return self.names <= toNameSet(other).names
+        return self.names <= conformSet(other).names
 
     def __lt__(self, other):
-        return self.names < toNameSet(other).names
+        return self.names < conformSet(other).names
 
     def __ge__(self, other):
-        return self.names >= toNameSet(other).names
+        return self.names >= conformSet(other).names
 
     def __gt__(self, other):
-        return self.names > toNameSet(other).names
+        return self.names > conformSet(other).names
 
     def issubset(self, other):
         """Return `True` if all elements in ``self`` are also in ``other``.
@@ -108,7 +107,7 @@ class DimensionSetBase(metaclass=ABCMeta):
 
         All sets (including the empty set) are disjoint with the empty set.
         """
-        return self.names.isdisjoint(toNameSet(other).names)
+        return self.names.isdisjoint(conformSet(other).names)
 
     def union(self, *others):
         """Return a new set containing all elements that are in ``self`` or
@@ -129,7 +128,7 @@ class DimensionSetBase(metaclass=ABCMeta):
         names = set(self.names)
         universe = getattr(self, "universe", None)
         for other in others:
-            names |= toNameSet(other).names
+            names |= conformSet(other).names
             universe = getattr(other, "universe", universe)
         if universe is not None:
             return DimensionSet(universe, names)
@@ -155,7 +154,7 @@ class DimensionSetBase(metaclass=ABCMeta):
         names = set(self.names)
         universe = getattr(self, "universe", None)
         for other in others:
-            names &= toNameSet(other).names
+            names &= conformSet(other).names
             universe = getattr(other, "universe", universe)
         if universe is not None:
             return DimensionSet(universe, names)
@@ -178,7 +177,7 @@ class DimensionSetBase(metaclass=ABCMeta):
             A full `DimensionSet` is returned if any argument is a full
             `DimensionSet` or `DimensionGraph`.
         """
-        names = self.names ^ toNameSet(other).names
+        names = self.names ^ conformSet(other).names
         universe = getattr(self, "universe", None)
         universe = getattr(other, "universe", universe)
         if universe is not None:
@@ -203,7 +202,7 @@ class DimensionSetBase(metaclass=ABCMeta):
             A full `DimensionSet` is returned if any argument is a full
             `DimensionSet` or `DimensionGraph`.
         """
-        names = self.names - toNameSet(other).names
+        names = self.names - conformSet(other).names
         universe = getattr(self, "universe", None)
         universe = getattr(other, "universe", universe)
         if universe is not None:

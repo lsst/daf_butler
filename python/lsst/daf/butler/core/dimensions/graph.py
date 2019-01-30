@@ -24,7 +24,7 @@ __all__ = ("DimensionGraph", "DimensionConfig")
 import itertools
 
 from ..config import ConfigSubset
-from .sets import DimensionSet, toNameSet
+from .sets import DimensionSet, conformSet
 from .elements import Dimension, DimensionJoin
 
 
@@ -168,7 +168,7 @@ class DimensionGraph:
             self._universe = universe
 
             # Make a set of the names of requested dimensions and all of their dependencies.
-            dimensionNames = set(toNameSet(dimensions).names)
+            dimensionNames = set(conformSet(dimensions).names)
 
             # Make a set of the names of all requested joins.
             joinNames = set()
@@ -405,7 +405,7 @@ class DimensionGraph:
         """
         if isinstance(elements, DimensionGraph) and not implied and self.issuperset(elements):
             return elements
-        elements = toNameSet(elements)
+        elements = conformSet(elements)
         if not self.elements.issuperset(elements):
             raise ValueError(
                 "Elements {} not in this graph.".format(elements.difference(self.names))
