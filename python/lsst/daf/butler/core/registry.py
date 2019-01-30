@@ -32,7 +32,20 @@ from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
 
-__all__ = ("RegistryConfig", "Registry", "disableWhenLimited")
+__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
+           "AmbiguousDatasetError", "ConflictingDefinitionError")
+
+
+class AmbiguousDatasetError(Exception):
+    """Exception raised when a `DatasetRef` has no ID and a `Registry`
+    operation requires one.
+    """
+
+
+class ConflictingDefinitionError(Exception):
+    """Exception raised when trying to insert a database record when a
+    conflicting record already exists.
+    """
 
 
 def disableWhenLimited(func):
@@ -272,8 +285,8 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
-        ValueError
-            If dataId is invalid.
+        LookupError
+            If one or more data ID keys are missing.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -293,14 +306,18 @@ class Registry(metaclass=ABCMeta):
         Raises
         ------
         ValueError
-            DatasetType is not valid for this registry or is already registered
-            but not identical.
+            Raised if the dimensions or storage class are invalid.
+        ConflictingDefinitionError
+            Raised if this DatasetType is already registered with a different
+            definition.
 
         Returns
         -------
         inserted : `bool`
             `True` if ``datasetType`` was inserted, `False` if an identical
-            existing `DatsetType` was found.
+            existing `DatsetType` was found.  Note that in either case the
+            DatasetType is guaranteed to be defined in the Registry
+            consistently with the given definition.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -363,7 +380,7 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
-        ValueError
+        ConflictingDefinitionError
             If a Dataset with the given `DatasetRef` already exists in the
             given collection.
 
@@ -403,6 +420,11 @@ class Registry(metaclass=ABCMeta):
             the component.
         component : `DatasetRef`
             A reference to the component dataset.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``parent.id`` or ``component.id`` is `None`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -427,7 +449,7 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
-        ValueError
+        ConflictingDefinitionError
             If a Dataset with the given `DatasetRef` already exists in the
             given collection.
         """
@@ -457,6 +479,11 @@ class Registry(metaclass=ABCMeta):
         removed : `list` of `DatasetRef`
             If `remove` is `True`, the `list` of `DatasetRef`\ s that were
             removed.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``any(ref.id is None for ref in refs)``.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -473,6 +500,11 @@ class Registry(metaclass=ABCMeta):
             A reference to the dataset for which to add storage information.
         datastoreName : `str`
             Name of the datastore holding this dataset.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
         """
         # TODO: this requires `ref.dataset_id` to be not None, and probably
         # doesn't use anything else from `ref`.  Should it just take a
@@ -496,6 +528,11 @@ class Registry(metaclass=ABCMeta):
         datastores : `set` of `str`
             All the matching datastores holding this dataset. Empty set
             if the dataset does not exist anywhere.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
         """
         # TODO: this requires `ref.dataset_id` to be not None, and probably
         # doesn't use anything else from `ref`.  Should it just take a
@@ -515,6 +552,11 @@ class Registry(metaclass=ABCMeta):
             Name of this `Datastore`.
         ref : `DatasetRef`
             A reference to the dataset for which information is to be removed.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
         """
         # TODO: this requires `ref.dataset_id` to be not None, and probably
         # doesn't use anything else from `ref`.  Should it just take a
@@ -538,8 +580,8 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
-        Exception
-            If `Execution` is already present in the `Registry`.
+        ConflictingDefinitionError
+            If ``execution`` is already present in the `Registry`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -590,7 +632,7 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
-        ValueError
+        ConflictingDefinitionError
             If ``run`` already exists, but is not identical.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -610,7 +652,7 @@ class Registry(metaclass=ABCMeta):
 
         Raises
         ------
-        ValueError
+        ConflictingDefinitionError
             If a run already exists with this collection.
         """
         raise NotImplementedError("Must be implemented by subclass")
@@ -730,7 +772,7 @@ class Registry(metaclass=ABCMeta):
         TypeError
             If the given `Dimension` does not have explicit entries in the
             registry.
-        ValueError
+        ConflictingDefinitionError
             If an entry with the primary-key defined in `values` is already
             present.
         NotImplementedError

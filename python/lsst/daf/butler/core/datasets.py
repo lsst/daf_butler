@@ -227,6 +227,34 @@ class DatasetType:
                            dimensions=deepcopy(self.dimensions, memo),
                            storageClass=deepcopy(self._storageClass or self._storageClassName, memo))
 
+    def normalize(self, universe):
+        """Ensure the dimensions and storage class name are valid, and make
+        ``self.dimensions`` a true `DimensionGraph` instance if it isn't
+        already.
+
+        Parameters
+        ----------
+        universe : `DimensionGraph`
+            The set of all known dimensions.
+
+        Raises
+        ------
+        ValueError
+            Raised if the DatasetType is invalid, either because one or more
+            dimensions in ``self.dimensions`` is not in ``universe``, or the
+            storage class name is not recognized.
+        """
+        if not isinstance(self._dimensions, DimensionGraph):
+            self._dimensions = universe.extract(self._dimensions)
+        try:
+            # Trigger lookup of StorageClass instance from StorageClass name.
+            # KeyError (sort of) makes sense in that context, but it doesn't
+            # make as much sense in the context in which normalize() is called,
+            # so we translate it to ValueError.
+            self.storageClass
+        except KeyError:
+            raise ValueError(f"Storage class '{self._storageClassName}' not recognized.")
+
 
 class DatasetRef:
     """Reference to a Dataset in a `Registry`.
@@ -249,7 +277,7 @@ class DatasetRef:
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run", "_hash",
                  "_predictedConsumers", "_actualConsumers", "_components")
 
-    def __init__(self, datasetType, dataId, id=None, run=None, hash=None):
+    def __init__(self, datasetType, dataId, id=None, run=None, hash=None, components=None):
         assert isinstance(datasetType, DatasetType)
         self._id = id
         self._datasetType = datasetType
@@ -258,10 +286,15 @@ class DatasetRef:
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
         self._components = dict()
+        if components is not None:
+            self._components.update(components)
         self._run = run
         self._hash = hash
 
     __eq__ = slotValuesAreEqual
+
+    def __repr__(self):
+        return f"DatasetRef({self.datasetType}, {self.dataId}, id={self.id}, run={self.run})"
 
     @property
     def id(self):
