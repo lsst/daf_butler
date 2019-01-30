@@ -69,6 +69,7 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         self._doc = doc
         self._requiredDependencies = DimensionSet(universe, required, expand=True, implied=False)
         self._impliedDependencies = DimensionSet(universe, implied, expand=False)
+        self._allDependencies = self._requiredDependencies | self._impliedDependencies
         # Compute _primaryKeys dict, used to back primaryKeys property.
         expandedLinks = set(self._localLinks)
         for dimension in self.dependencies(implied=False):
@@ -148,7 +149,7 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         """
         if required:
             if implied:
-                return self._requiredDependencies | self._impliedDependencies
+                return self._allDependencies
             else:
                 return self._requiredDependencies
         elif implied:
