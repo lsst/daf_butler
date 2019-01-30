@@ -575,8 +575,9 @@ class SqlPreFlight:
                 dimensions=rowDimensions,
                 region=extractRegion(rowDimensions)
             )
-            if expandDataIds:
-                self.registry.expandDataId(dataId)
+            # row-wide Data IDs are never expanded, even if expandDataIds=True;
+            # this is slightly confusing, but we don't actually need them
+            # expanded, and it's actually quite slow.
 
             # for each dataset get ids DataRef
             datasetRefs = {}
