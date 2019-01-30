@@ -422,6 +422,7 @@ class DimensionUniverse(DimensionGraph):
         joins = DimensionSet(self, elements=())
         super().__init__(universe=self, elements=elements, dimensions=dimensions, joins=joins)
         self._backrefs = {}
+        self._subgraphCache = {}
 
     def __repr__(self):
         return f"DimensionUniverse({self._dimensions}, joins={self._joins})"
@@ -444,33 +445,41 @@ class DimensionUniverse(DimensionGraph):
         subgraph : `DimensionGraph`
             A new graph containing the given elements and their dependencies.
         """
-        if isinstance(dimensions, DimensionGraph) and not joins and not implied:
-            return dimensions
+        dimensions = conformSet(dimensions)
 
-        # Make a set of the names of requested dimensions and all of their dependencies.
-        dimensionNames = set(conformSet(dimensions).names)
-
-        # Make a set of the names of all requested joins.
-        joinNames = set()
-        for join in joins:
-            if not isinstance(join, DimensionJoin):
-                join = self.universe._joins[join]
-            joinNames.add(join.name)
-            # Add to the dimension set any dimensions that are required by the requested joins.
-            dimensionNames |= join.dependencies().names
-
-        # Make the Dimension set, expanding to include dependencies
-        dimensions = DimensionSet(self, dimensionNames, expand=True, implied=implied)
-
-        # Add to the join set any joins that are implied by the set of dimensions.
-        for join in self._joins:
-            if dimensions.issuperset(join.dependencies()):
+        if not joins:
+            dimensionNames = frozenset(dimensions.names)
+            joinNames = set()
+        else:
+            # Make a set of the names of requested dimensions and all of their dependencies.
+            dimensionNames = set(dimensions.names)
+            # Make a set of the names of all requested joins.
+            joinNames = set()
+            for join in joins:
+                if not isinstance(join, DimensionJoin):
+                    join = self.universe._joins[join]
                 joinNames.add(join.name)
+                # Add to the dimension set any dimensions that are required by the requested joins.
+                dimensionNames |= join.dependencies().names
+            dimensionNames = frozenset(dimensionNames)
 
-        joins = DimensionSet(self, joinNames, expand=False)
-
-        return DimensionGraph._construct(self, dimensions=dimensions, joins=joins,
-                                         elements=(dimensions | joins))
+        # See if the desired graph is in the cache.
+        cacheKey = (dimensionNames, implied)
+        result = self._subgraphCache.get(cacheKey, None)
+        if result is None:
+            # Make the Dimension set, expanding to include dependencies
+            dimensions = DimensionSet(self, dimensionNames, expand=True, implied=implied)
+            # Add to the join set any joins that are implied by the set of dimensions.
+            for join in self._joins:
+                if dimensions.issuperset(join.dependencies()):
+                    joinNames.add(join.name)
+            joins = DimensionSet(self, joinNames, expand=False)
+            # Construct the new graph instance
+            result = DimensionGraph._construct(self, dimensions=dimensions, joins=joins,
+                                               elements=(dimensions | joins))
+            # Update the cache
+            self._subgraphCache[cacheKey] = result
+        return result
 
     def withLink(self, link):
         """Return the set of `Dimension` and `DimensionJoin` objects that have
