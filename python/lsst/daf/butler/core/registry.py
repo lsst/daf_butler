@@ -985,9 +985,9 @@ class Registry(metaclass=ABCMeta):
         visited = set()
 
         def visit(element):
-            assert element.links() <= allLinks.keys()
             if element.name in visited:
                 return
+            assert element.links() <= allLinks.keys()
             entries = dataId.entries[element]
             dependencies = element.dependencies(implied=True)
             # Get the set of fields we want to retrieve.
