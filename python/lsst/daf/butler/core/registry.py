@@ -27,7 +27,7 @@ import functools
 from lsst.utils import doImport
 from lsst.sphgeom import ConvexPolygon
 from .config import Config, ConfigSubset
-from .dimensions import DimensionConfig, DimensionGraph, DataId, DimensionKeyDict
+from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
@@ -174,7 +174,7 @@ class Registry(metaclass=ABCMeta):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
         self._pixelization = None
-        self.dimensions = DimensionGraph.fromConfig(dimensionConfig)
+        self.dimensions = DimensionUniverse.fromConfig(dimensionConfig)
         self._dataIdPackerFactories = {
             name: DataIdPackerFactory.fromConfig(self.dimensions, subconfig)
             for name, subconfig in registryConfig.get("dataIdPackers", {}).items()

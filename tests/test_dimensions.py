@@ -25,7 +25,7 @@ import itertools
 import lsst.utils
 import lsst.utils.tests
 
-from lsst.daf.butler import DimensionGraph, Dimension, DimensionJoin
+from lsst.daf.butler import DimensionUniverse, Dimension, DimensionJoin
 
 
 class DimensionTestCase(lsst.utils.tests.TestCase):
@@ -37,7 +37,7 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
     """
 
     def setUp(self):
-        self.universe = DimensionGraph.fromConfig()
+        self.universe = DimensionUniverse.fromConfig()
 
     def checkSetInvariants(self, dimensions):
         """Run tests on DimensionSet that should pass for any instance.
@@ -191,7 +191,7 @@ class DimensionTestCase(lsst.utils.tests.TestCase):
             joinName = "{}{}Join".format("".join(lhsNames), "".join(rhsNames))
         lhs = self.universe.extract(lhsNames)
         rhs = self.universe.extract(rhsNames)
-        both = DimensionGraph(self.universe, joins=[joinName])
+        both = self.universe.extract(joins=[joinName])
         self.checkGraphInvariants(both)
         join = both.joins().get(joinName)
         self.assertIsNotNone(join)
