@@ -280,6 +280,7 @@ class DimensionSet(DimensionSetBase, Set):
     def __init__(self, universe, elements, expand=False, implied=False):
         self._universe = universe
         self._elements = OrderedDict()
+        self._links = None
 
         def toPairs(elems):
             for elem in elems:
@@ -348,7 +349,9 @@ class DimensionSet(DimensionSetBase, Set):
         -------
         links : `frozenset` of `str`
         """
-        return frozenset().union(*(d.links() for d in self))
+        if self._links is None:
+            self._links = frozenset().union(*(d.links() for d in self))
+        return self._links
 
     def expanded(self, implied=False):
         """Return a new `DimensionSet` that has been expanded to include
