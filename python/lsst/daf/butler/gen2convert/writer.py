@@ -286,13 +286,8 @@ class ConversionWriter:
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for datasetType in self.datasetTypes.values():
-            # TODO: should put this "just make sure it exists" logic
-            # into registerDatasetType itself, and make it a bit more careful.
-            try:
-                registry.registerDatasetType(datasetType)
-                log.debug("Registered DatasetType '%s'." % datasetType.name)
-            except KeyError:
-                log.debug("DatasetType '%s' already registered." % datasetType.name)
+            registry.registerDatasetType(datasetType)
+            log.debug("Registered DatasetType '%s'." % datasetType.name)
 
     def insertDatasets(self, registry, datastore):
         """Add all Dataset entries to the given Registry and Datastore.
