@@ -199,12 +199,16 @@ class ConversionWriter:
 
         Runs all steps to create a Gen3 Repo.
         """
-        self.insertInstruments(registry)
-        self.insertSkyMaps(registry)
-        self.insertObservations(registry)
-        self.insertDatasetTypes(registry)
-        self.insertDatasets(registry, datastore)
-        self.insertObservationRegions(registry, datastore)
+        # Transaction here should help with performance as well as making the
+        # conversion atomic, as it prevents each Registry.addDataset from
+        # having to grab a new lock on the database.
+        with registry.transaction():
+            self.insertInstruments(registry)
+            self.insertSkyMaps(registry)
+            self.insertObservations(registry)
+            self.insertDatasetTypes(registry)
+            self.insertDatasets(registry, datastore)
+            self.insertObservationRegions(registry, datastore)
 
     def insertInstruments(self, registry):
         """Check that all necessary Instruments are already present in the
