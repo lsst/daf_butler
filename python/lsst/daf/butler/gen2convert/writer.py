@@ -199,12 +199,16 @@ class ConversionWriter:
 
         Runs all steps to create a Gen3 Repo.
         """
-        self.insertInstruments(registry)
-        self.insertSkyMaps(registry)
-        self.insertObservations(registry)
-        self.insertDatasetTypes(registry)
-        self.insertDatasets(registry, datastore)
-        self.insertObservationRegions(registry, datastore)
+        # Transaction here should help with performance as well as making the
+        # conversion atomic, as it prevents each Registry.addDataset from
+        # having to grab a new lock on the database.
+        with registry.transaction():
+            self.insertInstruments(registry)
+            self.insertSkyMaps(registry)
+            self.insertObservations(registry)
+            self.insertDatasetTypes(registry)
+            self.insertDatasets(registry, datastore)
+            self.insertObservationRegions(registry, datastore)
 
     def insertInstruments(self, registry):
         """Check that all necessary Instruments are already present in the
@@ -282,13 +286,8 @@ class ConversionWriter:
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for datasetType in self.datasetTypes.values():
-            # TODO: should put this "just make sure it exists" logic
-            # into registerDatasetType itself, and make it a bit more careful.
-            try:
-                registry.registerDatasetType(datasetType)
-                log.debug("Registered DatasetType '%s'." % datasetType.name)
-            except KeyError:
-                log.debug("DatasetType '%s' already registered." % datasetType.name)
+            registry.registerDatasetType(datasetType)
+            log.debug("Registered DatasetType '%s'." % datasetType.name)
 
     def insertDatasets(self, registry, datastore):
         """Add all Dataset entries to the given Registry and Datastore.

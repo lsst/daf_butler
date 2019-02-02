@@ -22,6 +22,8 @@
 from contextlib import closing
 
 from sqlalchemy import event
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool
 
 from sqlite3 import Connection as SQLite3Connection
 
@@ -92,7 +94,8 @@ class SqliteRegistry(SqlRegistry):
         super().__init__(registryConfig, schemaConfig, dimensionConfig, create)
 
     def _createEngine(self):
-        engine = super()._createEngine()
+        engine = create_engine(self.config["db"], poolclass=NullPool,
+                               connect_args={"check_same_thread": False})
         event.listen(engine, "connect", _onSqlite3Connect)
         event.listen(engine, "begin", _onSqlite3Begin)
         return engine
