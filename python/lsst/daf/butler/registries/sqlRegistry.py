@@ -800,7 +800,9 @@ class SqlRegistry(Registry):
             return dsType
         needed = [standardize(t) for t in neededDatasetTypes]
         future = [standardize(t) for t in futureDatasetTypes]
-        preFlight = SqlPreFlight(self, originInfo, needed, future, expandDataIds=expandDataIds)
+        preFlight = SqlPreFlight(self, originInfo, needed, future,
+                                 expandDataIds=expandDataIds,
+                                 deferOutputIdQueries=self.config["deferOutputIdQueries"])
         return preFlight.selectDimensions(expression)
 
     @disableWhenLimited

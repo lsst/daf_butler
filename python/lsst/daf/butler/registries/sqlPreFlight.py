@@ -30,6 +30,12 @@ from lsst.sphgeom.relationship import DISJOINT
 from lsst.daf.butler import DatasetRef, PreFlightDimensionsRow, DimensionJoin, DataId
 
 
+class DATASET_ID_DEFERRED:  # noqa N801
+    """Type used as a sentinal value to indicate when a dataset ID was not
+    queried for, as opposed to not found."""
+    pass
+
+
 _LOG = logging.getLogger(__name__)
 
 
@@ -56,8 +62,16 @@ class SqlPreFlight:
         be included in the returned column set.
     expandDataIds : `bool`
         If `True` (default), expand all data IDs when returning them.
+    deferOutputIdQueries: `bool`
+        If `True`, do not include subqueries for preexisting output datasets
+        in the main initial query that constrains the results, and instead
+        query for them one-by-one when processing the results of the initial
+        query.  This option should be used when keeping the number of joins
+        in the query low is important (i.e. for SQLite, which has a maximum
+        of 64 joins in a single query).
     """
-    def __init__(self, registry, originInfo, neededDatasetTypes, futureDatasetTypes, expandDataIds=True):
+    def __init__(self, registry, originInfo, neededDatasetTypes, futureDatasetTypes,
+                 expandDataIds=True, deferOutputIdQueries=False):
         self.registry = registry
         # Make a copy of the tables in the schema so we can modify it to fake
         # nonexistent tables without modifying registry state.
@@ -66,6 +80,7 @@ class SqlPreFlight:
         self.neededDatasetTypes = neededDatasetTypes
         self.futureDatasetTypes = futureDatasetTypes
         self.expandDataIds = expandDataIds
+        self.deferOutputIdQueries = deferOutputIdQueries
 
     def _joinOnForeignKey(self, fromClause, dimension, otherDimensions):
         """Add new table for join clause.
@@ -284,8 +299,10 @@ class SqlPreFlight:
                      [(dsType, True) for dsType in self.futureDatasetTypes]
         for dsType, isOutput in allDsTypes:
 
-            _LOG.debug("joining %s dataset type: %s",
-                       "output" if isOutput else "input", dsType.name)
+            if isOutput and self.deferOutputIdQueries:
+                _LOG.debug("deferring lookup for output dataset type: %s", dsType.name)
+                dsIdColumns[dsType] = DATASET_ID_DEFERRED
+                continue
 
             # Build a sub-query.
             subquery = self._buildDatasetSubquery(dsType, isOutput)
@@ -293,8 +310,13 @@ class SqlPreFlight:
                 # If there nothing to join (e.g. we know that output
                 # collection is empty) then just pass None as column
                 # index for this dataset type to the code below.
+                _LOG.debug("nothing to join for %s dataset type: %s",
+                           "output" if isOutput else "input", dsType.name)
                 dsIdColumns[dsType] = None
                 continue
+
+            _LOG.debug("joining %s dataset type: %s",
+                       "output" if isOutput else "input", dsType.name)
 
             # Join sub-query with all dimensions on their link names,
             # OUTER JOIN is used for output datasets (they don't usually exist)
@@ -574,7 +596,7 @@ class SqlPreFlight:
             # this is slightly confusing, but we don't actually need them
             # expanded, and it's actually quite slow.
 
-            # for each dataset get ids DataRef
+            # get Dataset for each DatasetType
             datasetRefs = {}
             for dsType, col in dsIdColumns.items():
                 linkNames = {}  # maps full link name in linkColumnIndices to dataId key
@@ -592,8 +614,21 @@ class SqlPreFlight:
                                   region=extractRegion(dsType.dimensions))
                 if self.expandDataIds:
                     self.registry.expandDataId(dsDataId)
-                dsId = None if col is None else row[col]
-                datasetRefs[dsType] = DatasetRef(dsType, dsDataId, dsId)
+
+                if col is None:
+                    # Dataset does not exist yet.
+                    datasetRefs[dsType] = DatasetRef(dsType, dsDataId, id=None)
+                elif col is DATASET_ID_DEFERRED:
+                    # We haven't searched for the dataset yet, because we've
+                    # deferred these queries
+                    ref = self.registry.find(
+                        collection=self.originInfo.getOutputCollection(dsType.name),
+                        datasetType=dsType,
+                        dataId=dsDataId
+                    )
+                    datasetRefs[dsType] = ref if ref is not None else DatasetRef(dsType, dsDataId, id=None)
+                else:
+                    datasetRefs[dsType] = self.registry.getDataset(id=row[col])
 
             count += 1
             yield PreFlightDimensionsRow(dataId, datasetRefs)

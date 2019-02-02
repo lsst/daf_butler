@@ -85,7 +85,7 @@ class SqliteRegistry(SqlRegistry):
         super().setConfigRoot(root, config, full)
         Config.overrideParameters(RegistryConfig, config, full,
                                   toUpdate={"db": "sqlite:///{}/gen3.sqlite3".format(root)},
-                                  toCopy=("cls", ))
+                                  toCopy=("cls", "deferOutputIdQueries"))
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False):
         registryConfig = SqlRegistryConfig(registryConfig)

@@ -125,25 +125,28 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=collection1)
-        preFlight = SqlPreFlight(self.registry, neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType], originInfo=originInfo)
-        rows = preFlight.selectDimensions(expression="")
-        rows = list(rows)
-        self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
-        for row in rows:
-            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-            self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
-            packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
-            packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
-            self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
-                             DataId(row.dataId, dimensions=packer1.dimensions.required))
-            self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
-                             DataId(row.dataId, dimensions=packer2.dimensions.required))
-            self.assertNotEqual(packer1.pack(row.dataId), packer2.pack(row.dataId))
-        self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
-                              (100, 101, 110, 111))
-        self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10, 11))
-        self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
+        for deferOutputIdQueries in (True, False):
+            with self.subTest(deferOutputIdQueries=deferOutputIdQueries):
+                preFlight = SqlPreFlight(self.registry, neededDatasetTypes=[rawType],
+                                         futureDatasetTypes=[calexpType], originInfo=originInfo,
+                                         deferOutputIdQueries=deferOutputIdQueries)
+                rows = preFlight.selectDimensions(expression="")
+                rows = list(rows)
+                self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
+                for row in rows:
+                    self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+                    self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
+                    packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
+                    packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
+                    self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
+                                     DataId(row.dataId, dimensions=packer1.dimensions.required))
+                    self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
+                                     DataId(row.dataId, dimensions=packer2.dimensions.required))
+                    self.assertNotEqual(packer1.pack(row.dataId), packer2.pack(row.dataId))
+                self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
+                                      (100, 101, 110, 111))
+                self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10, 11))
+                self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
         # second collection
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection2], defaultOutput=collection1)
