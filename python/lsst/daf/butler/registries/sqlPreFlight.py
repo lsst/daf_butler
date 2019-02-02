@@ -44,12 +44,28 @@ class SqlPreFlight:
     ----------
     registry : `SqlRegistry``
         Registry instance
+    originInfo : `DatasetOriginInfo`
+        Object which provides names of the input/output collections.
+    neededDatasetTypes : `list` of `DatasetType`
+        The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
+        be included in the returned column set. Output is limited to the
+        the Datasets of these DatasetTypes which already exist in the
+        registry.
+    futureDatasetTypes : `list` of `DatasetType`
+        The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
+        be included in the returned column set.
+    expandDataIds : `bool`
+        If `True` (default), expand all data IDs when returning them.
     """
-    def __init__(self, registry):
+    def __init__(self, registry, originInfo, neededDatasetTypes, futureDatasetTypes, expandDataIds=True):
         self.registry = registry
         # Make a copy of the tables in the schema so we can modify it to fake
         # nonexistent tables without modifying registry state.
         self.tables = self.registry._schema.tables.copy()
+        self.originInfo = originInfo
+        self.neededDatasetTypes = neededDatasetTypes
+        self.futureDatasetTypes = futureDatasetTypes
+        self.expandDataIds = expandDataIds
 
     def _joinOnForeignKey(self, fromClause, dimension, otherDimensions):
         """Add new table for join clause.
@@ -96,8 +112,7 @@ class SqlPreFlight:
                 # so we have to use `onclause` which is always true.
                 return fromClause.join(self.tables[dimension.name], literal(True))
 
-    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
-                         expandDataIds=True):
+    def selectDimensions(self, expression):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of dimension values.
 
@@ -108,23 +123,9 @@ class SqlPreFlight:
 
         Parameters
         ----------
-        originInfo : `DatasetOriginInfo`
-            Object which provides names of the input/output collections.
         expression : `str`
             An expression that limits the `Dimensions <Dimension>` and
             (indirectly) the Datasets returned.
-        neededDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
-            be included in the returned column set. Output is limited to the
-            the Datasets of these DatasetTypes which already exist in the
-            registry.
-        futureDatasetTypes : `list` of `DatasetType`
-            The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
-            be included in the returned column set. It is expected that
-            Datasets for these DatasetTypes do not exist in the registry,
-            but presently this is not checked.
-        expandDataIds : `bool`
-            If `True` (default), expand all data IDs when returning them.
 
         Yields
         ------
@@ -154,8 +155,8 @@ class SqlPreFlight:
         # Collect dimensions from both input and output dataset types
         dimensions = self.registry.dimensions.extract(
             itertools.chain(
-                itertools.chain.from_iterable(dsType.dimensions.names for dsType in neededDatasetTypes),
-                itertools.chain.from_iterable(dsType.dimensions.names for dsType in futureDatasetTypes),
+                itertools.chain.from_iterable(dsType.dimensions.names for dsType in self.neededDatasetTypes),
+                itertools.chain.from_iterable(dsType.dimensions.names for dsType in self.futureDatasetTypes),
             )
         )
         _LOG.debug("dimensions: %s", dimensions)
@@ -279,15 +280,15 @@ class SqlPreFlight:
 
         # join with input datasets to restrict to existing inputs
         dsIdColumns = {}
-        allDsTypes = [(dsType, False) for dsType in neededDatasetTypes] + \
-                     [(dsType, True) for dsType in futureDatasetTypes]
+        allDsTypes = [(dsType, False) for dsType in self.neededDatasetTypes] + \
+                     [(dsType, True) for dsType in self.futureDatasetTypes]
         for dsType, isOutput in allDsTypes:
 
             _LOG.debug("joining %s dataset type: %s",
                        "output" if isOutput else "input", dsType.name)
 
             # Build a sub-query.
-            subquery = self._buildDatasetSubquery(dsType, originInfo, isOutput)
+            subquery = self._buildDatasetSubquery(dsType, isOutput)
             if subquery is None:
                 # If there nothing to join (e.g. we know that output
                 # collection is empty) then just pass None as column
@@ -336,10 +337,9 @@ class SqlPreFlight:
 
         # execute and return result iterator
         rows = self.registry._connection.execute(q).fetchall()
-        return self._convertResultRows(rows, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns,
-                                       expandDataIds=expandDataIds)
+        return self._convertResultRows(rows, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns)
 
-    def _buildDatasetSubquery(self, dsType, originInfo, isOutput):
+    def _buildDatasetSubquery(self, dsType, isOutput):
         """Build a sub-query for a dataset type to be joined with "big join".
 
         If there is only one collection then there is a guarantee that
@@ -414,8 +414,6 @@ class SqlPreFlight:
         Parameters
         ----------
         dsType : `DatasetType`
-        originInfo : `DatasetOriginInfo`
-            Object which provides names of the input/output collections.
         isOutput : `bool`
             `True` for output datasets.
 
@@ -431,7 +429,7 @@ class SqlPreFlight:
 
         if isOutput:
 
-            outputCollection = originInfo.getOutputCollection(dsType.name)
+            outputCollection = self.originInfo.getOutputCollection(dsType.name)
             if not outputCollection:
                 # No output collection means no output datasets exist, we do
                 # not need to do any joins here.
@@ -439,7 +437,7 @@ class SqlPreFlight:
 
             dsCollections = [outputCollection]
         else:
-            dsCollections = originInfo.getInputCollections(dsType.name)
+            dsCollections = self.originInfo.getInputCollections(dsType.name)
 
         _LOG.debug("using collections: %s", dsCollections)
 
@@ -493,8 +491,7 @@ class SqlPreFlight:
         subquery = subquery.alias("ds" + dsType.name)
         return subquery
 
-    def _convertResultRows(self, rowIter, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns,
-                           expandDataIds=True):
+    def _convertResultRows(self, rowIter, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns):
         """Convert query result rows into `PreFlightDimensionsRow` instances.
 
         Parameters
@@ -512,8 +509,6 @@ class SqlPreFlight:
         dsIdColumns : `dict`
             Dictionary of (DatasetType, column index), column contains
             dataset Id, or None if dataset does not exist
-        expandDataIds : `bool`
-            If `True` (default), expand all data IDs when returning them.
 
         Yields
         ------
@@ -595,7 +590,7 @@ class SqlPreFlight:
                 dsDataId = DataId({val: row[linkColumnIndices[key]] for key, val in linkNames.items()},
                                   dimensions=dsType.dimensions,
                                   region=extractRegion(dsType.dimensions))
-                if expandDataIds:
+                if self.expandDataIds:
                     self.registry.expandDataId(dsDataId)
                 dsId = None if col is None else row[col]
                 datasetRefs[dsType] = DatasetRef(dsType, dsDataId, dsId)

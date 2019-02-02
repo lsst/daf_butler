@@ -41,7 +41,6 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         # easiest way to make SqlPreFlight instance is to ask SqlRegistry to do it
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
-        self.preFlight = SqlPreFlight(self.registry)
 
     def testDatasetOriginInfoDef(self):
         """Test for DatasetOriginInfoDef class"""
@@ -126,10 +125,9 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=collection1)
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        preFlight = SqlPreFlight(self.registry, neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType], originInfo=originInfo)
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for row in rows:
@@ -149,10 +147,9 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # second collection
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection2], defaultOutput=collection1)
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo, neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType])
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for row in rows:
@@ -165,10 +162,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with two input datasets
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1, collection2], defaultOutput=collection2)
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType])
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 6*3)   # 6 exposures times 3 detectors
         for row in rows:
@@ -181,10 +178,10 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # limit to single visit
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=None)
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="Visit.visit = 10",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType])
+        rows = preFlight.selectDimensions(expression="Visit.visit = 10")
         rows = list(rows)
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
@@ -193,30 +190,30 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # more limiting expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput="")
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="Visit.visit = 10 and Detector.detector > 1",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType])
+        rows = preFlight.selectDimensions(expression="Visit.visit = 10 and Detector.detector > 1")
         rows = list(rows)
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (2, 3))
 
-        # expression excludes everyhting
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="Visit.visit > 1000",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        # expression excludes everything
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType])
+        rows = preFlight.selectDimensions(expression="Visit.visit > 1000")
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
         # Selecting by PhysicalFilter, this is not in the units, but it is
         # a part of the full expression so it should work too.
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="PhysicalFilter.physical_filter = 'dummy_r'",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType])
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType])
+        rows = preFlight.selectDimensions(expression="PhysicalFilter.physical_filter = 'dummy_r'")
         rows = list(rows)
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (110, 111))
@@ -310,11 +307,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # without flat/bias
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[rawType],
-                                               futureDatasetTypes=[calexpType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType],
+                                 futureDatasetTypes=[calexpType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 6*5)   # 6 exposures times 5 detectors
         for row in rows:
@@ -323,11 +320,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # use bias
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[rawType, biasType],
-                                               futureDatasetTypes=[calexpType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType, biasType],
+                                 futureDatasetTypes=[calexpType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 6*5)  # 6 exposures times 5 detectors
         for row in rows:
@@ -336,11 +333,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, biasType, calexpType))
 
         # use flat
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[rawType, flatType],
-                                               futureDatasetTypes=[calexpType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType, flatType],
+                                 futureDatasetTypes=[calexpType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 3*3)  # 3 exposures times 3 detectors
         for row in rows:
@@ -349,11 +346,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
 
         # use both bias and flat, plus expression
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="Detector.detector IN (1, 3)",
-                                               neededDatasetTypes=[rawType, flatType, biasType],
-                                               futureDatasetTypes=[calexpType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType, flatType, biasType],
+                                 futureDatasetTypes=[calexpType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="Detector.detector IN (1, 3)")
         rows = list(rows)
         self.assertEqual(len(rows), 3*2)  # 3 exposures times 2 detectors
         for row in rows:
@@ -362,11 +359,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, biasType, calexpType))
 
         # select single exposure (third) and detector and check datasetRefs
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="Exposure.exposure = 110 AND Detector.detector = 1",
-                                               neededDatasetTypes=[rawType, flatType, biasType],
-                                               futureDatasetTypes=[calexpType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[rawType, flatType, biasType],
+                                 futureDatasetTypes=[calexpType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="Exposure.exposure = 110 AND Detector.detector = 1")
         rows = list(rows)
         self.assertEqual(len(rows), 1)
         row = rows[0]
@@ -431,11 +428,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[calexpType, mergeType],
-                                               futureDatasetTypes=[measType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[calexpType, mergeType],
+                                 futureDatasetTypes=[measType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for row in rows:
@@ -446,11 +443,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)",
-                                               neededDatasetTypes=[calexpType, mergeType],
-                                               futureDatasetTypes=[measType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[calexpType, mergeType],
+                                 futureDatasetTypes=[measType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="Tract.tract IN (1, 5) AND Patch.patch IN (2, 7)")
         rows = list(rows)
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 5))
@@ -458,11 +455,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to single filter
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="AbstractFilter.abstract_filter = 'i'",
-                                               neededDatasetTypes=[calexpType, mergeType],
-                                               futureDatasetTypes=[measType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[calexpType, mergeType],
+                                 futureDatasetTypes=[measType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="AbstractFilter.abstract_filter = 'i'")
         rows = list(rows)
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 3, 5))
@@ -471,11 +468,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # expression excludes everyhting, specifying non-existing skymap is not a
         # fatal error, it's operator error
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="SkyMap.skymap = 'Mars'",
-                                               neededDatasetTypes=[calexpType, mergeType],
-                                               futureDatasetTypes=[measType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[calexpType, mergeType],
+                                 futureDatasetTypes=[measType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="SkyMap.skymap = 'Mars'")
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
@@ -507,11 +504,11 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
 
         # without data this should run OK but return empty set
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        rows = self.preFlight.selectDimensions(originInfo=originInfo,
-                                               expression="",
-                                               neededDatasetTypes=[calexpType],
-                                               futureDatasetTypes=[coaddType],
-                                               expandDataIds=False)
+        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
+                                 neededDatasetTypes=[calexpType],
+                                 futureDatasetTypes=[coaddType],
+                                 expandDataIds=False)
+        rows = preFlight.selectDimensions(expression="")
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 

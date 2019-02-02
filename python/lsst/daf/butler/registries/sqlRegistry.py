@@ -800,9 +800,8 @@ class SqlRegistry(Registry):
             return dsType
         needed = [standardize(t) for t in neededDatasetTypes]
         future = [standardize(t) for t in futureDatasetTypes]
-        preFlight = SqlPreFlight(self)
-        return preFlight.selectDimensions(originInfo, expression, needed, future,
-                                          expandDataIds=expandDataIds)
+        preFlight = SqlPreFlight(self, originInfo, needed, future, expandDataIds=expandDataIds)
+        return preFlight.selectDimensions(expression)
 
     @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):
