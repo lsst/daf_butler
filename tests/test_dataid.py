@@ -25,7 +25,7 @@ import pickle
 import lsst.utils
 import lsst.utils.tests
 
-from lsst.daf.butler import DataId, DimensionGraph
+from lsst.daf.butler import DataId, DimensionUniverse
 
 
 class DataIdTestCase(lsst.utils.tests.TestCase):
@@ -37,7 +37,7 @@ class DataIdTestCase(lsst.utils.tests.TestCase):
     """
 
     def setUp(self):
-        self.universe = DimensionGraph.fromConfig()
+        self.universe = DimensionUniverse.fromConfig()
 
     #
     # TODO: more tests would be useful

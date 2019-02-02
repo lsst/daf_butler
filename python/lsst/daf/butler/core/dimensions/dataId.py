@@ -297,7 +297,7 @@ class DataId(Mapping):
 
         assert isinstance(dimensions, DimensionGraph), "should be set by earlier logic"
 
-        allDimensions = DimensionGraph(dimensions.universe, dimensions=dimensions, implied=True)
+        allDimensions = dimensions.universe.extract(dimensions=dimensions, implied=True)
 
         if isinstance(dataId, DataId):
 
@@ -315,8 +315,7 @@ class DataId(Mapping):
             )
 
             if changedLinkValues:
-                constantDimensions = DimensionGraph(
-                    dimensions.universe,
+                constantDimensions = dimensions.universe.extract(
                     dimensions=[d for d in dimensions if d.links().isdisjoint(changedLinkValues)],
                     implied=True
                 )
@@ -395,7 +394,7 @@ class DataId(Mapping):
             for linkName in missing:
                 # Didn't get enough key-value pairs to identify all dimensions
                 # from the links; look in entries for those.
-                for element in self.dimensions().withLink(linkName):
+                for element in self.dimensions().universe.withLink(linkName):
                     try:
                         self._linkValues[linkName] = self.entries[element][linkName]
                         break
@@ -416,7 +415,7 @@ class DataId(Mapping):
         def addLinksToEntries(items):
             for linkName, linkValue in items:
                 try:
-                    associated = self.dimensions(implied=True).withLink(linkName)
+                    associated = self.dimensions().universe.withLink(linkName)
                 except KeyError:
                     # This isn't a link. If an explicit dimension was
                     # provided, assume these fields are metadata for that

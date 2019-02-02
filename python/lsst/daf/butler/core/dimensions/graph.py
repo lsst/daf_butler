@@ -19,13 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DimensionGraph", "DimensionConfig")
+__all__ = ("DimensionGraph", "DimensionUniverse", "DimensionConfig")
 
 import itertools
 
 from ..config import ConfigSubset
-from .sets import DimensionSet, toNameSet
+from .sets import DimensionSet, conformSet
 from .elements import Dimension, DimensionJoin
+from ..utils import PrivateConstructorMeta
 
 
 class DimensionConfig(ConfigSubset):
@@ -34,27 +35,18 @@ class DimensionConfig(ConfigSubset):
     defaultConfigFile = "dimensions.yaml"
 
 
-class DimensionGraph:
+class DimensionGraph(metaclass=PrivateConstructorMeta):
     r"""An automatically-expanded collection of both `Dimension`\s and
     `DimensionJoin`\s.
 
-    Parameters
-    ----------
-    universe : `DimensionGraph`
-        The ultimate graph the new graph should be a subset of.
-    dimensions : iterable of `Dimension` or `str`
-        `Dimension` objects that should be included in the graph, or their
-        string names.  Note that the new graph will in general return more
-        than these dimensions, due to expansion to include dependenies.
-    joins : iterable of `DimensionJoin` or `str`.
-        `DimensionJoin` objects that should be included in the graph, or their
-        string names.
-    implied : `bool`
-        If `True`, expand the graph to (recursively) include implied
-        dependencies as well as required dependencies.
-
     Notes
     -----
+    `DimensionGraph`\s can only be constructed from an instance of a special
+    subclass, `DimensionUniverse`, which itself constructed via from
+    configuration (see `DimensionUniverse.fromConfig`).  A universe graph
+    contains all dimension elements, and all other `DimensionGraph`\s or
+    `DimensionSet`\s constructed from that universe are subsets of it.
+
     A `DimensionGraph` behaves much like a `DimensionSet` containing only
     `Dimension` objects, with a few key differences:
 
@@ -69,129 +61,13 @@ class DimensionGraph:
        accessible via the `joins()` method (which is why we consider this
        graph - it contains the relationships as well as the elements of
        a system of dimensions).
-
-    Unlike most other dimension classes, `DimensionGraph` objects can be
-    constructed directly, but only after a special "universe" `DimensionGraph`
-    is constructed via a call to `fromConfig`.  A "universe" graph contains
-    all dimension elements, and all other `DimensionGraph`\s or
-    `DimensionSet`\s constructed from that universe are subsets of it.
     """
 
-    @staticmethod
-    def fromConfig(config=None):
-        """Construct a "universe" `DimensionGraph` from configuration.
-
-        Parameters
-        ----------
-        config : `DimensionConfig`, implied
-            Configuration specifying the elements and their relationships.
-            If not provided, will be loaded from the default search path
-            (see `ConfigSubset`).
-
-        Returns
-        -------
-        universe : `DimensionGraph`
-            A self-contained `DimensionGraph` containing all of the elements
-            defined in the given configuration.
-        """
-        config = DimensionConfig(config)
-
-        universe = DimensionGraph(universe=None)
-
-        # Now we'll construct dictionaries from the bits of config that are
-        # necessary to topologically sort the units and joins.
-        # We'll empty these "to do" dicts as we populate the graph.
-
-        elementsToDo = {}  # {unit name: frozenset of names of unit dependencies}
-
-        for elementName, subconfig in config["elements"].items():
-            elementsToDo[elementName] = frozenset().union(
-                subconfig.get(".dependencies.required", ()),
-                subconfig.get(".dependencies.implied", ()),
-                subconfig.get(".lhs", ()),
-                subconfig.get(".rhs", ()),
-            )
-
-        backrefs = {}
-
-        while elementsToDo:
-
-            # Create and add to universe any DimensionUnits whose
-            # dependencies are already in the universe.
-            namesOfUnblockedElements = [name for name, deps in elementsToDo.items()
-                                        if deps.issubset(universe._dimensions.names)]
-            namesOfUnblockedElements.sort()  # break topological ties with lexicographical sort
-            if not namesOfUnblockedElements:
-                raise ValueError("Cycle detected: [{}]".format(", ".join(elementsToDo.keys())))
-            for elementName in namesOfUnblockedElements:
-                subconfig = config["elements"][elementName]
-                if "lhs" in subconfig:  # this is a join
-                    element = DimensionJoin._construct(universe, name=elementName, config=subconfig)
-                    universe._joins._elements[elementName] = element
-                else:
-                    element = Dimension._construct(universe, name=elementName, config=subconfig)
-                    universe._dimensions._elements[elementName] = element
-                universe._elements._elements[elementName] = element
-
-                for link in element.links():
-                    backrefs.setdefault(link, set()).add(elementName)
-                for link in element.dependencies(implied=True, required=False).links():
-                    backrefs.setdefault(link, set()).add(elementName)
-                del elementsToDo[elementName]
-
-        # The 'summarizes' field of DimensionJoin needs to be populated in the
-        # opposite order (DimensionJoins that relate fewer Dimensions
-        # summarize those that relate more), so we put off setting those
-        # attributes until everything else is initialized.
-        for join in universe._joins:
-            names = config["elements", join.name].get("summarizes", ())
-            join._summarizes = DimensionSet(universe, names)
-
-        # Finish setting up dictionary mapping link names to dimension
-        # elements by transforming local 'backrefs' variable's sets string
-        # names into true DimensionSets in universe._backrefs
-        for linkName, nameSet in backrefs.items():
-            universe._backrefs[linkName] = DimensionSet(universe, nameSet)
-
-        return universe
-
-    def __init__(self, universe, dimensions=(), joins=(), implied=False):
-        if universe is None:
-            self._universe = self
-            self._elements = DimensionSet(self, elements=())
-            self._dimensions = DimensionSet(self, elements=())
-            self._joins = DimensionSet(self, elements=())
-            self._backrefs = {}
-        else:
-            if universe.universe is not universe:
-                raise ValueError("'universe' argument is not a universe graph.")
-            self._universe = universe
-
-            # Make a set of the names of requested dimensions and all of their dependencies.
-            dimensionNames = set(toNameSet(dimensions).names)
-
-            # Make a set of the names of all requested joins.
-            joinNames = set()
-            for join in joins:
-                if not isinstance(join, DimensionJoin):
-                    join = self.universe._joins[join]
-                joinNames.add(join.name)
-                # Add to the dimension set any dimensions that are required by the requested joins.
-                dimensionNames |= join.dependencies().names
-
-            # Make the Dimension set, expanding to include dependencies
-            self._dimensions = DimensionSet(universe, dimensionNames, expand=True, implied=implied)
-
-            # Add to the join set any joins that are implied by the set of dimensions.
-            for join in self.universe._joins:
-                if self._dimensions.issuperset(join.dependencies()):
-                    joinNames.add(join.name)
-
-            self._joins = DimensionSet(universe, joinNames, expand=False)
-
-            self._elements = DimensionSet(universe, self._dimensions.names | self._joins.names)
-
-            self._backrefs = universe._backrefs
+    def __init__(self, universe, elements, dimensions, joins):
+        self._universe = universe
+        self._elements = elements
+        self._dimensions = dimensions
+        self._joins = joins
 
     def __repr__(self):
         return f"DimensionGraph({self._dimensions}, joins={self._joins})"
@@ -357,7 +233,7 @@ class DimensionGraph:
         result : `DimensionGraph`
             Graph containing any elements in any of the inputs.
         """
-        return DimensionGraph(self.universe, self._dimensions.union(*others), implied=implied)
+        return self.universe.extract(self._dimensions.union(*others), implied=implied)
 
     def intersection(self, *others, implied=False):
         """Return a new graph containing all elements that are in both  ``self``
@@ -373,7 +249,7 @@ class DimensionGraph:
         result : `DimensionGraph`
             Graph containing all elements in all of the inputs.
         """
-        return DimensionGraph(self.universe, self._dimensions.intersection(*others), implied=implied)
+        return self.universe.extract(self._dimensions.intersection(*others), implied=implied)
 
     def __or__(self, other):
         if isinstance(other, DimensionGraph):
@@ -384,36 +260,6 @@ class DimensionGraph:
         if isinstance(other, DimensionGraph):
             return self.intersection(other)
         return NotImplemented
-
-    def extract(self, elements, implied=False):
-        r"""Return a new graph containing the given elements.
-
-        Parameters
-        ----------
-        elements : iterable of `DimensionElement` or `str`
-            `Dimension`\s, `DimensionJoin`\s, or names thereof.  These must be
-            in ``self`` or ``self.joins()``.
-        implied : `bool`
-            If `True`, expand the result to include implied dependencies as
-            well as required dependencies.
-
-        Returns
-        -------
-        subgraph : `DimensionGraph`
-            A new graph containing at least the elements and their
-            dependencies.
-        """
-        if isinstance(elements, DimensionGraph) and not implied and self.issuperset(elements):
-            return elements
-        elements = toNameSet(elements)
-        if not self.elements.issuperset(elements):
-            raise ValueError(
-                "Elements {} not in this graph.".format(elements.difference(self.names))
-            )
-        return DimensionGraph(self.universe,
-                              dimensions=self._dimensions.intersection(elements),
-                              joins=self._joins.intersection(elements),
-                              implied=implied)
 
     def getRegionHolder(self):
         """Return the Dimension that provides the spatial region for this
@@ -446,26 +292,6 @@ class DimensionGraph:
                 else:
                     candidate = dimension
         return candidate
-
-    def withLink(self, link):
-        """Return the set of `Dimension` and `DimensionJoin` objects that have
-        the given link name in their primary or foreign keys.
-
-        Unlike most other `DimensionGraph` operations, this method does not
-        limit its results to the elements included in ``self``.
-
-        Parameters
-        ----------
-        link : `str`
-            Key field name.
-
-        Returns
-        -------
-        dimensions : `DimensionSet`
-            Set potentially containing both `Dimension` and `DimensionJoin`
-            elements.
-        """
-        return self._backrefs[link]
 
     def findIf(self, predicate, default=None):
         """Return the element in ``self`` that matches the given predicate.
@@ -500,3 +326,174 @@ class DimensionGraph:
         for dim in self:
             leafNames -= dim.dependencies(implied=True).names
         return DimensionSet(self.universe, leafNames)
+
+
+class DimensionUniverse(DimensionGraph):
+    """Specialization for a `DimensionGraph` that defines a complete system
+    of dimensions.
+
+    `DimensionUniverse` instances can only be constructed via the `fromConfig`
+    method.
+    """
+
+    @staticmethod
+    def fromConfig(config=None):
+        """Construct a "universe" `DimensionGraph` from configuration.
+
+        Parameters
+        ----------
+        config : `DimensionConfig`, optional
+            Configuration specifying the elements and their relationships.
+            If not provided, will be loaded from the default search path
+            (see `ConfigSubset`).
+
+        Returns
+        -------
+        universe : `DimensionGraph`
+            A self-contained `DimensionGraph` containing all of the elements
+            defined in the given configuration.
+        """
+        config = DimensionConfig(config)
+
+        universe = DimensionUniverse._construct()
+
+        # Now we'll construct dictionaries from the bits of config that are
+        # necessary to topologically sort the units and joins.
+        # We'll empty these "to do" dicts as we populate the graph.
+
+        elementsToDo = {}  # {unit name: frozenset of names of unit dependencies}
+
+        for elementName, subconfig in config["elements"].items():
+            elementsToDo[elementName] = frozenset().union(
+                subconfig.get(".dependencies.required", ()),
+                subconfig.get(".dependencies.implied", ()),
+                subconfig.get(".lhs", ()),
+                subconfig.get(".rhs", ()),
+            )
+
+        backrefs = {}
+
+        while elementsToDo:
+
+            # Create and add to universe any DimensionElements whose
+            # dependencies are already in the universe.
+            namesOfUnblockedElements = [name for name, deps in elementsToDo.items()
+                                        if deps.issubset(universe._dimensions.names)]
+            namesOfUnblockedElements.sort()  # break topological ties with lexicographical sort
+            if not namesOfUnblockedElements:
+                raise ValueError("Cycle detected: [{}]".format(", ".join(elementsToDo.keys())))
+            for elementName in namesOfUnblockedElements:
+                subconfig = config["elements"][elementName]
+                if "lhs" in subconfig:  # this is a join
+                    element = DimensionJoin._construct(universe, name=elementName, config=subconfig)
+                    universe._joins._elements[elementName] = element
+                else:
+                    element = Dimension._construct(universe, name=elementName, config=subconfig)
+                    universe._dimensions._elements[elementName] = element
+                universe._elements._elements[elementName] = element
+
+                for link in element.links():
+                    backrefs.setdefault(link, set()).add(elementName)
+                for link in element.dependencies(implied=True, required=False).links():
+                    backrefs.setdefault(link, set()).add(elementName)
+                del elementsToDo[elementName]
+
+        # The 'summarizes' field of DimensionJoin needs to be populated in the
+        # opposite order (DimensionJoins that relate fewer Dimensions
+        # summarize those that relate more), so we put off setting those
+        # attributes until everything else is initialized.
+        for join in universe._joins:
+            names = config["elements", join.name].get("summarizes", ())
+            join._summarizes = DimensionSet(universe, names)
+
+        # Finish setting up dictionary mapping link names to dimension
+        # elements by transforming local 'backrefs' variable's sets string
+        # names into true DimensionSets in universe._backrefs
+        for linkName, nameSet in backrefs.items():
+            universe._backrefs[linkName] = DimensionSet(universe, nameSet)
+
+        return universe
+
+    def __init__(self):
+        # Should only be callable from fromConfig - we initialize with empty
+        # things here, and let fromConfig populate them.
+        elements = DimensionSet(self, elements=())
+        dimensions = DimensionSet(self, elements=())
+        joins = DimensionSet(self, elements=())
+        super().__init__(universe=self, elements=elements, dimensions=dimensions, joins=joins)
+        self._backrefs = {}
+        self._subgraphCache = {}
+
+    def __repr__(self):
+        return f"DimensionUniverse({self._dimensions}, joins={self._joins})"
+
+    def extract(self, dimensions=(), joins=(), implied=False):
+        r"""Return a new graph containing the given elements.
+
+        Parameters
+        ----------
+        dimensions : iterable of `Dimension` or `str`
+            `Dimension`\s or names thereof.
+        joins : `iterable of `DimensionJoin`
+            `DimensionJoin`\s or names thereof.
+        implied : `bool`
+            If `True`, expand the result to include implied dependencies as
+            well as required dependencies.
+
+        Returns
+        -------
+        subgraph : `DimensionGraph`
+            A new graph containing the given elements and their dependencies.
+        """
+        dimensions = conformSet(dimensions)
+
+        if not joins:
+            dimensionNames = frozenset(dimensions.names)
+            joinNames = set()
+        else:
+            # Make a set of the names of requested dimensions and all of their dependencies.
+            dimensionNames = set(dimensions.names)
+            # Make a set of the names of all requested joins.
+            joinNames = set()
+            for join in joins:
+                if not isinstance(join, DimensionJoin):
+                    join = self.universe._joins[join]
+                joinNames.add(join.name)
+                # Add to the dimension set any dimensions that are required by the requested joins.
+                dimensionNames |= join.dependencies().names
+            dimensionNames = frozenset(dimensionNames)
+
+        # See if the desired graph is in the cache.
+        cacheKey = (dimensionNames, implied)
+        result = self._subgraphCache.get(cacheKey, None)
+        if result is None:
+            # Make the Dimension set, expanding to include dependencies
+            dimensions = DimensionSet(self, dimensionNames, expand=True, implied=implied)
+            # Add to the join set any joins that are implied by the set of dimensions.
+            for join in self._joins:
+                if dimensions.issuperset(join.dependencies()):
+                    joinNames.add(join.name)
+            joins = DimensionSet(self, joinNames, expand=False)
+            # Construct the new graph instance
+            result = DimensionGraph._construct(self, dimensions=dimensions, joins=joins,
+                                               elements=(dimensions | joins))
+            # Update the cache
+            self._subgraphCache[cacheKey] = result
+        return result
+
+    def withLink(self, link):
+        """Return the set of `Dimension` and `DimensionJoin` objects that have
+        the given link name in their primary or foreign keys.
+
+        Parameters
+        ----------
+        link : `str`
+            Key field name.
+
+        Returns
+        -------
+        dimensions : `DimensionSet`
+            Set potentially containing both `Dimension` and `DimensionJoin`
+            elements.
+        """
+        return self._backrefs[link]

@@ -564,8 +564,8 @@ class SqlPreFlight:
                              if row[col] is not None}
             # Find all of the Dimensions we can uniquely identify with the
             # non-NULL link columns.
-            rowDimensions = dimensions.extract(dim for dim in dimensions
-                                               if dim.links().issubset(rowDataIdDict.keys()))
+            rowDimensions = self.registry.dimensions.extract(dim for dim in dimensions
+                                                             if dim.links().issubset(rowDataIdDict.keys()))
             # Remove all of the link columns that weren't needed by the
             # Dimensions we selected (in practice this is just ExposureRange
             # links right now, so this step might not be needed once we make
@@ -575,8 +575,9 @@ class SqlPreFlight:
                 dimensions=rowDimensions,
                 region=extractRegion(rowDimensions)
             )
-            if expandDataIds:
-                self.registry.expandDataId(dataId)
+            # row-wide Data IDs are never expanded, even if expandDataIds=True;
+            # this is slightly confusing, but we don't actually need them
+            # expanded, and it's actually quite slow.
 
             # for each dataset get ids DataRef
             datasetRefs = {}
