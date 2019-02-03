@@ -628,7 +628,8 @@ class SqlPreFlight:
                     )
                     datasetRefs[dsType] = ref if ref is not None else DatasetRef(dsType, dsDataId, id=None)
                 else:
-                    datasetRefs[dsType] = self.registry.getDataset(id=row[col])
+                    datasetRefs[dsType] = self.registry.getDataset(id=row[col], datasetType=dsType,
+                                                                   dataId=dsDataId)
 
             count += 1
             yield PreFlightDimensionsRow(dataId, datasetRefs)

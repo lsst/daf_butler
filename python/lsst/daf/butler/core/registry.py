@@ -390,13 +390,22 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getDataset(self, id):
+    def getDataset(self, id, datasetType=None, dataId=None):
         """Retrieve a Dataset entry.
 
         Parameters
         ----------
         id : `int`
             The unique identifier for the Dataset.
+        datasetType : `DatasetType`, optional
+            The `DatasetType` of the dataset to retrieve.  This is used to
+            short-circuit retrieving the `DatasetType`, so if provided, the
+            caller is guaranteeing that it is what would have been retrieved.
+        dataId : `DataId`, optional
+            A `Dimension`-based identifier for the dataset within a
+            collection, possibly containing additional metadata. This is used
+            to short-circuit retrieving the `DataId`, so if provided, the
+            caller is guaranteeing that it is what would have been retrieved.
 
         Returns
         -------

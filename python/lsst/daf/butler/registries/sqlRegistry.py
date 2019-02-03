@@ -193,7 +193,7 @@ class SqlRegistry(Registry):
         config["table"] = table
         return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
 
-    def _makeDatasetRefFromRow(self, row, datasetType=None):
+    def _makeDatasetRefFromRow(self, row, datasetType=None, dataId=None):
         """Construct a DatasetRef from the result of a query on the Dataset
         table.
 
@@ -207,6 +207,10 @@ class SqlRegistry(Registry):
             if not provided.  If provided, the caller guarantees that it is
             already consistent with what would have been retrieved from the
             database.
+        dataId : `DataId`, optional
+            `DataId` associated with this datasets.  Will be retrieved if not
+            provided.  If provided, the caller guarantees that it is already
+            consistent with what would have been retrieved from the database.
 
         Returns
         -------
@@ -219,10 +223,11 @@ class SqlRegistry(Registry):
             datasetType.normalize(universe=self.dimensions)
         run = self.getRun(id=row.run_id)
         datasetRefHash = row["dataset_ref_hash"]
-        dataId = DataId({link: row[self._schema.datasetTable.c[link]]
-                         for link in datasetType.dimensions.links()},
-                        dimensions=datasetType.dimensions,
-                        universe=self.dimensions)
+        if dataId is None:
+            dataId = DataId({link: row[self._schema.datasetTable.c[link]]
+                             for link in datasetType.dimensions.links()},
+                            dimensions=datasetType.dimensions,
+                            universe=self.dimensions)
         # Get components (if present)
         components = {}
         if datasetType.storageClass.isComposite():
@@ -249,7 +254,7 @@ class SqlRegistry(Registry):
                     dimensions=datasetType.dimensions,
                     storageClass=datasetType.storageClass.components[componentName]
                 )
-                components[componentName] = self._makeDatasetRefFromRow(result,
+                components[componentName] = self._makeDatasetRefFromRow(result, dataId=dataId,
                                                                         datasetType=componentDatasetType)
             if not components.keys() <= datasetType.storageClass.components.keys():
                 raise RuntimeError(
@@ -286,7 +291,7 @@ class SqlRegistry(Registry):
         # TODO update dimension values and add Run, Quantum and assembler?
         if result is None:
             return None
-        return self._makeDatasetRefFromRow(result, datasetType=datasetType)
+        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     def query(self, sql, **params):
         """Execute a SQL SELECT statement directly.
@@ -429,14 +434,14 @@ class SqlRegistry(Registry):
                 self.attachComponent(component, datasetRef, compRef)
         return datasetRef
 
-    def getDataset(self, id):
+    def getDataset(self, id, datasetType=None, dataId=None):
         # Docstring inherited from Registry.getDataset
         datasetTable = self._schema.tables["Dataset"]
         result = self._connection.execute(
             select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
         if result is None:
             return None
-        return self._makeDatasetRefFromRow(result)
+        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
     def attachComponent(self, name, parent, component):
