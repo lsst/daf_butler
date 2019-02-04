@@ -498,10 +498,8 @@ class SqlRegistry(Registry):
                     )
 
     @transactional
-    def disassociate(self, collection, refs, remove=True):
+    def disassociate(self, collection, refs):
         # Docstring inherited from Registry.disassociate.
-        if remove:
-            raise NotImplementedError("Cleanup of datasets not yet implemented")
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         for ref in refs:
             if ref.id is None:
@@ -509,7 +507,6 @@ class SqlRegistry(Registry):
             self._connection.execute(datasetCollectionTable.delete().where(
                 and_(datasetCollectionTable.c.dataset_id == ref.id,
                      datasetCollectionTable.c.collection == collection)))
-        return []
 
     @transactional
     def addDatasetLocation(self, ref, datastoreName):

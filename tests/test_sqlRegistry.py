@@ -337,7 +337,7 @@ class RegistryTests(metaclass=ABCMeta):
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
         # but no more after disassociation
-        registry.disassociate(newCollection, [inputRef1, ], remove=False)  # TODO test with removal when done
+        registry.disassociate(newCollection, [inputRef1, ])
         self.assertIsNone(registry.find(newCollection, datasetType, dataId1))
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)

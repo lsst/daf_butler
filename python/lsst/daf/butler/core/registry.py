@@ -466,7 +466,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def disassociate(self, collection, refs, remove=True):
+    def disassociate(self, collection, refs):
         r"""Remove existing Datasets from a collection.
 
         ``collection`` and ``ref`` combinations that are not currently
@@ -479,15 +479,6 @@ class Registry(metaclass=ABCMeta):
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
             `Registry`.
-        remove : `bool`
-            If `True`, remove Datasets from the `Registry` if they are not
-            associated with any collection (including via any composites).
-
-        Returns
-        -------
-        removed : `list` of `DatasetRef`
-            If `remove` is `True`, the `list` of `DatasetRef`\ s that were
-            removed.
 
         Raises
         ------
