@@ -137,7 +137,6 @@ class ParserYacc:
 
     precedence = (
         ('left', 'OR'),
-        ('left', 'XOR'),
         ('left', 'AND'),
         ('nonassoc', 'EQ', 'NE'),  # Nonassociative operators
         ('nonassoc', 'LT', 'LE', 'GT', 'GE'),  # Nonassociative operators
@@ -160,7 +159,6 @@ class ParserYacc:
 
     def p_expr(self, p):
         """ expr : expr OR expr
-                 | expr XOR expr
                  | expr AND expr
                  | NOT expr
                  | bool_primary
