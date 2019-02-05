@@ -33,7 +33,7 @@ from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
 
 __all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
-           "AmbiguousDatasetError", "ConflictingDefinitionError")
+           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 
 class AmbiguousDatasetError(Exception):
@@ -45,6 +45,12 @@ class AmbiguousDatasetError(Exception):
 class ConflictingDefinitionError(Exception):
     """Exception raised when trying to insert a database record when a
     conflicting record already exists.
+    """
+
+
+class OrphanedRecordError(Exception):
+    """Exception raised when trying to remove or modify a database record
+    that is still being used in some other table.
     """
 
 
@@ -412,6 +418,32 @@ class Registry(metaclass=ABCMeta):
         ref : `DatasetRef`
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def removeDataset(self, ref):
+        """Remove a dataset from the Registry.
+
+        The dataset and all components will be removed unconditionally from
+        all collections, and any associated `Quantum` records will also be
+        removed.  `Datastore` records will *not* be deleted; the caller is
+        responsible for ensuring that the dataset has already been removed
+        from all Datastores.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the dataset to be removed.  Must include a valid
+            ``id`` attribute, and should be considered invalidated upon return.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
+        OrphanedRecordError
+            Raised if the dataset is still present in any `Datastore`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 

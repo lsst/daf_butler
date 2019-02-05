@@ -24,14 +24,15 @@ import contextlib
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import select, and_, exists, bindparam
+from sqlalchemy.sql import select, and_, exists, bindparam, union
 from sqlalchemy.exc import IntegrityError
 
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registry import (RegistryConfig, Registry, disableWhenLimited,
-                             ConflictingDefinitionError, AmbiguousDatasetError)
+                             ConflictingDefinitionError, AmbiguousDatasetError,
+                             OrphanedRecordError)
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
@@ -442,6 +443,57 @@ class SqlRegistry(Registry):
         if result is None:
             return None
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+
+    @transactional
+    def removeDataset(self, ref):
+        # Docstring inherited from Registry.removeDataset.
+        if not ref.id:
+            raise AmbiguousDatasetError(f"Cannot remove dataset {ref} without ID.")
+
+        # Remove component datasets.  We assume ``ref.components`` is already
+        # correctly populated, and rely on ON DELETE CASCADE to remove entries
+        # from DatasetComposition.
+        for componentRef in ref.components.values():
+            self.removeDataset(componentRef)
+
+        datasetTable = self._schema.tables["Dataset"]
+
+        # Remove related quanta.  We actually delete from Execution, because
+        # Quantum's primary key (quantum_id) is also a foreign key to
+        # Execution.execution_id.  We then rely on ON DELETE CASCADE to remove
+        # the Quantum record as well as any related records in
+        # DatasetConsumers.  Note that we permit a Quantum to be deleted
+        # without removing the Datasets it refers to, but do not allow a
+        # Dataset to be deleting without removing the Quanta that refer to
+        # them.  A Dataset is still quite usable without provenance, but
+        # provenance is worthless if it's inaccurate.
+        executionTable = self._schema.tables["Execution"]
+        datasetConsumersTable = self._schema.tables["DatasetConsumers"]
+        selectProducer = select(
+            [datasetTable.c.quantum_id]
+        ).where(
+            datasetTable.c.dataset_id == ref.id
+        )
+        selectConsumers = select(
+            [datasetConsumersTable.c.quantum_id]
+        ).where(
+            datasetConsumersTable.c.dataset_id == ref.id
+        )
+        self._connection.execute(
+            executionTable.delete().where(
+                executionTable.c.execution_id.in_(union(selectProducer, selectConsumers))
+            )
+        )
+
+        # Remove the Dataset record itself.  We rely on ON DELETE CASCADE to
+        # remove from DatasetCollection, and assume foreign key violations
+        # come from DatasetLocation (everything else should have an ON DELETE).
+        try:
+            self._connection.execute(
+                datasetTable.delete().where(datasetTable.c.dataset_id == ref.id)
+            )
+        except IntegrityError as err:
+            raise OrphanedRecordError(f"Dataset {ref} is still present in one or more Datastores.") from err
 
     @transactional
     def attachComponent(self, name, parent, component):
