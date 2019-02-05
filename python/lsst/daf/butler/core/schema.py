@@ -262,15 +262,17 @@ class SchemaBuilder:
             Should always contain:
             - src, list of source column names
             - tgt, list of target column names
+            May also contain:
+            - onDelete, one of "SET NULL" or "CASCADE".
         """
         if isinstance(table, str):
             table = self.metadata.tables[table]
-        src, tgt, tgtTable = self.normalizeForeignKeyConstraint(constraintDescription)
+        src, tgt, tgtTable, onDelete = self.normalizeForeignKeyConstraint(constraintDescription)
         if not self.isIncluded(table.name) or not self.isIncluded(tgtTable):
             return
         if self.isView(table.name) or self.isView(tgtTable):
             return
-        table.append_constraint(ForeignKeyConstraint(src, tgt))
+        table.append_constraint(ForeignKeyConstraint(src, tgt, ondelete=onDelete))
 
     def makeColumn(self, columnDescription):
         """Make a Column entry for addition to a Table.
@@ -334,6 +336,8 @@ class SchemaBuilder:
             Should always contain:
             - src, list of source column names or single source column name
             - tgt, list of (table-qualified) target column names or single target column name
+            May also contain:
+            - onDelete, one of "SET NULL" or "CASCADE".
 
         Returns
         -------
@@ -343,9 +347,12 @@ class SchemaBuilder:
             Sequence of table-qualified field names in the remote table.
         tgtTable : `str`
             Name of the target table.
+        onDelete : `str`, optional
+            One of "SET NULL", "CASCADE", or `None`.
         """
         src = tuple(iterable(constraintDescription["src"]))
         tgt = tuple(iterable(constraintDescription["tgt"]))
         tgtTable, _ = tgt[0].split(".")
         assert all(t.split(".")[0] == tgtTable for t in tgt[1:])
-        return src, tgt, tgtTable
+        onDelete = constraintDescription.get("onDelete", None)
+        return src, tgt, tgtTable, onDelete
