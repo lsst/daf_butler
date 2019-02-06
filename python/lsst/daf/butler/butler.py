@@ -382,7 +382,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
@@ -422,7 +422,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         predict : `bool`
             If `True`, allow URIs to be returned of datasets that have not
             been written.
@@ -470,7 +470,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -506,7 +506,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         delete : `bool`
             If `True` (default) actually delete the dataset from the
             Datastore (i.e. actually remove files).
