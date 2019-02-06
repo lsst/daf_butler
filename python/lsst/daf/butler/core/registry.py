@@ -486,7 +486,8 @@ class Registry(metaclass=ABCMeta):
             Indicates the collection the Datasets should be associated with.
         refs : iterable of `DatasetRef`
             An iterable of `DatasetRef` instances that already exist in this
-            `Registry`.
+            `Registry`.  All component datasets will be associated with the
+            collection as well.
 
         Raises
         ------
@@ -510,7 +511,7 @@ class Registry(metaclass=ABCMeta):
             The collection the Datasets should no longer be associated with.
         refs : `list` of `DatasetRef`
             A `list` of `DatasetRef` instances that already exist in this
-            `Registry`.
+            `Registry`.  All component datasets will also be removed.
 
         Raises
         ------

@@ -548,6 +548,7 @@ class SqlRegistry(Registry):
                             ref.datasetType, ref.dataId, collection
                         )
                     )
+            self.associate(collection, ref.components.values())
 
     @transactional
     def disassociate(self, collection, refs):
@@ -556,6 +557,7 @@ class SqlRegistry(Registry):
         for ref in refs:
             if ref.id is None:
                 raise AmbiguousDatasetError(f"Cannot disassociate dataset {ref} without ID.")
+            self.disassociate(collection, ref.components.values())
             self._connection.execute(datasetCollectionTable.delete().where(
                 and_(datasetCollectionTable.c.dataset_id == ref.id,
                      datasetCollectionTable.c.collection == collection)))
