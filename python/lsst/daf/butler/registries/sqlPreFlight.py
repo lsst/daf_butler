@@ -27,8 +27,8 @@ from sqlalchemy.sql import select, and_, or_, not_, functions, literal, case, be
 
 from lsst.sphgeom import Region
 from lsst.sphgeom.relationship import DISJOINT
-from .. import DatasetRef, PreFlightDimensionsRow, DimensionJoin, DataId, exprParser
-from ..exprParser import ParserYacc
+from .. import DatasetRef, PreFlightDimensionsRow, DimensionJoin, DataId
+from ..exprParser import ParserYacc, TreeVisitor
 
 
 class DATASET_ID_DEFERRED:  # noqa N801
@@ -38,6 +38,96 @@ class DATASET_ID_DEFERRED:  # noqa N801
 
 
 _LOG = logging.getLogger(__name__)
+
+
+class _ClauseVisitor(TreeVisitor):
+    """Implement TreeVisitor to convert user expression into SQLAlchemy
+    clause.
+
+    Parameters
+    ----------
+    tables : `dict`
+        Mapping of table names to `sqlalchemy.Table` instances.
+    dimensions : `DimensionGraph`
+        All Dimensions included in the query.
+    """
+
+    unaryOps = {"NOT": lambda x: not_(x),
+                "+": lambda x: +x,
+                "-": lambda x: -x}
+    """Mapping or unary operator names to corresponding functions"""
+
+    binaryOps = {"OR": lambda x, y: or_(x, y),
+                 "AND": lambda x, y: and_(x, y),
+                 "=": lambda x, y: x == y,
+                 "!=": lambda x, y: x != y,
+                 "<": lambda x, y: x < y,
+                 "<=": lambda x, y: x <= y,
+                 ">": lambda x, y: x > y,
+                 ">=": lambda x, y: x >= y,
+                 "+": lambda x, y: x + y,
+                 "-": lambda x, y: x - y,
+                 "*": lambda x, y: x * y,
+                 "/": lambda x, y: x / y,
+                 "%": lambda x, y: x % y}
+    """Mapping or binary operator names to corresponding functions"""
+
+    def __init__(self, tables, dimensions):
+        self.tables = tables
+        self.dimensions = dimensions
+
+    def visitNumericLiteral(self, value, node):
+        # Docstring inherited from TreeVisitor.visitNumericLiteral
+        # Convert string value into float or int
+        if value.isdigit():
+            value = int(value)
+        else:
+            value = float(value)
+        return literal(value)
+
+    def visitStringLiteral(self, value, node):
+        # Docstring inherited from TreeVisitor.visitStringLiteral
+        return literal(value)
+
+    def visitIdentifier(self, name, node):
+        # Docstring inherited from TreeVisitor.visitIdentifier
+        table, sep, column = name.partition('.')
+        if column:
+            return self.tables[table].columns[column]
+        else:
+            link = table
+            for dim in self.dimensions:
+                if link in dim.links():
+                    return self.tables[dim.name].columns[link]
+            # can't find the link
+            raise ValueError(f"Link name `{link}' is not in the dimensions for this query.")
+
+    def visitUnaryOp(self, operator, operand, node):
+        # Docstring inherited from TreeVisitor.visitUnaryOp
+        func = self.unaryOps.get(operator)
+        if func:
+            return func(operand)
+        else:
+            raise ValueError(f"Unexpected unary operator `{operator}' in `{node}'.")
+
+    def visitBinaryOp(self, operator, lhs, rhs, node):
+        # Docstring inherited from TreeVisitor.visitBinaryOp
+        func = self.binaryOps.get(operator)
+        if func:
+            return func(lhs, rhs)
+        else:
+            raise ValueError(f"Unexpected binary operator `{operator}' in `{node}'.")
+
+    def visitIsIn(self, lhs, values, not_in, node):
+        # Docstring inherited from TreeVisitor.visitIsIn
+        if not_in:
+            return lhs.notin_(values)
+        else:
+            return lhs.in_(values)
+
+    def visitParens(self, expression, node):
+        # Docstring inherited from TreeVisitor.visitParens
+        return expression.self_group()
 
 
 class SqlPreFlight:
@@ -356,7 +446,8 @@ class SqlPreFlight:
         # build full query
         q = select(selectColumns).select_from(fromJoin)
         if expression:
-            where = self._buildUserExpression(expression, dimensions)
+            visitor = _ClauseVisitor(self.tables, dimensions)
+            where = expression.visit(visitor)
             _LOG.debug("full where: %s", where)
             q = q.where(where)
         _LOG.debug("full query: %s",
@@ -518,88 +609,6 @@ class SqlPreFlight:
         # need a unique alias name for it, otherwise we'll see name conflicts
         subquery = subquery.alias("ds" + dsType.name)
         return subquery
-
-    def _buildUserExpression(self, expression, dimensions):
-        """Generate SQLAlchemy clause from user expression.
-
-        Parameters
-        ----------
-        expression : `exprParser.Node`
-            Parsed user expression tree.
-        dimensions : `DimensionGraph`
-            All Dimensions included in this query.
-
-        Returns
-        -------
-        clause : `sqlalchemy.ClauseElement`
-            Expression to be used in WHERE clause.
-
-        Raises
-        ------
-        ValueError
-            Raised for unexpected tree element, e.g. unknown link name.
-        Exception
-            Any exception raised by SQLAlchemy is propagated to caller.
-        """
-        if isinstance(expression, (exprParser.StringLiteral, exprParser.NumericLiteral)):
-            # just use the literal value
-            return literal(expression.value)
-        elif isinstance(expression, exprParser.Identifier):
-            # This should be a column in a table, if table name is missing then
-            # it is link name which we use to find its corresponding table.
-            table, sep, column = expression.name.partition('.')
-            if column:
-                return self.tables[table].columns[column]
-            else:
-                link = table
-                for dim in dimensions:
-                    if link in dim.links():
-                        return self.tables[dim.name].columns[link]
-                # can't find the link
-                raise ValueError(f"Link name `{link}' is not in the dimensions for this query.")
-        elif isinstance(expression, exprParser.Parens):
-            # `self_group()` is used to produce parenthesized result
-            return self._buildUserExpression(expression.expr, dimensions).self_group()
-        elif isinstance(expression, exprParser.IsIn):
-            lhs = self._buildUserExpression(expression.lhs, dimensions)
-            values = [self._buildUserExpression(val, dimensions) for val in expression.values]
-            if expression.not_in:
-                return lhs.notin_(values)
-            else:
-                return lhs.in_(values)
-        elif isinstance(expression, exprParser.UnaryOp):
-            operand = self._buildUserExpression(expression.operand, dimensions)
-            unaryOps = {"NOT": lambda x: not_(x),
-                        "+": lambda x: +x,
-                        "-": lambda x: -x}
-            func = unaryOps.get(expression.op)
-            if func:
-                return func(operand)
-            else:
-                raise ValueError(f"Unexpected unary operator `{expression.op}' in `{expression}'.")
-        elif isinstance(expression, exprParser.BinaryOp):
-            lhs = self._buildUserExpression(expression.lhs, dimensions)
-            rhs = self._buildUserExpression(expression.rhs, dimensions)
-            binaryOps = {"OR": lambda x, y: or_(x, y),
-                         "AND": lambda x, y: and_(x, y),
-                         "=": lambda x, y: x == y,
-                         "!=": lambda x, y: x != y,
-                         "<": lambda x, y: x < y,
-                         "<=": lambda x, y: x <= y,
-                         ">": lambda x, y: x > y,
-                         ">=": lambda x, y: x >= y,
-                         "+": lambda x, y: x + y,
-                         "-": lambda x, y: x - y,
-                         "*": lambda x, y: x * y,
-                         "/": lambda x, y: x / y,
-                         "%": lambda x, y: x % y}
-            func = binaryOps.get(expression.op)
-            if func:
-                return func(lhs, rhs)
-            else:
-                raise ValueError(f"Unexpected binary operator `{expression.op}' in `{expression}'.")
-        else:
-            raise ValueError(f"Unexpected expression type `{type(expression)}'.")
 
     def _convertResultRows(self, rowIter, dimensions, linkColumnIndices, regionColumnIndices, dsIdColumns):
         """Convert query result rows into `PreFlightDimensionsRow` instances.
