@@ -309,7 +309,15 @@ class ConversionWriter:
                     run = repo.run
                 translator = repo.translators[datasetTypeName]
                 for dataset in datasets.values():
-                    gen3id = translator(dataset.dataId)
+                    try:
+                        gen3id = translator(dataset.dataId)
+                    except TypeError as err:
+                        log.warn(
+                            "Skipping insertion of '%s': %s",
+                            dataset.filePath,
+                            err
+                        )
+                        continue
                     if collectionTemplate is not None:
                         allIds = dataset.dataId.copy()
                         allIds.update(gen3id)
@@ -322,7 +330,7 @@ class ConversionWriter:
                         if instrument is None:
                             factory = Instrument.factories.get(gen3id["instrument"])
                             if factory is None:
-                                log.warning(
+                                log.warn(
                                     "Instrument not imported; raw formatter for %s not specialized.",
                                     dataset.filePath
                                 )

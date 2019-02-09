@@ -75,16 +75,37 @@ class ConstantKeyHandler(KeyHandler):
 
 
 class CopyKeyHandler(KeyHandler):
-    """A KeyHandler that simply copies a value from a Gen3 data ID."""
+    """A KeyHandler that simply copies a value from a Gen3 data ID.
 
-    __slots__ = ("gen2key",)
+    Parameters
+    ----------
+    gen3key : `str`
+        Name of the Gen3 data ID key produced by this handler.
+    gen3unit : `str`
+        Name of the Gen3 dimension produced by this handler.
+    dtype : `type`, optional
+        If not `None`, the type that values for this key must be an
+        instance of.
+    """
 
-    def __init__(self, gen3key, gen3unit, gen2key=None):
+    __slots__ = ("gen2key", "dtype")
+
+    def __init__(self, gen3key, gen3unit, gen2key=None, dtype=None):
         super().__init__(gen3key, gen3unit)
         self.gen2key = gen2key if gen2key is not None else gen3key
+        self.dtype = dtype
 
     def extract(self, gen2id, skyMap, skyMapName):
-        return gen2id[self.gen2key]
+        r = gen2id[self.gen2key]
+        if self.dtype is not None:
+            try:
+                r = self.dtype(r)
+            except ValueError as err:
+                raise TypeError(
+                    f"'{r}' is not a valid value for {self.gen3key}; "
+                    f"expected {self.dtype.__name__}, got {type(r).__name__}."
+                ) from err
+        return r
 
 
 class PatchKeyHandler(KeyHandler):
@@ -281,7 +302,7 @@ for coaddName in ("deep", "goodSeeing", "psfMatched", "dcr"):
 Translator.addRule(PatchKeyHandler(), gen2keys=("patch",))
 
 # Copy Gen2 "tract" to Gen3 "tract".
-Translator.addRule(CopyKeyHandler("tract", "Tract"), gen2keys=("tract",))
+Translator.addRule(CopyKeyHandler("tract", "Tract", dtype=int), gen2keys=("tract",))
 
 # Add valid_first, valid_last to Instrument-level transmission/ datasets;
 # these are considered calibration products in Gen3.
@@ -294,4 +315,4 @@ for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmiss
 # Translate Gen2 pixel_id to Gen3 skypix.
 # For now, we just assume that the Gen3 Registry's pixelization happens to be
 # the same as what the ref_cat indexer uses.
-Translator.addRule(CopyKeyHandler("skypix", "SkyPix", gen2key="pixel_id"), gen2keys=("pixel_id",))
+Translator.addRule(CopyKeyHandler("skypix", "SkyPix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))

@@ -212,7 +212,7 @@ schema:
       -
         name: storage_class
         type: string
-        length: 32
+        length: 64
         nullable: false
         doc: >
           Name of the StorageClass associated with this DatasetType.  All
