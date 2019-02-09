@@ -9,5 +9,4 @@ daf_butler documentation preview
 .. toctree::
    :maxdepth: 1
 
-   daf_butler/index
    lsst.daf.butler/index
