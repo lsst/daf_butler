@@ -26,6 +26,7 @@ Butler top level classes.
 import os
 import contextlib
 import logging
+import itertools
 
 from lsst.utils import doImport
 from .core.utils import transactional
@@ -367,7 +368,8 @@ class Butler:
                                                                              parameters=unusedParams)
         else:
             # single entity in datastore
-            raise ValueError("Unable to locate ref {} in datastore {}".format(ref.id, self.datastore.name))
+            raise FileNotFoundError("Unable to locate ref {} in datastore {}".format(ref.id,
+                                                                                     self.datastore.name))
 
     def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
         """Retrieve a stored dataset.
@@ -380,7 +382,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
@@ -420,7 +422,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         predict : `bool`
             If `True`, allow URIs to be returned of datasets that have not
             been written.
@@ -468,7 +470,7 @@ class Butler:
         dataId : `dict` or `DataId`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
+            should be provided as the first argument.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -485,3 +487,61 @@ class Butler:
                 "{} with {} not found in collection {}".format(datasetType, dataId, self.collection)
             )
         return self.datastore.exists(ref)
+
+    def remove(self, datasetRefOrType, dataId=None, *, delete=True, remember=True, **kwds):
+        """Remove a dataset from the collection and possibly the repository.
+
+        The identified dataset is always at least removed from the Butler's
+        collection.  By default it is also deleted from the Datastore (e.g.
+        files are actually deleted), but the dataset is "remembered" by
+        retaining its row in the dataset and provenance tables in the registry.
+
+        If the dataset is a composite, all components will also be removed.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        delete : `bool`
+            If `True` (default) actually delete the dataset from the
+            Datastore (i.e. actually remove files).
+        remember : `bool`
+            If `True` (default), retain dataset and provenance records in
+            the `Registry` for this dataset.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Raises
+        ------
+        ValueError
+            Raised if ``delete`` and ``remember`` are both `False`; a dataset
+            cannot remain in a `Datastore` if all of its `Registry` entries are
+            removed.
+        OrphanedRecordError
+            Raised if ``remember`` is `False` but the dataset is still present
+            in a `Datastore` not recognized by this `Butler` client.
+        """
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
+        if delete:
+            for r in itertools.chain([ref], ref.components.values()):
+                # If dataset is a composite, we don't know whether it's the
+                # parent or the components that actually need to be removed,
+                # so try them all and swallow errors.
+                try:
+                    self.datastore.remove(r)
+                except FileNotFoundError:
+                    pass
+        elif not remember:
+            raise ValueError("Cannot retain dataset in Datastore without keeping Registry dataset record.")
+        if remember:
+            self.registry.disassociate(self.collection, [ref])
+        else:
+            # This also implicitly disassociates.
+            self.registry.removeDataset(ref)

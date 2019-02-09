@@ -31,7 +31,7 @@ import lsst.sphgeom
 from sqlalchemy.exc import OperationalError
 from lsst.daf.butler import (Execution, Quantum, Run, DatasetType, Registry,
                              StorageClass, ButlerConfig, DataId,
-                             ConflictingDefinitionError)
+                             ConflictingDefinitionError, OrphanedRecordError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
 
 """Tests for SqlRegistry.
@@ -93,14 +93,17 @@ class RegistryTests(metaclass=ABCMeta):
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="testtype", dimensions=("Instrument",), storageClass=storageClass)
         registry.registerDatasetType(datasetType)
+        dataId = {"instrument": "DummyCam"}
         if not registry.limited:
-            registry.addDimensionEntry("Instrument", {"instrument": "DummyCam"})
-        ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
+            registry.addDimensionEntry("Instrument", dataId)
+        ref = registry.addDataset(datasetType, dataId=dataId, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
         self.assertEqual(ref, outRef)
         with self.assertRaises(ConflictingDefinitionError):
-            ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
+            ref = registry.addDataset(datasetType, dataId=dataId, run=run)
+        registry.removeDataset(ref)
+        self.assertIsNone(registry.find(run.collection, datasetType, dataId))
 
     def testComponents(self):
         registry = self.makeRegistry()
@@ -119,19 +122,23 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
+        dataId = {"instrument": "DummyCam"}
         if not registry.limited:
-            registry.addDimensionEntry("Instrument", {"instrument": "DummyCam"})
+            registry.addDimensionEntry("Instrument", dataId)
         run = registry.makeRun(collection="test")
-        parent = registry.addDataset(parentDatasetType, dataId={"instrument": "DummyCam"}, run=run)
-        children = {"child1": registry.addDataset(childDatasetType1,
-                                                  dataId={"instrument": "DummyCam"}, run=run),
-                    "child2": registry.addDataset(childDatasetType2,
-                                                  dataId={"instrument": "DummyCam"}, run=run)}
+        parent = registry.addDataset(parentDatasetType, dataId=dataId, run=run)
+        children = {"child1": registry.addDataset(childDatasetType1, dataId=dataId, run=run),
+                    "child2": registry.addDataset(childDatasetType2, dataId=dataId, run=run)}
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
         outParent = registry.getDataset(parent.id)
         self.assertEqual(outParent.components, children)
+        # Remove the parent; this should remove both children.
+        registry.removeDataset(parent)
+        self.assertIsNone(registry.find(run.collection, parentDatasetType, dataId))
+        self.assertIsNone(registry.find(run.collection, childDatasetType1, dataId))
+        self.assertIsNone(registry.find(run.collection, childDatasetType2, dataId))
 
     def testRun(self):
         registry = self.makeRegistry()
@@ -209,6 +216,11 @@ class RegistryTests(metaclass=ABCMeta):
         registry.markInputUsed(quantum, ref1)
         outQuantum = registry.getQuantum(quantum.id)
         self.assertEqual(outQuantum, quantum)
+        # Removing a predictedInput dataset should be enough to remove the
+        # Quantum; we don't want to allow Quantums with inaccurate information
+        # to exist.
+        registry.removeDataset(ref1)
+        self.assertIsNone(registry.getQuantum(quantum.id))
 
     def testDatasetLocations(self):
         registry = self.makeRegistry()
@@ -241,10 +253,13 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(len(addresses), 1)
         self.assertNotIn(datastoreName, addresses)
         self.assertIn(datastoreName2, addresses)
+        with self.assertRaises(OrphanedRecordError):
+            registry.removeDataset(ref)
         registry.removeDatasetLocation(datastoreName2, ref)
         addresses = registry.getDatasetLocations(ref)
         self.assertEqual(len(addresses), 0)
         self.assertNotIn(datastoreName2, addresses)
+        registry.removeDataset(ref)  # should not raise
         addresses = registry.getDatasetLocations(ref2)
         self.assertEqual(len(addresses), 1)
         self.assertIn(datastoreName2, addresses)
@@ -337,7 +352,7 @@ class RegistryTests(metaclass=ABCMeta):
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
         # but no more after disassociation
-        registry.disassociate(newCollection, [inputRef1, ], remove=False)  # TODO test with removal when done
+        registry.disassociate(newCollection, [inputRef1, ])
         self.assertIsNone(registry.find(newCollection, datasetType, dataId1))
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)

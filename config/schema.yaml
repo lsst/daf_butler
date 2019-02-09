@@ -107,6 +107,7 @@ schema:
       -
         src: quantum_id
         tgt: Quantum.execution_id
+        onDelete: SET NULL
       -
         src: abstract_filter
         tgt: AbstractFilter.abstract_filter
@@ -192,9 +193,11 @@ schema:
       -
         src: parent_dataset_id
         tgt: Dataset.dataset_id
+        onDelete: CASCADE
       -
         src: component_dataset_id
         tgt: Dataset.dataset_id
+        onDelete: CASCADE
 
     DatasetType:
       doc: >
@@ -301,6 +304,7 @@ schema:
       -
         src: dataset_id
         tgt: Dataset.dataset_id
+        onDelete: CASCADE
       unique:
       - [dataset_ref_hash, collection]
 
@@ -377,12 +381,15 @@ schema:
       -
         src: environment_id
         tgt: Dataset.dataset_id
+        onDelete: SET NULL
       -
         src: pipeline_id
         tgt: Dataset.dataset_id
+        onDelete: SET NULL
       -
         src: execution_id
         tgt: Execution.execution_id
+        onDelete: CASCADE
 
     Quantum:
       doc: >
@@ -413,9 +420,11 @@ schema:
       -
         src: run_id
         tgt: Run.execution_id
+        onDelete: CASCADE
       -
         src: execution_id
         tgt: Execution.execution_id
+        onDelete: CASCADE
 
     DatasetConsumers:
       doc: >
@@ -444,9 +453,11 @@ schema:
       -
         src: quantum_id
         tgt: Quantum.execution_id
+        onDelete: CASCADE
       -
         src: dataset_id
         tgt: Dataset.dataset_id
+        onDelete: CASCADE
 
     DatasetStorage:
       doc: >

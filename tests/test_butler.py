@@ -116,16 +116,7 @@ class ButlerTests:
         # Create and register a DatasetType
         dimensions = ("Instrument", "Visit")
 
-        # We can not delete datasets so for now create two so we can do
-        # two puts.
-        self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
-
-        datasetTypeName2 = datasetTypeName + "2"
-        self.addDatasetType(datasetTypeName2, dimensions, storageClass, butler.registry)
-
-        # Add a third type to test putting with a DataSetType
-        datasetTypeName3 = datasetTypeName + "3"
-        self.addDatasetType(datasetTypeName3, dimensions, storageClass, butler.registry)
+        datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
         # Add needed Dimensions
         butler.registry.addDimensionEntry("Instrument", {"instrument": "DummyCamComp"})
@@ -139,38 +130,75 @@ class ButlerTests:
         dataId = {"instrument": "DummyCamComp", "visit": 423}
 
         # Create a DatasetRef for put
-        datasetType2 = butler.registry.getDatasetType(datasetTypeName2)
-        ref2 = DatasetRef(datasetType2, dataId, id=None)
-
-        datasetType3 = butler.registry.getDatasetType(datasetTypeName3)
+        refIn = DatasetRef(datasetType, dataId, id=None)
 
         # Put with a preexisting id should fail
         with self.assertRaises(ValueError):
-            butler.put(metric, DatasetRef(datasetType2, dataId, id=100))
+            butler.put(metric, DatasetRef(datasetType, dataId, id=100))
 
-        # Put the dataset once as a DatasetRef, once as a dataId, and once with a DataSetType
-        for args in ((ref2,), (datasetTypeName, dataId), (datasetType3, dataId)):
-            ref = butler.put(metric, *args)
-            self.assertIsInstance(ref, DatasetRef)
+        # Put and remove the dataset once as a DatasetRef, once as a dataId, and once with a DatasetType
+        for args in ((refIn,), (datasetTypeName, dataId), (datasetType, dataId)):
+            with self.subTest(args=args):
+                ref = butler.put(metric, *args)
+                self.assertIsInstance(ref, DatasetRef)
 
-            # Test getDirect
-            metricOut = butler.getDirect(ref)
-            self.assertEqual(metric, metricOut)
-            # Test get
-            metricOut = butler.get(ref.datasetType.name, dataId)
-            self.assertEqual(metric, metricOut)
-            # Test get with a datasetRef
-            metricOut = butler.get(ref)
-            self.assertEqual(metric, metricOut)
+                # Test getDirect
+                metricOut = butler.getDirect(ref)
+                self.assertEqual(metric, metricOut)
+                # Test get
+                metricOut = butler.get(ref.datasetType.name, dataId)
+                self.assertEqual(metric, metricOut)
+                # Test get with a datasetRef
+                metricOut = butler.get(ref)
+                self.assertEqual(metric, metricOut)
 
-            # Check we can get components
-            if storageClass.isComposite():
-                self.assertGetComponents(butler, ref,
-                                         ("summary", "data", "output"), metric)
+                # Check we can get components
+                if storageClass.isComposite():
+                    self.assertGetComponents(butler, ref,
+                                             ("summary", "data", "output"), metric)
+
+                # Remove from collection only; after that we shouldn't be able
+                # to find it unless we use the dataset_id.
+                butler.remove(*args, delete=False)
+                with self.assertRaises(LookupError):
+                    butler.datasetExists(*args)
+                # If we use the output ref with the dataset_id, we should still be
+                # able to load it with getDirect().
+                self.assertEqual(metric, butler.getDirect(ref))
+
+                # Reinsert into collection, then delete from Datastore *and*
+                # remove from collection.
+                butler.registry.associate(butler.collection, [ref])
+                butler.remove(*args)
+                # Lookup with original args should still fail.
+                with self.assertRaises(LookupError):
+                    butler.datasetExists(*args)
+                # Now getDirect() should fail, too.
+                with self.assertRaises(FileNotFoundError):
+                    butler.getDirect(ref)
+                # Registry still knows about it, if we use the dataset_id.
+                self.assertEqual(butler.registry.getDataset(ref.id), ref)
+
+                # Put again, then remove completely (this generates a new dataset
+                # record in registry, with a new ID - the old one still exists,
+                # but it is not in any collection so we don't care).
+                ref = butler.put(metric, *args)
+                butler.remove(*args, remember=False)
+                # Lookup with original args should still fail.
+                with self.assertRaises(LookupError):
+                    butler.datasetExists(*args)
+                # getDirect() should still fail.
+                with self.assertRaises(FileNotFoundError):
+                    butler.getDirect(ref)
+                # Registry shouldn't be able to find it by dataset_id anymore.
+                self.assertIsNone(butler.registry.getDataset(ref.id))
+
+        # Put the dataset again, since the last thing we did was remove it.
+        ref = butler.put(metric, refIn)
 
         # Get with parameters
         stop = 4
-        sliced = butler.get(ref2, parameters={"slice": slice(stop)})
+        sliced = butler.get(ref, parameters={"slice": slice(stop)})
         self.assertNotEqual(metric, sliced)
         self.assertEqual(metric.summary, sliced.summary)
         self.assertEqual(metric.output, sliced.output)
