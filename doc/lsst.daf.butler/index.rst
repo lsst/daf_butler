@@ -23,29 +23,50 @@ Python API reference
 ====================
 
 .. automodapi:: lsst.daf.butler
+   :no-main-docstr:
 
-Example Datastores
-==================
+Example datastores
+------------------
 
 .. automodapi:: lsst.daf.butler.datastores.posixDatastore
+   :no-main-docstr:
+   :headings: ^"
 .. automodapi:: lsst.daf.butler.datastores.inMemoryDatastore
+   :no-main-docstr:
+   :headings: ^"
 .. automodapi:: lsst.daf.butler.datastores.chainedDatastore
+   :no-main-docstr:
+   :headings: ^"
 
-Example Registries
-==================
+Example registries
+------------------
 
 .. automodapi:: lsst.daf.butler.registries.sqlRegistry
+   :no-main-docstr:
+   :headings: ^"
 
-Example Formatters
-==================
+Example formatters
+------------------
 
 .. automodapi:: lsst.daf.butler.formatters.fileFormatter
+   :no-main-docstr:
+   :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.jsonFormatter
+   :no-main-docstr:
+   :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.yamlFormatter
+   :no-main-docstr:
+   :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.pickleFormatter
+   :no-main-docstr:
+   :headings: ^"
 
 Support API
-===========
+-----------
 
 .. automodapi:: lsst.daf.butler.core.safeFileIo
+   :no-main-docstr:
+   :headings: ^"
 .. automodapi:: lsst.daf.butler.core.utils
+   :no-main-docstr:
+   :headings: ^"
