@@ -422,24 +422,10 @@ class SqlPreFlight:
             # OUTER JOIN is used for output datasets (they don't usually exist)
             joinOn = []
             for dimension in dsType.dimensions:
-                if dimension.name == "ExposureRange":
-                    # very special handling of ExposureRange
-                    # TODO: try to generalize this in some way, maybe using
-                    # sql from ExposureRangeJoin
-                    _LOG.debug("  joining on dimension: %s", dimension.name)
-                    exposureTable = self.tables["Exposure"]
-                    joinOn.append(between(exposureTable.c.datetime_begin,
-                                          subquery.c.valid_first,
-                                          subquery.c.valid_last))
-                    linkColumnIndices[dsType.name + ".valid_first"] = len(selectColumns)
-                    selectColumns.append(subquery.c.valid_first)
-                    linkColumnIndices[dsType.name + ".valid_last"] = len(selectColumns)
-                    selectColumns.append(subquery.c.valid_last)
-                else:
-                    for link in dimension.links():
-                        _LOG.debug("  joining on link: %s", link)
-                        joinOn.append(subquery.c[link] ==
-                                      self.tables[dimension.name].c[link])
+                for link in dimension.links():
+                    _LOG.debug("  joining on link: %s", link)
+                    joinOn.append(subquery.c[link] ==
+                                  self.tables[dimension.name].c[link])
             fromJoin = fromJoin.join(subquery, and_(*joinOn), isouter=isOutput)
 
             # remember dataset_id column index for this dataset
@@ -703,14 +689,8 @@ class SqlPreFlight:
             for dsType, col in dsIdColumns.items():
                 linkNames = {}  # maps full link name in linkColumnIndices to dataId key
                 for dimension in dsType.dimensions:
-                    if dimension.name == "ExposureRange":
-                        # special case of ExposureRange, its columns come from
-                        # Dataset table instead of Dimension
-                        linkNames[dsType.name + ".valid_first"] = "valid_first"
-                        linkNames[dsType.name + ".valid_last"] = "valid_last"
-                    else:
-                        if self.tables.get(dimension.name) is not None:
-                            linkNames.update((s, s) for s in dimension.links(expand=False))
+                    if self.tables.get(dimension.name) is not None:
+                        linkNames.update((s, s) for s in dimension.links(expand=False))
                 dsDataId = DataId({val: row[linkColumnIndices[key]] for key, val in linkNames.items()},
                                   dimensions=dsType.dimensions,
                                   region=extractRegion(dsType.dimensions))

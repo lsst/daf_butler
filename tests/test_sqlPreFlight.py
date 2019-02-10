@@ -223,6 +223,7 @@ class SqlPreFlightTestCase(unittest.TestCase):
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (11,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
+    @unittest.skip("ExposureRange has been removed, but not yet replaced.")
     def testPreFlightExposureRange(self):
         """Test involving only ExposureRange unit"""
         registry = self.registry

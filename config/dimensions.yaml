@@ -80,21 +80,6 @@ dimensions:
       link:
       - exposure
 
-    ExposureRange:
-      dependencies:
-        required:
-        - Instrument
-      doc: >
-        An inclusive range of Exposure dates that may be open in either
-        direction, typically used to identify master calibration products.
-        There is no SQL table associated with ExposureRanges; there is no
-        additional information associated with an ExposureRange besides the
-        instrument, valid_first, and valid_last fields already present in
-        Dataset.
-      link:
-      - valid_first
-      - valid_last
-
     SkyPix:
       doc: >
         A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
