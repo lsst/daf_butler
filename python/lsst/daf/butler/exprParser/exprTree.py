@@ -29,14 +29,13 @@ database-specific identifiers but everything else will probably be sent
 to database directly.
 """
 
-from __future__ import absolute_import, division, print_function
-
 __all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
            'Parens', 'StringLiteral', 'UnaryOp']
 
 # -------------------------------
 #  Imports of standard modules --
 # -------------------------------
+from abc import ABC, abstractmethod
 
 # -----------------------------
 #  Imports for other modules --
@@ -51,7 +50,7 @@ __all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
 # ------------------------
 
 
-class Node:
+class Node(ABC):
     """Base class of IR node in expression tree.
 
     The purpose of this class is to simplify visiting of the
@@ -67,35 +66,15 @@ class Node:
     def __init__(self, children=None):
         self.children = tuple(children or ())
 
-    def visitDepthFirst(self, callable, *args):
-        """Visit all nodes in a tree in  depth-first manner.
+    @abstractmethod
+    def visit(self, visitor):
+        """Implement Visitor pattern for parsed tree.
 
         Parameters
         ----------
-        callable : object
-            Callable object which will be called for each node in a tree
-            with node as first argument plus all arguments in `args`
-        args :
-            Extra arguments to pass to callable
+        visitor : `TreeVisitor`
+            Instance of vistor type.
         """
-        for child in self.children:
-            child.visitDepthFirst(callable, *args)
-        callable(self, *args)
-
-    def visitBreadthFirst(self, callable, *args):
-        """Visit all nodes in a tree in  breadth-first manner.
-
-        Parameters
-        ----------
-        callable : object
-            Callable object which will be called for each node in a tree
-            with node as first argument plus all arguments in `args`
-        args :
-            Extra arguments to pass to callable
-        """
-        callable(self, *args)
-        for child in self.children:
-            child.visitBreadthFirst(callable, *args)
 
 
 class BinaryOp(Node):
@@ -119,6 +98,12 @@ class BinaryOp(Node):
         self.op = op
         self.rhs = rhs
 
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        lhs = self.lhs.visit(visitor)
+        rhs = self.rhs.visit(visitor)
+        return visitor.visitBinaryOp(self.op, lhs, rhs, self)
+
     def __str__(self):
         return "{lhs} {op} {rhs}".format(**vars(self))
 
@@ -141,6 +126,11 @@ class UnaryOp(Node):
         self.op = op
         self.operand = operand
 
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        operand = self.operand.visit(visitor)
+        return visitor.visitUnaryOp(self.op, operand, self)
+
     def __str__(self):
         return "{op} {operand}".format(**vars(self))
 
@@ -156,6 +146,10 @@ class StringLiteral(Node):
     def __init__(self, value):
         Node.__init__(self)
         self.value = value
+
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        return visitor.visitStringLiteral(self.value, self)
 
     def __str__(self):
         return "'{value}'".format(**vars(self))
@@ -176,6 +170,10 @@ class NumericLiteral(Node):
         Node.__init__(self)
         self.value = value
 
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        return visitor.visitNumericLiteral(self.value, self)
+
     def __str__(self):
         return "{value}".format(**vars(self))
 
@@ -194,6 +192,10 @@ class Identifier(Node):
     def __init__(self, name):
         Node.__init__(self)
         self.name = name
+
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        return visitor.visitIdentifier(self.name, self)
 
     def __str__(self):
         return "{name}".format(**vars(self))
@@ -217,6 +219,12 @@ class IsIn(Node):
         self.values = values
         self.not_in = not_in
 
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        lhs = self.lhs.visit(visitor)
+        values = [value.visit(visitor) for value in self.values]
+        return visitor.visitIsIn(lhs, values, self.not_in, self)
+
     def __str__(self):
         values = ", ".join(str(x) for x in self.values)
         not_in = ""
@@ -238,6 +246,11 @@ class Parens(Node):
     def __init__(self, expr):
         Node.__init__(self, (expr,))
         self.expr = expr
+
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        expr = self.expr.visit(visitor)
+        return visitor.visitParens(expr, self)
 
     def __str__(self):
         return "({expr})".format(**vars(self))

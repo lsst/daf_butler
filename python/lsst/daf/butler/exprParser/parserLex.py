@@ -96,7 +96,6 @@ class ParserLex:
         # NULL="NULL",
         OR="OR",
         AND="AND",
-        XOR="XOR",
         NOT="NOT",
         # BETWEEN="BETWEEN",
         # LIKE="LIKE",

@@ -23,11 +23,12 @@ __all__ = ("SqlPreFlight",)
 
 import itertools
 import logging
-from sqlalchemy.sql import select, and_, functions, text, literal, case, between
+from sqlalchemy.sql import select, and_, or_, not_, functions, literal, case, between
 
 from lsst.sphgeom import Region
 from lsst.sphgeom.relationship import DISJOINT
-from lsst.daf.butler import DatasetRef, PreFlightDimensionsRow, DimensionJoin, DataId
+from .. import DatasetRef, PreFlightDimensionsRow, DimensionJoin, DataId
+from ..exprParser import ParserYacc, TreeVisitor
 
 
 class DATASET_ID_DEFERRED:  # noqa N801
@@ -37,6 +38,96 @@ class DATASET_ID_DEFERRED:  # noqa N801
 
 
 _LOG = logging.getLogger(__name__)
+
+
+class _ClauseVisitor(TreeVisitor):
+    """Implement TreeVisitor to convert user expression into SQLAlchemy
+    clause.
+
+    Parameters
+    ----------
+    tables : `dict`
+        Mapping of table names to `sqlalchemy.Table` instances.
+    dimensions : `DimensionGraph`
+        All Dimensions included in the query.
+    """
+
+    unaryOps = {"NOT": lambda x: not_(x),
+                "+": lambda x: +x,
+                "-": lambda x: -x}
+    """Mapping or unary operator names to corresponding functions"""
+
+    binaryOps = {"OR": lambda x, y: or_(x, y),
+                 "AND": lambda x, y: and_(x, y),
+                 "=": lambda x, y: x == y,
+                 "!=": lambda x, y: x != y,
+                 "<": lambda x, y: x < y,
+                 "<=": lambda x, y: x <= y,
+                 ">": lambda x, y: x > y,
+                 ">=": lambda x, y: x >= y,
+                 "+": lambda x, y: x + y,
+                 "-": lambda x, y: x - y,
+                 "*": lambda x, y: x * y,
+                 "/": lambda x, y: x / y,
+                 "%": lambda x, y: x % y}
+    """Mapping or binary operator names to corresponding functions"""
+
+    def __init__(self, tables, dimensions):
+        self.tables = tables
+        self.dimensions = dimensions
+
+    def visitNumericLiteral(self, value, node):
+        # Docstring inherited from TreeVisitor.visitNumericLiteral
+        # Convert string value into float or int
+        if value.isdigit():
+            value = int(value)
+        else:
+            value = float(value)
+        return literal(value)
+
+    def visitStringLiteral(self, value, node):
+        # Docstring inherited from TreeVisitor.visitStringLiteral
+        return literal(value)
+
+    def visitIdentifier(self, name, node):
+        # Docstring inherited from TreeVisitor.visitIdentifier
+        table, sep, column = name.partition('.')
+        if column:
+            return self.tables[table].columns[column]
+        else:
+            link = table
+            for dim in self.dimensions:
+                if link in dim.links():
+                    return self.tables[dim.name].columns[link]
+            # can't find the link
+            raise ValueError(f"Link name `{link}' is not in the dimensions for this query.")
+
+    def visitUnaryOp(self, operator, operand, node):
+        # Docstring inherited from TreeVisitor.visitUnaryOp
+        func = self.unaryOps.get(operator)
+        if func:
+            return func(operand)
+        else:
+            raise ValueError(f"Unexpected unary operator `{operator}' in `{node}'.")
+
+    def visitBinaryOp(self, operator, lhs, rhs, node):
+        # Docstring inherited from TreeVisitor.visitBinaryOp
+        func = self.binaryOps.get(operator)
+        if func:
+            return func(lhs, rhs)
+        else:
+            raise ValueError(f"Unexpected binary operator `{operator}' in `{node}'.")
+
+    def visitIsIn(self, lhs, values, not_in, node):
+        # Docstring inherited from TreeVisitor.visitIsIn
+        if not_in:
+            return lhs.notin_(values)
+        else:
+            return lhs.in_(values)
+
+    def visitParens(self, expression, node):
+        # Docstring inherited from TreeVisitor.visitParens
+        return expression.self_group()
 
 
 class SqlPreFlight:
@@ -127,7 +218,7 @@ class SqlPreFlight:
                 # so we have to use `onclause` which is always true.
                 return fromClause.join(self.tables[dimension.name], literal(True))
 
-    def selectDimensions(self, expression):
+    def selectDimensions(self, expression=None):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of dimension values.
 
@@ -138,7 +229,7 @@ class SqlPreFlight:
 
         Parameters
         ----------
-        expression : `str`
+        expression : `str`, optional
             An expression that limits the `Dimensions <Dimension>` and
             (indirectly) the Datasets returned.
 
@@ -147,6 +238,12 @@ class SqlPreFlight:
         row : `PreFlightDimensionsRow`
             Single row is a unique combination of dimensions in a transform.
         """
+        # parse expression, can raise on errors
+        try:
+            parser = ParserYacc()
+            expression = parser.parse(expression or "")
+        except Exception as exc:
+            raise ValueError(f"Failed to parse user expression `{expression}'") from exc
 
         # Brief overview of the code below:
         #  - extract all Dimensions used by all input/output dataset types
@@ -349,8 +446,8 @@ class SqlPreFlight:
         # build full query
         q = select(selectColumns).select_from(fromJoin)
         if expression:
-            # TODO: potentially transform query from user-friendly expression
-            where = text(expression)
+            visitor = _ClauseVisitor(self.tables, dimensions)
+            where = expression.visit(visitor)
             _LOG.debug("full where: %s", where)
             q = q.where(where)
         _LOG.debug("full query: %s",

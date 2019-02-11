@@ -24,8 +24,37 @@
 
 import unittest
 
-from lsst.daf.butler.exprParser import exprTree, ParserYacc, ParseError
+from lsst.daf.butler.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
 import lsst.utils.tests
+
+
+class _Visitor(TreeVisitor):
+    """Trivial implementation of TreeVisitor.
+    """
+    def visitNumericLiteral(self, value, node):
+        return f"N({value})"
+
+    def visitStringLiteral(self, value, node):
+        return f"S({value})"
+
+    def visitIdentifier(self, name, node):
+        return f"ID({name})"
+
+    def visitUnaryOp(self, operator, operand, node):
+        return f"U({operator} {operand})"
+
+    def visitBinaryOp(self, operator, lhs, rhs, node):
+        return f"B({lhs} {operator} {rhs})"
+
+    def visitIsIn(self, lhs, values, not_in, node):
+        values = ", ".join([str(val) for val in values])
+        if not_in:
+            return f"!IN({lhs} ({values}))"
+        else:
+            return f"IN({lhs} ({values}))"
+
+    def visitParens(self, expression, node):
+        return f"P({expression})"
 
 
 class ParserLexTestCase(unittest.TestCase):
@@ -202,7 +231,7 @@ class ParserLexTestCase(unittest.TestCase):
         """
         parser = ParserYacc()
 
-        for op in ('OR', 'XOR', 'AND'):
+        for op in ('OR', 'AND'):
             tree = parser.parse('a {} b'.format(op))
             self.assertIsInstance(tree, exprTree.BinaryOp)
             self.assertEqual(tree.op, op)
@@ -280,34 +309,22 @@ class ParserLexTestCase(unittest.TestCase):
     def testVisit(self):
         """Test for visitor methods"""
 
-        def _visitor(node, nodes):
-            nodes.append(node)
-
+        # test should cover all visit* methods
         parser = ParserYacc()
+        visitor = _Visitor()
 
         tree = parser.parse("(a+b)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "P(B(ID(a) + ID(b)))")
 
-        # collect all nodes into a list, depth first
-        nodes = []
-        tree.visitDepthFirst(_visitor, nodes)
-        self.assertEqual(len(nodes), 4)
-        self.assertIsInstance(nodes[0], exprTree.Identifier)
-        self.assertEqual(nodes[0].name, 'a')
-        self.assertIsInstance(nodes[1], exprTree.Identifier)
-        self.assertEqual(nodes[1].name, 'b')
-        self.assertIsInstance(nodes[2], exprTree.BinaryOp)
-        self.assertIsInstance(nodes[3], exprTree.Parens)
+        tree = parser.parse("(A or B) and not (x + 3 > y)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "B(P(B(ID(A) OR ID(B))) AND U(NOT P(B(B(ID(x) + N(3)) > ID(y)))))")
 
-        # collect all nodes into a list, breadth first
-        nodes = []
-        tree.visitBreadthFirst(_visitor, nodes)
-        self.assertEqual(len(nodes), 4)
-        self.assertIsInstance(nodes[0], exprTree.Parens)
-        self.assertIsInstance(nodes[1], exprTree.BinaryOp)
-        self.assertIsInstance(nodes[2], exprTree.Identifier)
-        self.assertEqual(nodes[2].name, 'a')
-        self.assertIsInstance(nodes[3], exprTree.Identifier)
-        self.assertEqual(nodes[3].name, 'b')
+        tree = parser.parse("x in (1,2) AND y NOT IN (1.1, .25, 1e2) OR z in ('a', 'b')")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "B(B(IN(ID(x) (N(1), N(2))) AND !IN(ID(y) (N(1.1), N(.25), N(1e2))))"
+                         " OR IN(ID(z) (S(a), S(b))))")
 
 
 class MyMemoryTestCase(lsst.utils.tests.MemoryTestCase):
