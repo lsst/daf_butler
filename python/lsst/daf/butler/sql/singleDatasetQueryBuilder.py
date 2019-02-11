@@ -1,0 +1,297 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+__all__ = ("SingleDatasetQueryBuilder",)
+
+
+import logging
+from sqlalchemy.sql import select, and_, functions, case
+
+from .queryBuilder import QueryBuilder
+
+_LOG = logging.getLogger(__name__)
+
+
+class SingleDatasetQueryBuilder(QueryBuilder):
+    """Specialization of `QueryBuilder` that includes a single join
+    to the Dataset table corresponding to a single `DatasetType`.
+
+    Most users should call `fromCollections` to construct an instance of this
+    class rather than invoking the constructor directly.
+
+    Parameters
+    ----------
+    registry : `SqlRegistry`
+        Registry instance the query is being run against.
+    datasetType : `DatasetType`
+        `DatasetType` of the datasets this query searches for.
+    selectableForDataset : `sqlalchemy.sql.expression.FromClause`
+        SQLAlchemy object representing the Dataset table or a subquery
+        equivalent.
+    fromClause : `sqlalchemy.sql.expression.FromClause`, optional
+        Initial FROM clause for the query.
+    whereClause : SQLAlchemy boolean expression, optional
+        Expression to use as the initial WHERE clause.
+    addResultColumns : `bool`
+        If `True` (default), add result columns to ``self.resultColumns``
+        for the dataset ID and dimension links used to identify this
+        `DatasetType.
+    """
+
+    def __init__(self, registry, *, datasetType, selectableForDataset, fromClause=None, whereClause=None,
+                 addResultColumns=True):
+        super().__init__(registry, fromClause=fromClause, whereClause=whereClause)
+        self._datasetType = datasetType
+        self._selectableForDataset = selectableForDataset
+        if addResultColumns:
+            self.selectDatasetId()
+            for link in datasetType.dimensions.links():
+                self.resultColumns.addDimensionLink(selectableForDataset, link)
+
+    @classmethod
+    def fromSingleCollection(cls, registry, datasetType, collection, addResultColumns=True):
+        """Construct a builder that searches a single collection for the
+        dataset.
+
+        Parameters
+        ----------
+        registry : `SqlRegistry`
+            Registry instance the query is being run against.
+        datasetType : `DatasetType`
+            `DatasetType` of the datasets this query searches for.
+        collection : `str`
+            Name of the collection to search in.
+        addResultColumns : `bool`
+            If `True` (default), add result columns to ``self.resultColumns``
+            for the dataset ID and dimension links used to identify this
+            `DatasetType.
+
+        Returns
+        -------
+        builder : `SingleDatasetQueryBuilder`
+            New query builder instance initialized with a
+            `~QueryBuilder.fromClause` that either directly includes the
+            dataset table or includes a subquery equivalent.
+
+        Notes
+        -----
+        If there is only one collection, then there is a guarantee that
+        data IDs are all unique (by data ID we mean the combination of all link
+        values relevant for this dataset); in that case the dataset query can
+        be written as:
+
+            SELECT
+                Dataset.dataset_id AS dataset_id,
+                Dataset.link1 AS link1,
+                ...
+                Dataset.link1 AS linkN
+            FROM Dataset JOIN DatasetCollection
+                ON Dataset.dataset_id = DatasetCollection.dataset_id
+            WHERE Dataset.dataset_type_name = :dsType_name
+                AND DatasetCollection.collection = :collection_name
+        """
+        datasetTable = registry._schema.tables["Dataset"]
+        datasetCollectionTable = registry._schema.tables["DatasetCollection"]
+        fromClause = datasetTable.join(datasetCollectionTable,
+                                       datasetTable.c.dataset_id == datasetCollectionTable.c.dataset_id)
+        whereClause = and_(datasetTable.c.dataset_type_name == datasetType.name,
+                           datasetCollectionTable.c.collection == collection)
+        return cls(registry, fromClause=fromClause, whereClause=whereClause, datasetType=datasetType,
+                   selectableForDataset=datasetTable, addResultColumns=addResultColumns)
+
+    @classmethod
+    def fromCollections(cls, registry, datasetType, collections, addResultColumns=True):
+        """Construct a builder that searches a single collection for the
+        dataset.
+
+        Parameters
+        ----------
+        registry : `SqlRegistry`
+            Registry instance the query is being run against.
+        datasetType : `DatasetType`
+            `DatasetType` of the datasets this query searches for.
+        collections : `list` of `str`
+            List of collections to search, ordered from highest-priority to
+            lowest.
+        addResultColumns : `bool`
+            If `True` (default), add result columns to ``self.resultColumns``
+            for the dataset ID and dimension links used to identify this
+            `DatasetType.
+
+        Returns
+        -------
+        builder : `SingleDatasetQueryBuilder`
+            New query builder instance initialized with a
+            `~QueryBuilder.fromClause` that either directly includes the
+            dataset table or includes a subquery equivalent.
+
+        Notes
+        -----
+        If ``len(collections)==1``, this method simply calls
+        `fromSingleCollection`.
+
+        If there are multiple collections, then there can be multiple matching
+        Datasets for the same DataId. In that case we need only one Dataset
+        record, which comes from earliest collection (in the user-provided
+        order). Here things become complicated; we have to:
+        - replace collection names with their order in input list
+        - select all combinations of rows from Dataset and DatasetCollection
+          which match collection names and dataset type name
+        - from those only select rows with lowest collection position if
+          there are multiple collections for the same DataId
+
+        Replacing collection names with positions is easy:
+
+            SELECT dataset_id,
+                CASE collection
+                    WHEN 'collection1' THEN 0
+                    WHEN 'collection2' THEN 1
+                    ...
+                END AS collorder
+            FROM DatasetCollection
+
+        Combined query will look like (CASE ... END is as above):
+
+            SELECT Dataset.dataset_id AS dataset_id,
+                CASE DatasetCollection.collection ... END AS collorder,
+                Dataset.link1,
+                ...
+                Dataset.linkN
+            FROM Dataset JOIN DatasetCollection
+                ON Dataset.dataset_id = DatasetCollection.dataset_id
+            WHERE Dataset.dataset_type_name = <dsType.name>
+                AND DatasetCollection.collection IN (<collections>)
+
+        Filtering is complicated; it would be simpler to use Common Table
+        Expressions (WITH clause) but not all databases support CTEs, so we
+        will have to do with the repeating sub-queries. We use GROUP BY for
+        the data ID (link columns) and MIN(collorder) to find ``collorder``
+        for a particular DataId, then join it with previous combined selection:
+
+            SELECT
+                DS.dataset_id AS dataset_id,
+                DS.link1 AS link1,
+                ...
+                DS.linkN AS linkN
+            FROM (
+                SELECT Dataset.dataset_id AS dataset_id,
+                    CASE ... END AS collorder,
+                    Dataset.link1,
+                    ...
+                    Dataset.linkN
+                FROM Dataset JOIN DatasetCollection
+                    ON Dataset.dataset_id = DatasetCollection.dataset_id
+                WHERE Dataset.dataset_type_name = <dsType.name>
+                    AND DatasetCollection.collection IN (<collections>)
+                ) DS
+            INNER JOIN (
+                SELECT
+                    MIN(CASE ... END AS) collorder,
+                    Dataset.link1,
+                    ...
+                    Dataset.linkN
+                FROM Dataset JOIN DatasetCollection
+                    ON Dataset.dataset_id = DatasetCollection.dataset_id
+                WHERE Dataset.dataset_type_name = <dsType.name>
+                   AND DatasetCollection.collection IN (<collections>)
+                GROUP BY (
+                    Dataset.link1,
+                    ...
+                    Dataset.linkN
+                    )
+                ) DSG
+            ON (DS.colpos = DSG.colpos
+                    AND
+                DS.link1 = DSG.link1
+                    AND
+                ...
+                    AND
+                DS.linkN = DSG.linkN)
+        """
+        if len(collections) == 1:
+            return cls.fromSingleCollection(registry, datasetType, collections[0])
+
+        # helper method
+        def _columns(selectable, names):
+            """Return list of columns for given column names"""
+            return [selectable.c[name].label(name) for name in names]
+
+        datasetTable = registry._schema.tables["Dataset"]
+        datasetCollectionTable = registry._schema.tables["DatasetCollection"]
+
+        # full set of link names for this DatasetType
+        links = list(datasetType.dimensions.links())
+
+        # Starting point for both subqueries below: a join of Dataset to
+        # DatasetCollection
+        subJoin = datasetTable.join(datasetCollectionTable,
+                                    datasetTable.c.dataset_id == datasetCollectionTable.c.dataset_id)
+        subWhere = and_(datasetTable.c.dataset_type_name == datasetType.name,
+                        datasetCollectionTable.c.collection.in_(collections))
+
+        # CASE clause that transforms collection name to position in the given
+        # list of collections
+        collorder = case([
+            (datasetCollectionTable.c.collection == coll, pos) for pos, coll in enumerate(collections)
+        ])
+
+        # first GROUP BY sub-query, find minimum `collorder` for each DataId
+        columns = [functions.min(collorder).label("collorder")] + _columns(datasetTable, links)
+        groupSubq = select(columns).select_from(subJoin).where(subWhere)
+        groupSubq = groupSubq.group_by(*links)
+        groupSubq = groupSubq.alias("sub1" + datasetType.name)
+
+        # next combined sub-query
+        columns = [collorder.label("collorder")] + _columns(datasetTable, ["dataset_id"] + links)
+        combined = select(columns).select_from(subJoin).where(subWhere)
+        combined = combined.alias("sub2" + datasetType.name)
+
+        # now join these two
+        joinsOn = [groupSubq.c.collorder == combined.c.collorder] + \
+                  [groupSubq.c[colName] == combined.c[colName] for colName in links]
+
+        return cls(registry, fromClause=combined.join(groupSubq, and_(*joinsOn)),
+                   datasetType=datasetType, selectableForDataset=combined, addResultColumns=addResultColumns)
+
+    @property
+    def datasetType(self):
+        """The dataset type this query searches for (`DatasetType`).
+        """
+        return self._datasetType
+
+    def selectDatasetId(self):
+        """Add the ``dataset_id`` column to the SELECT clause of the query.
+        """
+        self.resultColumns.addDatasetId(self._selectableForDataset, self.datasetType)
+
+    def findSelectableForLink(self, link):
+        # Docstring inherited from QueryBuilder.findSelectableForLink
+        result = super().findSelectableForLink(link)
+        if result is None and link in self.datasetType.dimensions.links():
+            result = self._selectableForDataset
+        return result
+
+    def findSelectableByName(self, name):
+        # Docstring inherited from QueryBuilder.findSelectableByName
+        result = super().findSelectableByName(name)
+        if result is None and (name == self.datasetType.name or name == "Dataset"):
+            result = self._selectableForDataset
+        return result

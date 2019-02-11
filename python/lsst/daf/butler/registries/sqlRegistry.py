@@ -43,7 +43,8 @@ from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.dimensions import DataId
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
-from .sqlPreFlight import SqlPreFlight
+from ..sql import MultipleDatasetQueryBuilder
+
 
 class SqlRegistryConfig(RegistryConfig):
     pass
@@ -847,7 +848,7 @@ class SqlRegistry(Registry):
         return dataId
 
     @disableWhenLimited
-    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
+    def selectDimensions(self, originInfo, expression=None, neededDatasetTypes=(), futureDatasetTypes=(),
                          expandDataIds=True):
         # Docstring inherited from Registry.selectDimensions
         def standardize(dsType):
@@ -856,12 +857,22 @@ class SqlRegistry(Registry):
             else:
                 dsType.normalize(universe=self.dimensions)
             return dsType
+
         needed = [standardize(t) for t in neededDatasetTypes]
         future = [standardize(t) for t in futureDatasetTypes]
-        preFlight = SqlPreFlight(self, originInfo, needed, future,
-                                 expandDataIds=expandDataIds,
-                                 deferOutputIdQueries=self.config["deferOutputIdQueries"])
-        return preFlight.selectDimensions(expression)
+
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self,
+            originInfo,
+            required=needed,
+            optional=future,
+            deferOptionalDatasetQueries=self.config["deferOutputIdQueries"]
+        )
+
+        if expression is not None:
+            builder.whereParsedExpression(expression)
+
+        return builder.execute(expandDataIds=expandDataIds)
 
     @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):
