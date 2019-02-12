@@ -149,6 +149,7 @@ dimensions:
       lhs: [Visit]
       rhs: [Detector]
       hasRegion: true
+      asNeeded: true
 
     VisitDetectorSkyPixJoin:
       doc: >

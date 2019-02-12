@@ -239,6 +239,7 @@ class DimensionJoin(DimensionElement):
                          required=lhs + rhs, implied=(), doc=config["doc"])
         self._lhs = DimensionSet(universe, lhs, implied=False)
         self._rhs = DimensionSet(universe, rhs, implied=False)
+        self._asNeeded = config.get("asNeeded", False)
         # self._summarizes initialized later in DimensionGraph.fromConfig.
 
     @property
@@ -260,6 +261,13 @@ class DimensionJoin(DimensionElement):
         an easy way to distinguish between the two sides.
         """
         return self._rhs
+
+    @property
+    def asNeeded(self):
+        """Whether this join only be included in a query when required,
+        as opposed to whenever its dependencies are included (`bool`).
+        """
+        return self._asNeeded
 
     @property
     def summarizes(self):
