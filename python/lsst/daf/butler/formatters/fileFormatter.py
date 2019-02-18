@@ -145,7 +145,8 @@ class FileFormatter(Formatter):
                 # Defer the complaint
                 data = None
 
-        # Coerce to the requested type (not necessarily the type that was written)
+        # Coerce to the requested type (not necessarily the type that was
+        # written)
         data = self._coerceType(data, fileDescriptor.readStorageClass,
                                 pytype=fileDescriptor.readStorageClass.pytype)
 

@@ -236,7 +236,7 @@ class DimensionGraph(metaclass=PrivateConstructorMeta):
         return self.universe.extract(self._dimensions.union(*others), implied=implied)
 
     def intersection(self, *others, implied=False):
-        """Return a new graph containing all elements that are in both  ``self``
+        """Return a new graph containing all elements that are in both ``self``
         and all of the other given graphs.
 
         Parameters
@@ -451,7 +451,8 @@ class DimensionUniverse(DimensionGraph):
             dimensionNames = frozenset(dimensions.names)
             joinNames = set()
         else:
-            # Make a set of the names of requested dimensions and all of their dependencies.
+            # Make a set of the names of requested dimensions and all of their
+            # dependencies.
             dimensionNames = set(dimensions.names)
             # Make a set of the names of all requested joins.
             joinNames = set()
@@ -459,7 +460,8 @@ class DimensionUniverse(DimensionGraph):
                 if not isinstance(join, DimensionJoin):
                     join = self.universe._joins[join]
                 joinNames.add(join.name)
-                # Add to the dimension set any dimensions that are required by the requested joins.
+                # Add to the dimension set any dimensions that are required by
+                # the requested joins.
                 dimensionNames |= join.dependencies().names
             dimensionNames = frozenset(dimensionNames)
 
@@ -469,7 +471,8 @@ class DimensionUniverse(DimensionGraph):
         if result is None:
             # Make the Dimension set, expanding to include dependencies
             dimensions = DimensionSet(self, dimensionNames, expand=True, implied=implied)
-            # Add to the join set any joins that are implied by the set of dimensions.
+            # Add to the join set any joins that are implied by the set of
+            # dimensions.
             for join in self._joins:
                 if dimensions.issuperset(join.dependencies()):
                     joinNames.add(join.name)

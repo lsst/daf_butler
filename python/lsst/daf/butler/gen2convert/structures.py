@@ -92,7 +92,8 @@ class Gen2Dataset:
 
     @property
     def fullPath(self):
-        """Full path to this dataset, combining `root` and `filePath` (`str`)."""
+        """Full path to this dataset, combining `root` and `filePath`
+        (`str`)."""
         return os.path.join(self.root, self.filePath)
 
 
@@ -135,7 +136,8 @@ class Gen2Repo:
 
     @property
     def mapper(self):
-        """Gen2 Mapper that organizes this repository (`obs.base.CameraMapper)."""
+        """Gen2 Mapper that organizes this repository
+        (`lsst.obs.base.CameraMapper`)."""
         if self._mapper is None:
             mapperLog = Log.getLogger("CameraMapper")
             mapperLogLevel = mapperLog.getLevel()

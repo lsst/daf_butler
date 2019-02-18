@@ -169,7 +169,8 @@ class Config(collections.abc.MutableMapping):
             # if other is a string, assume it is a file path.
             self.__initFromFile(other)
         else:
-            # if the config specified by other could not be recognized raise a runtime error.
+            # if the config specified by other could not be recognized raise
+            # a runtime error.
             raise RuntimeError("A Config could not be loaded from other:%s" % other)
 
     def ppprint(self):
@@ -322,7 +323,8 @@ class Config(collections.abc.MutableMapping):
         keys : `list` or `tuple`
             Keys to search in hierarchy.
         create : `bool`, optional
-            If `True`, if a part of the hierarchy does not exist, insert an empty `dict` into the hierarchy.
+            If `True`, if a part of the hierarchy does not exist, insert an
+            empty `dict` into the hierarchy.
 
         Returns
         -------
@@ -598,8 +600,8 @@ class Config(collections.abc.MutableMapping):
         array : `collections.abc.Sequence`
             The value corresponding to name, but guaranteed to be returned
             as a list with at least one element. If the value is a
-            `~collections.abc.Sequence` (and not a `str`) the value itself will be
-            returned, else the value will be the first element.
+            `~collections.abc.Sequence` (and not a `str`) the value itself
+            will be returned, else the value will be the first element.
         """
         val = self.get(name)
         if isinstance(val, str):

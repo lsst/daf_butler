@@ -301,7 +301,8 @@ class SqlRegistry(Registry):
         them with a colon.  Parameter values are provided as additional
         keyword arguments.  For example:
 
-          registry.query("SELECT * FROM Instrument WHERE instrument=:name", name="HSC")
+          registry.query("SELECT * FROM Instrument WHERE instrument=:name",
+                         name="HSC")
 
         Parameters
         ----------
@@ -498,7 +499,8 @@ class SqlRegistry(Registry):
     @transactional
     def attachComponent(self, name, parent, component):
         # Docstring inherited from Registry.attachComponent.
-        # TODO Insert check for component name and type against parent.storageClass specified components
+        # TODO Insert check for component name and type against
+        # parent.storageClass specified components
         if parent.id is None:
             raise AmbiguousDatasetError(f"Cannot attach component to dataset {parent} without ID.")
         if component.id is None:
@@ -638,8 +640,9 @@ class SqlRegistry(Registry):
     def addRun(self, run):
         # Docstring inherited from Registry.addRun
         runTable = self._schema.tables["Run"]
-        # TODO: this check is probably undesirable, as we may want to have multiple Runs output
-        # to the same collection.  Fixing this requires (at least) modifying getRun() accordingly.
+        # TODO: this check is probably undesirable, as we may want to have
+        # multiple Runs output to the same collection.  Fixing this requires
+        # (at least) modifying getRun() accordingly.
         selection = select([exists().where(runTable.c.collection == run.collection)])
         if self._connection.execute(selection).scalar():
             raise ConflictingDefinitionError(f"A run already exists with this collection: {run.collection}")

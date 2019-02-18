@@ -155,7 +155,8 @@ class ConfigTestCase(unittest.TestCase):
             del c[k]
             self.assertNotIn(k, c)
 
-        # Check that `dict` still exists, but is now empty (then remove it, mutatic c)
+        # Check that `dict` still exists, but is now empty (then remove
+        # it, mutatic c)
         self.assertIn("dict", c)
         del c["dict"]
 

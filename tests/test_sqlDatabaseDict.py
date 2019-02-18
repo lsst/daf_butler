@@ -105,11 +105,12 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
         d["zero"] = data[0]
 
     def testExtraFieldsInTable(self):
-        """Test when there are fields in the table that not in the value or the key.
+        """Test when there are fields in the table that not in the value or
+        the key.
 
         These should be completely ignored by the DatabaseDict after the table
-        is created (which implies that they must be nullable if __setitem__ is
-        expected to work."""
+        is created (which implies that they must be nullable if
+        ``__setitem__`` is expected to work."""
         value = namedtuple("TestValue", ["y"])
         data = {
             0: value(y="zero"),

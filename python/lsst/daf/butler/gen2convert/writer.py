@@ -128,8 +128,8 @@ class ConversionWriter:
             log.debug("Using SkyMap with hash=%s for '%s' in '%s'",
                       skyMap.getSha1().hex(), coaddName, gen2repo.root)
             skyMapNamesByCoaddName[coaddName] = self.skyMapNames[skyMap.getSha1()]
-        # Create translators and Gen3 DatasetType objects from Gen2DatasetType objects, but
-        # only if we actually use them for Datasets in this repo.
+        # Create translators and Gen3 DatasetType objects from Gen2DatasetType
+        # objects, but only if we actually use them for Datasets in this repo.
         translators = {}
         scFactory = StorageClassFactory()
         scConfig = self.config["storageClasses"]
@@ -269,7 +269,8 @@ class ConversionWriter:
             instrument = self.config["mappers", mapperName, "instrument"]
             log.info("Inserting Exposure and Visit Dimensions for Instrument '%s'", instrument)
             for obsInfoId, (obsInfo, filt) in nested.items():
-                # TODO: generalize this to instruments with snaps and/or compound gen2 visit/exposure IDs
+                # TODO: generalize this to instruments with snaps and/or
+                # compound gen2 visit/exposure IDs
                 visitId, = obsInfoId
                 exposureId, = obsInfoId
                 # TODO: skip insertion if Dimensions already exist.

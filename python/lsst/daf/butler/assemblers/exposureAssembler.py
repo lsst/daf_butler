@@ -66,7 +66,7 @@ class ExposureAssembler(CompositeAssembler):
 
         Parameters
         ----------
-        composite : `Exposure`
+        composite : `~lsst.afw.image.Exposure`
             `Exposure` to access component.
         componentName : `str`
             Name of component to retrieve.
@@ -126,7 +126,7 @@ class ExposureAssembler(CompositeAssembler):
 
         Parameters
         ----------
-        composite : `lsst.afw.Exposure`
+        composite : `~lsst.afw.image.Exposure`
             `Exposure` composite object consisting of components to be
             extracted.
 

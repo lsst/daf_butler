@@ -43,7 +43,8 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName)
         self.assertIsInstance(f, Formatter)
-        # Defer the import so that we ensure that the infrastructure loaded it on demand previously
+        # Defer the import so that we ensure that the infrastructure loaded
+        # it on demand previously
         from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
         self.assertEqual(type(f), FitsCatalogFormatter)
 

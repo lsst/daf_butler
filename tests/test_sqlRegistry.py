@@ -410,8 +410,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry.associate(newCollection, [ref1_run1])
         registry.associate(newCollection, [ref1_run1, ref2_run1])
         self.assertRowCount(registry, "DatasetCollection", 8)
-        # associated refs from run2 with same other collection, this should be OK
-        # because thy have different dataset type
+        # associated refs from run2 with same other collection, this should
+        # be OK because thy have different dataset type
         registry.associate(newCollection, [ref1_run2, ref2_run2])
         self.assertRowCount(registry, "DatasetCollection", 10)
         # associating DatasetRef with the same units but different ID is not OK
@@ -568,10 +568,12 @@ class RegistryTests(metaclass=ABCMeta):
         # Get region for a (visit, detector) combination
         self.assertEqual(regionVisitDetector,
                          getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2}))
-        # Attempt to get region for a non-existent (visit, detector) combination
+        # Attempt to get region for a non-existent (visit, detector)
+        # combination
         with self.assertRaises(LookupError):
             getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3})
-        # getRegion for a dataId containing no spatial dimensions should return None
+        # getRegion for a dataId containing no spatial dimensions should
+        # return None
         self.assertIsNone(getRegion({"instrument": "DummyCam"}))
         # getRegion for a mix of spatial dimensions should return None
         self.assertIsNone(getRegion({"instrument": "DummyCam",

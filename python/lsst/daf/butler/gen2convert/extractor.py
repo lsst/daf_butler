@@ -161,5 +161,6 @@ class Extractor:
         return dataset
 
     def getDatasetTypes(self):
-        """Return a dict mapping DatasetType name to Gen2DatasetType instance."""
+        """Return a dict mapping DatasetType name to Gen2DatasetType
+        instance."""
         return {parser.datasetType.name: parser.datasetType for parser in self.parsers.values()}

@@ -420,7 +420,8 @@ StorageClasses
                         processStorageClass(ctype, sconfig)
                     components[cname] = self.getStorageClass(ctype)
 
-            # Extract scalar items from dict that are needed for StorageClass Constructor
+            # Extract scalar items from dict that are needed for
+            # StorageClass Constructor
             storageClassKwargs = {k: info[k] for k in ("pytype", "assembler", "parameters") if k in info}
 
             # Fill in other items

@@ -117,10 +117,10 @@ class PreFlightDimensionsRow:
     each instance will have unique ``dataId``, but `DatasetRef` in
     ``datasetRefs`` are not necessarily unique. For example when pre-flight
     solver generates data for Quantum which has two DatasetRefs on input and
-    one on output it will create two `PreFlightDimensionsRow` instances with the
-    same `DatasetRef` for output dataset type. It is caller's responsibility
-    to combine multiple `PreFlightDimensionsRow` into a suitable structure
-    (e.g. QuantumGraph).
+    one on output it will create two `PreFlightDimensionsRow` instances with
+    the same `DatasetRef` for output dataset type. It is caller's
+    the responsibility to combine multiple `PreFlightDimensionsRow` into a
+    suitable structure (e.g., `lsst.pipe.base.QuantumGraph`).
 
     .. note::
 

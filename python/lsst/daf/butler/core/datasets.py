@@ -331,21 +331,23 @@ class DatasetRef:
 
     @property
     def producer(self):
-        """The `Quantum` instance that produced (or will produce) the
-        Dataset.
+        """The `~lsst.daf.butler.Quantum` instance that produced (or will
+        produce) the Dataset.
 
-        Read-only; update via `Registry.addDataset()`,
-        `QuantumGraph.addDataset()`, or `Butler.put()`.
+        Read-only; update via `~lsst.daf.butler.Registry.addDataset()`,
+        `~lsst.daf.butler.Quantum.addOutput()`, or
+        `~lsst.daf.butler.Butler.put()`.
         May be `None` if no provenance information is available.
         """
         return self._producer
 
     @property
     def run(self):
-        """The `Run` instance that produced (or will produce) the
-        Dataset.
+        """The `~lsst.daf.butler.Run` instance that produced (or will produce)
+        the Dataset.
 
-        Read-only; update via `Registry.addDataset()` or `Butler.put()`.
+        Read-only; update via `~lsst.daf.butler.Registry.addDataset()` or
+        `~lsst.daf.butler.Butler.put()`.
         """
         return self._run
 
