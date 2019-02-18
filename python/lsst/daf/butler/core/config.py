@@ -163,7 +163,7 @@ class Config(collections.abc.MutableMapping):
 
         if isinstance(other, Config):
             self._data = copy.deepcopy(other._data)
-        elif isinstance(other, collections.Mapping):
+        elif isinstance(other, collections.abc.Mapping):
             self.update(other)
         elif isinstance(other, str):
             # if other is a string, assume it is a file path.
@@ -343,7 +343,7 @@ class Config(collections.abc.MutableMapping):
             if d is None:
                 # We have gone past the end of the hierarchy
                 pass
-            elif isinstance(d, collections.Sequence):
+            elif isinstance(d, collections.abc.Sequence):
                 # Check sequence first because for lists
                 # __contains__ checks whether value is found in list
                 # not whether the index exists in list. When we traverse
@@ -388,7 +388,7 @@ class Config(collections.abc.MutableMapping):
             raise KeyError(f"{name} not found")
         data = hierarchy[-1]
 
-        if isinstance(data, collections.Mapping):
+        if isinstance(data, collections.abc.Mapping):
             data = Config(data)
             # Ensure that child configs inherit the parent internal delimiter
             if self._D != Config._D:
@@ -448,11 +448,11 @@ class Config(collections.abc.MutableMapping):
               foo == {"a": {"b": 1, "c": 2}}
         """
         def doUpdate(d, u):
-            if not isinstance(u, collections.Mapping) or \
-                    not isinstance(d, collections.Mapping):
+            if not isinstance(u, collections.abc.Mapping) or \
+                    not isinstance(d, collections.abc.Mapping):
                 raise RuntimeError("Only call update with Mapping, not {}".format(type(d)))
             for k, v in u.items():
-                if isinstance(v, collections.Mapping):
+                if isinstance(v, collections.abc.Mapping):
                     d[k] = doUpdate(d.get(k, {}), v)
                 else:
                     d[k] = v
@@ -496,7 +496,7 @@ class Config(collections.abc.MutableMapping):
             return list((k,) for k in self)
 
         def getKeysAsTuples(d, keys, base):
-            if isinstance(d, collections.Sequence):
+            if isinstance(d, collections.abc.Sequence):
                 theseKeys = range(len(d))
             else:
                 theseKeys = d.keys()
@@ -504,7 +504,8 @@ class Config(collections.abc.MutableMapping):
                 val = d[key]
                 levelKey = base + (key,) if base is not None else (key,)
                 keys.append(levelKey)
-                if isinstance(val, (collections.Mapping, collections.Sequence)) and not isinstance(val, str):
+                if isinstance(val, (collections.abc.Mapping, collections.abc.Sequence)) \
+                        and not isinstance(val, str):
                     getKeysAsTuples(val, keys, levelKey)
         keys = []
         getKeysAsTuples(self._data, keys, None)
@@ -594,16 +595,16 @@ class Config(collections.abc.MutableMapping):
 
         Returns
         -------
-        array : `collections.Sequence`
+        array : `collections.abc.Sequence`
             The value corresponding to name, but guaranteed to be returned
             as a list with at least one element. If the value is a
-            `~collections.Sequence` (and not a `str`) the value itself will be
+            `~collections.abc.Sequence` (and not a `str`) the value itself will be
             returned, else the value will be the first element.
         """
         val = self.get(name)
         if isinstance(val, str):
             val = [val]
-        elif not isinstance(val, collections.Sequence):
+        elif not isinstance(val, collections.abc.Sequence):
             val = [val]
         return val
 

@@ -271,7 +271,7 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c[".a.b.c.1"], "7")
         c[".a.b.c.1"] = 8
         self.assertEqual(c[".a.b.c.1"], 8)
-        self.assertIsInstance(c[".a.b.c"], collections.Sequence)
+        self.assertIsInstance(c[".a.b.c"], collections.abc.Sequence)
 
         # Test we do get lists back from asArray
         a = c.asArray(".a.b.c")
@@ -303,7 +303,7 @@ class ConfigTestCase(unittest.TestCase):
         c[".datastores.1.datastore"] = {"cls": "datastore2modified"}
         self.assertEqual(c[".datastores.0.datastore.cls"], "datastore1")
         self.assertEqual(c[".datastores.1.datastore.cls"], "datastore2modified")
-        self.assertIsInstance(c["datastores"], collections.Sequence)
+        self.assertIsInstance(c["datastores"], collections.abc.Sequence)
 
         # Test that we can get all the listed names.
         # and also that they are marked as "in" the Config

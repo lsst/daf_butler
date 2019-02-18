@@ -182,7 +182,7 @@ class CompositeAssembler:
         components = {}
         if self.storageClass is not None and self.storageClass.isComposite():
             for c in self.storageClass.components:
-                if isinstance(composite, collections.Mapping):
+                if isinstance(composite, collections.abc.Mapping):
                     comp = composite[c]
                 else:
                     try:
