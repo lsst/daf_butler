@@ -325,6 +325,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
                                                              "physical_filter": "d-r"})
         butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
                                                     "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 425,
+                                                    "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -334,9 +336,11 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
         dimensions = ("Instrument", "Visit")
         butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
+        butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
 
         dataId1 = {"instrument": "DummyCamComp", "visit": 423}
         dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
+        dataId3 = {"instrument": "DummyCamComp", "visit": 425}
 
         # Put with exactly the data ID keys needed
         butler.put(metric, "metric1", dataId1)
@@ -348,6 +352,11 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
         # must be consistent).
         butler.put(metric, "metric2", dataId2)
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
+
+        # Now use a file template that will not result in unique filenames
+        butler.put(metric, "metric3", dataId1)
+        with self.assertRaises(FileExistsError):
+            butler.put(metric, "metric3", dataId3)
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):

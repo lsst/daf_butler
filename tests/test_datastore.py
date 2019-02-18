@@ -204,6 +204,10 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
 
                 compsRead[compName] = datastore.get(compRef)
 
+                # We can generate identical files for each storage class
+                # so remove the component here
+                datastore.remove(compRef)
+
             # combine all the components we read back into a new composite
             metricsOut = sc.assembler().assemble(compsRead)
             self.assertEqual(metrics, metricsOut)

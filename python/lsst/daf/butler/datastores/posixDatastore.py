@@ -344,6 +344,11 @@ class PosixDatastore(Datastore):
 
         # Write the file
         predictedFullPath = os.path.join(self.root, formatter.predictPath(location))
+
+        if os.path.exists(predictedFullPath):
+            raise FileExistsError(f"Cannot write file for ref {ref} as "
+                                  f"output file {predictedFullPath} already exists")
+
         with self._transaction.undoWith("write", os.remove, predictedFullPath):
             path = formatter.write(inMemoryDataset, FileDescriptor(location, storageClass=storageClass))
             assert predictedFullPath == os.path.join(self.root, path)

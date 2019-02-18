@@ -6,6 +6,7 @@ datastore:
     calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
     metric: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
+    metric3: "{collection}/{datasetType}/{instrument}"
   formatters:
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
