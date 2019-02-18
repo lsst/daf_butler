@@ -147,6 +147,23 @@ class DatasetType:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
 
+    def nameAndComponent(self):
+        """Return the root name of this dataset type and the component
+        name (if defined).
+
+        Returns
+        -------
+        rootName : `str`
+            Root name for this `DatasetType` without any components.
+        componentName : `str`
+            The component if it has been specified, else `None`.
+        """
+        comp = None
+        root = self.name
+        if "." in root:
+            root, comp = self.name.split(".", maxsplit=1)
+        return root, comp
+
     def component(self):
         """Component name (if defined)
 
@@ -156,9 +173,7 @@ class DatasetType:
             Name of component part of DatasetType name. `None` if this
             `DatasetType` is not associated with a component.
         """
-        comp = None
-        if "." in self.name:
-            _, comp = self.name.split(".", maxsplit=1)
+        _, comp = self.nameAndComponent()
         return comp
 
     def componentTypeName(self, component):
