@@ -36,6 +36,9 @@ class Location:
         self._datastoreRoot = datastoreRoot
         self._uri = urllib.parse.urlparse(uri)
 
+    def __str__(self):
+        return self.uri
+
     @property
     def uri(self):
         """URI corresponding to location.

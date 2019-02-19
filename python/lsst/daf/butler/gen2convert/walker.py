@@ -158,7 +158,8 @@ class ConversionWalker:
                 repo.parents.append(parent)
             # Make sure there are no cycles in the graph of parents.
             repo._findCycles()
-            # Make sure we can find a MapperClass in parents if we don't have one already.
+            # Make sure we can find a MapperClass in parents if we don't have
+            # one already.
             self._ensureMapperClass(repo)
             # Make sure we have all the SkyMaps we need.
             self._ensureSkyMaps(repo)
@@ -216,7 +217,8 @@ class ConversionWalker:
                     log.debug("%s: found %s with %s", repo.root, dataset.datasetType.name, dataset.dataId)
                     repo.datasets[dataset.datasetType.name][filePath] = dataset
 
-                    # append date ranges to datasets that have calibDate entries
+                    # append date ranges to datasets that have calibDate
+                    # entries
                     if "calibDate" in dataset.dataId.keys():
                         calibRow = self._calibDict.get(
                             (dataset.datasetType.name, dataset.dataId["calibDate"], dataset.dataId["ccd"]),
@@ -234,7 +236,8 @@ class ConversionWalker:
                                           dataset.dataId["ccd"]))
 
     def readObsInfo(self):
-        """Load unique ObservationInfo objects and filter associations from all scanned repositories.
+        """Load unique ObservationInfo objects and filter associations from
+        all scanned repositories.
         """
         for repo in self.scanned.values():
             config = self.config["mappers", repo.MapperClass.__name__, "VisitInfo"]
@@ -249,14 +252,16 @@ class ConversionWalker:
                 instrumentObsInfo[obsInfoId] = (ObservationInfo(md), filt)
 
     def readCalibInfo(self, calibPath=None):
-        """Load calibration data directly from the sqlite datababase as it is found.
+        """Load calibration data directly from the sqlite datababase as it is
+        found.
         """
         with sqlite3.connect(calibPath) as calibConn:
             calibConn.row_factory = sqlite3.Row
             c = calibConn.cursor()
 
             queryList = []
-            # This query only includes calibration types that are known at this time
+            # This query only includes calibration types that are known at
+            # this time
             for tableRow in c.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
                     "('bias', 'dark', 'defect', 'flat', 'fringe', 'sky')"):

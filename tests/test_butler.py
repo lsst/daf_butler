@@ -136,7 +136,8 @@ class ButlerTests:
         with self.assertRaises(ValueError):
             butler.put(metric, DatasetRef(datasetType, dataId, id=100))
 
-        # Put and remove the dataset once as a DatasetRef, once as a dataId, and once with a DatasetType
+        # Put and remove the dataset once as a DatasetRef, once as a dataId,
+        # and once with a DatasetType
         for args in ((refIn,), (datasetTypeName, dataId), (datasetType, dataId)):
             with self.subTest(args=args):
                 ref = butler.put(metric, *args)
@@ -162,8 +163,8 @@ class ButlerTests:
                 butler.remove(*args, delete=False)
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
-                # If we use the output ref with the dataset_id, we should still be
-                # able to load it with getDirect().
+                # If we use the output ref with the dataset_id, we should
+                # still be able to load it with getDirect().
                 self.assertEqual(metric, butler.getDirect(ref))
 
                 # Reinsert into collection, then delete from Datastore *and*
@@ -179,9 +180,10 @@ class ButlerTests:
                 # Registry still knows about it, if we use the dataset_id.
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
 
-                # Put again, then remove completely (this generates a new dataset
-                # record in registry, with a new ID - the old one still exists,
-                # but it is not in any collection so we don't care).
+                # Put again, then remove completely (this generates a new
+                # dataset record in registry, with a new ID - the old one
+                # still exists but it is not in any collection so we don't
+                # care).
                 ref = butler.put(metric, *args)
                 butler.remove(*args, remember=False)
                 # Lookup with original args should still fail.
@@ -323,27 +325,38 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
                                                              "physical_filter": "d-r"})
         butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
                                                     "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 425,
+                                                    "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
 
-        # Create two almost-identical DatasetTypes (both will use default template)
+        # Create two almost-identical DatasetTypes (both will use default
+        # template)
         dimensions = ("Instrument", "Visit")
         butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
+        butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
 
         dataId1 = {"instrument": "DummyCamComp", "visit": 423}
         dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
+        dataId3 = {"instrument": "DummyCamComp", "visit": 425}
 
         # Put with exactly the data ID keys needed
         butler.put(metric, "metric1", dataId1)
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
 
-        # Put with extra data ID keys (physical_filter is an optional dependency);
-        # should not change template (at least the way we're defining them
-        # to behave now; the important thing is that they must be consistent).
+        # Put with extra data ID keys (physical_filter is an optional
+        # dependency); should not change template (at least the way we're
+        # defining them  to behave now; the important thing is that they
+        # must be consistent).
         butler.put(metric, "metric2", dataId2)
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
+
+        # Now use a file template that will not result in unique filenames
+        butler.put(metric, "metric3", dataId1)
+        with self.assertRaises(FileExistsError):
+            butler.put(metric, "metric3", dataId3)
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):

@@ -108,8 +108,10 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
             compTypeName = DatasetType.nameWithComponent(datasetTypeName, compName)
             component = butler.get(compTypeName, dataId)
             # TODO enable check for component instance types
-            # compRef = butler.registry.find(butler.run.collection, "calexp.{}".format(compName), dataId)
-            # self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
+            # compRef = butler.registry.find(butler.run.collection,
+            #                                f"calexp.{compName}", dataId)
+            # self.assertIsInstance(component,
+            #                       compRef.datasetType.storageClass.pytype)
             compsRead[compName] = component
         # Simple check of WCS
         bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),

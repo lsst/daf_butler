@@ -171,7 +171,8 @@ class Butler:
             else:
                 runCollection = run
                 self.run = None
-            # if run *arg* is not None and collection arg is, use run for collecion.
+            # if run *arg* is not None and collection arg is, use run for
+            # collection.
             if collection is None:
                 collection = runCollection
         del run  # it's a logic bug if we try to use this variable below

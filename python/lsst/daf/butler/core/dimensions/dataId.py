@@ -266,7 +266,8 @@ class DataId(Mapping):
                 raise ValueError(f"Cannot use {type(dimension)} as 'dimension' argument without universe.")
             dimension = universe[dimension]
 
-        # Transform 'dimensions' arg into a DimensionGraph object if it isn't already
+        # Transform 'dimensions' arg into a DimensionGraph object if it isn't
+        # already
         if dimensions is not None and not isinstance(dimensions, DimensionGraph):
             if universe is None:
                 universe = getattr(dimensions, "universe", None)
@@ -320,10 +321,11 @@ class DataId(Mapping):
                     implied=True
                 )
             else:
-                # Attempt to shortcut by returning the original object: if caller
-                # provided a true DataId and the dimensions are not changing. Note that
-                # __init__ will still fire, allowing us to update the DataId with
-                # new information provided via other arguments.
+                # Attempt to shortcut by returning the original object: if
+                # caller provided a true DataId and the dimensions are not
+                # changing. Note that __init__ will still fire, allowing us
+                # to update the DataId with new information provided via
+                # other arguments.
                 if dataId.dimensions() == dimensions:
                     return dataId
                 constantDimensions = allDimensions

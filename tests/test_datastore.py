@@ -204,6 +204,10 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
 
                 compsRead[compName] = datastore.get(compRef)
 
+                # We can generate identical files for each storage class
+                # so remove the component here
+                datastore.remove(compRef)
+
             # combine all the components we read back into a new composite
             metricsOut = sc.assembler().assemble(compsRead)
             self.assertEqual(metrics, metricsOut)
@@ -325,7 +329,8 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
         # Dataset(s) inserted before the transaction should still exist
         metricsOut = datastore.get(refBefore, parameters=None)
         self.assertEqual(metrics, metricsOut)
-        # But all datasets inserted during the (rolled back) transaction should be gone
+        # But all datasets inserted during the (rolled back) transaction
+        # should be gone
         with self.assertRaises(FileNotFoundError):
             datastore.get(refOuter)
         with self.assertRaises(FileNotFoundError):
@@ -387,7 +392,8 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
                 datastore = self.makeDatastore(mode)
 
                 def succeed(obj, path, ref):
-                    """Ingest a file by transferring it to the template location."""
+                    """Ingest a file by transferring it to the template
+                    location."""
                     datastore.ingest(os.path.abspath(path), ref, transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
@@ -398,7 +404,8 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
                     self.assertFalse(datastore.exists(ref))
 
                 def failOutputExists(obj, path, ref):
-                    """Can't ingest files if transfer destination already exists."""
+                    """Can't ingest files if transfer destination already
+                    exists."""
                     with self.assertRaises(FileExistsError):
                         datastore.ingest(os.path.abspath(path), ref, transfer=mode)
                     self.assertFalse(datastore.exists(ref))

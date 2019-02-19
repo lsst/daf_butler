@@ -169,8 +169,7 @@ class FileTemplate:
         fields = {k: v for k, v in ref.dataId.items() if v is not None}
 
         datasetType = ref.datasetType
-        fields["datasetType"] = datasetType.name
-        component = datasetType.component()
+        fields["datasetType"], component = datasetType.nameAndComponent()
 
         usedComponent = False
         if component is not None:

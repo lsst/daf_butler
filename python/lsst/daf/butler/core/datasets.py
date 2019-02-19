@@ -147,6 +147,23 @@ class DatasetType:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
 
+    def nameAndComponent(self):
+        """Return the root name of this dataset type and the component
+        name (if defined).
+
+        Returns
+        -------
+        rootName : `str`
+            Root name for this `DatasetType` without any components.
+        componentName : `str`
+            The component if it has been specified, else `None`.
+        """
+        comp = None
+        root = self.name
+        if "." in root:
+            root, comp = self.name.split(".", maxsplit=1)
+        return root, comp
+
     def component(self):
         """Component name (if defined)
 
@@ -156,9 +173,7 @@ class DatasetType:
             Name of component part of DatasetType name. `None` if this
             `DatasetType` is not associated with a component.
         """
-        comp = None
-        if "." in self.name:
-            _, comp = self.name.split(".", maxsplit=1)
+        _, comp = self.nameAndComponent()
         return comp
 
     def componentTypeName(self, component):
@@ -331,21 +346,23 @@ class DatasetRef:
 
     @property
     def producer(self):
-        """The `Quantum` instance that produced (or will produce) the
-        Dataset.
+        """The `~lsst.daf.butler.Quantum` instance that produced (or will
+        produce) the Dataset.
 
-        Read-only; update via `Registry.addDataset()`,
-        `QuantumGraph.addDataset()`, or `Butler.put()`.
+        Read-only; update via `~lsst.daf.butler.Registry.addDataset()`,
+        `~lsst.daf.butler.Quantum.addOutput()`, or
+        `~lsst.daf.butler.Butler.put()`.
         May be `None` if no provenance information is available.
         """
         return self._producer
 
     @property
     def run(self):
-        """The `Run` instance that produced (or will produce) the
-        Dataset.
+        """The `~lsst.daf.butler.Run` instance that produced (or will produce)
+        the Dataset.
 
-        Read-only; update via `Registry.addDataset()` or `Butler.put()`.
+        Read-only; update via `~lsst.daf.butler.Registry.addDataset()` or
+        `~lsst.daf.butler.Butler.put()`.
         """
         return self._run
 

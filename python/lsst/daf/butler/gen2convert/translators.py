@@ -175,8 +175,8 @@ class Translator:
             A KeyHandler instance to add to a Translator when this rule
             matches.
         instrument : `str`
-            Gen3 instrument name the Gen2 repository must be associated with for
-            this rule to match, or None to match any instrument.
+            Gen3 instrument name the Gen2 repository must be associated with
+            for this rule to match, or None to match any instrument.
         datasetTypeName : `str`
             Name of the DatasetType this rule matches, or None to match any
             DatasetType.
@@ -212,8 +212,8 @@ class Translator:
         Parameters
         ----------
         instrument : `str`
-            String name of the Gen3 instrument associated with the Gen2 repository
-            this dataset is being translated from.
+            String name of the Gen3 instrument associated with the Gen2
+            repository this dataset is being translated from.
         datasetType : `Gen2DatasetType`
             A structure containing information about the Gen2 DatasetType,
             including its name and data ID keys.
@@ -287,7 +287,8 @@ class Translator:
 
     @property
     def gen3units(self):
-        """The Gen3 Dimension (names) populated by this Translator (`frozenset`)."""
+        """The Gen3 Dimension (names) populated by this Translator
+        (`frozenset`)."""
         return frozenset(h.gen3unit for h in self.handlers)
 
 

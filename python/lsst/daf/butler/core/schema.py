@@ -139,7 +139,8 @@ class SchemaBuilder:
             self.addTable(tableName, tableDescription)
 
     def isView(self, name):
-        """Return True if the named table should be added / has been added as a view.
+        """Return True if the named table should be added / has been added as
+        a view.
 
         Parameters
         ----------
@@ -157,7 +158,8 @@ class SchemaBuilder:
         return "sql" in description and not description.get("materialize", False)
 
     def isIncluded(self, name):
-        """Return True if the named table or view should be included in this schema.
+        """Return True if the named table or view should be included in this
+        schema.
 
         Parameters
         ----------
@@ -228,7 +230,8 @@ class SchemaBuilder:
 
         Parameters
         ----------
-        table : `sqlalchemy.Table`, `sqlalchemy.expression.TableClause` or `str`
+        table : `sqlalchemy.Table`, `sqlalchemy.expression.TableClause`
+                or `str`
             The table.
         columnDescription : `dict`
             Description of the column to be created.
@@ -334,8 +337,9 @@ class SchemaBuilder:
         constraintDescription : `dict`
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
-            - src, list of source column names or single source column name
-            - tgt, list of (table-qualified) target column names or single target column name
+            - src, list of source column names or single source column name.
+            - tgt, list of (table-qualified) target column names or single
+              target column name.
             May also contain:
             - onDelete, one of "SET NULL" or "CASCADE".
 

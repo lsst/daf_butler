@@ -38,7 +38,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
-        # easiest way to make SqlPreFlight instance is to ask SqlRegistry to do it
+        # easiest way to make SqlPreFlight instance is to ask SqlRegistry to
+        # do it
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
 
@@ -110,8 +111,9 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
                 ref = registry.addDataset(rawType, dataId=dataId, run=run)
-                # Exposures 100 and 101 appear in both collections, 100 has different
-                # dataset_id in different collections, for 101 only single dataset_id exists
+                # Exposures 100 and 101 appear in both collections, 100 has
+                # different dataset_id in different collections, for 101 only
+                # single dataset_id exists
                 if exposure == 100:
                     registry.addDataset(rawType, dataId=dataId, run=run2)
                 if exposure == 101:
@@ -469,8 +471,8 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertCountEqual(set(row.dataId["patch"] for row in rows), (2, 4, 6, 7))
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i",))
 
-        # expression excludes everyhting, specifying non-existing skymap is not a
-        # fatal error, it's operator error
+        # expression excludes everyhting, specifying non-existing skymap is
+        # not a fatal error, it's operator error
         preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
                                  neededDatasetTypes=[calexpType, mergeType],
                                  futureDatasetTypes=[measType],

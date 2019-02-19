@@ -223,7 +223,8 @@ class Registry(metaclass=ABCMeta):
 
     @property
     def pixelization(self):
-        """Object that interprets SkyPix Dimension values (`lsst.sphgeom.Pixelization`).
+        """Object that interprets SkyPix Dimension values
+        (`lsst.sphgeom.Pixelization`).
 
         `None` for limited registries.
         """

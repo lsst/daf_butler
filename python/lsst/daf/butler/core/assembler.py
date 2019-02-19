@@ -182,7 +182,7 @@ class CompositeAssembler:
         components = {}
         if self.storageClass is not None and self.storageClass.isComposite():
             for c in self.storageClass.components:
-                if isinstance(composite, collections.Mapping):
+                if isinstance(composite, collections.abc.Mapping):
                     comp = composite[c]
                 else:
                     try:
@@ -296,7 +296,8 @@ class CompositeAssembler:
             try:
                 component = self.getComponent(composite, c)
             except AttributeError:
-                # Defer complaining so we get an idea of how many problems we have
+                # Defer complaining so we get an idea of how many problems
+                # we have
                 pass
             else:
                 # If we found a match store it in the results dict and remove

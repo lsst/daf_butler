@@ -97,7 +97,8 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
         self.assertIsInstance(column.type, SchemaBuilder.VALID_COLUMN_TYPES[columnDescription["type"]])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
-        """Check that foreign-key constraints match the `constraintsDescription`.
+        """Check that foreign-key constraints match the
+        `constraintsDescription`.
         """
         # Gather all actual constraints on the current table.
         tableConstraints = {}
@@ -106,7 +107,8 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
             tgt = tuple(sorted((e.target_fullname for e in constraint.elements)))
             tableConstraints[src] = tgt
         # Check that all constraints in the description are indeed applied.
-        # Note that this is only a one-way check, the table may have more constraints imposed by other means.
+        # Note that this is only a one-way check, the table may have more
+        # constraints imposed by other means.
         for constraint in constraintsDescription:
             src = tuple(sorted(iterable(constraint["src"])))
             tgt = tuple(sorted(iterable(constraint["tgt"])))

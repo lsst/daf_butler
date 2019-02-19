@@ -53,7 +53,8 @@ class ParserLexError(Exception):
     remain : str
         Remaining non-parsed part of the expression
     pos : int
-        Current parsing posistion, offset from beginning of expression in characters
+        Current parsing posistion, offset from beginning of expression in
+        characters
     lineno : int
         Current line number in the expression
     """
