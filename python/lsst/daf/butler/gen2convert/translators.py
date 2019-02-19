@@ -53,11 +53,12 @@ class KeyHandler(metaclass=ABCMeta):
         self.gen3key = gen3key
         self.gen3unit = gen3unit
 
-    def translate(self, gen2id, gen3id, skyMap, skyMapName):
-        gen3id[self.gen3key] = self.extract(gen2id, skyMap=skyMap, skyMapName=skyMapName)
+    def translate(self, gen2id, gen3id, skyMap, skyMapName, datasetTypeName):
+        gen3id[self.gen3key] = self.extract(gen2id, skyMap=skyMap, skyMapName=skyMapName,
+                                            datasetTypeName=datasetTypeName)
 
     @abstractmethod
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         raise NotImplementedError()
 
 
@@ -70,7 +71,7 @@ class ConstantKeyHandler(KeyHandler):
         super().__init__(gen3key, gen3unit)
         self.value = value
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return self.value
 
 
@@ -95,7 +96,7 @@ class CopyKeyHandler(KeyHandler):
         self.gen2key = gen2key if gen2key is not None else gen3key
         self.dtype = dtype
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         r = gen2id[self.gen2key]
         if self.dtype is not None:
             try:
@@ -116,7 +117,7 @@ class PatchKeyHandler(KeyHandler):
     def __init__(self):
         super().__init__("patch", "Patch")
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         tract = gen2id["tract"]
         tractInfo = skyMap[tract]
         x, y = gen2id["patch"].split(",")
@@ -132,7 +133,7 @@ class SkyMapKeyHandler(KeyHandler):
     def __init__(self):
         super().__init__("skymap", "SkyMap")
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return skyMapName
 
 
@@ -265,19 +266,22 @@ class Translator:
         else:
             skyMap = None
             skyMapName = None
-        return Translator(matchedHandlers, skyMap=skyMap, skyMapName=skyMapName)
+        return Translator(matchedHandlers, skyMap=skyMap, skyMapName=skyMapName,
+                          datasetTypeName=datasetTypeName)
 
-    def __init__(self, handlers, skyMap, skyMapName):
+    def __init__(self, handlers, skyMap, skyMapName, datasetTypeName):
         self.handlers = handlers
         self.skyMap = skyMap
         self.skyMapName = skyMapName
+        self.datasetTypeName = datasetTypeName
 
     def __call__(self, gen2id):
         """Return a Gen3 data ID that corresponds to the given Gen2 data ID.
         """
         gen3id = {}
         for handler in self.handlers:
-            handler.translate(gen2id, gen3id, skyMap=self.skyMap, skyMapName=self.skyMapName)
+            handler.translate(gen2id, gen3id, skyMap=self.skyMap, skyMapName=self.skyMapName,
+                              datasetTypeName=self.datasetTypeName)
         return gen3id
 
     @property
