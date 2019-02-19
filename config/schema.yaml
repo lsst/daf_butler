@@ -82,9 +82,16 @@ schema:
       -
         name: label
         type: string
-        length: 32
+        length: 128
         doc: >
           A string value composed only of letters, numbers, and underscores.
+      -
+        name: calibration_label
+        type: string
+        length: 128
+        doc: >
+          A string value associated with a validity range for a set of master
+          calibration products.
       foreignKeys:
       -
         src: dataset_type_name
@@ -130,6 +137,13 @@ schema:
         tgt:
           - Exposure.instrument
           - Exposure.exposure
+      -
+        src:
+          - instrument
+          - calibration_label
+        tgt:
+          - CalibrationLabel.instrument
+          - CalibrationLabel.calibration_label
       -
         src: skymap
         tgt: SkyMap.skymap
@@ -915,6 +929,105 @@ schema:
         - Tract.skymap
         - Tract.tract
 
+    CalibrationLabel:
+      doc: >
+        A join table that associates an instrument and label with a date range,
+        used to associate master calibration products with exposures.
+      limited: false
+      columns:
+      -
+        name: instrument
+        type: string
+        length: 8
+        primary_key: true
+        nullable: false
+        doc: >
+          Name of the instrument associated with these master calibration
+          products.
+      -
+        name: calibration_label
+        type: string
+        length: 128
+        primary_key: true
+        nullable: false
+        doc: Label used to identify a group of master calibration products.
+      -
+        name: valid_first
+        type: datetime
+        doc: >
+          TAI timestamp of first exposure included in the range (inclusive).
+          May be far in the past to indicate an open interval.
+      -
+        name: valid_last
+        type: datetime
+        doc: >
+          TAI timestamp of last exposure included in the range (inclusive).
+          May be far in the future to indicate an open interval.
+      foreignKeys:
+      -
+        src: instrument
+        tgt: Instrument.instrument
+
+    ExposureCalibrationLabelJoin:
+      doc: >
+        A many-to-many join table that relates Exposure to CalibrationLabel.
+
+        This can and probably should be implemented as a view.
+      columns:
+      -
+        name: instrument
+        type: string
+        length: 8
+        primary_key: true
+        nullable: false
+        doc: >
+          Name of the instrument associated with these master calibration
+          products.
+      -
+        name: calibration_label
+        type: string
+        length: 128
+        primary_key: true
+        nullable: false
+        doc: Label used to identify a group of master calibration products.
+      -
+        name: exposure
+        type: int
+        primary_key: true
+        nullable: false
+        doc: >
+          Unique (with instrument) integer identifier for an Exposure.
+      foreignKeys:
+      -
+        src: instrument
+        tgt: Instrument.instrument
+      -
+        src:
+        - instrument
+        - exposure
+        tgt:
+        - Exposure.instrument
+        - Exposure.exposure
+      -
+        src:
+        - instrument
+        - calibration_label
+        tgt:
+        - CalibrationLabel.instrument
+        - CalibrationLabel.calibration_label
+      sql: >
+        SELECT DISTINCT
+            Exposure.instrument, Exposure.exposure, CalibrationLabel.calibration_label
+        FROM
+            Exposure INNER JOIN CalibrationLabel ON (
+                Exposure.instrument = CalibrationLabel.instrument
+                AND
+                Exposure.datetime_begin >= CalibrationLabel.valid_first
+                AND
+                Exposure.datetime_end <= CalibrationLabel.valid_last
+            );
+      materialize: false
+
     VisitDetectorRegion:
       doc: >
         A one-to-many table join table that stores the spatial region
@@ -927,7 +1040,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 64
+        length: 8
         primary_key: true
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.

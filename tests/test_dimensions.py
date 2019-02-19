@@ -114,8 +114,9 @@ class DimensionTestCase(unittest.TestCase):
         )
         self.checkGraphInvariants(graph1)
         self.assertCountEqual(graph1.names,
-                              ["Instrument", "Detector", "PhysicalFilter", "Visit", "Exposure"])
-        self.assertCountEqual(graph1.joins().names, ["VisitDetectorRegion"])
+                              ["Instrument", "Detector", "PhysicalFilter", "Visit", "Exposure",
+                               "CalibrationLabel"])
+        self.assertCountEqual(graph1.joins().names, ["VisitDetectorRegion", "ExposureCalibrationLabelJoin"])
         self.assertEqual(graph1.getRegionHolder(), graph1.joins().get("VisitDetectorRegion"))
         graph2 = graph1.intersection(["Visit"])
         self.assertCountEqual(graph2.names, ["Instrument", "Visit"])

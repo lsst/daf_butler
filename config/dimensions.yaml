@@ -142,6 +142,25 @@ dimensions:
       link:
       - label
 
+    CalibrationLabel:
+      dependencies:
+        required:
+        - Instrument
+      doc: >
+        A string label that maps to a date validity range for master
+        calibration products.
+      link:
+      - calibration_label
+
+    ExposureCalibrationLabelJoin:
+      doc: >
+        A many-to-many join table that relates Exposure to CalibrationRange's
+        Instrument+Label.
+
+        This can and probably should be implemented as a view.
+      lhs: [Exposure]
+      rhs: [CalibrationLabel]
+
     VisitDetectorRegion:
       doc: >
         A many-to-many join table that provides region information for
