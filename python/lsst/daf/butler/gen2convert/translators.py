@@ -20,10 +20,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import itertools
-from datetime import datetime
 from abc import ABCMeta, abstractmethod
 
-__all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler")
+__all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler",
+           "makeCalibrationLabel")
+
+
+def makeCalibrationLabel(datasetTypeName, calibDate):
+    """Make a Gen3 CalibrationLabel string from a Gen2 dataset type name and
+    calibDate value.
+    """
+    return f"gen2/{datasetTypeName}_{calibDate}"
 
 
 class NoSkyMapError(LookupError):
@@ -137,6 +144,24 @@ class SkyMapKeyHandler(KeyHandler):
         return skyMapName
 
 
+class CalibKeyHandler(KeyHandler):
+    """A KeyHandler for master calibration datasets.
+
+    This translator currently assumes that dataset type name and
+    the "calibDate" value from the Gen2 calibration registry together
+    have a unique mapping to a validity range (i.e. there are no overrides
+    for e.g. detector or filter).
+    """
+
+    __slots__ = ()
+
+    def __init__(self):
+        super().__init__("calibration_label", "CalibrationLabel")
+
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
+        return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"])
+
+
 class Translator:
     """Callable object that translates Gen2 Data IDs to Gen3 Data IDs for a
     particular DatasetType.
@@ -154,7 +179,7 @@ class Translator:
         Dimensions.
     """
 
-    __slots__ = ("handlers", "skyMap", "skyMapName")
+    __slots__ = ("handlers", "skyMap", "skyMapName", "datasetTypeName")
 
     # Rules used to match Handlers when constring a Translator.
     # outer key is instrument name, or None for any
@@ -267,7 +292,7 @@ class Translator:
             skyMap = None
             skyMapName = None
         return Translator(matchedHandlers, skyMap=skyMap, skyMapName=skyMapName,
-                          datasetTypeName=datasetTypeName)
+                          datasetTypeName=datasetType.name)
 
     def __init__(self, handlers, skyMap, skyMapName, datasetTypeName):
         self.handlers = handlers
@@ -312,12 +337,13 @@ Translator.addRule(CopyKeyHandler("tract", "Tract", dtype=int), gen2keys=("tract
 # Add valid_first, valid_last to Instrument-level transmission/ datasets;
 # these are considered calibration products in Gen3.
 for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmission_filter"):
-    Translator.addRule(ConstantKeyHandler("valid_first", "ExposureRange", datetime.min),
-                       datasetTypeName=datasetTypeName)
-    Translator.addRule(ConstantKeyHandler("valid_last", "ExposureRange", datetime.max),
+    Translator.addRule(ConstantKeyHandler("calibration_label", "CalibrationLabel", "unbounded"),
                        datasetTypeName=datasetTypeName)
 
 # Translate Gen2 pixel_id to Gen3 skypix.
 # For now, we just assume that the Gen3 Registry's pixelization happens to be
 # the same as what the ref_cat indexer uses.
 Translator.addRule(CopyKeyHandler("skypix", "SkyPix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))
+
+# Translate Gen2 calibDate and datasetType to Gen3 calibration_label.
+Translator.addRule(CalibKeyHandler(), gen2keys=("calibDate",))

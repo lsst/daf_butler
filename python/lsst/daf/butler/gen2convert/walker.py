@@ -64,7 +64,6 @@ class ConversionWalker:
         self._skyMaps = dict()
         self._skyMapRoots = dict()
         self._obsInfo = dict()
-        self._calibDict = dict()
 
     def scanAll(self):
         """Recursively inspect and scan Gen2 data repositories.
@@ -106,7 +105,7 @@ class ConversionWalker:
         parentPaths = []
         repoCfgPath = os.path.join(root, "repositoryCfg.yaml")
         calibPath = os.path.join(root, "calibRegistry.sqlite3")
-        isCalib = False
+        calibDict = None
         if os.path.exists(repoCfgPath):
             with open(repoCfgPath, "r") as f:
                 repoCfg = yaml.load(f)
@@ -114,7 +113,7 @@ class ConversionWalker:
             MapperClass = repoCfg.mapper
         elif os.path.exists(calibPath):
             # Slurp all the entries into _calibDict
-            self.readCalibInfo(calibPath=calibPath)
+            calibDict = self.readCalibInfo(calibPath=calibPath)
             calibRoot = os.path.dirname(root)
             mapperFilePath = os.path.join(calibRoot, "_mapper")
             MapperClass = None
@@ -122,7 +121,6 @@ class ConversionWalker:
                 with open(mapperFilePath, "r") as f:
                     mapperClassPath = f.read().strip()
                     MapperClass = doImport(mapperClassPath)
-            isCalib = True
         else:
             parentLinkPath = os.path.join(root, "_parent")
             if os.path.exists(parentLinkPath):
@@ -135,7 +133,7 @@ class ConversionWalker:
 
         # This directory has no _mapper, no _parent, and no repositoryCfg.yaml.
         # It probably just isn't a repository root.
-        if not (parentPaths or MapperClass or isCalib):
+        if not (parentPaths or MapperClass or calibDict):
             log.debug("%s: not a data repository.", root)
             return None
 
@@ -144,7 +142,7 @@ class ConversionWalker:
         # before we recurse into parents to make sure we short-cut any cycles
         # (which shouldn't exist, but better to detect that later rather than
         # recurse infinitely).
-        repo = Gen2Repo(root, MapperClass)
+        repo = Gen2Repo(root, MapperClass, calibDict=calibDict)
         self.found[root] = repo
 
         try:
@@ -217,24 +215,6 @@ class ConversionWalker:
                     log.debug("%s: found %s with %s", repo.root, dataset.datasetType.name, dataset.dataId)
                     repo.datasets[dataset.datasetType.name][filePath] = dataset
 
-                    # append date ranges to datasets that have calibDate
-                    # entries
-                    if "calibDate" in dataset.dataId.keys():
-                        calibRow = self._calibDict.get(
-                            (dataset.datasetType.name, dataset.dataId["calibDate"], dataset.dataId["ccd"]),
-                            None)
-                        if calibRow is not None:
-                            if calibRow["filter"] is None or calibRow["filter"] == dataset.dataId["filter"]:
-                                dataset.dataId["valid_first"] = calibRow["valid_first"]
-                                dataset.dataId["valid_last"] = calibRow["valid_last"]
-                                log.debug("Calib: setting valid date ranges for dataset: (%s %s %s)" %
-                                          (dataset.datasetType.name, dataset.dataId["calibDate"],
-                                           dataset.dataId["ccd"]))
-                            else:
-                                log.warn("Calib expected dataset: (%s %s %s) not found." %
-                                         (dataset.datasetType.name, dataset.dataId["calibDate"],
-                                          dataset.dataId["ccd"]))
-
     def readObsInfo(self):
         """Load unique ObservationInfo objects and filter associations from
         all scanned repositories.
@@ -251,10 +231,21 @@ class ConversionWalker:
                 filt = repo.mapper.queryMetadata(config["DatasetType"], ("filter",), dataset.dataId)[0][0]
                 instrumentObsInfo[obsInfoId] = (ObservationInfo(md), filt)
 
-    def readCalibInfo(self, calibPath=None):
-        """Load calibration data directly from the sqlite datababase as it is
-        found.
+    def readCalibInfo(self, calibPath):
+        """Load calibration validity ranges from a Gen2 sqlite database.
+
+        Parameters
+        ----------
+        calibPath : `str`
+            Path to a Gen2 ``calibRegistry.sqlite3`` file.
+
+        Returns
+        -------
+        calibDict : `dict`
+            Dictionary mapping tuples of (datasetTypeName, calibDate) to
+            tuples of (valid_first, valid_last).
         """
+        result = {}
         with sqlite3.connect(calibPath) as calibConn:
             calibConn.row_factory = sqlite3.Row
             c = calibConn.cursor()
@@ -271,18 +262,16 @@ class ConversionWalker:
             query = " UNION ".join(queryList)
 
             for row in c.execute(query):
-                if row["filter"] == "NONE":
-                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])] = {
-                        "filter": None,
-                        "valid_first": datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
-                        "valid_last": datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"),
-                    }
-                else:
-                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])] = {
-                        "filter": row["filter"],
-                        "valid_first": datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
-                        "valid_last": datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"),
-                    }
+                key = (row["type"], row["calibDate"])
+                value = (datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
+                         datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"))
+                oldValue = result.get(key)
+                if oldValue is not None and oldValue != value:
+                    raise NotImplementedError(
+                        "gen2convert assumes calibration validity ranges do not depend on CCD or filter."
+                    )
+                result[key] = value
+        return result
 
     @property
     def found(self):

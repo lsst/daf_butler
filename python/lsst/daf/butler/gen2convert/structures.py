@@ -105,9 +105,9 @@ class Gen2Repo:
     """
 
     __slots__ = ("_root", "_MapperClass", "_mapper", "_parents", "_skyMaps", "_datasetTypes",
-                 "_datasets", "_unrecognized")
+                 "_datasets", "_unrecognized", "_calibDict")
 
-    def __init__(self, root, MapperClass):
+    def __init__(self, root, MapperClass, calibDict=None):
         self._root = root
         self._MapperClass = MapperClass
         self._mapper = None
@@ -116,6 +116,7 @@ class Gen2Repo:
         self._datasetTypes = {}
         self._datasets = defaultdict(dict)
         self._unrecognized = []
+        self._calibDict = calibDict
 
     def __eq__(self, rhs):
         if not isinstance(rhs, Gen2Repo):
@@ -193,6 +194,14 @@ class Gen2Repo:
     def unrecognized(self):
         """A list of filePaths that were not recognized as datasets (`str`)."""
         return self._unrecognized
+
+    @property
+    def calibDict(self):
+        """If this is a calibration repository, a dictionary mapping tuples
+        of (datasetTypeName, calibDate) to tuples of (valid_first, valid_last).
+        `None` if this is not a calibration repository.
+        """
+        return self._calibDict
 
     def _findCycles(self, seen=None):
         """Look for cycles in the parents graph.
