@@ -889,7 +889,7 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     @disableWhenLimited
     def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
-                         expandDataIds=True):
+                         perDatasetTypeDimensions=(), expandDataIds=True):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of data unit values.
 
@@ -914,6 +914,9 @@ class Registry(metaclass=ABCMeta):
             be included in the returned column set. It is expected that
             Datasets for these DatasetTypes do not exist in the registry,
             but presently this is not checked.
+        perDatasetTypeDimensions : iterable of `Dimension` or `str`, optional
+            Dimensions (or `str` names thereof) for which different dataset
+            types do not need to have the same values in each result row.
         expandDataIds : `bool`
             If `True` (default), expand all data IDs when returning them.
 

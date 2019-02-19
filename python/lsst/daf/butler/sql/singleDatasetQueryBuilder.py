@@ -24,7 +24,7 @@ __all__ = ("SingleDatasetQueryBuilder",)
 
 import logging
 from sqlalchemy.sql import select, and_, functions, case
-
+from ..core import DimensionJoin
 from .queryBuilder import QueryBuilder
 
 _LOG = logging.getLogger(__name__)
@@ -276,6 +276,57 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         """The dataset type this query searches for (`DatasetType`).
         """
         return self._datasetType
+
+    def relateDimensions(self, otherDimensions, addResultColumns=True):
+        """Add the dimension tables/views necessary to map the dimensions
+        of this query's `DatasetType` to another set of dimensions.
+
+        Parameters
+        ----------
+        otherDimensions : `DimensionGraph` or `DimensionSet`
+            The dimensions we need to relate the dataset type to.  One or more
+            `DimensionJoin` tables/views will be added to the query for each
+            `Dimension` in ``self.datasetType.dimensions`` that is not
+            in ``otherDimensions``.
+        addResultColumns : `bool`
+            If `True` (default), add result columns to ``self.resultColumns``
+            for the dataset ID and dimension links used to identify this
+            `DatasetType.
+
+        Returns
+        -------
+        newLinks : `set` of `str`
+            The names of additional dimension link columns provided by the
+            subquery via the added joins.  This is a subset of
+            ``otherDimensions.link()`` and disjoint from
+            ``self.datasetType.dimensions.links()``.
+
+        Notes
+        -----
+        This method can currently only handle a single level of indirection -
+        for any "missing" dimension (one that is in
+        ``self.datasetType.dimensions`` but not in ``otherDimensions``), there
+        must be a single `DimensionJoin` that relates that dimension to one or
+        more dimensions in ``otherDimensions``.
+        """
+        allDimensions = self.datasetType.dimensions.union(otherDimensions)
+        missingDimensions = self.datasetType.dimensions.toSet().difference(otherDimensions)
+        newLinks = set()
+        for missingLink in missingDimensions.links():
+            related = False
+            for element in self.registry.dimensions.withLink(missingLink):
+                if (isinstance(element, DimensionJoin) and not element.asNeeded and
+                        element.links().issubset(allDimensions.links())):
+                    self.joinDimensionElement(element)
+                    newLinks.update(element.links())
+                    related = True
+            if not related:
+                raise ValueError(f"No join found relating link {missingLink} to {otherDimensions.links()}")
+        newLinks -= self.datasetType.dimensions.links()
+        if addResultColumns:
+            for link in newLinks:
+                self.selectDimensionLink(link)
+        return newLinks
 
     def selectDatasetId(self):
         """Add the ``dataset_id`` column to the SELECT clause of the query.

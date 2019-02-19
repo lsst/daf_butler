@@ -849,7 +849,7 @@ class SqlRegistry(Registry):
 
     @disableWhenLimited
     def selectDimensions(self, originInfo, expression=None, neededDatasetTypes=(), futureDatasetTypes=(),
-                         expandDataIds=True):
+                         perDatasetTypeDimensions=(), expandDataIds=True):
         # Docstring inherited from Registry.selectDimensions
         def standardize(dsType):
             if not isinstance(dsType, DatasetType):
@@ -866,6 +866,7 @@ class SqlRegistry(Registry):
             originInfo,
             required=needed,
             optional=future,
+            perDatasetTypeDimensions=perDatasetTypeDimensions,
             deferOptionalDatasetQueries=self.config["deferOutputIdQueries"]
         )
 

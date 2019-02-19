@@ -23,6 +23,7 @@ __all__ = ("ResultColumnsManager", "SearchDeferred")
 
 import logging
 import itertools
+from collections import defaultdict
 
 from sqlalchemy.sql import select
 
@@ -58,6 +59,7 @@ class ResultColumnsManager:
         self.registry = registry
         self._columns = []
         self._indicesForDimensionLinks = {}
+        self._indicesForPerDatasetTypeDimensionLinks = defaultdict(dict)
         self._indicesForRegions = {}
         self._indicesForDatasetIds = {}
 
@@ -72,7 +74,7 @@ class ResultColumnsManager:
         if self._indicesForDatasetIds:
             _LOG.debug("ResultColumnsManager datasets: %s", self._indicesForDatasetIds)
 
-    def addDimensionLink(self, selectable, link):
+    def addDimensionLink(self, selectable, link, datasetType=None):
         """Add a column containing a dimension link value.
 
         Parameters
@@ -83,11 +85,20 @@ class ResultColumnsManager:
         link : `str`
             String name of a dimension link column.  If this link is
             already in the selected columns, this method does nothing.
+        datasetType : `DatasetType`, optional
+            If not `None`, this link corresponds to a "per-DatasetType"
+            dimension in a querym for this `DatasetType`.
         """
-        if link in self._indicesForDimensionLinks:
-            return
         column = selectable.c[link]
-        self._indicesForDimensionLinks[link] = len(self._columns)
+        if datasetType is None:
+            if link in self._indicesForDimensionLinks:
+                return
+            self._indicesForDimensionLinks[link] = len(self._columns)
+        else:
+            if link in self._indicesForPerDatasetTypeDimensionLinks:
+                return
+            column = column.label(f"{datasetType.name}_{link}")
+            self._indicesForPerDatasetTypeDimensionLinks[datasetType][link] = len(self._columns)
         self._columns.append(column)
 
     def addRegion(self, selectable, holder):
@@ -149,7 +160,7 @@ class ResultColumnsManager:
             SQLAlchemy object representing the SELECT and FROM clauses of the
             query.
         """
-        return select(self._columns, use_labels=True).select_from(fromClause)
+        return select(self._columns).select_from(fromClause)
 
     def extractRegions(self, row):
         """Return a dictionary of regions from a query result row.
@@ -195,12 +206,14 @@ class ResultColumnsManager:
                 result[datasetType] = row[index]
         return result
 
-    def extractDataId(self, row):
+    def extractFullDataId(self, row, **kwds):
         """Return a `DataId` from a query result row.
 
         Parameters
         ----------
         row : `sqlalchemy.RowProxy`
+        kwds
+            Additional keywords argument forward to the `DataId` constructor.
 
         Returns
         -------
@@ -208,7 +221,28 @@ class ResultColumnsManager:
             Dictionary-like object that identifies a set of dimensions.
         """
         return DataId({link: row[index] for link, index in self._indicesForDimensionLinks.items()},
-                      universe=self.registry.dimensions)
+                      universe=self.registry.dimensions, **kwds)
+
+    def extractDatasetDataId(self, row, datasetType, **kwds):
+        """Return a `DataId` from a query result row.
+
+        Parameters
+        ----------
+        row : `sqlalchemy.RowProxy`
+        datasetType : `DatasetType`
+            The `DatasetType` this data ID is expected to identify.
+        kwds
+            Additional keywords argument forward to the `DataId` constructor.
+
+        Returns
+        -------
+        dataId : `DataId`
+            Dictionary-like object that identifies a set of dimensions.
+        """
+        d = {link: row[index] for link, index in self._indicesForDimensionLinks.items()}
+        indices = self._indicesForPerDatasetTypeDimensionLinks[datasetType]
+        d.update((link, row[index]) for link, index in indices.items())
+        return DataId(d, dimensions=datasetType.dimensions, **kwds)
 
     def convertQueryResults(self, rowIter, expandDataIds=True):
         """Convert query result rows into `PreFlightDimensionsRow` instances.
@@ -249,7 +283,7 @@ class ResultColumnsManager:
             if disjoint:
                 continue
 
-            dataId = self.extractDataId(row)
+            dataId = self.extractFullDataId(row)
 
             # row-wide Data IDs are never expanded, even if
             # expandDataIds=True; this is slightly confusing, but we don't
@@ -265,7 +299,7 @@ class ResultColumnsManager:
                 else:
                     region = None
 
-                dsDataId = DataId(dataId, dimensions=datasetType.dimensions, region=region)
+                dsDataId = self.extractDatasetDataId(row, datasetType, region=region)
 
                 if expandDataIds:
                     self.registry.expandDataId(dsDataId)

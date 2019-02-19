@@ -25,6 +25,7 @@ import itertools
 import logging
 from collections import namedtuple
 
+from ..core import DimensionSet
 from .resultColumnsManager import SearchDeferred
 from .queryBuilder import QueryBuilder
 from .singleDatasetQueryBuilder import SingleDatasetQueryBuilder
@@ -32,7 +33,7 @@ from .singleDatasetQueryBuilder import SingleDatasetQueryBuilder
 _LOG = logging.getLogger(__name__)
 
 
-_SubqueryData = namedtuple("_SubqueryData", ("subquery", "optional"))
+_SubqueryData = namedtuple("_SubqueryData", ("subquery", "optional", "links"))
 
 
 class MultipleDatasetQueryBuilder(QueryBuilder):
@@ -58,8 +59,9 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         self._subqueries = {}
 
     @classmethod
-    def fromDatasetTypes(cls, registry, originInfo, required=(), optional=(), addResultColumns=True,
-                         deferOptionalDatasetQueries=False):
+    def fromDatasetTypes(cls, registry, originInfo, required=(), optional=(),
+                         perDatasetTypeDimensions=(), deferOptionalDatasetQueries=False,
+                         addResultColumns=True):
         r"""Build a query that relates multiple `DatasetType`s via their
         dimensions.
 
@@ -82,13 +84,17 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
             JOIN. Note that this does nothing unless the ID for this dataset
             is actually requested in the results, via either
             ``addResultColumns`` here or `selectDatasetId`.
-        addResultColumns : `bool`
-            If `True` (default), add result columns to the SELECT clause for
-            all dataset IDs and dimension links.
+        perDatasetTypeDimensions : iterable of `Dimension` or `str`, optional
+            Dimensions (or `str` names thereof) for which different dataset
+            types do not need to have the same values in each result row.
         deferOptionalDatasetQueries : `bool`
             If `True`, defer queries for optional dataset IDs until row-by-row
             processing of the main query's results.
+        addResultColumns : `bool`
+            If `True` (default), add result columns to the SELECT clause for
+            all dataset IDs and dimension links.
         """
+        perDatasetTypeDimensions = DimensionSet(registry.dimensions, perDatasetTypeDimensions)
         resultDimensions = registry.dimensions.extract(
             itertools.chain(
                 itertools.chain.from_iterable(dsType.dimensions.names for dsType in required),
@@ -98,15 +104,25 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         _LOG.debug("Input dimensions (needed by DatasetTypes): %s", resultDimensions)
         allDimensions = resultDimensions.union(resultDimensions.implied())
         _LOG.debug("All dimensions (expanded to include implied): %s", allDimensions)
+        commonDimensions = registry.dimensions.extract(
+            allDimensions.toSet().difference(perDatasetTypeDimensions),
+            implied=True
+        )
+        _LOG.debug("Per-DatasetType dimensions: %s", perDatasetTypeDimensions)
+        _LOG.debug("Common dimensions (per-DatasetType dimensions removed): %s", commonDimensions)
+        if not commonDimensions.isdisjoint(perDatasetTypeDimensions):
+            raise ValueError("Some per-DatasetType dimensions are dependencies of common dimensions")
 
-        self = cls.fromDimensions(registry, dimensions=allDimensions, addResultColumns=addResultColumns)
+        self = cls.fromDimensions(registry, dimensions=commonDimensions, addResultColumns=addResultColumns)
 
         for datasetType in required:
             self.joinDataset(datasetType, originInfo.getInputCollections(datasetType.name),
+                             commonDimensions=commonDimensions,
                              addResultColumns=addResultColumns)
         for datasetType in optional:
             collections = [originInfo.getOutputCollection(datasetType.name)]
             self.joinDataset(datasetType, collections, optional=True, defer=deferOptionalDatasetQueries,
+                             commonDimensions=commonDimensions,
                              addResultColumns=addResultColumns)
         return self
 
@@ -117,7 +133,8 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         """
         return self._subqueries.keys()
 
-    def joinDataset(self, datasetType, collections, optional=False, defer=False, addResultColumns=True):
+    def joinDataset(self, datasetType, collections, optional=False, defer=False, commonDimensions=None,
+                    addResultColumns=True):
         """Join an aliased subquery of the dataset table for a particular
         `DatasetType` into the query.
 
@@ -145,6 +162,10 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
             ``optional`` is `True`.  Note that this does nothing unless
             the ID for this dataset is actually requested in the results,
             via either ``addResultColumns`` here or `selectDatasetId`.
+        commonDimensions : `DimensionGraph`, optional
+            Dimensions already present in the query that the dimensions of
+            the `DatasetType` should be related to in the query (see
+            `SingleDatasetQueryBuilder.relateDimensions`).
         addResultColumns : `bool`
             If `True` (default), add the ``dataset_id`` for this `DatasetType`
             to the result columns in the SELECT clause of the query.
@@ -152,12 +173,27 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         if datasetType in self._subqueries:
             raise ValueError(f"DatasetType {datasetType.name} already included in query.")
         if defer:
+            if commonDimensions is not None and not commonDimensions.issuperset(datasetType.dimensions):
+                raise ValueError(f"Cannot defer search for dataset {datasetType.name} "
+                                 f"with per-DatasetType dimensions.")
             subquery = SearchDeferred(collections)
+            joinLinks = datasetType.dimensions.links()
         else:
             builder = SingleDatasetQueryBuilder.fromCollections(self.registry, datasetType, collections)
+            if commonDimensions is not None:
+                newLinks = builder.relateDimensions(commonDimensions)
+                perDatasetTypeLinks = datasetType.dimensions.links() - commonDimensions.links()
+                joinLinks = (commonDimensions.links() & datasetType.dimensions.links()) | newLinks
+            else:
+                newLinks = frozenset()
+                perDatasetTypeLinks = frozenset()
+                joinLinks = datasetType.dimensions.links()
             subquery = builder.build().alias(datasetType.name)
-            self.join(subquery, datasetType.dimensions.links(), isOuter=optional)
-        self._subqueries[datasetType] = _SubqueryData(subquery=subquery, optional=optional)
+            if commonDimensions is not None and addResultColumns:
+                for link in perDatasetTypeLinks:
+                    self.resultColumns.addDimensionLink(subquery, link, datasetType=datasetType)
+            self.join(subquery, joinLinks, isOuter=optional)
+        self._subqueries[datasetType] = _SubqueryData(subquery=subquery, optional=optional, links=joinLinks)
         if addResultColumns:
             self.resultColumns.addDatasetId(subquery, datasetType)
         return subquery
@@ -180,7 +216,7 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         result = super().findSelectableForLink(link)
         if result is None:
             for datasetType, data in self._subqueries.items():
-                if not data.optional and link in datasetType.dimensions().links():
+                if not data.optional and link in data.links:
                     result = data.subquery
                     break
         return result
