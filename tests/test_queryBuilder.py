@@ -58,11 +58,11 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertEqual(originInfo.getOutputCollection("ds"), "out")
         self.assertEqual(originInfo.getOutputCollection("ds2"), "out2")
 
-    def testInstrumentUnits(self):
-        """Test involving only Instrument units, no joins to SkyMap"""
+    def testInstrumentDimensions(self):
+        """Test involving only Instrument dimensions, no joins to SkyMap"""
         registry = self.registry
 
-        # need a bunch of units and datasets for test
+        # need a bunch of dimensions and datasets for test
         registry.addDimensionEntry("Instrument", dict(instrument="DummyCam", visit_max=25, exposure_max=300,
                                                       detector_max=6))
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
@@ -216,7 +216,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         rows = list(rows)
         self.assertEqual(len(rows), 0)
 
-        # Selecting by PhysicalFilter, this is not in the units, but it is
+        # Selecting by PhysicalFilter, this is not in the dimensions, but it is
         # a part of the full expression so it should work too.
         rows = self.registry.selectDimensions(expression="physical_filter = 'dummy_r'",
                                               originInfo=originInfo,
@@ -228,12 +228,13 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (11,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
-    @unittest.skip("ExposureRange has been removed, but not yet replaced.")
-    def testPreFlightExposureRange(self):
-        """Test involving only ExposureRange unit"""
+    def testCalibrationLabel(self):
+        """Test the CalibrationLabel dimension and the perDatasetTypeDimensions
+        option to `Registry.selectDimensions`.
+        """
         registry = self.registry
 
-        # need a bunch of units and datasets for test
+        # need a bunch of dimensions and datasets for test
         registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
                                                           physical_filter="dummy_r",
@@ -249,7 +250,7 @@ class QueryBuilderTestCase(unittest.TestCase):
                                        dict(instrument="DummyCam", visit=visit, physical_filter="dummy_r"))
             visit_start = now + timedelta(seconds=visit*45)
             for exposure in (0, 1):
-                start = visit_start + timedelta(seconds=15*exposure)
+                start = visit_start + timedelta(seconds=20*exposure)
                 end = start + timedelta(seconds=15)
                 registry.addDimensionEntry("Exposure", dict(instrument="DummyCam",
                                                             exposure=visit*10+exposure,
@@ -260,6 +261,33 @@ class QueryBuilderTestCase(unittest.TestCase):
                 timestamps += [(start, end)]
         self.assertEqual(len(timestamps), 6)
 
+        # Add CalibrationLabel dimension entries, with various date ranges.
+        # The string calibration_labels are intended to be descriptive for
+        # the purposes of this test, by showing ranges of Exposure numbers,
+        # and do not represent what we expect real-life CalibrationLabels
+        # to look like.
+
+        # From before first exposure (100) to the end of second exposure (101).
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="..101",
+                                        valid_first=now-timedelta(seconds=3600),
+                                        valid_last=timestamps[1][1]))
+        # From start of third exposure (110) to the end of last exposure (201).
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="110..201",
+                                        valid_first=timestamps[2][0],
+                                        valid_last=timestamps[-1][1]))
+        # Third (110) and fourth (111) exposures.
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="110..111",
+                                        valid_first=timestamps[2][0],
+                                        valid_last=timestamps[3][1]))
+        # Fifth exposure (200) only.
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="200..200",
+                                        valid_first=timestamps[4][0],
+                                        valid_last=timestamps[5][0]-timedelta(seconds=1)))
+
         # dataset types
         collection = "test"
         run = registry.makeRun(collection=collection)
@@ -268,11 +296,11 @@ class QueryBuilderTestCase(unittest.TestCase):
         rawType = DatasetType(name="RAW", dimensions=("Instrument", "Detector", "Exposure"),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        biasType = DatasetType(name="bias", dimensions=("Instrument", "Detector", "ExposureRange"),
+        biasType = DatasetType(name="BIAS", dimensions=("Instrument", "Detector", "CalibrationLabel"),
                                storageClass=storageClass)
         registry.registerDatasetType(biasType)
-        flatType = DatasetType(name="flat",
-                               dimensions=("Instrument", "Detector", "PhysicalFilter", "ExposureRange"),
+        flatType = DatasetType(name="FLAT",
+                               dimensions=("Instrument", "Detector", "PhysicalFilter", "CalibrationLabel"),
                                storageClass=storageClass)
         registry.registerDatasetType(flatType)
         calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
@@ -288,30 +316,18 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # add few bias datasets
         for detector in (1, 2, 3, 4, 5):
-            # from before first exposure to the end of second exposure
-            dataId = dict(instrument="DummyCam", detector=detector,
-                          valid_first=now-timedelta(seconds=3600),
-                          valid_last=timestamps[1][1])
+            dataId = dict(instrument="DummyCam", detector=detector, calibration_label="..101")
             registry.addDataset(biasType, dataId=dataId, run=run)
-            # from start of third exposure to the end of last exposure
-            dataId = dict(instrument="DummyCam", detector=detector,
-                          valid_first=timestamps[2][0],
-                          valid_last=timestamps[-1][1])
+            dataId = dict(instrument="DummyCam", detector=detector, calibration_label="110..201")
             registry.addDataset(biasType, dataId=dataId, run=run)
 
         # add few flat datasets, only for subset of detectors and exposures
         for detector in (1, 2, 3):
-            # third and fourth exposures
             dataId = dict(instrument="DummyCam", detector=detector,
-                          physical_filter="dummy_r",
-                          valid_first=timestamps[2][0],
-                          valid_last=timestamps[3][1])
+                          physical_filter="dummy_r", calibration_label="110..111")
             registry.addDataset(flatType, dataId=dataId, run=run)
-            # fifth exposure only
             dataId = dict(instrument="DummyCam", detector=detector,
-                          physical_filter="dummy_r",
-                          valid_first=timestamps[4][0],
-                          valid_last=timestamps[5][0]-timedelta(seconds=1))
+                          physical_filter="dummy_r", calibration_label="200..200")
             registry.addDataset(flatType, dataId=dataId, run=run)
 
         # without flat/bias
@@ -319,11 +335,13 @@ class QueryBuilderTestCase(unittest.TestCase):
         rows = self.registry.selectDimensions(originInfo=originInfo,
                                               neededDatasetTypes=[rawType],
                                               futureDatasetTypes=[calexpType],
-                                              expandDataIds=False)
+                                              expandDataIds=False,
+                                              perDatasetTypeDimensions=["CalibrationLabel"])
         rows = list(rows)
         self.assertEqual(len(rows), 6*5)   # 6 exposures times 5 detectors
         for row in rows:
-            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
+                                                      "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
 
         # use bias
@@ -331,24 +349,28 @@ class QueryBuilderTestCase(unittest.TestCase):
         rows = self.registry.selectDimensions(originInfo=originInfo,
                                               neededDatasetTypes=[rawType, biasType],
                                               futureDatasetTypes=[calexpType],
-                                              expandDataIds=False)
+                                              expandDataIds=False,
+                                              perDatasetTypeDimensions=["CalibrationLabel"])
         rows = list(rows)
         self.assertEqual(len(rows), 6*5)  # 6 exposures times 5 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit"))
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, biasType, calexpType))
 
         # use flat
         rows = self.registry.selectDimensions(originInfo=originInfo,
                                               neededDatasetTypes=[rawType, flatType],
                                               futureDatasetTypes=[calexpType],
-                                              expandDataIds=False)
+                                              expandDataIds=False,
+                                              perDatasetTypeDimensions=["CalibrationLabel"])
         rows = list(rows)
         self.assertEqual(len(rows), 3*3)  # 3 exposures times 3 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit", "physical_filter"))
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
 
         # use both bias and flat, plus expression
@@ -356,12 +378,14 @@ class QueryBuilderTestCase(unittest.TestCase):
                                               originInfo=originInfo,
                                               neededDatasetTypes=[rawType, flatType, biasType],
                                               futureDatasetTypes=[calexpType],
-                                              expandDataIds=False)
+                                              expandDataIds=False,
+                                              perDatasetTypeDimensions=["CalibrationLabel"])
         rows = list(rows)
         self.assertEqual(len(rows), 3*2)  # 3 exposures times 2 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit", "physical_filter"))
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, biasType, calexpType))
 
         # select single exposure (third) and detector and check datasetRefs
@@ -369,7 +393,8 @@ class QueryBuilderTestCase(unittest.TestCase):
                                               originInfo=originInfo,
                                               neededDatasetTypes=[rawType, flatType, biasType],
                                               futureDatasetTypes=[calexpType],
-                                              expandDataIds=False)
+                                              expandDataIds=False,
+                                              perDatasetTypeDimensions=["CalibrationLabel"])
         rows = list(rows)
         self.assertEqual(len(rows), 1)
         row = rows[0]
@@ -377,20 +402,19 @@ class QueryBuilderTestCase(unittest.TestCase):
                          dict(instrument="DummyCam",
                               detector=1,
                               physical_filter="dummy_r",
-                              valid_first=timestamps[2][0],
-                              valid_last=timestamps[3][1]))
+                              calibration_label="110..111"))
         self.assertEqual(row.datasetRefs[biasType].dataId,
                          dict(instrument="DummyCam",
                               detector=1,
-                              valid_first=timestamps[2][0],
-                              valid_last=timestamps[-1][1]))
+                              calibration_label="110..201"))
 
-    def testPreFlightSkyMapUnits(self):
-        """Test involving only SkyMap units, no joins to Instrument"""
+    def testSkyMapDimensions(self):
+        """Test involving only SkyMap dimensions, no joins to Instrument"""
         registry = self.registry
 
-        # need a bunch of units and datasets for test, we want "AbstractFilter"
-        # in the test so also have to add PhysicalFilter units
+        # need a bunch of dimensions and datasets for test, we want
+        # "AbstractFilter" in the test so also have to add PhysicalFilter
+        # dimensions
         registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
                                                           physical_filter="dummy_r",
