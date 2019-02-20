@@ -970,7 +970,7 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         dataId : `DataId`
-            A Data ID with its ``region`` attribute set.
+            A Data ID with all requested data populated.
 
         Raises
         ------
