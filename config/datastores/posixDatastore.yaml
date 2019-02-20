@@ -8,7 +8,7 @@ datastore:
     # valid_first and valid_last here are YYYYMMDD; we assume we'll switch to
     # MJD (DM-15890) before we need more than day resolution, since that's all
     # Gen2 has.
-    default: "{collection}/{datasetType}/{skymap:?}/{tract:?}/{patch:?}/{label:?}/{abstract_filter:?}/{instrument:?}/{physical_filter:?}/{valid_first:%Y%m%d?}-{valid_last:%Y%m%d?}/{visit:?}/{exposure:?}/{detector:?}"
+    default: "{collection}/{datasetType}/{skymap:?}/{tract:?}/{patch:?}/{label:?}/{abstract_filter:?}/{instrument:?}/{physical_filter:?}/{calibration_label:?}/{visit:?}/{exposure:?}/{detector:?}"
   formatters:
     TablePersistable: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableWcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
