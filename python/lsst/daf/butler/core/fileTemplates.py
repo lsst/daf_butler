@@ -145,6 +145,18 @@ class FileTemplate:
             raise ValueError(f"Template ({template}) does not contain any format specifiers")
         self.template = template
 
+    def __eq__(self, other):
+        if not isinstance(other, FileTemplate):
+            return False
+
+        return self.template == other.template
+
+    def __str__(self):
+        return self.template
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(\"{self.template}\")"
+
     def format(self, ref):
         """Format a template string into a full path.
 
