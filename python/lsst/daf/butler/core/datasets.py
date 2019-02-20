@@ -147,6 +147,36 @@ class DatasetType:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
 
+    @staticmethod
+    def splitDatasetTypeName(datasetTypeName):
+        """Given a dataset type name, return the root name and the component
+        name.
+
+        Parameters
+        ----------
+        datasetTypeName : `str`
+            The name of the dataset type, can include a component using
+            a "."-separator.
+
+        Returns
+        -------
+        rootName : `str`
+            Root name without any components.
+        componentName : `str`
+            The component if it has been specified, else `None`.
+
+        Notes
+        -----
+        If the dataset type name is ``a.b.c`` this method will return a
+        root name of ``a`` and a component name of ``b.c``.
+        """
+        comp = None
+        root = datasetTypeName
+        if "." in root:
+            # If there is doubt, the component is after the first "."
+            root, comp = root.split(".", maxsplit=1)
+        return root, comp
+
     def nameAndComponent(self):
         """Return the root name of this dataset type and the component
         name (if defined).
@@ -158,11 +188,7 @@ class DatasetType:
         componentName : `str`
             The component if it has been specified, else `None`.
         """
-        comp = None
-        root = self.name
-        if "." in root:
-            root, comp = self.name.split(".", maxsplit=1)
-        return root, comp
+        return self.splitDatasetTypeName(self.name)
 
     def component(self):
         """Component name (if defined)
@@ -431,5 +457,15 @@ class DatasetRef:
         -------
         names : `tuple` of `str`
             Tuple of the `DatasetType` name and the `StorageClass` name.
+            If ``instrument`` is defined in the dataId, each of those names
+            is added to the start of the tuple with a key derived from the
+            value of ``instrument``.
         """
-        return self.datasetType._lookupNames()
+        # Special case the instrument Dimension since we allow configs
+        # to include the instrument name in the hierarchy.
+        names = self.datasetType._lookupNames()
+
+        if "instrument" in self.dataId:
+            names = tuple(f"instrument<{self.dataId['instrument']}>{n}" for n in names) + names
+
+        return names

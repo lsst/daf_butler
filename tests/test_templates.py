@@ -148,6 +148,17 @@ class TestFileTemplates(unittest.TestCase):
         self.assertEqual(tmpl_calexp, tmpl_image)
         self.assertNotEqual(tmpl_calexp, tmpl_wcs)
 
+        # Test that instrument overrides retrieve specialist templates
+        ref_pvi = self.makeDatasetRef("pvi")
+        ref_pvi_hsc = self.makeDatasetRef("pvi", dataId={"instrument": "HSC", "physical_filter": "z"})
+        ref_pvi_lsst = self.makeDatasetRef("pvi", dataId={"instrument": "LSST", "physical_filter": "z"})
+
+        tmpl_pvi = templates.getTemplate(ref_pvi)
+        tmpl_pvi_hsc = templates.getTemplate(ref_pvi_hsc)
+        tmpl_pvi_lsst = templates.getTemplate(ref_pvi_lsst)
+        self.assertEqual(tmpl_pvi, tmpl_pvi_lsst)
+        self.assertNotEqual(tmpl_pvi, tmpl_pvi_hsc)
+
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
         templates = FileTemplates(config2)

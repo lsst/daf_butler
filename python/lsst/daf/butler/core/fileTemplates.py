@@ -25,8 +25,10 @@ __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig")
 
 import os.path
 import string
+from collections.abc import Mapping
 
 from .config import Config
+from .datasets import DatasetType
 
 
 class FileTemplatesConfig(Config):
@@ -44,6 +46,19 @@ class FileTemplates:
     default : `str`, optional
         If not `None`, a default template to use if no template has
         been specified explicitly in the configuration.
+
+    Notes
+    -----
+    The configuration can include one level of hierarchy where an
+    instrument-specific section can be defined to override more general
+    template specifications.  This is represented in YAML using a
+    key of form ``instrument<name>`` which can then define templates
+    that will be returned if a `DatasetRef` contains a matching instrument
+    name in the data ID.
+
+    A default fallback template can be specified using the key ``default``.
+    Defaulting can be disabled in a child configuration by defining the
+    value to be an empty string or a boolean `False`.
     """
 
     def __init__(self, config, default=None):
@@ -59,7 +74,13 @@ class FileTemplates:
                 else:
                     self.default = FileTemplate(templateStr)
             else:
-                self.templates[name] = FileTemplate(templateStr)
+                # Possible to have a second level hierarchy but store as
+                # full names without separator
+                if isinstance(templateStr, Mapping):
+                    for subKey, subStr in templateStr.items():
+                        self.templates[f"{name}{subKey}"] = FileTemplate(subStr)
+                else:
+                    self.templates[name] = FileTemplate(templateStr)
 
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
@@ -74,7 +95,9 @@ class FileTemplates:
             Instance to use to look for a corresponding template.
             A `DatasetType` name or a `StorageClass` name will be used
             depending on the supplied entity. Priority is given to a
-            `DatasetType` name.
+            `DatasetType` name. Supports instrument override if a
+            `DatasetRef` is provided configured with an ``instrument``
+            value for the data ID.
 
         Returns
         -------
@@ -91,19 +114,16 @@ class FileTemplates:
         names = entity._lookupNames()
 
         # Get a location from the templates
-        template = None
+        template = self.default
         for name in names:
             if name in self.templates:
                 template = self.templates[name]
-            elif "." in name:
-                baseType, component = name.split(".", maxsplit=1)
-                if baseType in self.templates:
-                    template = self.templates[baseType]
-            if template is not None:
                 break
 
-        if template is None and self.default is not None:
-            template = self.default
+            baseType, component = DatasetType.splitDatasetTypeName(name)
+            if component is not None and baseType in self.templates:
+                template = self.templates[baseType]
+                break
 
         # if still not template give up for now.
         if template is None:

@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Mapping
 
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
@@ -140,6 +141,30 @@ class FormatterFactory:
     def __init__(self):
         self._mappingFactory = MappingFactory(Formatter)
 
+    def registerFormatters(self, config):
+        """Bulk register formatters from a config.
+
+        Parameters
+        ----------
+        config : `Config`
+            ``formatters`` section of a configuration.
+
+        Notes
+        -----
+        The configuration can include one level of hierarchy where an
+        instrument-specific section can be defined to override more general
+        formatter specifications.  This is represented in YAML using a
+        key of form ``instrument<name>`` which can then define formatters
+        that will be returned if a `DatasetRef` contains a matching instrument
+        name in the data ID.
+        """
+        for name, f in config.items():
+            if isinstance(f, Mapping):
+                for subName, subF in f.items():
+                    self.registerFormatter(f"{name}{subName}", subF)
+            else:
+                self.registerFormatter(name, f)
+
     def getFormatter(self, entity):
         """Get a new formatter instance.
 
@@ -148,7 +173,14 @@ class FormatterFactory:
         entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
             Entity to use to determine the formatter to return.
             `StorageClass` will be used as a last resort if `DatasetRef`
-            or `DatasetType` instance is provided.
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        formatter : `Formatter`
+            An instance of the registered formatter.
         """
         if isinstance(entity, str):
             names = (entity,)

@@ -7,6 +7,8 @@ datastore:
     metric: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
     metric3: "{collection}/{datasetType}/{instrument}"
+    instrument<DummyCamComp>:
+      metric33: "{collection}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
   formatters:
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
@@ -21,3 +23,8 @@ datastore:
     ExposureCompositeF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
     ThingOne: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     datasetType.component: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    pvi: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    instrument<DummyHSC>:
+      pvi: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+      StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+      DummySC: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter

@@ -3,3 +3,6 @@ default: False
 calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
 calexp.wcs: "{datasetType}.{component}-a-wcs-{visit}-{physical_filter}"
 StorageClassX: "StorageClass/{datasetType}"
+pvi: "{datasetType}_{physical_filter}"
+instrument<HSC>:
+  pvi: "HyperSuprimCam-{datasetType}_{physical_filter}"
