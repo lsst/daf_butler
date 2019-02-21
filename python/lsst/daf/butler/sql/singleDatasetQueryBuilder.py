@@ -68,8 +68,8 @@ class SingleDatasetQueryBuilder(QueryBuilder):
 
     @classmethod
     def fromSingleCollection(cls, registry, datasetType, collection, addResultColumns=True):
-        """Construct a builder that searches a single collection for the
-        dataset.
+        """Construct a builder that searches a single collection for datasets
+        of a single dataset type.
 
         Parameters
         ----------
@@ -110,17 +110,19 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         """
         datasetTable = registry._schema.tables["Dataset"]
         datasetCollectionTable = registry._schema.tables["DatasetCollection"]
-        fromClause = datasetTable.join(datasetCollectionTable,
-                                       datasetTable.c.dataset_id == datasetCollectionTable.c.dataset_id)
-        whereClause = and_(datasetTable.c.dataset_type_name == datasetType.name,
-                           datasetCollectionTable.c.collection == collection)
+        fromClause = datasetTable.join(
+            datasetCollectionTable,
+            datasetTable.columns.dataset_id == datasetCollectionTable.columns.dataset_id
+        )
+        whereClause = and_(datasetTable.columns.dataset_type_name == datasetType.name,
+                           datasetCollectionTable.columns.collection == collection)
         return cls(registry, fromClause=fromClause, whereClause=whereClause, datasetType=datasetType,
                    selectableForDataset=datasetTable, addResultColumns=addResultColumns)
 
     @classmethod
     def fromCollections(cls, registry, datasetType, collections, addResultColumns=True):
-        """Construct a builder that searches a single collection for the
-        dataset.
+        """Construct a builder that searches a multiple collections for
+        datasets single dataset type.
 
         Parameters
         ----------
@@ -227,12 +229,13 @@ class SingleDatasetQueryBuilder(QueryBuilder):
                 DS.linkN = DSG.linkN)
         """
         if len(collections) == 1:
-            return cls.fromSingleCollection(registry, datasetType, collections[0])
+            return cls.fromSingleCollection(registry, datasetType, collections[0],
+                                            addResultColumns=addResultColumns)
 
         # helper method
         def _columns(selectable, names):
             """Return list of columns for given column names"""
-            return [selectable.c[name].label(name) for name in names]
+            return [selectable.columns[name].label(name) for name in names]
 
         datasetTable = registry._schema.tables["Dataset"]
         datasetCollectionTable = registry._schema.tables["DatasetCollection"]
@@ -242,15 +245,17 @@ class SingleDatasetQueryBuilder(QueryBuilder):
 
         # Starting point for both subqueries below: a join of Dataset to
         # DatasetCollection
-        subJoin = datasetTable.join(datasetCollectionTable,
-                                    datasetTable.c.dataset_id == datasetCollectionTable.c.dataset_id)
-        subWhere = and_(datasetTable.c.dataset_type_name == datasetType.name,
-                        datasetCollectionTable.c.collection.in_(collections))
+        subJoin = datasetTable.join(
+            datasetCollectionTable,
+            datasetTable.columns.dataset_id == datasetCollectionTable.columns.dataset_id
+        )
+        subWhere = and_(datasetTable.columns.dataset_type_name == datasetType.name,
+                        datasetCollectionTable.columns.collection.in_(collections))
 
         # CASE clause that transforms collection name to position in the given
         # list of collections
         collorder = case([
-            (datasetCollectionTable.c.collection == coll, pos) for pos, coll in enumerate(collections)
+            (datasetCollectionTable.columns.collection == coll, pos) for pos, coll in enumerate(collections)
         ])
 
         # first GROUP BY sub-query, find minimum `collorder` for each DataId
@@ -265,8 +270,8 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         combined = combined.alias("sub2" + datasetType.name)
 
         # now join these two
-        joinsOn = [groupSubq.c.collorder == combined.c.collorder] + \
-                  [groupSubq.c[colName] == combined.c[colName] for colName in links]
+        joinsOn = [groupSubq.columns.collorder == combined.columns.collorder] + \
+                  [groupSubq.columns[colName] == combined.columns[colName] for colName in links]
 
         return cls(registry, fromClause=combined.join(groupSubq, and_(*joinsOn)),
                    datasetType=datasetType, selectableForDataset=combined, addResultColumns=addResultColumns)
@@ -346,3 +351,21 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         if result is None and (name == self.datasetType.name or name == "Dataset"):
             result = self._selectableForDataset
         return result
+
+    def convertResultRow(self, managed, *, expandDataId=True):
+        """Convert a result row for this query to a `DatasetRef`.
+
+        Parameters
+        ----------
+        managed : `ResultsColumnsManager.ManagedRow`
+            Intermediate result row object to convert.
+        expandDataId : `bool`
+            If `True` (default), query the registry again to fully populate
+            the `DataId` associated with the returned `DatasetRef`.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            Reference to a dataset identified by the query.
+        """
+        return managed.makeDatasetRef(self.datasetType, expandDataId=expandDataId)

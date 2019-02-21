@@ -33,11 +33,11 @@ class QueryBuilderTestCase(unittest.TestCase):
     """Tests for QueryBuilders.
     """
 
+    DEFER = False
+
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
-        # easiest way to make SqlPreFlight instance is to ask SqlRegistry to
-        # do it
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
 
@@ -125,40 +125,41 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=collection1)
-        for deferOptionalDatasetQueries in (True, False):
-            with self.subTest(deferOptionalDatasetQueries=deferOptionalDatasetQueries):
-                # Use QueryBuilder directly so we can test
-                # deferOptionalDatasetQueries without re-initializing Registry.
-                rows = MultipleDatasetQueryBuilder.fromDatasetTypes(
-                    self.registry,
-                    originInfo=originInfo,
-                    required=[rawType],
-                    optional=[calexpType],
-                    deferOptionalDatasetQueries=deferOptionalDatasetQueries
-                ).execute()
-                rows = list(rows)
-                self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
-                for row in rows:
-                    self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
-                                                              "physical_filter", "abstract_filter"))
-                    self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
-                    packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
-                    packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
-                    self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
-                                     DataId(row.dataId, dimensions=packer1.dimensions.required))
-                    self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
-                                     DataId(row.dataId, dimensions=packer2.dimensions.required))
-                    self.assertNotEqual(packer1.pack(row.dataId), packer2.pack(row.dataId))
-                self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
-                                      (100, 101, 110, 111))
-                self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10, 11))
-                self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
+        self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
+                                                      "physical_filter", "abstract_filter"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
+            packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
+            packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
+            self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
+                             DataId(row.dataId, dimensions=packer1.dimensions.required))
+            self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
+                             DataId(row.dataId, dimensions=packer2.dimensions.required))
+            self.assertNotEqual(packer1.pack(row.dataId), packer2.pack(row.dataId))
+        self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
+                              (100, 101, 110, 111))
+        self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10, 11))
+        self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
         # second collection
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection2], defaultOutput=collection1)
-        rows = self.registry.selectDimensions(originInfo=originInfo, neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
@@ -171,10 +172,14 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # with two input datasets
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1, collection2], defaultOutput=collection2)
-        rows = self.registry.selectDimensions(originInfo=originInfo,
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 6*3)   # 6 exposures times 3 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
@@ -187,10 +192,15 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # limit to single visit
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=None)
-        rows = self.registry.selectDimensions(expression="Visit.visit = 10", originInfo=originInfo,
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("Visit.visit = 10")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10,))
@@ -198,31 +208,43 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # more limiting expression, using link names instead of Table.column
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput="")
-        rows = self.registry.selectDimensions(expression="visit = 10 and detector > 1",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("visit = 10 and detector > 1")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (2, 3))
 
         # expression excludes everything
-        rows = self.registry.selectDimensions(expression="Visit.visit > 1000",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("Visit.visit > 1000")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
 
         # Selecting by PhysicalFilter, this is not in the dimensions, but it is
         # a part of the full expression so it should work too.
-        rows = self.registry.selectDimensions(expression="physical_filter = 'dummy_r'",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("physical_filter = 'dummy_r'")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (110, 111))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (11,))
@@ -332,26 +354,33 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # without flat/bias
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        rows = self.registry.selectDimensions(originInfo=originInfo,
-                                              neededDatasetTypes=[rawType],
-                                              futureDatasetTypes=[calexpType],
-                                              expandDataIds=False,
-                                              perDatasetTypeDimensions=["CalibrationLabel"])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 6*5)   # 6 exposures times 5 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
                                                       "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
 
-        # use bias
+        # use bias; we have biases for all raws, so no expression is needed
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        rows = self.registry.selectDimensions(originInfo=originInfo,
-                                              neededDatasetTypes=[rawType, biasType],
-                                              futureDatasetTypes=[calexpType],
-                                              expandDataIds=False,
-                                              perDatasetTypeDimensions=["CalibrationLabel"])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[biasType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 6*5)  # 6 exposures times 5 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
@@ -359,13 +388,30 @@ class QueryBuilderTestCase(unittest.TestCase):
                                    "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, biasType, calexpType))
 
-        # use flat
-        rows = self.registry.selectDimensions(originInfo=originInfo,
-                                              neededDatasetTypes=[rawType, flatType],
-                                              futureDatasetTypes=[calexpType],
-                                              expandDataIds=False,
-                                              perDatasetTypeDimensions=["CalibrationLabel"])
-        rows = list(rows)
+        # use flat; we lack a flat for some exposures, so this should raise
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[flatType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        with self.assertRaises(LookupError):
+            rows = list(builder.execute())
+
+        # use flat, but as a required dataset type instead of prerequisite -
+        # this should automatically filter results
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType, flatType],
+            optional=[calexpType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*3)  # 3 exposures times 3 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
@@ -374,13 +420,17 @@ class QueryBuilderTestCase(unittest.TestCase):
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
 
         # use both bias and flat, plus expression
-        rows = self.registry.selectDimensions(expression="detector IN (1, 3)",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[rawType, flatType, biasType],
-                                              futureDatasetTypes=[calexpType],
-                                              expandDataIds=False,
-                                              perDatasetTypeDimensions=["CalibrationLabel"])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[flatType, biasType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("detector IN (1, 3) AND exposure NOT IN (100, 101, 201)")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*2)  # 3 exposures times 2 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
@@ -389,13 +439,17 @@ class QueryBuilderTestCase(unittest.TestCase):
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, biasType, calexpType))
 
         # select single exposure (third) and detector and check datasetRefs
-        rows = self.registry.selectDimensions(expression="Exposure.exposure = 110 AND Detector.detector = 1",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[rawType, flatType, biasType],
-                                              futureDatasetTypes=[calexpType],
-                                              expandDataIds=False,
-                                              perDatasetTypeDimensions=["CalibrationLabel"])
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[flatType, biasType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("Exposure.exposure = 110 AND Detector.detector = 1")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 1)
         row = rows[0]
         self.assertEqual(row.datasetRefs[flatType].dataId,
@@ -458,11 +512,14 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        rows = self.registry.selectDimensions(originInfo=originInfo,
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType],
-                                              expandDataIds=False)
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for row in rows:
             self.assertCountEqual(row.dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -472,40 +529,48 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = self.registry.selectDimensions(expression="tract IN (1, 5) AND Patch.patch IN (2, 7)",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType],
-                                              expandDataIds=False)
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+            defer=self.DEFER,
+        )
+        builder.whereParsedExpression("tract IN (1, 5) AND Patch.patch IN (2, 7)")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 5))
         self.assertCountEqual(set(row.dataId["patch"] for row in rows), (2, 7))
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to single filter
-        rows = self.registry.selectDimensions(expression="abstract_filter = 'i'",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType],
-                                              expandDataIds=False)
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+        )
+        builder.whereParsedExpression("abstract_filter = 'i'")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 3, 5))
         self.assertCountEqual(set(row.dataId["patch"] for row in rows), (2, 4, 6, 7))
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i",))
 
-        # expression excludes everyhting, specifying non-existing skymap is
+        # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
-        rows = self.registry.selectDimensions(expression="skymap = 'Mars'",
-                                              originInfo=originInfo,
-                                              neededDatasetTypes=[calexpType, mergeType],
-                                              futureDatasetTypes=[measType],
-                                              expandDataIds=False)
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("skymap = 'Mars'")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
 
-    def testPreFlightSpatialMatch(self):
+    def testSpatialMatch(self):
         """Test involving spatial match using join tables.
 
         Note that realistic test needs a resonably-defined SkyPix and regions
@@ -533,12 +598,23 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # without data this should run OK but return empty set
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        rows = self.registry.selectDimensions(originInfo=originInfo,
-                                              neededDatasetTypes=[calexpType],
-                                              futureDatasetTypes=[coaddType],
-                                              expandDataIds=False)
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType],
+            optional=[coaddType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
+
+
+class QueryBuilderDeferralTestCase(QueryBuilderTestCase):
+    """Trivial subclass of `QueryBuilderTestCase` that runs all tests with
+    the ``defer`` option of `MultipleDatasetQueryBuilder.fromDatasetTypes`
+    set to `True`.
+    """
+    DEFER = True
 
 
 if __name__ == "__main__":

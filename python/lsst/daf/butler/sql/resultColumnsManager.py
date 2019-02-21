@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("ResultColumnsManager", "SearchDeferred")
+__all__ = ("ResultColumnsManager",)
 
 import logging
 import itertools
@@ -28,22 +28,10 @@ from collections import defaultdict
 from sqlalchemy.sql import select
 
 from lsst.sphgeom import Region, DISJOINT
-from .. import DatasetRef, PreFlightDimensionsRow
-
-from .. import DataId
+from .. import DatasetRef, DataId
 
 
 _LOG = logging.getLogger(__name__)
-
-
-class SearchDeferred:
-
-    def __init__(self, collections):
-        if len(collections) != 1:
-            # TODO: remove this limitation, probably by making `Registry.find`
-            # search multiple collections.
-            raise NotImplementedError("Deferred searches in multiple collections is not yet supported.")
-        self.collections = collections
 
 
 class ResultColumnsManager:
@@ -62,6 +50,7 @@ class ResultColumnsManager:
         self._indicesForPerDatasetTypeDimensionLinks = defaultdict(dict)
         self._indicesForRegions = {}
         self._indicesForDatasetIds = {}
+        self._needSkyPixRegion = False
 
     def logState(self):
         """Log the state of ``self`` at debug level.
@@ -87,15 +76,15 @@ class ResultColumnsManager:
             already in the selected columns, this method does nothing.
         datasetType : `DatasetType`, optional
             If not `None`, this link corresponds to a "per-DatasetType"
-            dimension in a querym for this `DatasetType`.
+            dimension in a query for this `DatasetType`.
         """
-        column = selectable.c[link]
+        column = selectable.columns[link]
         if datasetType is None:
             if link in self._indicesForDimensionLinks:
                 return
             self._indicesForDimensionLinks[link] = len(self._columns)
         else:
-            if link in self._indicesForPerDatasetTypeDimensionLinks:
+            if link in self._indicesForPerDatasetTypeDimensionLinks[datasetType]:
                 return
             column = column.label(f"{datasetType.name}_{link}")
             self._indicesForPerDatasetTypeDimensionLinks[datasetType][link] = len(self._columns)
@@ -117,9 +106,16 @@ class ResultColumnsManager:
         if holder in self._indicesForRegions:
             return
         if holder.name == "SkyPix":
-            self._indicesForRegions[holder] = None
+            # We obtain these regions directly from the registry, but require
+            # that the "skypix" dimension link be present to do so.  We can't
+            # add that ourselves (we don't know what selectable to obtain it
+            # from), and we can't assume it's *already* been added.
+            # Instead we'll remember that we do need it, and raise when trying
+            # to create the full query (in `selectFrom`) if it's not present.
+            self._needSkyPixRegion = True
+            return
         else:
-            column = selectable.c.region
+            column = selectable.columns.region
             self._indicesForRegions[holder] = len(self._columns)
             self._columns.append(column)
 
@@ -128,24 +124,20 @@ class ResultColumnsManager:
 
         Parameters
         ----------
-        selectable : `sqlalchemy.FromClause` or `SearchDeferreed`
+        selectable : `sqlalchemy.FromClause`
             SQLAlchemy object representing a part of the query from which
-            a column can be selected, or a `SearchDeferred` instance
-            indicating that a follow-up query must be performed later.
+            a column can be selected.
         datasetType : `DatasetType`
             `DatasetType` this ID column is for.  If this `DatasetType` is
             already in the selected columns, this method does nothing.
         """
         if datasetType in self._indicesForDatasetIds:
             return
-        if isinstance(selectable, SearchDeferred):
-            self._indicesForDatasetIds[datasetType] = selectable
-        else:
-            column = selectable.c["dataset_id"]
-            self._indicesForDatasetIds[datasetType] = len(self._columns)
-            self._columns.append(column)
+        column = selectable.columns["dataset_id"]
+        self._indicesForDatasetIds[datasetType] = len(self._columns)
+        self._columns.append(column)
 
-    def apply(self, fromClause):
+    def selectFrom(self, fromClause):
         """Return a select query that extracts the managed columns from the
         given from clause.
 
@@ -160,168 +152,142 @@ class ResultColumnsManager:
             SQLAlchemy object representing the SELECT and FROM clauses of the
             query.
         """
+        if self._needSkyPixRegion and "skypix" not in self._indicesForDimensionLinks:
+            raise RuntimeError("SkyPix region added to query without associated link.")
         return select(self._columns).select_from(fromClause)
 
-    def extractRegions(self, row):
-        """Return a dictionary of regions from a query result row.
+    def manageRow(self, row):
+        """Return an object that manages raw query result row.
 
         Parameters
         ----------
-        row : `sqlalchemy.RowProxy`
+        row : `sqlalchemy.sql.RowProxy`, optional
+            Direct SQLAlchemy row result object.
 
         Returns
         -------
-        regions : `dict`
-            Dictionary mapping region holders (`DimensionElement`) to
-            regions (`sphgeom.Region`).
+        managed : `ManagedRow` or `None`
+            Proxy for the row that understands the columns managed by ``self``.
+            Will be `None` if and only if ``row`` is `None`.
         """
-        result = {}
-        for holder, index in self._indicesForRegions.items():
-            if index is None:
-                assert holder.name == "SkyPix"
-                skypix = row[self._indicesForDimensionLinks["skypix"]]
-                result[holder] = self.registry.pixelization.pixel(skypix)
-            else:
-                result[holder] = Region.decode(row[index])
-        return result
+        if row is None:
+            return None
+        else:
+            return self.ManagedRow(self, row)
 
-    def extractDatasetIds(self, row):
-        """Return a dictionary of dataset IDs from a query result row.
+    class ManagedRow:
+        """An intermediate query result row class that understands the columns
+        managed by a `ResultColumnsManager`.
 
         Parameters
         ----------
-        row : `sqlalchemy.RowProxy`
-
-        Returns
-        -------
-        ids : `dict`
-            Dictionary mapping `DatasetType` to integer dataset ID or
-            `SearchStatus` enum value.
-        """
-        result = {}
-        for datasetType, index in self._indicesForDatasetIds.items():
-            if isinstance(index, SearchDeferred):
-                result[datasetType] = index
-            else:
-                result[datasetType] = row[index]
-        return result
-
-    def extractFullDataId(self, row, **kwds):
-        """Return a `DataId` from a query result row.
-
-        Parameters
-        ----------
-        row : `sqlalchemy.RowProxy`
-        kwds
-            Additional keywords argument forward to the `DataId` constructor.
-
-        Returns
-        -------
-        dataId : `DataId`
-            Dictionary-like object that identifies a set of dimensions.
-        """
-        return DataId({link: row[index] for link, index in self._indicesForDimensionLinks.items()},
-                      universe=self.registry.dimensions, **kwds)
-
-    def extractDatasetDataId(self, row, datasetType, **kwds):
-        """Return a `DataId` from a query result row.
-
-        Parameters
-        ----------
-        row : `sqlalchemy.RowProxy`
-        datasetType : `DatasetType`
-            The `DatasetType` this data ID is expected to identify.
-        kwds
-            Additional keywords argument forward to the `DataId` constructor.
-
-        Returns
-        -------
-        dataId : `DataId`
-            Dictionary-like object that identifies a set of dimensions.
-        """
-        d = {link: row[index] for link, index in self._indicesForDimensionLinks.items()}
-        indices = self._indicesForPerDatasetTypeDimensionLinks[datasetType]
-        d.update((link, row[index]) for link, index in indices.items())
-        return DataId(d, dimensions=datasetType.dimensions, **kwds)
-
-    def convertQueryResults(self, rowIter, expandDataIds=True):
-        """Convert query result rows into `PreFlightDimensionsRow` instances.
-
-        Parameters
-        ----------
-        rowIter : iterable
-            Iterator for rows returned by a query created with the selected
-            columns managed by ``self``.
-        expandDataIds : `bool`
-            If `True` (default), expand per-`DatasetType` data IDs when
-            returning them.
-
-        Yields
-        ------
-        row : `PreFlightDimensionsRow`
+        manager : `ResultColumnsManager`
+            Object that manages the columns in the query's SELECT clause.
+        row : `sqlalchemy.sql.RowProxy`
+            Direct SQLAlchemy row result object.
         """
 
-        total = 0
-        count = 0
-        for row in rowIter:
+        __slots__ = ("registry", "_dimensionLinks", "_perDatasetTypeDimensionLinks", "_regions",
+                     "_datasetIds")
 
-            total += 1
+        def __init__(self, manager, row):
+            self.registry = manager.registry
+            self._dimensionLinks = {
+                link: row[index] for link, index in manager._indicesForDimensionLinks.items()
+            }
+            self._perDatasetTypeDimensionLinks = {
+                datasetType: {link: row[index] for link, index in indices.items()}
+                for datasetType, indices in manager._indicesForPerDatasetTypeDimensionLinks.items()
+            }
+            self._regions = {
+                holder: Region.decode(row[index]) for holder, index in manager._indicesForRegions.items()
+            }
+            self._datasetIds = {
+                datasetType: row[index] for datasetType, index in manager._indicesForDatasetIds.items()
+            }
+            skypix = self._dimensionLinks.get("skypix", None)
+            if skypix is not None:
+                self._regions[self.registry.dimensions["SkyPix"]] = self.registry.pixelization.pixel(skypix)
 
-            # Filter result rows that have non-overlapping regions. Result set
-            # generated by query in selectDimensions() method can include set
-            # of regions in each row (encoded as bytes). Due to pixel-based
-            # matching some regions may not overlap, this generator method
-            # filters rows that have disjoint regions. If result row contains
-            # more than two regions (this should not happen with our current
-            # schema) then row is filtered if any of two regions are disjoint.
-            disjoint = False
-            regions = self.extractRegions(row)
-            for reg1, reg2 in itertools.combinations(regions.values(), 2):
+        def areRegionsDisjoint(self):
+            """Test whether the regions in this result row are disjoint.
+
+            Returns
+            -------
+            disjoint : `bool`
+                `True` if any region in the result row is disjoint with any
+                other region in the result row.
+            """
+            for reg1, reg2 in itertools.combinations(self._regions.values(), 2):
                 if reg1.relate(reg2) == DISJOINT:
-                    disjoint = True
-                    break
-            if disjoint:
-                continue
+                    return True
+            return False
 
-            dataId = self.extractFullDataId(row)
+        def makeDataId(self, *, datasetType=None, expandDataId=True, **kwds):
+            """Construct a `DataId` from the result row.
 
-            # row-wide Data IDs are never expanded, even if
-            # expandDataIds=True; this is slightly confusing, but we don't
-            # actually need them expanded, and it's actually quite slow.
+            Parameters
+            ----------
+            datasetType : `DatasetType`, optional
+                If provided, the `DatasetType` this data ID will describe.
+                This will enable per-DatasetType dimension link values to be
+                used and set the `~DataId.dimensions` to be those of the
+                `DatasetType`. If not provided, the returned data ID will
+                cover all common dimensions in the graph.
+            expandDataId : `bool`
+                If `True` (default), query the `Registry` to further expand
+                the data ID to include additional information.
+            kwds
+                Additional keyword arguments passed to the `DataId`
+                constructor.
 
-            # get DatasetRef for each DatasetType
-            datasetRefs = {}
-            for datasetType, datasetId in self.extractDatasetIds(row).items():
-
-                holder = datasetType.dimensions.getRegionHolder()
+            Returns
+            -------
+            dataId : `DataId`
+                A new `DataId` instance.
+            """
+            if datasetType is None:
+                result = DataId(self._dimensionLinks, universe=self.registry.dimensions, **kwds)
+            else:
+                d = self._dimensionLinks.copy()
+                d.update(self._perDatasetTypeDimensionLinks.get(datasetType, {}))
+                result = DataId(d, dimensions=datasetType.dimensions, **kwds)
+            if result.region is None:
+                holder = result.dimensions().getRegionHolder()
                 if holder is not None:
-                    region = regions.get(holder)
-                else:
-                    region = None
+                    result.region = self._regions.get(holder)
+            if expandDataId:
+                self.registry.expandDataId(result)
+            return result
 
-                dsDataId = self.extractDatasetDataId(row, datasetType, region=region)
+        def makeDatasetRef(self, datasetType, *, expandDataId=True, **kwds):
+            """Construct a `DatasetRef` from the result row.
 
-                if expandDataIds:
-                    self.registry.expandDataId(dsDataId)
+            Parameters
+            ----------
+            datasetType : `DatasetType`
+                The `DatasetType` the returned `DatasetRef` will identify.
+            expandDataId : `bool`
+                If `True` (default), query the `Registry` to further expand
+                the data ID to include additional information.
+            kwds
+                Additional keyword arguments passed to the `DataId`
+                constructor.
 
-                if datasetId is None:
-                    # Dataset does not exist yet.
-                    datasetRefs[datasetType] = DatasetRef(datasetType, dataId, id=None)
-                elif isinstance(datasetId, SearchDeferred):
-                    # We haven't searched for the dataset yet, because we've
-                    # deferred these queries
-                    ref = self.registry.find(
-                        collection=datasetId.collections[0],
-                        datasetType=datasetType,
-                        dataId=dsDataId
-                    )
-                    datasetRefs[datasetType] = ref if ref is not None else DatasetRef(datasetType, dsDataId,
-                                                                                      id=None)
-                else:
-                    datasetRefs[datasetType] = self.registry.getDataset(id=datasetId,
-                                                                        datasetType=datasetType,
-                                                                        dataId=dsDataId)
-            count += 1
-            yield PreFlightDimensionsRow(dataId, datasetRefs)
-
-        _LOG.debug("Total %d rows in result set, %d after region filtering", total, count)
+            Returns
+            -------
+            ref : `DatasetRef`
+                New `DatasetRef` instance.  `DatasetRef.id` will be `None` if
+                the ``dataset_id`` for this dataset was either not included in
+                the result columns or NULL in the result row.  If
+                `DatasetRef.id` is not `None`, any component dataset references
+                will also be present.
+            """
+            dataId = self.makeDataId(datasetType=datasetType, expandDataId=expandDataId, **kwds)
+            datasetId = self._datasetIds.get(datasetType)
+            if datasetId is None:
+                return DatasetRef(datasetType, dataId)
+            else:
+                # Need to ask registry to expand to include components if they
+                # exist.
+                return self.registry.getDataset(id=datasetId, dataId=dataId, datasetType=datasetType)

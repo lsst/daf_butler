@@ -848,8 +848,8 @@ class SqlRegistry(Registry):
         return dataId
 
     @disableWhenLimited
-    def selectDimensions(self, originInfo, expression=None, neededDatasetTypes=(), futureDatasetTypes=(),
-                         perDatasetTypeDimensions=(), expandDataIds=True):
+    def selectMultipleDatasetTypes(self, originInfo, expression=None, required=(), optional=(),
+                                   prerequisite=(), perDatasetTypeDimensions=(), expandDataIds=True):
         # Docstring inherited from Registry.selectDimensions
         def standardize(dsType):
             if not isinstance(dsType, DatasetType):
@@ -858,16 +858,18 @@ class SqlRegistry(Registry):
                 dsType.normalize(universe=self.dimensions)
             return dsType
 
-        needed = [standardize(t) for t in neededDatasetTypes]
-        future = [standardize(t) for t in futureDatasetTypes]
+        required = [standardize(t) for t in required]
+        optional = [standardize(t) for t in optional]
+        prerequisite = [standardize(t) for t in prerequisite]
 
         builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
             self,
             originInfo,
-            required=needed,
-            optional=future,
+            required=required,
+            optional=optional,
+            prerequisite=prerequisite,
             perDatasetTypeDimensions=perDatasetTypeDimensions,
-            deferOptionalDatasetQueries=self.config["deferOutputIdQueries"]
+            defer=self.config["deferDatasetIdQueries"]
         )
 
         if expression is not None:

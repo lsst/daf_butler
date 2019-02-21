@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DatasetOriginInfo", "DatasetOriginInfoDef", "PreFlightDimensionsRow")
+__all__ = ("DatasetOriginInfo", "DatasetOriginInfoDef",)
 
 
 from abc import ABCMeta, abstractmethod
@@ -103,53 +103,3 @@ class DatasetOriginInfoDef(DatasetOriginInfo):
             Name of output collection.
         """
         return self.outputOverrides.get(datasetTypeName, self.defaultOutput)
-
-
-class PreFlightDimensionsRow:
-    """Simple data class holding combination of Dimension values for one row
-    returned by pre-flight solver.
-
-    Logically instance of this class represents a single "path" connecting a
-    set of DatasetRefs which exist or may exist for a given set of
-    DatasetTypes based on the Dimension relational algebra.
-
-    Pre-flight solver returns a sequence of `PreFlightDimensionsRow` instances,
-    each instance will have unique ``dataId``, but `DatasetRef` in
-    ``datasetRefs`` are not necessarily unique. For example when pre-flight
-    solver generates data for Quantum which has two DatasetRefs on input and
-    one on output it will create two `PreFlightDimensionsRow` instances with
-    the same `DatasetRef` for output dataset type. It is caller's
-    the responsibility to combine multiple `PreFlightDimensionsRow` into a
-    suitable structure (e.g., `lsst.pipe.base.QuantumGraph`).
-
-    .. note::
-
-        In current implementation of `SqlPreFlight` the instances of
-        `DatasetRef` do not have ``components`` property correctly filled.
-        If you need to know dataset composition you have to re-fetch
-        dataset again using `Registry.getDataset` method.
-
-    Attributes
-    ----------
-    dataId : `DataId`
-        Maps dimensions link names to their corresponding values.
-    datasetRefs : `dict`
-        Maps `DatasetType` to its corresponding `DatasetRef`.
-    """
-    __slots__ = ("_dataId", "_datasetRefs")
-
-    def __init__(self, dataId, datasetRefs):
-        self._dataId = dataId
-        self._datasetRefs = datasetRefs
-
-    @property
-    def dataId(self):
-        return self._dataId
-
-    @property
-    def datasetRefs(self):
-        return self._datasetRefs
-
-    def __str__(self):
-        return "(dataId={}, datasetRefs=[{}])".format(
-            self.dataId, ', '.join(str(ref) for ref in self.datasetRefs.values()))

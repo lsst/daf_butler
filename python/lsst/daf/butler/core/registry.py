@@ -888,14 +888,14 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @disableWhenLimited
-    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
-                         perDatasetTypeDimensions=(), expandDataIds=True):
+    def selectMultipleDatasetTypes(self, originInfo, expression=None, required=(), optional=(),
+                                   prerequisite=(), perDatasetTypeDimensions=(), expandDataIds=True):
         """Evaluate a filter expression and lists of
-        `DatasetTypes <DatasetType>` and return a set of data unit values.
+        `DatasetTypes <DatasetType>` and return a set of dimension values.
 
-        Returned set consists of combinations of units participating in data
-        transformation from ``neededDatasetTypes`` to ``futureDatasetTypes``,
-        restricted by existing data and filter expression.
+        The returned rows consists of combinations of dimensions participating
+        in the transformation from ``required`` to ``optional`` dataset types,
+        restricted by existing datasets and filter expression.
 
         Parameters
         ----------
@@ -904,16 +904,22 @@ class Registry(metaclass=ABCMeta):
         expression : `str`
             An expression that limits the `Dimensions <Dimension>` and
             (indirectly) the Datasets returned.
-        neededDatasetTypes : `list` of `DatasetType` or `str`
-            The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
-            be included in the returned column set. Output is limited to the
-            the Datasets of these DatasetTypes which already exist in the
-            registry.
-        futureDatasetTypes : `list` of `DatasetType` or `str`
-            The `list` of `DatasetTypes <DatasetType>` whose Dimensions will
-            be included in the returned column set. It is expected that
-            Datasets for these DatasetTypes do not exist in the registry,
-            but presently this is not checked.
+        required : iterable of `DatasetType` or `str`
+            The `list` of DatasetTypes whose Dimensions will be included in
+            the returned column set. Output is limited to the the Datasets of
+            these DatasetTypes which already exist in the registry.
+        optional : iterable of `DatasetType` or `str`
+            The `list` of DatasetTypes whose Dimensions will be included in
+            the returned column set. Datasets of these types may or may not
+            existin the registry.
+        prerequisite : iterable of `DatasetType` or `str`
+            DatasetTypes that should not constrain the query results, but must
+            be present for all result rows.  These are included with a LEFT
+            OUTER JOIN, but the results are checked for NULL.  Unlike regular
+            inputs, prerequisite inputs lookups may be deferred (by some
+            `Registry` implementations). Any DatasetTypes that are present in
+            both ``required`` and ``prerequisite`` are considered
+            ``prerequisite``.
         perDatasetTypeDimensions : iterable of `Dimension` or `str`, optional
             Dimensions (or `str` names thereof) for which different dataset
             types do not need to have the same values in each result row.
@@ -922,13 +928,15 @@ class Registry(metaclass=ABCMeta):
 
         Yields
         ------
-        row : `PreFlightUnitsRow`
+        row : `~lsst.daf.butler.sql.MultipleDatasetQueryRow`
             Single row is a unique combination of units in a transform.
 
         Raises
         ------
         NotImplementedError
             Raised if `limited` is `True`.
+        LookupError
+            Raised (during iteration) if a prerequisite dataset is not found.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -1092,7 +1100,7 @@ class Registry(metaclass=ABCMeta):
         dataId : `dict` or `DataId`
             A `dict`-like object containing the `Dimension` links that include
             the primary keys of the rows to query.  May include link fields
-            beyond those needed to identify ``element``.
+            beyond those required to identify ``element``.
         columns : iterable of `str`
             String column names to query values for.
 

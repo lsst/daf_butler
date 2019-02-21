@@ -22,6 +22,7 @@
 __all__ = ("QueryBuilder",)
 
 import logging
+from abc import ABC, abstractmethod
 from sqlalchemy.sql import and_, or_, not_, literal
 
 from ..core import DimensionJoin, DimensionSet
@@ -37,10 +38,8 @@ class _ClauseVisitor(TreeVisitor):
 
     Parameters
     ----------
-    tables : `dict`
-        Mapping of table names to `sqlalchemy.Table` instances.
-    dimensions : `DimensionGraph`
-        All Dimensions included in the query.
+    queryBuilder: `QueryBuilder`
+        Query builder object the new visitor is to be a helper for.
     """
 
     unaryOps = {"NOT": lambda x: not_(x),
@@ -92,7 +91,7 @@ class _ClauseVisitor(TreeVisitor):
             if selectable is None:
                 raise ValueError(f"No table or clause providing link '{column}' in this query.")
         try:
-            return selectable.c[column]
+            return selectable.columns[column]
         except KeyError as err:
             raise ValueError(f"No column '{column}' found.") from err
 
@@ -124,7 +123,7 @@ class _ClauseVisitor(TreeVisitor):
         return expression.self_group()
 
 
-class QueryBuilder:
+class QueryBuilder(ABC):
     """Helper class for constructing a query that joins together several
     related `Dimension` and `DimensionJoin` tables.
 
@@ -233,7 +232,7 @@ class QueryBuilder:
         for link in links:
             selectableAlreadyIncluded = self.findSelectableForLink(link)
             if selectableAlreadyIncluded is not None:
-                joinOn.append(selectableAlreadyIncluded.c[link] == selectable.c[link])
+                joinOn.append(selectableAlreadyIncluded.columns[link] == selectable.columns[link])
         if joinOn:
             self._fromClause = self.fromClause.join(selectable, and_(*joinOn), isouter=isOuter)
         else:
@@ -249,7 +248,7 @@ class QueryBuilder:
 
         Parameters
         ----------
-        sqlExpression
+        sqlExpression : `str`
             SQLAlchemy boolean column expression.
         op : `sqlalchemy.sql.operator`
             Binary operator to use if a WHERE expression already exists.
@@ -293,8 +292,15 @@ class QueryBuilder:
             raise ValueError(f"No table involving link {link} in query.")
         self.resultColumns.addDimensionLink(selectable, link)
 
-    def build(self):
+    def build(self, whereSql=None):
         """Return the full SELECT query.
+
+        Parameters
+        ----------
+        whereSql
+            An additional SQLAlchemy boolean column expression to include
+            in the query.  Unlike the `whereSqlExpression` method, this
+            does not modify the builder itself.
 
         Returns
         -------
@@ -303,30 +309,83 @@ class QueryBuilder:
             `fromClause`, the WHERE clause represented by `whereClause`,
             and the SELECT clause managed by `resultColumns`.
         """
-        query = self.resultColumns.apply(self.fromClause)
+        query = self.resultColumns.selectFrom(self.fromClause)
         if self._whereClause is not None:
             query = query.where(self._whereClause)
-        _LOG.debug("building query: %s",
-                   query.compile(bind=self.registry._connection.engine,
-                                 compile_kwargs={"literal_binds": True}))
+        if whereSql is not None:
+            query = query.where(whereSql)
+        if _LOG.isEnabledFor(logging.DEBUG):
+            _LOG.debug("building query: %s",
+                       query.compile(bind=self.registry._connection.engine,
+                                     compile_kwargs={"literal_binds": True}))
         return query
 
-    def execute(self, expandDataIds=True):
-        """Build and execute the query, returning an iterator over the results.
+    def execute(self, whereSql=None, **kwds):
+        """Build and execute the query, iterating over result rows.
 
         Parameters
         ----------
-        expandDataIds : `bool`
-            If `True`, expand per-DatasetType data IDs via additional per-row
-            queries.
+        whereSql
+            An additional SQLAlchemy boolean column expression to include
+            in the query.  Unlike the `whereSqlExpression` method, this
+            does not modify the builder itself.
+        kwds
+            Additional keyword arguments forwarded to `convertResultRow`.
 
         Yields
         ------
-        row : `PreFlightDimensionsRow`
+        result
+            Objects of the type returned by `convertResultRow`.
+
+        Notes
+        -----
+        Query rows that include disjoint regions are automatically filtered
+        out.
         """
-        query = self.build()
+        query = self.build(whereSql=whereSql)
         results = self.registry._connection.execute(query)
-        return self.resultColumns.convertQueryResults(results, expandDataIds=expandDataIds)
+        total = 0
+        count = 0
+        for row in results:
+            total += 1
+            managed = self.resultColumns.manageRow(row=row)
+            if managed.areRegionsDisjoint():
+                continue
+            count += 1
+            yield self.convertResultRow(managed, **kwds)
+        _LOG.debug("Total %d rows in result set, %d after region filtering", total, count)
+
+    def executeOne(self, whereSql=None, **kwds):
+        """Build and execute the query, returning a single result row.
+
+        Parameters
+        ----------
+        whereSql
+            An additional SQLAlchemy boolean column expression to include
+            in the query.  Unlike the `whereSqlExpression` method, this
+            does not modify the builder itself.
+        kwds
+            Additional keyword arguments forwarded to `convertResultRow`.
+
+        Returns
+        -------
+        result
+            A single object of the type returned by `convertResultRow`, or
+            `None` if the query generated no results.
+
+        Notes
+        -----
+        A query row that include disjoint regions is filtered out, resulting
+        in `None` being returned.
+        """
+        query = self.build(whereSql=whereSql)
+        results = self.registry._connection.execute(query)
+        for row in results:
+            managed = self.resultColumns.manageRow(row)
+            if managed is None or managed.areRegionsDisjoint():
+                continue
+            return self.convertResultRow(managed, **kwds)
+        return None
 
     def getIncludedDimensionElements(self):
         """Return the set of all `DimensionElement` objects explicitly
@@ -450,3 +509,27 @@ class QueryBuilder:
         if element is None:
             return None
         return self._selectablesForDimensionElements[element]
+
+    @abstractmethod
+    def convertResultRow(self, managed, **kwds):
+        """Convert a query result row to the type appropriate for this
+        `QueryBuilder`.
+
+        This method is a customization point for `execute` that must be
+        implemented by subclasses.  Other code should generally not need
+        to call it directly.
+
+        Parameters
+        ----------
+        managed : `ResultColumnsManager.ManagedRow`
+            Intermediate row object to convert.
+        kwds :
+            Additional keyword arguments defined by subclasses.
+
+        Returns
+        -------
+        result
+            An object that corresponds to a single query result row,
+            with type defined by the subclass implementation.
+        """
+        raise NotImplementedError("Must be implemented by subclasses.")
