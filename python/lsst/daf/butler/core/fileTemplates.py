@@ -25,10 +25,9 @@ __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig")
 
 import os.path
 import string
-from collections.abc import Mapping
 
 from .config import Config
-from .datasets import DatasetType
+from .configSupport import processLookupConfigs, LookupKey
 
 
 class FileTemplatesConfig(Config):
@@ -65,22 +64,18 @@ class FileTemplates:
         self.config = FileTemplatesConfig(config)
         self.templates = {}
         self.default = FileTemplate(default) if default is not None else None
-        for name, templateStr in self.config.items():
-            # We can disable defaulting with an empty string in a config
-            # or by using a boolean
-            if name == "default":
+        contents = processLookupConfigs(self.config)
+
+        # Convert all the values to FileTemplate, handling defaults
+        defaultKey = LookupKey(name="default")
+        for key, templateStr in contents.items():
+            if key == defaultKey:
                 if not templateStr:
                     self.default = None
                 else:
                     self.default = FileTemplate(templateStr)
             else:
-                # Possible to have a second level hierarchy but store as
-                # full names without separator
-                if isinstance(templateStr, Mapping):
-                    for subKey, subStr in templateStr.items():
-                        self.templates[f"{name}{subKey}"] = FileTemplate(subStr)
-                else:
-                    self.templates[name] = FileTemplate(templateStr)
+                self.templates[key] = FileTemplate(templateStr)
 
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
@@ -120,12 +115,6 @@ class FileTemplates:
                 template = self.templates[name]
                 break
 
-            baseType, component = DatasetType.splitDatasetTypeName(name)
-            if component is not None and baseType in self.templates:
-                template = self.templates[baseType]
-                break
-
-        # if still not template give up for now.
         if template is None:
             raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
 

@@ -20,8 +20,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from abc import ABCMeta, abstractmethod
-from collections.abc import Mapping
 
+from .configSupport import processLookupConfigs
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
 
@@ -158,12 +158,9 @@ class FormatterFactory:
         that will be returned if a `DatasetRef` contains a matching instrument
         name in the data ID.
         """
-        for name, f in config.items():
-            if isinstance(f, Mapping):
-                for subName, subF in f.items():
-                    self.registerFormatter(f"{name}{subName}", subF)
-            else:
-                self.registerFormatter(name, f)
+        contents = processLookupConfigs(config)
+        for key, f in contents.items():
+            self.registerFormatter(key, f)
 
     def getFormatter(self, entity):
         """Get a new formatter instance.

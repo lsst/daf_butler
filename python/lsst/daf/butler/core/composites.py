@@ -25,6 +25,7 @@ __all__ = ("CompositesConfig", "CompositesMap")
 
 import logging
 
+from .configSupport import processLookupConfigs
 from .config import ConfigSubset
 
 log = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class CompositesConfig(ConfigSubset):
     def validate(self):
         """Validate entries have the correct type."""
         super().validate()
+        # For now assume flat config with keys mapping to booleans
         for k, v in self[DISASSEMBLY_KEY].items():
             if not isinstance(v, bool):
                 raise ValueError(f"CompositesConfig: Key {k} is not a Boolean")
@@ -61,6 +63,10 @@ class CompositesMap:
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)
         self.config = config
+
+        # Calculate the disassembly lookup table -- no need to process
+        # the values
+        self._lut = processLookupConfigs(self.config[DISASSEMBLY_KEY])
 
     def shouldBeDisassembled(self, entity):
         """Given some choices, indicate whether the entity should be
@@ -97,10 +103,10 @@ class CompositesMap:
         matchName = "{} (via default)".format(entity)
         disassemble = self.config["default"]
 
-        for name in (entity._lookupNames()):
-            if name is not None and name in self.config[DISASSEMBLY_KEY]:
-                disassemble = self.config[DISASSEMBLY_KEY, name]
-                matchName = name
+        for key in (entity._lookupNames()):
+            if key is not None and key in self._lut:
+                disassemble = self._lut[key]
+                matchName = key
                 break
 
         log.debug("%s will%s be disassembled", matchName, "" if disassemble else " not")

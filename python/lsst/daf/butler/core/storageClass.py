@@ -28,6 +28,7 @@ from lsst.utils import doImport
 from .utils import Singleton, getFullTypeName
 from .assembler import CompositeAssembler
 from .config import ConfigSubset
+from .configSupport import LookupKey
 
 log = logging.getLogger(__name__)
 
@@ -171,16 +172,16 @@ class StorageClass:
         return False
 
     def _lookupNames(self):
-        """Names to use when looking up this DatasetRef in a configuration.
+        """Keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
 
         Returns
         -------
-        names : `tuple` of `str`
-            Tuple of solely the `StorageClass` name.
+        names : `tuple` of `LookupKey`
+            Tuple of a `LookupKey` using the `StorageClass` name.
         """
-        return (self.name, )
+        return (LookupKey(name=self.name), )
 
     def knownParameters(self):
         """Return set of all parameters known to this `StorageClass`

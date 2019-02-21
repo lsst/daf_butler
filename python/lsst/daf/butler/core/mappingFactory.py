@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import getInstanceOf
+from .configSupport import LookupKey
 
 __all__ = ("MappingFactory", )
 
@@ -71,7 +72,7 @@ class MappingFactory:
             if t is None:
                 attempts.append(t)
             else:
-                key = self._getName(t)
+                key = self._getNameKey(t)
                 attempts.append(key)
                 try:
                     typeName = self._registry[key]
@@ -86,7 +87,7 @@ class MappingFactory:
 
         Parameters
         ----------
-        registryKey : `str` or object supporting ``name`` attribute.
+        registryKey : `LookupKey`, `str` or object with ``name`` attribute.
             Item to associate with the provided type.
         typeName : `str` or Python type
             Identifies a class to associate with the provided key.
@@ -96,35 +97,41 @@ class MappingFactory:
         KeyError
             If item is already registered and has different value.
         """
-        keyString = self._getName(registryKey)
-        if keyString in self._registry:
+        key = self._getNameKey(registryKey)
+        if key in self._registry:
             # Compare the class strings since dynamic classes can be the
             # same thing but be different.
-            if str(self._registry[keyString]) == str(typeName):
+            if str(self._registry[key]) == str(typeName):
                 return
 
             raise KeyError("Item with key {} already registered with different value"
-                           " ({} != {})".format(keyString, self._registry[keyString], typeName))
+                           " ({} != {})".format(key, self._registry[key], typeName))
 
-        self._registry[keyString] = typeName
+        self._registry[key] = typeName
 
     @staticmethod
-    def _getName(typeOrName):
-        """Extract name of supplied object as string.
+    def _getNameKey(typeOrName):
+        """Extract name of supplied object as string or entity suitable for
+        using as key.
 
         Parameters
         ----------
-        typeOrName : `str` or object supporting ``name`` attribute.
+        typeOrName : `LookupKey, `str` or object supporting ``name`` attribute.
             Item from which to extract a name.
 
         Returns
         -------
-        name : `str`
-            Extracted name as a string.
+        name : `LookupKey`
+            Extracted name as a string or
         """
-        if isinstance(typeOrName, str):
+        if isinstance(typeOrName, LookupKey):
             return typeOrName
+
+        if isinstance(typeOrName, str):
+            name = typeOrName
         elif hasattr(typeOrName, "name"):
-            return typeOrName.name
+            name = typeOrName.name
         else:
             raise ValueError("Cannot extract name from type")
+
+        return LookupKey(name=name)
