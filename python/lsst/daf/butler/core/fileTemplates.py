@@ -190,6 +190,10 @@ class FileTemplate:
     unless it is a path separator, will be removed from the output path.
     """
 
+    specialFields = {"datasetType", "component", "collection", "run"}
+    """Set of special fields that are available independently of the defined
+    Dimensions."""
+
     def __init__(self, template):
         if not isinstance(template, str) or "{" not in template:
             raise ValueError(f"Template ({template}) does not contain any format specifiers")
@@ -206,6 +210,42 @@ class FileTemplate:
 
     def __repr__(self):
         return f"{self.__class__.__name__}(\"{self.template}\")"
+
+    def fields(self, optionals=False, specials=False):
+        """Return the field names used in this template.
+
+        Parameters
+        ----------
+        optionals : `bool`
+            If `True`, optional fields are included in the returned set.
+        specials : `bool`
+            If `True`, non-dimension fields are included.
+
+        Returns
+        -------
+        names : `set`
+            Names of fields used in this template
+
+        Notes
+        -----
+        The returned set will include the special values such as `datasetType`
+        and `component`.
+        """
+        fmt = string.Formatter()
+        parts = fmt.parse(self.template)
+
+        names = set()
+        for literal, field_name, format_spec, conversion in parts:
+            if field_name is not None:
+                if "?" in format_spec and not optionals:
+                    continue
+
+                if not specials and field_name in self.specialFields:
+                    continue
+
+                names.add(field_name)
+
+        return names
 
     def format(self, ref):
         """Format a template string into a full path.

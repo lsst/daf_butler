@@ -116,6 +116,37 @@ class TestFileTemplates(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.assertTemplate(tmplstr, "", refWcs)
 
+    def testFields(self):
+        # Template, mandatory fields, optional non-special fields,
+        # special fields, optional special fields
+        testData = (("{collection}/{datasetType}/{visit:05d}/{filter}-trail",
+                     set(["visit", "filter"]),
+                     set(),
+                     set(["collection", "datasetType"]),
+                     set()),
+                    ("{collection}/{component:?}_{visit}",
+                     set(["visit"]),
+                     set(),
+                     set(["collection"]),
+                     set(["component"]),),
+                    ("{run}/{component:?}_{visit:?}_{filter}_{instrument}_{datasetType}",
+                     set(["filter", "instrument"]),
+                     set(["visit"]),
+                     set(["run", "datasetType"]),
+                     set(["component"]),),
+                    )
+        for tmplstr, mandatory, optional, special, optionalSpecial in testData:
+            with self.subTest(template=tmplstr):
+                tmpl = FileTemplate(tmplstr)
+                fields = tmpl.fields()
+                self.assertEqual(fields, mandatory)
+                fields = tmpl.fields(optionals=True)
+                self.assertEqual(fields, mandatory | optional)
+                fields = tmpl.fields(specials=True)
+                self.assertEqual(fields, mandatory | special)
+                fields = tmpl.fields(specials=True, optionals=True)
+                self.assertEqual(fields, mandatory | special | optional | optionalSpecial)
+
     def testSimpleConfig(self):
         """Test reading from config file"""
         configRoot = os.path.join(TESTDIR, "config", "templates")
