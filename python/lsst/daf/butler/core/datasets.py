@@ -25,7 +25,7 @@ import hashlib
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, DimensionNameSet
+from .dimensions import DimensionGraph, DimensionNameSet, DataId
 from .configSupport import LookupKey
 
 __all__ = ("DatasetType", "DatasetRef")
@@ -330,6 +330,12 @@ class DatasetRef:
 
     def __init__(self, datasetType, dataId, id=None, run=None, hash=None, components=None):
         assert isinstance(datasetType, DatasetType)
+
+        # Check the dimensions match if a DataId is provided
+        if isinstance(dataId, DataId) and isinstance(datasetType.dimensions, DimensionGraph):
+            if dataId.dimensions() != datasetType.dimensions:
+                raise ValueError(f"Dimensions mismatch for {dataId} and {datasetType}")
+
         self._id = id
         self._datasetType = datasetType
         self._dataId = dataId
