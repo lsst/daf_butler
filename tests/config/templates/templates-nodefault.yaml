@@ -4,5 +4,9 @@ calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}
 calexp.wcs: "{datasetType}.{component}-a-wcs-{visit}-{physical_filter}"
 StorageClassX: "StorageClass/{datasetType}"
 pvi: "{datasetType}_{physical_filter}"
+# For testing the dimension names match the dataId keys since there is
+# no universe
+instrument+physical_filter: "{datasetType}_{physical_filter}_{instrument}"
 instrument<HSC>:
   pvi: "HyperSuprimCam-{datasetType}_{physical_filter}"
+  instrument+physical_filter: "hsc/{datasetType}_{physical_filter}_{instrument}"

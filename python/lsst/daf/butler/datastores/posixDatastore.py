@@ -121,9 +121,11 @@ class PosixDatastore(Datastore):
 
         # Now associate formatters with storage classes
         self.formatterFactory.registerFormatters(self.config["formatters"])
+        self.formatterFactory.normalizeDimensions(self.registry.dimensions)
 
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"])
+        self.templates.normalizeDimensions(self.registry.dimensions)
 
         # Name ourselves
         self.name = "POSIXDatastore@{}".format(self.root)

@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .utils import getInstanceOf
-from .configSupport import LookupKey
+from .configSupport import LookupKey, normalizeLookupKeys
 
 __all__ = ("MappingFactory", )
 
@@ -44,15 +44,45 @@ class MappingFactory:
     """
 
     def __init__(self, refType):
+        self.normalized = False
         self._registry = {}
         self.refType = refType
+
+    def normalizeRegistryDimensions(self, universe):
+        """Normalize dimensions used in registry keys to the supplied universe.
+        Parameters
+        ----------
+        universe : `DimensionGraph`
+            The set of all known dimensions. If `None`, returns without
+            action.
+
+        Notes
+        -----
+        Goes through all registered templates, and for keys that include
+        dimensions, rewrites those keys to use a verified set of
+        dimensions.
+
+        Returns without action if the template keys have already been
+        normalized.
+
+        Raises
+        ------
+        ValueError
+            A key exists where a dimension is not part of the ``universe``.
+        """
+        if self.normalized:
+            return
+
+        normalizeLookupKeys(self._registry, universe)
+
+        self.normalized = True
 
     def getFromRegistry(self, *targetClasses):
         """Get a new instance of the object stored in the registry.
 
         Parameters
         ----------
-        *targetClasses : `str` or objects supporting ``name`` attribute
+        *targetClasses : `LookupKey`, ``str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
 

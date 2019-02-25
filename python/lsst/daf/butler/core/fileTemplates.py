@@ -27,7 +27,7 @@ import os.path
 import string
 
 from .config import Config
-from .configSupport import processLookupConfigs, LookupKey
+from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
 
 
 class FileTemplatesConfig(Config):
@@ -63,6 +63,7 @@ class FileTemplates:
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
         self.templates = {}
+        self.normalized = False
         self.default = FileTemplate(default) if default is not None else None
         contents = processLookupConfigs(self.config)
 
@@ -105,6 +106,16 @@ class FileTemplates:
             No template could be located for this Dataset type.
         """
 
+        # normalize the registry if not already done and we have access
+        # to a universe
+        if not self.normalized:
+            try:
+                universe = entity.dimensions.universe
+            except AttributeError:
+                pass
+            else:
+                self.normalizeDimensions(universe)
+
         # Get the names to use for lookup
         names = entity._lookupNames()
 
@@ -119,6 +130,36 @@ class FileTemplates:
             raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
 
         return template
+
+    def normalizeDimensions(self, universe):
+        """Normalize template lookups that use dimensions.
+
+        Parameters
+        ----------
+        universe : `DimensionGraph`
+            The set of all known dimensions. If `None`, returns without
+            action.
+
+        Notes
+        -----
+        Goes through all registered templates, and for keys that include
+        dimensions, rewrites those keys to use a verified set of
+        dimensions.
+
+        Returns without action if the template keys have already been
+        normalized.
+
+        Raises
+        ------
+        ValueError
+            A key exists where a dimension is not part of the ``universe``.
+        """
+        if self.normalized:
+            return
+
+        normalizeLookupKeys(self.templates, universe)
+
+        self.normalized = True
 
 
 class FileTemplate:

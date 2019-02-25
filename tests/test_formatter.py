@@ -107,12 +107,20 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         self.assertIsInstance(ref_pvi_not_hsc_fmt, Formatter)
         self.assertIn("PickleFormatter", ref_pvi_not_hsc_fmt.name())
 
-        # Create a DatasetRef that should fall back to using StorageClass
+        # Create a DatasetRef that should fall back to using Dimensions
         ref_pvix_hsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
                                                                     "physical_filter": "v"})
         ref_pvix_hsc_fmt = self.factory.getFormatter(ref_pvix_hsc)
         self.assertIsInstance(ref_pvix_hsc_fmt, Formatter)
-        self.assertIn("YamlFormatter", ref_pvix_hsc_fmt.name())
+        self.assertIn("PickleFormatter", ref_pvix_hsc_fmt.name())
+
+        # Create a DatasetRef that should fall back to using StorageClass
+        dimensionsNoV = frozenset(("PhysicalFilter", "Instrument"))
+        ref_pvix_hsc_dims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
+                                                                            "physical_filter": "v"})
+        ref_pvix_hsc_dims_fmt = self.factory.getFormatter(ref_pvix_hsc_dims)
+        self.assertIsInstance(ref_pvix_hsc_dims_fmt, Formatter)
+        self.assertIn("YamlFormatter", ref_pvix_hsc_dims_fmt.name())
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

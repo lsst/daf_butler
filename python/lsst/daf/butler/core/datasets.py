@@ -255,6 +255,10 @@ class DatasetType:
         if componentName is not None:
             lookups = lookups + (LookupKey(name=rootName),)
 
+        if self.dimensions:
+            # Dimensions are a lower priority than dataset type name
+            lookups = lookups + (LookupKey(dimensions=self.dimensions),)
+
         return lookups + self.storageClass._lookupNames()
 
     def __reduce__(self):
@@ -435,6 +439,12 @@ class DatasetRef:
         Read-only; update via `Registry.attachComponent()`.
         """
         return _safeMakeMappingProxyType(self._components)
+
+    @property
+    def dimensions(self):
+        """The dimensions associated with the underlying `DatasetType`
+        """
+        return self.datasetType.dimensions
 
     def __str__(self):
         components = ""

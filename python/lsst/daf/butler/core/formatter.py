@@ -141,6 +141,31 @@ class FormatterFactory:
     def __init__(self):
         self._mappingFactory = MappingFactory(Formatter)
 
+    def normalizeDimensions(self, universe):
+        """Normalize formatter lookups that use dimensions.
+
+        Parameters
+        ----------
+        universe : `DimensionGraph`
+            The set of all known dimensions. If `None`, returns without
+            action.
+
+        Notes
+        -----
+        Goes through all registered formatters, and for keys that include
+        dimensions, rewrites those keys to use a verified set of
+        dimensions.
+
+        Returns without action if the formatter keys have already been
+        normalized.
+
+        Raises
+        ------
+        ValueError
+            A key exists where a dimension is not part of the ``universe``.
+        """
+        return self._mappingFactory.normalizeRegistryDimensions(universe)
+
     def registerFormatters(self, config):
         """Bulk register formatters from a config.
 
@@ -182,6 +207,15 @@ class FormatterFactory:
         if isinstance(entity, str):
             names = (entity,)
         else:
+            # Normalize the registry to a universe if not already done
+            if not self._mappingFactory.normalized:
+                try:
+                    universe = entity.dimensions.universe
+                except AttributeError:
+                    pass
+                else:
+                    self._mappingFactory.normalizeRegistryDimensions(universe)
+
             names = entity._lookupNames()
         return self._mappingFactory.getFromRegistry(*names)
 

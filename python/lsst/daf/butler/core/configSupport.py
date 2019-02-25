@@ -21,12 +21,12 @@
 
 """Support for configuration snippets"""
 
-__all__ = ("LookupKey", "processLookupConfigs")
+__all__ = ("LookupKey", "processLookupConfigs", "normalizeLookupKeys")
 
 import logging
 import re
 from collections.abc import Mapping
-from .dimensions import DimensionNameSet
+from .dimensions import DimensionNameSet, DimensionGraph
 
 log = logging.getLogger(__name__)
 
@@ -42,7 +42,7 @@ class LookupKey:
         represents dimensions (via ``dim1+dim2+dim3`` syntax) the name
         is converted to a `DimensionNameSet` and stored in ``dimensions``
         property.
-    dimensions : `DimensionNameSet`, optional
+    dimensions : `DimensionNameSet` or `DimensionGraph`, optional
         Dimensions that are relevant for lookup. Should not be specified
         if ``name`` is also specified.
     dataId : `dict`, optional
@@ -61,7 +61,10 @@ class LookupKey:
 
         if name is not None:
             if "+" in name:
-                self._dimensions = DimensionNameSet(name.split("+"))
+                # If we are given a single dimension we use the "+" to
+                # indicate this but have to filter out the empty value
+                dimensions = [n for n in name.split("+") if n]
+                self._dimensions = DimensionNameSet(dimensions)
             else:
                 self._name = name
         else:
@@ -151,6 +154,46 @@ class LookupKey:
             dataId = {k: v for k, v in self._dataId}
 
         return self.__class__(name=name, dimensions=dimensions, dataId=dataId)
+
+
+def normalizeLookupKeys(toUpdate, universe):
+    """Normalize dimensions used in keys of supplied dict.
+
+    Parameters
+    ----------
+    toUpdate : `dict` with keys of `LookupKey`
+        Dictionary to update.  The values are reassigned to normalized
+        versions of the keys.  Keys are ignored that are not `LookupKey`.
+    universe : `DimensionGraph`
+        The set of all known dimensions. If `None`, returns without
+        action.
+
+    Notes
+    -----
+    Goes through all keys, and for keys that include
+    dimensions, rewrites those keys to use a verified set of
+    dimensions.
+
+    Raises
+    ------
+    ValueError
+        A key exists where a dimension is not part of the ``universe``.
+    """
+    if universe is None:
+        return
+
+    # Get the keys because we are going to change them
+    allKeys = list(toUpdate.keys())
+
+    for k in allKeys:
+        if not isinstance(k, LookupKey):
+            continue
+        if k.dimensions is not None and not isinstance(k.dimensions, DimensionGraph):
+            newDimensions = universe.extract(k.dimensions)
+            print(f"Olddim: {k.dimensions} New: {newDimensions}")
+            newKey = k.clone(dimensions=newDimensions)
+            toUpdate[newKey] = toUpdate[k]
+            del toUpdate[k]
 
 
 def processLookupConfigs(config):

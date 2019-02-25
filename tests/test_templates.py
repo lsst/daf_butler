@@ -133,8 +133,8 @@ class TestFileTemplates(unittest.TestCase):
         # This should fall through the datasetTypeName check and use
         # StorageClass instead
         ref3 = self.makeDatasetRef("unknown2", storageClassName="StorageClassX")
-        tmpl = templates.getTemplate(ref3)
-        self.assertIsInstance(tmpl, FileTemplate)
+        tmpl_sc = templates.getTemplate(ref3)
+        self.assertIsInstance(tmpl_sc, FileTemplate)
 
         # Try with a component: one with defined formatter and one without
         ref_wcs = self.makeDatasetRef("calexp.wcs")
@@ -148,6 +148,16 @@ class TestFileTemplates(unittest.TestCase):
         self.assertEqual(tmpl_calexp, tmpl_image)
         self.assertNotEqual(tmpl_calexp, tmpl_wcs)
 
+        # Check dimensions lookup order.
+        # The order should be: dataset type name, dimension, storage class
+        # This one will not match name but might match storage class.
+        # It should match dimensions
+        ref_dims = self.makeDatasetRef("nomatch", dataId={"instrument": "LSST", "physical_filter": "z"},
+                                       storageClassName="StorageClassX")
+        tmpl_dims = templates.getTemplate(ref_dims)
+        self.assertIsInstance(tmpl_dims, FileTemplate)
+        self.assertNotEqual(tmpl_dims, tmpl_sc)
+
         # Test that instrument overrides retrieve specialist templates
         ref_pvi = self.makeDatasetRef("pvi")
         ref_pvi_hsc = self.makeDatasetRef("pvi", dataId={"instrument": "HSC", "physical_filter": "z"})
@@ -158,6 +168,13 @@ class TestFileTemplates(unittest.TestCase):
         tmpl_pvi_lsst = templates.getTemplate(ref_pvi_lsst)
         self.assertEqual(tmpl_pvi, tmpl_pvi_lsst)
         self.assertNotEqual(tmpl_pvi, tmpl_pvi_hsc)
+
+        # Have instrument match and dimensions look up with no name match
+        ref_nopvi_hsc = self.makeDatasetRef("pvix", dataId={"instrument": "HSC", "physical_filter": "z"},
+                                            storageClassName="StorageClassX")
+        tmpl_nopvi_hsc = templates.getTemplate(ref_nopvi_hsc)
+        self.assertNotEqual(tmpl_nopvi_hsc, tmpl_dims)
+        self.assertNotEqual(tmpl_nopvi_hsc, tmpl_pvi_hsc)
 
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
