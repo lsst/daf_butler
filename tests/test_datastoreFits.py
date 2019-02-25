@@ -37,7 +37,7 @@ from dummyRegistry import DummyRegistry
 try:
     import lsst.afw.table
     import lsst.afw.image
-    import lsst.afw.geom
+    import lsst.geom
 except ImportError:
     lsst.afw.table = None
     lsst.afw.image = None
@@ -190,8 +190,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         wcs = datastore.get(wcsRef)
 
         # Simple check of WCS
-        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
-                                   lsst.afw.geom.Extent2I(9, 9))
+        bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
+                               lsst.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
 
     def testExposureCompositePutGet(self):
@@ -228,8 +228,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
             compsRead[compName] = component
 
         # Simple check of WCS
-        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
-                                   lsst.afw.geom.Extent2I(9, 9))
+        bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
+                               lsst.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
 
         # Try to reassemble the exposure
