@@ -36,7 +36,7 @@ try:
     from lsst.afw.image import LOCAL
     from lsst.geom import Box2I, Point2I
 except ImportError:
-    lsst.afw.image = None
+    lsst.afw = None
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -57,7 +57,7 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
 
     @classmethod
     def setUpClass(cls):
-        if lsst.afw.image is None:
+        if lsst.afw is None:
             raise unittest.SkipTest("afw not available.")
         cls.storageClassFactory = StorageClassFactory()
         cls.storageClassFactory.addFromConfig(cls.configFile)

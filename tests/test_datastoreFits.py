@@ -39,8 +39,7 @@ try:
     import lsst.afw.image
     import lsst.geom
 except ImportError:
-    lsst.afw.table = None
-    lsst.afw.image = None
+    lsst.afw = None
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -50,7 +49,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
     @classmethod
     def setUpClass(cls):
-        if lsst.afw.table is None:
+        if lsst.afw is None:
             raise unittest.SkipTest("afw not available.")
 
         # Base classes need to know where the test directory is
