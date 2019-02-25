@@ -95,32 +95,32 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         # one in the config file.
         dimensions = frozenset(("Visit", "PhysicalFilter", "Instrument"))
         sc = StorageClass("DummySC", dict, None)
-        ref_pvi_hsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
-                                                                  "physical_filter": "v"})
-        ref_pvi_hsc_fmt = self.factory.getFormatter(ref_pvi_hsc)
-        self.assertIsInstance(ref_pvi_hsc_fmt, Formatter)
-        self.assertIn("JsonFormatter", ref_pvi_hsc_fmt.name())
+        refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
+                                                                "physical_filter": "v"})
+        refPviHscFmt = self.factory.getFormatter(refPviHsc)
+        self.assertIsInstance(refPviHscFmt, Formatter)
+        self.assertIn("JsonFormatter", refPviHscFmt.name())
 
-        ref_pvi_not_hsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
-                                                                      "physical_filter": "v"})
-        ref_pvi_not_hsc_fmt = self.factory.getFormatter(ref_pvi_not_hsc)
-        self.assertIsInstance(ref_pvi_not_hsc_fmt, Formatter)
-        self.assertIn("PickleFormatter", ref_pvi_not_hsc_fmt.name())
+        refPviNotHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
+                                                                   "physical_filter": "v"})
+        refPviNotHscFmt = self.factory.getFormatter(refPviNotHsc)
+        self.assertIsInstance(refPviNotHscFmt, Formatter)
+        self.assertIn("PickleFormatter", refPviNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using Dimensions
-        ref_pvix_hsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
-                                                                    "physical_filter": "v"})
-        ref_pvix_hsc_fmt = self.factory.getFormatter(ref_pvix_hsc)
-        self.assertIsInstance(ref_pvix_hsc_fmt, Formatter)
-        self.assertIn("PickleFormatter", ref_pvix_hsc_fmt.name())
+        refPvixHsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
+                                                                  "physical_filter": "v"})
+        refPvixNotHscFmt = self.factory.getFormatter(refPvixHsc)
+        self.assertIsInstance(refPvixNotHscFmt, Formatter)
+        self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using StorageClass
         dimensionsNoV = frozenset(("PhysicalFilter", "Instrument"))
-        ref_pvix_hsc_dims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
+        refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
                                                                             "physical_filter": "v"})
-        ref_pvix_hsc_dims_fmt = self.factory.getFormatter(ref_pvix_hsc_dims)
-        self.assertIsInstance(ref_pvix_hsc_dims_fmt, Formatter)
-        self.assertIn("YamlFormatter", ref_pvix_hsc_dims_fmt.name())
+        refPvixNotHscDims_fmt = self.factory.getFormatter(refPvixNotHscDims)
+        self.assertIsInstance(refPvixNotHscDims_fmt, Formatter)
+        self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 
 
 class MemoryTester(lsst.utils.tests.MemoryTestCase):

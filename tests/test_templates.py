@@ -133,48 +133,48 @@ class TestFileTemplates(unittest.TestCase):
         # This should fall through the datasetTypeName check and use
         # StorageClass instead
         ref3 = self.makeDatasetRef("unknown2", storageClassName="StorageClassX")
-        tmpl_sc = templates.getTemplate(ref3)
-        self.assertIsInstance(tmpl_sc, FileTemplate)
+        tmplSc = templates.getTemplate(ref3)
+        self.assertIsInstance(tmplSc, FileTemplate)
 
         # Try with a component: one with defined formatter and one without
-        ref_wcs = self.makeDatasetRef("calexp.wcs")
-        ref_image = self.makeDatasetRef("calexp.image")
-        tmpl_calexp = templates.getTemplate(ref)
-        tmpl_wcs = templates.getTemplate(ref_wcs)  # Should be special
-        tmpl_image = templates.getTemplate(ref_image)
-        self.assertIsInstance(tmpl_calexp, FileTemplate)
+        refWcs = self.makeDatasetRef("calexp.wcs")
+        refImage = self.makeDatasetRef("calexp.image")
+        tmplCalexp = templates.getTemplate(ref)
+        tmplWcs = templates.getTemplate(refWcs)  # Should be special
+        tmpl_image = templates.getTemplate(refImage)
+        self.assertIsInstance(tmplCalexp, FileTemplate)
         self.assertIsInstance(tmpl_image, FileTemplate)
-        self.assertIsInstance(tmpl_wcs, FileTemplate)
-        self.assertEqual(tmpl_calexp, tmpl_image)
-        self.assertNotEqual(tmpl_calexp, tmpl_wcs)
+        self.assertIsInstance(tmplWcs, FileTemplate)
+        self.assertEqual(tmplCalexp, tmpl_image)
+        self.assertNotEqual(tmplCalexp, tmplWcs)
 
         # Check dimensions lookup order.
         # The order should be: dataset type name, dimension, storage class
         # This one will not match name but might match storage class.
         # It should match dimensions
-        ref_dims = self.makeDatasetRef("nomatch", dataId={"instrument": "LSST", "physical_filter": "z"},
-                                       storageClassName="StorageClassX")
-        tmpl_dims = templates.getTemplate(ref_dims)
-        self.assertIsInstance(tmpl_dims, FileTemplate)
-        self.assertNotEqual(tmpl_dims, tmpl_sc)
+        refDims = self.makeDatasetRef("nomatch", dataId={"instrument": "LSST", "physical_filter": "z"},
+                                      storageClassName="StorageClassX")
+        tmplDims = templates.getTemplate(refDims)
+        self.assertIsInstance(tmplDims, FileTemplate)
+        self.assertNotEqual(tmplDims, tmplSc)
 
         # Test that instrument overrides retrieve specialist templates
-        ref_pvi = self.makeDatasetRef("pvi")
-        ref_pvi_hsc = self.makeDatasetRef("pvi", dataId={"instrument": "HSC", "physical_filter": "z"})
-        ref_pvi_lsst = self.makeDatasetRef("pvi", dataId={"instrument": "LSST", "physical_filter": "z"})
+        refPvi = self.makeDatasetRef("pvi")
+        refPviHsc = self.makeDatasetRef("pvi", dataId={"instrument": "HSC", "physical_filter": "z"})
+        refPviLsst = self.makeDatasetRef("pvi", dataId={"instrument": "LSST", "physical_filter": "z"})
 
-        tmpl_pvi = templates.getTemplate(ref_pvi)
-        tmpl_pvi_hsc = templates.getTemplate(ref_pvi_hsc)
-        tmpl_pvi_lsst = templates.getTemplate(ref_pvi_lsst)
-        self.assertEqual(tmpl_pvi, tmpl_pvi_lsst)
-        self.assertNotEqual(tmpl_pvi, tmpl_pvi_hsc)
+        tmplPvi = templates.getTemplate(refPvi)
+        tmplPviHsc = templates.getTemplate(refPviHsc)
+        tmplPviLsst = templates.getTemplate(refPviLsst)
+        self.assertEqual(tmplPvi, tmplPviLsst)
+        self.assertNotEqual(tmplPvi, tmplPviHsc)
 
         # Have instrument match and dimensions look up with no name match
-        ref_nopvi_hsc = self.makeDatasetRef("pvix", dataId={"instrument": "HSC", "physical_filter": "z"},
-                                            storageClassName="StorageClassX")
-        tmpl_nopvi_hsc = templates.getTemplate(ref_nopvi_hsc)
-        self.assertNotEqual(tmpl_nopvi_hsc, tmpl_dims)
-        self.assertNotEqual(tmpl_nopvi_hsc, tmpl_pvi_hsc)
+        refNoPviHsc = self.makeDatasetRef("pvix", dataId={"instrument": "HSC", "physical_filter": "z"},
+                                          storageClassName="StorageClassX")
+        tmplNoPviHsc = templates.getTemplate(refNoPviHsc)
+        self.assertNotEqual(tmplNoPviHsc, tmplDims)
+        self.assertNotEqual(tmplNoPviHsc, tmplPviHsc)
 
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
