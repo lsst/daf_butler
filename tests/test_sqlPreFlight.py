@@ -23,15 +23,13 @@ from datetime import datetime, timedelta
 import os
 import unittest
 
-import lsst.utils.tests
-
 from lsst.daf.butler import (ButlerConfig, DatasetType, Registry, DataId,
                              DatasetOriginInfoDef, StorageClass)
 from lsst.daf.butler.registries.sqlPreFlight import SqlPreFlight
 from lsst.sphgeom import Angle, Box, LonLat, NormalizedAngle
 
 
-class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
+class SqlPreFlightTestCase(unittest.TestCase):
     """Test for SqlPreFlight.
     """
 
@@ -518,14 +516,5 @@ class SqlPreFlightTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(len(rows), 0)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

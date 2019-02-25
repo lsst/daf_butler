@@ -25,7 +25,6 @@
 import unittest
 
 from lsst.daf.butler.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
-import lsst.utils.tests
 
 
 class _Visitor(TreeVisitor):
@@ -327,14 +326,5 @@ class ParserLexTestCase(unittest.TestCase):
                          " OR IN(ID(z) (S(a), S(b))))")
 
 
-class MyMemoryTestCase(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

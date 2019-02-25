@@ -22,13 +22,10 @@
 import unittest
 import itertools
 
-import lsst.utils
-import lsst.utils.tests
-
 from lsst.daf.butler import DimensionUniverse, Dimension, DimensionJoin
 
 
-class DimensionTestCase(lsst.utils.tests.TestCase):
+class DimensionTestCase(unittest.TestCase):
     """Tests for dimensions.
 
     All tests here rely on the content of ``config/dimensions.yaml``, either

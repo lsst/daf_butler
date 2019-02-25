@@ -24,7 +24,6 @@
 
 import os.path
 import unittest
-import lsst.utils.tests
 
 from datasetsHelper import DatasetTestHelper
 from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType, Config
@@ -32,7 +31,7 @@ from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetTy
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-class FormatterFactoryTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
+class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     """Tests of the formatter factory infrastructure.
     """
 
@@ -123,14 +122,5 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase, DatasetTestHelper):
         self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

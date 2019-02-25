@@ -28,8 +28,6 @@ import tempfile
 import shutil
 import pickle
 
-import lsst.utils.tests
-
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
@@ -307,7 +305,7 @@ class ButlerTests:
             self.assertIn(self.registryStr, str(butler))
 
 
-class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     fullConfigKey = ".datastore.formatters"
@@ -359,7 +357,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
             butler.put(metric, "metric3", dataId3)
 
 
-class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """InMemoryDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
     fullConfigKey = None
@@ -368,7 +366,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     registryStr = "registry='sqlite:///:memory:'"
 
 
-class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
+class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
@@ -376,7 +374,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, lsst.utils.tests.TestCase):
     registryStr = "registry='sqlite:///:memory:'"
 
 
-class ButlerConfigNoRunTestCase(lsst.utils.tests.TestCase):
+class ButlerConfigNoRunTestCase(unittest.TestCase):
     """Test case for butler config which does not have ``run``.
     """
     configFile = os.path.join(TESTDIR, "config/basic/butler-norun.yaml")
@@ -390,14 +388,5 @@ class ButlerConfigNoRunTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(butlerOut.config, butler.config)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

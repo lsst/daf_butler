@@ -22,15 +22,13 @@
 import unittest
 from collections import namedtuple
 
-import lsst.utils.tests
-
 from lsst.daf.butler.core import RegistryConfig, Registry
 
 """Tests for SqlDatabaseDict.
 """
 
 
-class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
+class SqlDatabaseDictTestCase(unittest.TestCase):
     """Test for SqlDatabaseDict.
     """
 
@@ -129,14 +127,5 @@ class SqlDatabaseDictTestCase(lsst.utils.tests.TestCase):
             self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

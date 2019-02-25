@@ -22,13 +22,10 @@
 import unittest
 import pickle
 
-import lsst.utils
-import lsst.utils.tests
-
 from lsst.daf.butler import DataId, DimensionUniverse
 
 
-class DataIdTestCase(lsst.utils.tests.TestCase):
+class DataIdTestCase(unittest.TestCase):
     """Tests for DataId.
 
     All tests here rely on the content of ``config/dimensions.yaml``, either

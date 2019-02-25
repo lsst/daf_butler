@@ -21,14 +21,12 @@
 
 import unittest
 
-import lsst.utils.tests
-
 from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
 
 
-class IterableTestCase(lsst.utils.tests.TestCase):
+class IterableTestCase(unittest.TestCase):
     """Tests for `iterable` helper.
     """
 
@@ -43,7 +41,7 @@ class IterableTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(list(iterable(["hello", "world"])), ["hello", "world"])
 
 
-class SingletonTestCase(lsst.utils.tests.TestCase):
+class SingletonTestCase(unittest.TestCase):
     """Tests of the Singleton metaclass"""
 
     class IsSingleton(metaclass=Singleton):
@@ -77,7 +75,7 @@ class SingletonTestCase(lsst.utils.tests.TestCase):
             SingletonTestCase.IsBadSingleton(52)
 
 
-class TestButlerUtils(lsst.utils.tests.TestCase):
+class TestButlerUtils(unittest.TestCase):
     """Tests of the simple utilities."""
 
     def testTypeNames(self):

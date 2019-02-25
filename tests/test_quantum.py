@@ -22,8 +22,6 @@
 import unittest
 from datetime import datetime
 
-import lsst.utils.tests
-
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
 from lsst.daf.butler.core.quantum import Quantum
 from lsst.daf.butler.core.storageClass import StorageClass
@@ -32,7 +30,7 @@ from lsst.daf.butler.core.storageClass import StorageClass
 """
 
 
-class QuantumTestCase(lsst.utils.tests.TestCase):
+class QuantumTestCase(unittest.TestCase):
     """Test for Quantum.
     """
 
@@ -97,14 +95,5 @@ class QuantumTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(len(quantum.outputs[datasetTypeName]), 2)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

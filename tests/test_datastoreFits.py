@@ -25,11 +25,10 @@ import tempfile
 import shutil
 
 import lsst.utils.tests
+from lsst.utils import doImport
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import DatastoreConfig
-
-from lsst.utils import doImport
 
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
 
@@ -262,14 +261,5 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

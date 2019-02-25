@@ -22,8 +22,6 @@
 import unittest
 import pickle
 
-import lsst.utils.tests
-
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
 from lsst.daf.butler.core.storageClass import StorageClass, StorageClassFactory
 
@@ -31,7 +29,7 @@ from lsst.daf.butler.core.storageClass import StorageClass, StorageClassFactory
 """
 
 
-class DatasetTypeTestCase(lsst.utils.tests.TestCase):
+class DatasetTypeTestCase(unittest.TestCase):
     """Test for DatasetType.
     """
 
@@ -139,7 +137,7 @@ class DatasetTypeTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(datasetType.storageClass, datasetTypeOut.storageClass)
 
 
-class DatasetRefTestCase(lsst.utils.tests.TestCase):
+class DatasetRefTestCase(unittest.TestCase):
     """Test for DatasetRef.
     """
     def testConstructor(self):
@@ -175,14 +173,5 @@ class DatasetRefTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(ref.components, detachedRef.components)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()
