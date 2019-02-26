@@ -31,6 +31,7 @@ import pickle
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
+from lsst.daf.butler import FileTemplateValidationError
 from examplePythonTypes import MetricsExample
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -341,18 +342,29 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         dataId3 = {"instrument": "DummyCamComp", "visit": 425}
 
         # Put with exactly the data ID keys needed
-        butler.put(metric, "metric1", dataId1)
+        ref = butler.put(metric, "metric1", dataId1)
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
+
+        # Check the template based on dimensions
+        butler.datastore.templates.validateTemplate(ref)
 
         # Put with extra data ID keys (physical_filter is an optional
         # dependency); should not change template (at least the way we're
         # defining them  to behave now; the important thing is that they
         # must be consistent).
-        butler.put(metric, "metric2", dataId2)
+        ref = butler.put(metric, "metric2", dataId2)
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
 
+        # Check the template based on dimensions
+        butler.datastore.templates.validateTemplate(ref)
+
         # Now use a file template that will not result in unique filenames
-        butler.put(metric, "metric3", dataId1)
+        ref = butler.put(metric, "metric3", dataId1)
+
+        # Check the template based on dimensions. This one is a bad template
+        with self.assertRaises(FileTemplateValidationError):
+            butler.datastore.templates.validateTemplate(ref)
+
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
 

@@ -21,13 +21,22 @@
 
 """Support for file template string expansion."""
 
-__all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig")
+__all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplateValidationError")
 
 import os.path
 import string
+import logging
 
 from .config import Config
 from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
+
+log = logging.getLogger(__name__)
+
+
+class FileTemplateValidationError(RuntimeError):
+    """Exception thrown when a file template is not consistent with the
+    associated `DatasetType`."""
+    pass
 
 
 class FileTemplatesConfig(Config):
@@ -78,6 +87,33 @@ class FileTemplates:
             else:
                 self.templates[key] = FileTemplate(templateStr)
 
+    def validateTemplate(self, *entities):
+        """Retrieve the template associated with each dataset type and
+        validate the dimensions against the template.
+
+        Parameters
+        ----------
+        *entities : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Entities to validate against the templates.  True validation
+            requires that the supplied entities have access to dimension
+            graphs.
+
+        Raises
+        ------
+        KeyError
+            No template could be found for the supplied entity.
+        FileTemplateValidationError
+            An entity failed validation.
+
+        Notes
+        -----
+        If a `StorageClass` is supplied then validation can not be done
+        against Dimensions.
+        """
+        for entity in entities:
+            template = self.getTemplate(entity)
+            template.validateTemplate(entity)
+
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
 
@@ -121,13 +157,17 @@ class FileTemplates:
 
         # Get a location from the templates
         template = self.default
+        source = "default"
         for name in names:
             if name in self.templates:
                 template = self.templates[name]
+                source = name
                 break
 
         if template is None:
             raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
+
+        log.debug("Got file %s from %s via %s", template, entity, source)
 
         return template
 
@@ -338,3 +378,48 @@ class FileTemplate:
             path = os.path.relpath(path, start="/")
 
         return path
+
+    def validateTemplate(self, entity):
+        """Compare the template against a representative entity that would
+        like to use template.
+
+        Parameters
+        ----------
+        entity : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Entity to compare against template.
+
+        Raises
+        ------
+        ValidationError
+            The template is inconsistent with the supplied entity.
+
+        Notes
+        -----
+        If a `StorageClass` is supplied then validation can not be done
+        against Dimensions and it will always succeed.  If a `DatasetType`
+        or `DatasetRef` is provided without dimensions validation will
+        succeed.
+        """
+
+        # If we do not have dimensions defined then all we can do is shrug
+        if not hasattr(entity, "dimensions"):
+            return
+
+        dimensions = entity.dimensions
+        if not dimensions:
+            return True
+
+        links = dimensions.links()
+        allfields = self.fields(optionals=True)
+        required = self.fields(optionals=False)
+
+        # Calculate any field usage that does not match a dimension
+        if not required.issubset(links):
+            raise FileTemplateValidationError(f"Template {self} is inconsistent with {entity}:"
+                                              f" {required} is not a subset of {links}.")
+
+        if not allfields.issuperset(links):
+            raise FileTemplateValidationError(f"Template {self} is inconsistent with {entity}:"
+                                              f" {allfields} is not a superset of {links}.")
+
+        return
