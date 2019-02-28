@@ -146,7 +146,7 @@ class FormatterFactory:
 
         Parameters
         ----------
-        universe : `DimensionGraph`
+        universe : `DimensionUniverse`
             The set of all known dimensions. If `None`, returns without
             action.
 
@@ -162,7 +162,8 @@ class FormatterFactory:
         Raises
         ------
         ValueError
-            A key exists where a dimension is not part of the ``universe``.
+            Raised if a key exists where a dimension is not part of
+            the ``universe``.
         """
         return self._mappingFactory.normalizeRegistryDimensions(universe)
 
@@ -178,10 +179,13 @@ class FormatterFactory:
         -----
         The configuration can include one level of hierarchy where an
         instrument-specific section can be defined to override more general
-        formatter specifications.  This is represented in YAML using a
-        key of form ``instrument<name>`` which can then define formatters
+        template specifications.  This is represented in YAML using a
+        key of form ``instrument<name>`` which can then define templates
         that will be returned if a `DatasetRef` contains a matching instrument
         name in the data ID.
+
+        The config is parsed using the function
+        `~lsst.daf.butler.configSubset.processLookupConfigs`.
         """
         contents = processLookupConfigs(config)
         for key, f in contents.items():
@@ -224,8 +228,10 @@ class FormatterFactory:
 
         Parameters
         ----------
-        type_ : `str` or `StorageClass` or `DatasetType`
-            Type for which this formatter is to be used.
+        type_ : `LookupKey`, `str` or `StorageClass` or `DatasetType`
+            Type for which this formatter is to be used.  If a `LookupKey`
+            is not provided, one will be constructed from the supplied string
+            or by using the ``name`` property of the supplied entity.
         formatter : `str`
             Identifies a `Formatter` subclass to use for reading and writing
             Datasets of this type.
@@ -233,6 +239,6 @@ class FormatterFactory:
         Raises
         ------
         ValueError
-            If formatter does not name a valid formatter type.
+            Raised if the formatter does not name a valid formatter type.
         """
         self._mappingFactory.placeInRegistry(type_, formatter)

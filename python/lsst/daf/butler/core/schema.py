@@ -230,20 +230,22 @@ class SchemaBuilder:
 
         Parameters
         ----------
-        table : `sqlalchemy.Table`, `sqlalchemy.expression.TableClause`
-                or `str`
+        table : `sqlalchemy.Table`, `sqlalchemy.expression.TableClause`, `str`
             The table.
         columnDescription : `dict`
             Description of the column to be created.
             Should always contain:
+
             - name, descriptive name
             - type, valid column type
+
             May contain:
+
             - nullable, entry can be null
             - primary_key, mark this column as primary key
             - foreign_key, link to other table
             - length, length of the field
-            - nbytes, length of decoded string (only for `type=='hash'`)
+            - nbytes, length of decoded string (only for ``type=='hash'``)
             - doc, docstring
         """
         if isinstance(table, str):
@@ -337,10 +339,13 @@ class SchemaBuilder:
         constraintDescription : `dict`
             Description of the ForeignKeyConstraint to be created.
             Should always contain:
+
             - src, list of source column names or single source column name.
             - tgt, list of (table-qualified) target column names or single
               target column name.
+
             May also contain:
+
             - onDelete, one of "SET NULL" or "CASCADE".
 
         Returns

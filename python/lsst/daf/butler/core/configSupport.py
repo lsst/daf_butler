@@ -100,17 +100,19 @@ class LookupKey:
 
     @property
     def name(self):
-        """Primary name string to use as lookup."""
+        """Primary name string to use as lookup. (`str`)"""
         return self._name
 
     @property
     def dimensions(self):
-        """Dimensions associated with lookup."""
+        """Dimensions associated with lookup.
+        (`DimensionGraph` or `DimensionNameSet`)"""
         return self._dimensions
 
     @property
     def dataId(self):
-        """Set of key/value tuples that are important for dataId lookup."""
+        """Set of key/value tuples that are important for dataId lookup.
+        (`frozenset`)"""
         return self._dataId
 
     def __hash__(self):
@@ -164,7 +166,7 @@ def normalizeLookupKeys(toUpdate, universe):
     toUpdate : `dict` with keys of `LookupKey`
         Dictionary to update.  The values are reassigned to normalized
         versions of the keys.  Keys are ignored that are not `LookupKey`.
-    universe : `DimensionGraph`
+    universe : `DimensionUniverse`
         The set of all known dimensions. If `None`, returns without
         action.
 
@@ -177,7 +179,8 @@ def normalizeLookupKeys(toUpdate, universe):
     Raises
     ------
     ValueError
-        A key exists where a dimension is not part of the ``universe``.
+        Raised if a key exists where a dimension is not part of
+        the ``universe``.
     """
     if universe is None:
         return
@@ -213,6 +216,38 @@ def processLookupConfigs(config):
         A `dict` with keys constructed from the configuration keys and values
         being simple strings.  It is assumed the caller will convert the
         values to the required form.
+
+    Notes
+    -----
+    The configuration is a mapping where the keys correspond to names
+    that can refer to dataset type or storage class names, or can use a
+    special syntax to refer to dimensions or dataId values.
+
+    Dimensions are indicated by using dimension names separated by a ``+``.
+    If a single dimension is specified this is also supported so long as
+    a ``+`` is found.  Dimensions are normalized before use such that if
+    ``PhysicalFilter+Visit`` is defined, then an implicit ``Instrument``
+    will automatically be added.
+
+    DataID overrides can be specified using the form: ``field<value>`` to
+    indicate a subhierarchy.  All keys within that new hierarchy will take
+    precedence over equivalent values in the root hierarchy.
+
+    Currently only a single dataId field can be specified for a key.
+    For example with a config such as:
+
+    .. code::
+
+       something:
+         calexp: value1
+         instrument<HSC>:
+           calexp: value2
+
+    Requesting the match for ``calexp`` would return ``value1`` unless
+    a `DatasetRef` is used with a dataId containing the key ``instrument``
+    and value ``HSC``.
+
+    The values of the mapping are stored as strings.
     """
     contents = {}
     for name, value in config.items():

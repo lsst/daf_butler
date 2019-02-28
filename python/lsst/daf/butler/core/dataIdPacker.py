@@ -64,7 +64,7 @@ class DataIdPackerDimensions:
 
     @property
     def universe(self):
-        """A graph containing all known dimensions `(DimensionGraph`).
+        """A graph containing all known dimensions (`DimensionGraph`).
         """
         return self._given.universe
 
@@ -101,7 +101,7 @@ class DataIdPacker(metaclass=ABCMeta):
     kwds
         Additional subclass-specific keyword arguments.  Values for these
         arguments are obtained from the `Registry` database according to the
-        how the packer is configured in the `Registry.
+        how the packer is configured in the `Registry`.
 
     Notes
     -----
@@ -112,7 +112,8 @@ class DataIdPacker(metaclass=ABCMeta):
        the `Registry` configuration.  In YAML form, that looks something like
        this:
 
-        .. code: yaml
+        .. code:: yaml
+
             dataIdPackers:
               VisitDetectorId:
                 given: [Instrument]
@@ -159,7 +160,7 @@ class DataIdPacker(metaclass=ABCMeta):
     @abstractmethod
     def maxBits(self):
         """The maximum number of nonzero bits in the packed ID returned by
-        `pack` (`int`).
+        `~DataIdPacker.pack` (`int`).
 
         Must be implemented by all concrete derived classes.  May return
         `None` to indicate that there is no maximum.
@@ -168,7 +169,7 @@ class DataIdPacker(metaclass=ABCMeta):
 
     @abstractmethod
     def _pack(self, dataId):
-        """Abstract implementation for `pack`.
+        """Abstract implementation for `~DataIdPacker.pack`.
 
         Must be implemented by all concrete derived classes.
 
@@ -213,8 +214,8 @@ class DataIdPacker(metaclass=ABCMeta):
 
         Notes
         -----
-        Should not be overridden by derived class (`_pack` should be overridden
-        instead).
+        Should not be overridden by derived class (`~DataIdPacker._pack`
+        should be overridden instead).
         """
         dataId = DataId(dataId, **kwds)
         packed = self._pack(dataId)
@@ -232,8 +233,8 @@ class DataIdPacker(metaclass=ABCMeta):
         Parameters
         ----------
         packedId : `int` or `bytes`
-            The result of a call to `pack` on either `self` or an
-            identically-constructed one.
+            The result of a call to `~DataIdPacker.pack` on either ``self``
+            or an identically-constructed one.
 
         Returns
         -------

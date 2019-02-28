@@ -67,6 +67,9 @@ class FileTemplates:
     A default fallback template can be specified using the key ``default``.
     Defaulting can be disabled in a child configuration by defining the
     value to be an empty string or a boolean `False`.
+
+    The config is parsed using the function
+    `~lsst.daf.butler.configSubset.processLookupConfigs`.
     """
 
     def __init__(self, config, default=None):
@@ -94,21 +97,18 @@ class FileTemplates:
         Parameters
         ----------
         *entities : `DatasetType`, `DatasetRef`, or `StorageClass`
-            Entities to validate against the templates.  True validation
-            requires that the supplied entities have access to dimension
-            graphs.
+            Entities to validate against the matching templates.
 
         Raises
         ------
         KeyError
-            No template could be found for the supplied entity.
+            Raised if no template could be found for the supplied entity.
         FileTemplateValidationError
-            An entity failed validation.
+            Raised if an entity failed validation.
 
         Notes
         -----
-        If a `StorageClass` is supplied then validation can not be done
-        against Dimensions.
+        See `FileTemplate.validateTemplate()` for details on the validation.
         """
         for entity in entities:
             template = self.getTemplate(entity)
@@ -139,7 +139,7 @@ class FileTemplates:
         Raises
         ------
         KeyError
-            No template could be located for this Dataset type.
+            Raised if no template could be located for this Dataset type.
         """
 
         # normalize the registry if not already done and we have access
@@ -176,7 +176,7 @@ class FileTemplates:
 
         Parameters
         ----------
-        universe : `DimensionGraph`
+        universe : `DimensionUniverse`
             The set of all known dimensions. If `None`, returns without
             action.
 
@@ -192,7 +192,8 @@ class FileTemplates:
         Raises
         ------
         ValueError
-            A key exists where a dimension is not part of the ``universe``.
+            Raised if a key exists where a dimension is not part of
+            the ``universe``.
         """
         if self.normalized:
             return
@@ -209,6 +210,11 @@ class FileTemplate:
     ----------
     template : `str`
         Template string.
+
+    Raises
+    ------
+    FileTemplateValidationError
+        Raised if the template fails basic validation.
 
     Notes
     -----
@@ -312,9 +318,9 @@ class FileTemplate:
         Raises
         ------
         KeyError
-            Requested field is not defined and the field is not optional.
-            Or, `component` is specified but "component" was not part of
-            the template.
+            Raised if the requested field is not defined and the field is
+            not optional.  Or, `component` is specified but "component" was
+            not part of the template.
         """
         # Extract defined non-None units from the dataId
         fields = {k: v for k, v in ref.dataId.items() if v is not None}
@@ -400,14 +406,15 @@ class FileTemplate:
         Raises
         ------
         ValidationError
-            The template is inconsistent with the supplied entity.
+            Raised if the template is inconsistent with the supplied entity.
 
         Notes
         -----
-        If a `StorageClass` is supplied then validation can not be done
-        against Dimensions and it will always succeed.  If a `DatasetType`
-        or `DatasetRef` is provided without dimensions validation will
-        succeed.
+        Validation will always include a check that mandatory fields
+        are present and that at least one field refers to a dimension.
+        If the supplied entity includes a `DimensionGraph` then it will be
+        used to compare the available dimensions with those specified in the
+        template.
         """
 
         # Check that the template has run or collection
@@ -416,7 +423,7 @@ class FileTemplate:
             raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
                                               f" from {self.mandatoryFields}")
 
-        # Check that there are some fields in the template
+        # Check that there are some dimension fields in the template
         allfields = self.fields(optionals=True)
         if not allfields:
             raise FileTemplateValidationError(f"Template '{self}' does not seem to have any fields"

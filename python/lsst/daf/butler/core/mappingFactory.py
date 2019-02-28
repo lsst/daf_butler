@@ -50,9 +50,10 @@ class MappingFactory:
 
     def normalizeRegistryDimensions(self, universe):
         """Normalize dimensions used in registry keys to the supplied universe.
+
         Parameters
         ----------
-        universe : `DimensionGraph`
+        universe : `DimensionUniverse`
             The set of all known dimensions. If `None`, returns without
             action.
 
@@ -82,7 +83,7 @@ class MappingFactory:
 
         Parameters
         ----------
-        *targetClasses : `LookupKey`, ``str` or objects with ``name`` attribute
+        *targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
 
