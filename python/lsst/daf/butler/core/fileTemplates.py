@@ -230,7 +230,13 @@ class FileTemplate:
     unless it is a path separator, will be removed from the output path.
     """
 
-    specialFields = {"datasetType", "component", "collection", "run"}
+    mandatoryFields = {"collection", "run"}
+    """A set of fields, one of which must be present in a template."""
+
+    datasetFields = {"datasetType", "component"}
+    """Fields related to the supplied dataset, not a dimension."""
+
+    specialFields = mandatoryFields | datasetFields
     """Set of special fields that are available independently of the defined
     Dimensions."""
 
@@ -238,6 +244,9 @@ class FileTemplate:
         if not isinstance(template, str) or "{" not in template:
             raise ValueError(f"Template ({template}) does not contain any format specifiers")
         self.template = template
+
+        # Do basic validation without access to dimensions
+        self.validateTemplate(None)
 
     def __eq__(self, other):
         if not isinstance(other, FileTemplate):
@@ -401,6 +410,18 @@ class FileTemplate:
         succeed.
         """
 
+        # Check that the template has run or collection
+        withSpecials = self.fields(specials=True)
+        if not withSpecials & self.mandatoryFields:
+            raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
+                                              f" from {self.mandatoryFields}")
+
+        # Check that there are some fields in the template
+        allfields = self.fields(optionals=True)
+        if not allfields:
+            raise FileTemplateValidationError(f"Template '{self}' does not seem to have any fields"
+                                              " corresponding to dimensions.")
+
         # If we do not have dimensions defined then all we can do is shrug
         if not hasattr(entity, "dimensions"):
             return
@@ -410,16 +431,16 @@ class FileTemplate:
             return True
 
         links = dimensions.links()
-        allfields = self.fields(optionals=True)
+
         required = self.fields(optionals=False)
 
         # Calculate any field usage that does not match a dimension
         if not required.issubset(links):
-            raise FileTemplateValidationError(f"Template {self} is inconsistent with {entity}:"
+            raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
                                               f" {required} is not a subset of {links}.")
 
         if not allfields.issuperset(links):
-            raise FileTemplateValidationError(f"Template {self} is inconsistent with {entity}:"
+            raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
                                               f" {allfields} is not a superset of {links}.")
 
         return

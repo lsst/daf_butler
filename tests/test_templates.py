@@ -25,7 +25,7 @@ import os.path
 import unittest
 
 from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, \
-    FileTemplate, FileTemplatesConfig, StorageClass, Run
+    FileTemplate, FileTemplatesConfig, StorageClass, Run, FileTemplateValidationError
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -62,9 +62,18 @@ class TestFileTemplates(unittest.TestCase):
                             "run2/calexp/00052/U-trail",
                             self.makeDatasetRef("calexp"))
 
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("no fields at all")
+
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{visit}")
+
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{run}_{datasetType}")
+
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{filter}"
-        with self.assertRaises(KeyError):
+        with self.assertRaises(FileTemplateValidationError):
             self.assertTemplate(tmplstr,
                                 "02/calexp/00052/U",
                                 self.makeDatasetRef("calexp"))
@@ -224,7 +233,7 @@ class TestFileTemplates(unittest.TestCase):
             templates.getTemplate(ref2)
 
         # Try again but specify a default in the constructor
-        default = "{datasetType}/{filter}"
+        default = "{run}/{datasetType}/{filter}"
         templates = FileTemplates(config3, default=default)
         tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)
