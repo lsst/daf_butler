@@ -247,8 +247,9 @@ class FileTemplate:
     Dimensions."""
 
     def __init__(self, template):
-        if not isinstance(template, str) or "{" not in template:
-            raise ValueError(f"Template ({template}) does not contain any format specifiers")
+        if not isinstance(template, str):
+            raise FileTemplateValidationError(f"Template ('{template}') does "
+                                              "not contain any format specifiers")
         self.template = template
 
         # Do basic validation without access to dimensions

@@ -60,6 +60,10 @@ class LookupKey:
         self._name = None
 
         if name is not None:
+
+            if not isinstance(name, str):
+                raise ValueError(f"Supplied name must be str not: '{name}'")
+
             if "+" in name:
                 # If we are given a single dimension we use the "+" to
                 # indicate this but have to filter out the empty value
@@ -193,7 +197,6 @@ def normalizeLookupKeys(toUpdate, universe):
             continue
         if k.dimensions is not None and not isinstance(k.dimensions, DimensionGraph):
             newDimensions = universe.extract(k.dimensions)
-            print(f"Olddim: {k.dimensions} New: {newDimensions}")
             newKey = k.clone(dimensions=newDimensions)
             toUpdate[newKey] = toUpdate[k]
             del toUpdate[k]

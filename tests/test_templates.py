@@ -223,7 +223,7 @@ class TestFileTemplates(unittest.TestCase):
         self.assertIsInstance(tmpl, FileTemplate)
 
         # Format config file with bad format string
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileTemplateValidationError):
             FileTemplates(os.path.join(configRoot, "templates-bad.yaml"))
 
         # Config file with no defaulting mentioned
