@@ -258,7 +258,7 @@ class FileTemplate:
         return self.template
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(\"{self.template}\")"
+        return f'{self.__class__.__name__}("{self.template}")'
 
     def fields(self, optionals=False, specials=False):
         """Return the field names used in this template.
