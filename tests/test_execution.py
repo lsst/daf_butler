@@ -22,15 +22,13 @@
 import unittest
 from datetime import datetime
 
-import lsst.utils.tests
-
 from lsst.daf.butler.core.execution import Execution
 
 """Tests for Execution.
 """
 
 
-class ExecutionTestCase(lsst.utils.tests.TestCase):
+class ExecutionTestCase(unittest.TestCase):
     """Test for Execution.
     """
 
@@ -47,14 +45,5 @@ class ExecutionTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(execution.host, host)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

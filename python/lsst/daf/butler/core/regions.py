@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import lsst.sphgeom
-import lsst.afw.geom
+import lsst.geom
 
 __all__ = ("makeBoxWcsRegion", )
 
@@ -30,11 +30,11 @@ def makeBoxWcsRegion(box, wcs, margin):
 
     Parameters
     ----------
-    box : lsst.afw.geom.Box2I or lsst.afw.geom.Box2D
+    box : `lsst.geom.Box2I` or `lsst.geom.Box2D`
         A box in the pixel coordinate system defined by the WCS.
-    wcs : lsst.afw.image.Wcs
+    wcs : `lsst.afw.image.Wcs`
         A mapping from a pixel coordinate system to the sky.
-    margin : float
+    margin : `float`
         A buffer in pixels to grow the box by (in all directions) before
         transforming it to sky coordinates.
 
@@ -43,7 +43,7 @@ def makeBoxWcsRegion(box, wcs, margin):
     polygon : `lsst.sphgeom.ConvexPolygon`
         A convex polygon.
     """
-    box = lsst.afw.geom.Box2D(box)
+    box = lsst.geom.Box2D(box)
     box.grow(margin)
     vertices = []
     for point in box.getCorners():

@@ -1,5 +1,12 @@
 # This file disables defaulting
 default: False
-calexp: "{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
-calexp.wcs: "{datasetType}.{component}-a-wcs-{visit}-{physical_filter}"
-StorageClassX: "StorageClass/{datasetType}"
+calexp: "{run}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
+calexp.wcs: "{run}/{datasetType}.{component}-a-wcs-{visit}-{physical_filter}"
+StorageClassX: "StorageClass/{run}_{datasetType}_{visit}"
+pvi: "{run}_{datasetType}_{physical_filter}"
+# For testing the dimension names match the dataId keys since there is
+# no universe
+instrument+physical_filter: "{collection}_{datasetType}_{physical_filter}_{instrument}"
+instrument<HSC>:
+  pvi: "HyperSuprimCam-{collection}/{datasetType}_{physical_filter}"
+  instrument+physical_filter: "hsc/{run}_{datasetType}_{physical_filter}_{instrument}"

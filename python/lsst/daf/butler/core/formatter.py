@@ -21,6 +21,7 @@
 
 from abc import ABCMeta, abstractmethod
 
+from .configSupport import processLookupConfigs
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
 
@@ -140,6 +141,56 @@ class FormatterFactory:
     def __init__(self):
         self._mappingFactory = MappingFactory(Formatter)
 
+    def normalizeDimensions(self, universe):
+        """Normalize formatter lookups that use dimensions.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            The set of all known dimensions. If `None`, returns without
+            action.
+
+        Notes
+        -----
+        Goes through all registered formatters, and for keys that include
+        dimensions, rewrites those keys to use a verified set of
+        dimensions.
+
+        Returns without action if the formatter keys have already been
+        normalized.
+
+        Raises
+        ------
+        ValueError
+            Raised if a key exists where a dimension is not part of
+            the ``universe``.
+        """
+        return self._mappingFactory.normalizeRegistryDimensions(universe)
+
+    def registerFormatters(self, config):
+        """Bulk register formatters from a config.
+
+        Parameters
+        ----------
+        config : `Config`
+            ``formatters`` section of a configuration.
+
+        Notes
+        -----
+        The configuration can include one level of hierarchy where an
+        instrument-specific section can be defined to override more general
+        template specifications.  This is represented in YAML using a
+        key of form ``instrument<name>`` which can then define templates
+        that will be returned if a `DatasetRef` contains a matching instrument
+        name in the data ID.
+
+        The config is parsed using the function
+        `~lsst.daf.butler.configSubset.processLookupConfigs`.
+        """
+        contents = processLookupConfigs(config)
+        for key, f in contents.items():
+            self.registerFormatter(key, f)
+
     def getFormatter(self, entity):
         """Get a new formatter instance.
 
@@ -148,11 +199,27 @@ class FormatterFactory:
         entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
             Entity to use to determine the formatter to return.
             `StorageClass` will be used as a last resort if `DatasetRef`
-            or `DatasetType` instance is provided.
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        formatter : `Formatter`
+            An instance of the registered formatter.
         """
         if isinstance(entity, str):
             names = (entity,)
         else:
+            # Normalize the registry to a universe if not already done
+            if not self._mappingFactory.normalized:
+                try:
+                    universe = entity.dimensions.universe
+                except AttributeError:
+                    pass
+                else:
+                    self._mappingFactory.normalizeRegistryDimensions(universe)
+
             names = entity._lookupNames()
         return self._mappingFactory.getFromRegistry(*names)
 
@@ -161,8 +228,10 @@ class FormatterFactory:
 
         Parameters
         ----------
-        type_ : `str` or `StorageClass` or `DatasetType`
-            Type for which this formatter is to be used.
+        type_ : `LookupKey`, `str` or `StorageClass` or `DatasetType`
+            Type for which this formatter is to be used.  If a `LookupKey`
+            is not provided, one will be constructed from the supplied string
+            or by using the ``name`` property of the supplied entity.
         formatter : `str`
             Identifies a `Formatter` subclass to use for reading and writing
             Datasets of this type.
@@ -170,6 +239,6 @@ class FormatterFactory:
         Raises
         ------
         ValueError
-            If formatter does not name a valid formatter type.
+            Raised if the formatter does not name a valid formatter type.
         """
         self._mappingFactory.placeInRegistry(type_, formatter)

@@ -22,7 +22,6 @@
 import os
 import pickle
 import unittest
-import lsst.utils.tests
 
 from lsst.daf.butler import StorageClass, StorageClassFactory, StorageClassConfig, CompositeAssembler
 
@@ -37,7 +36,7 @@ class PythonType:
     pass
 
 
-class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
+class StorageClassFactoryTestCase(unittest.TestCase):
     """Tests of the storage class infrastructure.
     """
 
@@ -217,14 +216,5 @@ class StorageClassFactoryTestCase(lsst.utils.tests.TestCase):
         self.assertEqual(sc2, sc)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

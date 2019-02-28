@@ -24,8 +24,7 @@ import unittest
 import shutil
 import yaml
 import tempfile
-
-import lsst.utils.tests
+import lsst.utils
 
 from lsst.daf.butler import StorageClassFactory, StorageClass
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError
@@ -422,7 +421,7 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
                     self.runIngestTest(failNotImplemented)
 
 
-class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
+class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
@@ -436,7 +435,7 @@ class PosixDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
         super().setUp()
 
 
-class InMemoryDatastoreTestCase(DatastoreTests, lsst.utils.tests.TestCase):
+class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
     uriScheme = "mem:"
@@ -460,14 +459,5 @@ class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2.yaml")
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

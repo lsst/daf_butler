@@ -120,11 +120,12 @@ class PosixDatastore(Datastore):
         self.storageClassFactory = StorageClassFactory()
 
         # Now associate formatters with storage classes
-        for name, f in self.config["formatters"].items():
-            self.formatterFactory.registerFormatter(name, f)
+        self.formatterFactory.registerFormatters(self.config["formatters"])
+        self.formatterFactory.normalizeDimensions(self.registry.dimensions)
 
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"])
+        self.templates.normalizeDimensions(self.registry.dimensions)
 
         # Name ourselves
         self.name = "POSIXDatastore@{}".format(self.root)
@@ -323,7 +324,7 @@ class PosixDatastore(Datastore):
 
         # Work out output file name
         try:
-            template = self.templates.getTemplate(datasetType)
+            template = self.templates.getTemplate(ref)
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find template for {datasetType}") from e
 
@@ -331,7 +332,7 @@ class PosixDatastore(Datastore):
 
         # Get the formatter based on the storage class
         try:
-            formatter = self.formatterFactory.getFormatter(datasetType)
+            formatter = self.formatterFactory.getFormatter(ref)
         except KeyError as e:
             raise DatasetTypeNotSupportedError("Unable to find formatter for StorageClass "
                                                f"{datasetType.storageClass.name} or "

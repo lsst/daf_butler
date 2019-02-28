@@ -25,7 +25,8 @@ import hashlib
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, DimensionNameSet
+from .dimensions import DimensionGraph, DimensionNameSet, DataId
+from .configSupport import LookupKey
 
 __all__ = ("DatasetType", "DatasetRef")
 
@@ -147,6 +148,36 @@ class DatasetType:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
 
+    @staticmethod
+    def splitDatasetTypeName(datasetTypeName):
+        """Given a dataset type name, return the root name and the component
+        name.
+
+        Parameters
+        ----------
+        datasetTypeName : `str`
+            The name of the dataset type, can include a component using
+            a "."-separator.
+
+        Returns
+        -------
+        rootName : `str`
+            Root name without any components.
+        componentName : `str`
+            The component if it has been specified, else `None`.
+
+        Notes
+        -----
+        If the dataset type name is ``a.b.c`` this method will return a
+        root name of ``a`` and a component name of ``b.c``.
+        """
+        comp = None
+        root = datasetTypeName
+        if "." in root:
+            # If there is doubt, the component is after the first "."
+            root, comp = root.split(".", maxsplit=1)
+        return root, comp
+
     def nameAndComponent(self):
         """Return the root name of this dataset type and the component
         name (if defined).
@@ -158,11 +189,7 @@ class DatasetType:
         componentName : `str`
             The component if it has been specified, else `None`.
         """
-        comp = None
-        root = self.name
-        if "." in root:
-            root, comp = self.name.split(".", maxsplit=1)
-        return root, comp
+        return self.splitDatasetTypeName(self.name)
 
     def component(self):
         """Component name (if defined)
@@ -210,16 +237,29 @@ class DatasetType:
         return self.storageClass.isComposite()
 
     def _lookupNames(self):
-        """Names to use when looking up this datasetType in a configuration.
+        """Name keys to use when looking up this datasetType in a
+        configuration.
 
         The names are returned in order of priority.
 
         Returns
         -------
-        names : `tuple` of `str`
+        names : `tuple` of `LookupKey`
             Tuple of the `DatasetType` name and the `StorageClass` name.
+            If the name includes a component the name with the component
+            is first, then the name without the component and finally
+            the storage class name.
         """
-        return (self.name, *self.storageClass._lookupNames())
+        rootName, componentName = self.nameAndComponent()
+        lookups = (LookupKey(name=self.name),)
+        if componentName is not None:
+            lookups = lookups + (LookupKey(name=rootName),)
+
+        if self.dimensions:
+            # Dimensions are a lower priority than dataset type name
+            lookups = lookups + (LookupKey(dimensions=self.dimensions),)
+
+        return lookups + self.storageClass._lookupNames()
 
     def __reduce__(self):
         """Support pickling.
@@ -294,6 +334,12 @@ class DatasetRef:
 
     def __init__(self, datasetType, dataId, id=None, run=None, hash=None, components=None):
         assert isinstance(datasetType, DatasetType)
+
+        # Check the dimensions match if a DataId is provided
+        if isinstance(dataId, DataId) and isinstance(datasetType.dimensions, DimensionGraph):
+            if dataId.dimensions() != datasetType.dimensions:
+                raise ValueError(f"Dimensions mismatch for {dataId} and {datasetType}")
+
         self._id = id
         self._datasetType = datasetType
         self._dataId = dataId
@@ -394,6 +440,12 @@ class DatasetRef:
         """
         return _safeMakeMappingProxyType(self._components)
 
+    @property
+    def dimensions(self):
+        """The dimensions associated with the underlying `DatasetType`
+        """
+        return self.datasetType.dimensions
+
     def __str__(self):
         components = ""
         if self.components:
@@ -423,13 +475,24 @@ class DatasetRef:
         return self.datasetType.isComposite()
 
     def _lookupNames(self):
-        """Names to use when looking up this DatasetRef in a configuration.
+        """Name keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
 
         Returns
         -------
-        names : `tuple` of `str`
+        names : `tuple` of `LookupKey`
             Tuple of the `DatasetType` name and the `StorageClass` name.
+            If ``instrument`` is defined in the dataId, each of those names
+            is added to the start of the tuple with a key derived from the
+            value of ``instrument``.
         """
-        return self.datasetType._lookupNames()
+        # Special case the instrument Dimension since we allow configs
+        # to include the instrument name in the hierarchy.
+        names = self.datasetType._lookupNames()
+
+        if "instrument" in self.dataId:
+            names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]})
+                          for n in names) + names
+
+        return names

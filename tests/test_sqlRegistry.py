@@ -25,7 +25,6 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
 from itertools import combinations
 
-import lsst.utils.tests
 import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
@@ -622,7 +621,7 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(dataId2, dataId2a)
 
 
-class SqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
+class SqlRegistryTestCase(unittest.TestCase, RegistryTests):
     """Test for SqlRegistry.
     """
 
@@ -662,7 +661,7 @@ class SqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
         self.assertIsNone(registry.findDimensionEntry(dimension, dataId2))
 
 
-class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
+class LimitedSqlRegistryTestCase(unittest.TestCase, RegistryTests):
     """Test for SqlRegistry with limited=True.
     """
 
@@ -679,14 +678,5 @@ class LimitedSqlRegistryTestCase(lsst.utils.tests.TestCase, RegistryTests):
         self.assertTrue(registry.limited)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

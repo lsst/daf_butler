@@ -19,20 +19,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import unittest
-import lsst.utils.tests
-
-from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType
-
 """Tests related to the formatter infrastructure.
 """
 
+import os.path
+import unittest
 
-class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
+from datasetsHelper import DatasetTestHelper
+from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType, Config
+
+TESTDIR = os.path.abspath(os.path.dirname(__file__))
+
+
+class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     """Tests of the formatter factory infrastructure.
     """
 
     def setUp(self):
+        self.id = 0
         self.factory = FormatterFactory()
 
     def testRegistry(self):
@@ -70,7 +74,7 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
         # Retrieve using the DatasetType
         f2 = self.factory.getFormatter(datasetType)
         self.assertIsInstance(f, Formatter)
-        self.assertEqual(f.name, f2.name)
+        self.assertEqual(f.name(), f2.name())
 
         # This might defer the import, pytest may have already loaded it
         from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
@@ -81,15 +85,42 @@ class FormatterFactoryTestCase(lsst.utils.tests.TestCase):
             self.factory.registerFormatter(storageClassName,
                                            "lsst.daf.butler.formatters.jsonFormatter.JsonFormatter")
 
+    def testRegistryConfig(self):
+        configFile = os.path.join(TESTDIR, "config", "basic", "posixDatastore.yaml")
+        config = Config(configFile)
+        self.factory.registerFormatters(config["datastore", "formatters"])
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
+        # Create a DatasetRef with and without instrument matching the
+        # one in the config file.
+        dimensions = frozenset(("Visit", "PhysicalFilter", "Instrument"))
+        sc = StorageClass("DummySC", dict, None)
+        refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
+                                                                "physical_filter": "v"})
+        refPviHscFmt = self.factory.getFormatter(refPviHsc)
+        self.assertIsInstance(refPviHscFmt, Formatter)
+        self.assertIn("JsonFormatter", refPviHscFmt.name())
 
+        refPviNotHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
+                                                                   "physical_filter": "v"})
+        refPviNotHscFmt = self.factory.getFormatter(refPviNotHsc)
+        self.assertIsInstance(refPviNotHscFmt, Formatter)
+        self.assertIn("PickleFormatter", refPviNotHscFmt.name())
 
-def setup_module(module):
-    lsst.utils.tests.init()
+        # Create a DatasetRef that should fall back to using Dimensions
+        refPvixHsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
+                                                                  "physical_filter": "v"})
+        refPvixNotHscFmt = self.factory.getFormatter(refPvixHsc)
+        self.assertIsInstance(refPvixNotHscFmt, Formatter)
+        self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
+
+        # Create a DatasetRef that should fall back to using StorageClass
+        dimensionsNoV = frozenset(("PhysicalFilter", "Instrument"))
+        refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
+                                                                            "physical_filter": "v"})
+        refPvixNotHscDims_fmt = self.factory.getFormatter(refPvixNotHscDims)
+        self.assertIsInstance(refPvixNotHscDims_fmt, Formatter)
+        self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 
 
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

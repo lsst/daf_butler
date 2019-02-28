@@ -25,11 +25,10 @@ import tempfile
 import shutil
 
 import lsst.utils.tests
+from lsst.utils import doImport
 
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler.datastores.posixDatastore import DatastoreConfig
-
-from lsst.utils import doImport
 
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
 
@@ -38,10 +37,9 @@ from dummyRegistry import DummyRegistry
 try:
     import lsst.afw.table
     import lsst.afw.image
-    import lsst.afw.geom
+    import lsst.geom
 except ImportError:
-    lsst.afw.table = None
-    lsst.afw.image = None
+    lsst.afw = None
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -51,7 +49,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
     @classmethod
     def setUpClass(cls):
-        if lsst.afw.table is None:
+        if lsst.afw is None:
             raise unittest.SkipTest("afw not available.")
 
         # Base classes need to know where the test directory is
@@ -191,8 +189,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         wcs = datastore.get(wcsRef)
 
         # Simple check of WCS
-        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
-                                   lsst.afw.geom.Extent2I(9, 9))
+        bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
+                               lsst.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
 
     def testExposureCompositePutGet(self):
@@ -229,8 +227,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
             compsRead[compName] = component
 
         # Simple check of WCS
-        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
-                                   lsst.afw.geom.Extent2I(9, 9))
+        bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
+                               lsst.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
 
         # Try to reassemble the exposure
@@ -262,14 +260,5 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

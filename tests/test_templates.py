@@ -25,7 +25,7 @@ import os.path
 import unittest
 
 from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, \
-    FileTemplate, FileTemplatesConfig, StorageClass, Run
+    FileTemplate, FileTemplatesConfig, StorageClass, Run, FileTemplateValidationError
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -62,9 +62,18 @@ class TestFileTemplates(unittest.TestCase):
                             "run2/calexp/00052/U-trail",
                             self.makeDatasetRef("calexp"))
 
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("no fields at all")
+
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{visit}")
+
+        with self.assertRaises(FileTemplateValidationError):
+            FileTemplate("{run}_{datasetType}")
+
     def testRunOrCollectionNeeded(self):
         tmplstr = "{datasetType}/{visit:05d}/{filter}"
-        with self.assertRaises(KeyError):
+        with self.assertRaises(FileTemplateValidationError):
             self.assertTemplate(tmplstr,
                                 "02/calexp/00052/U",
                                 self.makeDatasetRef("calexp"))
@@ -116,6 +125,37 @@ class TestFileTemplates(unittest.TestCase):
         with self.assertRaises(KeyError):
             self.assertTemplate(tmplstr, "", refWcs)
 
+    def testFields(self):
+        # Template, mandatory fields, optional non-special fields,
+        # special fields, optional special fields
+        testData = (("{collection}/{datasetType}/{visit:05d}/{filter}-trail",
+                     set(["visit", "filter"]),
+                     set(),
+                     set(["collection", "datasetType"]),
+                     set()),
+                    ("{collection}/{component:?}_{visit}",
+                     set(["visit"]),
+                     set(),
+                     set(["collection"]),
+                     set(["component"]),),
+                    ("{run}/{component:?}_{visit:?}_{filter}_{instrument}_{datasetType}",
+                     set(["filter", "instrument"]),
+                     set(["visit"]),
+                     set(["run", "datasetType"]),
+                     set(["component"]),),
+                    )
+        for tmplstr, mandatory, optional, special, optionalSpecial in testData:
+            with self.subTest(template=tmplstr):
+                tmpl = FileTemplate(tmplstr)
+                fields = tmpl.fields()
+                self.assertEqual(fields, mandatory)
+                fields = tmpl.fields(optionals=True)
+                self.assertEqual(fields, mandatory | optional)
+                fields = tmpl.fields(specials=True)
+                self.assertEqual(fields, mandatory | special)
+                fields = tmpl.fields(specials=True, optionals=True)
+                self.assertEqual(fields, mandatory | special | optional | optionalSpecial)
+
     def testSimpleConfig(self):
         """Test reading from config file"""
         configRoot = os.path.join(TESTDIR, "config", "templates")
@@ -133,20 +173,48 @@ class TestFileTemplates(unittest.TestCase):
         # This should fall through the datasetTypeName check and use
         # StorageClass instead
         ref3 = self.makeDatasetRef("unknown2", storageClassName="StorageClassX")
-        tmpl = templates.getTemplate(ref3)
-        self.assertIsInstance(tmpl, FileTemplate)
+        tmplSc = templates.getTemplate(ref3)
+        self.assertIsInstance(tmplSc, FileTemplate)
 
         # Try with a component: one with defined formatter and one without
-        ref_wcs = self.makeDatasetRef("calexp.wcs")
-        ref_image = self.makeDatasetRef("calexp.image")
-        tmpl_calexp = templates.getTemplate(ref)
-        tmpl_wcs = templates.getTemplate(ref_wcs)  # Should be special
-        tmpl_image = templates.getTemplate(ref_image)
-        self.assertIsInstance(tmpl_calexp, FileTemplate)
+        refWcs = self.makeDatasetRef("calexp.wcs")
+        refImage = self.makeDatasetRef("calexp.image")
+        tmplCalexp = templates.getTemplate(ref)
+        tmplWcs = templates.getTemplate(refWcs)  # Should be special
+        tmpl_image = templates.getTemplate(refImage)
+        self.assertIsInstance(tmplCalexp, FileTemplate)
         self.assertIsInstance(tmpl_image, FileTemplate)
-        self.assertIsInstance(tmpl_wcs, FileTemplate)
-        self.assertEqual(tmpl_calexp, tmpl_image)
-        self.assertNotEqual(tmpl_calexp, tmpl_wcs)
+        self.assertIsInstance(tmplWcs, FileTemplate)
+        self.assertEqual(tmplCalexp, tmpl_image)
+        self.assertNotEqual(tmplCalexp, tmplWcs)
+
+        # Check dimensions lookup order.
+        # The order should be: dataset type name, dimension, storage class
+        # This one will not match name but might match storage class.
+        # It should match dimensions
+        refDims = self.makeDatasetRef("nomatch", dataId={"instrument": "LSST", "physical_filter": "z"},
+                                      storageClassName="StorageClassX")
+        tmplDims = templates.getTemplate(refDims)
+        self.assertIsInstance(tmplDims, FileTemplate)
+        self.assertNotEqual(tmplDims, tmplSc)
+
+        # Test that instrument overrides retrieve specialist templates
+        refPvi = self.makeDatasetRef("pvi")
+        refPviHsc = self.makeDatasetRef("pvi", dataId={"instrument": "HSC", "physical_filter": "z"})
+        refPviLsst = self.makeDatasetRef("pvi", dataId={"instrument": "LSST", "physical_filter": "z"})
+
+        tmplPvi = templates.getTemplate(refPvi)
+        tmplPviHsc = templates.getTemplate(refPviHsc)
+        tmplPviLsst = templates.getTemplate(refPviLsst)
+        self.assertEqual(tmplPvi, tmplPviLsst)
+        self.assertNotEqual(tmplPvi, tmplPviHsc)
+
+        # Have instrument match and dimensions look up with no name match
+        refNoPviHsc = self.makeDatasetRef("pvix", dataId={"instrument": "HSC", "physical_filter": "z"},
+                                          storageClassName="StorageClassX")
+        tmplNoPviHsc = templates.getTemplate(refNoPviHsc)
+        self.assertNotEqual(tmplNoPviHsc, tmplDims)
+        self.assertNotEqual(tmplNoPviHsc, tmplPviHsc)
 
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
@@ -155,7 +223,7 @@ class TestFileTemplates(unittest.TestCase):
         self.assertIsInstance(tmpl, FileTemplate)
 
         # Format config file with bad format string
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileTemplateValidationError):
             FileTemplates(os.path.join(configRoot, "templates-bad.yaml"))
 
         # Config file with no defaulting mentioned
@@ -165,7 +233,7 @@ class TestFileTemplates(unittest.TestCase):
             templates.getTemplate(ref2)
 
         # Try again but specify a default in the constructor
-        default = "{datasetType}/{filter}"
+        default = "{run}/{datasetType}/{filter}"
         templates = FileTemplates(config3, default=default)
         tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)

@@ -24,9 +24,6 @@ import unittest
 
 from sqlalchemy import create_engine, MetaData
 
-import lsst.utils
-import lsst.utils.tests
-
 from lsst.daf.butler.core.utils import iterable
 from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column, SchemaBuilder
 from sqlalchemy.sql.expression import TableClause
@@ -35,7 +32,7 @@ from sqlalchemy.sql.expression import TableClause
 """
 
 
-class SchemaTestCase(lsst.utils.tests.TestCase):
+class SchemaTestCase(unittest.TestCase):
     """Tests for Schema.
 
     .. warning::
@@ -119,14 +116,5 @@ class SchemaTestCase(lsst.utils.tests.TestCase):
             self.assertEqual(tableConstraints[src], tgt)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

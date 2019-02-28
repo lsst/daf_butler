@@ -22,8 +22,6 @@
 import os
 import unittest
 
-import lsst.utils.tests
-
 from lsst.daf.butler.core import Registry
 from lsst.daf.butler.core.butlerConfig import ButlerConfig
 
@@ -68,7 +66,7 @@ class DummyCam(Instrument):
         return None
 
 
-class InstrumentTestCase(lsst.utils.tests.TestCase):
+class InstrumentTestCase(unittest.TestCase):
     """Test for Instrument.
     """
 
@@ -82,14 +80,5 @@ class InstrumentTestCase(lsst.utils.tests.TestCase):
         dummyCam.register(registry)
 
 
-class MemoryTester(lsst.utils.tests.MemoryTestCase):
-    pass
-
-
-def setup_module(module):
-    lsst.utils.tests.init()
-
-
 if __name__ == "__main__":
-    lsst.utils.tests.init()
     unittest.main()

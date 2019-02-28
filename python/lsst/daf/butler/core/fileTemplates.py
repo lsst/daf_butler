@@ -21,12 +21,22 @@
 
 """Support for file template string expansion."""
 
-__all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig")
+__all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplateValidationError")
 
 import os.path
 import string
+import logging
 
 from .config import Config
+from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
+
+log = logging.getLogger(__name__)
+
+
+class FileTemplateValidationError(RuntimeError):
+    """Exception thrown when a file template is not consistent with the
+    associated `DatasetType`."""
+    pass
 
 
 class FileTemplatesConfig(Config):
@@ -44,22 +54,65 @@ class FileTemplates:
     default : `str`, optional
         If not `None`, a default template to use if no template has
         been specified explicitly in the configuration.
+
+    Notes
+    -----
+    The configuration can include one level of hierarchy where an
+    instrument-specific section can be defined to override more general
+    template specifications.  This is represented in YAML using a
+    key of form ``instrument<name>`` which can then define templates
+    that will be returned if a `DatasetRef` contains a matching instrument
+    name in the data ID.
+
+    A default fallback template can be specified using the key ``default``.
+    Defaulting can be disabled in a child configuration by defining the
+    value to be an empty string or a boolean `False`.
+
+    The config is parsed using the function
+    `~lsst.daf.butler.configSubset.processLookupConfigs`.
     """
 
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
         self.templates = {}
+        self.normalized = False
         self.default = FileTemplate(default) if default is not None else None
-        for name, templateStr in self.config.items():
-            # We can disable defaulting with an empty string in a config
-            # or by using a boolean
-            if name == "default":
+        contents = processLookupConfigs(self.config)
+
+        # Convert all the values to FileTemplate, handling defaults
+        defaultKey = LookupKey(name="default")
+        for key, templateStr in contents.items():
+            if key == defaultKey:
                 if not templateStr:
                     self.default = None
                 else:
                     self.default = FileTemplate(templateStr)
             else:
-                self.templates[name] = FileTemplate(templateStr)
+                self.templates[key] = FileTemplate(templateStr)
+
+    def validateTemplate(self, *entities):
+        """Retrieve the template associated with each dataset type and
+        validate the dimensions against the template.
+
+        Parameters
+        ----------
+        *entities : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Entities to validate against the matching templates.
+
+        Raises
+        ------
+        KeyError
+            Raised if no template could be found for the supplied entity.
+        FileTemplateValidationError
+            Raised if an entity failed validation.
+
+        Notes
+        -----
+        See `FileTemplate.validateTemplate()` for details on the validation.
+        """
+        for entity in entities:
+            template = self.getTemplate(entity)
+            template.validateTemplate(entity)
 
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
@@ -74,7 +127,9 @@ class FileTemplates:
             Instance to use to look for a corresponding template.
             A `DatasetType` name or a `StorageClass` name will be used
             depending on the supplied entity. Priority is given to a
-            `DatasetType` name.
+            `DatasetType` name. Supports instrument override if a
+            `DatasetRef` is provided configured with an ``instrument``
+            value for the data ID.
 
         Returns
         -------
@@ -84,32 +139,68 @@ class FileTemplates:
         Raises
         ------
         KeyError
-            No template could be located for this Dataset type.
+            Raised if no template could be located for this Dataset type.
         """
+
+        # normalize the registry if not already done and we have access
+        # to a universe
+        if not self.normalized:
+            try:
+                universe = entity.dimensions.universe
+            except AttributeError:
+                pass
+            else:
+                self.normalizeDimensions(universe)
 
         # Get the names to use for lookup
         names = entity._lookupNames()
 
         # Get a location from the templates
-        template = None
+        template = self.default
+        source = "default"
         for name in names:
             if name in self.templates:
                 template = self.templates[name]
-            elif "." in name:
-                baseType, component = name.split(".", maxsplit=1)
-                if baseType in self.templates:
-                    template = self.templates[baseType]
-            if template is not None:
+                source = name
                 break
 
-        if template is None and self.default is not None:
-            template = self.default
-
-        # if still not template give up for now.
         if template is None:
             raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
 
+        log.debug("Got file %s from %s via %s", template, entity, source)
+
         return template
+
+    def normalizeDimensions(self, universe):
+        """Normalize template lookups that use dimensions.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            The set of all known dimensions. If `None`, returns without
+            action.
+
+        Notes
+        -----
+        Goes through all registered templates, and for keys that include
+        dimensions, rewrites those keys to use a verified set of
+        dimensions.
+
+        Returns without action if the template keys have already been
+        normalized.
+
+        Raises
+        ------
+        ValueError
+            Raised if a key exists where a dimension is not part of
+            the ``universe``.
+        """
+        if self.normalized:
+            return
+
+        normalizeLookupKeys(self.templates, universe)
+
+        self.normalized = True
 
 
 class FileTemplate:
@@ -119,6 +210,11 @@ class FileTemplate:
     ----------
     template : `str`
         Template string.
+
+    Raises
+    ------
+    FileTemplateValidationError
+        Raised if the template fails basic validation.
 
     Notes
     -----
@@ -140,10 +236,72 @@ class FileTemplate:
     unless it is a path separator, will be removed from the output path.
     """
 
+    mandatoryFields = {"collection", "run"}
+    """A set of fields, one of which must be present in a template."""
+
+    datasetFields = {"datasetType", "component"}
+    """Fields related to the supplied dataset, not a dimension."""
+
+    specialFields = mandatoryFields | datasetFields
+    """Set of special fields that are available independently of the defined
+    Dimensions."""
+
     def __init__(self, template):
-        if not isinstance(template, str) or "{" not in template:
-            raise ValueError(f"Template ({template}) does not contain any format specifiers")
+        if not isinstance(template, str):
+            raise FileTemplateValidationError(f"Template ('{template}') does "
+                                              "not contain any format specifiers")
         self.template = template
+
+        # Do basic validation without access to dimensions
+        self.validateTemplate(None)
+
+    def __eq__(self, other):
+        if not isinstance(other, FileTemplate):
+            return False
+
+        return self.template == other.template
+
+    def __str__(self):
+        return self.template
+
+    def __repr__(self):
+        return f'{self.__class__.__name__}("{self.template}")'
+
+    def fields(self, optionals=False, specials=False):
+        """Return the field names used in this template.
+
+        Parameters
+        ----------
+        optionals : `bool`
+            If `True`, optional fields are included in the returned set.
+        specials : `bool`
+            If `True`, non-dimension fields are included.
+
+        Returns
+        -------
+        names : `set`
+            Names of fields used in this template
+
+        Notes
+        -----
+        The returned set will include the special values such as `datasetType`
+        and `component`.
+        """
+        fmt = string.Formatter()
+        parts = fmt.parse(self.template)
+
+        names = set()
+        for literal, field_name, format_spec, conversion in parts:
+            if field_name is not None:
+                if "?" in format_spec and not optionals:
+                    continue
+
+                if not specials and field_name in self.specialFields:
+                    continue
+
+                names.add(field_name)
+
+        return names
 
     def format(self, ref):
         """Format a template string into a full path.
@@ -161,9 +319,9 @@ class FileTemplate:
         Raises
         ------
         KeyError
-            Requested field is not defined and the field is not optional.
-            Or, `component` is specified but "component" was not part of
-            the template.
+            Raised if the requested field is not defined and the field is
+            not optional.  Or, `component` is specified but "component" was
+            not part of the template.
         """
         # Extract defined non-None units from the dataId
         fields = {k: v for k, v in ref.dataId.items() if v is not None}
@@ -236,3 +394,61 @@ class FileTemplate:
             path = os.path.relpath(path, start="/")
 
         return path
+
+    def validateTemplate(self, entity):
+        """Compare the template against a representative entity that would
+        like to use template.
+
+        Parameters
+        ----------
+        entity : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Entity to compare against template.
+
+        Raises
+        ------
+        ValidationError
+            Raised if the template is inconsistent with the supplied entity.
+
+        Notes
+        -----
+        Validation will always include a check that mandatory fields
+        are present and that at least one field refers to a dimension.
+        If the supplied entity includes a `DimensionGraph` then it will be
+        used to compare the available dimensions with those specified in the
+        template.
+        """
+
+        # Check that the template has run or collection
+        withSpecials = self.fields(specials=True)
+        if not withSpecials & self.mandatoryFields:
+            raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
+                                              f" from {self.mandatoryFields}")
+
+        # Check that there are some dimension fields in the template
+        allfields = self.fields(optionals=True)
+        if not allfields:
+            raise FileTemplateValidationError(f"Template '{self}' does not seem to have any fields"
+                                              " corresponding to dimensions.")
+
+        # If we do not have dimensions defined then all we can do is shrug
+        if not hasattr(entity, "dimensions"):
+            return
+
+        dimensions = entity.dimensions
+        if not dimensions:
+            return True
+
+        links = dimensions.links()
+
+        required = self.fields(optionals=False)
+
+        # Calculate any field usage that does not match a dimension
+        if not required.issubset(links):
+            raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
+                                              f" {required} is not a subset of {links}.")
+
+        if not allfields.issuperset(links):
+            raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
+                                              f" {allfields} is not a superset of {links}.")
+
+        return
