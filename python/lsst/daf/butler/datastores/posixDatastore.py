@@ -313,7 +313,6 @@ class PosixDatastore(Datastore):
             The associated `DatasetType` is not handled by this datastore.
         """
         datasetType = ref.datasetType
-        typeName = datasetType.name
         storageClass = datasetType.storageClass
 
         # Sanity check
@@ -326,7 +325,7 @@ class PosixDatastore(Datastore):
         try:
             template = self.templates.getTemplate(ref)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find template for {datasetType}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find template for {ref}") from e
 
         location = self.locationFactory.fromPath(template.format(ref))
 
@@ -334,9 +333,7 @@ class PosixDatastore(Datastore):
         try:
             formatter = self.formatterFactory.getFormatter(ref)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError("Unable to find formatter for StorageClass "
-                                               f"{datasetType.storageClass.name} or "
-                                               f"DatasetType {typeName}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
