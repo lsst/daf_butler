@@ -98,6 +98,9 @@ class ButlerTests:
         butler = Butler(self.tmpConfigFile)
         self.assertIsInstance(butler, Butler)
 
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, set())
+
     def testBasicPutGet(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         self.runPutGetTest(storageClass, "test_metric")
@@ -112,6 +115,11 @@ class ButlerTests:
 
     def runPutGetTest(self, storageClass, datasetTypeName):
         butler = Butler(self.tmpConfigFile)
+
+        # There will not be a collection yet
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, set())
+
         # Create and register a DatasetType
         dimensions = ("Instrument", "Visit")
 
@@ -216,6 +224,10 @@ class ButlerTests:
         with self.assertRaises(KeyError):
             butler.get(ref, parameters={"unsupported": True})
 
+        # Check we have a collection
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, set(["ingest", ]))
+
     def testPickle(self):
         """Test pickle support.
         """
@@ -297,6 +309,11 @@ class ButlerTests:
         # inheriting from defaults.
         self.assertIn(self.fullConfigKey, full)
         self.assertNotIn(self.fullConfigKey, limited)
+
+        # Collections don't appear until something is put in them
+        collections1 = butler1.registry.getAllCollections()
+        self.assertEqual(collections1, set())
+        self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
     def testStringification(self):
         butler = Butler(self.configFile)

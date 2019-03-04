@@ -264,6 +264,17 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    def getAllCollections(self):
+        """Get names of all the collections found in this repository.
+
+        Returns
+        -------
+        collections : `set` of `str`
+            The collections.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
     def find(self, collection, datasetType, dataId=None, **kwds):
         """Lookup a dataset.
 
@@ -346,6 +357,17 @@ class Registry(metaclass=ABCMeta):
         ------
         KeyError
             Requested named DatasetType could not be found in registry.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getAllDatasetTypes(self):
+        r"""Get every registered `DatasetType`.
+
+        Returns
+        -------
+        types : `tuple` of `DatasetType`
+            All the `DatasetType`\ s.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
