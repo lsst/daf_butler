@@ -29,7 +29,8 @@ from collections import namedtuple
 
 from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory,
                              FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
-                             StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict)
+                             StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
+                             DatastoreValidationError, FileTemplateValidationError)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 
@@ -556,6 +557,53 @@ class PosixDatastore(Datastore):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return self.put(inMemoryDataset, ref)
+
+    def validateConfiguration(self, *entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+            All the problems are reported in a single exception.
+
+        Notes
+        -----
+        This method checks that all the supplied entities have valid file
+        templates and also have formatters defined.
+        """
+
+        templateFailed = None
+        try:
+            self.templates.validateTemplate(*entities, logFailures=logFailures)
+        except FileTemplateValidationError as e:
+            templateFailed = e
+
+        formatterFailed = []
+        for entity in entities:
+            try:
+                self.formatterFactory.getFormatter(entity)
+            except KeyError as e:
+                formatterFailed.append(e)
+                if logFailures:
+                    log.fatal("Formatter failure: %s", str(e))
+
+        if templateFailed or formatterFailed:
+            messages = []
+            if templateFailed:
+                messages.append(str(templateFailed))
+            if formatterFailed:
+                messages.append(",".join(formatterFailed))
+            msg = "; ".join(messages)
+            raise DatastoreValidationError(msg)
 
     @staticmethod
     def computeChecksum(filename, algorithm="blake2b", block_size=8192):

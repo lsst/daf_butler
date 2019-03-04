@@ -29,11 +29,12 @@ import logging
 
 from .config import Config
 from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
+from .exceptions import ValidationError
 
 log = logging.getLogger(__name__)
 
 
-class FileTemplateValidationError(RuntimeError):
+class FileTemplateValidationError(ValidationError):
     """Exception thrown when a file template is not consistent with the
     associated `DatasetType`."""
     pass
@@ -90,7 +91,7 @@ class FileTemplates:
             else:
                 self.templates[key] = FileTemplate(templateStr)
 
-    def validateTemplate(self, *entities):
+    def validateTemplate(self, *entities, logFailures=False):
         """Retrieve the template associated with each dataset type and
         validate the dimensions against the template.
 
@@ -98,11 +99,12 @@ class FileTemplates:
         ----------
         *entities : `DatasetType`, `DatasetRef`, or `StorageClass`
             Entities to validate against the matching templates.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
 
         Raises
         ------
-        KeyError
-            Raised if no template could be found for the supplied entity.
         FileTemplateValidationError
             Raised if an entity failed validation.
 
@@ -110,9 +112,28 @@ class FileTemplates:
         -----
         See `FileTemplate.validateTemplate()` for details on the validation.
         """
+        failed = []
         for entity in entities:
-            template = self.getTemplate(entity)
-            template.validateTemplate(entity)
+            try:
+                template = self.getTemplate(entity)
+            except KeyError as e:
+                failed.append(e)
+                if logFailures:
+                    log.fatal("%s", str(e))
+                continue
+            try:
+                template.validateTemplate(entity)
+            except FileTemplateValidationError as e:
+                failed.append(e)
+                if logFailures:
+                    log.fatal("Template failure: %s", str(e))
+
+        if failed:
+            if len(failed) == 1:
+                msg = str(failed[0])
+            else:
+                msg = f"{len(failed)} template validation failures: {'; '.join([str(f) for f in failed])}"
+            raise FileTemplateValidationError(msg)
 
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
@@ -371,7 +392,8 @@ class FileTemplate:
                 if "/" not in literal:
                     literal = ""
             else:
-                raise KeyError("{} requested in template but not defined and not optional".format(field_name))
+                raise KeyError(f"'{field_name}' requested in template via '{self.template}' "
+                               "but not defined and not optional")
 
             # Now use standard formatting
             output = output + literal + format(value, format_spec)

@@ -31,7 +31,7 @@ import pickle
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
-from lsst.daf.butler import FileTemplateValidationError
+from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -236,6 +236,40 @@ class ButlerTests:
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
 
+    def testGetDatasetTypes(self):
+        butler = Butler(self.tmpConfigFile)
+        dimensions = ("Instrument", "Visit", "PhysicalFilter")
+        dimensionEntries = (("Instrument", {"instrument": "DummyCam"}),
+                            ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
+                            ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        # Add needed Dimensions
+        for name, value in dimensionEntries:
+            butler.registry.addDimensionEntry(name, value)
+
+        # When a DatasetType is added to the registry entries are created
+        # for each component
+        datasetTypeNames = {"metric", "metric2", "metric4"}
+        components = set()
+        for datasetTypeName in datasetTypeNames:
+            # Create and register a DatasetType
+            self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
+
+            for componentName in storageClass.components:
+                components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
+
+        fromRegistry = butler.registry.getAllDatasetTypes()
+        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
+
+        # Now that we have some dataset types registered, validate them
+        butler.validateConfiguration()
+
+        # Add a new datasetType that will fail template validation
+        self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
+        if self.validationCanFail:
+            with self.assertRaises(ValidationError):
+                butler.validateConfiguration(logFailures=True)
+
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
         datasetTypeName = "test_metric"
@@ -327,6 +361,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     fullConfigKey = ".datastore.formatters"
+    validationCanFail = True
 
     datastoreStr = "datastore='./butler_test_repository"
     registryStr = "registry='sqlite:///:memory:'"
@@ -391,6 +426,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
     fullConfigKey = None
     useTempRoot = False
+    validationCanFail = False
     datastoreStr = "datastore='InMemory'"
     registryStr = "registry='sqlite:///:memory:'"
 
@@ -399,6 +435,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
+    validationCanFail = True
     datastoreStr = "datastore='InMemory, ./butler_test_repository, ./butler_test_repository2'"
     registryStr = "registry='sqlite:///:memory:'"
 

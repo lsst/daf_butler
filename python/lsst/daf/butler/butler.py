@@ -39,11 +39,16 @@ from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataId
+from .core.exceptions import ValidationError
 
-
-__all__ = ("Butler",)
+__all__ = ("Butler", "ButlerValidationError")
 
 log = logging.getLogger(__name__)
+
+
+class ButlerValidationError(ValidationError):
+    """There is a problem with the Butler configuration."""
+    pass
 
 
 class Butler:
@@ -546,3 +551,23 @@ class Butler:
         else:
             # This also implicitly disassociates.
             self.registry.removeDataset(ref)
+
+    def validateConfiguration(self, logFailures=False):
+        """Validate butler configuration.
+
+        Checks that each `DatasetType` can be stored in the `Datastore`.
+
+        Parameters
+        ----------
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        ButlerValidationError
+            Raised if there is some inconsistency with how this Butler
+            is configured.
+        """
+        datasetTypes = self.registry.getAllDatasetTypes()
+        self.datastore.validateConfiguration(*datasetTypes, logFailures=logFailures)

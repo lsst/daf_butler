@@ -30,14 +30,21 @@ from abc import ABCMeta, abstractmethod
 
 from lsst.utils import doImport
 from .config import ConfigSubset
+from .exceptions import ValidationError
 
-__all__ = ("DatastoreConfig", "Datastore")
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 
 class DatastoreConfig(ConfigSubset):
     component = "datastore"
     requiredKeys = ("cls",)
     defaultConfigFile = "datastore.yaml"
+
+
+class DatastoreValidationError(ValidationError):
+    """There is a problem with the Datastore configuration.
+    """
+    pass
 
 
 class DatastoreTransaction:
@@ -363,5 +370,29 @@ class Datastore(metaclass=ABCMeta):
             The external `Datastore` from which to retreive the Dataset.
         datasetRef : `DatasetRef`
             Reference to the required Dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def validateConfiguration(self, *entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+
+        Notes
+        -----
+        Which parts of the configuration are validated is at the discretion
+        of each Datastore implementation.
         """
         raise NotImplementedError("Must be implemented by subclass")

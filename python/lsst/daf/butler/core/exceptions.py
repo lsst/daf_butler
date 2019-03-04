@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Specialized Butler exceptions."""
-__all__ = ("DatasetTypeNotSupportedError",)
+__all__ = ("DatasetTypeNotSupportedError", "ValidationError")
 
 
 class DatasetTypeNotSupportedError(RuntimeError):
@@ -28,5 +28,11 @@ class DatasetTypeNotSupportedError(RuntimeError):
 
     This can happen in a `Datastore` when a particular `DatasetType`
     has no formatters associated with it.
+    """
+    pass
+
+
+class ValidationError(RuntimeError):
+    """Some sort of validation error has occurred.
     """
     pass

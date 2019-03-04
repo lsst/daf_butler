@@ -27,7 +27,8 @@ import os
 import warnings
 
 from lsst.utils import doImport
-from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError
+from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
+    DatastoreValidationError
 
 log = logging.getLogger(__name__)
 
@@ -456,3 +457,40 @@ class ChainedDatastore(Datastore):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return [datastore.put(inMemoryDataset, ref) for datastore in self.datastores]
+
+    def validateConfiguration(self, *entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+            All the problems are reported in a single exception.
+
+        Notes
+        -----
+        This method checks each datastore in turn.
+        """
+
+        # Need to catch each of the datastore outputs and ensure that
+        # all are tested.
+        failures = []
+        for datastore in self.datastores:
+            try:
+                datastore.validateConfiguration(*entities, logFailures=logFailures)
+            except DatastoreValidationError as e:
+                if logFailures:
+                    log.fatal("Datastore %s failed validation", datastore.name)
+                failures.append(f"Datastore {self.name}: {e}")
+
+        if failures:
+            msg = "; ".join(failures)
+            raise DatastoreValidationError(msg)

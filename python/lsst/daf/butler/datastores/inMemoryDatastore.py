@@ -419,3 +419,26 @@ class InMemoryDatastore(Datastore):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return self.put(inMemoryDataset, ref)
+
+    def validateConfiguration(self, *entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+            All the problems are reported in a single exception.
+
+        Notes
+        -----
+        This method is a no-op.
+        """
+        return

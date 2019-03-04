@@ -4,9 +4,10 @@ datastore:
   templates:
     default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
     calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
-    metric: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
+    metric: "{collection}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
     metric3: "{collection}/{datasetType}/{instrument}"
+    metric4: "{collection}/{instrument}_{physical_filter}_{visit:08d}"
     PhysicalFilter+: "{collection}/{instrument}_{physical_filter}"
     instrument<DummyCamComp>:
       metric33: "{collection}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
