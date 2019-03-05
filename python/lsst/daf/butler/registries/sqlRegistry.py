@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("SqlRegistryConfig", "SqlRegistry")
+
 import itertools
 import contextlib
 
@@ -42,9 +44,6 @@ from ..core.config import Config
 from ..core.dimensions import DataId
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from .sqlPreFlight import SqlPreFlight
-
-__all__ = ("SqlRegistryConfig", "SqlRegistry")
-
 
 class SqlRegistryConfig(RegistryConfig):
     pass
