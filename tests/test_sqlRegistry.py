@@ -86,7 +86,7 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(outDatasetType2, inDatasetType)
 
         allTypes = registry.getAllDatasetTypes()
-        self.assertEqual(allTypes, set([outDatasetType1, outDatasetType2]))
+        self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
     def testDataset(self):
         registry = self.makeRegistry()
@@ -467,7 +467,7 @@ class RegistryTests(metaclass=ABCMeta):
 
         instrumentEntries = registry.findDimensionEntries(dimensionName)
         instruments = {e["instrument"] for e in instrumentEntries}
-        self.assertEqual(instruments, set(["DummyCam", "DummyCam2"]))
+        self.assertEqual(instruments, {"DummyCam", "DummyCam2"})
 
     def testBasicTransaction(self):
         registry = self.makeRegistry()

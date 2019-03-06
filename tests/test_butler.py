@@ -226,7 +226,7 @@ class ButlerTests:
 
         # Check we have a collection
         collections = butler.registry.getAllCollections()
-        self.assertEqual(collections, set(["ingest", ]))
+        self.assertEqual(collections, {"ingest", })
 
     def testPickle(self):
         """Test pickle support.
