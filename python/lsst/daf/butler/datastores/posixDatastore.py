@@ -585,21 +585,21 @@ class PosixDatastore(Datastore):
         try:
             self.templates.validateTemplate(*entities, logFailures=logFailures)
         except FileTemplateValidationError as e:
-            templateFailed = e
+            templateFailed = str(e)
 
         formatterFailed = []
         for entity in entities:
             try:
                 self.formatterFactory.getFormatter(entity)
             except KeyError as e:
-                formatterFailed.append(e)
+                formatterFailed.append(str(e))
                 if logFailures:
                     log.fatal("Formatter failure: %s", str(e))
 
         if templateFailed or formatterFailed:
             messages = []
             if templateFailed:
-                messages.append(str(templateFailed))
+                messages.append(templateFailed)
             if formatterFailed:
                 messages.append(",".join(formatterFailed))
             msg = "; ".join(messages)
