@@ -65,8 +65,8 @@ class RegistryTests(metaclass=ABCMeta):
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         # Inserting for the first time should return True
         self.assertTrue(registry.registerDatasetType(inDatasetType))
-        outDatasetType = registry.getDatasetType(datasetTypeName)
-        self.assertEqual(outDatasetType, inDatasetType)
+        outDatasetType1 = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType1, inDatasetType)
 
         # Re-inserting should work
         self.assertFalse(registry.registerDatasetType(inDatasetType))
@@ -82,8 +82,11 @@ class RegistryTests(metaclass=ABCMeta):
         dimensions = ("Instrument", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(inDatasetType)
-        outDatasetType = registry.getDatasetType(datasetTypeName)
-        self.assertEqual(outDatasetType, inDatasetType)
+        outDatasetType2 = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType2, inDatasetType)
+
+        allTypes = registry.getAllDatasetTypes()
+        self.assertEqual(set(allTypes), set([outDatasetType1, outDatasetType2]))
 
     def testDataset(self):
         registry = self.makeRegistry()
@@ -355,6 +358,9 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertIsNone(registry.find(newCollection, datasetType, dataId1))
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
+
+        collections = registry.getAllCollections()
+        self.assertEqual(collections, {"something", "ingest"})
 
     def testAssociate(self):
         registry = self.makeRegistry()
