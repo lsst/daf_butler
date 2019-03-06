@@ -22,6 +22,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import sys
 
 from lsst.daf.butler import Butler, ValidationError
 
@@ -33,14 +34,19 @@ if __name__ == "__main__":
                         help="Filesystem path for an existing Butler repository.")
     parser.add_argument("--collection", "-c", default="validate", type=str,
                         help="Collection to refer to in this repository.")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                        help="Do not report individual failures.")
 
     args = parser.parse_args()
     # The collection does not matter for validation but if a run is specified
     # in the configuration then it must be consistent with this collection
     butler = Butler(config=args.root, collection=args.collection)
     try:
-        butler.validateConfiguration(logFailures=True)
+        logFailures = True
+        if args.quiet:
+            logFailures = False
+        butler.validateConfiguration(logFailures=logFailures)
     except ValidationError:
-        pass
+        sys.exit(1)
     else:
         print("No problems encountered with configuration.")
