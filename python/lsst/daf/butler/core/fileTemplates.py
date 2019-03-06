@@ -452,15 +452,20 @@ class FileTemplate:
             raise FileTemplateValidationError(f"Template '{self}' does not seem to have any fields"
                                               " corresponding to dimensions.")
 
-        # If we do not have dimensions defined then all we can do is shrug
+        # If we do not have dimensions available then all we can do is shrug
         if not hasattr(entity, "dimensions"):
             return
 
-        dimensions = entity.dimensions
-        if not dimensions:
-            return True
-
-        links = dimensions.links()
+        # Get the dimension links to get the full set of available field names
+        # Fall back to dataId keys if we have them but no links.
+        # dataId keys must still be present in the template
+        try:
+            links = entity.dimensions.links()
+        except AttributeError:
+            try:
+                links = set(entity.dataId.keys())
+            except AttributeError:
+                return
 
         required = self.fields(optionals=False)
 
