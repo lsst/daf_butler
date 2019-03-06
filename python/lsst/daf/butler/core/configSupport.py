@@ -82,8 +82,16 @@ class LookupKey:
             self._dataId = None
 
     def __str__(self):
-        return "({}, {})".format(self._name if self._name else self._dimensions,
-                                 ",".join(str(t) for t in self._dataId) if self._dataId else "")
+        # For the simple case return the simple string
+        if self._name:
+            name = self._name
+        else:
+            name = str(self._dimensions)
+
+        if not self._dataId:
+            return name
+
+        return "{} ({})".format(name, ",".join(str(t) for t in self._dataId))
 
     def __repr__(self):
         params = ""
