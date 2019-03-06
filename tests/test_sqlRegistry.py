@@ -86,7 +86,7 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(outDatasetType2, inDatasetType)
 
         allTypes = registry.getAllDatasetTypes()
-        self.assertEqual(set(allTypes), set([outDatasetType1, outDatasetType2]))
+        self.assertEqual(allTypes, set([outDatasetType1, outDatasetType2]))
 
     def testDataset(self):
         registry = self.makeRegistry()

@@ -385,10 +385,10 @@ class SqlRegistry(Registry):
         # Get all the registered names
         result = self._connection.execute(select([datasetTypeTable.c.dataset_type_name])).fetchall()
         if result is None:
-            return tuple()
+            return frozenset()
 
         datasetTypeNames = [r[0] for r in result]
-        return tuple(self.getDatasetType(name) for name in datasetTypeNames)
+        return frozenset(self.getDatasetType(name) for name in datasetTypeNames)
 
     def getDatasetType(self, name):
         # Docstring inherited from Registry.getDatasetType.

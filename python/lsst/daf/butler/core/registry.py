@@ -366,8 +366,8 @@ class Registry(metaclass=ABCMeta):
 
         Returns
         -------
-        types : `tuple` of `DatasetType`
-            All the `DatasetType`\ s.
+        types : `frozenset` of `DatasetType`
+            Every `DatasetType` in the registry.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
