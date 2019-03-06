@@ -569,5 +569,24 @@ class Butler:
             Raised if there is some inconsistency with how this Butler
             is configured.
         """
-        datasetTypes = self.registry.getAllDatasetTypes()
-        self.datastore.validateConfiguration(*datasetTypes, logFailures=logFailures)
+        entities = list(self.registry.getAllDatasetTypes())
+
+        # Find all the registered instruments
+        instruments = set()
+        if not self.registry.limited:
+            instrumentEntries = self.registry.findDimensionEntries("Instrument")
+            instruments = {e["instrument"] for e in instrumentEntries}
+
+        # For each datasetType that has an Instrument dimension, create
+        # a DatasetRef for each defined instrument
+        datasetRefs = []
+
+        for datasetType in entities:
+            if "Instrument" in datasetType.dimensions:
+                for instrument in instruments:
+                    datasetRef = DatasetRef(datasetType, {"instrument": instrument})
+                    datasetRefs.append(datasetRef)
+
+        entities.extend(datasetRefs)
+
+        self.datastore.validateConfiguration(*entities, logFailures=logFailures)
