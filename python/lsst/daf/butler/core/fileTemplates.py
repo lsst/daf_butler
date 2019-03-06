@@ -125,7 +125,7 @@ class FileTemplates:
             try:
                 template.validateTemplate(entity)
             except FileTemplateValidationError as e:
-                failed.append(e)
+                failed.append(str(e))
                 if logFailures:
                     log.fatal("Template failure: %s", str(e))
 
@@ -133,7 +133,8 @@ class FileTemplates:
             if len(failed) == 1:
                 msg = str(failed[0])
             else:
-                msg = f"{len(failed)} template validation failures: {'; '.join([str(f) for f in failed])}"
+                failMsg = "; ".join(failed)
+                msg = f"{len(failed)} template validation failures: {failMsg}"
             raise FileTemplateValidationError(msg)
 
     def getTemplate(self, entity):
