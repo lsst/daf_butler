@@ -25,19 +25,19 @@ import unittest
 
 from lsst.daf.butler import (ButlerConfig, DatasetType, Registry, DataId,
                              DatasetOriginInfoDef, StorageClass)
-from lsst.daf.butler.registries.sqlPreFlight import SqlPreFlight
+from lsst.daf.butler.sql import MultipleDatasetQueryBuilder
 from lsst.sphgeom import Angle, Box, LonLat, NormalizedAngle
 
 
-class SqlPreFlightTestCase(unittest.TestCase):
-    """Test for SqlPreFlight.
+class QueryBuilderTestCase(unittest.TestCase):
+    """Tests for QueryBuilders.
     """
+
+    DEFER = False
 
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.configFile = os.path.join(self.testDir, "config/basic/butler.yaml")
-        # easiest way to make SqlPreFlight instance is to ask SqlRegistry to
-        # do it
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
 
@@ -58,11 +58,11 @@ class SqlPreFlightTestCase(unittest.TestCase):
         self.assertEqual(originInfo.getOutputCollection("ds"), "out")
         self.assertEqual(originInfo.getOutputCollection("ds2"), "out2")
 
-    def testPreFlightInstrumentUnits(self):
-        """Test involving only Instrument units, no joins to SkyMap"""
+    def testInstrumentDimensions(self):
+        """Test involving only Instrument dimensions, no joins to SkyMap"""
         registry = self.registry
 
-        # need a bunch of units and datasets for test
+        # need a bunch of dimensions and datasets for test
         registry.addDimensionEntry("Instrument", dict(instrument="DummyCam", visit_max=25, exposure_max=300,
                                                       detector_max=6))
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
@@ -125,38 +125,45 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=collection1)
-        for deferOutputIdQueries in (True, False):
-            with self.subTest(deferOutputIdQueries=deferOutputIdQueries):
-                preFlight = SqlPreFlight(self.registry, neededDatasetTypes=[rawType],
-                                         futureDatasetTypes=[calexpType], originInfo=originInfo,
-                                         deferOutputIdQueries=deferOutputIdQueries)
-                rows = preFlight.selectDimensions()
-                rows = list(rows)
-                self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
-                for row in rows:
-                    self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
-                    self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
-                    packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
-                    packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
-                    self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
-                                     DataId(row.dataId, dimensions=packer1.dimensions.required))
-                    self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
-                                     DataId(row.dataId, dimensions=packer2.dimensions.required))
-                    self.assertNotEqual(packer1.pack(row.dataId), packer2.pack(row.dataId))
-                self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
-                                      (100, 101, 110, 111))
-                self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10, 11))
-                self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
+        self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
+        for row in rows:
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
+                                                      "physical_filter", "abstract_filter"))
+            self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
+            packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
+            packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
+            self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
+                             DataId(row.dataId, dimensions=packer1.dimensions.required))
+            self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
+                             DataId(row.dataId, dimensions=packer2.dimensions.required))
+            self.assertNotEqual(packer1.pack(row.dataId), packer2.pack(row.dataId))
+        self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
+                              (100, 101, 110, 111))
+        self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10, 11))
+        self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
         # second collection
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection2], defaultOutput=collection1)
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo, neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType])
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for row in rows:
-            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
+                                                      "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
                               (100, 101, 200, 201))
@@ -165,14 +172,18 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # with two input datasets
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1, collection2], defaultOutput=collection2)
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType])
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 6*3)   # 6 exposures times 3 detectors
         for row in rows:
-            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
+                                                      "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows),
                               (100, 101, 110, 111, 200, 201))
@@ -181,11 +192,15 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # limit to single visit
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput=None)
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType])
-        rows = preFlight.selectDimensions(expression="Visit.visit = 10")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("Visit.visit = 10")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10,))
@@ -193,41 +208,55 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # more limiting expression, using link names instead of Table.column
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection1], defaultOutput="")
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType])
-        rows = preFlight.selectDimensions(expression="visit = 10 and detector > 1")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("visit = 10 and detector > 1")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (10,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (2, 3))
 
         # expression excludes everything
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType])
-        rows = preFlight.selectDimensions(expression="Visit.visit > 1000")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("Visit.visit > 1000")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
 
-        # Selecting by PhysicalFilter, this is not in the units, but it is
+        # Selecting by PhysicalFilter, this is not in the dimensions, but it is
         # a part of the full expression so it should work too.
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType])
-        rows = preFlight.selectDimensions(expression="physical_filter = 'dummy_r'")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("physical_filter = 'dummy_r'")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (110, 111))
         self.assertCountEqual(set(row.dataId["visit"] for row in rows), (11,))
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
-    def testPreFlightExposureRange(self):
-        """Test involving only ExposureRange unit"""
+    def testCalibrationLabel(self):
+        """Test the CalibrationLabel dimension and the perDatasetTypeDimensions
+        option to `Registry.selectDimensions`.
+        """
         registry = self.registry
 
-        # need a bunch of units and datasets for test
+        # need a bunch of dimensions and datasets for test
         registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
                                                           physical_filter="dummy_r",
@@ -243,7 +272,7 @@ class SqlPreFlightTestCase(unittest.TestCase):
                                        dict(instrument="DummyCam", visit=visit, physical_filter="dummy_r"))
             visit_start = now + timedelta(seconds=visit*45)
             for exposure in (0, 1):
-                start = visit_start + timedelta(seconds=15*exposure)
+                start = visit_start + timedelta(seconds=20*exposure)
                 end = start + timedelta(seconds=15)
                 registry.addDimensionEntry("Exposure", dict(instrument="DummyCam",
                                                             exposure=visit*10+exposure,
@@ -254,6 +283,33 @@ class SqlPreFlightTestCase(unittest.TestCase):
                 timestamps += [(start, end)]
         self.assertEqual(len(timestamps), 6)
 
+        # Add CalibrationLabel dimension entries, with various date ranges.
+        # The string calibration_labels are intended to be descriptive for
+        # the purposes of this test, by showing ranges of Exposure numbers,
+        # and do not represent what we expect real-life CalibrationLabels
+        # to look like.
+
+        # From before first exposure (100) to the end of second exposure (101).
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="..101",
+                                        valid_first=now-timedelta(seconds=3600),
+                                        valid_last=timestamps[1][1]))
+        # From start of third exposure (110) to the end of last exposure (201).
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="110..201",
+                                        valid_first=timestamps[2][0],
+                                        valid_last=timestamps[-1][1]))
+        # Third (110) and fourth (111) exposures.
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="110..111",
+                                        valid_first=timestamps[2][0],
+                                        valid_last=timestamps[3][1]))
+        # Fifth exposure (200) only.
+        registry.addDimensionEntry("CalibrationLabel",
+                                   dict(instrument="DummyCam", calibration_label="200..200",
+                                        valid_first=timestamps[4][0],
+                                        valid_last=timestamps[5][0]-timedelta(seconds=1)))
+
         # dataset types
         collection = "test"
         run = registry.makeRun(collection=collection)
@@ -262,11 +318,11 @@ class SqlPreFlightTestCase(unittest.TestCase):
         rawType = DatasetType(name="RAW", dimensions=("Instrument", "Detector", "Exposure"),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        biasType = DatasetType(name="bias", dimensions=("Instrument", "Detector", "ExposureRange"),
+        biasType = DatasetType(name="BIAS", dimensions=("Instrument", "Detector", "CalibrationLabel"),
                                storageClass=storageClass)
         registry.registerDatasetType(biasType)
-        flatType = DatasetType(name="flat",
-                               dimensions=("Instrument", "Detector", "PhysicalFilter", "ExposureRange"),
+        flatType = DatasetType(name="FLAT",
+                               dimensions=("Instrument", "Detector", "PhysicalFilter", "CalibrationLabel"),
                                storageClass=storageClass)
         registry.registerDatasetType(flatType)
         calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
@@ -282,112 +338,137 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # add few bias datasets
         for detector in (1, 2, 3, 4, 5):
-            # from before first exposure to the end of second exposure
-            dataId = dict(instrument="DummyCam", detector=detector,
-                          valid_first=now-timedelta(seconds=3600),
-                          valid_last=timestamps[1][1])
+            dataId = dict(instrument="DummyCam", detector=detector, calibration_label="..101")
             registry.addDataset(biasType, dataId=dataId, run=run)
-            # from start of third exposure to the end of last exposure
-            dataId = dict(instrument="DummyCam", detector=detector,
-                          valid_first=timestamps[2][0],
-                          valid_last=timestamps[-1][1])
+            dataId = dict(instrument="DummyCam", detector=detector, calibration_label="110..201")
             registry.addDataset(biasType, dataId=dataId, run=run)
 
         # add few flat datasets, only for subset of detectors and exposures
         for detector in (1, 2, 3):
-            # third and fourth exposures
             dataId = dict(instrument="DummyCam", detector=detector,
-                          physical_filter="dummy_r",
-                          valid_first=timestamps[2][0],
-                          valid_last=timestamps[3][1])
+                          physical_filter="dummy_r", calibration_label="110..111")
             registry.addDataset(flatType, dataId=dataId, run=run)
-            # fifth exposure only
             dataId = dict(instrument="DummyCam", detector=detector,
-                          physical_filter="dummy_r",
-                          valid_first=timestamps[4][0],
-                          valid_last=timestamps[5][0]-timedelta(seconds=1))
+                          physical_filter="dummy_r", calibration_label="200..200")
             registry.addDataset(flatType, dataId=dataId, run=run)
 
         # without flat/bias
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType],
-                                 futureDatasetTypes=[calexpType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 6*5)   # 6 exposures times 5 detectors
         for row in rows:
-            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit"))
+            self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
+                                                      "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
 
-        # use bias
+        # use bias; we have biases for all raws, so no expression is needed
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput=collection)
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType, biasType],
-                                 futureDatasetTypes=[calexpType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[biasType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 6*5)  # 6 exposures times 5 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit"))
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, biasType, calexpType))
 
-        # use flat
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType, flatType],
-                                 futureDatasetTypes=[calexpType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        # use flat; we lack a flat for some exposures, so this should raise
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[flatType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        with self.assertRaises(LookupError):
+            rows = list(builder.execute())
+
+        # use flat, but as a required dataset type instead of prerequisite -
+        # this should automatically filter results
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType, flatType],
+            optional=[calexpType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*3)  # 3 exposures times 3 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit", "physical_filter"))
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
 
         # use both bias and flat, plus expression
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType, flatType, biasType],
-                                 futureDatasetTypes=[calexpType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions(expression="detector IN (1, 3)")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[flatType, biasType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("detector IN (1, 3) AND exposure NOT IN (100, 101, 201)")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*2)  # 3 exposures times 2 detectors
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
-                                  ("instrument", "detector", "exposure", "visit", "physical_filter"))
+                                  ("instrument", "detector", "exposure", "visit",
+                                   "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, biasType, calexpType))
 
         # select single exposure (third) and detector and check datasetRefs
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[rawType, flatType, biasType],
-                                 futureDatasetTypes=[calexpType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions(expression="Exposure.exposure = 110 AND Detector.detector = 1")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[rawType],
+            optional=[calexpType],
+            prerequisite=[flatType, biasType],
+            perDatasetTypeDimensions=["CalibrationLabel"],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("Exposure.exposure = 110 AND Detector.detector = 1")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 1)
         row = rows[0]
         self.assertEqual(row.datasetRefs[flatType].dataId,
                          dict(instrument="DummyCam",
                               detector=1,
                               physical_filter="dummy_r",
-                              valid_first=timestamps[2][0],
-                              valid_last=timestamps[3][1]))
+                              calibration_label="110..111"))
         self.assertEqual(row.datasetRefs[biasType].dataId,
                          dict(instrument="DummyCam",
                               detector=1,
-                              valid_first=timestamps[2][0],
-                              valid_last=timestamps[-1][1]))
+                              calibration_label="110..201"))
 
-    def testPreFlightSkyMapUnits(self):
-        """Test involving only SkyMap units, no joins to Instrument"""
+    def testSkyMapDimensions(self):
+        """Test involving only SkyMap dimensions, no joins to Instrument"""
         registry = self.registry
 
-        # need a bunch of units and datasets for test, we want "AbstractFilter"
-        # in the test so also have to add PhysicalFilter units
+        # need a bunch of dimensions and datasets for test, we want
+        # "AbstractFilter" in the test so also have to add PhysicalFilter
+        # dimensions
         registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
         registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
                                                           physical_filter="dummy_r",
@@ -431,12 +512,14 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # with empty expression
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[calexpType, mergeType],
-                                 futureDatasetTypes=[measType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for row in rows:
             self.assertCountEqual(row.dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -446,41 +529,49 @@ class SqlPreFlightTestCase(unittest.TestCase):
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[calexpType, mergeType],
-                                 futureDatasetTypes=[measType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions(expression="tract IN (1, 5) AND Patch.patch IN (2, 7)")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+            defer=self.DEFER,
+        )
+        builder.whereParsedExpression("tract IN (1, 5) AND Patch.patch IN (2, 7)")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 5))
         self.assertCountEqual(set(row.dataId["patch"] for row in rows), (2, 7))
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i", "r"))
 
         # limit to single filter
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[calexpType, mergeType],
-                                 futureDatasetTypes=[measType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions(expression="abstract_filter = 'i'")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+        )
+        builder.whereParsedExpression("abstract_filter = 'i'")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 3, 5))
         self.assertCountEqual(set(row.dataId["patch"] for row in rows), (2, 4, 6, 7))
         self.assertCountEqual(set(row.dataId["abstract_filter"] for row in rows), ("i",))
 
-        # expression excludes everyhting, specifying non-existing skymap is
+        # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[calexpType, mergeType],
-                                 futureDatasetTypes=[measType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions(expression="skymap = 'Mars'")
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType, mergeType],
+            optional=[measType],
+            defer=self.DEFER
+        )
+        builder.whereParsedExpression("skymap = 'Mars'")
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
 
-    def testPreFlightSpatialMatch(self):
-        """Test involving spacial match using join tables.
+    def testSpatialMatch(self):
+        """Test involving spatial match using join tables.
 
         Note that realistic test needs a resonably-defined SkyPix and regions
         in registry tables which is hard to implement in this simple test.
@@ -507,13 +598,23 @@ class SqlPreFlightTestCase(unittest.TestCase):
 
         # without data this should run OK but return empty set
         originInfo = DatasetOriginInfoDef(defaultInputs=[collection], defaultOutput="")
-        preFlight = SqlPreFlight(self.registry, originInfo=originInfo,
-                                 neededDatasetTypes=[calexpType],
-                                 futureDatasetTypes=[coaddType],
-                                 expandDataIds=False)
-        rows = preFlight.selectDimensions()
-        rows = list(rows)
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self.registry,
+            originInfo=originInfo,
+            required=[calexpType],
+            optional=[coaddType],
+            defer=self.DEFER
+        )
+        rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
+
+
+class QueryBuilderDeferralTestCase(QueryBuilderTestCase):
+    """Trivial subclass of `QueryBuilderTestCase` that runs all tests with
+    the ``defer`` option of `MultipleDatasetQueryBuilder.fromDatasetTypes`
+    set to `True`.
+    """
+    DEFER = True
 
 
 if __name__ == "__main__":

@@ -70,11 +70,14 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         self._requiredDependencies = DimensionSet(universe, required, expand=True, implied=False)
         self._impliedDependencies = DimensionSet(universe, implied, expand=False)
         self._allDependencies = self._requiredDependencies | self._impliedDependencies
-        # Compute _primaryKeys dict, used to back primaryKeys property.
         expandedLinks = set(self._localLinks)
         for dimension in self.dependencies(implied=False):
             expandedLinks |= dimension.links(expand=True)
         self._expandedLinks = frozenset(expandedLinks)
+        expandedImpliedLinks = set(self._localLinks)
+        for dimension in self.dependencies(implied=True):
+            expandedImpliedLinks |= dimension.links(expand=True)
+        self._expandedImpliedLinks = frozenset(expandedImpliedLinks)
 
     def __eq__(self, other):
         try:
@@ -112,7 +115,7 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         """
         return self._doc
 
-    def links(self, expand=True):
+    def links(self, expand=True, implied=False):
         """Return the names of fields that uniquely identify this dimension in
         a data ID dict.
 
@@ -121,6 +124,9 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
         expand: `bool`
             If `True` (default) include links associated with required
             dependencies.
+        implied: `bool`
+            If `True`, expand to include the links of implied dpendencies
+            as well.  Ignored if ``expand`` is `False`.
 
         Returns
         -------
@@ -128,7 +134,10 @@ class DimensionElement(metaclass=PrivateConstructorMeta):
             Set of field names.
         """
         if expand:
-            return self._expandedLinks
+            if implied:
+                return self._expandedImpliedLinks
+            else:
+                return self._expandedLinks
         else:
             return self._localLinks
 
@@ -239,6 +248,7 @@ class DimensionJoin(DimensionElement):
                          required=lhs + rhs, implied=(), doc=config["doc"])
         self._lhs = DimensionSet(universe, lhs, implied=False)
         self._rhs = DimensionSet(universe, rhs, implied=False)
+        self._asNeeded = config.get("asNeeded", False)
         # self._summarizes initialized later in DimensionGraph.fromConfig.
 
     @property
@@ -260,6 +270,13 @@ class DimensionJoin(DimensionElement):
         an easy way to distinguish between the two sides.
         """
         return self._rhs
+
+    @property
+    def asNeeded(self):
+        """Whether this join only be included in a query when required,
+        as opposed to whenever its dependencies are included (`bool`).
+        """
+        return self._asNeeded
 
     @property
     def summarizes(self):

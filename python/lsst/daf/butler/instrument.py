@@ -20,8 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 __all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo",
-           "ObservationDataIdPacker")
+           "ObservationDataIdPacker", "addUnboundedCalibrationLabel")
 
+from datetime import datetime
 from inspect import isabstract
 from abc import ABCMeta, abstractmethod
 from lsst.daf.butler import DataId, DataIdPacker
@@ -183,3 +184,35 @@ def updateVisitEntryFromObsInfo(dataId, obsInfo):
         exposure_time=obsInfo.exposure_time.to_value("s"),
     )
     return dataId
+
+
+def addUnboundedCalibrationLabel(registry, instrumentName):
+    """Add a special 'unbounded' CalibrationLabel dimension entry for the
+    given camera that is valid for any exposure.
+
+    If such an entry already exists, this function just returns a `DataId`
+    for the existing entry.
+
+    Parameters
+    ----------
+    registry : `Registry`
+        Registry object in which to insert the dimension entry.
+    instrumentName : `str`
+        Name of the instrument this calibration label is associated with.
+
+    Returns
+    -------
+    dataId : `DataId`
+        New or existing data ID for the unbounded calibration.
+    """
+    d = dict(instrument=instrumentName, calibration_label="unbounded")
+    try:
+        return registry.expandDataId(dimension="CalibrationLabel",
+                                     metadata=["valid_first", "valid_last"], **d)
+    except LookupError:
+        pass
+    unboundedDataId = DataId(universe=registry.dimensions, **d)
+    unboundedDataId.entries["CalibrationLabel"]["valid_first"] = datetime.min
+    unboundedDataId.entries["CalibrationLabel"]["valid_last"] = datetime.max
+    registry.addDimensionEntry("CalibrationLabel", unboundedDataId)
+    return unboundedDataId

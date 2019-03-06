@@ -29,9 +29,10 @@ from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
 from ..core import Config, Run, DatasetType, StorageClassFactory, DataId
-from ..instrument import Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo
+from ..instrument import (Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo,
+                          addUnboundedCalibrationLabel)
 from .structures import ConvertedRepo
-from .translators import Translator, NoSkyMapError
+from .translators import Translator, NoSkyMapError, makeCalibrationLabel
 
 
 __all__ = ("ConversionWriter,")
@@ -206,6 +207,7 @@ class ConversionWriter:
             self.insertInstruments(registry)
             self.insertSkyMaps(registry)
             self.insertObservations(registry)
+            self.insertCalibrationLabels(registry)
             self.insertDatasetTypes(registry)
             self.insertDatasets(registry, datastore)
             self.insertObservationRegions(registry, datastore)
@@ -282,13 +284,44 @@ class ConversionWriter:
                 registry.addDimensionEntry("Visit", dataId)
                 registry.addDimensionEntry("Exposure", dataId)
 
+    def insertCalibrationLabels(self, registry):
+        """Add all necessary CalibrationLabel Dimension entries to the
+        Registry.
+        """
+        log = Log.getLogger("lsst.daf.butler.gen2convert")
+        for repo in self.repos.values():
+            if repo.gen2.calibDict is None:
+                continue
+            # TODO: we currently implicitly assume that there is only one
+            # calib repo being converted, or at least that different calib
+            # repos don't have any of the same calibDates.  To fix that we
+            # probably need to add a column to the CalibrationLabel table
+            # to represent a "CalibrationSet", and provide a way to configure
+            # which one a Registry uses.  We'll probably also want to use that
+            # pattern for other dimensions in the future, such as systems of
+            # observation relationships that define a particular mapping from
+            # Exposure to Visit.
+            mapperName = repo.gen2.MapperClass.__name__
+            instrument = self.config["mappers", mapperName, "instrument"]
+            log.debug("Inserting unbounded CalibrationLabel.")
+            addUnboundedCalibrationLabel(registry, instrument)
+            for (datasetTypeName, calibDate), (first, last) in repo.gen2.calibDict.items():
+                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate),
+                                instrument=instrument,
+                                universe=registry.dimensions)
+                dataId.entries["CalibrationLabel"]["valid_first"] = first
+                dataId.entries["CalibrationLabel"]["valid_last"] = last
+                log.debug("Inserting CalibrationLabel %s with validity range %s - %s.",
+                          dataId["calibration_label"], first, last)
+                registry.addDimensionEntry("CalibrationLabel", dataId)
+
     def insertDatasetTypes(self, registry):
         """Add all necessary DatasetType registrations to the Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for datasetType in self.datasetTypes.values():
+            log.debug("Registering DatasetType '%s'." % datasetType.name)
             registry.registerDatasetType(datasetType)
-            log.debug("Registered DatasetType '%s'." % datasetType.name)
 
     def insertDatasets(self, registry, datastore):
         """Add all Dataset entries to the given Registry and Datastore.

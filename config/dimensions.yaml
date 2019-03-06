@@ -80,21 +80,6 @@ dimensions:
       link:
       - exposure
 
-    ExposureRange:
-      dependencies:
-        required:
-        - Instrument
-      doc: >
-        An inclusive range of Exposure dates that may be open in either
-        direction, typically used to identify master calibration products.
-        There is no SQL table associated with ExposureRanges; there is no
-        additional information associated with an ExposureRange besides the
-        instrument, valid_first, and valid_last fields already present in
-        Dataset.
-      link:
-      - valid_first
-      - valid_last
-
     SkyPix:
       doc: >
         A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
@@ -157,6 +142,25 @@ dimensions:
       link:
       - label
 
+    CalibrationLabel:
+      dependencies:
+        required:
+        - Instrument
+      doc: >
+        A string label that maps to a date validity range for master
+        calibration products.
+      link:
+      - calibration_label
+
+    ExposureCalibrationLabelJoin:
+      doc: >
+        A many-to-many join table that relates Exposure to CalibrationRange's
+        Instrument+Label.
+
+        This can and probably should be implemented as a view.
+      lhs: [Exposure]
+      rhs: [CalibrationLabel]
+
     VisitDetectorRegion:
       doc: >
         A many-to-many join table that provides region information for
@@ -164,6 +168,7 @@ dimensions:
       lhs: [Visit]
       rhs: [Detector]
       hasRegion: true
+      asNeeded: true
 
     VisitDetectorSkyPixJoin:
       doc: >

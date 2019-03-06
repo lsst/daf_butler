@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("SqlRegistryConfig", "SqlRegistry")
+
 import itertools
 import contextlib
 
@@ -41,9 +43,7 @@ from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.dimensions import DataId
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
-from .sqlPreFlight import SqlPreFlight
-
-__all__ = ("SqlRegistryConfig", "SqlRegistry")
+from ..sql import MultipleDatasetQueryBuilder
 
 
 class SqlRegistryConfig(RegistryConfig):
@@ -848,8 +848,8 @@ class SqlRegistry(Registry):
         return dataId
 
     @disableWhenLimited
-    def selectDimensions(self, originInfo, expression, neededDatasetTypes, futureDatasetTypes,
-                         expandDataIds=True):
+    def selectMultipleDatasetTypes(self, originInfo, expression=None, required=(), optional=(),
+                                   prerequisite=(), perDatasetTypeDimensions=(), expandDataIds=True):
         # Docstring inherited from Registry.selectDimensions
         def standardize(dsType):
             if not isinstance(dsType, DatasetType):
@@ -857,12 +857,25 @@ class SqlRegistry(Registry):
             else:
                 dsType.normalize(universe=self.dimensions)
             return dsType
-        needed = [standardize(t) for t in neededDatasetTypes]
-        future = [standardize(t) for t in futureDatasetTypes]
-        preFlight = SqlPreFlight(self, originInfo, needed, future,
-                                 expandDataIds=expandDataIds,
-                                 deferOutputIdQueries=self.config["deferOutputIdQueries"])
-        return preFlight.selectDimensions(expression)
+
+        required = [standardize(t) for t in required]
+        optional = [standardize(t) for t in optional]
+        prerequisite = [standardize(t) for t in prerequisite]
+
+        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
+            self,
+            originInfo,
+            required=required,
+            optional=optional,
+            prerequisite=prerequisite,
+            perDatasetTypeDimensions=perDatasetTypeDimensions,
+            defer=self.config["deferDatasetIdQueries"]
+        )
+
+        if expression is not None:
+            builder.whereParsedExpression(expression)
+
+        return builder.execute(expandDataIds=expandDataIds)
 
     @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):

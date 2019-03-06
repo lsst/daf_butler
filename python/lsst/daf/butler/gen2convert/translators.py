@@ -20,10 +20,17 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import itertools
-from datetime import datetime
 from abc import ABCMeta, abstractmethod
 
-__all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler")
+__all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler",
+           "makeCalibrationLabel")
+
+
+def makeCalibrationLabel(datasetTypeName, calibDate):
+    """Make a Gen3 CalibrationLabel string from a Gen2 dataset type name and
+    calibDate value.
+    """
+    return f"gen2/{datasetTypeName}_{calibDate}"
 
 
 class NoSkyMapError(LookupError):
@@ -53,11 +60,12 @@ class KeyHandler(metaclass=ABCMeta):
         self.gen3key = gen3key
         self.gen3unit = gen3unit
 
-    def translate(self, gen2id, gen3id, skyMap, skyMapName):
-        gen3id[self.gen3key] = self.extract(gen2id, skyMap=skyMap, skyMapName=skyMapName)
+    def translate(self, gen2id, gen3id, skyMap, skyMapName, datasetTypeName):
+        gen3id[self.gen3key] = self.extract(gen2id, skyMap=skyMap, skyMapName=skyMapName,
+                                            datasetTypeName=datasetTypeName)
 
     @abstractmethod
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         raise NotImplementedError()
 
 
@@ -70,7 +78,7 @@ class ConstantKeyHandler(KeyHandler):
         super().__init__(gen3key, gen3unit)
         self.value = value
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return self.value
 
 
@@ -95,7 +103,7 @@ class CopyKeyHandler(KeyHandler):
         self.gen2key = gen2key if gen2key is not None else gen3key
         self.dtype = dtype
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         r = gen2id[self.gen2key]
         if self.dtype is not None:
             try:
@@ -116,7 +124,7 @@ class PatchKeyHandler(KeyHandler):
     def __init__(self):
         super().__init__("patch", "Patch")
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         tract = gen2id["tract"]
         tractInfo = skyMap[tract]
         x, y = gen2id["patch"].split(",")
@@ -132,8 +140,26 @@ class SkyMapKeyHandler(KeyHandler):
     def __init__(self):
         super().__init__("skymap", "SkyMap")
 
-    def extract(self, gen2id, skyMap, skyMapName):
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return skyMapName
+
+
+class CalibKeyHandler(KeyHandler):
+    """A KeyHandler for master calibration datasets.
+
+    This translator currently assumes that dataset type name and
+    the "calibDate" value from the Gen2 calibration registry together
+    have a unique mapping to a validity range (i.e. there are no overrides
+    for e.g. detector or filter).
+    """
+
+    __slots__ = ()
+
+    def __init__(self):
+        super().__init__("calibration_label", "CalibrationLabel")
+
+    def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
+        return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"])
 
 
 class Translator:
@@ -153,7 +179,7 @@ class Translator:
         Dimensions.
     """
 
-    __slots__ = ("handlers", "skyMap", "skyMapName")
+    __slots__ = ("handlers", "skyMap", "skyMapName", "datasetTypeName")
 
     # Rules used to match Handlers when constring a Translator.
     # outer key is instrument name, or None for any
@@ -265,19 +291,22 @@ class Translator:
         else:
             skyMap = None
             skyMapName = None
-        return Translator(matchedHandlers, skyMap=skyMap, skyMapName=skyMapName)
+        return Translator(matchedHandlers, skyMap=skyMap, skyMapName=skyMapName,
+                          datasetTypeName=datasetType.name)
 
-    def __init__(self, handlers, skyMap, skyMapName):
+    def __init__(self, handlers, skyMap, skyMapName, datasetTypeName):
         self.handlers = handlers
         self.skyMap = skyMap
         self.skyMapName = skyMapName
+        self.datasetTypeName = datasetTypeName
 
     def __call__(self, gen2id):
         """Return a Gen3 data ID that corresponds to the given Gen2 data ID.
         """
         gen3id = {}
         for handler in self.handlers:
-            handler.translate(gen2id, gen3id, skyMap=self.skyMap, skyMapName=self.skyMapName)
+            handler.translate(gen2id, gen3id, skyMap=self.skyMap, skyMapName=self.skyMapName,
+                              datasetTypeName=self.datasetTypeName)
         return gen3id
 
     @property
@@ -308,12 +337,13 @@ Translator.addRule(CopyKeyHandler("tract", "Tract", dtype=int), gen2keys=("tract
 # Add valid_first, valid_last to Instrument-level transmission/ datasets;
 # these are considered calibration products in Gen3.
 for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmission_filter"):
-    Translator.addRule(ConstantKeyHandler("valid_first", "ExposureRange", datetime.min),
-                       datasetTypeName=datasetTypeName)
-    Translator.addRule(ConstantKeyHandler("valid_last", "ExposureRange", datetime.max),
+    Translator.addRule(ConstantKeyHandler("calibration_label", "CalibrationLabel", "unbounded"),
                        datasetTypeName=datasetTypeName)
 
 # Translate Gen2 pixel_id to Gen3 skypix.
 # For now, we just assume that the Gen3 Registry's pixelization happens to be
 # the same as what the ref_cat indexer uses.
 Translator.addRule(CopyKeyHandler("skypix", "SkyPix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))
+
+# Translate Gen2 calibDate and datasetType to Gen3 calibration_label.
+Translator.addRule(CalibKeyHandler(), gen2keys=("calibDate",))
