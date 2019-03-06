@@ -589,4 +589,4 @@ class Butler:
 
         entities.extend(datasetRefs)
 
-        self.datastore.validateConfiguration(*entities, logFailures=logFailures)
+        self.datastore.validateConfiguration(entities, logFailures=logFailures)

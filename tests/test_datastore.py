@@ -97,25 +97,25 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     def testConfigurationValidation(self):
         datastore = self.makeDatastore()
         sc = self.storageClassFactory.getStorageClass("ThingOne")
-        datastore.validateConfiguration(sc)
+        datastore.validateConfiguration([sc])
 
         sc2 = self.storageClassFactory.getStorageClass("ThingTwo")
         if self.validationCanFail:
             with self.assertRaises(DatastoreValidationError):
-                datastore.validateConfiguration(sc2, logFailures=True)
+                datastore.validateConfiguration([sc2], logFailures=True)
 
         # Without a universe testing is limited but create a
         # ref that has valid dataId and one that does not
         dimensions = frozenset(("Visit", "PhysicalFilter"))
         dataId = {"visit": 52, "physical_filter": "V"}
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-        datastore.validateConfiguration(ref)
+        datastore.validateConfiguration([ref])
 
         dataId = {"visit": 52, "physical_filter": "V", "foo": "bar"}
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         if self.validationCanFail:
             with self.assertRaises(DatastoreValidationError):
-                datastore.validateConfiguration(ref)
+                datastore.validateConfiguration([ref])
 
     def testParameterValidation(self):
         """Check that parameters are validated"""

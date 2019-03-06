@@ -374,13 +374,14 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def validateConfiguration(self, *entities, logFailures=False):
+    def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.
 
         Parameters
         ----------
-        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
-            Entities to test against this configuration.
+        entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.    Can be differing
+            types.
         logFailures : `bool`, optional
             If `True`, output a log message for every validation error
             detected.

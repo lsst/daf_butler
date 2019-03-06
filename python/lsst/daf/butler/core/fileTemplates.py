@@ -91,14 +91,15 @@ class FileTemplates:
             else:
                 self.templates[key] = FileTemplate(templateStr)
 
-    def validateTemplate(self, *entities, logFailures=False):
+    def validateTemplates(self, entities, logFailures=False):
         """Retrieve the template associated with each dataset type and
         validate the dimensions against the template.
 
         Parameters
         ----------
-        *entities : `DatasetType`, `DatasetRef`, or `StorageClass`
-            Entities to validate against the matching templates.
+        entities : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Entities to validate against the matching templates.  Can be
+            differing types.
         logFailures : `bool`, optional
             If `True`, output a log message for every validation error
             detected.

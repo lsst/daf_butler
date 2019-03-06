@@ -558,13 +558,14 @@ class PosixDatastore(Datastore):
         inMemoryDataset = inputDatastore.get(ref)
         return self.put(inMemoryDataset, ref)
 
-    def validateConfiguration(self, *entities, logFailures=False):
+    def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.
 
         Parameters
         ----------
-        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
-            Entities to test against this configuration.
+        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.  Can be differing
+            types.
         logFailures : `bool`, optional
             If `True`, output a log message for every validation error
             detected.
@@ -583,7 +584,7 @@ class PosixDatastore(Datastore):
 
         templateFailed = None
         try:
-            self.templates.validateTemplate(*entities, logFailures=logFailures)
+            self.templates.validateTemplates(entities, logFailures=logFailures)
         except FileTemplateValidationError as e:
             templateFailed = str(e)
 

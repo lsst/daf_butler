@@ -398,7 +398,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
-        butler.datastore.templates.validateTemplate(ref)
+        butler.datastore.templates.validateTemplates([ref])
 
         # Put with extra data ID keys (physical_filter is an optional
         # dependency); should not change template (at least the way we're
@@ -408,14 +408,14 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
-        butler.datastore.templates.validateTemplate(ref)
+        butler.datastore.templates.validateTemplates([ref])
 
         # Now use a file template that will not result in unique filenames
         ref = butler.put(metric, "metric3", dataId1)
 
         # Check the template based on dimensions. This one is a bad template
         with self.assertRaises(FileTemplateValidationError):
-            butler.datastore.templates.validateTemplate(ref)
+            butler.datastore.templates.validateTemplates([ref])
 
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)

@@ -458,13 +458,14 @@ class ChainedDatastore(Datastore):
         inMemoryDataset = inputDatastore.get(ref)
         return [datastore.put(inMemoryDataset, ref) for datastore in self.datastores]
 
-    def validateConfiguration(self, *entities, logFailures=False):
+    def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.
 
         Parameters
         ----------
-        *entities : `DatasetRef`, `DatasetType`, or `StorageClass`
-            Entities to test against this configuration.
+        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.  Can be differing
+            types.
         logFailures : `bool`, optional
             If `True`, output a log message for every validation error
             detected.
@@ -485,7 +486,7 @@ class ChainedDatastore(Datastore):
         failures = []
         for datastore in self.datastores:
             try:
-                datastore.validateConfiguration(*entities, logFailures=logFailures)
+                datastore.validateConfiguration(entities, logFailures=logFailures)
             except DatastoreValidationError as e:
                 if logFailures:
                     log.fatal("Datastore %s failed validation", datastore.name)
