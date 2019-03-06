@@ -41,7 +41,7 @@ from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.dimensions import DataId
+from ..core.dimensions import DataId, Dimension
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from ..sql import MultipleDatasetQueryBuilder
 
@@ -798,6 +798,20 @@ class SqlRegistry(Registry):
         if dataId.region is not None:
             self.setDimensionRegion(dataId)
         return dataId
+
+    @disableWhenLimited
+    def findDimensionEntries(self, dimension):
+        # Docstring inherited from Registry.findDimensionEntries
+        if not isinstance(dimension, Dimension):
+            dimension = self.dimensions[dimension]
+        table = self._schema.tables[dimension.name]
+        result = self._connection.execute(select([table])).fetchall()
+
+        if result is None:
+            return []
+
+        entries = [dict(r.items()) for r in result]
+        return entries
 
     @disableWhenLimited
     def findDimensionEntry(self, dimension, dataId=None, **kwds):

@@ -449,6 +449,20 @@ class RegistryTests(metaclass=ABCMeta):
         # Find should return the entry
         self.assertEqual(registry.findDimensionEntry(dimensionName2, dimensionValue2), dimensionValue2)
 
+        # Get all the Instrument values
+        instrumentEntries = registry.findDimensionEntries(dimensionName)
+        instruments = {e["instrument"] for e in instrumentEntries}
+        self.assertTrue(len(instruments), 1)
+        self.assertIn(dimensionValue["instrument"], instruments)
+
+        # Add a new instrument
+        dimensionValue3 = {"instrument": "DummyCam2", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+        registry.addDimensionEntry(dimensionName, dimensionValue3)
+
+        instrumentEntries = registry.findDimensionEntries(dimensionName)
+        instruments = {e["instrument"] for e in instrumentEntries}
+        self.assertEqual(instruments, set(["DummyCam", "DummyCam2"]))
+
     def testBasicTransaction(self):
         registry = self.makeRegistry()
         storageClass = StorageClass("testDatasetType")

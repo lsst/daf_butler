@@ -838,6 +838,30 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @disableWhenLimited
+    def findDimensionEntries(self, dimension):
+        """Return all `Dimension` entries corresponding to the named dimension.
+
+        Parameters
+        ----------
+        dimension : `str` or `Dimension`
+            Either a `Dimension` object or the name of one.
+
+        Returns
+        -------
+        entries : `list` of `dict`
+            List with `dict` containing the `Dimension` values for each variant
+            of the `Dimension`.  Returns empty list if no entries have been
+            added for this dimension.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if `limited` is `True`.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @disableWhenLimited
     def findDimensionEntry(self, dimension, dataId=None, **kwds):
         """Return a `Dimension` entry corresponding to a `DataId`.
 
