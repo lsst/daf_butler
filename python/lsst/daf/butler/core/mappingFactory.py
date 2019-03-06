@@ -111,7 +111,11 @@ class MappingFactory:
                     pass
                 else:
                     return getInstanceOf(typeName)
-        raise KeyError("Unable to find item in registry with keys: {}".format(attempts))
+
+        # Convert list to a string for error reporting
+        msg = ", ".join(str(k) for k in attempts)
+        plural = "" if len(attempts) == 1 else "s"
+        raise KeyError(f"Unable to find item in registry with key{plural}: {msg}")
 
     def placeInRegistry(self, registryKey, typeName):
         """Register a class name with the associated type.
