@@ -19,13 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Formatter", "FormatterFactory")
+
 from abc import ABCMeta, abstractmethod
 
 from .configSupport import processLookupConfigs
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
-
-__all__ = ("Formatter", "FormatterFactory")
 
 
 class Formatter(metaclass=ABCMeta):

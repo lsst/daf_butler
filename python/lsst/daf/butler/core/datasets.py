@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("DatasetType", "DatasetRef")
+
 from copy import deepcopy
 import hashlib
 
@@ -27,8 +29,6 @@ from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
 from .dimensions import DimensionGraph, DimensionNameSet, DataId
 from .configSupport import LookupKey
-
-__all__ = ("DatasetType", "DatasetRef")
 
 
 def _safeMakeMappingProxyType(data):

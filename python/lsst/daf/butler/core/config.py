@@ -21,6 +21,8 @@
 
 """Configuration control."""
 
+__all__ = ("Config", "ConfigSubset")
+
 import collections
 import copy
 import logging
@@ -36,7 +38,6 @@ from lsst.utils import doImport
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
-__all__ = ("Config", "ConfigSubset")
 
 # Config module logger
 log = logging.getLogger(__name__)

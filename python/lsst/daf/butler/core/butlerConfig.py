@@ -23,6 +23,8 @@
 Configuration classes specific to the Butler
 """
 
+__all__ = ("ButlerConfig",)
+
 import os.path
 
 from .config import Config
@@ -32,8 +34,6 @@ from .registry import RegistryConfig
 from .storageClass import StorageClassConfig
 from .dimensions import DimensionConfig
 from .composites import CompositesConfig
-
-__all__ = ("ButlerConfig",)
 
 CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig,
                             DatastoreConfig, CompositesConfig, DimensionConfig)

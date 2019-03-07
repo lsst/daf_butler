@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("ConversionWriter,")
+
 import os
 import re
 from collections import OrderedDict
@@ -33,9 +35,6 @@ from ..instrument import (Instrument, updateExposureEntryFromObsInfo, updateVisi
                           addUnboundedCalibrationLabel)
 from .structures import ConvertedRepo
 from .translators import Translator, NoSkyMapError, makeCalibrationLabel
-
-
-__all__ = ("ConversionWriter,")
 
 
 class ConversionWriter:

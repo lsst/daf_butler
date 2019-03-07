@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
+           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
+
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import contextlib
@@ -31,9 +34,6 @@ from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKey
 from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
-
-__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
-           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 
 class AmbiguousDatasetError(Exception):

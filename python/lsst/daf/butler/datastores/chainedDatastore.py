@@ -21,6 +21,8 @@
 
 """Chained datastore."""
 
+__all__ = ("ChainedDatastore",)
+
 import time
 import logging
 import os
@@ -31,8 +33,6 @@ from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, Dat
     DatastoreValidationError
 
 log = logging.getLogger(__name__)
-
-__all__ = ("ChainedDatastore", )
 
 
 class ChainedDatastore(Datastore):

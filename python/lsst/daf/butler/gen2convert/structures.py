@@ -19,12 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Gen2DatasetType", "Gen2Dataset", "Gen2Repo", "ConvertedRepo")
+
 import os
 from collections import defaultdict
 
 from lsst.log import Log
-
-__all__ = ("Gen2DatasetType", "Gen2Dataset", "Gen2Repo", "ConvertedRepo")
 
 
 class Gen2DatasetType:

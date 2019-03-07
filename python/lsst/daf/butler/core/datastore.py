@@ -23,6 +23,8 @@
 Support for generic data stores.
 """
 
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
+
 import contextlib
 import logging
 from collections import namedtuple
@@ -31,8 +33,6 @@ from abc import ABCMeta, abstractmethod
 from lsst.utils import doImport
 from .config import ConfigSubset
 from .exceptions import ValidationError
-
-__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 
 class DatastoreConfig(ConfigSubset):

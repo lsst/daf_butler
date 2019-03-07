@@ -22,13 +22,6 @@
 """
 Utilities for safe file IO
 """
-from contextlib import contextmanager
-import errno
-import fcntl
-import filecmp
-import os
-import tempfile
-import logging
 
 __all__ = ("DoNotWrite",
            "safeMakeDir",
@@ -39,6 +32,14 @@ __all__ = ("DoNotWrite",
            "SafeFilename",
            "SafeLockedFileForRead",
            "SafeLockedFileForWrite")
+
+from contextlib import contextmanager
+import errno
+import fcntl
+import filecmp
+import os
+import tempfile
+import logging
 
 
 class DoNotWrite(RuntimeError):

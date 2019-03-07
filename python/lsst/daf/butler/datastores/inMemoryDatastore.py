@@ -21,14 +21,14 @@
 
 """In-memory datastore."""
 
+__all__ = ("StoredItemInfo", "InMemoryDatastore")
+
 import time
 import logging
 
 from lsst.daf.butler import Datastore, StorageClassFactory
 
 log = logging.getLogger(__name__)
-
-__all__ = ("StoredItemInfo", "InMemoryDatastore")
 
 
 class StoredItemInfo:

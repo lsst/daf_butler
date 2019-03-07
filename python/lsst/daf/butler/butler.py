@@ -23,6 +23,8 @@
 Butler top level classes.
 """
 
+__all__ = ("Butler", "ButlerValidationError")
+
 import os
 import contextlib
 import logging
@@ -40,8 +42,6 @@ from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataId
 from .core.exceptions import ValidationError
-
-__all__ = ("Butler", "ButlerValidationError")
 
 log = logging.getLogger(__name__)
 

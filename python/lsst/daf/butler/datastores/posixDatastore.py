@@ -21,6 +21,8 @@
 
 """POSIX datastore."""
 
+__all__ = ("PosixDatastore", )
+
 import os
 import shutil
 import hashlib
@@ -35,8 +37,6 @@ from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 
 log = logging.getLogger(__name__)
-
-__all__ = ("PosixDatastore", )
 
 
 class PosixDatastore(Datastore):

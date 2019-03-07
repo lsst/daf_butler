@@ -19,10 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Run", )
+
 from .execution import Execution
 from .utils import slotValuesAreEqual, slotValuesToHash
-
-__all__ = ("Run", )
 
 
 class Run(Execution):

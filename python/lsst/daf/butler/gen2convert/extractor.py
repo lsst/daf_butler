@@ -19,12 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Extractor",)
+
 import re
 from collections import OrderedDict
 
 from .structures import Gen2Dataset, Gen2DatasetType
-
-__all__ = ("Extractor",)
 
 # Regular expression that matches a single substitution in
 # Gen2 CameraMapper template, such as "%(tract)04d".

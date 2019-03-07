@@ -19,14 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
+           "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
+           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta")
+
 import sys
 import functools
 
 from lsst.utils import doImport
-
-__all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
-           "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
-           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta")
 
 
 def iterable(a):

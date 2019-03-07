@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("SqliteRegistry", )
+
 from contextlib import closing
 
 from sqlalchemy import event
@@ -31,8 +33,6 @@ from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registry import RegistryConfig
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
-
-__all__ = ("SqliteRegistry", )
 
 
 def _onSqlite3Connect(dbapiConnection, connectionRecord):
