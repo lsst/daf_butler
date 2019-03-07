@@ -36,6 +36,10 @@ if __name__ == "__main__":
                         help="Collection to refer to in this repository.")
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Do not report individual failures.")
+    parser.add_argument("--datasettype", "-d", action="append", type=str,
+                        help="Specific DatasetType to validate")
+    parser.add_argument("--ignore", "-i", action="append", type=str,
+                        help="DatasetType(s) to ignore for validation (e.g., 'raw')")
 
     args = parser.parse_args()
     # The collection does not matter for validation but if a run is specified
@@ -45,7 +49,8 @@ if __name__ == "__main__":
         logFailures = True
         if args.quiet:
             logFailures = False
-        butler.validateConfiguration(logFailures=logFailures)
+        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=args.datasettype,
+                                     ignore=args.ignore)
     except ValidationError:
         sys.exit(1)
     else:

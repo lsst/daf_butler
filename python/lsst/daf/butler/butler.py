@@ -552,7 +552,7 @@ class Butler:
             # This also implicitly disassociates.
             self.registry.removeDataset(ref)
 
-    def validateConfiguration(self, logFailures=False):
+    def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
         """Validate butler configuration.
 
         Checks that each `DatasetType` can be stored in the `Datastore`.
@@ -562,6 +562,12 @@ class Butler:
         logFailures : `bool`, optional
             If `True`, output a log message for every validation error
             detected.
+        datasetTypeNames : iterable of `str`, optional
+            The `DatasetType` names that should be checked.  This allows
+            only a subset to be selected.
+        ignore : iterable of `str`, optional
+            Names of DatasetTypes to skip over.  This can be used to skip
+            known problems.
 
         Raises
         ------
@@ -569,7 +575,15 @@ class Butler:
             Raised if there is some inconsistency with how this Butler
             is configured.
         """
-        entities = list(self.registry.getAllDatasetTypes())
+        if datasetTypeNames is not None:
+            entities = [self.registry.getDatasetType(name) for name in datasetTypeNames]
+        else:
+            entities = list(self.registry.getAllDatasetTypes())
+
+        # filter out anything from the ignore list
+        if ignore is not None:
+            ignore = set(ignore)
+            entities = [e for e in entities if e.name not in ignore]
 
         # Find all the registered instruments
         instruments = set()
