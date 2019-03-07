@@ -27,6 +27,28 @@ import sys
 from lsst.daf.butler import Butler, ValidationError
 
 
+def processCommas(arg):
+    """Given a list that might contain strings with commas, return expanded
+    list.
+
+    Parameters
+    ----------
+    arg : iterable of `str`
+        Values read from command line.
+
+    Returns
+    -------
+    expanded : `list` of `str`
+        List where any items with commas are expanded into multiple entries.
+    """
+    expanded = []
+    if arg is None:
+        return expanded
+    for item in arg:
+        expanded.extend(item.split(","))
+    return expanded
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Validate the configuration files for a "
                                      "Gen3 Butler repository.")
@@ -37,20 +59,26 @@ if __name__ == "__main__":
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Do not report individual failures.")
     parser.add_argument("--datasettype", "-d", action="append", type=str,
-                        help="Specific DatasetType to validate")
+                        help="Specific DatasetType(s) to validate (can be comma-separated)")
     parser.add_argument("--ignore", "-i", action="append", type=str,
-                        help="DatasetType(s) to ignore for validation (e.g., 'raw')")
+                        help="DatasetType(s) to ignore for validation (can be comma-separated)")
 
     args = parser.parse_args()
     # The collection does not matter for validation but if a run is specified
     # in the configuration then it must be consistent with this collection
     butler = Butler(config=args.root, collection=args.collection)
+
+    logFailures = True
+    if args.quiet:
+        logFailures = False
+
+    # Process any commas in dataset type or ignore list
+    ignore = processCommas(args.ignore)
+    datasetTypes = processCommas(args.datasettype)
+
     try:
-        logFailures = True
-        if args.quiet:
-            logFailures = False
-        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=args.datasettype,
-                                     ignore=args.ignore)
+        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasetTypes,
+                                     ignore=ignore)
     except ValidationError:
         sys.exit(1)
     else:
