@@ -575,13 +575,13 @@ class Butler:
             Raised if there is some inconsistency with how this Butler
             is configured.
         """
-        if datasetTypeNames is not None:
+        if datasetTypeNames:
             entities = [self.registry.getDatasetType(name) for name in datasetTypeNames]
         else:
             entities = list(self.registry.getAllDatasetTypes())
 
         # filter out anything from the ignore list
-        if ignore is not None:
+        if ignore:
             ignore = set(ignore)
             entities = [e for e in entities if e.name not in ignore]
 
