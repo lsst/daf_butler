@@ -73,6 +73,9 @@ class FileTemplates:
     `~lsst.daf.butler.configSubset.processLookupConfigs`.
     """
 
+    defaultKey = LookupKey("default")
+    """Configuration key associated with the default template."""
+
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
         self.templates = {}
@@ -81,9 +84,8 @@ class FileTemplates:
         contents = processLookupConfigs(self.config)
 
         # Convert all the values to FileTemplate, handling defaults
-        defaultKey = LookupKey(name="default")
         for key, templateStr in contents.items():
-            if key == defaultKey:
+            if key == self.defaultKey:
                 if not templateStr:
                     self.default = None
                 else:
@@ -116,7 +118,7 @@ class FileTemplates:
         failed = []
         for entity in entities:
             try:
-                template = self.getTemplate(entity)
+                matchKey, template = self.getTemplateWithMatch(entity)
             except KeyError as e:
                 failed.append(e)
                 if logFailures:
@@ -125,9 +127,9 @@ class FileTemplates:
             try:
                 template.validateTemplate(entity)
             except FileTemplateValidationError as e:
-                failed.append(str(e))
+                failed.append(f"{e} (via key '{matchKey}')")
                 if logFailures:
-                    log.fatal("Template failure: %s", str(e))
+                    log.fatal("Template failure with key '%s': %s", str(matchKey), str(e))
 
         if failed:
             if len(failed) == 1:
@@ -136,6 +138,76 @@ class FileTemplates:
                 failMsg = ";\n".join(failed)
                 msg = f"{len(failed)} template validation failures: {failMsg}"
             raise FileTemplateValidationError(msg)
+
+    def getLookupKeys(self):
+        """Retrieve the look up keys for all the template entries.
+
+        Returns
+        -------
+        keys : `set` of `LookupKey`
+            The keys available for matching a template.
+        """
+        return set(self.templates)
+
+    def getTemplateWithMatch(self, entity):
+        """Retrieve the `FileTemplate` associated with the dataset type along
+        with the lookup key that was a match for this template.
+
+        If the lookup name corresponds to a component the base name for
+        the component will be examined if the full component name does
+        not match.
+
+        Parameters
+        ----------
+        entity : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Instance to use to look for a corresponding template.
+            A `DatasetType` name or a `StorageClass` name will be used
+            depending on the supplied entity. Priority is given to a
+            `DatasetType` name. Supports instrument override if a
+            `DatasetRef` is provided configured with an ``instrument``
+            value for the data ID.
+
+        Returns
+        -------
+        matchKey : `LookupKey`
+            The key that resulted in the successful match.
+        template : `FileTemplate`
+            Template instance to use with that dataset type.
+
+        Raises
+        ------
+        KeyError
+            Raised if no template could be located for this Dataset type.
+        """
+
+        # normalize the registry if not already done and we have access
+        # to a universe
+        if not self.normalized:
+            try:
+                universe = entity.dimensions.universe
+            except AttributeError:
+                pass
+            else:
+                self.normalizeDimensions(universe)
+
+        # Get the names to use for lookup
+        names = entity._lookupNames()
+
+        # Get a location from the templates
+        template = self.default
+        source = self.defaultKey
+        for name in names:
+            if name in self.templates:
+                template = self.templates[name]
+                source = name
+                break
+
+        if template is None:
+            raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
+
+        log.debug("Got file %s from %s via %s", template, entity, source)
+
+        return source, template
 
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
@@ -164,34 +236,7 @@ class FileTemplates:
         KeyError
             Raised if no template could be located for this Dataset type.
         """
-
-        # normalize the registry if not already done and we have access
-        # to a universe
-        if not self.normalized:
-            try:
-                universe = entity.dimensions.universe
-            except AttributeError:
-                pass
-            else:
-                self.normalizeDimensions(universe)
-
-        # Get the names to use for lookup
-        names = entity._lookupNames()
-
-        # Get a location from the templates
-        template = self.default
-        source = "default"
-        for name in names:
-            if name in self.templates:
-                template = self.templates[name]
-                source = name
-                break
-
-        if template is None:
-            raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
-
-        log.debug("Got file %s from %s via %s", template, entity, source)
-
+        _, template = self.getTemplateWithMatch(entity)
         return template
 
     def normalizeDimensions(self, universe):
