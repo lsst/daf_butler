@@ -443,7 +443,7 @@ class FileTemplate:
         """
 
         # Check that the template has run or collection
-        withSpecials = self.fields(specials=True)
+        withSpecials = self.fields(specials=True, optionals=True)
         if not withSpecials & self.mandatoryFields:
             raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
                                               f" from {self.mandatoryFields}")
@@ -457,6 +457,16 @@ class FileTemplate:
         # If we do not have dimensions available then all we can do is shrug
         if not hasattr(entity, "dimensions"):
             return
+
+        # if this entity represents a component then insist that component
+        # is present in the template
+        try:
+            if entity.isComponent():
+                if "component" not in withSpecials:
+                    raise FileTemplateValidationError(f"Template '{self}' has no component but "
+                                                      f"{entity} refers to a component.")
+        except AttributeError:
+            pass
 
         # Get the dimension links to get the full set of available field names
         # Fall back to dataId keys if we have them but no links.
