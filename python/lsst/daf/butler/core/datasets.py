@@ -225,6 +225,19 @@ class DatasetType:
             return self.nameWithComponent(self.name, component)
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
 
+    def isComponent(self):
+        """Boolean indicating whether this `DatasetType` refers to a
+        component of a composite.
+
+        Returns
+        -------
+        isComponent : `bool`
+            `True` if this `DatasetType` is a component, `False` otherwise.
+        """
+        if self.component:
+            return True
+        return False
+
     def isComposite(self):
         """Boolean indicating whether this `DatasetType` is a composite type.
 
@@ -462,6 +475,17 @@ class DatasetRef:
         ref = deepcopy(self)
         ref._id = None
         return ref
+
+    def isComponent(self):
+        """Boolean indicating whether this `DatasetRef` refers to a
+        component of a composite.
+
+        Returns
+        -------
+        isComponent : `bool`
+            `True` if this `DatasetRef` is a component, `False` otherwise.
+        """
+        return self.datasetType.isComponent()
 
     def isComposite(self):
         """Boolean indicating whether this `DatasetRef` is a composite type.
