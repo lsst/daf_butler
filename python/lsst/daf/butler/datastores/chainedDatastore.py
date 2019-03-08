@@ -493,5 +493,5 @@ class ChainedDatastore(Datastore):
                 failures.append(f"Datastore {self.name}: {e}")
 
         if failures:
-            msg = "; ".join(failures)
+            msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)

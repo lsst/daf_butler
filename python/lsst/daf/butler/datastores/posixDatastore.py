@@ -603,7 +603,7 @@ class PosixDatastore(Datastore):
                 messages.append(templateFailed)
             if formatterFailed:
                 messages.append(",".join(formatterFailed))
-            msg = "; ".join(messages)
+            msg = ";\n".join(messages)
             raise DatastoreValidationError(msg)
 
     @staticmethod
