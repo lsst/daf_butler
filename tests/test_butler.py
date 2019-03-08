@@ -268,7 +268,13 @@ class ButlerTests:
         self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
         if self.validationCanFail:
             with self.assertRaises(ValidationError):
-                butler.validateConfiguration(logFailures=True)
+                butler.validateConfiguration()
+
+        # Rerun validation but with a subset of dataset type names
+        butler.validateConfiguration(datasetTypeNames=["metric4"])
+
+        # Rerun validation but ignore the bad datasetType
+        butler.validateConfiguration(ignore=["test_metric_comp"])
 
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
