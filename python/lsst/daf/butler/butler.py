@@ -567,7 +567,9 @@ class Butler:
             only a subset to be selected.
         ignore : iterable of `str`, optional
             Names of DatasetTypes to skip over.  This can be used to skip
-            known problems.
+            known problems. If a named `DatasetType` corresponds to a
+            composite, all component of that `DatasetType` will also be
+            ignored.
 
         Raises
         ------
@@ -583,7 +585,7 @@ class Butler:
         # filter out anything from the ignore list
         if ignore:
             ignore = set(ignore)
-            entities = [e for e in entities if e.name not in ignore]
+            entities = [e for e in entities if e.name not in ignore and e.nameAndComponent()[0] not in ignore]
 
         # Find all the registered instruments
         instruments = set()
