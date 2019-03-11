@@ -144,6 +144,22 @@ class FormatterFactory:
     def __init__(self):
         self._mappingFactory = MappingFactory(Formatter)
 
+    def __contains__(self, key):
+        """Indicates whether the supplied key is present in the factory.
+
+        Parameters
+        ----------
+        key : `LookupKey`, `str` or objects with ``name`` attribute
+            Key to use to lookup in the factory whether a corresponding
+            formatter is present.
+
+        Returns
+        -------
+        in : `bool`
+            `True` if the supplied key is present in the factory.
+        """
+        return key in self._mappingFactory
+
     def normalizeDimensions(self, universe):
         """Normalize formatter lookups that use dimensions.
 

@@ -443,3 +443,11 @@ class InMemoryDatastore(Datastore):
         This method is a no-op.
         """
         return
+
+    def validateKey(self, lookupKey, entity):
+        # Docstring is inherited from base class
+        return
+
+    def getLookupKeys(self):
+        # Docstring is inherited from base class
+        return set()

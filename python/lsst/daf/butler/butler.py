@@ -586,6 +586,8 @@ class Butler:
         if ignore:
             ignore = set(ignore)
             entities = [e for e in entities if e.name not in ignore and e.nameAndComponent()[0] not in ignore]
+        else:
+            ignore = set()
 
         # Find all the registered instruments
         instruments = set()
@@ -605,4 +607,85 @@ class Butler:
 
         entities.extend(datasetRefs)
 
-        self.datastore.validateConfiguration(entities, logFailures=logFailures)
+        datastoreErrorStr = None
+        try:
+            self.datastore.validateConfiguration(entities, logFailures=logFailures)
+        except ValidationError as e:
+            datastoreErrorStr = str(e)
+
+        # Also check that the LookupKeys used by the datastores match
+        # registry and storage class definitions
+        keys = self.datastore.getLookupKeys()
+
+        # Dummy StorageClass to use for Dimensions validation
+        dummyStorageClass = self.storageClasses.getStorageClass("StructuredDataDict")
+
+        failedNames = set()
+        failedDataId = set()
+        failedValues = set()
+        for key in keys:
+            datasetType = None
+            if key.name is not None:
+                if key.name in ignore:
+                    continue
+
+                # skip if specific datasetType names were requested and this
+                # name does not match
+                if datasetTypeNames is not None and key.name not in datasetTypeNames:
+                    continue
+
+                # See if it is a StorageClass or a DatasetType
+                if key.name in self.storageClasses:
+                    pass
+                else:
+                    try:
+                        datasetType = self.registry.getDatasetType(key.name)
+                    except KeyError:
+                        if logFailures:
+                            log.fatal(f"Key '{key}' does not correspond to a DatasetType or StorageClass")
+                        failedNames.add(key)
+            else:
+                # Dimensions are checked for consistency when the Butler
+                # is created and rendezvoused with a universe.
+                # Create a reference DatasetType using these dimensions
+                # StorageClass should not matter
+                datasetType = DatasetType("DimensionValidation", key.dimensions,
+                                          dummyStorageClass)
+
+            # Check that the value is okay for this datastore using the
+            # given DatasetType
+            if datasetType is not None:
+                try:
+                    self.datastore.validateKey(key, datasetType)
+                except ValidationError as e:
+                    if logFailures:
+                        log.fatal("Key '%s' has bad value: %s", key, e)
+                    failedValues.add(key)
+
+            # Check that the instrument is a valid instrument
+            # Currently only support instrument so check for that
+            if key.dataId:
+                dataIdKeys = set(key.dataId)
+                if set(["instrument"]) != dataIdKeys:
+                    if logFailures:
+                        log.fatal(f"Key '{key}' has unsupported DataId override")
+                    failedDataId.add(key)
+                elif key.dataId["instrument"] not in instruments:
+                    if logFailures:
+                        log.fatal(f"Key '{key}' has unknown instrument")
+                    failedDataId.add(key)
+
+        messages = []
+
+        if datastoreErrorStr:
+            messages.append(datastoreErrorStr)
+
+        for failed, msg in ((failedNames, "Keys with out corresponding DatasetType or StorageClass entry: "),
+                            (failedDataId, "Keys with bad DataId entries: "),
+                            (failedValues, "Keys with failed values: ")):
+            if failed:
+                msg += ", ".join(str(k) for k in failed)
+                messages.append(msg)
+
+        if messages:
+            raise ValidationError(";\n".join(messages))

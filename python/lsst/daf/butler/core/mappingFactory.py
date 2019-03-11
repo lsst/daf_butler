@@ -48,6 +48,23 @@ class MappingFactory:
         self._registry = {}
         self.refType = refType
 
+    def __contains__(self, key):
+        """Indicates whether the supplied key is present in the factory.
+
+        Parameters
+        ----------
+        key : `LookupKey`, `str` or objects with ``name`` attribute
+            Key to use to lookup whether a corresponding element exists
+            in this factory.
+
+        Returns
+        -------
+        in : `bool`
+            `True` if the supplied key is present in the factory.
+        """
+        key = self._getNameKey(key)
+        return key in self._registry
+
     def normalizeRegistryDimensions(self, universe):
         """Normalize dimensions used in registry keys to the supplied universe.
 

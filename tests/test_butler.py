@@ -240,6 +240,8 @@ class ButlerTests:
         butler = Butler(self.tmpConfigFile)
         dimensions = ("Instrument", "Visit", "PhysicalFilter")
         dimensionEntries = (("Instrument", {"instrument": "DummyCam"}),
+                            ("Instrument", {"instrument": "DummyHSC"}),
+                            ("Instrument", {"instrument": "DummyCamComp"}),
                             ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
                             ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
@@ -248,8 +250,10 @@ class ButlerTests:
             butler.registry.addDimensionEntry(name, value)
 
         # When a DatasetType is added to the registry entries are created
-        # for each component
-        datasetTypeNames = {"metric", "metric2", "metric4"}
+        # for each component. Need entries for each component in the test
+        # configuration otherwise validation won't work. The ones that
+        # are deliberately broken will be ignored later.
+        datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi"}
         components = set()
         for datasetTypeName in datasetTypeNames:
             # Create and register a DatasetType
@@ -262,7 +266,8 @@ class ButlerTests:
         self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
 
         # Now that we have some dataset types registered, validate them
-        butler.validateConfiguration()
+        butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
+                                             "datasetType.component"])
 
         # Add a new datasetType that will fail template validation
         self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
@@ -274,7 +279,8 @@ class ButlerTests:
         butler.validateConfiguration(datasetTypeNames=["metric4"])
 
         # Rerun validation but ignore the bad datasetType
-        butler.validateConfiguration(ignore=["test_metric_comp"])
+        butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
+                                             "datasetType.component"])
 
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)

@@ -495,3 +495,23 @@ class ChainedDatastore(Datastore):
         if failures:
             msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)
+
+    def validateKey(self, lookupKey, entity):
+        # Docstring is inherited from base class
+        failures = []
+        for datastore in self.datastores:
+            try:
+                datastore.validateKey(lookupKey, entity)
+            except DatastoreValidationError as e:
+                failures.append(f"Datastore {self.name}: {e}")
+
+        if failures:
+            msg = ";\n".join(failures)
+            raise DatastoreValidationError(msg)
+
+    def getLookupKeys(self):
+        # Docstring is inherited from base class
+        keys = set()
+        for datastore in self.datastores:
+            keys.update(datastore.getLookupKeys())
+        return keys

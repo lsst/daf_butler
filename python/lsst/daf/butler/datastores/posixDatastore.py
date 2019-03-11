@@ -606,6 +606,20 @@ class PosixDatastore(Datastore):
             msg = ";\n".join(messages)
             raise DatastoreValidationError(msg)
 
+    def getLookupKeys(self):
+        # Docstring is inherited from base class
+        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys()
+
+    def validateKey(self, lookupKey, entity):
+        # Docstring is inherited from base class
+        # The key can be valid in either formatters or templates so we can
+        # only check the template if it exists
+        if lookupKey in self.templates:
+            try:
+                self.templates[lookupKey].validateTemplate(entity)
+            except FileTemplateValidationError as e:
+                raise DatastoreValidationError from e
+
     @staticmethod
     def computeChecksum(filename, algorithm="blake2b", block_size=8192):
         """Compute the checksum of the supplied file.

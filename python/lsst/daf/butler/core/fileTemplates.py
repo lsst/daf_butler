@@ -93,6 +93,25 @@ class FileTemplates:
             else:
                 self.templates[key] = FileTemplate(templateStr)
 
+    def __contains__(self, key):
+        """Indicates whether the supplied key is present in the templates.
+
+        Parameters
+        ----------
+        key : `LookupKey`
+            Key to use to determine if a corresponding value is present
+            in the templates.
+
+        Returns
+        -------
+        in : `bool`
+            `True` if the supplied key is present in the templates.
+        """
+        return key in self.templates
+
+    def __getitem__(self, key):
+        return self.templates[key]
+
     def validateTemplates(self, entities, logFailures=False):
         """Retrieve the template associated with each dataset type and
         validate the dimensions against the template.
@@ -475,7 +494,7 @@ class FileTemplate:
 
         Raises
         ------
-        ValidationError
+        FileTemplateValidationError
             Raised if the template is inconsistent with the supplied entity.
 
         Notes
