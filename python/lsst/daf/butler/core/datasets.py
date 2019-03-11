@@ -234,7 +234,7 @@ class DatasetType:
         isComponent : `bool`
             `True` if this `DatasetType` is a component, `False` otherwise.
         """
-        if self.component:
+        if self.component():
             return True
         return False
 

@@ -136,6 +136,33 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetType.dimensions.names, datasetTypeOut.dimensions.names)
         self.assertEqual(datasetType.storageClass, datasetTypeOut.storageClass)
 
+    def test_composites(self):
+        """Test components within composite DatasetTypes."""
+        storageClassA = StorageClass("compA")
+        storageClassB = StorageClass("compB")
+        storageClass = StorageClass("test_composite", components={"compA": storageClassA,
+                                                                  "compB": storageClassB})
+        self.assertTrue(storageClass.isComposite())
+        self.assertFalse(storageClassA.isComposite())
+        self.assertFalse(storageClassB.isComposite())
+
+        dimensions = frozenset(("instrument", "visit"))
+
+        datasetTypeComposite = DatasetType("composite", dimensions, storageClass)
+        datasetTypeComponentA = DatasetType("composite.compA", dimensions, storageClassA)
+        datasetTypeComponentB = DatasetType("composite.compB", dimensions, storageClassB)
+
+        self.assertTrue(datasetTypeComposite.isComposite())
+        self.assertFalse(datasetTypeComponentA.isComposite())
+        self.assertTrue(datasetTypeComponentB.isComponent())
+        self.assertFalse(datasetTypeComposite.isComponent())
+
+        self.assertEqual(datasetTypeComposite.name, "composite")
+        self.assertEqual(datasetTypeComponentA.name, "composite.compA")
+        self.assertEqual(datasetTypeComponentB.component(), "compB")
+        self.assertEqual(datasetTypeComposite.nameAndComponent(), ("composite", None))
+        self.assertEqual(datasetTypeComponentA.nameAndComponent(), ("composite", "compA"))
+
 
 class DatasetRefTestCase(unittest.TestCase):
     """Test for DatasetRef.
