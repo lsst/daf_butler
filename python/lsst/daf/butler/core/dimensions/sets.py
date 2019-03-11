@@ -25,6 +25,7 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Set, MutableSet
 from collections import OrderedDict
 from .elements import DimensionElement
+from ..exceptions import ValidationError
 
 
 def conformSet(container):
@@ -255,6 +256,11 @@ class DimensionSet(DimensionSetBase, Set):
         If `True`, include implied dependencies in expansion.  Ignored
         if ``expand`` is `False`.
 
+    Raises
+    ------
+    ValidationError
+        Raised if a Dimension is not part of the Universe.
+
     Notes
     -----
     `DimensionSet` comparison operators and named-method relation operations
@@ -285,7 +291,10 @@ class DimensionSet(DimensionSetBase, Set):
         def toPairs(elems):
             for elem in elems:
                 if not isinstance(elem, DimensionElement):
-                    elem = self._universe.elements[elem]
+                    try:
+                        elem = self._universe.elements[elem]
+                    except KeyError as e:
+                        raise ValidationError(f"Dimension '{elem}' is not part of Universe") from e
                 yield (elem.name, elem)
                 if expand:
                     yield from toPairs(elem.dependencies(implied=implied))
