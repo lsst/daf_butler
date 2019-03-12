@@ -663,7 +663,7 @@ class Butler:
         if datastoreErrorStr:
             messages.append(datastoreErrorStr)
 
-        for failed, msg in ((failedNames, "Keys with out corresponding DatasetType or StorageClass entry: "),
+        for failed, msg in ((failedNames, "Keys without corresponding DatasetType or StorageClass entry: "),
                             (failedDataId, "Keys with bad DataId entries: ")):
             if failed:
                 msg += ", ".join(str(k) for k in failed)
