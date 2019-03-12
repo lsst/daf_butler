@@ -631,7 +631,7 @@ class Butler:
 
                 # skip if specific datasetType names were requested and this
                 # name does not match
-                if datasetTypeNames is not None and key.name not in datasetTypeNames:
+                if datasetTypeNames and key.name not in datasetTypeNames:
                     continue
 
                 # See if it is a StorageClass or a DatasetType
