@@ -618,7 +618,7 @@ class PosixDatastore(Datastore):
             try:
                 self.templates[lookupKey].validateTemplate(entity)
             except FileTemplateValidationError as e:
-                raise DatastoreValidationError from e
+                raise DatastoreValidationError(e) from e
 
     @staticmethod
     def computeChecksum(filename, algorithm="blake2b", block_size=8192):
