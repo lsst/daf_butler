@@ -638,7 +638,7 @@ class Butler:
                         self.registry.getDatasetType(key.name)
                     except KeyError:
                         if logFailures:
-                            log.fatal(f"Key '{key}' does not correspond to a DatasetType or StorageClass")
+                            log.fatal("Key '%s' does not correspond to a DatasetType or StorageClass", key)
                         failedNames.add(key)
             else:
                 # Dimensions are checked for consistency when the Butler
@@ -651,11 +651,11 @@ class Butler:
                 dataIdKeys = set(key.dataId)
                 if set(["instrument"]) != dataIdKeys:
                     if logFailures:
-                        log.fatal(f"Key '{key}' has unsupported DataId override")
+                        log.fatal("Key '%s' has unsupported DataId override", key)
                     failedDataId.add(key)
                 elif key.dataId["instrument"] not in instruments:
                     if logFailures:
-                        log.fatal(f"Key '{key}' has unknown instrument")
+                        log.fatal("Key '%s' has unknown instrument", key)
                     failedDataId.add(key)
 
         messages = []
