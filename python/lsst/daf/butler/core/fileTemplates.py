@@ -146,9 +146,11 @@ class FileTemplates:
             try:
                 matchKey, template = self.getTemplateWithMatch(entity)
             except KeyError as e:
-                failed.append(e)
+                # KeyError always quotes on stringification so strip here
+                errMsg = str(e).strip('"\'')
+                failed.append(errMsg)
                 if logFailures:
-                    log.fatal("%s", str(e))
+                    log.fatal("%s", errMsg)
                 continue
 
             if matchKey in unmatchedKeys:
@@ -159,7 +161,7 @@ class FileTemplates:
             except FileTemplateValidationError as e:
                 failed.append(f"{e} (via key '{matchKey}')")
                 if logFailures:
-                    log.fatal("Template failure with key '%s': %s", str(matchKey), str(e))
+                    log.fatal("Template failure with key '%s': %s", matchKey, e)
 
         if logFailures and unmatchedKeys:
             log.warning("Unchecked keys: %s", ", ".join([str(k) for k in unmatchedKeys]))
@@ -168,7 +170,7 @@ class FileTemplates:
             if len(failed) == 1:
                 msg = str(failed[0])
             else:
-                failMsg = ";\n".join(str(f) for f in failed)
+                failMsg = ";\n".join(failed)
                 msg = f"{len(failed)} template validation failures: {failMsg}"
             raise FileTemplateValidationError(msg)
 

@@ -595,7 +595,7 @@ class PosixDatastore(Datastore):
             except KeyError as e:
                 formatterFailed.append(str(e))
                 if logFailures:
-                    log.fatal("Formatter failure: %s", str(e))
+                    log.fatal("Formatter failure: %s", e)
 
         if templateFailed or formatterFailed:
             messages = []
