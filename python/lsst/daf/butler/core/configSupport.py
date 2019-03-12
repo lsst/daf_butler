@@ -208,8 +208,12 @@ def normalizeLookupKeys(toUpdate, universe):
         if k.dimensions is not None and not isinstance(k.dimensions, DimensionGraph):
             newDimensions = universe.extract(k.dimensions)
             newKey = k.clone(dimensions=newDimensions)
-            toUpdate[newKey] = toUpdate[k]
+            # Delete before adding the new version since LookupKeys hash
+            # to the same value regardless of DimensionGraph vs
+            # DimensionNameSet
+            oldValue = toUpdate[k]
             del toUpdate[k]
+            toUpdate[newKey] = oldValue
 
 
 def processLookupConfigs(config):
