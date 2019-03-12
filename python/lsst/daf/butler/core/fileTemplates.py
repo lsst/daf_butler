@@ -523,12 +523,18 @@ class FileTemplate:
             return
 
         # if this entity represents a component then insist that component
-        # is present in the template
+        # is present in the template. If the entity is not a component
+        # make sure that component is not mandatory.
         try:
             if entity.isComponent():
                 if "component" not in withSpecials:
                     raise FileTemplateValidationError(f"Template '{self}' has no component but "
                                                       f"{entity} refers to a component.")
+            else:
+                mandatorySpecials = self.fields(specials=True)
+                if "component" in mandatorySpecials:
+                    raise FileTemplateValidationError(f"Template '{self}' has mandatory component but "
+                                                      f"{entity} does not refer to a component.")
         except AttributeError:
             pass
 
