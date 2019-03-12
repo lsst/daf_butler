@@ -617,12 +617,8 @@ class Butler:
         # registry and storage class definitions
         keys = self.datastore.getLookupKeys()
 
-        # Dummy StorageClass to use for Dimensions validation
-        dummyStorageClass = self.storageClasses.getStorageClass("StructuredDataDict")
-
         failedNames = set()
         failedDataId = set()
-        failedValues = set()
         for key in keys:
             datasetType = None
             if key.name is not None:
@@ -639,7 +635,7 @@ class Butler:
                     pass
                 else:
                     try:
-                        datasetType = self.registry.getDatasetType(key.name)
+                        self.registry.getDatasetType(key.name)
                     except KeyError:
                         if logFailures:
                             log.fatal(f"Key '{key}' does not correspond to a DatasetType or StorageClass")
@@ -647,20 +643,7 @@ class Butler:
             else:
                 # Dimensions are checked for consistency when the Butler
                 # is created and rendezvoused with a universe.
-                # Create a reference DatasetType using these dimensions
-                # StorageClass should not matter
-                datasetType = DatasetType("DimensionValidation", key.dimensions,
-                                          dummyStorageClass)
-
-            # Check that the value is okay for this datastore using the
-            # given DatasetType
-            if datasetType is not None:
-                try:
-                    self.datastore.validateKey(key, datasetType)
-                except ValidationError as e:
-                    if logFailures:
-                        log.fatal("Key '%s' has bad value: %s", key, e)
-                    failedValues.add(key)
+                pass
 
             # Check that the instrument is a valid instrument
             # Currently only support instrument so check for that
@@ -681,8 +664,7 @@ class Butler:
             messages.append(datastoreErrorStr)
 
         for failed, msg in ((failedNames, "Keys with out corresponding DatasetType or StorageClass entry: "),
-                            (failedDataId, "Keys with bad DataId entries: "),
-                            (failedValues, "Keys with failed values: ")):
+                            (failedDataId, "Keys with bad DataId entries: ")):
             if failed:
                 msg += ", ".join(str(k) for k in failed)
                 messages.append(msg)
