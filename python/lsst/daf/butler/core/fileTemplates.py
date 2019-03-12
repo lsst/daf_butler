@@ -134,6 +134,7 @@ class FileTemplates:
         -----
         See `FileTemplate.validateTemplate()` for details on the validation.
         """
+        unmatchedKeys = set(self.templates)
         failed = []
         for entity in entities:
             try:
@@ -143,12 +144,19 @@ class FileTemplates:
                 if logFailures:
                     log.fatal("%s", str(e))
                 continue
+
+            if matchKey in unmatchedKeys:
+                unmatchedKeys.remove(matchKey)
+
             try:
                 template.validateTemplate(entity)
             except FileTemplateValidationError as e:
                 failed.append(f"{e} (via key '{matchKey}')")
                 if logFailures:
                     log.fatal("Template failure with key '%s': %s", str(matchKey), str(e))
+
+        if logFailures and unmatchedKeys:
+            log.warning("Unchecked keys: %s", ", ".join([str(k) for k in unmatchedKeys]))
 
         if failed:
             if len(failed) == 1:
