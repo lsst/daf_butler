@@ -77,7 +77,7 @@ class LookupKey:
         # The dataId is converted to a frozenset of key/value
         # tuples so that it is not mutable
         if dataId is not None:
-            self._dataId = frozenset((k, v) for k, v in dataId.items())
+            self._dataId = frozenset(dataId.items())
         else:
             self._dataId = None
 
