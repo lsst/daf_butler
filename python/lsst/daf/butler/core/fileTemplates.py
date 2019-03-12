@@ -154,7 +154,7 @@ class FileTemplates:
             if len(failed) == 1:
                 msg = str(failed[0])
             else:
-                failMsg = ";\n".join(failed)
+                failMsg = ";\n".join(str(f) for f in failed)
                 msg = f"{len(failed)} template validation failures: {failMsg}"
             raise FileTemplateValidationError(msg)
 
