@@ -26,6 +26,7 @@ __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplate
 import os.path
 import string
 import logging
+from types import MappingProxyType
 
 from .config import Config
 from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
@@ -78,7 +79,7 @@ class FileTemplates:
 
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
-        self.templates = {}
+        self._templates = {}
         self.normalized = False
         self.default = FileTemplate(default) if default is not None else None
         contents = processLookupConfigs(self.config)
@@ -91,7 +92,12 @@ class FileTemplates:
                 else:
                     self.default = FileTemplate(templateStr)
             else:
-                self.templates[key] = FileTemplate(templateStr)
+                self._templates[key] = FileTemplate(templateStr)
+
+    @property
+    def templates(self):
+        """Collection of templates indexed by lookup key (`dict`)."""
+        return MappingProxyType(self._templates)
 
     def __contains__(self, key):
         """Indicates whether the supplied key is present in the templates.
@@ -293,7 +299,7 @@ class FileTemplates:
         if self.normalized:
             return
 
-        normalizeLookupKeys(self.templates, universe)
+        normalizeLookupKeys(self._templates, universe)
 
         self.normalized = True
 
