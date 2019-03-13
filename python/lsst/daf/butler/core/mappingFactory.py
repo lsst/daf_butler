@@ -86,7 +86,8 @@ class MappingFactory:
         Raises
         ------
         ValueError
-            Raised if a key exists where a dimension is not part of the ``universe``.
+            Raised if a key exists where a dimension is not part of the
+            ``universe``.
         """
         if self.normalized:
             return
@@ -126,7 +127,8 @@ class MappingFactory:
         Raises
         ------
         KeyError
-            Raised if none of the supplied target classes match an item in the registry.
+            Raised if none of the supplied target classes match an item in the
+            registry.
         """
         attempts = []
         for t in (targetClasses):
@@ -165,7 +167,8 @@ class MappingFactory:
         Raises
         ------
         KeyError
-            Raised if none of the supplied target classes match an item in the registry.
+            Raised if none of the supplied target classes match an item in the
+            registry.
         """
         _, instance = self.getFromRegistryWithMatch(*targetClasses)
         return instance
