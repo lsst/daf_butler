@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# This file is part of ci_hsc.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project

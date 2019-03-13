@@ -21,7 +21,6 @@
 
 __all__ = ("SingleDatasetQueryBuilder",)
 
-
 import logging
 from sqlalchemy.sql import select, and_, functions, case
 from ..core import DimensionJoin

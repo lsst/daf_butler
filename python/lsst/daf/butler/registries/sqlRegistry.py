@@ -41,7 +41,7 @@ from ..core.run import Run
 from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.dimensions import DataId
+from ..core.dimensions import DataId, Dimension
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 from ..sql import MultipleDatasetQueryBuilder
 
@@ -267,6 +267,14 @@ class SqlRegistry(Registry):
         return DatasetRef(datasetType=datasetType, dataId=dataId, id=row["dataset_id"], run=run,
                           hash=datasetRefHash, components=components)
 
+    def getAllCollections(self):
+        # Docstring inherited from Registry.getAllCollections
+        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        result = self._connection.execute(select([datasetCollectionTable.c.collection]).distinct()).fetchall()
+        if result is None:
+            return set()
+        return {r[0] for r in result}
+
     def find(self, collection, datasetType, dataId=None, **kwds):
         # Docstring inherited from Registry.find
         if not isinstance(datasetType, DatasetType):
@@ -369,6 +377,18 @@ class SqlRegistry(Registry):
             return False
         else:
             raise ConflictingDefinitionError(f"DatasetType: {datasetType} != existing {existingDatasetType}")
+
+    def getAllDatasetTypes(self):
+        # Docstring inherited from Registry.getAllDatasetTypes.
+        datasetTypeTable = self._schema.tables["DatasetType"]
+
+        # Get all the registered names
+        result = self._connection.execute(select([datasetTypeTable.c.dataset_type_name])).fetchall()
+        if result is None:
+            return frozenset()
+
+        datasetTypeNames = [r[0] for r in result]
+        return frozenset(self.getDatasetType(name) for name in datasetTypeNames)
 
     def getDatasetType(self, name):
         # Docstring inherited from Registry.getDatasetType.
@@ -778,6 +798,20 @@ class SqlRegistry(Registry):
         if dataId.region is not None:
             self.setDimensionRegion(dataId)
         return dataId
+
+    @disableWhenLimited
+    def findDimensionEntries(self, dimension):
+        # Docstring inherited from Registry.findDimensionEntries
+        if not isinstance(dimension, Dimension):
+            dimension = self.dimensions[dimension]
+        table = self._schema.tables[dimension.name]
+        result = self._connection.execute(select([table])).fetchall()
+
+        if result is None:
+            return []
+
+        entries = [dict(r.items()) for r in result]
+        return entries
 
     @disableWhenLimited
     def findDimensionEntry(self, dimension, dataId=None, **kwds):

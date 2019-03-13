@@ -21,6 +21,8 @@
 
 """POSIX datastore."""
 
+__all__ = ("PosixDatastore", )
+
 import os
 import shutil
 import hashlib
@@ -29,13 +31,12 @@ from collections import namedtuple
 
 from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory,
                              FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
-                             StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict)
+                             StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
+                             DatastoreValidationError, FileTemplateValidationError)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 
 log = logging.getLogger(__name__)
-
-__all__ = ("PosixDatastore", )
 
 
 class PosixDatastore(Datastore):
@@ -313,7 +314,6 @@ class PosixDatastore(Datastore):
             The associated `DatasetType` is not handled by this datastore.
         """
         datasetType = ref.datasetType
-        typeName = datasetType.name
         storageClass = datasetType.storageClass
 
         # Sanity check
@@ -326,7 +326,7 @@ class PosixDatastore(Datastore):
         try:
             template = self.templates.getTemplate(ref)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find template for {datasetType}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find template for {ref}") from e
 
         location = self.locationFactory.fromPath(template.format(ref))
 
@@ -334,9 +334,7 @@ class PosixDatastore(Datastore):
         try:
             formatter = self.formatterFactory.getFormatter(ref)
         except KeyError as e:
-            raise DatasetTypeNotSupportedError("Unable to find formatter for StorageClass "
-                                               f"{datasetType.storageClass.name} or "
-                                               f"DatasetType {typeName}") from e
+            raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
@@ -559,6 +557,68 @@ class PosixDatastore(Datastore):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return self.put(inMemoryDataset, ref)
+
+    def validateConfiguration(self, entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.  Can be differing
+            types.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+            All the problems are reported in a single exception.
+
+        Notes
+        -----
+        This method checks that all the supplied entities have valid file
+        templates and also have formatters defined.
+        """
+
+        templateFailed = None
+        try:
+            self.templates.validateTemplates(entities, logFailures=logFailures)
+        except FileTemplateValidationError as e:
+            templateFailed = str(e)
+
+        formatterFailed = []
+        for entity in entities:
+            try:
+                self.formatterFactory.getFormatter(entity)
+            except KeyError as e:
+                formatterFailed.append(str(e))
+                if logFailures:
+                    log.fatal("Formatter failure: %s", e)
+
+        if templateFailed or formatterFailed:
+            messages = []
+            if templateFailed:
+                messages.append(templateFailed)
+            if formatterFailed:
+                messages.append(",".join(formatterFailed))
+            msg = ";\n".join(messages)
+            raise DatastoreValidationError(msg)
+
+    def getLookupKeys(self):
+        # Docstring is inherited from base class
+        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys()
+
+    def validateKey(self, lookupKey, entity):
+        # Docstring is inherited from base class
+        # The key can be valid in either formatters or templates so we can
+        # only check the template if it exists
+        if lookupKey in self.templates:
+            try:
+                self.templates[lookupKey].validateTemplate(entity)
+            except FileTemplateValidationError as e:
+                raise DatastoreValidationError(e) from e
 
     @staticmethod
     def computeChecksum(filename, algorithm="blake2b", block_size=8192):

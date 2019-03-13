@@ -26,14 +26,16 @@ __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplate
 import os.path
 import string
 import logging
+from types import MappingProxyType
 
 from .config import Config
 from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
+from .exceptions import ValidationError
 
 log = logging.getLogger(__name__)
 
 
-class FileTemplateValidationError(RuntimeError):
+class FileTemplateValidationError(ValidationError):
     """Exception thrown when a file template is not consistent with the
     associated `DatasetType`."""
     pass
@@ -72,37 +74,65 @@ class FileTemplates:
     `~lsst.daf.butler.configSubset.processLookupConfigs`.
     """
 
+    defaultKey = LookupKey("default")
+    """Configuration key associated with the default template."""
+
     def __init__(self, config, default=None):
         self.config = FileTemplatesConfig(config)
-        self.templates = {}
+        self._templates = {}
         self.normalized = False
         self.default = FileTemplate(default) if default is not None else None
         contents = processLookupConfigs(self.config)
 
         # Convert all the values to FileTemplate, handling defaults
-        defaultKey = LookupKey(name="default")
         for key, templateStr in contents.items():
-            if key == defaultKey:
+            if key == self.defaultKey:
                 if not templateStr:
                     self.default = None
                 else:
                     self.default = FileTemplate(templateStr)
             else:
-                self.templates[key] = FileTemplate(templateStr)
+                self._templates[key] = FileTemplate(templateStr)
 
-    def validateTemplate(self, *entities):
+    @property
+    def templates(self):
+        """Collection of templates indexed by lookup key (`dict`)."""
+        return MappingProxyType(self._templates)
+
+    def __contains__(self, key):
+        """Indicates whether the supplied key is present in the templates.
+
+        Parameters
+        ----------
+        key : `LookupKey`
+            Key to use to determine if a corresponding value is present
+            in the templates.
+
+        Returns
+        -------
+        in : `bool`
+            `True` if the supplied key is present in the templates.
+        """
+        return key in self.templates
+
+    def __getitem__(self, key):
+        return self.templates[key]
+
+    def validateTemplates(self, entities, logFailures=False):
         """Retrieve the template associated with each dataset type and
         validate the dimensions against the template.
 
         Parameters
         ----------
-        *entities : `DatasetType`, `DatasetRef`, or `StorageClass`
-            Entities to validate against the matching templates.
+        entities : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Entities to validate against the matching templates.  Can be
+            differing types.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
 
         Raises
         ------
-        KeyError
-            Raised if no template could be found for the supplied entity.
         FileTemplateValidationError
             Raised if an entity failed validation.
 
@@ -110,9 +140,109 @@ class FileTemplates:
         -----
         See `FileTemplate.validateTemplate()` for details on the validation.
         """
+        unmatchedKeys = set(self.templates)
+        failed = []
         for entity in entities:
-            template = self.getTemplate(entity)
-            template.validateTemplate(entity)
+            try:
+                matchKey, template = self.getTemplateWithMatch(entity)
+            except KeyError as e:
+                # KeyError always quotes on stringification so strip here
+                errMsg = str(e).strip('"\'')
+                failed.append(errMsg)
+                if logFailures:
+                    log.fatal("%s", errMsg)
+                continue
+
+            if matchKey in unmatchedKeys:
+                unmatchedKeys.remove(matchKey)
+
+            try:
+                template.validateTemplate(entity)
+            except FileTemplateValidationError as e:
+                failed.append(f"{e} (via key '{matchKey}')")
+                if logFailures:
+                    log.fatal("Template failure with key '%s': %s", matchKey, e)
+
+        if logFailures and unmatchedKeys:
+            log.warning("Unchecked keys: %s", ", ".join([str(k) for k in unmatchedKeys]))
+
+        if failed:
+            if len(failed) == 1:
+                msg = str(failed[0])
+            else:
+                failMsg = ";\n".join(failed)
+                msg = f"{len(failed)} template validation failures: {failMsg}"
+            raise FileTemplateValidationError(msg)
+
+    def getLookupKeys(self):
+        """Retrieve the look up keys for all the template entries.
+
+        Returns
+        -------
+        keys : `set` of `LookupKey`
+            The keys available for matching a template.
+        """
+        return set(self.templates)
+
+    def getTemplateWithMatch(self, entity):
+        """Retrieve the `FileTemplate` associated with the dataset type along
+        with the lookup key that was a match for this template.
+
+        If the lookup name corresponds to a component the base name for
+        the component will be examined if the full component name does
+        not match.
+
+        Parameters
+        ----------
+        entity : `DatasetType`, `DatasetRef`, or `StorageClass`
+            Instance to use to look for a corresponding template.
+            A `DatasetType` name or a `StorageClass` name will be used
+            depending on the supplied entity. Priority is given to a
+            `DatasetType` name. Supports instrument override if a
+            `DatasetRef` is provided configured with an ``instrument``
+            value for the data ID.
+
+        Returns
+        -------
+        matchKey : `LookupKey`
+            The key that resulted in the successful match.
+        template : `FileTemplate`
+            Template instance to use with that dataset type.
+
+        Raises
+        ------
+        KeyError
+            Raised if no template could be located for this Dataset type.
+        """
+
+        # normalize the registry if not already done and we have access
+        # to a universe
+        if not self.normalized:
+            try:
+                universe = entity.dimensions.universe
+            except AttributeError:
+                pass
+            else:
+                self.normalizeDimensions(universe)
+
+        # Get the names to use for lookup
+        names = entity._lookupNames()
+
+        # Get a location from the templates
+        template = self.default
+        source = self.defaultKey
+        for name in names:
+            if name in self.templates:
+                template = self.templates[name]
+                source = name
+                break
+
+        if template is None:
+            raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
+
+        log.debug("Got file %s from %s via %s", template, entity, source)
+
+        return source, template
 
     def getTemplate(self, entity):
         """Retrieve the `FileTemplate` associated with the dataset type.
@@ -141,34 +271,7 @@ class FileTemplates:
         KeyError
             Raised if no template could be located for this Dataset type.
         """
-
-        # normalize the registry if not already done and we have access
-        # to a universe
-        if not self.normalized:
-            try:
-                universe = entity.dimensions.universe
-            except AttributeError:
-                pass
-            else:
-                self.normalizeDimensions(universe)
-
-        # Get the names to use for lookup
-        names = entity._lookupNames()
-
-        # Get a location from the templates
-        template = self.default
-        source = "default"
-        for name in names:
-            if name in self.templates:
-                template = self.templates[name]
-                source = name
-                break
-
-        if template is None:
-            raise KeyError(f"Unable to determine file template from supplied argument [{entity}]")
-
-        log.debug("Got file %s from %s via %s", template, entity, source)
-
+        _, template = self.getTemplateWithMatch(entity)
         return template
 
     def normalizeDimensions(self, universe):
@@ -198,7 +301,7 @@ class FileTemplates:
         if self.normalized:
             return
 
-        normalizeLookupKeys(self.templates, universe)
+        normalizeLookupKeys(self._templates, universe)
 
         self.normalized = True
 
@@ -371,7 +474,8 @@ class FileTemplate:
                 if "/" not in literal:
                     literal = ""
             else:
-                raise KeyError("{} requested in template but not defined and not optional".format(field_name))
+                raise KeyError(f"'{field_name}' requested in template via '{self.template}' "
+                               "but not defined and not optional")
 
             # Now use standard formatting
             output = output + literal + format(value, format_spec)
@@ -406,7 +510,7 @@ class FileTemplate:
 
         Raises
         ------
-        ValidationError
+        FileTemplateValidationError
             Raised if the template is inconsistent with the supplied entity.
 
         Notes
@@ -419,7 +523,7 @@ class FileTemplate:
         """
 
         # Check that the template has run or collection
-        withSpecials = self.fields(specials=True)
+        withSpecials = self.fields(specials=True, optionals=True)
         if not withSpecials & self.mandatoryFields:
             raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
                                               f" from {self.mandatoryFields}")
@@ -430,15 +534,36 @@ class FileTemplate:
             raise FileTemplateValidationError(f"Template '{self}' does not seem to have any fields"
                                               " corresponding to dimensions.")
 
-        # If we do not have dimensions defined then all we can do is shrug
+        # If we do not have dimensions available then all we can do is shrug
         if not hasattr(entity, "dimensions"):
             return
 
-        dimensions = entity.dimensions
-        if not dimensions:
-            return True
+        # if this entity represents a component then insist that component
+        # is present in the template. If the entity is not a component
+        # make sure that component is not mandatory.
+        try:
+            if entity.isComponent():
+                if "component" not in withSpecials:
+                    raise FileTemplateValidationError(f"Template '{self}' has no component but "
+                                                      f"{entity} refers to a component.")
+            else:
+                mandatorySpecials = self.fields(specials=True)
+                if "component" in mandatorySpecials:
+                    raise FileTemplateValidationError(f"Template '{self}' has mandatory component but "
+                                                      f"{entity} does not refer to a component.")
+        except AttributeError:
+            pass
 
-        links = dimensions.links()
+        # Get the dimension links to get the full set of available field names
+        # Fall back to dataId keys if we have them but no links.
+        # dataId keys must still be present in the template
+        try:
+            links = entity.dimensions.links()
+        except AttributeError:
+            try:
+                links = set(entity.dataId.keys())
+            except AttributeError:
+                return
 
         required = self.fields(optionals=False)
 

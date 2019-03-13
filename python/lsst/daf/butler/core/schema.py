@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
+
 from base64 import b64encode, b64decode
 from math import ceil
 
@@ -29,8 +31,6 @@ from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator, UniqueConstraint
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
-
-__all__ = ("SchemaConfig", "Schema", "SchemaBuilder")
 
 
 class Base64Bytes(TypeDecorator):

@@ -23,6 +23,8 @@
 Support for generic data stores.
 """
 
+__all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
+
 import contextlib
 import logging
 from collections import namedtuple
@@ -30,14 +32,19 @@ from abc import ABCMeta, abstractmethod
 
 from lsst.utils import doImport
 from .config import ConfigSubset
-
-__all__ = ("DatastoreConfig", "Datastore")
+from .exceptions import ValidationError
 
 
 class DatastoreConfig(ConfigSubset):
     component = "datastore"
     requiredKeys = ("cls",)
     defaultConfigFile = "datastore.yaml"
+
+
+class DatastoreValidationError(ValidationError):
+    """There is a problem with the Datastore configuration.
+    """
+    pass
 
 
 class DatastoreTransaction:
@@ -363,5 +370,68 @@ class Datastore(metaclass=ABCMeta):
             The external `Datastore` from which to retreive the Dataset.
         datasetRef : `DatasetRef`
             Reference to the required Dataset.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def validateConfiguration(self, entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.    Can be differing
+            types.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+
+        Notes
+        -----
+        Which parts of the configuration are validated is at the discretion
+        of each Datastore implementation.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def validateKey(self, lookupKey, entity, logFailures=False):
+        """Validate a specific look up key with supplied entity.
+
+        Parameters
+        ----------
+        lookupKey : `LookupKey`
+            Key to use to retrieve information from the datastore
+            configuration.
+        entity : `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entity to compare with configuration retrieved using the
+            specified lookup key.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a problem with the combination of entity
+            and lookup key.
+
+        Notes
+        -----
+        Bypasses the normal selection priorities by allowing a key that
+        would normally not be selected to be validated.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getLookupKeys(self):
+        """Return all the lookup keys relevant to this datastore.
+
+        Returns
+        -------
+        keys : `set` of `LookupKey`
+            The keys stored internally for looking up information based
+            on `DatasetType` name or `StorageClass`.
         """
         raise NotImplementedError("Must be implemented by subclass")

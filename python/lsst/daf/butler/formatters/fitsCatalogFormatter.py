@@ -19,11 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("FitsCatalogFormatter", )
+
 import os.path
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
-
-__all__ = ("FitsCatalogFormatter", )
 
 
 class FitsCatalogFormatter(FileFormatter):

@@ -21,11 +21,11 @@
 
 """Formatter associated with Python pickled objects."""
 
+__all__ = ("PickleFormatter", )
+
 import pickle
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
-
-__all__ = ("PickleFormatter", )
 
 
 class PickleFormatter(FileFormatter):

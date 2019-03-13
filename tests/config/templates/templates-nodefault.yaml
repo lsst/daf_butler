@@ -8,5 +8,5 @@ pvi: "{run}_{datasetType}_{physical_filter}"
 # no universe
 instrument+physical_filter: "{collection}_{datasetType}_{physical_filter}_{instrument}"
 instrument<HSC>:
-  pvi: "HyperSuprimCam-{collection}/{datasetType}_{physical_filter}"
+  pvi: "HyperSuprimCam-{collection}/{datasetType}_{physical_filter}_{instrument}"
   instrument+physical_filter: "hsc/{run}_{datasetType}_{physical_filter}_{instrument}"

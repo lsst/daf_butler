@@ -21,6 +21,8 @@
 
 """Support for Storage Classes."""
 
+__all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
+
 import builtins
 import logging
 
@@ -31,8 +33,6 @@ from .config import ConfigSubset
 from .configSupport import LookupKey
 
 log = logging.getLogger(__name__)
-
-__all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 
 class StorageClassConfig(ConfigSubset):

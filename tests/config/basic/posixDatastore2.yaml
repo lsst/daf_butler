@@ -6,7 +6,7 @@ datastore:
   templates:
     default: "{run:02d}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
     calexp: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
-    metric: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
+    metric: "{run:02d}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
     test_metric_comp: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
   formatters:
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter

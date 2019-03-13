@@ -19,11 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("StoredFileInfo", )
+
 from .formatter import Formatter
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass
-
-__all__ = ("StoredFileInfo", )
 
 
 class StoredFileInfo:

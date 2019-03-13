@@ -19,13 +19,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("Formatter", "FormatterFactory")
+
 from abc import ABCMeta, abstractmethod
+import logging
 
 from .configSupport import processLookupConfigs
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
 
-__all__ = ("Formatter", "FormatterFactory")
+log = logging.getLogger(__name__)
 
 
 class Formatter(metaclass=ABCMeta):
@@ -141,6 +144,22 @@ class FormatterFactory:
     def __init__(self):
         self._mappingFactory = MappingFactory(Formatter)
 
+    def __contains__(self, key):
+        """Indicates whether the supplied key is present in the factory.
+
+        Parameters
+        ----------
+        key : `LookupKey`, `str` or objects with ``name`` attribute
+            Key to use to lookup in the factory whether a corresponding
+            formatter is present.
+
+        Returns
+        -------
+        in : `bool`
+            `True` if the supplied key is present in the factory.
+        """
+        return key in self._mappingFactory
+
     def normalizeDimensions(self, universe):
         """Normalize formatter lookups that use dimensions.
 
@@ -191,6 +210,54 @@ class FormatterFactory:
         for key, f in contents.items():
             self.registerFormatter(key, f)
 
+    def getLookupKeys(self):
+        """Retrieve the look up keys for all the registry entries.
+
+        Returns
+        -------
+        keys : `set` of `LookupKey`
+            The keys available for matching in the registry.
+        """
+        return self._mappingFactory.getLookupKeys()
+
+    def getFormatterWithMatch(self, entity):
+        """Get a new formatter instance along with the matching registry
+        key.
+
+        Parameters
+        ----------
+        entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
+            Entity to use to determine the formatter to return.
+            `StorageClass` will be used as a last resort if `DatasetRef`
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        matchKey : `LookupKey`
+            The key that resulted in the successful match.
+        formatter : `Formatter`
+            An instance of the registered formatter.
+        """
+        if isinstance(entity, str):
+            names = (entity,)
+        else:
+            # Normalize the registry to a universe if not already done
+            if not self._mappingFactory.normalized:
+                try:
+                    universe = entity.dimensions.universe
+                except AttributeError:
+                    pass
+                else:
+                    self._mappingFactory.normalizeRegistryDimensions(universe)
+
+            names = entity._lookupNames()
+        matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(*names)
+        log.debug("Retrieved formatter from key '%s' for entity '%s'", matchKey, entity)
+
+        return matchKey, formatter
+
     def getFormatter(self, entity):
         """Get a new formatter instance.
 
@@ -208,20 +275,8 @@ class FormatterFactory:
         formatter : `Formatter`
             An instance of the registered formatter.
         """
-        if isinstance(entity, str):
-            names = (entity,)
-        else:
-            # Normalize the registry to a universe if not already done
-            if not self._mappingFactory.normalized:
-                try:
-                    universe = entity.dimensions.universe
-                except AttributeError:
-                    pass
-                else:
-                    self._mappingFactory.normalizeRegistryDimensions(universe)
-
-            names = entity._lookupNames()
-        return self._mappingFactory.getFromRegistry(*names)
+        _, formatter = self.getFormatterWithMatch(entity)
+        return formatter
 
     def registerFormatter(self, type_, formatter):
         """Register a `Formatter`.

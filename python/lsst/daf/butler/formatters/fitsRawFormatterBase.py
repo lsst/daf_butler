@@ -19,12 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("FitsRawFormatterBase",)
+
 from abc import ABCMeta, abstractmethod
 
 from lsst.daf.butler.formatters.fitsExposureFormatter import FitsExposureFormatter
-
-
-__all__ = ("FitsRawFormatterBase",)
 
 
 class FitsRawFormatterBase(FitsExposureFormatter, metaclass=ABCMeta):

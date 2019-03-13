@@ -27,7 +27,7 @@ import tempfile
 import lsst.utils
 
 from lsst.daf.butler import StorageClassFactory, StorageClass
-from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError
+from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 
 from lsst.utils import doImport
 
@@ -93,6 +93,29 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
         datastore = self.makeDatastore()
         self.assertIsNotNone(datastore)
         self.assertIs(datastore.isEphemeral, self.isEphemeral)
+
+    def testConfigurationValidation(self):
+        datastore = self.makeDatastore()
+        sc = self.storageClassFactory.getStorageClass("ThingOne")
+        datastore.validateConfiguration([sc])
+
+        sc2 = self.storageClassFactory.getStorageClass("ThingTwo")
+        if self.validationCanFail:
+            with self.assertRaises(DatastoreValidationError):
+                datastore.validateConfiguration([sc2], logFailures=True)
+
+        # Without a universe testing is limited but create a
+        # ref that has valid dataId and one that does not
+        dimensions = frozenset(("Visit", "PhysicalFilter"))
+        dataId = {"visit": 52, "physical_filter": "V"}
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
+        datastore.validateConfiguration([ref])
+
+        dataId = {"visit": 52, "physical_filter": "V", "foo": "bar"}
+        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
+        if self.validationCanFail:
+            with self.assertRaises(DatastoreValidationError):
+                datastore.validateConfiguration([ref])
 
     def testParameterValidation(self):
         """Check that parameters are validated"""
@@ -428,6 +451,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
     isEphemeral = False
     rootKeys = ("root",)
+    validationCanFail = True
 
     def setUp(self):
         # Override the working directory before calling the base class
@@ -443,6 +467,7 @@ class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):
     ingestTransferModes = ()
     isEphemeral = True
     rootKeys = None
+    validationCanFail = False
 
 
 class ChainedDatastoreTestCase(PosixDatastoreTestCase):
@@ -452,11 +477,13 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     ingestTransferModes = ("copy", "move", "hardlink", "symlink")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
+    validationCanFail = True
 
 
 class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2.yaml")
+    validationCanFail = False
 
 
 if __name__ == "__main__":

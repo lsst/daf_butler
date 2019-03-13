@@ -65,8 +65,8 @@ class RegistryTests(metaclass=ABCMeta):
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         # Inserting for the first time should return True
         self.assertTrue(registry.registerDatasetType(inDatasetType))
-        outDatasetType = registry.getDatasetType(datasetTypeName)
-        self.assertEqual(outDatasetType, inDatasetType)
+        outDatasetType1 = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType1, inDatasetType)
 
         # Re-inserting should work
         self.assertFalse(registry.registerDatasetType(inDatasetType))
@@ -82,8 +82,11 @@ class RegistryTests(metaclass=ABCMeta):
         dimensions = ("Instrument", "Visit")
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(inDatasetType)
-        outDatasetType = registry.getDatasetType(datasetTypeName)
-        self.assertEqual(outDatasetType, inDatasetType)
+        outDatasetType2 = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType2, inDatasetType)
+
+        allTypes = registry.getAllDatasetTypes()
+        self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
     def testDataset(self):
         registry = self.makeRegistry()
@@ -356,6 +359,9 @@ class RegistryTests(metaclass=ABCMeta):
         outputRef = registry.find(newCollection, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
 
+        collections = registry.getAllCollections()
+        self.assertEqual(collections, {"something", "ingest"})
+
     def testAssociate(self):
         registry = self.makeRegistry()
         storageClass = StorageClass("testAssociate")
@@ -448,6 +454,20 @@ class RegistryTests(metaclass=ABCMeta):
         registry.addDimensionEntry(dimensionName2, dimensionValue2)
         # Find should return the entry
         self.assertEqual(registry.findDimensionEntry(dimensionName2, dimensionValue2), dimensionValue2)
+
+        # Get all the Instrument values
+        instrumentEntries = registry.findDimensionEntries(dimensionName)
+        instruments = {e["instrument"] for e in instrumentEntries}
+        self.assertTrue(len(instruments), 1)
+        self.assertIn(dimensionValue["instrument"], instruments)
+
+        # Add a new instrument
+        dimensionValue3 = {"instrument": "DummyCam2", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+        registry.addDimensionEntry(dimensionName, dimensionValue3)
+
+        instrumentEntries = registry.findDimensionEntries(dimensionName)
+        instruments = {e["instrument"] for e in instrumentEntries}
+        self.assertEqual(instruments, {"DummyCam", "DummyCam2"})
 
     def testBasicTransaction(self):
         registry = self.makeRegistry()

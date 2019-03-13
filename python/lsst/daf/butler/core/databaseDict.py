@@ -19,11 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("DatabaseDict",)
+
 from collections.abc import MutableMapping
 
 from lsst.utils import doImport
-
-__all__ = ("DatabaseDict",)
 
 
 class DatabaseDict(MutableMapping):

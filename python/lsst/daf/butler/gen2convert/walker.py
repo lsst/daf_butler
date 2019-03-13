@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("ConversionWalker",)
+
 import os
 import pickle
 import yaml
@@ -37,8 +39,6 @@ from ..core import Config
 
 from .structures import Gen2Repo
 from .extractor import Extractor
-
-__all__ = ("ConversionWalker",)
 
 
 class ConversionWalker:

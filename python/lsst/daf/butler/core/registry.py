@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
+           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
+
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import contextlib
@@ -31,9 +34,6 @@ from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKey
 from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
-
-__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
-           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 
 class AmbiguousDatasetError(Exception):
@@ -264,6 +264,17 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    def getAllCollections(self):
+        """Get names of all the collections found in this repository.
+
+        Returns
+        -------
+        collections : `set` of `str`
+            The collections.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
     def find(self, collection, datasetType, dataId=None, **kwds):
         """Lookup a dataset.
 
@@ -346,6 +357,17 @@ class Registry(metaclass=ABCMeta):
         ------
         KeyError
             Requested named DatasetType could not be found in registry.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def getAllDatasetTypes(self):
+        r"""Get every registered `DatasetType`.
+
+        Returns
+        -------
+        types : `frozenset` of `DatasetType`
+            Every `DatasetType` in the registry.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -809,6 +831,30 @@ class Registry(metaclass=ABCMeta):
         ConflictingDefinitionError
             If an entry with the primary-key defined in `values` is already
             present.
+        NotImplementedError
+            Raised if `limited` is `True`.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @disableWhenLimited
+    def findDimensionEntries(self, dimension):
+        """Return all `Dimension` entries corresponding to the named dimension.
+
+        Parameters
+        ----------
+        dimension : `str` or `Dimension`
+            Either a `Dimension` object or the name of one.
+
+        Returns
+        -------
+        entries : `list` of `dict`
+            List with `dict` containing the `Dimension` values for each variant
+            of the `Dimension`.  Returns empty list if no entries have been
+            added for this dimension.
+
+        Raises
+        ------
         NotImplementedError
             Raised if `limited` is `True`.
         """

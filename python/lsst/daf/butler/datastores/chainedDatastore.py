@@ -21,17 +21,18 @@
 
 """Chained datastore."""
 
+__all__ = ("ChainedDatastore",)
+
 import time
 import logging
 import os
 import warnings
 
 from lsst.utils import doImport
-from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError
+from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
+    DatastoreValidationError
 
 log = logging.getLogger(__name__)
-
-__all__ = ("ChainedDatastore", )
 
 
 class ChainedDatastore(Datastore):
@@ -456,3 +457,61 @@ class ChainedDatastore(Datastore):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return [datastore.put(inMemoryDataset, ref) for datastore in self.datastores]
+
+    def validateConfiguration(self, entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.  Can be differing
+            types.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+            All the problems are reported in a single exception.
+
+        Notes
+        -----
+        This method checks each datastore in turn.
+        """
+
+        # Need to catch each of the datastore outputs and ensure that
+        # all are tested.
+        failures = []
+        for datastore in self.datastores:
+            try:
+                datastore.validateConfiguration(entities, logFailures=logFailures)
+            except DatastoreValidationError as e:
+                if logFailures:
+                    log.fatal("Datastore %s failed validation", datastore.name)
+                failures.append(f"Datastore {self.name}: {e}")
+
+        if failures:
+            msg = ";\n".join(failures)
+            raise DatastoreValidationError(msg)
+
+    def validateKey(self, lookupKey, entity):
+        # Docstring is inherited from base class
+        failures = []
+        for datastore in self.datastores:
+            try:
+                datastore.validateKey(lookupKey, entity)
+            except DatastoreValidationError as e:
+                failures.append(f"Datastore {self.name}: {e}")
+
+        if failures:
+            msg = ";\n".join(failures)
+            raise DatastoreValidationError(msg)
+
+    def getLookupKeys(self):
+        # Docstring is inherited from base class
+        keys = set()
+        for datastore in self.datastores:
+            keys.update(datastore.getLookupKeys())
+        return keys

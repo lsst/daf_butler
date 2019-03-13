@@ -21,14 +21,14 @@
 
 """In-memory datastore."""
 
+__all__ = ("StoredItemInfo", "InMemoryDatastore")
+
 import time
 import logging
 
 from lsst.daf.butler import Datastore, StorageClassFactory
 
 log = logging.getLogger(__name__)
-
-__all__ = ("StoredItemInfo", "InMemoryDatastore")
 
 
 class StoredItemInfo:
@@ -419,3 +419,35 @@ class InMemoryDatastore(Datastore):
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
         return self.put(inMemoryDataset, ref)
+
+    def validateConfiguration(self, entities, logFailures=False):
+        """Validate some of the configuration for this datastore.
+
+        Parameters
+        ----------
+        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
+            Entities to test against this configuration.  Can be differing
+            types.
+        logFailures : `bool`, optional
+            If `True`, output a log message for every validation error
+            detected.
+
+        Raises
+        ------
+        DatastoreValidationError
+            Raised if there is a validation problem with a configuration.
+            All the problems are reported in a single exception.
+
+        Notes
+        -----
+        This method is a no-op.
+        """
+        return
+
+    def validateKey(self, lookupKey, entity):
+        # Docstring is inherited from base class
+        return
+
+    def getLookupKeys(self):
+        # Docstring is inherited from base class
+        return set()

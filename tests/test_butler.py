@@ -31,7 +31,7 @@ import pickle
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
-from lsst.daf.butler import FileTemplateValidationError
+from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -98,6 +98,9 @@ class ButlerTests:
         butler = Butler(self.tmpConfigFile)
         self.assertIsInstance(butler, Butler)
 
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, set())
+
     def testBasicPutGet(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
         self.runPutGetTest(storageClass, "test_metric")
@@ -112,6 +115,11 @@ class ButlerTests:
 
     def runPutGetTest(self, storageClass, datasetTypeName):
         butler = Butler(self.tmpConfigFile)
+
+        # There will not be a collection yet
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, set())
+
         # Create and register a DatasetType
         dimensions = ("Instrument", "Visit")
 
@@ -216,6 +224,10 @@ class ButlerTests:
         with self.assertRaises(KeyError):
             butler.get(ref, parameters={"unsupported": True})
 
+        # Check we have a collection
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, {"ingest", })
+
     def testPickle(self):
         """Test pickle support.
         """
@@ -223,6 +235,52 @@ class ButlerTests:
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
+
+    def testGetDatasetTypes(self):
+        butler = Butler(self.tmpConfigFile)
+        dimensions = ("Instrument", "Visit", "PhysicalFilter")
+        dimensionEntries = (("Instrument", {"instrument": "DummyCam"}),
+                            ("Instrument", {"instrument": "DummyHSC"}),
+                            ("Instrument", {"instrument": "DummyCamComp"}),
+                            ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
+                            ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        # Add needed Dimensions
+        for name, value in dimensionEntries:
+            butler.registry.addDimensionEntry(name, value)
+
+        # When a DatasetType is added to the registry entries are created
+        # for each component. Need entries for each component in the test
+        # configuration otherwise validation won't work. The ones that
+        # are deliberately broken will be ignored later.
+        datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi"}
+        components = set()
+        for datasetTypeName in datasetTypeNames:
+            # Create and register a DatasetType
+            self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
+
+            for componentName in storageClass.components:
+                components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
+
+        fromRegistry = butler.registry.getAllDatasetTypes()
+        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
+
+        # Now that we have some dataset types registered, validate them
+        butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
+                                             "datasetType.component"])
+
+        # Add a new datasetType that will fail template validation
+        self.addDatasetType("test_metric_comp", dimensions, storageClass, butler.registry)
+        if self.validationCanFail:
+            with self.assertRaises(ValidationError):
+                butler.validateConfiguration()
+
+        # Rerun validation but with a subset of dataset type names
+        butler.validateConfiguration(datasetTypeNames=["metric4"])
+
+        # Rerun validation but ignore the bad datasetType
+        butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
+                                             "datasetType.component"])
 
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
@@ -298,6 +356,11 @@ class ButlerTests:
         self.assertIn(self.fullConfigKey, full)
         self.assertNotIn(self.fullConfigKey, limited)
 
+        # Collections don't appear until something is put in them
+        collections1 = butler1.registry.getAllCollections()
+        self.assertEqual(collections1, set())
+        self.assertEqual(butler2.registry.getAllCollections(), collections1)
+
     def testStringification(self):
         butler = Butler(self.configFile)
         if self.datastoreStr is not None:
@@ -310,6 +373,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization of a butler"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     fullConfigKey = ".datastore.formatters"
+    validationCanFail = True
 
     datastoreStr = "datastore='./butler_test_repository"
     registryStr = "registry='sqlite:///:memory:'"
@@ -346,7 +410,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
-        butler.datastore.templates.validateTemplate(ref)
+        butler.datastore.templates.validateTemplates([ref])
 
         # Put with extra data ID keys (physical_filter is an optional
         # dependency); should not change template (at least the way we're
@@ -356,14 +420,14 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
-        butler.datastore.templates.validateTemplate(ref)
+        butler.datastore.templates.validateTemplates([ref])
 
         # Now use a file template that will not result in unique filenames
         ref = butler.put(metric, "metric3", dataId1)
 
         # Check the template based on dimensions. This one is a bad template
         with self.assertRaises(FileTemplateValidationError):
-            butler.datastore.templates.validateTemplate(ref)
+            butler.datastore.templates.validateTemplates([ref])
 
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
@@ -374,6 +438,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-inmemory.yaml")
     fullConfigKey = None
     useTempRoot = False
+    validationCanFail = False
     datastoreStr = "datastore='InMemory'"
     registryStr = "registry='sqlite:///:memory:'"
 
@@ -382,6 +447,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
+    validationCanFail = True
     datastoreStr = "datastore='InMemory, ./butler_test_repository, ./butler_test_repository2'"
     registryStr = "registry='sqlite:///:memory:'"
 

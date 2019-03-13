@@ -21,7 +21,6 @@
 
 __all__ = ("DatasetOriginInfo", "DatasetOriginInfoDef",)
 
-
 from abc import ABCMeta, abstractmethod
 
 

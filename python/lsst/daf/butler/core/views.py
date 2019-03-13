@@ -19,13 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("View", )
+
 from sqlalchemy import MetaData
 from sqlalchemy.schema import DDLElement
 from sqlalchemy.sql import text, select, TableClause
 from sqlalchemy.ext import compiler
 from sqlalchemy import event
-
-__all__ = ("View", )
 
 
 class CreateView(DDLElement):

@@ -238,6 +238,50 @@ class TestFileTemplates(unittest.TestCase):
         tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)
 
+    def testValidation(self):
+        configRoot = os.path.join(TESTDIR, "config", "templates")
+        config1 = FileTemplatesConfig(os.path.join(configRoot, "templates-nodefault.yaml"))
+        templates = FileTemplates(config1)
+
+        entities = {}
+        entities["calexp"] = self.makeDatasetRef("calexp", storageClassName="StorageClassX",
+                                                 dataId={"physical_filter": "i", "visit": 52})
+
+        with self.assertLogs(level="WARNING") as cm:
+            templates.validateTemplates(entities.values(), logFailures=True)
+        self.assertIn("Unchecked keys", cm.output[0])
+        self.assertIn("StorageClassX", cm.output[0])
+
+        entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
+                                              dataId={"physical_filter": "i"})
+        entities["StorageClassX"] = self.makeDatasetRef("storageClass",
+                                                        storageClassName="StorageClassX",
+                                                        dataId={"visit": 2})
+        entities["calexp.wcs"] = self.makeDatasetRef("calexp.wcs",
+                                                     storageClassName="StorageClassX",
+                                                     dataId={"physical_filter": "i", "visit": 23})
+
+        entities["instrument+physical_filter"] = self.makeDatasetRef("filter+inst",
+                                                                     storageClassName="StorageClassX",
+                                                                     dataId={"physical_filter": "i",
+                                                                             "instrument": "SCUBA"})
+        entities["hsc+pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
+                                                  dataId={"physical_filter": "i", "instrument": "HSC"})
+
+        entities["hsc+instrument+physical_filter"] = self.makeDatasetRef("filter+inst",
+                                                                         storageClassName="StorageClassX",
+                                                                         dataId={"physical_filter": "i",
+                                                                                 "instrument": "HSC"})
+
+        templates.validateTemplates(entities.values(), logFailures=True)
+
+        # Rerun but with a failure
+        entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
+                                              dataId={"abstract_filter": "i"})
+        with self.assertRaises(FileTemplateValidationError):
+            with self.assertLogs(level="FATAL"):
+                templates.validateTemplates(entities.values(), logFailures=True)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -21,12 +21,12 @@
 
 """Support for reading and writing files to a POSIX file system."""
 
+__all__ = ("FileFormatter",)
+
 import copy
 from abc import abstractmethod
 
 from lsst.daf.butler import Formatter
-
-__all__ = ("FileFormatter", )
 
 
 class FileFormatter(Formatter):

@@ -75,15 +75,23 @@ class LookupKey:
             self._dimensions = dimensions
 
         # The dataId is converted to a frozenset of key/value
-        # tuples.
+        # tuples so that it is not mutable
         if dataId is not None:
-            self._dataId = frozenset((k, v) for k, v in dataId.items())
+            self._dataId = frozenset(dataId.items())
         else:
             self._dataId = None
 
     def __str__(self):
-        return "({}, {})".format(self._name if self._name else self._dimensions,
-                                 ",".join(str(t) for t in self._dataId) if self._dataId else "")
+        # For the simple case return the simple string
+        if self._name:
+            name = self._name
+        else:
+            name = "+".join(self._dimensions.names)
+
+        if not self._dataId:
+            return name
+
+        return f"{name} ({self.dataId})"
 
     def __repr__(self):
         params = ""
@@ -115,9 +123,12 @@ class LookupKey:
 
     @property
     def dataId(self):
-        """Set of key/value tuples that are important for dataId lookup.
-        (`frozenset`)"""
-        return self._dataId
+        """Dict of keys/values that are important for dataId lookup.
+        (`dict` or `None`)"""
+        if self._dataId is not None:
+            return {k: v for k, v in self._dataId}
+        else:
+            return
 
     def __hash__(self):
         """Hash the lookup to allow use as a key in a dict."""
@@ -154,10 +165,9 @@ class LookupKey:
             name = self._name
             dimensions = self._dimensions
 
-        # To copy the dataId we need to convert it back to a dict when
-        # copying
+        # Make sure we use the dict form for the constructor
         if dataId is None and self._dataId is not None:
-            dataId = {k: v for k, v in self._dataId}
+            dataId = self.dataId
 
         return self.__class__(name=name, dimensions=dimensions, dataId=dataId)
 
@@ -198,8 +208,12 @@ def normalizeLookupKeys(toUpdate, universe):
         if k.dimensions is not None and not isinstance(k.dimensions, DimensionGraph):
             newDimensions = universe.extract(k.dimensions)
             newKey = k.clone(dimensions=newDimensions)
-            toUpdate[newKey] = toUpdate[k]
+            # Delete before adding the new version since LookupKeys hash
+            # to the same value regardless of DimensionGraph vs
+            # DimensionNameSet
+            oldValue = toUpdate[k]
             del toUpdate[k]
+            toUpdate[newKey] = oldValue
 
 
 def processLookupConfigs(config):
