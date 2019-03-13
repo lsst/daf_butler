@@ -15,8 +15,8 @@ storageClasses:
     pytype: lsst.afw.image.VisitInfo
   TablePersistableApCorr:
     pytype: lsst.afw.image.ApCorrMap
-  TablePersistableCalib:
-    pytype: lsst.afw.image.Calib
+  TablePersistablePhotoCalib:
+    pytype: lsst.afw.image.PhotoCalib
   TablePersistableTransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
   TablePersistableCamera:
@@ -91,7 +91,7 @@ storageClasses:
       variance: Image
       wcs: TablePersistableWcs
       psf: TablePersistablePsf
-      calib: TablePersistableCalib
+      photoCalib: TablePersistablePhotoCalib
       visitInfo: TablePersistableVisitInfo
       apCorrMap: TablePersistableApCorr
       coaddInputs: TablePersistableCoaddInputs
