@@ -54,24 +54,33 @@ class SqlRegistryDatabaseDict(DatabaseDict):
     key : `str`
         The name of the field to be used as the dictionary key.  Must not be
         present in ``value._fields``.
-    value : `type` (`namedtuple`)
-        The type used for the dictionary's values, typically a `namedtuple`.
-        Must have a ``_fields`` class attribute that is a tuple of field names
-        (i.e. as defined by `namedtuple`); these field names must also appear
-        in the ``types`` arg, and a `_make` attribute to construct it from a
-        sequence of values (again, as defined by `namedtuple`).
+    value : `type` (`collections.namedtuple`)
+        The type used for the dictionary's values, typically a
+        `~collections.namedtuple`.  Must have a ``_fields`` class attribute
+        that is a tuple of field names (i.e., as defined by
+        `~collections.namedtuple`); these field names must also appear
+        in the ``types`` arg, and a ``_make`` attribute to construct it from a
+        sequence of values (again, as defined by `~collections.namedtuple`).
     registry : `SqlRegistry`
         A registry object with an open connection and a schema.
+    lengths : `dict`, optional
+        Specific lengths of string fields.  Defaults will be used if not
+        specified.
     """
 
     COLUMN_TYPES = {str: String, int: Integer, float: Float,
                     bool: Boolean, bytes: LargeBinary, datetime: DateTime}
 
-    def __init__(self, config, types, key, value, registry):
+    def __init__(self, config, types, key, value, registry, lengths=None):
         self.registry = registry
         allColumns = []
+        if lengths is None:
+            lengths = {}
         for name, type_ in types.items():
-            column = Column(name, self.COLUMN_TYPES.get(type_, type_), primary_key=(name == key))
+            column_type = self.COLUMN_TYPES.get(type_, type_)
+            if issubclass(column_type, String) and name in lengths:
+                column_type = column_type(length=lengths[name])
+            column = Column(name, column_type, primary_key=(name == key))
             allColumns.append(column)
         if key in value._fields:
             raise ValueError("DatabaseDict's key field may not be a part of the value tuple")

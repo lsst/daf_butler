@@ -236,14 +236,14 @@ class Registry(metaclass=ABCMeta):
         return self._pixelization
 
     @abstractmethod
-    def makeDatabaseDict(self, table, types, key, value):
-        """Construct a DatabaseDict backed by a table in the same database as
+    def makeDatabaseDict(self, table, types, key, value, lengths=None):
+        """Construct a `DatabaseDict` backed by a table in the same database as
         this Registry.
 
         Parameters
         ----------
         table : `table`
-            Name of the table that backs the returned DatabaseDict.  If this
+            Name of the table that backs the returned `DatabaseDict`.  If this
             table already exists, its schema must include at least everything
             in `types`.
         types : `dict`
@@ -257,9 +257,17 @@ class Registry(metaclass=ABCMeta):
             `~collections.namedtuple`.  Must have a ``_fields`` class
             attribute that is a tuple of field names (i.e. as defined by
             `~collections.namedtuple`); these field names must also appear
-            in the ``types`` arg, and a `_make` attribute to construct it
+            in the ``types`` arg, and a ``_make`` attribute to construct it
             from a sequence of values (again, as defined by
             `~collections.namedtuple`).
+        lengths : `dict`, optional
+            Specific lengths of string fields.  Defaults will be used if not
+            specified.
+
+        Returns
+        -------
+        databaseDict : `DatabaseDict`
+            `DatabaseDict` backed by this registry.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
