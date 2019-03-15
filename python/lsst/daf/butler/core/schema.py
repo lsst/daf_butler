@@ -28,7 +28,8 @@ from .utils import iterable, stripIfNotNone
 from .views import View
 from .config import ConfigSubset
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
-    Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator, UniqueConstraint
+    Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator, UniqueConstraint,\
+    Sequence
 
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
@@ -293,6 +294,7 @@ class SchemaBuilder:
             - nullable, entry can be null
             - primary_key, mark this column as primary key
             - length, length of the field
+            - autoinc, indicates column should auto increment
             - nbytes, length of decoded string (only for `type=='hash'`)
             - doc, docstring
 
@@ -308,7 +310,11 @@ class SchemaBuilder:
         """
         description = columnDescription.copy()
         # required
+        args = []
+        # keeps track of if this column is intended to be auto incremented
+        autoinc = False
         columnName = description.pop("name")
+        args.append(columnName)
         columnType = self.VALID_COLUMN_TYPES[description.pop("type")]
         # extract kwargs for type object constructor, if any
         typeKwargs = {}
@@ -318,7 +324,16 @@ class SchemaBuilder:
                 typeKwargs[opt] = value
         if typeKwargs:
             columnType = columnType(**typeKwargs)
-        args = (columnName, columnType)
+        args.append(columnType)
+        # check if autoinc is in the description and if it is, check if it is
+        # set to true
+        autoinc = description.pop("autoinc", False)
+        if autoinc:
+            # Generate a sequence to use for auto incrementing for
+            # databases that do not support it natively, this will be
+            # ignored by sqlalchemy for databases that do support it
+            columnSequence = Sequence(columnName+"_seq", metadata=self.metadata)
+            args.append(columnSequence)
         # extract kwargs for Column contructor.
         kwargs = {}
         for opt in ("nullable", "primary_key"):
@@ -326,6 +341,9 @@ class SchemaBuilder:
                 value = description.pop(opt)
                 kwargs[opt] = value
         kwargs["comment"] = stripIfNotNone(description.pop("doc", None))
+        # Note If auto incrementing some backends (such as postgres) MAY
+        # require the following leaving this here for future reference:
+        # kwargs["server_default"] = columnSequence.next_value()
         if description:
             raise ValueError("Unhandled extra kwargs: {} for column: {}".format(description, columnName))
         return Column(*args, **kwargs)
