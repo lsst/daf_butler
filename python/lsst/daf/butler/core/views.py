@@ -45,6 +45,29 @@ def compileCreateView(element, compiler, **kw):
                                                    compiler.sql_compiler.process(element.selectable))
 
 
+# Ignoring PEP8 redefinition of function, as this is the sqlalchemy
+# recommended procedure for dealing with multiple dialects
+@compiler.compiles(CreateView, 'oracle')  # noqa: F811
+def compileCreateView(element, compiler, **kw):
+    # This is special cased as oracle does not support IF NOT EXISTS,
+    # but should be kept until the consequences of using CREATE OR REPLACE
+    # would be on users who are actively using a view when someone else
+    # attempts to create or replace it.
+    return """
+DECLARE
+    nCount NUMBER;
+BEGIN
+    SELECT COUNT(view_name) INTO nCount FROM user_views WHERE view_name = '{}';
+    IF(nCount <= 0)
+    THEN
+        execute immediate 'CREATE VIEW {} AS {}';
+    END IF;
+END;
+""".format(element.name,
+           element.name,
+           compiler.sql_compiler.process(element.selectable).replace(";\n FROM DUAL", ""))
+
+
 @compiler.compiles(DropView)
 def compileDropView(element, compiler, **kw):
     return "DROP VIEW %s" % (element.name)
