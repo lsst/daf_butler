@@ -81,6 +81,10 @@ class SqlRegistry(Registry):
         if create:
             self._createTables(self._schema, self._connection)
 
+    def close(self):
+        # Docstring inherited from Registry.close
+        self._connection.close()
+
     def __str__(self):
         return self.config["db"]
 
