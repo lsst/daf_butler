@@ -26,7 +26,7 @@ import contextlib
 
 from sqlalchemy import create_engine, text, func
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import select, and_, exists, bindparam, union
+from sqlalchemy.sql import select, and_, bindparam, union
 from sqlalchemy.exc import IntegrityError
 
 from ..core.utils import transactional
