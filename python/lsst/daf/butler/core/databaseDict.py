@@ -50,15 +50,20 @@ class DatabaseDict(MutableMapping):
         The name of the field to be used as the dictionary key.  Must not be
         present in ``value._fields``.
     value : `type`
-        The type used for the dictionary's values, typically a `namedtuple`.
-        Must have a ``_fields`` class attribute that is a tuple of field names
-        (i.e. as defined by `namedtuple`); these field names must also appear
-        in the ``types`` arg, and a `_make` attribute to construct it from a
-        sequence of values (again, as defined by `namedtuple`).
+        The type used for the dictionary's values, typically a
+        `namedtuple`. Must have a ``_fields`` class attribute that is a
+        tuple of field names (i.e., as defined by
+        `~collections.namedtuple`); these field names must also appear
+        in the ``types`` arg, and a ``_make`` attribute to construct it
+        from a sequence of values (again, as defined by
+        `~collections.namedtuple`).
+    lengths : `dict`, optional
+        Specific lengths of string fields.  Defaults will be used if not
+        specified.
     """
 
     @staticmethod
-    def fromConfig(config, types, key, value, registry=None):
+    def fromConfig(config, types, key, value, lengths=None, registry=None):
         """Create a `DatabaseDict` subclass instance from `config`.
 
         If ``config`` contains a class ``cls`` key, this will be assumed to
@@ -72,19 +77,23 @@ class DatabaseDict(MutableMapping):
         config : `Config`
             Configuration used to identify and construct a subclass.
         types : `dict`
-            A dictionary mapping `str` field names to type objects, containing
-            all fields to be held in the database.
+            A dictionary mapping `str` field names to Python type objects,
+            containing all fields to be held in the database.
         key : `str`
             The name of the field to be used as the dictionary key.  Must not
             be present in ``value._fields``.
         value : `type`
             The type used for the dictionary's values, typically a
             `namedtuple`. Must have a ``_fields`` class attribute that is a
-            tuple of field names (i.e. as defined by `namedtuple`); these
-            field names must also appear in the ``types`` arg, and a `_make`
-            attribute to construct it from a sequence of values (again, as
-            defined by `namedtuple`).
-        registry : `Registry`
+            tuple of field names (i.e., as defined by
+            `~collections.namedtuple`); these field names must also appear
+            in the ``types`` arg, and a ``_make`` attribute to construct it
+            from a sequence of values (again, as defined by
+            `~collections.namedtuple`).
+        lengths : `dict`, optional
+            Specific lengths of string fields.  Defaults will be used if not
+            specified.
+        registry : `Registry`, optional
             A registry instance from which a `DatabaseDict` subclass can be
             obtained.  Ignored if ``config["cls"]`` exists; may be None if
             it does.
@@ -96,14 +105,14 @@ class DatabaseDict(MutableMapping):
         """
         if "cls" in config:
             cls = doImport(config["cls"])
-            return cls(config=config, types=types, key=key, value=value)
+            return cls(config=config, types=types, key=key, value=value, lengths=lengths)
         else:
             table = config["table"]
             if registry is None:
                 raise ValueError("Either config['cls'] or registry must be provided.")
-            return registry.makeDatabaseDict(table, types=types, key=key, value=value)
+            return registry.makeDatabaseDict(table, types=types, key=key, value=value, lengths=lengths)
 
-    def __init__(self, config, types, key, value):
+    def __init__(self, config, types, key, value, lengths=None):
         # This constructor is currently defined just to clearly document the
         # interface subclasses should conform to.
         pass

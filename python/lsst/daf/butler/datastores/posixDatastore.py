@@ -134,9 +134,11 @@ class PosixDatastore(Datastore):
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
                  "file_size": int, "checksum": str, "dataset_id": int}
+        lengths = {"path": 256, "formatter": 128, "storage_class": 64,
+                   "checksum": 128}
         self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
                                                value=self.RecordTuple, key="dataset_id",
-                                               registry=registry)
+                                               lengths=lengths, registry=registry)
 
     def __str__(self):
         return self.root

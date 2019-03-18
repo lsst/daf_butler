@@ -158,7 +158,7 @@ class SqlRegistry(Registry):
         """
         return isinstance(datasetType, DatasetType)
 
-    def makeDatabaseDict(self, table, types, key, value):
+    def makeDatabaseDict(self, table, types, key, value, lengths=None):
         """Construct a DatabaseDict backed by a table in the same database as
         this Registry.
 
@@ -179,9 +179,17 @@ class SqlRegistry(Registry):
             `~collections.namedtuple`.  Must have a ``_fields`` class
             attribute that is a tuple of field names (i.e. as defined by
             `~collections.namedtuple`); these field names must also appear
-            in the ``types`` arg, and a `_make` attribute to construct it
+            in the ``types`` arg, and a ``_make`` attribute to construct it
             from a sequence of values (again, as defined by
             `~collections.namedtuple`).
+        lengths : `dict`, optional
+            Specific lengths of string fields.  Defaults will be used if not
+            specified.
+
+        Returns
+        -------
+        databaseDict : `DatabaseDict`
+            `DatabaseDict` backed by this registry.
         """
         # We need to construct a temporary config for the table value because
         # SqlRegistryDatabaseDict.__init__ is required to take a config so it
@@ -192,7 +200,8 @@ class SqlRegistry(Registry):
         # really need.
         config = Config()
         config["table"] = table
-        return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, registry=self)
+        return SqlRegistryDatabaseDict(config, types=types, key=key, value=value, lengths=lengths,
+                                       registry=self)
 
     def _makeDatasetRefFromRow(self, row, datasetType=None, dataId=None):
         """Construct a DatasetRef from the result of a query on the Dataset

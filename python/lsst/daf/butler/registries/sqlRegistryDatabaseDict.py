@@ -25,6 +25,7 @@ from datetime import datetime
 
 from sqlalchemy import Table, Column, \
     String, Integer, Boolean, LargeBinary, DateTime, Float
+from sqlalchemy import CheckConstraint
 from sqlalchemy.sql import select, bindparam, func
 from sqlalchemy.exc import IntegrityError, StatementError
 
@@ -54,24 +55,36 @@ class SqlRegistryDatabaseDict(DatabaseDict):
     key : `str`
         The name of the field to be used as the dictionary key.  Must not be
         present in ``value._fields``.
-    value : `type` (`namedtuple`)
-        The type used for the dictionary's values, typically a `namedtuple`.
-        Must have a ``_fields`` class attribute that is a tuple of field names
-        (i.e. as defined by `namedtuple`); these field names must also appear
-        in the ``types`` arg, and a `_make` attribute to construct it from a
-        sequence of values (again, as defined by `namedtuple`).
+    value : `type` (`collections.namedtuple`)
+        The type used for the dictionary's values, typically a
+        `~collections.namedtuple`.  Must have a ``_fields`` class attribute
+        that is a tuple of field names (i.e., as defined by
+        `~collections.namedtuple`); these field names must also appear
+        in the ``types`` arg, and a ``_make`` attribute to construct it from a
+        sequence of values (again, as defined by `~collections.namedtuple`).
     registry : `SqlRegistry`
         A registry object with an open connection and a schema.
+    lengths : `dict`, optional
+        Specific lengths of string fields.  Defaults will be used if not
+        specified.
     """
 
     COLUMN_TYPES = {str: String, int: Integer, float: Float,
                     bool: Boolean, bytes: LargeBinary, datetime: DateTime}
 
-    def __init__(self, config, types, key, value, registry):
+    def __init__(self, config, types, key, value, registry, lengths=None):
         self.registry = registry
         allColumns = []
+        allConstraints = []
+        if lengths is None:
+            lengths = {}
         for name, type_ in types.items():
-            column = Column(name, self.COLUMN_TYPES.get(type_, type_), primary_key=(name == key))
+            column_type = self.COLUMN_TYPES.get(type_, type_)
+            if issubclass(column_type, String) and name in lengths:
+                column_type = column_type(length=lengths[name])
+                allConstraints.append(CheckConstraint(f"length({name})<={lengths[name]}",
+                                                      name=f"ck_{config['table']}_{name}_len"))
+            column = Column(name, column_type, primary_key=(name == key))
             allColumns.append(column)
         if key in value._fields:
             raise ValueError("DatabaseDict's key field may not be a part of the value tuple")
@@ -81,7 +94,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
             raise TypeError("No type(s) provided for field(s) {}".format(set(value._fields) - types.keys()))
         self._key = key
         self._value = value
-        self._table = Table(config["table"], self.registry._schema.metadata, *allColumns)
+        self._table = Table(config["table"], self.registry._schema.metadata, *allColumns, *allConstraints)
         self._table.create(self.registry._connection, checkfirst=True)
         valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
         keyColumn = getattr(self._table.columns, key)
@@ -108,12 +121,13 @@ class SqlRegistryDatabaseDict(DatabaseDict):
             try:
                 self.registry._connection.execute(self._table.insert(), **kwds)
                 return
-            except IntegrityError:
+            except IntegrityError as e:
                 # Swallow the expected IntegrityError (due to i.e. duplicate
                 # primary key values)
                 # TODO: would be better to explicitly inspect the error, but
                 # this is tricky.
-                pass
+                if "CHECK constraint failed" in str(e):
+                    raise ValueError(f"{e}") from e
             except StatementError as err:
                 raise TypeError("Bad data types in value: {}".format(err))
 

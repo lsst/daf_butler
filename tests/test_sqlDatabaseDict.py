@@ -66,6 +66,8 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         d[1] = data[0]
         self.assertEqual(len(d), 1)
         self.assertEqual(d[1], data[0])
+        del d[1]
+        self.assertEqual(len(d), 0)
 
     def testKeyInValue(self):
         """Test that the key is not permitted to be part of the value."""
@@ -82,6 +84,24 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         }
         d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
         self.checkDatabaseDict(d, data)
+
+    def testLengths(self):
+        """Test that when a length is specified that it is actually used."""
+        value = namedtuple("TestValue", ["y", "z"])
+        data = {
+            0: value(y="passes", z=0.0),
+            1: value(y="fails too long", z=0.1),
+        }
+        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value,
+                                           lengths={"y": 6})
+
+        # This insert meets the constraint
+        d[0] = data[0]
+        self.assertEqual(d[0], data[0])
+
+        # This string is too long
+        with self.assertRaises(ValueError):
+            d[1] = data[1]
 
     def testBadValueTypes(self):
         """Test that we cannot insert value tuples with the wrong types."""
