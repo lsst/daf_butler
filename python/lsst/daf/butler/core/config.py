@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
 
-class Loader(yaml.CLoader):
+class Loader(yaml.CSafeLoader):
     """YAML Loader that supports file include directives
 
     Uses ``!include`` directive in a YAML file to point to another
