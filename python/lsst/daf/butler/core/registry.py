@@ -189,6 +189,14 @@ class Registry(metaclass=ABCMeta):
         for packerFactory in self._dataIdPackerFactories.values():
             packerFactory.updateFieldsToGet(self._fieldsToAlwaysGet)
 
+    @abstractmethod
+    def close(self):
+        """This method performs any steps to properly close a registry
+        instance. After this method is called on a registry instance it
+        should be considered unusable. Any new registry interactions
+        should involve a newly constructed registry instance."""
+        pass
+
     def __str__(self):
         return "None"
 

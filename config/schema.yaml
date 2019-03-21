@@ -8,6 +8,7 @@ schema:
         type: int
         primary_key: true
         nullable: false
+        autoinc: true
         doc: >
           A unique autoincrement field used the primary key for dataset.
       -
@@ -319,6 +320,7 @@ schema:
         type: int
         primary_key: true
         nullable: false
+        autoinc: true
         doc: >
           A unique autoincrement field used as the primary key for
           Execution.

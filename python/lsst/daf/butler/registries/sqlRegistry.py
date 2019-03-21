@@ -24,9 +24,9 @@ __all__ = ("SqlRegistryConfig", "SqlRegistry")
 import itertools
 import contextlib
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text, func
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import select, and_, exists, bindparam, union
+from sqlalchemy.sql import select, and_, bindparam, union
 from sqlalchemy.exc import IntegrityError
 
 from ..core.utils import transactional
@@ -80,6 +80,10 @@ class SqlRegistry(Registry):
         self._connection = self._createConnection(self._engine)
         if create:
             self._createTables(self._schema, self._connection)
+
+    def close(self):
+        # Docstring inherited from Registry.close
+        self._connection.close()
 
     def __str__(self):
         return self.config["db"]
@@ -452,6 +456,9 @@ class SqlRegistry(Registry):
                                                                        quantum_id=None,
                                                                        **links))
         datasetRef._id = result.inserted_primary_key[0]
+        # If the result is reported as a list of a number, unpack the list
+        if isinstance(datasetRef._id, list):
+            datasetRef._id = datasetRef._id[0]
 
         # A dataset is always initially associated with its Run collection.
         self.associate(run.collection, [datasetRef, ])
@@ -552,10 +559,9 @@ class SqlRegistry(Registry):
 
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         insertQuery = datasetCollectionTable.insert()
-        checkQuery = datasetCollectionTable.select(datasetCollectionTable.c.dataset_id).where(
-            and_(datasetCollectionTable.c.collection == collection,
-                 datasetCollectionTable.c.dataset_ref_hash == bindparam("hash"))
-        )
+        checkQuery = select([datasetCollectionTable.c.dataset_id], whereclause=and_(
+            datasetCollectionTable.c.collection == collection,
+            datasetCollectionTable.c.dataset_ref_hash == bindparam("hash")))
 
         for ref in refs:
 
@@ -626,12 +632,22 @@ class SqlRegistry(Registry):
     def addExecution(self, execution):
         # Docstring inherited from Registry.addExecution
         executionTable = self._schema.tables["Execution"]
-        result = self._connection.execute(executionTable.insert().values(execution_id=execution.id,
-                                                                         start_time=execution.startTime,
-                                                                         end_time=execution.endTime,
-                                                                         host=execution.host))
+        kwargs = {}
+        # Only pass in the execution_id to the insert statement if it is not
+        # None. Otherwise, some databases attempt to insert a null and fail.
+        # The Column is an auto increment primary key, so it will automatically
+        # be inserted if absent.
+        if execution.id is not None:
+            kwargs["execution_id"] = execution.id
+        kwargs["start_time"] = execution.startTime
+        kwargs["end_time"] = execution.endTime
+        kwargs["host"] = execution.host
+        result = self._connection.execute(executionTable.insert().values(**kwargs))
         # Reassign id, may have been `None`
         execution._id = result.inserted_primary_key[0]
+        # If the result is reported as a list of a number, unpack the list
+        if isinstance(execution._id, list):
+            execution._id = execution._id[0]
 
     def getExecution(self, id):
         # Docstring inherited from Registry.getExecution
@@ -672,8 +688,9 @@ class SqlRegistry(Registry):
         # TODO: this check is probably undesirable, as we may want to have
         # multiple Runs output to the same collection.  Fixing this requires
         # (at least) modifying getRun() accordingly.
-        selection = select([exists().where(runTable.c.collection == run.collection)])
-        if self._connection.execute(selection).scalar():
+        selection = select([func.count()]).select_from(runTable).where(runTable.c.collection ==
+                                                                       run.collection)
+        if self._connection.execute(selection).scalar() > 0:
             raise ConflictingDefinitionError(f"A run already exists with this collection: {run.collection}")
         # First add the Execution part
         self.addExecution(run)

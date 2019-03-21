@@ -241,7 +241,8 @@ class QueryBuilder(ABC):
             # specific method for that. Using join() without `onclause` will
             # try to join on FK and will raise an exception for unrelated
             # tables, so we have to use `onclause` which is always true.
-            self._fromClause = self.fromClause.join(selectable, literal(True), isouter=isOuter)
+            self._fromClause = self.fromClause.join(selectable, literal(True) == literal(True),
+                                                    isouter=isOuter)
 
     def whereSqlExpression(self, sqlExpression, op=and_):
         """Add a SQL expression to the query's WHERE clause.
