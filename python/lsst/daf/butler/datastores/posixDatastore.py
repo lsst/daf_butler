@@ -412,6 +412,9 @@ class PosixDatastore(Datastore):
                 if os.path.commonpath([absRoot, path]) != absRoot:
                     raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
                 path = os.path.relpath(path, absRoot)
+        elif transfer == "czwRelax":
+            # Do not worry if files are outside of the repository root.
+            pass
         else:
             template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))
