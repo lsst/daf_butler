@@ -108,7 +108,7 @@ class ConversionWalker:
         calibDict = None
         if os.path.exists(repoCfgPath):
             with open(repoCfgPath, "r") as f:
-                repoCfg = yaml.load(f)
+                repoCfg = yaml.load(f, Loader=yaml.UnsafeLoader)
             parentPaths = [parent.root for parent in repoCfg.parents]
             MapperClass = repoCfg.mapper
         elif os.path.exists(calibPath):
