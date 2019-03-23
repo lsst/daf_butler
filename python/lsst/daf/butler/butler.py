@@ -42,6 +42,7 @@ from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataId
 from .core.exceptions import ValidationError
+from .core.repoRelocation import ROOT_TAG
 
 log = logging.getLogger(__name__)
 
@@ -147,22 +148,22 @@ class Butler:
         config = Config(config)
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
-        datastoreClass.setConfigRoot(root, config, full)
+        datastoreClass.setConfigRoot(f"{ROOT_TAG}/datastore", config, full)
         registryClass = doImport(full["registry", "cls"])
-        registryClass.setConfigRoot(root, config, full)
+        registryClass.setConfigRoot(ROOT_TAG, config, full)
         if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))
         # Create Registry and populate tables
-        registryClass.fromConfig(config, create=createRegistry)
+        registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
     def __init__(self, config=None, collection=None, run=None):
         # save arguments for pickling
         self._args = (config, collection, run)
         self.config = ButlerConfig(config)
-        self.registry = Registry.fromConfig(self.config)
-        self.datastore = Datastore.fromConfig(self.config, self.registry)
+        self.registry = Registry.fromConfig(self.config, butlerRoot=self.config.configDir)
+        self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=self.config.configDir)
         self.storageClasses = StorageClassFactory()
         self.storageClasses.addFromConfig(self.config)
         self.composites = CompositesMap(self.config)

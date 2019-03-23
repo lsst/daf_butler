@@ -70,7 +70,7 @@ class SqlRegistry(Registry):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False):
+    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dimensionConfig=dimensionConfig)
         self.storageClasses = StorageClassFactory()

@@ -1,6 +1,6 @@
 datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
-  root: default_butler_repository
+  root: <root>/datastore
   records:
     table: PosixDatastoreRecords
   create: true

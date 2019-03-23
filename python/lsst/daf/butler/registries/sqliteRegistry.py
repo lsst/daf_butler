@@ -31,6 +31,7 @@ from sqlite3 import Connection as SQLite3Connection
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.repoRelocation import replaceRoot
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
@@ -84,14 +85,16 @@ class SqliteRegistry(SqlRegistry):
         """
         super().setConfigRoot(root, config, full)
         Config.overrideParameters(RegistryConfig, config, full,
-                                  toUpdate={"db": "sqlite:///{}/gen3.sqlite3".format(root)},
+                                  toUpdate={"db": f"sqlite:///{root}/gen3.sqlite3"},
                                   toCopy=("cls", "deferDatasetIdQueries"))
 
-    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False):
+    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
+        if "db" in registryConfig:
+            registryConfig["db"] = replaceRoot(registryConfig["db"], butlerRoot)
         if ":memory:" in registryConfig.get("db", ""):
             create = True
-        super().__init__(registryConfig, schemaConfig, dimensionConfig, create)
+        super().__init__(registryConfig, schemaConfig, dimensionConfig, create, butlerRoot=butlerRoot)
 
     def _createEngine(self):
         engine = create_engine(self.config["db"], poolclass=NullPool,

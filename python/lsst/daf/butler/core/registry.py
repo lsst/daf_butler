@@ -121,7 +121,7 @@ class Registry(metaclass=ABCMeta):
                                   toCopy=(("skypix", "cls"), ("skypix", "level")))
 
     @staticmethod
-    def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False):
+    def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to
@@ -174,9 +174,10 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
         cls = doImport(registryConfig["cls"])
-        return cls(registryConfig, schemaConfig, dimensionConfig, create=create)
+        return cls(registryConfig, schemaConfig, dimensionConfig, create=create, butlerRoot=butlerRoot)
 
-    def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False):
+    def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False,
+                 butlerRoot=None):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
         self._pixelization = None

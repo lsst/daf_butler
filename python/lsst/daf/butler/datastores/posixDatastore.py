@@ -35,6 +35,7 @@ from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory
                              DatastoreValidationError, FileTemplateValidationError)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler.core.repoRelocation import replaceRoot
 
 log = logging.getLogger(__name__)
 
@@ -106,14 +107,17 @@ class PosixDatastore(Datastore):
                                   toUpdate={"root": root},
                                   toCopy=("cls", ("records", "table")))
 
-    def __init__(self, config, registry):
+    def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
-        self.root = self.config["root"]
+
+        # Support repository relocation in config
+        self.root = replaceRoot(self.config["root"], butlerRoot)
+
         if not os.path.isdir(self.root):
             if "create" not in self.config or not self.config["create"]:
-                raise ValueError("No valid root at: {0}".format(self.root))
+                raise ValueError(f"No valid root at: {self.root}")
             safeMakeDir(self.root)
 
         self.locationFactory = LocationFactory(self.root)

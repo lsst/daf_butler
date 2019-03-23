@@ -363,10 +363,13 @@ class ButlerTests:
 
     def testStringification(self):
         butler = Butler(self.configFile)
+        butlerStr = str(butler)
         if self.datastoreStr is not None:
-            self.assertIn(self.datastoreStr, str(butler))
+
+            for testStr in self.datastoreStr:
+                self.assertIn(testStr, butlerStr)
         if self.registryStr is not None:
-            self.assertIn(self.registryStr, str(butler))
+            self.assertIn(self.registryStr, butlerStr)
 
 
 class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -375,7 +378,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
 
-    datastoreStr = "datastore='./butler_test_repository"
+    datastoreStr = ["butler_test_repository"]
     registryStr = "registry='sqlite:///:memory:'"
 
     def testPutTemplates(self):
@@ -407,7 +410,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
-        self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
+        self.assertTrue(os.path.exists(os.path.join(butler.datastore.root,
+                                                    "ingest/metric1/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -417,7 +421,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         # defining them  to behave now; the important thing is that they
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
-        self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
+        self.assertTrue(os.path.exists(os.path.join(butler.datastore.root,
+                                                    "ingest/metric2/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -439,7 +444,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = None
     useTempRoot = False
     validationCanFail = False
-    datastoreStr = "datastore='InMemory'"
+    datastoreStr = ["datastore='InMemory'"]
     registryStr = "registry='sqlite:///:memory:'"
 
 
@@ -448,7 +453,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = "datastore='InMemory, ./butler_test_repository, ./butler_test_repository2'"
+    datastoreStr = ["datastore='InMemory", "/butler_test_repository,", "/butler_test_repository2'"]
     registryStr = "registry='sqlite:///:memory:'"
 
 

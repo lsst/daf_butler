@@ -58,6 +58,8 @@ class ButlerConfig(Config):
 
     def __init__(self, other=None):
 
+        self.configDir = None
+
         # If this is already a ButlerConfig we assume that defaults
         # have already been loaded.
         if other is not None and isinstance(other, ButlerConfig):
@@ -73,6 +75,10 @@ class ButlerConfig(Config):
         # Read the supplied config so that we can work out which other
         # defaults to use.
         butlerConfig = Config(other)
+
+        configFile = butlerConfig.configFile
+        if configFile is not None:
+            self.configDir = os.path.dirname(os.path.abspath(configFile))
 
         # A Butler config contains defaults defined by each of the component
         # configuration classes. We ask each of them to apply defaults to
