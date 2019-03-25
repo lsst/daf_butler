@@ -362,7 +362,7 @@ class ButlerTests:
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
     def testStringification(self):
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
         butlerStr = str(butler)
 
         if self.datastoreStr is not None:
@@ -383,9 +383,9 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
 
-    datastoreStr = ["butler_test_repository"]
-    datastoreName = ["POSIXDatastore@<root>/butler_test_repository"]
-    registryStr = "registry='sqlite:///:memory:'"
+    datastoreStr = ["/datastore"]
+    datastoreName = ["POSIXDatastore@<root>/datastore"]
+    registryStr = "/gen3.sqlite3'"
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -460,9 +460,10 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = ["datastore='InMemory", "/butler_test_repository,", "/butler_test_repository2'"]
-    datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/butler_test_repository", "SecondDatastore"]
-    registryStr = "registry='sqlite:///:memory:'"
+    datastoreStr = ["datastore='InMemory", "/datastore/PosixDatastore_1,", "/datastore/PosixDatastore_2'"]
+    datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/datastore/PosixDatastore_1",
+                     "SecondDatastore"]
+    registryStr = "/gen3.sqlite3'"
 
 
 class ButlerConfigNoRunTestCase(unittest.TestCase):
@@ -473,10 +474,17 @@ class ButlerConfigNoRunTestCase(unittest.TestCase):
     def testPickle(self):
         """Test pickle support.
         """
-        butler = Butler(self.configFile, run="ingest")
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        Butler.makeRepo(self.root, config=Config(self.configFile))
+        self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
+        butler = Butler(self.tmpConfigFile, run="ingest")
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
 
 if __name__ == "__main__":
