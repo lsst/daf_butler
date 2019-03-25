@@ -43,6 +43,7 @@ from .core.composites import CompositesMap
 from .core.dimensions import DataId
 from .core.exceptions import ValidationError
 from .core.repoRelocation import ROOT_TAG
+from .core.safeFileIo import safeMakeDir
 
 log = logging.getLogger(__name__)
 
@@ -144,8 +145,14 @@ class Butler:
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
         root = os.path.abspath(root)
         if not os.path.isdir(root):
-            os.makedirs(root)
+            safeMakeDir(root)
         config = Config(config)
+
+        # If we are creating a new repo from scratch with relative roots,
+        # do not propagate an explicit root from the config file
+        if "root" in config:
+            del config["root"]
+
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(f"{ROOT_TAG}/datastore", config, full)
@@ -162,8 +169,14 @@ class Butler:
         # save arguments for pickling
         self._args = (config, collection, run)
         self.config = ButlerConfig(config)
-        self.registry = Registry.fromConfig(self.config, butlerRoot=self.config.configDir)
-        self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=self.config.configDir)
+
+        if "root" in self.config:
+            butlerRoot = self.config["root"]
+        else:
+            butlerRoot = self.config.configDir
+
+        self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
+        self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
         self.storageClasses = StorageClassFactory()
         self.storageClasses.addFromConfig(self.config)
         self.composites = CompositesMap(self.config)

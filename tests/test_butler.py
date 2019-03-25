@@ -28,6 +28,7 @@ import tempfile
 import shutil
 import pickle
 
+from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
@@ -464,6 +465,38 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/datastore/PosixDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3'"
+
+
+class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
+    """Test that a yaml file in one location can refer to a root in another."""
+
+    # Disable the makeRepo test since we are deliberately not using
+    # butler.yaml as the config name.
+    fullConfigKey = None
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+
+        # Make a new repository in one place
+        self.dir1 = os.path.join(self.root, "dir1")
+        Butler.makeRepo(self.dir1, config=Config(self.configFile))
+
+        # Move the yaml file to a different place and add a "root"
+        self.dir2 = os.path.join(self.root, "dir2")
+        safeMakeDir(self.dir2)
+        configFile1 = os.path.join(self.dir1, "butler.yaml")
+        config = Config(configFile1)
+        config["root"] = self.dir1
+        configFile2 = os.path.join(self.dir2, "butler2.yaml")
+        config.dumpToFile(configFile2)
+        os.remove(configFile1)
+        self.tmpConfigFile = configFile2
+
+    def testFileLocations(self):
+        self.assertNotEqual(self.dir1, self.dir2)
+        self.assertTrue(os.path.exists(os.path.join(self.dir2, "butler2.yaml")))
+        self.assertFalse(os.path.exists(os.path.join(self.dir1, "butler.yaml")))
+        self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
 
 
 class ButlerConfigNoRunTestCase(unittest.TestCase):
