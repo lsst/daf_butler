@@ -364,12 +364,17 @@ class ButlerTests:
     def testStringification(self):
         butler = Butler(self.configFile)
         butlerStr = str(butler)
-        if self.datastoreStr is not None:
 
+        if self.datastoreStr is not None:
             for testStr in self.datastoreStr:
                 self.assertIn(testStr, butlerStr)
         if self.registryStr is not None:
             self.assertIn(self.registryStr, butlerStr)
+
+        datastoreName = butler.datastore.name
+        if self.datastoreName is not None:
+            for testStr in self.datastoreName:
+                self.assertIn(testStr, datastoreName)
 
 
 class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -379,6 +384,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     validationCanFail = True
 
     datastoreStr = ["butler_test_repository"]
+    datastoreName = ["POSIXDatastore@<root>/butler_test_repository"]
     registryStr = "registry='sqlite:///:memory:'"
 
     def testPutTemplates(self):
@@ -445,6 +451,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     useTempRoot = False
     validationCanFail = False
     datastoreStr = ["datastore='InMemory'"]
+    datastoreName = ["InMemoryDatastore@"]
     registryStr = "registry='sqlite:///:memory:'"
 
 
@@ -454,6 +461,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
     datastoreStr = ["datastore='InMemory", "/butler_test_repository,", "/butler_test_repository2'"]
+    datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/butler_test_repository", "SecondDatastore"]
     registryStr = "registry='sqlite:///:memory:'"
 
 

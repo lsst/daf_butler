@@ -1,4 +1,5 @@
 datastore:
+  name: SecondDatastore
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: <root>/butler_test_repository2
   records:

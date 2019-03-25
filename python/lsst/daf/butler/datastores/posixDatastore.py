@@ -112,6 +112,13 @@ class PosixDatastore(Datastore):
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
 
+        # Name ourselves either using an explicit name or a name
+        # derived from the (unexpanded) root
+        if "name" in self.config:
+            self.name = self.config["name"]
+        else:
+            self.name = "POSIXDatastore@{}".format(self.config["root"])
+
         # Support repository relocation in config
         self.root = replaceRoot(self.config["root"], butlerRoot)
 
@@ -131,9 +138,6 @@ class PosixDatastore(Datastore):
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"])
         self.templates.normalizeDimensions(self.registry.dimensions)
-
-        # Name ourselves
-        self.name = "POSIXDatastore@{}".format(self.root)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
