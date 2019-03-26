@@ -1,5 +1,6 @@
 import datetime
 import os
+import sqlite3
 import re
 import time
 
@@ -15,16 +16,18 @@ from lsst.daf.butler import Butler, ButlerConfig, Registry, Datastore
 from ..core import Config, Run, StorageClassFactory, DataId
 from ..instrument import (Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo)
 
-
 from lsst.daf.butler.gen2convert.extractor import Extractor, FilePathParser
 from lsst.daf.butler.gen2convert.walker import ConversionWalker
 from lsst.daf.butler.gen2convert.writer import ConversionWriter
 from lsst.daf.butler.gen2convert.structures import Gen2Repo, Gen2Dataset, Gen2DatasetType
 
+from lsst.obs.subaru.gen3.hsc import HyperSuprimeCam
+
 __all__ = ['Gen3Generic', 'OneWalker', 'OneExtractor', 'OneWriter']
 
 
 class Gen3Generic():
+    only = []
 
     def __init__(self, kwargs):
         self.converterConfig = Config(os.path.join(getPackageDir("daf_butler"), "config/gen2convert.yaml"))
@@ -59,10 +62,19 @@ class Gen3Generic():
                                                                                kwargs['runName'])}
             self.converterConfig["regions"][0]["collection"] = "/".join("shared", kwargs['runName'])
         if 'only' in kwargs.keys():
-            self.only = kwargs['only']
+            if kwargs['only'] is not None:
+                self.only = kwargs['only']
+
+        if 'parent' in kwargs.keys():
+            self.getParent = kwargs['parent']
 
         self.butlerConfig = ButlerConfig(self.OUT_ROOT)
         StorageClassFactory().addFromConfig(self.butlerConfig)
+
+        # This assignment is here to allow HSC's instrument class to exist,
+        # which is needed for the writer.  There must be a more portable
+        # way to do this.
+        self.instrument = HyperSuprimeCam()
 
     def getRegistry(self):
         return Registry.fromConfig(self.butlerConfig)
@@ -75,7 +87,8 @@ class Gen3Generic():
 
     def walk(self):
         walker = OneWalker(self.converterConfig)
-
+        walker.followLinks = True
+        walker.getParent = self.getParent
         if len(self.only) > 0:
             walker.allowedDataset.append(self.only)
             walker.followLinks = True
@@ -86,7 +99,7 @@ class Gen3Generic():
         return walker
 
     def write(self, walker, registry, datastore):
-        writer = ConversionWriter.fromWalker(walker)
+        writer = OneWriter.fromWalker(walker)
         writer.run(registry, datastore)
 
 
@@ -98,6 +111,7 @@ class OneWalker(ConversionWalker):
     firstMapper = None
     followLinks = False
     followParents = False
+    _calibDict = dict()
 
     def tryRoot(self, root, mapper_root):
         log = Log.getLogger("czw.1convert")
@@ -124,7 +138,7 @@ class OneWalker(ConversionWalker):
             if self.mapperClass is None:
                 raise RuntimeError("No mapper known for root directory %s", root)
 
-        repo = Gen2Repo(root, self.mapperClass)
+        repo = Gen2Repo(root, self.mapperClass, calibDict=self._calibDict)
         self.found[root] = repo
 
         log.info("%s: identified as a data repository with mapper=%s.", root, repo.MapperClass.__name__)
@@ -145,17 +159,18 @@ class OneWalker(ConversionWalker):
 
         log.info("%s: walking datasets.", repo.root)
         dirs = []
+
         dirs.append(repo.root)
 
         while len(dirs) > 0:
             toDir = dirs.pop()
             print(len(dirs))
             for dirPath, dirNames, fileNames in os.walk(toDir, followlinks=self.followLinks):
-                # Do not add dirnames as possible repos, as all repos are one.
+                # There should need to be no recursing, as we're only
+                # adding one repo tree.
                 relative = dirPath[len(repo.root) + 1:]
+
                 print(repo.root, relative, dirPath)
-                #                if 'DEEPE05' in dirPath:
-                #    return
                 if len(self.allowedDataset) > 0 and 'raw' in self.allowedDataset:
                     if 'rerun' in dirPath:
                         continue
@@ -170,12 +185,18 @@ class OneWalker(ConversionWalker):
                         pass
                     elif fileName in ("calibRegistry.sqlite3"):
                         # handle calibInfo extraction
-                        print("CALIB CALIB!", os.path.join(dirPath, fileName))
-                        self.readCalibInfo(calibPath=os.path.join(dirPath, fileName))
+                        log.info("Reading calibration data from %s %s", dirPath, fileName)
+                        calibDict = self.readCalibInfo(calibPath=os.path.join(dirPath, fileName))
+                        for key, val in calibDict.items():
+                            repo.calibDict[key] = val
                     elif fileName in ("_mapper"):
-                        # handle mapper clashes =or die.
+                        # handle mapper clashes or die?
                         pass
                     else:
+                        if self.getParent is True:
+                            top, bottom = os.path.split(dirPath)
+                            relative = bottom
+
                         filePath = os.path.join(relative, fileName)
                         dataset = extractor(filePath)
 
@@ -194,47 +215,15 @@ class OneWalker(ConversionWalker):
                                       len(self.allowedDataset), self.allowedDataset)
                             repo.unrecognized.append(filePath)
                         else:
+                            if self.getParent is True:
+                                top, bottom = os.path.split(dirPath)
+                                relative = bottom
+                                dataset.filePath = re.sub(r"^" + str(relative) + "/", "", dataset.filePath)
+
+                            # Found a usable dataset.
                             log.debug("%s: found %s in %s with %s", repo.root, dataset.datasetType.name,
                                       dataset.root, dataset.dataId)
-                            # entries
-                            if "calibDate" in dataset.dataId.keys():
-                                #                                import pdb
-                                #                                pdb.set_trace()
-                                try:
-                                    calibRows = self._calibDict.get(
-                                        (dataset.datasetType.name,
-                                         dataset.dataId["calibDate"],
-                                         dataset.dataId["ccd"]),
-                                        [])
-                                except KeyError:
-                                    calibRows = []
-                                if len(calibRows) == 0:
-                                    # import pdb
-                                    # pdb.set_trace()
-                                    continue
-                                else:
-                                    for calibRow in calibRows:
-                                        if ((calibRow["filter"] is None or
-                                             calibRow["filter"] == dataset.dataId["filter"])):
-                                            dataset.dataId["valid_first"] = calibRow["valid_first"]
-                                            dataset.dataId["valid_last"] = calibRow["valid_last"]
-                                            log.debug("Calib: setting valid date ranges for dataset"
-                                                      ": (%s %s %s)" %
-                                                      (dataset.datasetType.name,
-                                                       dataset.dataId["calibDate"],
-                                                       dataset.dataId["ccd"]))
-
-                                    if (("valid_first" not in dataset.dataId.keys() or
-                                         "valid_last" not in dataset.dataId.keys())):
-                                        import pdb
-                                        pdb.set_trace()
-
-                                        log.warn("Calib expected dataset: (%s) not found in %s." %
-                                                 (dataset.datasetType.name, repo.root))
-                                        continue
-
-                            # End calibration checks.  If we're here, we can
-                            # add it to things to worry about later.
+                            log.debug("  Filepath: %s", filePath)
                             repo.datasets[dataset.datasetType.name][filePath] = dataset
 
                             if dataset.root not in self.collections:
@@ -266,10 +255,21 @@ class OneWalker(ConversionWalker):
                 instrumentObsInfo[obsInfoId] = (ObservationInfo(md), filt)
 
     def readCalibInfo(self, calibPath=None):
-        """Load calibration data directly from the sqlite datababase as it is
-        found.
+        """Load calibration validity ranges from a Gen2 sqlite database.
+
+        Parameters
+        ----------
+        calibPath : `str`
+            Path to a Gen2 ``calibRegistry.sqlite3`` file.
+
+        Returns
+        -------
+        calibDict : `dict`
+            Dictionary mapping tuples of (datasetTypeName, calibDate,
+            filter) to
+            tuples of (valid_first, valid_last);
         """
-        import sqlite3
+        result = {}
         with sqlite3.connect(calibPath) as calibConn:
             calibConn.row_factory = sqlite3.Row
             c = calibConn.cursor()
@@ -286,23 +286,14 @@ class OneWalker(ConversionWalker):
             query = " UNION ".join(queryList)
 
             for row in c.execute(query):
-                if (row["type"], row["calibDate"], row["ccd"]) not in self._calibDict.keys():
-                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])] = []
-
-                if row["filter"] == "NONE":
-                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])].append(
-                        {
-                            "filter": None,
-                            "valid_first": datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
-                            "valid_last": datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"),
-                        })
-                else:
-                    self._calibDict[(row["type"], row["calibDate"], row["ccd"])].append(
-                        {
-                            "filter": row["filter"],
-                            "valid_first": datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
-                            "valid_last": datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"),
-                        })
+                key = (row["type"], row["calibDate"], row["filter"])
+                value = (datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
+                         datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"))
+                oldValue = result.get(key)
+                if oldValue is not None and oldValue != value:
+                    raise NotImplementedError("gen2convert made a bad assumption in readCalibInfo.")
+                result[key] = value
+        return result
 
 
 TEMPLATE_RE = re.compile(r"\%\((?P<name>\w+)\)[^\%]*?(?P<type>[idrs])")
@@ -415,12 +406,17 @@ class OneWriter(ConversionWriter):
         # Transaction here should help with performance as well as making the
         # conversion atomic, as it prevents each Registry.addDataset from
         # having to grab a new lock on the database.
+        #        import pdb
+        #        pdb.set_trace()
         with registry.transaction():
             self.insertInstruments(registry)
         with registry.transaction():
             self.insertSkyMaps(registry)
         with registry.transaction():
             self.insertObservations(registry)
+        #    pdb.set_trace()
+        with registry.transaction():
+            self.insertCalibrationLabels(registry)
         with registry.transaction():
             self.insertDatasetTypes(registry)
         # Do transaction internally.
@@ -499,8 +495,9 @@ class OneWriter(ConversionWriter):
                 if collectionTemplate is None:
                     collection = repo.run.collection
                     print(repo.run, repo.run.collection)
-                    registry.ensureRun(repo.run)
-                    run = repo.run
+                    run = registry.ensureRun(repo.run)
+                    if run is None:
+                        run = repo.run
                 translator = repo.translators[datasetTypeName]
                 T = time.time()
                 for dataset in datasets.values():
@@ -521,7 +518,7 @@ class OneWriter(ConversionWriter):
                         allIds.update(gen3id)
                         collection = collectionTemplate.format(**allIds)
                         run = self.runs.setdefault(collection, Run(collection=collection))
-                        registry.ensureRun(run)
+                        run = registry.ensureRun(run)
                     formatter = None
                     if datasetTypeName == "raw":
                         instrument = instrumentCache.get(gen3id["instrument"])
@@ -553,32 +550,12 @@ class OneWriter(ConversionWriter):
                             print("Add dataset end: %f" % (time.time() - T))
                             registry.attachComponent(component, ref, compRef)
                             refs.append(compRef)
-                    print("End transaction : %f" % (time.time() - T))
-                    # try:
-                    # datastore.ingest(path=os.path.relpath(dataset.fullPath,
-                    #                  start=datastore.root), ref=ref,
-                    #                  formatter=formatter)
-                    # except Exception as e:
-                    try:
-                        datastore.ingest(path=os.path.join(repo.gen2.root, dataset.fullPath), ref=ref,
-                                         formatter=formatter, transfer='relaxBucko')
-                    except Exception:
-                        print("Couldn't ingest %s %s %s" % (dataset.fullPath, datastore.root, formatter))
-                    print("End ingest : %f" % (time.time() - T))
-            # Add Datasets to collections associated with any child repos to
-            # simulate Gen2 parent lookups.
-
-            # TODO: The Gen2 behavior is to associate *everything* from the
-            #       parent repo, because it's a repo-level link.  In Gen3, we
-            #       want to limit to that to just the "relevant" datasets -
-            #       which we probably define to be those in the full
-            #       provenance tree of anything in the child repo.  Right now,
-            #       the conversion behavior is the Gen2 behavior, which could
-            #       get very expensive in the common case where we have a very
-            #       large parent repo with many small child repos.
-            # for potentialChildRepo in self.repos.values():
-            #    if repo.gen2.isRecursiveParentOf(potentialChildRepo.gen2):
-            #     log.info("Adding Datasets from %s to child collection %s.",
-            #              repo.gen2.root,
-            #              potentialChildRepo.run.collection)
-            #     registry.associate(potentialChildRepo.run.collection, refs)
+                        print("End registry component : %f" % (time.time() - T))
+                        try:
+                            datastore.ingest(path=os.path.join(repo.gen2.root, dataset.fullPath),
+                                             ref=ref,
+                                             formatter=formatter, transfer='symlink')
+                        except Exception as e:
+                            print("Couldn't ingest %s %s %s %s" %
+                                  (dataset.fullPath, datastore.root, formatter, e))
+                    print("End transaction & ingest : %f" % (time.time() - T))

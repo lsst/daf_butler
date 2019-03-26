@@ -687,9 +687,15 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.ensureRun
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
+
             if run != existingRun:
                 raise ConflictingDefinitionError(f"{run} != existing: {existingRun}")
             return
+        if run.id is None:
+            existingRun = self.getRun(collection=run.collection)
+            if existingRun is not None:
+                return existingRun
+
         self.addRun(run)
 
     @transactional
