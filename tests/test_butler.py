@@ -384,8 +384,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
 
-    datastoreStr = ["/datastore"]
-    datastoreName = ["POSIXDatastore@<root>/datastore"]
+    datastoreStr = ["/tmp"]
+    datastoreName = ["POSIXDatastore@<root>"]
     registryStr = "/gen3.sqlite3'"
 
     def testPutTemplates(self):
@@ -461,8 +461,8 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = ["datastore='InMemory", "/datastore/PosixDatastore_1,", "/datastore/PosixDatastore_2'"]
-    datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/datastore/PosixDatastore_1",
+    datastoreStr = ["datastore='InMemory", "/PosixDatastore_1,", "/PosixDatastore_2'"]
+    datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/PosixDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3'"
 
@@ -470,6 +470,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
     """Test that a yaml file in one location can refer to a root in another."""
 
+    datastoreStr = ["dir1"]
     # Disable the makeRepo test since we are deliberately not using
     # butler.yaml as the config name.
     fullConfigKey = None

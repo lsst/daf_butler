@@ -155,7 +155,7 @@ class Butler:
 
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
-        datastoreClass.setConfigRoot(f"{ROOT_TAG}/datastore", config, full)
+        datastoreClass.setConfigRoot(ROOT_TAG, config, full)
         registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(ROOT_TAG, config, full)
         if standalone:
