@@ -408,7 +408,7 @@ class PosixDatastore(Datastore):
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref)
 
-        fullPath = os.path.join(self.root, path)
+        fullPath = os.path.normpath(os.path.join(self.root, path))
         if not os.path.exists(fullPath):
             raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
                                     "assumed to be relative to self.root unless they are absolute."
