@@ -220,6 +220,12 @@ class Butler:
         # resort if at all possible.
         self.close()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+
     def close(self):
         """This method should be called to properly close any resources the
         butler may have open. The instance on which this method is closed
