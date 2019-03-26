@@ -64,6 +64,8 @@ class ButlerConfig(Config):
         # have already been loaded.
         if other is not None and isinstance(other, ButlerConfig):
             super().__init__(other)
+            # Ensure that the configuration directory propagates
+            self.configDir = other.configDir
             return
 
         if isinstance(other, str) and os.path.isdir(other):
