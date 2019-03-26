@@ -420,6 +420,8 @@ class PosixDatastore(Datastore):
                 if os.path.commonpath([absRoot, path]) != absRoot:
                     raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
                 path = os.path.relpath(path, absRoot)
+            elif path.startswith(os.path.pardir):
+                raise RuntimeError(f"'{path}' is outside repository root '{self.root}'")
         else:
             template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))
