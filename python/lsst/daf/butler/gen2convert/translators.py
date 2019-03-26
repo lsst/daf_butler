@@ -26,11 +26,14 @@ import itertools
 from abc import ABCMeta, abstractmethod
 
 
-def makeCalibrationLabel(datasetTypeName, calibDate):
+def makeCalibrationLabel(datasetTypeName, calibDate, filter):
     """Make a Gen3 CalibrationLabel string from a Gen2 dataset type name and
     calibDate value.
     """
-    return f"gen2/{datasetTypeName}_{calibDate}"
+    if filter is None or filter == 'None' or filter == 'NONE':
+        return f"gen2/{datasetTypeName}-NONE_{calibDate}"
+    else:
+        return f"gen2/{datasetTypeName}-{filter}_{calibDate}"
 
 
 class NoSkyMapError(LookupError):
@@ -159,7 +162,10 @@ class CalibKeyHandler(KeyHandler):
         super().__init__("calibration_label", "CalibrationLabel")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
-        return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"])
+        if 'filter' in gen2id.keys():
+            return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"], gen2id['filter'])
+        else:
+            return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"], None)
 
 
 class Translator:

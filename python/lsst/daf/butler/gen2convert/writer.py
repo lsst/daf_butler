@@ -156,7 +156,7 @@ class ConversionWriter:
                 log.debug("Looking for StorageClass configured for %s; trying persistable '%s'",
                           gen2dst.name, gen2dst.persistable)
                 storageClassName = scConfig.get(gen2dst.persistable, None)
-            if storageClassName is None:
+            if storageClassName is None and gen2dst.python is not None:
                 unqualified = gen2dst.python.split(".")[-1]
                 log.debug("Looking for StorageClass configured for %s; trying unqualified python '%s'",
                           gen2dst.name, unqualified)
@@ -304,15 +304,18 @@ class ConversionWriter:
             instrument = self.config["mappers", mapperName, "instrument"]
             log.debug("Inserting unbounded CalibrationLabel.")
             addUnboundedCalibrationLabel(registry, instrument)
-            for (datasetTypeName, calibDate), (first, last) in repo.gen2.calibDict.items():
-                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate),
+            for (datasetTypeName, calibDate, filter), (first, last) in repo.gen2.calibDict.items():
+                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate, filter),
                                 instrument=instrument,
                                 universe=registry.dimensions)
                 dataId.entries["CalibrationLabel"]["valid_first"] = first
                 dataId.entries["CalibrationLabel"]["valid_last"] = last
                 log.debug("Inserting CalibrationLabel %s with validity range %s - %s.",
                           dataId["calibration_label"], first, last)
-                registry.addDimensionEntry("CalibrationLabel", dataId)
+                try:
+                    registry.addDimensionEntry("CalibrationLabel", dataId)
+                except Exception as e:
+                    print(f"Attempted, but failed due to uniqueness, to insert {dataId} {e}")
 
     def insertDatasetTypes(self, registry):
         """Add all necessary DatasetType registrations to the Registry.

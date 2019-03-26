@@ -3,13 +3,12 @@ import argparse
 
 from lsst.log import Log
 
-# from lsst.obs.subaru.gen3.hsc import HyperSuprimeCam
-
 from lsst.daf.butler.gen2convert import repoConvert
+from lsst.obs.subaru.gen3.hsc import HyperSuprimeCam
 
 
 def main(kwargs):
-    g3g = repoConvert.gen3generic(kwargs)
+    g3g = repoConvert.Gen3Generic(kwargs)
 
     registry = g3g.getRegistry()
     datastore = g3g.getDatastore(registry)
@@ -17,7 +16,9 @@ def main(kwargs):
     walker = g3g.walk()
     walker.readObsInfo()
     g3g.write(walker, registry, datastore)
-    #    HyperSuprimeCam().writeCuratedCalibrations(gen3.getButler("calib"))
+
+    if isinstance(g3g.instrument, HyperSuprimeCam) and kwargs["curated_calibs"] is True:
+        HyperSuprimeCam().writeCuratedCalibrations(g3g.getButler("calib"))
 
 
 if __name__ == "__main__":
@@ -32,6 +33,11 @@ if __name__ == "__main__":
     parser.add_argument("-K", "--scan", help="Repo to scan (can be subdirectory of source).")
     parser.add_argument("-M", "--mapper", help="Mapper location.")
     parser.add_argument("-O", "--only", help="dataset to only include.")
+    parser.add_argument("-P", "--parent", action="store_true",
+                        help="include as if from the parent directory.")
+    parser.add_argument("-C", "--curated_calibs", action="store_true",
+                        help="Add instrument curated calibs.")
+
     args = parser.parse_args()
     log = Log.getLogger("czw.1convert")
     log.setLevel(args.logLevel)
