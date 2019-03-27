@@ -34,6 +34,7 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
+from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -405,7 +406,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     validationCanFail = True
 
     datastoreStr = ["/tmp"]
-    datastoreName = ["POSIXDatastore@<root>"]
+    datastoreName = [f"POSIXDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3'"
 
     def testPutTemplates(self):
@@ -482,7 +483,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
     datastoreStr = ["datastore='InMemory", "/PosixDatastore_1,", "/PosixDatastore_2'"]
-    datastoreName = ["InMemoryDatastore@", "POSIXDatastore@<root>/PosixDatastore_1",
+    datastoreName = ["InMemoryDatastore@", f"POSIXDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3'"
 

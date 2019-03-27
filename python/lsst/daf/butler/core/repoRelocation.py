@@ -21,18 +21,21 @@
 
 """Routines to support relocation of a file-based Butler repository."""
 
-__all__ = ("ROOT_TAG", "replaceRoot")
+__all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
 
-# The special string to be used in configuration files to indicate that
-# the butler root location should be used.
-ROOT_TAG = "<root>"
+BUTLER_ROOT_TAG = "<butlerRoot>"
+"""The special string to be used in configuration files to indicate that
+the butler root location should be used."""
 
 
 def replaceRoot(configRoot, butlerRoot):
-    """Update a configuration root with the butler root location (if
-    necessary).
+    """Update a configuration root with the butler root location.
+
+    No changes are made if the special root string is not found in the
+    configuration entry.  The name of the tag is defined in
+    the module variable `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG`.
 
     Parameters
     ----------
@@ -40,8 +43,9 @@ def replaceRoot(configRoot, butlerRoot):
         Directory root location as specified in a configuration file.
     butlerRoot : `str`
         Butler root directory.  Absolute path is inserted into the
-        ``configRoot`` where the ``<root>`` string is found.  If `None`
-        the current working directory is used for the root.
+        ``configRoot`` where the
+        `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG` string is
+        found.  If `None` the current working directory is used for the root.
 
     Returns
     -------
@@ -53,4 +57,4 @@ def replaceRoot(configRoot, butlerRoot):
     if butlerRoot is None:
         butlerRoot = os.path.curdir
 
-    return configRoot.replace(ROOT_TAG, os.path.abspath(butlerRoot))
+    return configRoot.replace(BUTLER_ROOT_TAG, os.path.abspath(butlerRoot))

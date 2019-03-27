@@ -42,7 +42,7 @@ from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataId
 from .core.exceptions import ValidationError
-from .core.repoRelocation import ROOT_TAG
+from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 
 log = logging.getLogger(__name__)
@@ -155,9 +155,9 @@ class Butler:
 
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
-        datastoreClass.setConfigRoot(ROOT_TAG, config, full)
+        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         registryClass = doImport(full["registry", "cls"])
-        registryClass.setConfigRoot(ROOT_TAG, config, full)
+        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))

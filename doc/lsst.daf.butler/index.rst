@@ -70,3 +70,7 @@ Support API
 .. automodapi:: lsst.daf.butler.core.utils
    :no-main-docstr:
    :headings: ^"
+.. automodapi:: lsst.daf.butler.core.repoRelocation
+   :no-main-docstr:
+   :headings: ^"
+   :include-all-objects:
