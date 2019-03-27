@@ -28,7 +28,7 @@ import sqlite3
 import datetime
 
 # register YAML loader for repositoryCfg.yaml files.
-import lsst.daf.persistence.repositoryCfg   # noqa F401
+import lsst.daf.persistence.repositoryCfg   # noqa: F401
 
 from astro_metadata_translator import ObservationInfo
 from lsst.afw.image import readMetadata

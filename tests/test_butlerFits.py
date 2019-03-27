@@ -99,7 +99,7 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
                                                     "physical_filter": "d-r"})
         butler.put(exposure, datasetTypeName, dataId)
         # Get the full thing
-        full = butler.get(datasetTypeName, dataId)  # noqa F841
+        butler.get(datasetTypeName, dataId)
         # TODO enable check for equality (fix for Exposure type)
         # self.assertEqual(full, exposure)
         # Get a component
