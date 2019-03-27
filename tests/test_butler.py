@@ -29,7 +29,7 @@ import shutil
 import pickle
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
-from lsst.daf.butler import Butler, Config
+from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
@@ -51,6 +51,26 @@ class TransactionTestError(Exception):
     that might otherwise occur when a standard exception is used.
     """
     pass
+
+
+class ButlerConfigTests(unittest.TestCase):
+    """Simple tests for ButlerConfig that are not tested in other test cases.
+    """
+
+    def testSearchPath(self):
+        configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
+        with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
+            config1 = ButlerConfig(configFile)
+        self.assertNotIn("testConfigs", "\n".join(cm.output))
+
+        overrideDirectory = os.path.join(TESTDIR, "config", "testConfigs")
+        with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
+            config2 = ButlerConfig(configFile, searchPaths=[overrideDirectory])
+        self.assertIn("testConfigs", "\n".join(cm.output))
+
+        key = ("datastore", "records", "table")
+        self.assertNotEqual(config1[key], config2[key])
+        self.assertEqual(config2[key], "OverrideRecord")
 
 
 class ButlerTests:
