@@ -3,14 +3,11 @@ version.py
 _build.*
 .cache
 tests/.tests
-tests/test_input_datastore/
-tests/test_output_datastore/
 .sconf_temp/
 .sconsign.dblite
 config.log
 ups/*.cfgc
 pytest_session.txt
-butler_test_repository
 bin/*
 .coverage
 .pytest_cache/

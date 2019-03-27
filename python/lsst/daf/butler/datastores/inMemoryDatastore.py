@@ -91,7 +91,7 @@ class InMemoryDatastore(Datastore):
     """A new datastore is created every time and datasets disappear when
     the process shuts down."""
 
-    def __init__(self, config, registry=None):
+    def __init__(self, config, registry=None, butlerRoot=None):
         super().__init__(config, registry)
 
         self.storageClassFactory = StorageClassFactory()

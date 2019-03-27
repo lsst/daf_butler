@@ -28,7 +28,7 @@ import sqlite3
 import datetime
 
 # register YAML loader for repositoryCfg.yaml files.
-import lsst.daf.persistence.repositoryCfg   # noqa F401
+import lsst.daf.persistence.repositoryCfg   # noqa: F401
 
 from astro_metadata_translator import ObservationInfo
 from lsst.afw.image import readMetadata
@@ -108,7 +108,7 @@ class ConversionWalker:
         calibDict = None
         if os.path.exists(repoCfgPath):
             with open(repoCfgPath, "r") as f:
-                repoCfg = yaml.load(f)
+                repoCfg = yaml.load(f, Loader=yaml.UnsafeLoader)
             parentPaths = [parent.root for parent in repoCfg.parents]
             MapperClass = repoCfg.mapper
         elif os.path.exists(calibPath):

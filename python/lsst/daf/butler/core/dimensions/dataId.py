@@ -96,7 +96,7 @@ class DimensionKeyDict(Mapping):
             self._keys = DimensionSet(universe, byName.keys())
 
         if where is None:
-            where = lambda x: True  # noqa E731; better than shadowing via def
+            where = lambda x: True  # noqa: E731; better than shadowing via def
 
         # Make a new dictionary keyed by DimensionElement in the right order,
         # using factory() when no value is available.

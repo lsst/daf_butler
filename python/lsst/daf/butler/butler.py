@@ -42,6 +42,8 @@ from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataId
 from .core.exceptions import ValidationError
+from .core.repoRelocation import BUTLER_ROOT_TAG
+from .core.safeFileIo import safeMakeDir
 
 log = logging.getLogger(__name__)
 
@@ -143,26 +145,38 @@ class Butler:
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
         root = os.path.abspath(root)
         if not os.path.isdir(root):
-            os.makedirs(root)
+            safeMakeDir(root)
         config = Config(config)
+
+        # If we are creating a new repo from scratch with relative roots,
+        # do not propagate an explicit root from the config file
+        if "root" in config:
+            del config["root"]
+
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
-        datastoreClass.setConfigRoot(root, config, full)
+        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         registryClass = doImport(full["registry", "cls"])
-        registryClass.setConfigRoot(root, config, full)
+        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))
         # Create Registry and populate tables
-        registryClass.fromConfig(config, create=createRegistry)
+        registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
     def __init__(self, config=None, collection=None, run=None):
         # save arguments for pickling
         self._args = (config, collection, run)
         self.config = ButlerConfig(config)
-        self.registry = Registry.fromConfig(self.config)
-        self.datastore = Datastore.fromConfig(self.config, self.registry)
+
+        if "root" in self.config:
+            butlerRoot = self.config["root"]
+        else:
+            butlerRoot = self.config.configDir
+
+        self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
+        self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
         self.storageClasses = StorageClassFactory()
         self.storageClasses.addFromConfig(self.config)
         self.composites = CompositesMap(self.config)
@@ -204,6 +218,12 @@ class Butler:
         # so if possible the user should explicitly call close. This
         # exists only to make an attempt to shut things down as a last
         # resort if at all possible.
+        self.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
         self.close()
 
     def close(self):

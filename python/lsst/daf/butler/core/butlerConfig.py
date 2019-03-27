@@ -52,16 +52,27 @@ class ButlerConfig(Config):
     other : `str`, `Config`, optional
         Path to butler configuration YAML file or a directory containing a
         "butler.yaml" file. If `None` the butler will
-        be configured based entirely on defaults read from the environment.
+        be configured based entirely on defaults read from the environment
+        or from ``searchPaths``.
         No defaults will be read if a `ButlerConfig` is supplied directly.
+    searchPaths : `list` or `tuple`, optional
+        Explicit additional paths to search for defaults. They should
+        be supplied in priority order. These paths have higher priority
+        than those read from the environment in
+        `ConfigSubset.defaultSearchPaths()`.  They are only read if ``other``
+        refers to a configuration file or directory.
     """
 
-    def __init__(self, other=None):
+    def __init__(self, other=None, searchPaths=None):
+
+        self.configDir = None
 
         # If this is already a ButlerConfig we assume that defaults
         # have already been loaded.
         if other is not None and isinstance(other, ButlerConfig):
             super().__init__(other)
+            # Ensure that the configuration directory propagates
+            self.configDir = other.configDir
             return
 
         if isinstance(other, str) and os.path.isdir(other):
@@ -74,6 +85,10 @@ class ButlerConfig(Config):
         # defaults to use.
         butlerConfig = Config(other)
 
+        configFile = butlerConfig.configFile
+        if configFile is not None:
+            self.configDir = os.path.dirname(os.path.abspath(configFile))
+
         # A Butler config contains defaults defined by each of the component
         # configuration classes. We ask each of them to apply defaults to
         # the values we have been supplied by the user.
@@ -84,7 +99,7 @@ class ButlerConfig(Config):
             localOverrides = None
             if configClass.component in butlerConfig:
                 localOverrides = butlerConfig
-            config = configClass(localOverrides)
+            config = configClass(localOverrides, searchPaths=searchPaths)
             # Re-attach it using the global namespace
             self.update({configClass.component: config})
             # Remove the key from the butlerConfig since we have already

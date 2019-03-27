@@ -64,9 +64,6 @@ if __name__ == "__main__":
                         help="DatasetType(s) to ignore for validation (can be comma-separated)")
 
     args = parser.parse_args()
-    # The collection does not matter for validation but if a run is specified
-    # in the configuration then it must be consistent with this collection
-    butler = Butler(config=args.root, collection=args.collection)
 
     logFailures = True
     if args.quiet:
@@ -76,10 +73,17 @@ if __name__ == "__main__":
     ignore = processCommas(args.ignore)
     datasetTypes = processCommas(args.datasettype)
 
-    try:
-        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasetTypes,
-                                     ignore=ignore)
-    except ValidationError:
-        sys.exit(1)
-    else:
-        print("No problems encountered with configuration.")
+    exitStatus = 0
+
+    # The collection does not matter for validation but if a run is specified
+    # in the configuration then it must be consistent with this collection
+    with Butler(config=args.root, collection=args.collection) as butler:
+        try:
+            butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasetTypes,
+                                         ignore=ignore)
+        except ValidationError:
+            exitStatus = 1
+        else:
+            print("No problems encountered with configuration.")
+
+    sys.exit(exitStatus)

@@ -1,0 +1,3 @@
+datastore:
+  records:
+    table: OverrideRecord

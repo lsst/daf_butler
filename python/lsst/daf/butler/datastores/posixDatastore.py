@@ -35,6 +35,7 @@ from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory
                              DatastoreValidationError, FileTemplateValidationError)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler.core.repoRelocation import replaceRoot
 
 log = logging.getLogger(__name__)
 
@@ -106,14 +107,24 @@ class PosixDatastore(Datastore):
                                   toUpdate={"root": root},
                                   toCopy=("cls", ("records", "table")))
 
-    def __init__(self, config, registry):
+    def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
-        self.root = self.config["root"]
+
+        # Name ourselves either using an explicit name or a name
+        # derived from the (unexpanded) root
+        if "name" in self.config:
+            self.name = self.config["name"]
+        else:
+            self.name = "POSIXDatastore@{}".format(self.config["root"])
+
+        # Support repository relocation in config
+        self.root = replaceRoot(self.config["root"], butlerRoot)
+
         if not os.path.isdir(self.root):
             if "create" not in self.config or not self.config["create"]:
-                raise ValueError("No valid root at: {0}".format(self.root))
+                raise ValueError(f"No valid root at: {self.root}")
             safeMakeDir(self.root)
 
         self.locationFactory = LocationFactory(self.root)
@@ -127,9 +138,6 @@ class PosixDatastore(Datastore):
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"])
         self.templates.normalizeDimensions(self.registry.dimensions)
-
-        # Name ourselves
-        self.name = "POSIXDatastore@{}".format(self.root)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
@@ -400,7 +408,7 @@ class PosixDatastore(Datastore):
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref)
 
-        fullPath = os.path.join(self.root, path)
+        fullPath = os.path.normpath(os.path.join(self.root, path))
         if not os.path.exists(fullPath):
             raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
                                     "assumed to be relative to self.root unless they are absolute."
@@ -412,6 +420,8 @@ class PosixDatastore(Datastore):
                 if os.path.commonpath([absRoot, path]) != absRoot:
                     raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
                 path = os.path.relpath(path, absRoot)
+            elif path.startswith(os.path.pardir):
+                raise RuntimeError(f"'{path}' is outside repository root '{self.root}'")
         else:
             template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))

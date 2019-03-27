@@ -186,7 +186,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @staticmethod
-    def fromConfig(config, registry):
+    def fromConfig(config, registry, butlerRoot=None):
         """Create datastore from type specified in config file.
 
         Parameters
@@ -195,9 +195,9 @@ class Datastore(metaclass=ABCMeta):
             Configuration instance.
         """
         cls = doImport(config["datastore", "cls"])
-        return cls(config=config, registry=registry)
+        return cls(config=config, registry=registry, butlerRoot=butlerRoot)
 
-    def __init__(self, config, registry):
+    def __init__(self, config, registry, butlerRoot=None):
         self.config = DatastoreConfig(config)
         self.registry = registry
         self.name = "ABCDataStore"

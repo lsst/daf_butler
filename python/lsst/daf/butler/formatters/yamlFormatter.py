@@ -48,10 +48,14 @@ class YamlFormatter(FileFormatter):
         data : `object`
             Either data as Python object read from YAML file, or None
             if the file could not be opened.
+
+        Notes
+        -----
+        The `~yaml.UnsafeLoader` is used when parsing the YAML file.
         """
         try:
             with open(path, "r") as fd:
-                data = yaml.load(fd)
+                data = yaml.load(fd, Loader=yaml.UnsafeLoader)
         except FileNotFoundError:
             data = None
 

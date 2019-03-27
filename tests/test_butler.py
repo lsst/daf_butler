@@ -28,11 +28,13 @@ import tempfile
 import shutil
 import pickle
 
-from lsst.daf.butler import Butler, Config
+from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
+from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -50,6 +52,26 @@ class TransactionTestError(Exception):
     that might otherwise occur when a standard exception is used.
     """
     pass
+
+
+class ButlerConfigTests(unittest.TestCase):
+    """Simple tests for ButlerConfig that are not tested in other test cases.
+    """
+
+    def testSearchPath(self):
+        configFile = os.path.join(TESTDIR, "config", "basic", "butler.yaml")
+        with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
+            config1 = ButlerConfig(configFile)
+        self.assertNotIn("testConfigs", "\n".join(cm.output))
+
+        overrideDirectory = os.path.join(TESTDIR, "config", "testConfigs")
+        with self.assertLogs("lsst.daf.butler", level="DEBUG") as cm:
+            config2 = ButlerConfig(configFile, searchPaths=[overrideDirectory])
+        self.assertIn("testConfigs", "\n".join(cm.output))
+
+        key = ("datastore", "records", "table")
+        self.assertNotEqual(config1[key], config2[key])
+        self.assertEqual(config2[key], "OverrideRecord")
 
 
 class ButlerTests:
@@ -362,11 +384,19 @@ class ButlerTests:
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
     def testStringification(self):
-        butler = Butler(self.configFile)
+        butler = Butler(self.tmpConfigFile)
+        butlerStr = str(butler)
+
         if self.datastoreStr is not None:
-            self.assertIn(self.datastoreStr, str(butler))
+            for testStr in self.datastoreStr:
+                self.assertIn(testStr, butlerStr)
         if self.registryStr is not None:
-            self.assertIn(self.registryStr, str(butler))
+            self.assertIn(self.registryStr, butlerStr)
+
+        datastoreName = butler.datastore.name
+        if self.datastoreName is not None:
+            for testStr in self.datastoreName:
+                self.assertIn(testStr, datastoreName)
 
 
 class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -375,8 +405,9 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.formatters"
     validationCanFail = True
 
-    datastoreStr = "datastore='./butler_test_repository"
-    registryStr = "registry='sqlite:///:memory:'"
+    datastoreStr = ["/tmp"]
+    datastoreName = [f"POSIXDatastore@{BUTLER_ROOT_TAG}"]
+    registryStr = "/gen3.sqlite3'"
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -407,7 +438,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
-        self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric1/DummyCamComp_423.pickle")))
+        self.assertTrue(os.path.exists(os.path.join(butler.datastore.root,
+                                                    "ingest/metric1/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -417,7 +449,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         # defining them  to behave now; the important thing is that they
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
-        self.assertTrue(os.path.exists(os.path.join(self.root, "ingest/metric2/DummyCamComp_423.pickle")))
+        self.assertTrue(os.path.exists(os.path.join(butler.datastore.root,
+                                                    "ingest/metric2/DummyCamComp_423.pickle")))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -439,7 +472,8 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = None
     useTempRoot = False
     validationCanFail = False
-    datastoreStr = "datastore='InMemory'"
+    datastoreStr = ["datastore='InMemory'"]
+    datastoreName = ["InMemoryDatastore@"]
     registryStr = "registry='sqlite:///:memory:'"
 
 
@@ -448,8 +482,43 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
-    datastoreStr = "datastore='InMemory, ./butler_test_repository, ./butler_test_repository2'"
-    registryStr = "registry='sqlite:///:memory:'"
+    datastoreStr = ["datastore='InMemory", "/PosixDatastore_1,", "/PosixDatastore_2'"]
+    datastoreName = ["InMemoryDatastore@", f"POSIXDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
+                     "SecondDatastore"]
+    registryStr = "/gen3.sqlite3'"
+
+
+class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
+    """Test that a yaml file in one location can refer to a root in another."""
+
+    datastoreStr = ["dir1"]
+    # Disable the makeRepo test since we are deliberately not using
+    # butler.yaml as the config name.
+    fullConfigKey = None
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+
+        # Make a new repository in one place
+        self.dir1 = os.path.join(self.root, "dir1")
+        Butler.makeRepo(self.dir1, config=Config(self.configFile))
+
+        # Move the yaml file to a different place and add a "root"
+        self.dir2 = os.path.join(self.root, "dir2")
+        safeMakeDir(self.dir2)
+        configFile1 = os.path.join(self.dir1, "butler.yaml")
+        config = Config(configFile1)
+        config["root"] = self.dir1
+        configFile2 = os.path.join(self.dir2, "butler2.yaml")
+        config.dumpToFile(configFile2)
+        os.remove(configFile1)
+        self.tmpConfigFile = configFile2
+
+    def testFileLocations(self):
+        self.assertNotEqual(self.dir1, self.dir2)
+        self.assertTrue(os.path.exists(os.path.join(self.dir2, "butler2.yaml")))
+        self.assertFalse(os.path.exists(os.path.join(self.dir1, "butler.yaml")))
+        self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
 
 
 class ButlerConfigNoRunTestCase(unittest.TestCase):
@@ -460,10 +529,17 @@ class ButlerConfigNoRunTestCase(unittest.TestCase):
     def testPickle(self):
         """Test pickle support.
         """
-        butler = Butler(self.configFile, run="ingest")
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        Butler.makeRepo(self.root, config=Config(self.configFile))
+        self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
+        butler = Butler(self.tmpConfigFile, run="ingest")
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
 
 
 if __name__ == "__main__":

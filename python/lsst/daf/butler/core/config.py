@@ -46,7 +46,7 @@ log = logging.getLogger(__name__)
 CONFIG_PATH = "DAF_BUTLER_CONFIG_PATH"
 
 
-class Loader(yaml.CLoader):
+class Loader(yaml.CSafeLoader):
     """YAML Loader that supports file include directives
 
     Uses ``!include`` directive in a YAML file to point to another
@@ -158,6 +158,7 @@ class Config(collections.abc.MutableMapping):
 
     def __init__(self, other=None):
         self._data = {}
+        self.configFile = None
 
         if other is None:
             return
@@ -226,6 +227,7 @@ class Config(collections.abc.MutableMapping):
         log.debug("Opening YAML config file: %s", path)
         with open(path, "r") as f:
             self.__initFromYaml(f)
+        self.configFile = path
 
     def __initFromYaml(self, stream):
         """Loads a YAML config from any readable stream that contains one.

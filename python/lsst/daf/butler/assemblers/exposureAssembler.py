@@ -22,7 +22,7 @@
 """Support for assembling and disassembling afw Exposures."""
 
 # Need to enable PSFs to be instantiated
-import lsst.afw.detection  # noqa F401
+import lsst.afw.detection  # noqa: F401
 from lsst.afw.image import makeExposure, makeMaskedImage
 
 from lsst.daf.butler import CompositeAssembler

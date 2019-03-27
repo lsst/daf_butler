@@ -123,7 +123,7 @@ class ChainedDatastore(Datastore):
 
         return
 
-    def __init__(self, config, registry=None):
+    def __init__(self, config, registry=None, butlerRoot=None):
         super().__init__(config, registry)
 
         self.storageClassFactory = StorageClassFactory()
@@ -133,7 +133,7 @@ class ChainedDatastore(Datastore):
         for c in self.config["datastores"]:
             c = DatastoreConfig(c)
             datastoreType = doImport(c["cls"])
-            datastore = datastoreType(c, registry)
+            datastore = datastoreType(c, registry, butlerRoot=butlerRoot)
             log.debug("Creating child datastore %s", datastore.name)
             self.datastores.append(datastore)
 
