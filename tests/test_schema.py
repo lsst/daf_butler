@@ -21,6 +21,8 @@
 
 import os
 import unittest
+import warnings
+from sqlalchemy.exc import SADeprecationWarning
 
 from sqlalchemy import create_engine, MetaData
 
@@ -45,7 +47,15 @@ class SchemaTestCase(unittest.TestCase):
         self.config = SchemaConfig()
         self.schema = Schema(self.config)
         self.engine = create_engine("sqlite:///:memory:")
-        self.schema.metadata.create_all(self.engine)
+        # In our tables we have columns that make use of sqlalchemy
+        # Sequence objects. There is currently a bug in sqlalchmey
+        # that causes a deprecation warning to be thrown on a
+        # property of the Sequence object when the repr for the
+        # sequence is created. Here a filter is used to catch these
+        # deprecation warnings when tables are created.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=SADeprecationWarning)
+            self.schema.metadata.create_all(self.engine)
 
     def testConstructor(self):
         """Independent check for `Schema` constructor.
