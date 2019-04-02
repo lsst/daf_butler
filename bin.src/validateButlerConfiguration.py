@@ -77,13 +77,13 @@ if __name__ == "__main__":
 
     # The collection does not matter for validation but if a run is specified
     # in the configuration then it must be consistent with this collection
-    with Butler(config=args.root, collection=args.collection) as butler:
-        try:
-            butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasetTypes,
-                                         ignore=ignore)
-        except ValidationError:
-            exitStatus = 1
-        else:
-            print("No problems encountered with configuration.")
+    butler = Butler(config=args.root, collection=args.collection)
+    try:
+        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasetTypes,
+                                     ignore=ignore)
+    except ValidationError:
+        exitStatus = 1
+    else:
+        print("No problems encountered with configuration.")
 
     sys.exit(exitStatus)

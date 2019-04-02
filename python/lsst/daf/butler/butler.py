@@ -211,29 +211,6 @@ class Butler:
             if self.run is None:
                 self.run = self.registry.makeRun(runCollection)
 
-    def __del__(self):
-        # Attempt to close any open resources when this object is
-        # garbage collected. Python does not guarantee that this method
-        # will be called, or that it will be called in the proper order
-        # so if possible the user should explicitly call close. This
-        # exists only to make an attempt to shut things down as a last
-        # resort if at all possible.
-        self.close()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.close()
-
-    def close(self):
-        """This method should be called to properly close any resources the
-        butler may have open. The instance on which this method is closed
-        should be considered unusable and no further methods should be called
-        on it.
-        """
-        self.registry.close()
-
     def __reduce__(self):
         """Support pickling.
         """
