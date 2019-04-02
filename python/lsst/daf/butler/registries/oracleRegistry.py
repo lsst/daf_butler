@@ -65,10 +65,12 @@ class OracleRegistry(SqlRegistry):
         Config.overrideParameters(RegistryConfig, config, full,
                                   toCopy=("cls", "deferDatasetIdQueries"))
 
-    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False):
+    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
+                 butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
         self.schemaConfig = schemaConfig
-        super().__init__(registryConfig, schemaConfig, dimensionConfig, create)
+        super().__init__(registryConfig, schemaConfig, dimensionConfig, create,
+                         butlerRoot=butlerRoot)
 
     def _createEngine(self):
         tables = self.schemaConfig['tables'].keys()
