@@ -347,7 +347,6 @@ class DatasetRef:
 
     def __init__(self, datasetType, dataId, id=None, run=None, hash=None, components=None):
         assert isinstance(datasetType, DatasetType)
-
         # Check the dimensions match if a DataId is provided
         if isinstance(dataId, DataId) and isinstance(datasetType.dimensions, DimensionGraph):
             if dataId.dimensions() != datasetType.dimensions:

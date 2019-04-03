@@ -26,13 +26,16 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import contextlib
 import functools
+import os
+
+import boto3
 
 from lsst.utils import doImport
 from lsst.sphgeom import ConvexPolygon
 from .config import Config, ConfigSubset
 from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKeyDict
 from .schema import SchemaConfig
-from .utils import transactional
+from .utils import transactional, s3CheckFileExists, parsePath2Uri, bucketExists
 from .dataIdPacker import DataIdPackerFactory
 
 
@@ -169,6 +172,36 @@ class Registry(metaclass=ABCMeta):
 
         if not isinstance(registryConfig, RegistryConfig):
             if isinstance(registryConfig, str) or isinstance(registryConfig, Config):
+                # very annoying: if s3:// is the obj store designator then
+                # db key is really a pair of nested uri's for sqlite db and s3. That
+                # makes it hard to tell whether we're dealing with absolute or relative
+                # path. All this string manipulation dependance, not best I assume?
+                db, path = registryConfig['.registry.db'].split('///')
+                scheme, root, relpath = parsePath2Uri(path)
+                if scheme == 'file://':
+                    pass
+                elif scheme == 's3://' and bucketExists(path):
+                    s3client = boto3.client('s3')
+                    tmpdir = "/home/dinob/uni/lsstspark/simple_repo/s3_repo"
+                    tmppath = os.path.join(tmpdir, 'gen3.sqlite3')
+                    tmpdburi = f'{db}///{tmppath}'
+                    if create:
+                        # if new registry is being created, do it locally and upload to bucket
+                        # be annoying if one already exists on there
+                        if s3CheckFileExists(s3client, root, relpath)[0]:
+                            raise IOError('Overwriting existing registry.')
+
+                        registryConfig.update({'registry': {'db': tmpdburi}})
+                        registryConfig = RegistryConfig(registryConfig)
+                        cls = doImport(registryConfig["cls"])
+                        registry =  cls(registryConfig, schemaConfig, dimensionConfig, create=create)
+                        s3client.upload_file(tmppath, root, relpath)
+                        return registry
+                    else:
+                        # if no new registry is being created look to download one
+                        s3client.download_file(root, relpath, tmppath)
+                        # changing the config keys like this is probably bad too...
+                        registryConfig.update({'registry': {'db': tmpdburi}})
                 registryConfig = RegistryConfig(registryConfig)
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))

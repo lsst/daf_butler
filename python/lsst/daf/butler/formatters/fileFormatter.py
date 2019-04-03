@@ -178,6 +178,7 @@ class FileFormatter(Formatter):
 
         return fileDescriptor.location.pathInStore
 
+
     def predictPath(self, location):
         """Return the path that would be returned by write, without actually
         writing.

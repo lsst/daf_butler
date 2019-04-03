@@ -26,7 +26,10 @@ Configuration classes specific to the Butler
 __all__ = ("ButlerConfig",)
 
 import os.path
+import boto3
 
+
+from . import utils
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
@@ -75,8 +78,21 @@ class ButlerConfig(Config):
             self.configDir = other.configDir
             return
 
-        if isinstance(other, str) and os.path.isdir(other):
-            other = os.path.join(other, "butler.yaml")
+        if isinstance(other, str):
+            scheme, root, relpath = utils.parsePath2Uri(other)
+            if scheme == 'file://':
+                if  os.path.isdir(other):
+                    other = os.path.join(other, "butler.yaml")
+            elif scheme == 's3://' and utils.bucketExists(other):
+                # authorizing somewhere clever would be a good thing too
+                session = boto3.Session(profile_name='default')
+
+                # download stuff where needed the short way for now,
+                # but better to have specific functionality somewhere.
+                # tempfiles, TransferConfig etc etc...
+                other = "/home/dinob/uni/lsstspark/simple_repo/s3_repo/butler.yaml"
+                s3client = boto3.client('s3')
+                s3client.download_file(root, relpath, other)
 
         # Create an empty config for us to populate
         super().__init__()

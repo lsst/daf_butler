@@ -30,8 +30,10 @@ import contextlib
 import logging
 import itertools
 
+import boto3
+
 from lsst.utils import doImport
-from .core.utils import transactional
+from .core.utils import transactional, parsePath2Uri
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .core.registry import Registry
@@ -143,6 +145,7 @@ class Butler:
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
+<<<<<<< HEAD
         root = os.path.abspath(root)
         if not os.path.isdir(root):
             safeMakeDir(root)
@@ -156,14 +159,49 @@ class Butler:
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
+=======
+
+        # lets at least feign generality
+        scheme, rootpath, relpath = parsePath2Uri(root)
+        if scheme == 'file://':
+            root = os.path.abspath(root)
+            if not os.path.isdir(root):
+                os.makedirs(root)
+        elif scheme == 's3://':
+            s3 = boto3.resource('s3')
+            # implies bucket exists, if not another level of checks
+            bucket = s3.Bucket(rootpath)
+            bucket.put_object(Bucket=rootpath, Key=(relpath))
+
+        config = Config(config)
+
+        full = ButlerConfig(config)  # this applies defaults
+        datastoreClass = doImport(full["datastore", "cls"])
+        datastoreClass.setConfigRoot(root, config, full)
+
+>>>>>>> 9ce8e2f... Added makeRepo functionality, added put and get functionality for pickleFormatters.
         registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         if standalone:
             config.merge(full)
-        config.dumpToFile(os.path.join(root, "butler.yaml"))
+
+        if scheme == 'file://':
+            config.dumpToFile(os.path.join(root, "butler.yaml"))
+        elif scheme == 's3://':
+            tmpdir = "/home/dinob/uni/lsstspark/simple_repo/s3_repo"
+            tmppath = os.path.join(tmpdir, 'butler.yaml')
+            config.dumpToFile(tmppath)
+
+            bucketpath = os.path.join(relpath, 'butler.yaml')
+            config.dumpToFile(tmppath)
+            s3 = boto3.client('s3')
+            s3.upload_file(tmppath, rootpath, bucketpath)
+
+
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
+
 
     def __init__(self, config=None, collection=None, run=None):
         # save arguments for pickling

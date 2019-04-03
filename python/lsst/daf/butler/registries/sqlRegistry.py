@@ -432,7 +432,6 @@ class SqlRegistry(Registry):
     @transactional
     def addDataset(self, datasetType, dataId, run, producer=None, recursive=False, **kwds):
         # Docstring inherited from Registry.addDataset
-
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         else:
@@ -440,8 +439,13 @@ class SqlRegistry(Registry):
 
         # Make a full DataId up front, so we don't do multiple times
         # in calls below.  Note that calling DataId with a full DataId
-        # is basically a no-op.
-        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
+        # is basically a no-op
+        dataId = DataId(dataId, dimensions=datasetType.dimensions,
+                        universe=self.dimensions, **kwds)
+#       [TMPFIX?] I think because I have dimensionless datasettype this instantiation
+#       fails, but because I use all the regularly used names, leaving the DataId to figure
+#       it out on its own works.
+#        dataId = DataId(dataId, universe=self.dimensions, **kwds)
 
         # Expand Dimension links to insert into the table to include implied
         # dependencies.
@@ -561,7 +565,6 @@ class SqlRegistry(Registry):
         # implementation with special "UPSERT" or "MERGE" syntax.  This
         # implementation is only concurrency-safe for databases that implement
         # transactions with database- or table-wide locks (e.g. SQLite).
-
         datasetCollectionTable = self._schema.tables["DatasetCollection"]
         insertQuery = datasetCollectionTable.insert()
         checkQuery = select([datasetCollectionTable.c.dataset_id], whereclause=and_(
