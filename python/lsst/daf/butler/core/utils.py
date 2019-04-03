@@ -27,9 +27,109 @@ __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
 import builtins
 import sys
 import functools
-from collections.abc import MutableMapping
+import boto3
+import urllib
+from urllib.parse import urlparse
 
 from lsst.utils import doImport
+
+
+def s3CheckFileExists(client, bucket, filepath):
+    """Checks that the file exists and if it does returns its size.
+
+    Parameters
+    ----------
+    client : 'boto3.client'
+        S3 Client object to query.
+    bucket : 'str'
+        Name of the bucket in which to look.
+    filepath : 'str'
+        Path to file.
+    """
+    # this has maxkeys kwarg, limited to 1000
+    response = client.list_objects_v2(
+        Bucket=bucket,
+        Prefix=filepath
+    )
+    # Hopefully multiple identical files will never exist?
+    # if not then this returns list len 1 if found, this is charged for - worth it?
+    matches = [x for x in response.get('Contents', []) if x["Key"] == filepath]
+    if len(matches) == 1:
+        return (True, matches[0]['Size'])
+    else:
+        return (False, 0)
+
+
+# it would be great if this can be better
+def parsePath2Uri(path):
+    """If the path is a local filesystem path constructs elements of a URI.
+    If path is an s3:// URI returns the URI elements.
+
+    Parameters
+    ----------
+    uri : `str`
+        URI to parse.
+
+    Returns
+    -------
+    scheme : 'str'
+        Either 'file://' or 's3://'.
+    root : 'str'
+        S3 Bucket name or Posix-like path to the top of the relative path
+    relpath : 'str'
+        Posix-like path relative to roothpath.
+    """
+    parsed = urlparse(path)
+    # if the parsed path is the supplied one - filesystem
+    if parsed.path == path:
+        scheme = 'file://'
+        # bit silly if its already an abspath
+        if os.path.isabs(path):
+            root = '/'
+            relpath = parsed.path.lstrip('/')
+        else:
+            root = os.path.abspath(path).split(path)
+            relpath = path
+    elif parsed.scheme == 's3':
+        scheme = 's3://'
+        # this is the bucketname
+        root = parsed.netloc
+        relpath = parsed.path.lstrip('/')
+    else:
+        raise urllib.error.URLError(f'Can not parse path: {path}')
+
+    return scheme, root, relpath
+
+def bucketExists(uri):
+    """Check if the S3 bucket at a given URI actually exists.
+
+    Parameters
+    ----------
+    uri : `str`
+        URI of the S3 Bucket
+
+    Returns
+    -------
+    exists : `bool`
+        True if it exists, False if no Bucket with specified parameters is found.
+    """
+    session = boto3.Session(profile_name='default')
+    client = boto3.client('s3')
+    scheme, root, relpath = parsePath2Uri(uri)
+
+    try:
+        client.get_bucket_location(Bucket=root)
+        # bucket exists, all is well
+        return True
+    except client.exceptions.NoSuchBucket:
+        return False
+
+#        # creating new buckets, generalizations hard?
+#        client.create_bucket(ACL='authenticated-read',
+#                             Bucket=bucket,
+#                             LocationConstraint = {'LocationConstraint':'us-west-2'}
+#        )
+
 
 
 def iterable(a):

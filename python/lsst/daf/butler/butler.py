@@ -30,8 +30,10 @@ import contextlib
 import logging
 import itertools
 
+import boto3
+
 from lsst.utils import doImport
-from .core.utils import transactional
+from .core.utils import transactional, parsePath2Uri
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .core.registry import Registry
@@ -178,6 +180,18 @@ class Butler:
             safeMakeDir(root)
         config = Config(config)
 
+        # lets at least feign generality
+        scheme, rootpath, relpath = parsePath2Uri(root)
+        if scheme == 'file://':
+            root = os.path.abspath(root)
+            if not os.path.isdir(root):
+                os.makedirs(root)
+        elif scheme == 's3://':
+            s3 = boto3.resource('s3')
+            # implies bucket exists, if not another level of checks
+            bucket = s3.Bucket(rootpath)
+            bucket.put_object(Bucket=rootpath, Key=(relpath))
+
         # If we are creating a new repo from scratch with relative roots,
         # do not propagate an explicit root from the config file
         if "root" in config:
@@ -191,14 +205,10 @@ class Butler:
         if standalone:
             config.merge(full)
 
-        # Write out the config
-        if outfile is not None:
-            # Force root so that we can find everything else
-            config["root"] = root
-        else:
-            outfile = os.path.join(root, "butler.yaml")
-        config.dumpToFile(outfile)
-
+        if scheme == 'file://':
+            config.dumpToFile(os.path.join(root, "butler.yaml"))
+        elif scheme == 's3://':
+            config.dumpToS3(rootpath, os.path.join(relpath, 'butler.yaml'))
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config

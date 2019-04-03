@@ -1,0 +1,47 @@
+datastore:
+  cls: lsst.daf.butler.datastores.s3Datastore.S3Datastore
+  root: default_butler_repository
+  records:
+    table: S3DatastoreRecords
+  create: true
+  templates:
+    # valid_first and valid_last here are YYYYMMDD; we assume we'll switch to
+    # MJD (DM-15890) before we need more than day resolution, since that's all
+    # Gen2 has.
+    default: "s3://{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{label:?}/{abstract_filter:?}/{physical_filter:?}/{visit:?}/{datasetType}_{component:?}_{tract:?}_{patch:?}_{label:?}_{abstract_filter:?}_{physical_filter:?}_{calibration_label:?}_{visit:?}_{exposure:?}_{detector:?}_{instrument:?}_{skymap:?}_{run}"
+  formatters:
+    TablePersistable: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableWcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistablePsf: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCoaddInputs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableVisitInfo: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableApCorr: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCalib: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableTransmissionCurve: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistableCamera: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    ImageF: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    MaskX: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Exposure: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ExposureF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ExposureI: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    Catalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    PeakCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    SimpleCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    SourceCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    ObjectMaskCatalog: lsst.pipe.tasks.objectMasks.RegionFileFormatter
+    ImageF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    # diff
+    ImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    DecoratedImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    MaskX: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    MaskedImageF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    Exposure: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ExposureF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ExposureI: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    SkyMap: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    Background: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Config: lsst.daf.butler.formatters.pexConfigFormatter.PexConfigFormatter
+    Packages: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    PropertyList: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    PropertySet: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    NumpyArray: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
