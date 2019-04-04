@@ -21,7 +21,8 @@
 
 """Support for configuration snippets"""
 
-__all__ = ("LookupKey", "processLookupConfigs", "normalizeLookupKeys")
+__all__ = ("LookupKey", "processLookupConfigs", "normalizeLookupKeys",
+           "processLookupConfigList")
 
 import logging
 import re
@@ -29,6 +30,9 @@ from collections.abc import Mapping
 from .dimensions import DimensionNameSet, DimensionGraph
 
 log = logging.getLogger(__name__)
+
+DATAID_RE = re.compile(r"([a-z_]+)<(.*)>$")
+"""Regex to find dataIds embedded in configurations."""
 
 
 class LookupKey:
@@ -270,7 +274,7 @@ def processLookupConfigs(config):
     for name, value in config.items():
         if isinstance(value, Mapping):
             # indicates a dataId component -- check the format
-            kv = re.match(r"([a-z_]+)<(.*)>$", name)
+            kv = DATAID_RE.match(name)
             if kv:
                 dataIdKey = kv.group(1)
                 dataIdValue = kv.group(2)
@@ -282,5 +286,50 @@ def processLookupConfigs(config):
         else:
             lookup = LookupKey(name=name)
             contents[lookup] = value
+
+    return contents
+
+
+def processLookupConfigList(config):
+    """Process sections of configuration relating to lookups by dataset type
+    name, storage class name, dataId components or dimensions.
+
+    Parameters
+    ----------
+    config : `list` of `str` or `dict`
+        Contents a configuration listing keys that can be
+        dataset type names, storage class names, dimensions
+        or dataId components.  DataId components are represented as entries
+        in the `list` of `dicts` with a single key with a value of a `list`
+        of new keys.
+
+    Returns
+    -------
+    lookups : `set` of `LookupKey`
+        All the entries in the input list converted to `LookupKey` and
+        returned in a `set`.
+
+    Notes
+    -----
+    Keys are parsed as described in `processLookupConfigs`.
+    """
+    contents = set()
+
+    for name in config:
+        if isinstance(name, Mapping):
+            if len(name) != 1:
+                raise RuntimeError(f"Config dict entry {name} has more than key present")
+            for dataIdLookUp, subKeys in name.items():
+                kv = DATAID_RE.match(dataIdLookUp)
+                if kv:
+                    dataIdKey = kv.group(1)
+                    dataIdValue = kv.group(2)
+                    for subKey in subKeys:
+                        lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
+                        contents.add(lookup)
+                else:
+                    log.warning("Hierarchical key '%s' not in form 'key<value>', ignoring", name)
+        else:
+            contents.add(LookupKey(name=name))
 
     return contents
