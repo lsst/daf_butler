@@ -533,6 +533,12 @@ class InMemoryDatastorePermissionsTestCase(DatastorePermissionsTests, unittest.T
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastoreP.yaml")
 
 
+class ChainedDatastorePermissionsNativeTestCase(PosixDatastorePermissionsTestCase):
+    """ChainedDatastore specialization using a POSIXDatastore and permissions
+    at the ChainedDatstore """
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePa.yaml")
+
+
 class ChainedDatastorePermissionsTestCase(PosixDatastorePermissionsTestCase):
     """ChainedDatastore specialization using a POSIXDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastoreP.yaml")
@@ -541,6 +547,50 @@ class ChainedDatastorePermissionsTestCase(PosixDatastorePermissionsTestCase):
 class ChainedDatastoreMemoryPermissionsTestCase(InMemoryDatastorePermissionsTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2P.yaml")
+
+
+class ChainedDatastorePerStorePermissionsTests(DatastoreTestsBase, unittest.TestCase):
+    """Test that a chained datastore can control permissions per-datastore
+    even if child datastore would accept."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePb.yaml")
+
+    def setUp(self):
+        # Override the working directory before calling the base class
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        super().setUp()
+
+    def testPermissions(self):
+        """Test permissions model."""
+        metrics = makeExampleMetrics()
+        datastore = self.makeDatastore()
+
+        sc1 = self.storageClassFactory.getStorageClass("StructuredData")
+        sc2 = self.storageClassFactory.getStorageClass("StructuredDataJson")
+        dimensions = frozenset(("Visit", "PhysicalFilter", "Instrument"))
+        dataId1 = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
+        dataId2 = {"visit": 52, "physical_filter": "V", "instrument": "HSC"}
+
+        for datasetTypeName, dataId, sc, accepted in (("metric", dataId1, sc1, (False, True, False)),
+                                                      ("metric2", dataId1, sc1, (False, False, False)),
+                                                      ("metric2", dataId2, sc1, (True, False, False)),
+                                                      ("metric33", dataId2, sc2, (True, True, False)),
+                                                      ("metric2", dataId1, sc2, (False, True, False))):
+            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
+            if any(accepted):
+                datastore.put(metrics, ref)
+                self.assertTrue(datastore.exists(ref))
+
+                # Check each datastore inside the chained datastore
+                for childDatastore, expected in zip(datastore.datastores, accepted):
+                    self.assertEqual(childDatastore.exists(ref), expected,
+                                     f"Testing presence of {ref} in datastore {childDatastore.name}")
+
+                datastore.remove(ref)
+            else:
+                with self.assertRaises(DatasetTypeNotSupportedError):
+                    datastore.put(metrics, ref)
+                self.assertFalse(datastore.exists(ref))
 
 
 if __name__ == "__main__":

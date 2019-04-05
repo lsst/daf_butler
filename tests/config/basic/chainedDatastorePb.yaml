@@ -1,0 +1,20 @@
+datastore:
+  cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+  datastore_permissions:
+    # One entry per datastore in datastores section
+    # Use empty `-` if no permission override required
+    - permissions:
+        reject:
+          - instrument<DummyCamComp>:
+            - all
+    - permissions:
+        accept:
+          - metric
+          - StructuredDataJson
+    - permissions:
+        reject:
+          - all
+  datastores:
+  - !include inMemoryDatastore.yaml
+  - !include posixDatastore.yaml
+  - !include posixDatastore2.yaml

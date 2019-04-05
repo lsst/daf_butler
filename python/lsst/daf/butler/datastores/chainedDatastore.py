@@ -30,7 +30,7 @@ import warnings
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
-    DatastoreValidationError
+    DatastoreValidationError, Permissions
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +153,26 @@ class ChainedDatastore(Datastore):
                 break
         self.isEphemeral = isEphemeral
 
+        # And read the permissions list
+        permissionsConfig = self.config["permissions"] if "permissions" in self.config else None
+        self.permissions = Permissions(permissionsConfig, universe=self.registry.dimensions)
+
+        # per-datastore override permissions
+        if "datastore_permissions" in self.config:
+            overrides = self.config["datastore_permissions"]
+
+            if len(overrides) != len(self.datastores):
+                raise DatastoreValidationError(f"Number of registered datastores ({len(self.datastores)})"
+                                               " differs from number of permissions overrides"
+                                               f" {len(overrides)}")
+
+            self.datastorePermissions = [Permissions(c["permissions"])
+                                         if "permissions" in c else None
+                                         for c in overrides]
+
+        else:
+            self.datastorePermissions = (None,) * len(self.datastores)
+
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
     def __str__(self):
@@ -242,11 +262,22 @@ class ChainedDatastore(Datastore):
         """
         log.debug("Put %s", ref)
 
+        # Confirm that we can accept this dataset
+        if not self.permissions.hasPermission(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
+
         isPermanent = False
         nsuccess = 0
         npermanent = 0
         nephemeral = 0
-        for datastore in self.datastores:
+        for datastore, permissions in zip(self.datastores, self.datastorePermissions):
+            if permissions is not None and not permissions.hasPermission(ref):
+                log.debug("Datastore %s skipping put via configuration for ref %s",
+                          datastore.name, ref)
+                continue
+
             if datastore.isEphemeral:
                 nephemeral += 1
             else:

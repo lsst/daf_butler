@@ -1,0 +1,12 @@
+datastore:
+  cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+  permissions:
+    accept:
+      - metric
+      - StructuredDataJson
+      - instrument<DummyCamComp>:
+        - metric33
+  datastores:
+  - !include inMemoryDatastore.yaml
+  - !include posixDatastore.yaml
+  - !include posixDatastore2.yaml
