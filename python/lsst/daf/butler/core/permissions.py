@@ -25,7 +25,7 @@ __all__ = ("Permissions", "PermissionsValidationError", "PermissionsConfig")
 
 import logging
 from .config import Config
-from .configSupport import LookupKey, processLookupConfigList
+from .configSupport import LookupKey, processLookupConfigList, normalizeLookupKeys
 from .exceptions import ValidationError
 
 log = logging.getLogger(__name__)
@@ -57,6 +57,7 @@ class Permissions:
 
     def __init__(self, config):
         # Default is to accept all and reject nothing
+        self.normalized = False
         self._accept = set()
         self._reject = set()
 
@@ -87,6 +88,16 @@ class Permissions:
         allowed : `bool`
             `True` if the entity is allowed.
         """
+
+        # normalize the registry if not already done and we have access
+        # to a universe
+        if not self.normalized:
+            try:
+                universe = entity.dimensions.universe
+            except AttributeError:
+                pass
+            else:
+                self.normalizeDimensions(universe)
 
         # Get the names to use for lookup
         names = set(entity._lookupNames())
@@ -122,3 +133,38 @@ class Permissions:
             return True
 
         return False
+
+    def normalizeDimensions(self, universe):
+        """Normalize permission lookups that use dimensions.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            The set of all known dimensions. If `None`, returns without
+            action.
+
+        Notes
+        -----
+        Goes through all permission lookups, and for keys that include
+        dimensions, rewrites those keys to use a verified set of
+        dimensions.
+
+        Returns without action if the keys have already been
+        normalized.
+
+        Raises
+        ------
+        ValueError
+            Raised if a key exists where a dimension is not part of
+            the ``universe``.
+        """
+        if self.normalized:
+            return
+
+        # Normalize as a dict to reuse the existing infrastructure
+        for attr in ("_accept", "_reject"):
+            temp = {k: None for k in getattr(self, attr)}
+            normalizeLookupKeys(temp, universe)
+            setattr(self, attr, set(temp))
+
+        self.normalized = True
