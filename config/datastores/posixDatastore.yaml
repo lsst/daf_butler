@@ -16,7 +16,7 @@ datastore:
     TablePersistableCoaddInputs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableVisitInfo: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableApCorr: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableCalib: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TablePersistablePhotoCalib: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableTransmissionCurve: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     TablePersistableCamera: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     ImageF: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
