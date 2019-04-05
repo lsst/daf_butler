@@ -56,6 +56,10 @@ class FileTemplates:
     default : `str`, optional
         If not `None`, a default template to use if no template has
         been specified explicitly in the configuration.
+    universe : `DimensionUniverse`, optional
+        The set of all known dimensions. If not `None`, any look up keys
+        involving dimensions will be normalized.  Normalization only happens
+        once.
 
     Notes
     -----
@@ -77,7 +81,7 @@ class FileTemplates:
     defaultKey = LookupKey("default")
     """Configuration key associated with the default template."""
 
-    def __init__(self, config, default=None):
+    def __init__(self, config, default=None, universe=None):
         self.config = FileTemplatesConfig(config)
         self._templates = {}
         self.normalized = False
@@ -93,6 +97,9 @@ class FileTemplates:
                     self.default = FileTemplate(templateStr)
             else:
                 self._templates[key] = FileTemplate(templateStr)
+
+        # Normalize all the dimensions given the supplied universe
+        self.normalizeDimensions(universe)
 
     @property
     def templates(self):

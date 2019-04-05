@@ -50,12 +50,16 @@ class Permissions:
     config : `PermisssionsConfig` or `str`
         Load configuration.  If `None` then this is equivalent to having
         no restrictions.
+    universe : `DimensionUniverse`, optional
+        The set of all known dimensions. If not `None`, any look up keys
+        involving dimensions will be normalized.  Normalization only happens
+        once.
     """
 
     matchAllKey = LookupKey("all")
     """Configuration key associated with matching everything."""
 
-    def __init__(self, config):
+    def __init__(self, config, universe=None):
         # Default is to accept all and reject nothing
         self.normalized = False
         self._accept = set()
@@ -72,6 +76,9 @@ class Permissions:
         if self.matchAllKey in self._accept and self.matchAllKey in self._reject:
             raise PermissionsValidationError("Can not explicitly accept 'all' and reject 'all'"
                                              " in one configuration")
+
+        # Normalize all the dimensions given the supplied universe
+        self.normalizeDimensions(universe)
 
     def hasPermission(self, entity):
         """Check whether the supplied entity has permission for whatever

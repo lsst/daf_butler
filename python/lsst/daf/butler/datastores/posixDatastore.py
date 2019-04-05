@@ -132,12 +132,12 @@ class PosixDatastore(Datastore):
         self.storageClassFactory = StorageClassFactory()
 
         # Now associate formatters with storage classes
-        self.formatterFactory.registerFormatters(self.config["formatters"])
-        self.formatterFactory.normalizeDimensions(self.registry.dimensions)
+        self.formatterFactory.registerFormatters(self.config["formatters"],
+                                                 universe=self.registry.dimensions)
 
         # Read the file naming templates
-        self.templates = FileTemplates(self.config["templates"])
-        self.templates.normalizeDimensions(self.registry.dimensions)
+        self.templates = FileTemplates(self.config["templates"],
+                                       universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
