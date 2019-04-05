@@ -150,6 +150,18 @@ class Permissions:
 
         return False
 
+    def getLookupKeys(self):
+        """Retrieve the look up keys for all the permissions entries.
+
+        Returns
+        -------
+        keys : `set` of `LookupKey`
+            The keys available for determining permissions.  Does not include
+            the special "all" lookup key.
+        """
+        all = self._accept | self._accept
+        return set(a for a in all if a.name != self.matchAllKey.name)
+
     def normalizeDimensions(self, universe):
         """Normalize permission lookups that use dimensions.
 

@@ -545,4 +545,10 @@ class ChainedDatastore(Datastore):
         keys = set()
         for datastore in self.datastores:
             keys.update(datastore.getLookupKeys())
+
+        keys.update(self.permissions.getLookupKeys())
+        for p in self.datastorePermissions:
+            if p is not None:
+                keys.update(p.getLookupKeys())
+
         return keys

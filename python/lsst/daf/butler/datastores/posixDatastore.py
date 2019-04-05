@@ -639,7 +639,8 @@ class PosixDatastore(Datastore):
 
     def getLookupKeys(self):
         # Docstring is inherited from base class
-        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys()
+        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
+            self.permissions.getLookupKeys()
 
     def validateKey(self, lookupKey, entity):
         # Docstring is inherited from base class

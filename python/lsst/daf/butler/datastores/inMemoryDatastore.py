@@ -470,4 +470,4 @@ class InMemoryDatastore(Datastore):
 
     def getLookupKeys(self):
         # Docstring is inherited from base class
-        return set()
+        return self.permissions.getLookupKeys()
