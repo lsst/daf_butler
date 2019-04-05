@@ -80,6 +80,15 @@ class Permissions:
         # Normalize all the dimensions given the supplied universe
         self.normalizeDimensions(universe)
 
+    def __str__(self):
+        # Standard stringification
+        if not self._accept and not self._reject:
+            return "Accepts: all"
+
+        accepts = ", ".join(str(k) for k in self._accept)
+        rejects = ", ".join(str(k) for k in self._reject)
+        return f"Accepts: {accepts}; Rejects: {rejects}"
+
     def hasPermission(self, entity):
         """Check whether the supplied entity has permission for whatever
         this `Permissions` class is associated with.
