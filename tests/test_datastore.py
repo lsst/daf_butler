@@ -55,10 +55,9 @@ class TransactionTestError(Exception):
     pass
 
 
-class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
-    """Some basic tests of a simple POSIX datastore."""
+class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper):
+    """Support routines for datastore testing"""
     root = None
-    hasUnsupportedPut = True
 
     @classmethod
     def setUpClass(cls):
@@ -79,6 +78,12 @@ class DatastoreTests(DatasetTestHelper, DatastoreTestHelper):
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
+
+
+class DatastoreTests(DatastoreTestsBase):
+    """Some basic tests of a simple datastore."""
+
+    hasUnsupportedPut = True
 
     def testConfigRoot(self):
         full = DatastoreConfig(self.configFile)
@@ -484,6 +489,58 @@ class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2.yaml")
     validationCanFail = False
+
+
+class DatastorePermissionsTests(DatastoreTestsBase):
+    """Basic tests of permissions model of Datastores."""
+
+    def testPermissions(self):
+        """Test permissions model.  Assumes that each test class has the
+        same permissions."""
+        metrics = makeExampleMetrics()
+        datastore = self.makeDatastore()
+
+        sc1 = self.storageClassFactory.getStorageClass("StructuredData")
+        sc2 = self.storageClassFactory.getStorageClass("StructuredDataJson")
+        dimensions = frozenset(("Visit", "PhysicalFilter", "Instrument"))
+        dataId = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
+
+        for datasetTypeName, sc, accepted in (("metric", sc1, True), ("metric2", sc1, False),
+                                              ("metric33", sc1, True), ("metric2", sc2, True)):
+            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
+            if accepted:
+                datastore.put(metrics, ref)
+                self.assertTrue(datastore.exists(ref))
+                datastore.remove(ref)
+            else:
+                with self.assertRaises(DatasetTypeNotSupportedError):
+                    datastore.put(metrics, ref)
+                self.assertFalse(datastore.exists(ref))
+
+
+class PosixDatastorePermissionsTestCase(DatastorePermissionsTests, unittest.TestCase):
+    """PosixDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/posixDatastoreP.yaml")
+
+    def setUp(self):
+        # Override the working directory before calling the base class
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        super().setUp()
+
+
+class InMemoryDatastorePermissionsTestCase(DatastorePermissionsTests, unittest.TestCase):
+    """InMemoryDatastore specialization"""
+    configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastoreP.yaml")
+
+
+class ChainedDatastorePermissionsTestCase(PosixDatastorePermissionsTestCase):
+    """ChainedDatastore specialization using a POSIXDatastore"""
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastoreP.yaml")
+
+
+class ChainedDatastoreMemoryPermissionsTestCase(InMemoryDatastorePermissionsTestCase):
+    """ChainedDatastore specialization using all InMemoryDatastore"""
+    configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2P.yaml")
 
 
 if __name__ == "__main__":

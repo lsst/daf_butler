@@ -1,0 +1,8 @@
+datastore:
+  cls: lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore
+  permissions:
+    accept:
+      - metric
+      - StructuredDataJson
+      - instrument<DummyCamComp>:
+        - metric33

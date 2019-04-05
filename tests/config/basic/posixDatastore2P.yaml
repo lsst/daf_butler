@@ -1,0 +1,30 @@
+datastore:
+  name: SecondDatastore
+  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  root: <butlerRoot>/butler_test_repository2
+  records:
+    table: PosixDatastoreRecords2
+  permissions:
+    accept:
+      - metric
+      - StructuredDataJson
+      - instrument<DummyCamComp>:
+        - metric33
+  templates:
+    default: "{run:02d}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
+    calexp: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
+    metric: "{run:02d}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
+    test_metric_comp: "{run:02d}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
+  formatters:
+    StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataDictJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataListJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataDictPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredDataListPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredData: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataNoComponents: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    ExposureCompositeF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ThingOne: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
