@@ -107,6 +107,6 @@ class OracleRegistry(SqlRegistry):
                     # single quote, optional close double quote
                     statement = re.sub(f"\"?'?{name}\\b'?\"?", lambda x: _ignoreQuote(name, x), statement)
             return statement, parameters
-        engine = create_engine(self.config["db"], pool_size=1)
+        engine = create_engine(self.config[".db.url"], pool_size=1)
         event.listen(engine, "before_cursor_execute", _oracleExecute, retval=True)
         return engine

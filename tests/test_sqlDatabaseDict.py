@@ -34,7 +34,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
 
     def setUp(self):
         registryConfig = RegistryConfig()
-        registryConfig["db"] = "sqlite:///:memory:"
+        registryConfig[".db.url"] = "sqlite:///:memory:"
         self.registry = Registry.fromConfig(registryConfig, create=True)
         self.types = {"x": int, "y": str, "z": float}
         self.key = "x"

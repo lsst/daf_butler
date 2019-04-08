@@ -85,19 +85,19 @@ class SqliteRegistry(SqlRegistry):
         """
         super().setConfigRoot(root, config, full)
         Config.overrideParameters(RegistryConfig, config, full,
-                                  toUpdate={"db": f"sqlite:///{root}/gen3.sqlite3"},
+                                  toUpdate={".db.url": f"sqlite:///{root}/gen3.sqlite3"},
                                   toCopy=("cls", "deferDatasetIdQueries"))
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
-        if "db" in registryConfig:
-            registryConfig["db"] = replaceRoot(registryConfig["db"], butlerRoot)
-        if ":memory:" in registryConfig.get("db", ""):
+        if ".db.url" in registryConfig:
+            registryConfig[".db.url"] = replaceRoot(registryConfig[".db.url"], butlerRoot)
+        if ":memory:" in registryConfig.get(".db.url", ""):
             create = True
         super().__init__(registryConfig, schemaConfig, dimensionConfig, create, butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        engine = create_engine(self.config["db"], poolclass=NullPool,
+        engine = create_engine(self.config[".db.url"], poolclass=NullPool,
                                connect_args={"check_same_thread": False})
         event.listen(engine, "connect", _onSqlite3Connect)
         event.listen(engine, "begin", _onSqlite3Begin)

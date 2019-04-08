@@ -91,7 +91,7 @@ class SqlRegistry(Registry):
                 self._createTables(self._schema, self._connection)
 
     def __str__(self):
-        return self.config["db"]
+        return self.config[".db.url"]
 
     @contextlib.contextmanager
     def transaction(self):
@@ -142,7 +142,7 @@ class SqlRegistry(Registry):
         have a very good reason not to, subclasses that override this method
         should do the same.
         """
-        return create_engine(self.config["db"], poolclass=NullPool)
+        return create_engine(self.config[".db.url"], poolclass=NullPool)
 
     def _createConnection(self, engine):
         """Create and return a `sqlalchemy.Connection` for this `Registry`.

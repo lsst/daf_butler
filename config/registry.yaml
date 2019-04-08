@@ -1,7 +1,8 @@
 # Default with a sqlLite registry
 registry:
   cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
-  db: 'sqlite:///:memory:'
+  db: 
+    url: 'sqlite:///:memory:'
   limited: false
   deferDatasetIdQueries: true
   skypix:
