@@ -22,9 +22,12 @@
 __all__ = ("OracleRegistry", )
 
 import re
+import __main__
+import os
 
 from sqlalchemy import event
-from sqlalchemy import create_engine
+from sqlalchemy import engine, create_engine
+from sqlalchemy.pool import Pool
 
 
 from lsst.daf.butler.core.config import Config
@@ -67,9 +70,19 @@ class OracleRegistry(SqlRegistry):
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
                  butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
+
+        # currently code in class specific to cx_oracle driver
+        url = engine.url.make_url(registryConfig[".db.url"])
+        if url.get_driver_name() != "cx_oracle":
+            raise ValueError("Unsupported driver(%s).  cx_oracle is only driver supported by OracleRegistry" %
+                             url.get_driver_name())
+
         self.schemaConfig = schemaConfig
         super().__init__(registryConfig, schemaConfig, dimensionConfig, create,
                          butlerRoot=butlerRoot)
+
+        if ".db.schema" in self.config:
+            self._schema.metadata.schema = self.config[".db.schema"]
 
     def _createEngine(self):
         tables = self.schemaConfig['tables'].keys()
@@ -107,6 +120,28 @@ class OracleRegistry(SqlRegistry):
                     # single quote, optional close double quote
                     statement = re.sub(f"\"?'?{name}\\b'?\"?", lambda x: _ignoreQuote(name, x), statement)
             return statement, parameters
+
+        def _connCreator(**kw):
+            """ This function sets some Oracle values for each new pool
+            connection (e.g., module, schema).  Add connect listener to
+            Pool even if pool_size=1 for automatic reconnects.
+            """
+            # get executable name to save as DBMS_APPLICATION_INFO module
+            try:
+                modname = __main__.__file__
+            except AttributeError:
+                modname = "Unknown"
+            modname = os.path.basename(modname)[:48]  # column limited to 48 chars
+
+            # get the connection
+            dbapi = kw['dbapi_connection']
+
+            # cx_Oracle specific means to set current schema and module
+            dbapi.module = modname
+            if ".db.schema" in self.config:
+                dbapi.current_schema = self.config[".db.schema"]
+        event.listen(Pool, "connect", _connCreator, named=True)
+
         engine = create_engine(self.config[".db.url"], pool_size=1)
         event.listen(engine, "before_cursor_execute", _oracleExecute, retval=True)
         return engine
