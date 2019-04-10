@@ -29,7 +29,6 @@ from lsst.daf.butler.core.registry import RegistryConfig
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
-
 class OracleRegistry(SqlRegistry):
     """Registry backed by a Oracle database.
 

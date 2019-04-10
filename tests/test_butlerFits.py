@@ -23,6 +23,11 @@ import os
 import unittest
 import tempfile
 import shutil
+import string
+import random
+
+import boto3
+import botocore
 
 import lsst.utils.tests
 
@@ -140,6 +145,54 @@ class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase)
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
+
+class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
+    """"S3Datastore specialization of a butler. This is a S3 backed DataStore +
+    a local in memory SqliteRegistry
+    
+    Very practical for testing the S3Datastore quickly.
+    """
+    configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
+
+    bucketName = 'lsstspark'
+    permRoot = 'test_repo2/'
+
+    def genRoot(self):
+        """Returns a random string of len 20 to serve as a root
+        name for the temporary bucket repo.
+        """
+        rndstr = ''.join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
+        )
+        return rndstr
+
+    def setUp(self):
+        # create new repo after we're sure it doesn't exist anymore
+        if self.useTempRoot:
+            self.root = self.genRoot()+'/'
+        else:
+            self.root = self.permRoot
+        rooturi = f's3://{self.bucketName}/{self.root}'
+        Butler.makeRepo(rooturi, config=Config(self.configFile))
+        self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
+
+    def tearDown(self):
+        # clean up the test bucket
+        s3 = boto3.resource('s3')
+        try:
+            s3.Object(self.bucketName, self.root).load()
+            bucket = s3.Bucket(self.bucketName)
+            bucket.objects.filter(Prefix=self.root).delete()
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                # the key was not reachable (i.e. doesn't exist)
+                pass
+            else:
+                raise
+        else:
+            # key exists, remove it
+            bucket = s3.Bucket(self.bucketName)
+            bucket.objects.filter(Prefix=self.root).delete()
 
 if __name__ == "__main__":
     unittest.main()

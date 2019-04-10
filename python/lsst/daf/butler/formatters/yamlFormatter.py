@@ -23,6 +23,7 @@ __all__ = ("YamlFormatter", )
 
 import builtins
 import yaml
+import pickle
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
@@ -61,6 +62,38 @@ class YamlFormatter(FileFormatter):
 
         return data
 
+    def _fromBytes(self, pickledDataset, pytype):
+        """Read the bytes object as a python object.
+
+        Parameters
+        ----------
+        pickledDataset : `str`
+            Bytes object to unserialize.
+        pytype : `class`, optional
+            Not used by this implementation.
+
+        Returns
+        -------
+        data : `object`
+            Either data as Python object read from the pickled string, or None
+            if the string could not be read.
+        """
+        try:
+            data = pickle.loads(pickledDataset)
+        except pickle.PicklingError:
+            data = None
+        try:
+            data = data.exportAsDict()
+        except AttributeError:
+            # its either my mis-use of yaml or intended behaviour but yaml wants
+            # to return a dictionary sometimes and an actual object other times.
+            # Later FileFormatter assembles and checkes if only one of objects
+            # components was requested. Pickle, however, always gets back the object.
+            # I didn't want to figure out what is involved in the two different cases
+            # so I return all my yamls as dicts and let the assembler figure it out
+            pass
+        return data
+
     def _writeFile(self, inMemoryDataset):
         """Write the in memory dataset to file on disk.
 
@@ -81,6 +114,26 @@ class YamlFormatter(FileFormatter):
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
             yaml.dump(inMemoryDataset, stream=fd)
+
+    def _toBytes(self, inMemoryDataset):
+        """Write the in memory dataset to a bytestring.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to serialize
+
+        Returns
+        -------
+        data : `str`
+            Bytes object representing the pickled object.
+
+        Raises
+        ------
+        Exception
+            The object could not be pickled.
+        """
+        return pickle.dumps(inMemoryDataset, protocol=-1)
 
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.

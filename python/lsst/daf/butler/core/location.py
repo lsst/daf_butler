@@ -384,96 +384,32 @@ class Location:
         self._uri = urllib.parse.urlparse(urllib.parse.urlunparse(parts))
 
 
-class S3Location:
-    """Identifies a location in the `Datastore`.
-    TODO: This will have broken functionality for extensions etc.
-    """
-
-    __slots__ = ("_datastoreRoot", "_uri", "_bucket")
-
-    def __init__(self, datastoreRoot, uri, bucket, **kwargs):
-        self._datastoreRoot = datastoreRoot.lstrip('/')
-        self._uri = urllib.parse.urlparse(uri)
-        self._bucket = bucket
-
-    def __str__(self):
-        return self.uri
-
-    @property
-    def uri(self):
-        """URI corresponding to location.
-        """
-        return self._uri.geturl()
-
-    @property
-    def path(self):
-        """Path corresponding to location.
-
-        This path includes the root of the `Datastore`, but does not include
-        non-path components of the root URI.  If a file URI scheme is being
-        used the path will be returned with the local OS path separator.
-        """
-        if not self._datastoreRootUri.scheme:
-            # Entirely local file system
-            return os.path.normpath(os.path.join(self._datastoreRootUri.path, self.pathInStore))
-        elif self._datastoreRootUri.scheme == "file":
-            return os.path.normpath(os.path.join(posix2os(self._datastoreRootUri.path), self.pathInStore))
-        else:
-            return posixpath.join(self._datastoreRootUri.path, self.pathInStore)
-
-    @property
-    def pathInStore(self):
-        """Path corresponding to location relative to `Datastore` root.
-
-        Uses the same path separator as supplied to the object constructor.
-        """
-        return self._path
-
-    def updateExtension(self, ext):
-        """Update the file extension associated with this `Location`.
-
-        Parameters
-        ----------
-        ext : `str`
-            New extension. If an empty string is given any extension will
-            be removed. If `None` is given there will be no change.
-        """
-        if ext is None:
-            return
-
-        path, _ = os.path.splitext(self.pathInStore)
-
-        # Ensure that we have a leading "." on file extension (and we do not
-        # try to modify the empty string)
-        if ext and not ext.startswith("."):
-            ext = "." + ext
-
-        self._path = path + ext
-
-
 class LocationFactory:
     """Factory for `Location` instances.
-
-    The factory is constructed from the root location of the datastore.
-    This location can be a path on the file system (absolute or relative)
-    or as a URI.
-
-    Parameters
-    ----------
-    datastoreRoot : `str`
-        Root location of the `Datastore` either as a path in the local
-        filesystem or as a URI.  File scheme URIs can be used. If a local
-        filesystem path is used without URI scheme, it will be converted
-        to an absolute path and any home directory indicators expanded.
-        If a file scheme is used with a relative path, the path will
-        be treated as a posixpath but then converted to an absolute path.
     """
 
     def __init__(self, datastoreRoot):
-        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True)
+        """Constructor
+        Parameters
+        ----------
+        datastoreRoot : `str`
+            Root location of the `Datastore` in the filesystem.
+        """
+        self._datastoreRoot = datastoreRoot
 
-    def __str__(self):
-        return f"{self.__class__.__name__}@{self._datastoreRootUri}"
+    def fromUri(self, uri):
+        """Factory function to create a `Location` from a URI.
+        Parameters
+        ----------
+        uri : `str`
+            A valid Universal Resource Identifier.
+        Returns
+        location : `Location`
+            The equivalent `Location`.
+        """
+        if uri is None or not isinstance(uri, str):
+            raise ValueError("URI must be a string and not {}".format(uri))
+        return Location(self._datastoreRoot, uri)
 
     def fromPath(self, path):
         """Factory function to create a `Location` from a POSIX path.
@@ -482,10 +418,8 @@ class LocationFactory:
         path : `str`
             A standard POSIX path, relative to the `Datastore` root.
         Returns
-        -------
         location : `Location`
             The equivalent `Location`.
         """
-        if os.path.isabs(path):
-            raise ValueError("LocationFactory path must be relative to datastore, not absolute.")
-        return Location(self._datastoreRootUri, path)
+        uri = urllib.parse.urljoin("file://", path)
+        return self.fromUri(uri)

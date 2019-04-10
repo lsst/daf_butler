@@ -25,9 +25,21 @@ Configuration classes specific to the Butler
 
 __all__ = ("ButlerConfig",)
 
-import os.path
-import boto3
+# we can do this, or we can have as-neccessary imports
+# where we need them, when we need them, or all of this could live
+# in home __init__ where NOBOTO would be global
+NO_BOTO = False
+try:
+    import boto3
+except ImportError:
+    NO_BOTO = True
+    pass
 
+import yaml
+import tempfile
+import shutil
+import errno
+import os.path
 
 from . import utils
 from .config import Config
@@ -84,15 +96,15 @@ class ButlerConfig(Config):
                 if  os.path.isdir(other):
                     other = os.path.join(other, "butler.yaml")
             elif scheme == 's3://' and utils.bucketExists(other):
-                # authorizing somewhere clever would be a good thing too
-                session = boto3.Session(profile_name='default')
-
-                # download stuff where needed the short way for now,
-                # but better to have specific functionality somewhere.
-                # tempfiles, TransferConfig etc etc...
-                other = "/home/dinob/uni/lsstspark/simple_repo/s3_repo/butler.yaml"
-                s3client = boto3.client('s3')
-                s3client.download_file(root, relpath, other)
+                if NO_BOTO:
+                    raise ModuleNotFoundError(('boto3 not found.'
+                                               'Are you sure it is installed?'))
+                # I wonder if it would be a good idea to add a 'load' and 'loadFromfile' to
+                # Config instead of relying on its __init__
+                s3 = boto3.client('s3')
+                response = s3.get_object(Bucket=root, Key=relpath)
+                byteStr = response['Body'].read()
+                other = yaml.safe_load(byteStr)
 
         # Create an empty config for us to populate
         super().__init__()
