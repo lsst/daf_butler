@@ -44,7 +44,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
       -
         name: abstract_filter
         type: string
@@ -498,7 +498,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         doc: >
           Globally unique string indentifier for this Instrument.
@@ -548,7 +548,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         doc: >
           Name of the Instrument with which this filter is associated.
@@ -584,7 +584,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         nullable: false
         doc: >
@@ -630,7 +630,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         nullable: false
         doc: >
@@ -711,7 +711,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         nullable: false
         doc: >
@@ -940,7 +940,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         nullable: false
         doc: >
@@ -979,7 +979,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         nullable: false
         doc: >
@@ -1042,7 +1042,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         primary_key: true
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
@@ -1092,7 +1092,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
       -
@@ -1127,7 +1127,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         nullable: false
         doc: Name of the Instrument associated with the Visit.
       -
@@ -1226,7 +1226,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
       -
@@ -1294,7 +1294,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         nullable: false
         doc: Name of the Instrument associated with the Visit.
       -
@@ -1354,7 +1354,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         nullable: false
         doc: Name of the Instrument associated with the Visit and Detector.
       -
@@ -1414,7 +1414,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
         nullable: false
         doc: Name of the Instrument associated with the Visit.
       -

@@ -45,6 +45,11 @@ def s3CheckFileExists(client, bucket, filepath):
     filepath : 'str'
         Path to file.
     """
+    # I am downright not sure why checking if file exists is so complicated
+    # https://github.com/boto/botocore/issues/1248
+    # https://github.com/boto/boto3/issues/1128
+    # https://stackoverflow.com/questions/33842944/check-if-a-key-exists-in-a-bucket-in-s3-using-boto3
+
     # this has maxkeys kwarg, limited to 1000
     response = client.list_objects_v2(
         Bucket=bucket,
@@ -56,7 +61,7 @@ def s3CheckFileExists(client, bucket, filepath):
     if len(matches) == 1:
         return (True, matches[0]['Size'])
     else:
-        return (False, 0)
+        return (False, -1)
 
 
 # it would be great if this can be better
@@ -82,16 +87,15 @@ def parsePath2Uri(path):
     # if the parsed path is the supplied one - filesystem
     if parsed.path == path:
         scheme = 'file://'
-        # bit silly if its already an abspath
         if os.path.isabs(path):
             root = '/'
             relpath = parsed.path.lstrip('/')
         else:
-            root = os.path.abspath(path).split(path)
+            root = os.path.abspath(path).split(path)[0]
             relpath = path
     elif parsed.scheme == 's3':
         scheme = 's3://'
-        # this is the bucketname
+        # this ends up being the bucketname
         root = parsed.netloc
         relpath = parsed.path.lstrip('/')
     else:

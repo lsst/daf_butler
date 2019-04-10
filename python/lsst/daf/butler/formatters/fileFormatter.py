@@ -100,6 +100,50 @@ class FileFormatter(Formatter):
         """
         return inMemoryDataset
 
+    def _assembleDataset(self, data, fileDescriptor, component):
+        """Assembles and coerces the dataset, or one of its components,
+        into an appropriate python type and returns it.
+
+        Parameters
+        ----------
+        data : `dict` or `object`
+            a composite or a dict that, or which component, needs to be
+            coerced to a ptype
+        fileDescriptor : `FileDescriptor`
+            Identifies the file to read, type to read it into and parameters
+            to be used for reading.
+        component : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Object of expected type `pytype`.
+
+        """
+        # if read and write storage classes differ, more work is required
+        readStorageClass = fileDescriptor.readStorageClass
+        if readStorageClass != fileDescriptor.storageClass:
+            if component is None:
+                raise ValueError("Storage class inconsistency ({} vs {}) but no"
+                                 " component requested".format(readStorageClass.name,
+                                                               fileDescriptor.storageClass.name))
+
+            # Concrete composite written as a single file (we hope)
+            try:
+                data = fileDescriptor.storageClass.assembler().getComponent(data, component)
+            except AttributeError:
+                # Defer the complaint
+                data = None
+
+        # Coerce to the requested type (not necessarily the type that was
+        # written)
+        data = self._coerceType(data, fileDescriptor.readStorageClass,
+                                pytype=fileDescriptor.readStorageClass.pytype)
+
+        return data
+
     def read(self, fileDescriptor, component=None):
         """Read data from a file.
 
@@ -130,29 +174,48 @@ class FileFormatter(Formatter):
         path = fileDescriptor.location.path
         data = self._readFile(path, fileDescriptor.storageClass.pytype)
 
-        # if read and write storage classes differ, more work is required
-        readStorageClass = fileDescriptor.readStorageClass
-        if readStorageClass != fileDescriptor.storageClass:
-            if component is None:
-                raise ValueError("Storage class inconsistency ({} vs {}) but no"
-                                 " component requested".format(readStorageClass.name,
-                                                               fileDescriptor.storageClass.name))
-
-            # Concrete composite written as a single file (we hope)
-            try:
-                data = fileDescriptor.storageClass.assembler().getComponent(data, component)
-            except AttributeError:
-                # Defer the complaint
-                data = None
-
-        # Coerce to the requested type (not necessarily the type that was
-        # written)
-        data = self._coerceType(data, fileDescriptor.readStorageClass,
-                                pytype=fileDescriptor.readStorageClass.pytype)
-
         if data is None:
             raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
 
+        # Assemble the requested dataset and potentially return only its component
+        # coercing it to its appropriate ptype
+        data = self._assembleDataset(data, fileDescriptor, component)
+
+        return data
+
+    def fromBytes(self, pickledDataset, fileDescriptor, component=None):
+        """Read data from a bytestring.
+
+        Parameters
+        ----------
+        pickledDataset : `str`
+            Bytes object to unserialize
+        component : `str`, optional
+            Component to read from the file. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+        pytype : 'class'
+            Class to use to read the dataset into a python object.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            The requested data as a Python object. The type of object
+            is controlled by the specific formatter.
+
+        Raises
+        ------
+        ValueError
+            Component requested but this file does not seem to be a concrete
+            composite.
+        """
+        data = self._fromBytes(pickledDataset, fileDescriptor.storageClass.pytype)
+        if data is None:
+            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
+
+        # Assemble the requested dataset and potentially return only its component
+        # coercing it to its appropriate ptype
+        data = self._assembleDataset(data, fileDescriptor, component)
         return data
 
     def write(self, inMemoryDataset, fileDescriptor):
@@ -173,10 +236,25 @@ class FileFormatter(Formatter):
         """
         # Update the location with the formatter-preferred file extension
         fileDescriptor.location.updateExtension(self.extension)
-
         self._writeFile(inMemoryDataset, fileDescriptor)
-
         return fileDescriptor.location.pathInStore
+
+
+    def toBytes(self, inMemoryDataset, fileDescriptor):
+        """Write a Python object to a bytestring.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The Python object to store.
+
+        Returns
+        -------
+        pickedDataset : `str`
+            The bytestring representing the pickled dataset.
+        """
+        fileDescriptor.location.updateExtension(self.extension)
+        return self._toBytes(inMemoryDataset)
 
 
     def predictPath(self, location):

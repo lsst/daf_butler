@@ -1,0 +1,5 @@
+run: ingest
+datastore: !include s3Datastore.yaml
+registry: !include rdsRegistry.yaml
+storageClasses: !include storageClasses.yaml
+composites: !include composites.yaml
