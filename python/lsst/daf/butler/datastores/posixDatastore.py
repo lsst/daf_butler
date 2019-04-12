@@ -33,7 +33,7 @@ from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory
                              FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
                              StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
                              DatastoreValidationError, FileTemplateValidationError,
-                             Permissions)
+                             Constraints)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.repoRelocation import replaceRoot
@@ -140,9 +140,9 @@ class PosixDatastore(Datastore):
         self.templates = FileTemplates(self.config["templates"],
                                        universe=self.registry.dimensions)
 
-        # And read the permissions list
-        permissionsConfig = self.config["permissions"] if "permissions" in self.config else None
-        self.permissions = Permissions(permissionsConfig, universe=self.registry.dimensions)
+        # And read the constraints list
+        constraintsConfig = self.config["constraints"] if "constraints" in self.config else None
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
@@ -346,7 +346,7 @@ class PosixDatastore(Datastore):
                                                                  storageClass.pytype))
 
         # Confirm that we can accept this dataset
-        if not self.permissions.hasPermission(ref):
+        if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
             raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
                                                " configuration.")
@@ -640,7 +640,7 @@ class PosixDatastore(Datastore):
     def getLookupKeys(self):
         # Docstring is inherited from base class
         return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
-            self.permissions.getLookupKeys()
+            self.constraints.getLookupKeys()
 
     def validateKey(self, lookupKey, entity):
         # Docstring is inherited from base class

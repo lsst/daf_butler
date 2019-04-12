@@ -1,17 +1,17 @@
 datastore:
   cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
-  datastore_permissions:
+  datastore_constraints:
     # One entry per datastore in datastores section
-    # Use empty `-` if no permission override required
-    - permissions:
+    # Use empty `-` if no constraint override required
+    - constraints:
         reject:
           - instrument<DummyCamComp>:
             - all
-    - permissions:
+    - constraints:
         accept:
           - metric
           - StructuredDataJson
-    - permissions:
+    - constraints:
         reject:
           - all
   datastores:

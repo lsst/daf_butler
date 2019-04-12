@@ -19,9 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Code relating to control of permissions based on DatasetType."""
+"""Code relating to control of constraints based on DatasetType."""
 
-__all__ = ("Permissions", "PermissionsValidationError", "PermissionsConfig")
+__all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
 import logging
 from .config import Config
@@ -31,23 +31,23 @@ from .exceptions import ValidationError
 log = logging.getLogger(__name__)
 
 
-class PermissionsValidationError(ValidationError):
-    """Exception thrown when a permissions list is not consistent with the
+class ConstraintsValidationError(ValidationError):
+    """Exception thrown when a constraints list is not consistent with the
     associated `DatasetType`."""
     pass
 
 
-class PermissionsConfig(Config):
-    """Configuration information for `Permissions`"""
+class ConstraintsConfig(Config):
+    """Configuration information for `Constraints`"""
     pass
 
 
-class Permissions:
+class Constraints:
     """Control whether a `DatasetType` is allowed to be handled.
 
     Parameters
     ----------
-    config : `PermisssionsConfig` or `str`
+    config : `ConstraintsConfig` or `str`
         Load configuration.  If `None` then this is equivalent to having
         no restrictions.
     universe : `DimensionUniverse`, optional
@@ -66,7 +66,7 @@ class Permissions:
         self._reject = set()
 
         if config is not None:
-            self.config = PermissionsConfig(config)
+            self.config = ConstraintsConfig(config)
 
             if "accept" in self.config:
                 self._accept = processLookupConfigList(self.config["accept"])
@@ -74,7 +74,7 @@ class Permissions:
                 self._reject = processLookupConfigList(self.config["reject"])
 
         if self.matchAllKey in self._accept and self.matchAllKey in self._reject:
-            raise PermissionsValidationError("Can not explicitly accept 'all' and reject 'all'"
+            raise ConstraintsValidationError("Can not explicitly accept 'all' and reject 'all'"
                                              " in one configuration")
 
         # Normalize all the dimensions given the supplied universe
@@ -89,14 +89,14 @@ class Permissions:
         rejects = ", ".join(str(k) for k in self._reject)
         return f"Accepts: {accepts}; Rejects: {rejects}"
 
-    def hasPermission(self, entity):
-        """Check whether the supplied entity has permission for whatever
-        this `Permissions` class is associated with.
+    def isAcceptable(self, entity):
+        """Check whether the supplied entity will be acceptable to whatever
+        this `Constraints` class is associated with.
 
         Parameters
         ----------
         entity : `DatasetType`, `DatasetRef`, or `StorageClass`
-            Instance to use to look in permissions table.
+            Instance to use to look in constraints table.
             The entity itself reports the `LookupKey` that is relevant.
 
         Returns
@@ -151,19 +151,19 @@ class Permissions:
         return False
 
     def getLookupKeys(self):
-        """Retrieve the look up keys for all the permissions entries.
+        """Retrieve the look up keys for all the constraints entries.
 
         Returns
         -------
         keys : `set` of `LookupKey`
-            The keys available for determining permissions.  Does not include
+            The keys available for determining constraints.  Does not include
             the special "all" lookup key.
         """
         all = self._accept | self._accept
         return set(a for a in all if a.name != self.matchAllKey.name)
 
     def normalizeDimensions(self, universe):
-        """Normalize permission lookups that use dimensions.
+        """Normalize consraint lookups that use dimensions.
 
         Parameters
         ----------
@@ -173,7 +173,7 @@ class Permissions:
 
         Notes
         -----
-        Goes through all permission lookups, and for keys that include
+        Goes through all constraint lookups, and for keys that include
         dimensions, rewrites those keys to use a verified set of
         dimensions.
 

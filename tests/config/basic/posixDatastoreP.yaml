@@ -1,7 +1,7 @@
 datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: <butlerRoot>/butler_test_repository
-  permissions:
+  constraints:
     accept:
       - metric
       - StructuredDataJson

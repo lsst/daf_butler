@@ -491,12 +491,12 @@ class ChainedDatastoreMemoryTestCase(InMemoryDatastoreTestCase):
     validationCanFail = False
 
 
-class DatastorePermissionsTests(DatastoreTestsBase):
-    """Basic tests of permissions model of Datastores."""
+class DatastoreConstraintsTests(DatastoreTestsBase):
+    """Basic tests of constraints model of Datastores."""
 
-    def testPermissions(self):
-        """Test permissions model.  Assumes that each test class has the
-        same permissions."""
+    def testConstraints(self):
+        """Test constraints model.  Assumes that each test class has the
+        same constraints."""
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
 
@@ -518,7 +518,7 @@ class DatastorePermissionsTests(DatastoreTestsBase):
                 self.assertFalse(datastore.exists(ref))
 
 
-class PosixDatastorePermissionsTestCase(DatastorePermissionsTests, unittest.TestCase):
+class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/posixDatastoreP.yaml")
 
@@ -528,29 +528,29 @@ class PosixDatastorePermissionsTestCase(DatastorePermissionsTests, unittest.Test
         super().setUp()
 
 
-class InMemoryDatastorePermissionsTestCase(DatastorePermissionsTests, unittest.TestCase):
+class InMemoryDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
     """InMemoryDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastoreP.yaml")
 
 
-class ChainedDatastorePermissionsNativeTestCase(PosixDatastorePermissionsTestCase):
-    """ChainedDatastore specialization using a POSIXDatastore and permissions
+class ChainedDatastoreConstraintsNativeTestCase(PosixDatastoreConstraintsTestCase):
+    """ChainedDatastore specialization using a POSIXDatastore and constraints
     at the ChainedDatstore """
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePa.yaml")
 
 
-class ChainedDatastorePermissionsTestCase(PosixDatastorePermissionsTestCase):
+class ChainedDatastoreConstraintsTestCase(PosixDatastoreConstraintsTestCase):
     """ChainedDatastore specialization using a POSIXDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastoreP.yaml")
 
 
-class ChainedDatastoreMemoryPermissionsTestCase(InMemoryDatastorePermissionsTestCase):
+class ChainedDatastoreMemoryConstraintsTestCase(InMemoryDatastoreConstraintsTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2P.yaml")
 
 
-class ChainedDatastorePerStorePermissionsTests(DatastoreTestsBase, unittest.TestCase):
-    """Test that a chained datastore can control permissions per-datastore
+class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.TestCase):
+    """Test that a chained datastore can control constraints per-datastore
     even if child datastore would accept."""
 
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastorePb.yaml")
@@ -560,8 +560,8 @@ class ChainedDatastorePerStorePermissionsTests(DatastoreTestsBase, unittest.Test
         self.root = tempfile.mkdtemp(dir=TESTDIR)
         super().setUp()
 
-    def testPermissions(self):
-        """Test permissions model."""
+    def testConstraints(self):
+        """Test constraints model."""
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
 

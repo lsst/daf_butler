@@ -4,7 +4,7 @@ datastore:
   root: <butlerRoot>/butler_test_repository2
   records:
     table: PosixDatastoreRecords2
-  permissions:
+  constraints:
     accept:
       - metric
       - StructuredDataJson

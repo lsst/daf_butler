@@ -26,7 +26,7 @@ __all__ = ("StoredItemInfo", "InMemoryDatastore")
 import time
 import logging
 
-from lsst.daf.butler import Datastore, StorageClassFactory, Permissions, DatasetTypeNotSupportedError
+from lsst.daf.butler import Datastore, StorageClassFactory, Constraints, DatasetTypeNotSupportedError
 
 log = logging.getLogger(__name__)
 
@@ -108,9 +108,9 @@ class InMemoryDatastore(Datastore):
         # where we register multiple components for a single dataset.
         self.records = {}
 
-        # And read the permissions list
-        permissionsConfig = self.config["permissions"] if "permissions" in self.config else None
-        self.permissions = Permissions(permissionsConfig, universe=self.registry.dimensions)
+        # And read the constraints list
+        constraintsConfig = self.config["constraints"] if "constraints" in self.config else None
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
     def __str__(self):
         return "InMemory"
@@ -330,7 +330,7 @@ class InMemoryDatastore(Datastore):
                             "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
 
         # Confirm that we can accept this dataset
-        if not self.permissions.hasPermission(ref):
+        if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
             raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
                                                " configuration.")
@@ -470,4 +470,4 @@ class InMemoryDatastore(Datastore):
 
     def getLookupKeys(self):
         # Docstring is inherited from base class
-        return self.permissions.getLookupKeys()
+        return self.constraints.getLookupKeys()

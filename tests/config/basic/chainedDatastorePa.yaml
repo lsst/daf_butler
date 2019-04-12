@@ -1,6 +1,6 @@
 datastore:
   cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
-  permissions:
+  constraints:
     accept:
       - metric
       - StructuredDataJson

@@ -30,7 +30,7 @@ import warnings
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
-    DatastoreValidationError, Permissions
+    DatastoreValidationError, Constraints
 
 log = logging.getLogger(__name__)
 
@@ -153,25 +153,25 @@ class ChainedDatastore(Datastore):
                 break
         self.isEphemeral = isEphemeral
 
-        # And read the permissions list
-        permissionsConfig = self.config["permissions"] if "permissions" in self.config else None
-        self.permissions = Permissions(permissionsConfig, universe=self.registry.dimensions)
+        # And read the constraints list
+        constraintsConfig = self.config["constraints"] if "constraints" in self.config else None
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
-        # per-datastore override permissions
-        if "datastore_permissions" in self.config:
-            overrides = self.config["datastore_permissions"]
+        # per-datastore override constraints
+        if "datastore_constraints" in self.config:
+            overrides = self.config["datastore_constraints"]
 
             if len(overrides) != len(self.datastores):
                 raise DatastoreValidationError(f"Number of registered datastores ({len(self.datastores)})"
-                                               " differs from number of permissions overrides"
+                                               " differs from number of constraints overrides"
                                                f" {len(overrides)}")
 
-            self.datastorePermissions = [Permissions(c["permissions"])
-                                         if "permissions" in c else None
+            self.datastoreConstraints = [Constraints(c["constraints"])
+                                         if "constraints" in c else None
                                          for c in overrides]
 
         else:
-            self.datastorePermissions = (None,) * len(self.datastores)
+            self.datastoreConstraints = (None,) * len(self.datastores)
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
@@ -263,7 +263,7 @@ class ChainedDatastore(Datastore):
         log.debug("Put %s", ref)
 
         # Confirm that we can accept this dataset
-        if not self.permissions.hasPermission(ref):
+        if not self.constraints.isAcceptable(ref):
             # Raise rather than use boolean return value.
             raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
                                                " configuration.")
@@ -272,8 +272,8 @@ class ChainedDatastore(Datastore):
         nsuccess = 0
         npermanent = 0
         nephemeral = 0
-        for datastore, permissions in zip(self.datastores, self.datastorePermissions):
-            if permissions is not None and not permissions.hasPermission(ref):
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            if constraints is not None and not constraints.isAcceptable(ref):
                 log.debug("Datastore %s skipping put via configuration for ref %s",
                           datastore.name, ref)
                 continue
@@ -546,8 +546,8 @@ class ChainedDatastore(Datastore):
         for datastore in self.datastores:
             keys.update(datastore.getLookupKeys())
 
-        keys.update(self.permissions.getLookupKeys())
-        for p in self.datastorePermissions:
+        keys.update(self.constraints.getLookupKeys())
+        for p in self.datastoreConstraints:
             if p is not None:
                 keys.update(p.getLookupKeys())
 
