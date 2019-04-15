@@ -1,0 +1,20 @@
+datastore:
+  cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
+  datastore_constraints:
+    # One entry per datastore in datastores section
+    # Use empty `-` if no constraint override required
+    - constraints:
+        reject:
+          - instrument<DummyCamComp>:
+            - all
+    - constraints:
+        accept:
+          - metric
+          - StructuredDataJson
+    - constraints:
+        reject:
+          - all
+  datastores:
+  - !include inMemoryDatastore.yaml
+  - !include posixDatastore.yaml
+  - !include posixDatastore2.yaml

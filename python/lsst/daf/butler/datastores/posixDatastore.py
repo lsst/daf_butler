@@ -32,7 +32,8 @@ from collections import namedtuple
 from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory,
                              FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
                              StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
-                             DatastoreValidationError, FileTemplateValidationError)
+                             DatastoreValidationError, FileTemplateValidationError,
+                             Constraints)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.repoRelocation import replaceRoot
@@ -132,12 +133,16 @@ class PosixDatastore(Datastore):
         self.storageClassFactory = StorageClassFactory()
 
         # Now associate formatters with storage classes
-        self.formatterFactory.registerFormatters(self.config["formatters"])
-        self.formatterFactory.normalizeDimensions(self.registry.dimensions)
+        self.formatterFactory.registerFormatters(self.config["formatters"],
+                                                 universe=self.registry.dimensions)
 
         # Read the file naming templates
-        self.templates = FileTemplates(self.config["templates"])
-        self.templates.normalizeDimensions(self.registry.dimensions)
+        self.templates = FileTemplates(self.config["templates"],
+                                       universe=self.registry.dimensions)
+
+        # And read the constraints list
+        constraintsConfig = self.config.get("constraints")
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
@@ -322,6 +327,14 @@ class PosixDatastore(Datastore):
             Supplied object and storage class are inconsistent.
         DatasetTypeNotSupportedError
             The associated `DatasetType` is not handled by this datastore.
+
+        Notes
+        -----
+        If the datastore is configured to reject certain dataset types it
+        is possible that the put will fail and raise a
+        `DatasetTypeNotSupportedError`.  The main use case for this is to
+        allow `ChainedDatastore` to put to multiple datastores without
+        requiring that every datastore accepts the dataset.
         """
         datasetType = ref.datasetType
         storageClass = datasetType.storageClass
@@ -331,6 +344,12 @@ class PosixDatastore(Datastore):
             raise TypeError("Inconsistency between supplied object ({}) "
                             "and storage class type ({})".format(type(inMemoryDataset),
                                                                  storageClass.pytype))
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
 
         # Work out output file name
         try:
@@ -404,7 +423,16 @@ class PosixDatastore(Datastore):
         FileExistsError
             Raised if ``transfer is not None`` but a file already exists at the
             location computed from the template.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
         """
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
+
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref)
 
@@ -620,7 +648,8 @@ class PosixDatastore(Datastore):
 
     def getLookupKeys(self):
         # Docstring is inherited from base class
-        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys()
+        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
+            self.constraints.getLookupKeys()
 
     def validateKey(self, lookupKey, entity):
         # Docstring is inherited from base class

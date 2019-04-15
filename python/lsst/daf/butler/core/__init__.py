@@ -10,6 +10,7 @@ from .butlerConfig import *
 from .config import *
 from .configSupport import LookupKey
 from .composites import *
+from .constraints import *
 from .datasets import *
 from .datastore import *
 from .exceptions import *

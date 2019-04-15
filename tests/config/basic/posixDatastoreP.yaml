@@ -1,0 +1,40 @@
+datastore:
+  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  root: <butlerRoot>/butler_test_repository
+  constraints:
+    accept:
+      - metric
+      - StructuredDataJson
+      - instrument<DummyCamComp>:
+        - metric33
+  templates:
+    default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
+    calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
+    metric: "{collection}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
+    test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
+    metric3: "{collection}/{datasetType}/{instrument}"
+    metric4: "{collection}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
+    PhysicalFilter+: "{collection}/{instrument}_{physical_filter}"
+    instrument<DummyCamComp>:
+      metric33: "{collection}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
+  formatters:
+    StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataDictJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataListJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataDictPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredDataListPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredData: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    StructuredDataNoComponents: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    StructuredDataJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+    StructuredDataPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    ExposureCompositeF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
+    ThingOne: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    datasetType.component: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    pvi: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    Visit+PhysicalFilter+Instrument: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    instrument<DummyHSC>:
+      pvi: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
+      StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+      DummySC: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+      Visit+PhysicalFilter+Instrument: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter

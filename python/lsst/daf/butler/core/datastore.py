@@ -313,6 +313,8 @@ class Datastore(metaclass=ABCMeta):
         ------
         NotImplementedError
             Raised if the given transfer mode is not supported.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
         """
         raise NotImplementedError(
             "Datastore does not support direct file-based ingest."

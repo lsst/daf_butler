@@ -26,7 +26,7 @@ __all__ = ("StoredItemInfo", "InMemoryDatastore")
 import time
 import logging
 
-from lsst.daf.butler import Datastore, StorageClassFactory
+from lsst.daf.butler import Datastore, StorageClassFactory, Constraints, DatasetTypeNotSupportedError
 
 log = logging.getLogger(__name__)
 
@@ -107,6 +107,10 @@ class InMemoryDatastore(Datastore):
         # Records is distinct in order to track concrete composite components
         # where we register multiple components for a single dataset.
         self.records = {}
+
+        # And read the constraints list
+        constraintsConfig = self.config.get("constraints")
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
     def __str__(self):
         return "InMemory"
@@ -305,6 +309,16 @@ class InMemoryDatastore(Datastore):
         ------
         TypeError
             Supplied object and storage class are inconsistent.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
+
+        Notes
+        -----
+        If the datastore is configured to reject certain dataset types it
+        is possible that the put will fail and raise a
+        `DatasetTypeNotSupportedError`.  The main use case for this is to
+        allow `ChainedDatastore` to put to multiple datastores without
+        requiring that every datastore accepts the dataset.
         """
 
         datasetType = ref.datasetType
@@ -314,6 +328,12 @@ class InMemoryDatastore(Datastore):
         if not isinstance(inMemoryDataset, storageClass.pytype):
             raise TypeError("Inconsistency between supplied object ({}) "
                             "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
 
         self.datasets[ref.id] = inMemoryDataset
         log.debug("Store %s in %s", ref, self.name)
@@ -450,4 +470,4 @@ class InMemoryDatastore(Datastore):
 
     def getLookupKeys(self):
         # Docstring is inherited from base class
-        return set()
+        return self.constraints.getLookupKeys()

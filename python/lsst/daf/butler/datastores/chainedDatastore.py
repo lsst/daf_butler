@@ -30,7 +30,7 @@ import warnings
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
-    DatastoreValidationError
+    DatastoreValidationError, Constraints
 
 log = logging.getLogger(__name__)
 
@@ -153,6 +153,25 @@ class ChainedDatastore(Datastore):
                 break
         self.isEphemeral = isEphemeral
 
+        # And read the constraints list
+        constraintsConfig = self.config.get("constraints")
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
+
+        # per-datastore override constraints
+        if "datastore_constraints" in self.config:
+            overrides = self.config["datastore_constraints"]
+
+            if len(overrides) != len(self.datastores):
+                raise DatastoreValidationError(f"Number of registered datastores ({len(self.datastores)})"
+                                               " differs from number of constraints overrides"
+                                               f" {len(overrides)}")
+
+            self.datastoreConstraints = [Constraints(c.get("constraints"))
+                                         for c in overrides]
+
+        else:
+            self.datastoreConstraints = (None,) * len(self.datastores)
+
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
     def __str__(self):
@@ -242,11 +261,22 @@ class ChainedDatastore(Datastore):
         """
         log.debug("Put %s", ref)
 
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
+
         isPermanent = False
         nsuccess = 0
         npermanent = 0
         nephemeral = 0
-        for datastore in self.datastores:
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            if constraints is not None and not constraints.isAcceptable(ref):
+                log.debug("Datastore %s skipping put via configuration for ref %s",
+                          datastore.name, ref)
+                continue
+
             if datastore.isEphemeral:
                 nephemeral += 1
             else:
@@ -309,8 +339,16 @@ class ChainedDatastore(Datastore):
         NotImplementedError
             If all chained datastores have no ingest implemented or if
             a transfer mode of `None` is specified.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
         """
         log.debug("Ingesting %s (transfer=%s)", ref, transfer)
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
 
         if transfer is None:
             raise NotImplementedError("ChainedDatastore does not support transfer=None")
@@ -320,8 +358,15 @@ class ChainedDatastore(Datastore):
         if transfer == "move" and os.path.isabs(path):
             moveIsCopy = True
 
-        counter = 0
-        for datastore in self.datastores:
+        notImplementedCounter = 0
+        notAcceptedCounter = 0
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            if constraints is not None and not constraints.isAcceptable(ref):
+                log.debug("Datastore %s skipping ingest via configuration for ref %s",
+                          datastore.name, ref)
+                notAcceptedCounter += 1
+                continue
+
             dstransfer = transfer
             # Each child datastore must copy the file for a move operation
             if moveIsCopy:
@@ -329,10 +374,17 @@ class ChainedDatastore(Datastore):
             try:
                 datastore.ingest(path, ref, transfer=dstransfer, formatter=formatter)
             except NotImplementedError:
-                counter += 1
+                notImplementedCounter += 1
+            except DatasetTypeNotSupportedError:
+                notAcceptedCounter += 1
 
-        if counter == len(self.datastores):
-            raise NotImplementedError("Ingest not implemented by any of the chained datastores")
+        if (notAcceptedCounter + notImplementedCounter) == len(self.datastores):
+            log.warning("Datastore %s: Not accepted counter: %d; Not implemented counter: %d for ref %s",
+                        self.name, notAcceptedCounter, notImplementedCounter, ref)
+            if notAcceptedCounter > 0:
+                raise DatasetTypeNotSupportedError(f"Ingest of {ref} not supported by the chained datastores")
+            else:
+                raise NotImplementedError("Ingest not implemented by any of the chained datastores")
 
         # if the file was meant to be moved then we have to delete it
         if moveIsCopy:
@@ -514,4 +566,10 @@ class ChainedDatastore(Datastore):
         keys = set()
         for datastore in self.datastores:
             keys.update(datastore.getLookupKeys())
+
+        keys.update(self.constraints.getLookupKeys())
+        for p in self.datastoreConstraints:
+            if p is not None:
+                keys.update(p.getLookupKeys())
+
         return keys
