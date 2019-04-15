@@ -222,7 +222,7 @@ def normalizeLookupKeys(toUpdate, universe):
 
 def processLookupConfigs(config):
     """Process sections of configuration relating to lookups by dataset type
-    name, storage class name, dataId components or dimensions.
+    name, storage class name, dimensions, or values of dimensions.
 
     Parameters
     ----------
@@ -292,7 +292,7 @@ def processLookupConfigs(config):
 
 def processLookupConfigList(config):
     """Process sections of configuration relating to lookups by dataset type
-    name, storage class name, dataId components or dimensions.
+    name, storage class name, dimensions, or values of dimensions.
 
     Parameters
     ----------

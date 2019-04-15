@@ -19,7 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Code relating to control of constraints based on DatasetType."""
+"""Code relating to constraints based on `DatasetRef`, `DatasetType`, or
+`StorageClass`."""
 
 __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
@@ -32,8 +33,8 @@ log = logging.getLogger(__name__)
 
 
 class ConstraintsValidationError(ValidationError):
-    """Exception thrown when a constraints list is not consistent with the
-    associated `DatasetType`."""
+    """Exception thrown when a constraints list has mutually exclusive
+    definitions."""
     pass
 
 
@@ -43,7 +44,8 @@ class ConstraintsConfig(Config):
 
 
 class Constraints:
-    """Control whether a `DatasetType` is allowed to be handled.
+    """Determine whether a `DatasetRef`, `DatasetType`, or `StorageClass`
+    is allowed to be handled.
 
     Parameters
     ----------
