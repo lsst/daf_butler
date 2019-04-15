@@ -141,7 +141,7 @@ class PosixDatastore(Datastore):
                                        universe=self.registry.dimensions)
 
         # And read the constraints list
-        constraintsConfig = self.config["constraints"] if "constraints" in self.config else None
+        constraintsConfig = self.config.get("constraints")
         self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id

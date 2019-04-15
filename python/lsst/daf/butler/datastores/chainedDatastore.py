@@ -154,7 +154,7 @@ class ChainedDatastore(Datastore):
         self.isEphemeral = isEphemeral
 
         # And read the constraints list
-        constraintsConfig = self.config["constraints"] if "constraints" in self.config else None
+        constraintsConfig = self.config.get("constraints")
         self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # per-datastore override constraints
@@ -166,8 +166,7 @@ class ChainedDatastore(Datastore):
                                                " differs from number of constraints overrides"
                                                f" {len(overrides)}")
 
-            self.datastoreConstraints = [Constraints(c["constraints"])
-                                         if "constraints" in c else None
+            self.datastoreConstraints = [Constraints(c.get("constraints"))
                                          for c in overrides]
 
         else:
