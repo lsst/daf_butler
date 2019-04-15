@@ -282,7 +282,7 @@ def processLookupConfigs(config):
                     lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
                     contents[lookup] = subStr
             else:
-                log.warning("Hierarchical key '%s' not in form 'key<value>', ignoring", name)
+                raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
             lookup = LookupKey(name=name)
             contents[lookup] = value
@@ -328,7 +328,7 @@ def processLookupConfigList(config):
                         lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
                         contents.add(lookup)
                 else:
-                    log.warning("Hierarchical key '%s' not in form 'key<value>', ignoring", name)
+                    raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
             contents.add(LookupKey(name=name))
 
