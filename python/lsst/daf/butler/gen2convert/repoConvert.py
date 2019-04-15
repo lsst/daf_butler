@@ -58,8 +58,8 @@ class Gen3Generic():
             self.MAPPER_ROOT = self.REPO_ROOT
 
         if 'runName' in kwargs.keys():
-            self.converterConfig["skymaps"] = {kwargs['runName']: os.path.join(self.REPO_ROOT, "rerun",
-                                                                               kwargs['runName'])}
+            # self.converterConfig["skymaps"] = {kwargs['runName']: os.path.join(self.REPO_ROOT, "rerun",
+            #                                                                    kwargs['runName'])}
             self.converterConfig["regions"][0]["collection"] = "/".join("shared", kwargs['runName'])
         if 'only' in kwargs.keys():
             if kwargs['only'] is not None:
@@ -67,6 +67,8 @@ class Gen3Generic():
 
         if 'parent' in kwargs.keys():
             self.getParent = kwargs['parent']
+
+        self.converterConfig["skymaps"] = {'deep': self.REPO_ROOT}
 
         self.butlerConfig = ButlerConfig(self.OUT_ROOT)
         StorageClassFactory().addFromConfig(self.butlerConfig)
@@ -95,6 +97,7 @@ class Gen3Generic():
 
         walker.tryRoot(self.SCAN_ROOT, self.MAPPER_ROOT)
         walker.scanAll()
+
         walker.readObsInfo()
         return walker
 
@@ -142,6 +145,7 @@ class OneWalker(ConversionWalker):
         self.found[root] = repo
 
         log.info("%s: identified as a data repository with mapper=%s.", root, repo.MapperClass.__name__)
+
         return repo
 
     def scanRepo(self, repo):
@@ -174,8 +178,6 @@ class OneWalker(ConversionWalker):
                 if len(self.allowedDataset) > 0 and 'raw' in self.allowedDataset:
                     if 'rerun' in dirPath:
                         continue
-                    elif 'ref_cats' in dirPath:
-                        continue
                     elif 'BrightObject' in dirPath:
                         continue
 
@@ -200,8 +202,7 @@ class OneWalker(ConversionWalker):
                         filePath = os.path.join(relative, fileName)
                         dataset = extractor(filePath)
 
-                        if 'ref_cats' not in filePath:
-                            print(filePath, dataset)
+                        print(filePath, dataset)
 
                         if dataset is None:
                             log.debug("%s: %s unrecognized.", repo.root, filePath)
@@ -228,6 +229,13 @@ class OneWalker(ConversionWalker):
 
                             if dataset.root not in self.collections:
                                 self.collections.append(dataset.root)
+
+        try:
+            self._ensureSkyMaps(repo)
+        except Exception as e:
+            print("Issue with skymaps.")
+
+
 
     def readObsInfo(self):
         for repo in self.scanned.values():
@@ -432,24 +440,40 @@ class OneWriter(ConversionWriter):
         for hash, skyMap in self.skyMaps.items():
             skyMapName = self.skyMapNames.get(hash, None)
             try:
-                existing, = registry.query("SELECT skymap FROM SkyMap WHERE hash=:hash",
-                                           hash=hash)
-                if skyMapName is None:
-                    skyMapName = existing["skymap"]
-                    self.skyMapNames[hash] = skyMapName
-                    log.debug("Using preexisting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
-                if skyMapName != existing["skymap"]:
-                    raise ValueError(
-                        ("SkyMap with new name={} and hash={} already exists in the Registry "
-                         "with name={}".format(skyMapName, hash.hex(), existing["skymap"]))
-                    )
-                continue
+                # Attempt to find this entry in the registry.
+                existing = None
+                # CZW: This likely requires calls to base64.b64encode(hash).
+                for row in registry.query("SELECT skymap FROM SkyMap WHERE hash=:hash",
+                                           hash=hash):
+                    print("If you see this, the hash based query returned.")
+                    print(row)
+                for row in registry.query("SELECT * from SkyMap"):
+                    print(row)
+                    if skyMap.getSha1().hex() == row['hash']:
+                        existing = row
+                        break
+
+                if existing is None:
+                    # We didn't find one.
+                    pass
+                else:
+                    if skyMapName is None:
+                        # We didn't name our current skymap, so steal the existing name.
+                        skyMapName = existing["skymap"]
+                        self.skyMapNames[hash] = skyMapName
+                        log.debug("Using preexisting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
+                    elif skyMapName != existing["skymap"]:
+                        # There's a conflict.  Whoops.
+                        raise ValueError(
+                            ("SkyMap with new name={} and hash={} already exists in the Registry "
+                             "with name={}".format(skyMapName, hash.hex(), existing["skymap"]))
+                        )
             except ValueError:
                 # No SkyMap with this hash exists, so we need to insert it.
                 pass
             if skyMapName is None:
-                print("insertSkyMaps: unusable skymap found (%s %s).", skyMapName, hash.hex())
-                continue
+                print("insertSkyMaps: No name found for skymap.  Constructing a usable name.")
+                skyMapName = "skyMap" + hash.hex()
 
             log.info("Inserting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
             skyMap.register(skyMapName, registry)
@@ -538,7 +562,7 @@ class OneWriter(ConversionWriter):
                         try:
                             ref = registry.addDataset(datasetType, gen3id, run)
                         except Exception as e:
-                            print("Donk (%s) for %s.  Skipping." % (e, dataset.fullPath))
+                            print("Donk (%s) for %s (%s %s %s).  Skipping." % (e, dataset.fullPath, datasetType, gen3id, run))
                             continue
                         refs.append(ref)
                         for component in datasetType.storageClass.components:

@@ -15,6 +15,7 @@ def main(kwargs):
 
     walker = g3g.walk()
     walker.readObsInfo()
+
     g3g.write(walker, registry, datastore)
 
     if isinstance(g3g.instrument, HyperSuprimeCam) and kwargs["curated_calibs"] is True:

@@ -127,7 +127,11 @@ class ConversionWriter:
         for coaddName, skyMap in gen2repo.skyMaps.items():
             log.debug("Using SkyMap with hash=%s for '%s' in '%s'",
                       skyMap.getSha1().hex(), coaddName, gen2repo.root)
-            skyMapNamesByCoaddName[coaddName] = self.skyMapNames[skyMap.getSha1()]
+            try:
+                skyMapNamesByCoaddName[coaddName] = self.skyMapNames[skyMap.getSha1()]
+            except KeyError:
+                skyMapNamesByCoaddName[coaddName] = "DefaultName"
+                self.skyMapNames[skyMap.getSha1()] = "DefaultName"
         # Create translators and Gen3 DatasetType objects from Gen2DatasetType
         # objects, but only if we actually use them for Datasets in this repo.
         translators = {}
