@@ -507,15 +507,16 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 
         for datasetTypeName, sc, accepted in (("metric", sc1, True), ("metric2", sc1, False),
                                               ("metric33", sc1, True), ("metric2", sc2, True)):
-            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
-            if accepted:
-                datastore.put(metrics, ref)
-                self.assertTrue(datastore.exists(ref))
-                datastore.remove(ref)
-            else:
-                with self.assertRaises(DatasetTypeNotSupportedError):
+            with self.subTest(datasetTypeName=datasetTypeName):
+                ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
+                if accepted:
                     datastore.put(metrics, ref)
-                self.assertFalse(datastore.exists(ref))
+                    self.assertTrue(datastore.exists(ref))
+                    datastore.remove(ref)
+                else:
+                    with self.assertRaises(DatasetTypeNotSupportedError):
+                        datastore.put(metrics, ref)
+                    self.assertFalse(datastore.exists(ref))
 
 
 class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
@@ -576,21 +577,22 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                                                       ("metric2", dataId2, sc1, (True, False, False)),
                                                       ("metric33", dataId2, sc2, (True, True, False)),
                                                       ("metric2", dataId1, sc2, (False, True, False))):
-            ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
-            if any(accepted):
-                datastore.put(metrics, ref)
-                self.assertTrue(datastore.exists(ref))
-
-                # Check each datastore inside the chained datastore
-                for childDatastore, expected in zip(datastore.datastores, accepted):
-                    self.assertEqual(childDatastore.exists(ref), expected,
-                                     f"Testing presence of {ref} in datastore {childDatastore.name}")
-
-                datastore.remove(ref)
-            else:
-                with self.assertRaises(DatasetTypeNotSupportedError):
+            with self.subTest(datasetTypeName=datasetTypeName):
+                ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
+                if any(accepted):
                     datastore.put(metrics, ref)
-                self.assertFalse(datastore.exists(ref))
+                    self.assertTrue(datastore.exists(ref))
+
+                    # Check each datastore inside the chained datastore
+                    for childDatastore, expected in zip(datastore.datastores, accepted):
+                        self.assertEqual(childDatastore.exists(ref), expected,
+                                         f"Testing presence of {ref} in datastore {childDatastore.name}")
+
+                    datastore.remove(ref)
+                else:
+                    with self.assertRaises(DatasetTypeNotSupportedError):
+                        datastore.put(metrics, ref)
+                    self.assertFalse(datastore.exists(ref))
 
 
 if __name__ == "__main__":
