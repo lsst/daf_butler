@@ -339,8 +339,16 @@ class ChainedDatastore(Datastore):
         NotImplementedError
             If all chained datastores have no ingest implemented or if
             a transfer mode of `None` is specified.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
         """
         log.debug("Ingesting %s (transfer=%s)", ref, transfer)
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
 
         if transfer is None:
             raise NotImplementedError("ChainedDatastore does not support transfer=None")
@@ -350,8 +358,15 @@ class ChainedDatastore(Datastore):
         if transfer == "move" and os.path.isabs(path):
             moveIsCopy = True
 
-        counter = 0
-        for datastore in self.datastores:
+        notImplementedCounter = 0
+        notAcceptedCounter = 0
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            if constraints is not None and not constraints.isAcceptable(ref):
+                log.debug("Datastore %s skipping ingest via configuration for ref %s",
+                          datastore.name, ref)
+                notAcceptedCounter += 1
+                continue
+
             dstransfer = transfer
             # Each child datastore must copy the file for a move operation
             if moveIsCopy:
@@ -359,10 +374,17 @@ class ChainedDatastore(Datastore):
             try:
                 datastore.ingest(path, ref, transfer=dstransfer, formatter=formatter)
             except NotImplementedError:
-                counter += 1
+                notImplementedCounter += 1
+            except DatasetTypeNotSupportedError:
+                notAcceptedCounter += 1
 
-        if counter == len(self.datastores):
-            raise NotImplementedError("Ingest not implemented by any of the chained datastores")
+        if (notAcceptedCounter + notImplementedCounter) == len(self.datastores):
+            log.warning("Datastore %s: Not accepted counter: %d; Not implemented counter: %d for ref %s",
+                        self.name, notAcceptedCounter, notImplementedCounter, ref)
+            if notAcceptedCounter > 0:
+                raise DatasetTypeNotSupportedError(f"Ingest of {ref} not supported by the chained datastores")
+            else:
+                raise NotImplementedError("Ingest not implemented by any of the chained datastores")
 
         # if the file was meant to be moved then we have to delete it
         if moveIsCopy:

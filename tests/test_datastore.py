@@ -505,6 +505,9 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
         dimensions = frozenset(("Visit", "PhysicalFilter", "Instrument"))
         dataId = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
 
+        # Write empty file suitable for ingest check
+        testfile = tempfile.NamedTemporaryFile()
+
         for datasetTypeName, sc, accepted in (("metric", sc1, True), ("metric2", sc1, False),
                                               ("metric33", sc1, True), ("metric2", sc2, True)):
             with self.subTest(datasetTypeName=datasetTypeName):
@@ -513,15 +516,28 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
                     datastore.put(metrics, ref)
                     self.assertTrue(datastore.exists(ref))
                     datastore.remove(ref)
+
+                    # Try ingest
+                    if self.canIngest:
+                        datastore.ingest(testfile.name, ref, transfer="symlink")
+                        self.assertTrue(datastore.exists(ref))
+                        datastore.remove(ref)
                 else:
                     with self.assertRaises(DatasetTypeNotSupportedError):
                         datastore.put(metrics, ref)
                     self.assertFalse(datastore.exists(ref))
 
+                    # Again with ingest
+                    if self.canIngest:
+                        with self.assertRaises(DatasetTypeNotSupportedError):
+                            datastore.ingest(testfile.name, ref, transfer="symlink")
+                        self.assertFalse(datastore.exists(ref))
+
 
 class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/posixDatastoreP.yaml")
+    canIngest = True
 
     def setUp(self):
         # Override the working directory before calling the base class
@@ -532,6 +548,7 @@ class PosixDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.Test
 class InMemoryDatastoreConstraintsTestCase(DatastoreConstraintsTests, unittest.TestCase):
     """InMemoryDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastoreP.yaml")
+    canIngest = False
 
 
 class ChainedDatastoreConstraintsNativeTestCase(PosixDatastoreConstraintsTestCase):
@@ -548,6 +565,7 @@ class ChainedDatastoreConstraintsTestCase(PosixDatastoreConstraintsTestCase):
 class ChainedDatastoreMemoryConstraintsTestCase(InMemoryDatastoreConstraintsTestCase):
     """ChainedDatastore specialization using all InMemoryDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore2P.yaml")
+    canIngest = False
 
 
 class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.TestCase):
@@ -562,7 +580,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
         super().setUp()
 
     def testConstraints(self):
-        """Test constraints model."""
+        """Test chained datastore constraints model."""
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
 
@@ -572,26 +590,55 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
         dataId1 = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
         dataId2 = {"visit": 52, "physical_filter": "V", "instrument": "HSC"}
 
-        for datasetTypeName, dataId, sc, accepted in (("metric", dataId1, sc1, (False, True, False)),
-                                                      ("metric2", dataId1, sc1, (False, False, False)),
-                                                      ("metric2", dataId2, sc1, (True, False, False)),
-                                                      ("metric33", dataId2, sc2, (True, True, False)),
-                                                      ("metric2", dataId1, sc2, (False, True, False))):
-            with self.subTest(datasetTypeName=datasetTypeName):
-                ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId)
-                if any(accepted):
+        # Write empty file suitable for ingest check
+        testfile = tempfile.NamedTemporaryFile()
+
+        for typeName, dataId, sc, accept, ingest in (("metric", dataId1, sc1, (False, True, False), True),
+                                                     ("metric2", dataId1, sc1, (False, False, False), False),
+                                                     ("metric2", dataId2, sc1, (True, False, False), False),
+                                                     ("metric33", dataId2, sc2, (True, True, False), True),
+                                                     ("metric2", dataId1, sc2, (False, True, False), True)):
+            with self.subTest(datasetTypeName=typeName, dataId=dataId, sc=sc.name):
+                ref = self.makeDatasetRef(typeName, dimensions, sc, dataId)
+                if any(accept):
                     datastore.put(metrics, ref)
                     self.assertTrue(datastore.exists(ref))
 
                     # Check each datastore inside the chained datastore
-                    for childDatastore, expected in zip(datastore.datastores, accepted):
+                    for childDatastore, expected in zip(datastore.datastores, accept):
                         self.assertEqual(childDatastore.exists(ref), expected,
                                          f"Testing presence of {ref} in datastore {childDatastore.name}")
 
                     datastore.remove(ref)
+
+                    # Check that ingest works
+                    if ingest:
+                        datastore.ingest(testfile.name, ref, transfer="symlink")
+                        self.assertTrue(datastore.exists(ref))
+
+                        # Check each datastore inside the chained datastore
+                        for childDatastore, expected in zip(datastore.datastores, accept):
+                            # Ephemeral datastores means InMemory at the moment
+                            # and that does not accept ingest of files.
+                            if childDatastore.isEphemeral:
+                                expected = False
+                            self.assertEqual(childDatastore.exists(ref), expected,
+                                             f"Testing presence of ingested {ref} in datastore"
+                                             f" {childDatastore.name}")
+
+                        datastore.remove(ref)
+                    else:
+                        with self.assertRaises(DatasetTypeNotSupportedError):
+                            datastore.ingest(testfile.name, ref, transfer="symlink")
+
                 else:
                     with self.assertRaises(DatasetTypeNotSupportedError):
                         datastore.put(metrics, ref)
+                    self.assertFalse(datastore.exists(ref))
+
+                    # Again with ingest
+                    with self.assertRaises(DatasetTypeNotSupportedError):
+                        datastore.ingest(testfile.name, ref, transfer="symlink")
                     self.assertFalse(datastore.exists(ref))
 
 

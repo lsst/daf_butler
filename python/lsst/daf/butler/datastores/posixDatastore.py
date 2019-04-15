@@ -423,7 +423,16 @@ class PosixDatastore(Datastore):
         FileExistsError
             Raised if ``transfer is not None`` but a file already exists at the
             location computed from the template.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
         """
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
+
         if formatter is None:
             formatter = self.formatterFactory.getFormatter(ref)
 
