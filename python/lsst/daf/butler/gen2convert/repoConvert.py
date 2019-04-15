@@ -58,8 +58,9 @@ class Gen3Generic():
             self.MAPPER_ROOT = self.REPO_ROOT
 
         if 'runName' in kwargs.keys():
-            # self.converterConfig["skymaps"] = {kwargs['runName']: os.path.join(self.REPO_ROOT, "rerun",
-            #                                                                    kwargs['runName'])}
+            # self.converterConfig["skymaps"] = {kwargs['runName']:
+            #             os.path.join(self.REPO_ROOT, "rerun",
+            #                 kwargs['runName'])}
             self.converterConfig["regions"][0]["collection"] = "/".join("shared", kwargs['runName'])
         if 'only' in kwargs.keys():
             if kwargs['only'] is not None:
@@ -233,9 +234,7 @@ class OneWalker(ConversionWalker):
         try:
             self._ensureSkyMaps(repo)
         except Exception as e:
-            print("Issue with skymaps.")
-
-
+            print("Issue with skymaps. %s" % (e))
 
     def readObsInfo(self):
         for repo in self.scanned.values():
@@ -414,15 +413,13 @@ class OneWriter(ConversionWriter):
         # Transaction here should help with performance as well as making the
         # conversion atomic, as it prevents each Registry.addDataset from
         # having to grab a new lock on the database.
-        #        import pdb
-        #        pdb.set_trace()
+
         with registry.transaction():
             self.insertInstruments(registry)
         with registry.transaction():
             self.insertSkyMaps(registry)
         with registry.transaction():
             self.insertObservations(registry)
-        #    pdb.set_trace()
         with registry.transaction():
             self.insertCalibrationLabels(registry)
         with registry.transaction():
@@ -439,12 +436,13 @@ class OneWriter(ConversionWriter):
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for hash, skyMap in self.skyMaps.items():
             skyMapName = self.skyMapNames.get(hash, None)
+
             try:
                 # Attempt to find this entry in the registry.
                 existing = None
                 # CZW: This likely requires calls to base64.b64encode(hash).
                 for row in registry.query("SELECT skymap FROM SkyMap WHERE hash=:hash",
-                                           hash=hash):
+                                          hash=hash):
                     print("If you see this, the hash based query returned.")
                     print(row)
                 for row in registry.query("SELECT * from SkyMap"):
@@ -458,7 +456,8 @@ class OneWriter(ConversionWriter):
                     pass
                 else:
                     if skyMapName is None:
-                        # We didn't name our current skymap, so steal the existing name.
+                        # We didn't name our current skymap, so steal
+                        # the existing name.
                         skyMapName = existing["skymap"]
                         self.skyMapNames[hash] = skyMapName
                         log.debug("Using preexisting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
@@ -525,8 +524,6 @@ class OneWriter(ConversionWriter):
                 translator = repo.translators[datasetTypeName]
                 T = time.time()
                 for dataset in datasets.values():
-                    #                    import pdb
-                    #                    pdb.set_trace()
                     print("Starting dataset: %f" % (time.time() - T))
                     try:
                         gen3id = translator(dataset.dataId)
@@ -562,7 +559,8 @@ class OneWriter(ConversionWriter):
                         try:
                             ref = registry.addDataset(datasetType, gen3id, run)
                         except Exception as e:
-                            print("Donk (%s) for %s (%s %s %s).  Skipping." % (e, dataset.fullPath, datasetType, gen3id, run))
+                            print("Donk (%s) for %s (%s %s %s).  Skipping." %
+                                  (e, dataset.fullPath, datasetType, gen3id, run))
                             continue
                         refs.append(ref)
                         for component in datasetType.storageClass.components:

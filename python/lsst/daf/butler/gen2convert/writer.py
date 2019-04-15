@@ -123,6 +123,7 @@ class ConversionWriter:
         log.debug("Using collection '%s' for root '%s'", collection, gen2repo.root)
         run = self.runs.setdefault(collection, Run(collection=collection))
         instrument = self.config["mappers", gen2repo.MapperClass.__name__, "instrument"]
+
         skyMapNamesByCoaddName = {}
         for coaddName, skyMap in gen2repo.skyMaps.items():
             log.debug("Using SkyMap with hash=%s for '%s' in '%s'",
@@ -242,6 +243,7 @@ class ConversionWriter:
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for hash, skyMap in self.skyMaps.items():
             skyMapName = self.skyMapNames.get(hash, None)
+
             try:
                 existing, = registry.query("SELECT skymap FROM skymap WHERE hash=:hash",
                                            hash=hash)

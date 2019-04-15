@@ -7,7 +7,8 @@ from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
 from lsst.daf.butler.gen2convert import repoConvert
-from lsst.obs.subaru.gen3.hsc import HyperSuprimeCam
+# from lsst.obs.subaru.gen3.hsc import HyperSuprimeCam
+
 
 def InsertObservationRegions(confArray, registry, datastore, allowUpdate=False):
     """Add spatial regions for Visit-Detector combinations.
@@ -28,8 +29,7 @@ def InsertObservationRegions(confArray, registry, datastore, allowUpdate=False):
            "          AND Wcs.dataset_type_name = :wcsName"
            "          AND Metadata.dataset_type_name = :metadataName")
     log = Log.getLogger("lsst.daf.butler.gen2convert")
-    import pdb
-    pdb.set_trace()
+
     for config in confArray:
         log.info("Adding observation regions using %s from %s.",
                  config["DatasetType"], config["collection"])
@@ -78,6 +78,7 @@ def main(kwargs):
     datastore = g3g.getDatastore(registry)
 
     InsertObservationRegions(confArray, registry, datastore, allowUpdate=False)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Convert ci_hsc data repos to Butler Gen 3.")
