@@ -846,6 +846,50 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @disableWhenLimited
+    @transactional
+    def addDimensionEntryList(self, dimension, dataIdList, entry=None, **kwds):
+        """Add a new `Dimension` entry.
+
+        dimension : `str` or `Dimension`
+            Either a `Dimension` object or the name of one.
+        dataId : `list` of `dict` or `DataId`
+            A list of `dict`-like objects containing the `Dimension` links that
+            form the primary key of the rows to insert.  If these are a full
+            `DataId` object, ``dataId.entries[dimension]`` will be updated with
+            ``entry`` and then inserted into the `Registry`.
+        entry : `dict`
+            Dictionary that maps column name to column value.
+        kwds
+            Additional keyword arguments passed to the `DataId` constructor
+            to convert ``dataId`` to a true `DataId` or augment an existing
+            one.
+
+        If ``values`` includes a "region" key, regions will automatically be
+        added to set it any associated spatial join tables.
+        Region fields associated with a combination of Dimensions must be
+        explicitly set separately.
+
+        Returns
+        -------
+        dataId : `DataId`
+            A Data ID for exactly the given dimension that includes the added
+            entry.
+
+        Raises
+        ------
+        TypeError
+            If the given `Dimension` does not have explicit entries in the
+            registry.
+        ConflictingDefinitionError
+            If an entry with the primary-key defined in `values` is already
+            present.
+        NotImplementedError
+            Raised if `limited` is `True`.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @disableWhenLimited
     def findDimensionEntries(self, dimension):
         """Return all `Dimension` entries corresponding to the named dimension.
 
