@@ -878,7 +878,7 @@ class SqlRegistry(Registry):
                 table.update().where(
                     and_((table.columns[name] == dataId[name] for name in holder.links()))
                 ).values(
-                    region=dataId.region.encode()
+                    region=dataId.region
                 )
             )
             if result.rowcount == 0:
@@ -886,7 +886,7 @@ class SqlRegistry(Registry):
         else:  # Insert rather than update.
             self._connection.execute(
                 table.insert().values(
-                    region=dataId.region.encode(),
+                    region=dataId.region,
                     **dataId
                 )
             )

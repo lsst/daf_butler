@@ -27,7 +27,7 @@ from collections import defaultdict
 
 from sqlalchemy.sql import select
 
-from lsst.sphgeom import Region, DISJOINT
+from lsst.sphgeom import DISJOINT
 from .. import DatasetRef, DataId
 
 
@@ -200,7 +200,7 @@ class ResultColumnsManager:
                 for datasetType, indices in manager._indicesForPerDatasetTypeDimensionLinks.items()
             }
             self._regions = {
-                holder: Region.decode(row[index]) for holder, index in manager._indicesForRegions.items()
+                holder: row[index] for holder, index in manager._indicesForRegions.items()
             }
             self._datasetIds = {
                 datasetType: row[index] for datasetType, index in manager._indicesForDatasetIds.items()

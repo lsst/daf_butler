@@ -28,7 +28,6 @@ import contextlib
 import functools
 
 from lsst.utils import doImport
-from lsst.sphgeom import ConvexPolygon
 from .config import Config, ConfigSubset
 from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKeyDict
 from .schema import SchemaConfig
@@ -1111,11 +1110,7 @@ class Registry(metaclass=ABCMeta):
             if fieldsToGetNow:
                 result = self._queryMetadata(element, allLinks, fieldsToGetNow)
                 if "region" in result:
-                    encoded = result.pop("region")
-                    if encoded is None:
-                        dataId.region = None
-                    else:
-                        dataId.region = ConvexPolygon.decode(encoded)
+                    dataId.region = result.pop("region")
                 entries.update(result)
             # Update the running dictionary of link values and the marker set.
             allLinks.update((link, entries[link]) for link in dependencies.links())

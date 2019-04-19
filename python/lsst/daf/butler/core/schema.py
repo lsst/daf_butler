@@ -31,6 +31,8 @@ from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator, UniqueConstraint,\
     Sequence
 
+from lsst.sphgeom import ConvexPolygon
+
 metadata = None  # Needed to make disabled test_hsc not fail on import
 
 
@@ -63,6 +65,22 @@ class Base64Bytes(TypeDecorator):
         # We want to transform that to base64-encoded `bytes` and then
         # native `bytes`.
         return b64decode(value.encode('ascii')) if value is not None else None
+
+
+class Base64Region(TypeDecorator):
+    """A SQLAlchemy custom type that maps Python `sphgeom.ConvexPolygon` to a
+    base64-encoded `sqlalchemy.LargeBinary`.
+    """
+
+    impl = LargeBinary
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        return b64encode(value.encode())
+
+    def process_result_value(self, value, dialect):
+        return ConvexPolygon.decode(b64decode(value)) if value is not None else None
 
 
 class SchemaConfig(ConfigSubset):
@@ -125,7 +143,7 @@ class SchemaBuilder:
         The names of all entries in ``tables`` that are actually implemented as
         views.
     """
-    VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": LargeBinary,
+    VALID_COLUMN_TYPES = {"string": String, "int": Integer, "float": Float, "region": Base64Region,
                           "bool": Boolean, "blob": LargeBinary, "datetime": DateTime,
                           "hash": Base64Bytes}
 
