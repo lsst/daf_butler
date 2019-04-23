@@ -32,6 +32,7 @@ import random
 
 import boto3
 import botocore
+from moto import mock_s3
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
@@ -391,6 +392,7 @@ class ButlerTests:
     def testStringification(self):
         # is root declared in the self.configFile, which one exactly is this?
         butler = Butler(self.tmpConfigFile)
+
         butlerStr = str(butler)
         if self.datastoreStr is not None:
             for testStr in self.datastoreStr:
@@ -546,7 +548,7 @@ class ButlerConfigNoRunTestCase(unittest.TestCase):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
-
+@mock_s3
 class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     """S3Datastore specialization of a butler. Realistically this is a
     S3 storage DataStore + a local SqlRegistry (could be an interesting usecase, but
@@ -560,8 +562,8 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = None
     validationCanFail = True
 
-    bucketName = 'lsstspark'
-    permRoot = 'test_repo2/'
+    bucketName = 'bucketname'
+    permRoot = 'root/'
 
     registryStr = f"registry='sqlite:///:memory:'"
 
@@ -575,11 +577,17 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         return rndstr
 
     def setUp(self):
-        # create new repo after we're sure it doesn't exist anymore
+        # I finally understand, inside MOTO's virtual AWS acc nothing yet exists
+        # we need to recreate everything
+        s3 = boto3.resource('s3')
+        s3.create_bucket(Bucket=self.bucketName)
+
+        # create new repo root dir - analog to mkdir
         if self.useTempRoot:
             self.root = self.genRoot()+'/'
         else:
             self.root = self.permRoot
+
         # datastoreStr and Name need to be created here, otherwise how can we tell the
         # name of the randomly created root, I'm not sure how to work this out with the magical
         # BUTLER_ROOT_TAG
@@ -590,7 +598,8 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
 
     def tearDown(self):
-        # clean up the test bucket
+        # clean up the test bucket, note that there are no directories in S3
+        # so there is no recursive Key deleteion functionality either.
         s3 = boto3.resource('s3')
         try:
             s3.Object(self.bucketName, self.root).load()
@@ -606,6 +615,9 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
             # key exists, remove it
             bucket = s3.Bucket(self.bucketName)
             bucket.objects.filter(Prefix=self.root).delete()
+
+        bucket = s3.Bucket(self.bucketName)
+        bucket.delete()
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -665,7 +677,7 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
 
-
+@mock_s3
 class S3RdsButlerTestCase(S3DatastoreButlerTestCase):
     """An Amazon cloud oriented Butler. DataStore is the S3 Storage and the Registry
     is an RDS PostgreSql service.
@@ -674,24 +686,20 @@ class S3RdsButlerTestCase(S3DatastoreButlerTestCase):
     fullConfigKey = None # ".datastore.formatters"
     validationCanFail = True
 
-    bucketName = 'lsstspark'
-    permRoot = 'test_repo2/'
+    bucketName = 'bucketname'
+    permRoot = 'root'
 
     # there are too many important parameters in the db string that need to
     # carry over to here, so instead of making people copy-paste it on every change
-    # read and re-format it to something useful. Caveat: the RDS name can, but does not
-    # have to be, the same as the dbname, we want to avoid replacing anything except the dbname
-    # that's why we manually append the name at the end.
+    # read it from config and re-format it to something useful. Caveat: the RDS name can,
+    # but does not have to be, the same as the dbname, we want to avoid replacing anything
+    # except the dbname that's why we manually add the name at the end instead of replace().
     config =  Config(configFile)
     tmpconstr = config['.registry.registry.db']
     defaultName = tmpconstr.split('/')[-1]
     constr = tmpconstr[:-len(defaultName)]+'{dbname}'
     connectionStr = constr
 
-    del config
-    del tmpconstr
-    del defaultName
-    del constr
 
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
@@ -703,7 +711,11 @@ class S3RdsButlerTestCase(S3DatastoreButlerTestCase):
         return rndstr
 
     def setUp(self):
-        # create new repo after we're sure it doesn't exist anymore
+        # create a new test bucket so that moto knows it exists
+        s3 = boto3.resource('s3')
+        s3.create_bucket(Bucket=self.bucketName)
+
+        # create a new repo root - analog of tempdir
         if self.useTempRoot:
             self.root = self.genRoot()
         else:
@@ -773,6 +785,9 @@ class S3RdsButlerTestCase(S3DatastoreButlerTestCase):
             bucket = s3.Bucket(self.bucketName)
             bucket.objects.filter(Prefix=self.root).delete()
 
+        bucket = s3.Bucket(self.bucketName)
+        bucket.delete()
+
         # [SANITY WARNING #2] - Multiple DBs as repositories strike back
         # We have to undo everything done in setup. The quickest way is to just drop the
         # temporary database. PostgreSql won't allow dropping the DB as long as there are
@@ -808,7 +823,7 @@ class S3RdsButlerTestCase(S3DatastoreButlerTestCase):
         connection.execute('commit')
 
         # Fifth, kill all currently connected processes, except ours.
-        # IT IS INCREADIBLY IMPORTANT that the db name is single-quoted!!!
+        # IT IS INCREDIBLY IMPORTANT that the db name is single-quoted!!!
         connection.execute((f'SELECT pid, pg_terminate_backend(pid) '
                             'FROM pg_stat_activity WHERE '
                             f'datname = \'{self.root}\' and pid <> pg_backend_pid();'))
