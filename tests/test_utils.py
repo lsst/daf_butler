@@ -20,11 +20,67 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-from collections import namedtuple
+import os
 
-from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton, NamedKeyDict
+try:
+    import boto3
+    import botocore
+    from moto import mock_s3
+except ImportError:
+    boto3 = None
+    def mock_s3(cls):
+        """A no-op decorator in case moto mock_s3 can not be imported.
+        """
+        return cls
+
+from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
+#from lsst.daf.butler.core.s3utils import s3CheckFileExists, parsePathToUriElements, bucketExists
+from lsst.daf.butler.core.s3utils import *
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
+
+
+@unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
+@mock_s3
+class S3UtilsTestCase(unittest.TestCase):
+    """Test for the S3 related utilities.
+    """
+    bucketName = 'testBucketName'
+    fileName = 'testFileName'
+
+    def setUp(self):
+        s3 = boto3.client('s3')
+        try:
+            s3.create_bucket(Bucket=self.bucketName)
+            s3.put_object(Bucket=self.bucketName, Key=self.fileName,
+                          Body=b'test content')
+        except s3.exceptions.BucketAlreadyExists:
+            pass
+
+    def tearDown(self):
+        s3 = boto3.resource('s3')
+        bucket = s3.Bucket(self.bucketName)
+        try:
+            bucket.objects.all().delete()
+        except botocore.exceptions.ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                # the key was not reachable - pass
+                pass
+            else:
+                raise
+
+        bucket = s3.Bucket(self.bucketName)
+        bucket.delete()
+
+    def testBucketExists(self):
+        self.assertTrue(bucketExists(f's3://{self.bucketName}'))
+        self.assertFalse(bucketExists(f's3://{self.bucketName}_NO_EXIST'))
+
+    def testFileExists(self):
+        s3 = boto3.client('s3')
+        self.assertTrue(s3CheckFileExists(s3, self.bucketName, self.fileName)[0])
+        self.assertFalse(s3CheckFileExists(s3, self.bucketName,
+                                           self.fileName+'_NO_EXIST')[0])
 
 
 class IterableTestCase(unittest.TestCase):
@@ -162,6 +218,27 @@ class TestButlerUtils(unittest.TestCase):
         for item, typeName in tests:
             self.assertEqual(getFullTypeName(item), typeName)
 
+    def testParsePathToUriElements(self):
+#s3a = 's3://bucketname/root/relative/file.ext' # s3:// bucketname/root, relative
+#poa = 'file:///root/relative/file.ext'  # file:// /root relative...
+#pob = 'file://relative/file.ext'  #file:// '' relative..
+#poc = 'relative/file.ext'         #file:// '' relative
+#pod = '/root/relative/file.ext'   #file:// /root relative
+#poe = '~/root/relative/file.ext'  #file:// /home.../root relative
+#pof = '../root/relative/file.ext' #file:// cwd/root relative
+        import pdb
+        pdb.set_trace()
+        self.assertEqual(parsePathToUriElements('s3://bucketname/root/file.ext'),
+                         ('s3://', 'bucketname', 'root/file.ext'))
+
+        fullpath = '/root/relative/path/file.ext'
+        root = '/root'
+        relpart = 'relative/path/file.ext'
+        abspath = os.path.abspath(relpath).split(relpath)[0]
+        self.assertEqual(parsePathToUriElements('file://relative/path/file.ext'),
+                         ('file://', abspath, relpath))
+        self.assertEqual(parsePathToUriElements('file:///absolute/path/file.ext'),
+                         ('file://', '/', 'absolute/path/file.ext'))
 
 if __name__ == "__main__":
     unittest.main()

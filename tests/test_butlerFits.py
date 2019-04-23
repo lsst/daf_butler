@@ -28,6 +28,7 @@ import random
 
 import boto3
 import botocore
+from moto import mock_s3
 
 import lsst.utils.tests
 
@@ -145,17 +146,17 @@ class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase)
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
-
+@mock_s3
 class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     """"S3Datastore specialization of a butler. This is a S3 backed DataStore +
     a local in memory SqliteRegistry
-    
+
     Very practical for testing the S3Datastore quickly.
     """
     configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
 
-    bucketName = 'lsstspark'
-    permRoot = 'test_repo2/'
+    bucketName = 'bucketname'
+    permRoot = 'root/'
 
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
@@ -167,6 +168,10 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
         return rndstr
 
     def setUp(self):
+        # create a new test bucket so that moto knows it exists
+        s3 = boto3.resource('s3')
+        s3.create_bucket(Bucket=self.bucketName)
+
         # create new repo after we're sure it doesn't exist anymore
         if self.useTempRoot:
             self.root = self.genRoot()+'/'
