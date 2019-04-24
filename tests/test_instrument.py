@@ -38,15 +38,15 @@ class DummyCam(Instrument):
         return "DummyCam"
 
     def register(self, registry):
-        """Insert Instrument, PhysicalFilter, and Detector entries into a
+        """Insert Instrument, physical_filter, and detector entries into a
         `Registry`.
         """
         dataId = {"instrument": self.getName()}
-        registry.addDimensionEntry("Instrument", dataId)
+        registry.addDimensionEntry("instrument", dataId)
         for f in ("dummy_g", "dummy_u"):
-            registry.addDimensionEntry("PhysicalFilter", dataId, physical_filter=f)
+            registry.addDimensionEntry("physical_filter", dataId, physical_filter=f)
         for d in (1, 2):
-            registry.addDimensionEntry("Detector", dataId, detector=d)
+            registry.addDimensionEntry("detector", dataId, detector=d)
 
     def getRawFormatter(self, dataId):
         """Return the Formatter class that should be used to read a particular

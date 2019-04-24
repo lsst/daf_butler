@@ -8,7 +8,7 @@ datastore:
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
     metric3: "{collection}/{datasetType}/{instrument}"
     metric4: "{collection}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
-    PhysicalFilter+: "{collection}/{instrument}_{physical_filter}"
+    physical_filter+: "{collection}/{instrument}_{physical_filter}"
     instrument<DummyCamComp>:
       metric33: "{collection}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
   formatters:
@@ -26,9 +26,9 @@ datastore:
     ThingOne: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     datasetType.component: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     pvi: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-    Visit+PhysicalFilter+Instrument: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+    visit+physical_filter+instrument: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     instrument<DummyHSC>:
       pvi: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
       StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
       DummySC: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
-      Visit+PhysicalFilter+Instrument: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+      visit+physical_filter+instrument: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter

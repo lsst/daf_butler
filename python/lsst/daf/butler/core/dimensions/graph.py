@@ -280,8 +280,8 @@ class DimensionGraph(metaclass=PrivateConstructorMeta):
                 if candidate is not None:
                     if candidate in dimension.dependencies():
                         # this dimension is more specific than the old
-                        # candidate; replace it (e.g. Tract is replaced with
-                        # Patch).
+                        # candidate; replace it (e.g. tract is replaced with
+                        # patch).
                         candidate = dimension
                     else:
                         # opposite relationship should be impossible given

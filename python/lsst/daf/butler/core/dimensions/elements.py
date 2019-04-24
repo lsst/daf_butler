@@ -184,8 +184,8 @@ class Dimension(DimensionElement):
     r"""A discrete dimension of data used to organize Datasets and associate
     them with metadata.
 
-    `Dimension` instances represent concepts such as "Instrument",
-    "Detector", "Visit" and "SkyMap", which are usually associated with
+    `Dimension` instances represent concepts such as "instrument",
+    "detector", "visit" and "skymap", which are usually associated with
     database tables.  A `DatasetType` is associated with a fixed combination
     of `Dimension`\s.
 
@@ -285,15 +285,15 @@ class DimensionJoin(DimensionElement):
 
         When a join "summarizes" another, it means the table for that join
         could (at least conceptually) be defined as an aggregate view on the
-        summarized join table. For example, "TractSkyPixJoin" summarizes
-        "PatchSkyPixJoin", because the set of SkyPix rows associated with a
-        Tract row is just the set of SkyPix rows associated with all Patches
-        associated with that Tract.  Or, in SQL:
+        summarized join table. For example, "tract_skypix_join" summarizes
+        "patch_skypix_join", because the set of skypix rows associated with a
+        tract row is just the set of skypix rows associated with all patches
+        associated with that tract.  Or, in SQL:
 
         .. code-block:: sql
 
-            CREATE VIEW TractSkyPixJoin AS
-            SELECT DISTINCT skymap, tract, skypix FROM PatchSkyPixJoin;
+            CREATE VIEW tract_skypix_join AS
+            SELECT DISTINCT skymap, tract, skypix FROM patch_skypix_join;
         """
         return self._summarizes
 

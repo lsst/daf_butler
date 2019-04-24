@@ -2,278 +2,277 @@ dimensions:
   version: 0
   elements:
 
-    Instrument:
+    instrument:
       doc: >
-        An entity that produces observations.  An Instrument defines a set of
-        PhysicalFilters and Detectors and a numbering system for the Exposures
-        and Visits that represent observations with it.
+        An entity that produces observations.  An instrument defines a set of
+        physical_filters and detectors and a numbering system for the exposures
+        and visits that represent observations with it.
       link:
       - instrument
 
-    AbstractFilter:
+    abstract_filter:
       doc: >
-        A filter that is not associated with a particular Instrument.  An
+        A filter that is not associated with a particular instrument.  An
         abstract filter can be used to relate similar physical filters, and
         is typically the filter associated with coadds.
       link:
       - abstract_filter
 
-    PhysicalFilter:
+    physical_filter:
       dependencies:
         required:
-        - Instrument
+        - instrument
         implied:
-        - AbstractFilter
+        - abstract_filter
       doc: >
-        A filter associated with a particular Instrument.  PhysicalFilters are
+        A filter associated with a particular instrument.  physical_filters are
         used to identify datasets that can only be associated with a single
         observation.
       link:
       - physical_filter
 
-    Detector:
+    detector:
       dependencies:
         required:
-        - Instrument
+        - instrument
       doc: >
-        A detector associated with a particular Instrument (not an observation
+        A detector associated with a particular instrument (not an observation
         of that detector; that requires specifying an exposure or visit as
         well).
       link:
       - detector
 
-    Visit:
+    visit:
       dependencies:
         required:
-        - Instrument
+        - instrument
         implied:
-        - PhysicalFilter
+        - physical_filter
       doc: >
         A sequence of observations processed together, comprised of one or
-        more Exposures from the same Instrument with the same pointing and
-        PhysicalFilter.
-        The Visit table contains metadata that is both meaningful only for
-        science Exposures and the same for all Exposures in a Visit.
+        more exposures from the same instrument with the same pointing and
+        physical_filter.
+        The visit table contains metadata that is both meaningful only for
+        science exposures and the same for all exposures in a visit.
       link:
       - visit
       hasRegion: true
 
-    Exposure:
+    exposure:
       dependencies:
         required:
-        - Instrument
+        - instrument
         implied:
-        - Visit
-        - PhysicalFilter
+        - visit
+        - physical_filter
       doc: >
         An observation associated with a particular instrument.  All direct
-        observations are identified with an Exposure, but derived datasets
-        that may be based on more than one Exposure (e.g. multiple snaps) are
-        typically identified with Visits instead, even for instruments that
-        don't have multiple Exposures per Visit.  As a result, Instruments
-        that don't have multiple Exposures per Visit will typically have Visit
-        entries that are essentially duplicates of their Exposure entries.
+        observations are identified with an exposure, but derived datasets
+        that may be based on more than one exposure (e.g. multiple snaps) are
+        typically identified with visits instead, even for instruments that
+        don't have multiple exposures per visit.  As a result, instruments
+        that don't have multiple exposures per visit will typically have visit
+        entries that are essentially duplicates of their exposure entries.
 
-        The Exposure table contains metadata entries that are relevant for
-        calibration Exposures, and does not duplicate entries in Visit that
-        would be the same for all Exposures within a Visit.
+        The exposure table contains metadata entries that are relevant for
+        calibration exposures, and does not duplicate entries in visit that
+        would be the same for all exposures within a visit.
       link:
       - exposure
 
-    SkyPix:
+    skypix:
       doc: >
         A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
         HEALPix; we will select and support just one, but which is TBD). Has
         no SQL representation; even a definition table is not necessary, given
         that the allowable values and the associated hasRegion regions are best
-        computed on-the-fly.  SkyPix units are preferred to SkyMap (i.e.
-        Tract-Patch) units for Datasets without any overlap regions (e.g.
+        computed on-the-fly.  skypix units are preferred to skymap (i.e.
+        tract-patch) units for Datasets without any overlap regions (e.g.
         sharded reference catalogs).
 
         There are also considerable advantages to standardizing on just one
-        level of the standard pixelization: if all SkyPix values are at a
+        level of the standard pixelization: if all skypix values are at a
         single level, they can be indexed using standard B-Trees and compared
-        with simple equality comparison.  In contrast, comparing SkyPix values
+        with simple equality comparison.  In contrast, comparing skypix values
         at different levels requires pixelization-specific bit-shifting
         operations and custom indexes, which are much harder to implement
         across multiple RDMSs.  As a result, we will (at least initially) try
-        to define just a single level for all SkyPix values.  Our preliminary
+        to define just a single level for all skypix values.  Our preliminary
         guess is that this level should have pixels be approximately (within a
-        factor of ~4) of the size of a single Detector on the sky.
+        factor of ~4) of the size of a single detector on the sky.
       hasRegion:
         true
       link:
       - skypix
 
-    SkyMap:
+    skymap:
       doc: >
-        A set of Tracts and Patches that subdivide the sky into rectangular
+        A set of tracts and patches that subdivide the sky into rectangular
         regions with simple projections and intentional overlaps.
       link:
       - skymap
 
-    Tract:
+    tract:
       dependencies:
         required:
-        - SkyMap
+        - skymap
       doc: >
         A large rectangular region mapped to the sky with a single map
-        projection, associated with a particular SkyMap.
+        projection, associated with a particular skymap.
       link:
       - tract
       hasRegion: true
 
-    Patch:
+    patch:
       dependencies:
         required:
-        - SkyMap
-        - Tract
+        - skymap
+        - tract
       doc: >
-        A rectangular region within a Tract.
+        A rectangular region within a tract.
       link:
       - patch
       hasRegion: true
 
-    Label:
+    label:
       doc: >
         An arbitrary string value.  There is no SQL representation or
-        constraint on the values a Label can take.  Multiple labels are
+        constraint on the values a label can take.  Multiple labels are
         represented (by convention) by a comma-separated string.
       link:
       - label
 
-    CalibrationLabel:
+    calibration_label:
       dependencies:
         required:
-        - Instrument
+        - instrument
       doc: >
         A string label that maps to a date validity range for master
         calibration products.
       link:
       - calibration_label
 
-    ExposureCalibrationLabelJoin:
+    exposure_calibration_label_join:
       doc: >
-        A many-to-many join table that relates Exposure to CalibrationRange's
-        Instrument+Label.
+        A many-to-many join table that relates exposure to calibration_label.
 
         This can and probably should be implemented as a view.
-      lhs: [Exposure]
-      rhs: [CalibrationLabel]
+      lhs: [exposure]
+      rhs: [calibration_label]
 
-    VisitDetectorRegion:
+    visit_detector_region:
       doc: >
         A many-to-many join table that provides region information for
-        Visit-Detector combinations.
-      lhs: [Visit]
-      rhs: [Detector]
+        visit-detector combinations.
+      lhs: [visit]
+      rhs: [detector]
       hasRegion: true
       asNeeded: true
 
-    VisitDetectorSkyPixJoin:
+    visit_detector_skypix_join:
       doc: >
-        A spatial join table that relates Visit+Detector to SkyPix, also used
-        as an intermediate when relating Visit+Detector to SkyMap DataUnits.
+        A spatial join table that relates visit+detector to skypix, also used
+        as an intermediate when relating visit+detector to skymap DataUnits.
 
         Entries are expected to be calculated outside the database and
-        added/updated whenever VisitDetectorRegion is.
+        added/updated whenever visit_detector_region is.
 
-      lhs: [Visit, Detector]
-      rhs: [SkyPix]
+      lhs: [visit, detector]
+      rhs: [skypix]
 
-    VisitSkyPixJoin:
+    visit_skypix_join:
       doc: >
-        A spatial join table that relates Visit to SkyPix, also used as an
-        intermediate when relating Visit to SkyMap DataUnits.
+        A spatial join table that relates visit to skypix, also used as an
+        intermediate when relating visit to skymap DataUnits.
 
         This can and probably should be implemented as a trivial view on
-        VisitDetectorSkyPixJoin.
+        visit_detector_skypix_join.
 
-      lhs: [Visit]
-      rhs: [SkyPix]
-      summarizes: [VisitDetectorSkyPixJoin]
+      lhs: [visit]
+      rhs: [skypix]
+      summarizes: [visit_detector_skypix_join]
 
-    PatchSkyPixJoin:
+    patch_skypix_join:
       doc: >
-        A spatial join table that relates Patch to SkyPix, also used as an
-        intermediate when relating Patch to Instrument DataUnits.
+        A spatial join table that relates patch to skypix, also used as an
+        intermediate when relating patch to instrument DataUnits.
 
         Entries are expected to be calculated outside the database and
-        added along with the Patch itself.
+        added along with the patch itself.
 
-      lhs: [Patch]
-      rhs: [SkyPix]
+      lhs: [patch]
+      rhs: [skypix]
 
-    TractSkyPixJoin:
+    tract_skypix_join:
       doc: >
-        A spatial join table that relates Tract to SkyPix, also used as an
-        intermediate when relating Tract to Instrument DataUnits.
+        A spatial join table that relates tract to skypix, also used as an
+        intermediate when relating tract to instrument DataUnits.
 
         This can and probably should be implemented as a trivial view on
-        PatchSkyPixJoin.
+        patch_skypix_join.
 
-      lhs: [Tract]
-      rhs: [SkyPix]
-      summarizes: [PatchSkyPixJoin]
+      lhs: [tract]
+      rhs: [skypix]
+      summarizes: [patch_skypix_join]
 
-    VisitDetectorPatchJoin:
+    visit_detector_patch_join:
       doc: >
-        A spatial join table that relates Visit+Detector to Patch via SkyPix.
+        A spatial join table that relates visit+detector to patch via skypix.
 
         Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new Visits or SkyMaps are added.
+        can be kept up to date when new visits or skymaps are added.
 
         If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit, Detector]
-      rhs: [Patch]
+      lhs: [visit, detector]
+      rhs: [patch]
 
-    VisitPatchJoin:
+    visit_patch_join:
       doc: >
-        A spatial join table that relates Visit to Patch via SkyPix.
+        A spatial join table that relates visit to patch via skypix.
 
         Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new Visits or SkyMaps are added.
+        can be kept up to date when new visits or skymaps are added.
 
         If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit]
-      rhs: [Patch]
-      summarizes: [VisitDetectorPatchJoin]
+      lhs: [visit]
+      rhs: [patch]
+      summarizes: [visit_detector_patch_join]
 
-    VisitDetectorTractJoin:
+    visit_detector_tract_join:
       doc: >
-        A spatial join table that relates Visit+Detector to Tract via SkyPix.
+        A spatial join table that relates visit+detector to tract via skypix.
 
         Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new Visits or SkyMaps are added.
+        can be kept up to date when new visits or skymaps are added.
 
         If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit, Detector]
-      rhs: [Tract]
-      summarizes: [VisitDetectorPatchJoin]
+      lhs: [visit, detector]
+      rhs: [tract]
+      summarizes: [visit_detector_patch_join]
 
-    VisitTractJoin:
+    visit_tract_join:
       doc: >
-        A spatial join table that relates Visit to Tract via SkyPix.
+        A spatial join table that relates visit to tract via skypix.
 
         Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new Visits or SkyMaps are added.
+        can be kept up to date when new visits or skymaps are added.
 
         If a database UDF is available to determine whether two regions
         overlap, we could include that in this view to refine the results.
         For now, we will assume that such a UDF is not available.
 
-      lhs: [Visit]
-      rhs: [Tract]
+      lhs: [visit]
+      rhs: [tract]
       summarizes:
-        - VisitDetectorPatchJoin
-        - VisitDetectorTractJoin
-        - VisitPatchJoin
+        - visit_detector_patch_join
+        - visit_detector_tract_join
+        - visit_patch_join

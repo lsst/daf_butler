@@ -247,7 +247,7 @@ def processLookupConfigs(config):
     Dimensions are indicated by using dimension names separated by a ``+``.
     If a single dimension is specified this is also supported so long as
     a ``+`` is found.  Dimensions are normalized before use such that if
-    ``PhysicalFilter+Visit`` is defined, then an implicit ``Instrument``
+    ``physical_filter+visit`` is defined, then an implicit ``instrument``
     will automatically be added.
 
     DataID overrides can be specified using the form: ``field<value>`` to

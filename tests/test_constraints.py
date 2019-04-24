@@ -33,12 +33,12 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.id = 0
 
         # Create DatasetRefs to test against constraints model
-        dimensions = frozenset(("Visit", "PhysicalFilter", "Instrument"))
+        dimensions = frozenset(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         self.calexpA = self.makeDatasetRef("calexp", dimensions, sc, {"instrument": "A",
                                                                       "physical_filter": "u"})
 
-        dimensions = frozenset(("Visit", "CalibrationLabel", "Instrument"))
+        dimensions = frozenset(("visit", "calibration_label", "instrument"))
         self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A",
                                                                 "visit": 1})
         self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B",
@@ -52,13 +52,13 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
         # Dimension accept
-        config = ConstraintsConfig({"accept": ["Visit+PhysicalFilter+Instrument", "ExposureF"]})
+        config = ConstraintsConfig({"accept": ["visit+physical_filter+instrument", "ExposureF"]})
         constraints = Constraints(config)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
-        config = ConstraintsConfig({"accept": ["Visit+CalibrationLabel+Instrument", "ExposureF"]})
+        config = ConstraintsConfig({"accept": ["visit+calibration_label+instrument", "ExposureF"]})
         constraints = Constraints(config)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))

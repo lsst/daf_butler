@@ -414,7 +414,7 @@ class QueryBuilder(ABC):
         matters).
 
         Attempting to add a table for a `DimensionElement` that does not have
-        a direct in-database representation (such as the "SkyPix" `Dimension`)
+        a direct in-database representation (such as the "skypix" `Dimension`)
         is also a safe no-op.
 
         Parameters
@@ -455,7 +455,7 @@ class QueryBuilder(ABC):
                     # to include the regions of those dimensions in the query
                     # results. First we make sure the tables that provide
                     # those regions are in the query.  Note that this does
-                    # nothing and returns None for SkyPix, but that's okay
+                    # nothing and returns None for skypix, but that's okay
                     # because ResultColumnsManager knows to handle that case
                     # specially.
                     lhsTable = self.joinDimensionElement(lhsHolder)

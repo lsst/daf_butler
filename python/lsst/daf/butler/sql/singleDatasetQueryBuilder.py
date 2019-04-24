@@ -98,17 +98,17 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         be written as:
 
             SELECT
-                Dataset.dataset_id AS dataset_id,
-                Dataset.link1 AS link1,
+                dataset.dataset_id AS dataset_id,
+                dataset.link1 AS link1,
                 ...
-                Dataset.link1 AS linkN
-            FROM Dataset JOIN DatasetCollection
-                ON Dataset.dataset_id = DatasetCollection.dataset_id
-            WHERE Dataset.dataset_type_name = :dsType_name
-                AND DatasetCollection.collection = :collection_name
+                dataset.link1 AS linkN
+            FROM dataset JOIN dataset_collection
+                ON dataset.dataset_id = dataset_collection.dataset_id
+            WHERE dataset.dataset_type_name = :dsType_name
+                AND dataset_collection.collection = :collection_name
         """
-        datasetTable = registry._schema.tables["Dataset"]
-        datasetCollectionTable = registry._schema.tables["DatasetCollection"]
+        datasetTable = registry._schema.tables["dataset"]
+        datasetCollectionTable = registry._schema.tables["dataset_collection"]
         fromClause = datasetTable.join(
             datasetCollectionTable,
             datasetTable.columns.dataset_id == datasetCollectionTable.columns.dataset_id
@@ -154,7 +154,7 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         record, which comes from earliest collection (in the user-provided
         order). Here things become complicated; we have to:
         - replace collection names with their order in input list
-        - select all combinations of rows from Dataset and DatasetCollection
+        - select all combinations of rows from dataset and dataset_collection
           which match collection names and dataset type name
         - from those only select rows with lowest collection position if
           there are multiple collections for the same DataId
@@ -167,19 +167,19 @@ class SingleDatasetQueryBuilder(QueryBuilder):
                     WHEN 'collection2' THEN 1
                     ...
                 END AS collorder
-            FROM DatasetCollection
+            FROM dataset_collection
 
         Combined query will look like (CASE ... END is as above):
 
-            SELECT Dataset.dataset_id AS dataset_id,
-                CASE DatasetCollection.collection ... END AS collorder,
-                Dataset.link1,
+            SELECT dataset.dataset_id AS dataset_id,
+                CASE dataset_collection.collection ... END AS collorder,
+                dataset.link1,
                 ...
-                Dataset.linkN
-            FROM Dataset JOIN DatasetCollection
-                ON Dataset.dataset_id = DatasetCollection.dataset_id
-            WHERE Dataset.dataset_type_name = <dsType.name>
-                AND DatasetCollection.collection IN (<collections>)
+                dataset.linkN
+            FROM dataset JOIN dataset_collection
+                ON dataset.dataset_id = dataset_collection.dataset_id
+            WHERE dataset.dataset_type_name = <dsType.name>
+                AND dataset_collection.collection IN (<collections>)
 
         Filtering is complicated; it would be simpler to use Common Table
         Expressions (WITH clause) but not all databases support CTEs, so we
@@ -193,30 +193,30 @@ class SingleDatasetQueryBuilder(QueryBuilder):
                 ...
                 DS.linkN AS linkN
             FROM (
-                SELECT Dataset.dataset_id AS dataset_id,
+                SELECT dataset.dataset_id AS dataset_id,
                     CASE ... END AS collorder,
-                    Dataset.link1,
+                    dataset.link1,
                     ...
-                    Dataset.linkN
-                FROM Dataset JOIN DatasetCollection
-                    ON Dataset.dataset_id = DatasetCollection.dataset_id
-                WHERE Dataset.dataset_type_name = <dsType.name>
-                    AND DatasetCollection.collection IN (<collections>)
+                    dataset.linkN
+                FROM dataset JOIN dataset_collection
+                    ON dataset.dataset_id = dataset_collection.dataset_id
+                WHERE dataset.dataset_type_name = <dsType.name>
+                    AND dataset_collection.collection IN (<collections>)
                 ) DS
             INNER JOIN (
                 SELECT
                     MIN(CASE ... END AS) collorder,
-                    Dataset.link1,
+                    dataset.link1,
                     ...
-                    Dataset.linkN
-                FROM Dataset JOIN DatasetCollection
-                    ON Dataset.dataset_id = DatasetCollection.dataset_id
-                WHERE Dataset.dataset_type_name = <dsType.name>
-                   AND DatasetCollection.collection IN (<collections>)
+                    dataset.linkN
+                FROM dataset JOIN dataset_collection
+                    ON dataset.dataset_id = dataset_collection.dataset_id
+                WHERE dataset.dataset_type_name = <dsType.name>
+                   AND dataset_collection.collection IN (<collections>)
                 GROUP BY (
-                    Dataset.link1,
+                    dataset.link1,
                     ...
-                    Dataset.linkN
+                    dataset.linkN
                     )
                 ) DSG
             ON (DS.colpos = DSG.colpos
@@ -236,14 +236,14 @@ class SingleDatasetQueryBuilder(QueryBuilder):
             """Return list of columns for given column names"""
             return [selectable.columns[name].label(name) for name in names]
 
-        datasetTable = registry._schema.tables["Dataset"]
-        datasetCollectionTable = registry._schema.tables["DatasetCollection"]
+        datasetTable = registry._schema.tables["dataset"]
+        datasetCollectionTable = registry._schema.tables["dataset_collection"]
 
         # full set of link names for this DatasetType
         links = list(datasetType.dimensions.links())
 
-        # Starting point for both subqueries below: a join of Dataset to
-        # DatasetCollection
+        # Starting point for both subqueries below: a join of dataset to
+        # dataset_collection
         subJoin = datasetTable.join(
             datasetCollectionTable,
             datasetTable.columns.dataset_id == datasetCollectionTable.columns.dataset_id

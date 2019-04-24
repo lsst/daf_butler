@@ -98,7 +98,6 @@ class Schema:
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
         builder = SchemaBuilder(config, limited=limited)
-        self.datasetTable = builder.metadata.tables["Dataset"]
         self.metadata = builder.metadata
         self.views = frozenset(builder.views)
         self.tables = builder.tables
@@ -198,10 +197,13 @@ class SchemaBuilder:
         Raises
         ------
         ValueError
-            If a table with the given name already exists.
+            If a table with the given name already exists, or if the table
+            name or one or more column names are not lowercase.
         """
         if tableName in self.metadata.tables:
             raise ValueError("Table with name {} already exists".format(tableName))
+        if not tableName.islower():
+            raise ValueError("Table name {} is not all lowercase.")
         if not self.isIncluded(tableName):
             return None
         doc = stripIfNotNone(tableDescription.get("doc", None))
@@ -306,7 +308,8 @@ class SchemaBuilder:
         Raises
         ------
         ValueError
-            If the column description contains unsupported arguments
+            If the column description contains unsupported arguments or if
+            the column name is not lowercase.
         """
         description = columnDescription.copy()
         # required
@@ -314,6 +317,8 @@ class SchemaBuilder:
         # keeps track of if this column is intended to be auto incremented
         autoinc = False
         columnName = description.pop("name")
+        if not columnName.islower():
+            raise ValueError("Column name {} is not all lowercase.")
         args.append(columnName)
         columnType = self.VALID_COLUMN_TYPES[description.pop("type")]
         # extract kwargs for type object constructor, if any

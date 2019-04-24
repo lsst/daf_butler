@@ -143,15 +143,15 @@ class ButlerTests:
         self.assertEqual(collections, set())
 
         # Create and register a DatasetType
-        dimensions = ("Instrument", "Visit")
+        dimensions = ("instrument", "visit")
 
         datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
         # Add needed Dimensions
-        butler.registry.addDimensionEntry("Instrument", {"instrument": "DummyCamComp"})
-        butler.registry.addDimensionEntry("PhysicalFilter", {"instrument": "DummyCamComp",
-                                                             "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
+        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCamComp"})
+        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCamComp",
+                                                              "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 423,
                                                     "physical_filter": "d-r"})
 
         # Create and store a dataset
@@ -260,12 +260,12 @@ class ButlerTests:
 
     def testGetDatasetTypes(self):
         butler = Butler(self.tmpConfigFile)
-        dimensions = ("Instrument", "Visit", "PhysicalFilter")
-        dimensionEntries = (("Instrument", {"instrument": "DummyCam"}),
-                            ("Instrument", {"instrument": "DummyHSC"}),
-                            ("Instrument", {"instrument": "DummyCamComp"}),
-                            ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
-                            ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        dimensions = ("instrument", "visit", "physical_filter")
+        dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
+                            ("instrument", {"instrument": "DummyHSC"}),
+                            ("instrument", {"instrument": "DummyCamComp"}),
+                            ("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
+                            ("visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         # Add needed Dimensions
         for name, value in dimensionEntries:
@@ -307,10 +307,10 @@ class ButlerTests:
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
         datasetTypeName = "test_metric"
-        dimensions = ("Instrument", "Visit")
-        dimensionEntries = (("Instrument", {"instrument": "DummyCam"}),
-                            ("PhysicalFilter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
-                            ("Visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        dimensions = ("instrument", "visit")
+        dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
+                            ("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
+                            ("visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
         dataId = {"instrument": "DummyCam", "visit": 42}
@@ -414,12 +414,12 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         butler = Butler(self.tmpConfigFile)
 
         # Add needed Dimensions
-        butler.registry.addDimensionEntry("Instrument", {"instrument": "DummyCamComp"})
-        butler.registry.addDimensionEntry("PhysicalFilter", {"instrument": "DummyCamComp",
-                                                             "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 423,
+        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCamComp"})
+        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCamComp",
+                                                              "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 423,
                                                     "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("Visit", {"instrument": "DummyCamComp", "visit": 425,
+        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 425,
                                                     "physical_filter": "d-r"})
 
         # Create and store a dataset
@@ -427,7 +427,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         # Create two almost-identical DatasetTypes (both will use default
         # template)
-        dimensions = ("Instrument", "Visit")
+        dimensions = ("instrument", "visit")
         butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))

@@ -27,7 +27,7 @@ from abc import ABCMeta, abstractmethod
 
 
 def makeCalibrationLabel(datasetTypeName, calibDate):
-    """Make a Gen3 CalibrationLabel string from a Gen2 dataset type name and
+    """Make a Gen3 calibration_label string from a Gen2 dataset type name and
     calibDate value.
     """
     return f"gen2/{datasetTypeName}_{calibDate}"
@@ -50,8 +50,8 @@ class KeyHandler(metaclass=ABCMeta):
         Name of the Gen3 Data ID key (Dimension link field name) populated by
         this handler (e.g. "visit" or "abstract_filter")
     gen3unit : `str`
-        Name of the Gen3 Dimension associated with `gen3key` (e.g. "Visit" or
-        "AbstractFilter").
+        Name of the Gen3 Dimension associated with `gen3key` (e.g. "visit" or
+        "abstract_filter").
     """
 
     __slots__ = ("gen3key", "gen3unit")
@@ -122,7 +122,7 @@ class PatchKeyHandler(KeyHandler):
     __slots__ = ()
 
     def __init__(self):
-        super().__init__("patch", "Patch")
+        super().__init__("patch", "patch")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         tract = gen2id["tract"]
@@ -138,7 +138,7 @@ class SkyMapKeyHandler(KeyHandler):
     __slots__ = ()
 
     def __init__(self):
-        super().__init__("skymap", "SkyMap")
+        super().__init__("skymap", "skymap")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return skyMapName
@@ -156,7 +156,7 @@ class CalibKeyHandler(KeyHandler):
     __slots__ = ()
 
     def __init__(self):
-        super().__init__("calibration_label", "CalibrationLabel")
+        super().__init__("calibration_label", "calibration_label")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"])
@@ -173,9 +173,9 @@ class Translator:
     handlers : `list`
         A list of KeyHandlers this Translator should use.
     skyMap : `BaseSkyMap`
-        SkyMap instance used to define any Tract or Patch Dimensions.
+        SkyMap instance used to define any tract or patch Dimensions.
     skyMapName : `str`
-        Gen3 SkyMap Dimension name to be associated with any Tract or Patch
+        Gen3 SkyMap Dimension name to be associated with any tract or patch
         Dimensions.
     """
 
@@ -246,7 +246,7 @@ class Translator:
         skyMaps: `dict`
             A dictionary mapping "coaddName" strings to Gen2SkyMap instances.
         skyMapNames : `dict`
-            A dictionary mapping "coaddName" strings to Gen3 SkyMap names.
+            A dictionary mapping "coaddName" strings to Gen3 skymap names.
 
         Returns
         -------
@@ -332,18 +332,18 @@ for coaddName in ("deep", "goodSeeing", "psfMatched", "dcr"):
 Translator.addRule(PatchKeyHandler(), gen2keys=("patch",))
 
 # Copy Gen2 "tract" to Gen3 "tract".
-Translator.addRule(CopyKeyHandler("tract", "Tract", dtype=int), gen2keys=("tract",))
+Translator.addRule(CopyKeyHandler("tract", "tract", dtype=int), gen2keys=("tract",))
 
-# Add valid_first, valid_last to Instrument-level transmission/ datasets;
+# Add valid_first, valid_last to instrument-level transmission/ datasets;
 # these are considered calibration products in Gen3.
 for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmission_filter"):
-    Translator.addRule(ConstantKeyHandler("calibration_label", "CalibrationLabel", "unbounded"),
+    Translator.addRule(ConstantKeyHandler("calibration_label", "calibration_label", "unbounded"),
                        datasetTypeName=datasetTypeName)
 
 # Translate Gen2 pixel_id to Gen3 skypix.
 # For now, we just assume that the Gen3 Registry's pixelization happens to be
 # the same as what the ref_cat indexer uses.
-Translator.addRule(CopyKeyHandler("skypix", "SkyPix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))
+Translator.addRule(CopyKeyHandler("skypix", "skypix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))
 
 # Translate Gen2 calibDate and datasetType to Gen3 calibration_label.
 Translator.addRule(CalibKeyHandler(), gen2keys=("calibDate",))
