@@ -44,7 +44,7 @@ schema:
       -
         name: instrument
         type: string
-        length: 8
+        length: 16
       -
         name: abstract_filter
         type: string
