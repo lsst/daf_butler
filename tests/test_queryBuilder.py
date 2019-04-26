@@ -59,34 +59,34 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertEqual(originInfo.getOutputCollection("ds2"), "out2")
 
     def testInstrumentDimensions(self):
-        """Test involving only Instrument dimensions, no joins to SkyMap"""
+        """Test involving only instrument dimensions, no joins to skymap"""
         registry = self.registry
 
         # need a bunch of dimensions and datasets for test
-        registry.addDimensionEntry("Instrument", dict(instrument="DummyCam", visit_max=25, exposure_max=300,
+        registry.addDimensionEntry("instrument", dict(instrument="DummyCam", visit_max=25, exposure_max=300,
                                                       detector_max=6))
-        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                          physical_filter="dummy_r",
-                                                          abstract_filter="r"))
-        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                          physical_filter="dummy_i",
-                                                          abstract_filter="i"))
+        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
+                                                           physical_filter="dummy_r",
+                                                           abstract_filter="r"))
+        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
+                                                           physical_filter="dummy_i",
+                                                           abstract_filter="i"))
         for detector in (1, 2, 3, 4, 5):
-            registry.addDimensionEntry("Detector", dict(instrument="DummyCam", detector=detector))
-        registry.addDimensionEntry("Visit", dict(instrument="DummyCam", visit=10, physical_filter="dummy_i"))
-        registry.addDimensionEntry("Visit", dict(instrument="DummyCam", visit=11, physical_filter="dummy_r"))
-        registry.addDimensionEntry("Visit", dict(instrument="DummyCam", visit=20, physical_filter="dummy_r"))
-        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=100, visit=10,
+            registry.addDimensionEntry("detector", dict(instrument="DummyCam", detector=detector))
+        registry.addDimensionEntry("visit", dict(instrument="DummyCam", visit=10, physical_filter="dummy_i"))
+        registry.addDimensionEntry("visit", dict(instrument="DummyCam", visit=11, physical_filter="dummy_r"))
+        registry.addDimensionEntry("visit", dict(instrument="DummyCam", visit=20, physical_filter="dummy_r"))
+        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=100, visit=10,
                                                     physical_filter="dummy_i"))
-        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=101, visit=10,
+        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=101, visit=10,
                                                     physical_filter="dummy_i"))
-        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=110, visit=11,
+        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=110, visit=11,
                                                     physical_filter="dummy_r"))
-        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=111, visit=11,
+        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=111, visit=11,
                                                     physical_filter="dummy_r"))
-        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=200, visit=20,
+        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=200, visit=20,
                                                     physical_filter="dummy_r"))
-        registry.addDimensionEntry("Exposure", dict(instrument="DummyCam", exposure=201, visit=20,
+        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=201, visit=20,
                                                     physical_filter="dummy_r"))
 
         # dataset types
@@ -96,10 +96,10 @@ class QueryBuilderTestCase(unittest.TestCase):
         run2 = registry.makeRun(collection=collection2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW", dimensions=("Instrument", "Exposure", "Detector"),
+        rawType = DatasetType(name="RAW", dimensions=("instrument", "exposure", "detector"),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
+        calexpType = DatasetType(name="CALEXP", dimensions=("instrument", "visit", "detector"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
@@ -109,7 +109,7 @@ class QueryBuilderTestCase(unittest.TestCase):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
                 ref = registry.addDataset(rawType, dataId=dataId, run=run)
-                # Exposures 100 and 101 appear in both collections, 100 has
+                # exposures 100 and 101 appear in both collections, 100 has
                 # different dataset_id in different collections, for 101 only
                 # single dataset_id exists
                 if exposure == 100:
@@ -138,8 +138,8 @@ class QueryBuilderTestCase(unittest.TestCase):
             self.assertCountEqual(row.dataId.keys(), ("instrument", "detector", "exposure", "visit",
                                                       "physical_filter", "abstract_filter"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, calexpType))
-            packer1 = registry.makeDataIdPacker("VisitDetector", row.dataId)
-            packer2 = registry.makeDataIdPacker("ExposureDetector", row.dataId)
+            packer1 = registry.makeDataIdPacker("visit_detector", row.dataId)
+            packer2 = registry.makeDataIdPacker("exposure_detector", row.dataId)
             self.assertEqual(packer1.unpack(packer1.pack(row.dataId)),
                              DataId(row.dataId, dimensions=packer1.dimensions.required))
             self.assertEqual(packer2.unpack(packer2.pack(row.dataId)),
@@ -199,7 +199,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             optional=[calexpType],
             defer=self.DEFER
         )
-        builder.whereParsedExpression("Visit.visit = 10")
+        builder.whereParsedExpression("visit.visit = 10")
         rows = list(builder.execute())
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(row.dataId["exposure"] for row in rows), (100, 101))
@@ -230,12 +230,12 @@ class QueryBuilderTestCase(unittest.TestCase):
             optional=[calexpType],
             defer=self.DEFER
         )
-        builder.whereParsedExpression("Visit.visit > 1000")
+        builder.whereParsedExpression("visit.visit > 1000")
         rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
 
-        # Selecting by PhysicalFilter, this is not in the dimensions, but it is
-        # a part of the full expression so it should work too.
+        # Selecting by physical_filter, this is not in the dimensions, but it
+        # is a part of the full expression so it should work too.
         builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
             self.registry,
             originInfo=originInfo,
@@ -251,30 +251,30 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
     def testCalibrationLabel(self):
-        """Test the CalibrationLabel dimension and the perDatasetTypeDimensions
-        option to `Registry.selectDimensions`.
+        """Test the calibration_label dimension and the
+        perDatasetTypeDimensions option to `Registry.selectDimensions`.
         """
         registry = self.registry
 
         # need a bunch of dimensions and datasets for test
-        registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
-        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                          physical_filter="dummy_r",
-                                                          abstract_filter="r"))
+        registry.addDimensionEntry("instrument", dict(instrument="DummyCam"))
+        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
+                                                           physical_filter="dummy_r",
+                                                           abstract_filter="r"))
         for detector in (1, 2, 3, 4, 5):
-            registry.addDimensionEntry("Detector", dict(instrument="DummyCam", detector=detector))
+            registry.addDimensionEntry("detector", dict(instrument="DummyCam", detector=detector))
 
         # make few visits/exposures
         now = datetime.now()
         timestamps = []       # list of start/end time of each exposure
         for visit in (10, 11, 20):
-            registry.addDimensionEntry("Visit",
+            registry.addDimensionEntry("visit",
                                        dict(instrument="DummyCam", visit=visit, physical_filter="dummy_r"))
             visit_start = now + timedelta(seconds=visit*45)
             for exposure in (0, 1):
                 start = visit_start + timedelta(seconds=20*exposure)
                 end = start + timedelta(seconds=15)
-                registry.addDimensionEntry("Exposure", dict(instrument="DummyCam",
+                registry.addDimensionEntry("exposure", dict(instrument="DummyCam",
                                                             exposure=visit*10+exposure,
                                                             visit=visit,
                                                             physical_filter="dummy_r",
@@ -283,29 +283,29 @@ class QueryBuilderTestCase(unittest.TestCase):
                 timestamps += [(start, end)]
         self.assertEqual(len(timestamps), 6)
 
-        # Add CalibrationLabel dimension entries, with various date ranges.
+        # Add calibration_label dimension entries, with various date ranges.
         # The string calibration_labels are intended to be descriptive for
-        # the purposes of this test, by showing ranges of Exposure numbers,
-        # and do not represent what we expect real-life CalibrationLabels
+        # the purposes of this test, by showing ranges of exposure numbers,
+        # and do not represent what we expect real-life calibration_labels
         # to look like.
 
         # From before first exposure (100) to the end of second exposure (101).
-        registry.addDimensionEntry("CalibrationLabel",
+        registry.addDimensionEntry("calibration_label",
                                    dict(instrument="DummyCam", calibration_label="..101",
                                         valid_first=now-timedelta(seconds=3600),
                                         valid_last=timestamps[1][1]))
         # From start of third exposure (110) to the end of last exposure (201).
-        registry.addDimensionEntry("CalibrationLabel",
+        registry.addDimensionEntry("calibration_label",
                                    dict(instrument="DummyCam", calibration_label="110..201",
                                         valid_first=timestamps[2][0],
                                         valid_last=timestamps[-1][1]))
         # Third (110) and fourth (111) exposures.
-        registry.addDimensionEntry("CalibrationLabel",
+        registry.addDimensionEntry("calibration_label",
                                    dict(instrument="DummyCam", calibration_label="110..111",
                                         valid_first=timestamps[2][0],
                                         valid_last=timestamps[3][1]))
         # Fifth exposure (200) only.
-        registry.addDimensionEntry("CalibrationLabel",
+        registry.addDimensionEntry("calibration_label",
                                    dict(instrument="DummyCam", calibration_label="200..200",
                                         valid_first=timestamps[4][0],
                                         valid_last=timestamps[5][0]-timedelta(seconds=1)))
@@ -315,17 +315,17 @@ class QueryBuilderTestCase(unittest.TestCase):
         run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testExposureRange")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW", dimensions=("Instrument", "Detector", "Exposure"),
+        rawType = DatasetType(name="RAW", dimensions=("instrument", "detector", "exposure"),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        biasType = DatasetType(name="BIAS", dimensions=("Instrument", "Detector", "CalibrationLabel"),
+        biasType = DatasetType(name="BIAS", dimensions=("instrument", "detector", "calibration_label"),
                                storageClass=storageClass)
         registry.registerDatasetType(biasType)
         flatType = DatasetType(name="FLAT",
-                               dimensions=("Instrument", "Detector", "PhysicalFilter", "CalibrationLabel"),
+                               dimensions=("instrument", "detector", "physical_filter", "calibration_label"),
                                storageClass=storageClass)
         registry.registerDatasetType(flatType)
-        calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
+        calexpType = DatasetType(name="CALEXP", dimensions=("instrument", "visit", "detector"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
@@ -359,7 +359,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             originInfo=originInfo,
             required=[rawType],
             optional=[calexpType],
-            perDatasetTypeDimensions=["CalibrationLabel"],
+            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         rows = list(builder.execute())
@@ -377,7 +377,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[biasType],
-            perDatasetTypeDimensions=["CalibrationLabel"],
+            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         rows = list(builder.execute())
@@ -395,7 +395,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[flatType],
-            perDatasetTypeDimensions=["CalibrationLabel"],
+            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         with self.assertRaises(LookupError):
@@ -408,7 +408,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             originInfo=originInfo,
             required=[rawType, flatType],
             optional=[calexpType],
-            perDatasetTypeDimensions=["CalibrationLabel"],
+            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         rows = list(builder.execute())
@@ -426,7 +426,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[flatType, biasType],
-            perDatasetTypeDimensions=["CalibrationLabel"],
+            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         builder.whereParsedExpression("detector IN (1, 3) AND exposure NOT IN (100, 101, 201)")
@@ -445,10 +445,10 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[flatType, biasType],
-            perDatasetTypeDimensions=["CalibrationLabel"],
+            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
-        builder.whereParsedExpression("Exposure.exposure = 110 AND Detector.detector = 1")
+        builder.whereParsedExpression("exposure.exposure = 110 AND detector.detector = 1")
         rows = list(builder.execute())
         self.assertEqual(len(rows), 1)
         row = rows[0]
@@ -463,24 +463,24 @@ class QueryBuilderTestCase(unittest.TestCase):
                               calibration_label="110..201"))
 
     def testSkyMapDimensions(self):
-        """Test involving only SkyMap dimensions, no joins to Instrument"""
+        """Test involving only skymap dimensions, no joins to instrument"""
         registry = self.registry
 
         # need a bunch of dimensions and datasets for test, we want
-        # "AbstractFilter" in the test so also have to add PhysicalFilter
+        # "abstract_filter" in the test so also have to add physical_filter
         # dimensions
-        registry.addDimensionEntry("Instrument", dict(instrument="DummyCam"))
-        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                          physical_filter="dummy_r",
-                                                          abstract_filter="r"))
-        registry.addDimensionEntry("PhysicalFilter", dict(instrument="DummyCam",
-                                                          physical_filter="dummy_i",
-                                                          abstract_filter="i"))
-        registry.addDimensionEntry("SkyMap", dict(skymap="DummyMap", hash="sha!".encode("utf8")))
+        registry.addDimensionEntry("instrument", dict(instrument="DummyCam"))
+        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
+                                                           physical_filter="dummy_r",
+                                                           abstract_filter="r"))
+        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
+                                                           physical_filter="dummy_i",
+                                                           abstract_filter="i"))
+        registry.addDimensionEntry("skymap", dict(skymap="DummyMap", hash="sha!".encode("utf8")))
         for tract in range(10):
-            registry.addDimensionEntry("Tract", dict(skymap="DummyMap", tract=tract))
+            registry.addDimensionEntry("tract", dict(skymap="DummyMap", tract=tract))
             for patch in range(10):
-                registry.addDimensionEntry("Patch", dict(skymap="DummyMap", tract=tract, patch=patch,
+                registry.addDimensionEntry("patch", dict(skymap="DummyMap", tract=tract, patch=patch,
                                                          cell_x=0, cell_y=0,
                                                          region=Box(LonLat(NormalizedAngle(0.), Angle(0.)))))
 
@@ -489,15 +489,15 @@ class QueryBuilderTestCase(unittest.TestCase):
         run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        calexpType = DatasetType(name="deepCoadd_calexp", dimensions=("SkyMap", "Tract", "Patch",
-                                                                      "AbstractFilter"),
+        calexpType = DatasetType(name="deepCoadd_calexp", dimensions=("skymap", "tract", "patch",
+                                                                      "abstract_filter"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
-        mergeType = DatasetType(name="deepCoadd_mergeDet", dimensions=("SkyMap", "Tract", "Patch"),
+        mergeType = DatasetType(name="deepCoadd_mergeDet", dimensions=("skymap", "tract", "patch"),
                                 storageClass=storageClass)
         registry.registerDatasetType(mergeType)
-        measType = DatasetType(name="deepCoadd_meas", dimensions=("SkyMap", "Tract", "Patch",
-                                                                  "AbstractFilter"),
+        measType = DatasetType(name="deepCoadd_meas", dimensions=("skymap", "tract", "patch",
+                                                                  "abstract_filter"),
                                storageClass=storageClass)
         registry.registerDatasetType(measType)
 
@@ -536,7 +536,7 @@ class QueryBuilderTestCase(unittest.TestCase):
             optional=[measType],
             defer=self.DEFER,
         )
-        builder.whereParsedExpression("tract IN (1, 5) AND Patch.patch IN (2, 7)")
+        builder.whereParsedExpression("tract IN (1, 5) AND patch.patch IN (2, 7)")
         rows = list(builder.execute())
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(row.dataId["tract"] for row in rows), (1, 5))
@@ -573,7 +573,7 @@ class QueryBuilderTestCase(unittest.TestCase):
     def testSpatialMatch(self):
         """Test involving spatial match using join tables.
 
-        Note that realistic test needs a resonably-defined SkyPix and regions
+        Note that realistic test needs a resonably-defined skypix and regions
         in registry tables which is hard to implement in this simple test.
         So we do not actually fill registry with any data and all queries will
         return empty result, but this is still useful for coverage of the code
@@ -587,12 +587,12 @@ class QueryBuilderTestCase(unittest.TestCase):
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
 
-        calexpType = DatasetType(name="CALEXP", dimensions=("Instrument", "Visit", "Detector"),
+        calexpType = DatasetType(name="CALEXP", dimensions=("instrument", "visit", "detector"),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
-        coaddType = DatasetType(name="deepCoadd_calexp", dimensions=("SkyMap", "Tract", "Patch",
-                                                                     "AbstractFilter"),
+        coaddType = DatasetType(name="deepCoadd_calexp", dimensions=("skymap", "tract", "patch",
+                                                                     "abstract_filter"),
                                 storageClass=storageClass)
         registry.registerDatasetType(coaddType)
 

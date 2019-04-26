@@ -1,15 +1,15 @@
 mappers:
   HscMapper:
-    # Gen3 Instrument name associated with this Gen2 Mapper
+    # Gen3 instrument name associated with this Gen2 Mapper
     instrument: HSC
-    # VisitInfo objects are used to populate Gen3 Visit and Exposure DataUnit
+    # VisitInfo objects are used to populate Gen3 visit and exposure DataUnit
     # entries; options here say how to get those from a Gen2 repo.
     VisitInfo:
       # The Gen2 DatasetType to read when trying to create a VisitInfo.
       # (we actually add a "_md" suffix, because we just read the metadata).
       DatasetType: raw
       # Gen2 Data ID keys for the above DatasetType that are used
-      # to construct Gen3 Exposure/Visit identifiers.
+      # to construct Gen3 exposure/visit identifiers.
       # At present, only one key can be provided and this is used directly
       # as the Gen3 value.
       uniqueKeys:
@@ -17,9 +17,9 @@ mappers:
 regions:
   -
     # The Gen3 DatasetType (Exposure StorageClass) to use when creating
-    # Visit-Detector regions.
+    # visit-detector regions.
     DatasetType: calexp
-    # Padding (in pixels) to add to the edges of each Detector region
+    # Padding (in pixels) to add to the edges of each detector region
     # to account for WCS inaccuracies.
     padding: 5.0
     # Collection from which WCSs should be read.
@@ -61,7 +61,7 @@ runs:
   # that originally contained the file, unless that has been overridden.
   {}
 
-skymaps: {}  # dictionary mapping Gen3 SkyMap names to repository roots
+skymaps: {}  # dictionary mapping Gen3 skymap names to repository roots
 
 storageClasses:
   # dictionary mapping Gen2 Mapping.persistable, Mapping.python, the last term

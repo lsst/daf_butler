@@ -115,14 +115,14 @@ class DataIdPacker(metaclass=ABCMeta):
         .. code:: yaml
 
             dataIdPackers:
-              VisitDetectorId:
-                given: [Instrument]
-                required: [Visit, Detector]
+              visit_detector_id:
+                given: [instrument]
+                required: [visit, detector]
                 cls: lsst.daf.butler.instrument.ObservationDataIdPacker
                 parameters:
-                  instrument: Instrument.instrument
-                  obsMax: Instrument.visit_max
-                  detectorMax: Instrument.detector_max
+                  instrument: instrument.instrument
+                  obsMax: instrument.visit_max
+                  detectorMax: instrument.detector_max
 
        See `DataIdPackerDimensions` for a description of the ``given`` and
        ``required`` options.  The ``parameters`` section maps keyword argument

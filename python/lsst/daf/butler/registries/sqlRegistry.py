@@ -243,15 +243,15 @@ class SqlRegistry(Registry):
         run = self.getRun(id=row.run_id)
         datasetRefHash = row["dataset_ref_hash"]
         if dataId is None:
-            dataId = DataId({link: row[self._schema.datasetTable.c[link]]
+            dataId = DataId({link: row[self._schema.tables["dataset"].c[link]]
                              for link in datasetType.dimensions.links()},
                             dimensions=datasetType.dimensions,
                             universe=self.dimensions)
         # Get components (if present)
         components = {}
         if datasetType.storageClass.isComposite():
-            datasetCompositionTable = self._schema.tables["DatasetComposition"]
-            datasetTable = self._schema.tables["Dataset"]
+            datasetCompositionTable = self._schema.tables["dataset_composition"]
+            datasetTable = self._schema.tables["dataset"]
             columns = list(datasetTable.c)
             columns.append(datasetCompositionTable.c.component_name)
             results = self._connection.execute(
@@ -287,7 +287,7 @@ class SqlRegistry(Registry):
 
     def getAllCollections(self):
         # Docstring inherited from Registry.getAllCollections
-        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        datasetCollectionTable = self._schema.tables["dataset_collection"]
         result = self._connection.execute(select([datasetCollectionTable.c.collection]).distinct()).fetchall()
         if result is None:
             return set()
@@ -300,9 +300,9 @@ class SqlRegistry(Registry):
         else:
             datasetType.normalize(universe=self.dimensions)
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
-        datasetTable = self._schema.tables["Dataset"]
-        datasetCollectionTable = self._schema.tables["DatasetCollection"]
-        dataIdExpression = and_(self._schema.datasetTable.c[name] == dataId[name]
+        datasetTable = self._schema.tables["dataset"]
+        datasetCollectionTable = self._schema.tables["dataset_collection"]
+        dataIdExpression = and_(self._schema.tables["dataset"].c[name] == dataId[name]
                                 for name in dataId.dimensions().links())
         result = self._connection.execute(
             datasetTable.select().select_from(
@@ -327,7 +327,7 @@ class SqlRegistry(Registry):
         them with a colon.  Parameter values are provided as additional
         keyword arguments.  For example:
 
-          registry.query("SELECT * FROM Instrument WHERE instrument=:name",
+          registry.query("SELECT * FROM instrument WHERE instrument=:name",
                          name="HSC")
 
         Parameters
@@ -360,7 +360,7 @@ class SqlRegistry(Registry):
         if existingDatasetType is None:
             try:
                 self._connection.execute(
-                    self._schema.tables["DatasetType"].insert().values(
+                    self._schema.tables["dataset_type"].insert().values(
                         dataset_type_name=datasetType.name,
                         storage_class=datasetType.storageClass.name
                     )
@@ -377,7 +377,7 @@ class SqlRegistry(Registry):
                 # content must be corrupted.
                 if datasetType.dimensions:
                     self._connection.execute(
-                        self._schema.tables["DatasetTypeDimensions"].insert(),
+                        self._schema.tables["dataset_type_dimensions"].insert(),
                         [{"dataset_type_name": datasetType.name,
                           "dimension_name": dimensionName}
                          for dimensionName in datasetType.dimensions.names]
@@ -398,7 +398,7 @@ class SqlRegistry(Registry):
 
     def getAllDatasetTypes(self):
         # Docstring inherited from Registry.getAllDatasetTypes.
-        datasetTypeTable = self._schema.tables["DatasetType"]
+        datasetTypeTable = self._schema.tables["dataset_type"]
 
         # Get all the registered names
         result = self._connection.execute(select([datasetTypeTable.c.dataset_type_name])).fetchall()
@@ -410,8 +410,8 @@ class SqlRegistry(Registry):
 
     def getDatasetType(self, name):
         # Docstring inherited from Registry.getDatasetType.
-        datasetTypeTable = self._schema.tables["DatasetType"]
-        datasetTypeDimensionsTable = self._schema.tables["DatasetTypeDimensions"]
+        datasetTypeTable = self._schema.tables["dataset_type"]
+        datasetTypeDimensionsTable = self._schema.tables["dataset_type_dimensions"]
         # Get StorageClass from DatasetType table
         result = self._connection.execute(select([datasetTypeTable.c.storage_class]).where(
             datasetTypeTable.c.dataset_type_name == name)).fetchone()
@@ -452,7 +452,7 @@ class SqlRegistry(Registry):
         # Add the Dataset table entry itself.  Note that this will get rolled
         # back if the subsequent call to associate raises, which is what we
         # want.
-        datasetTable = self._schema.tables["Dataset"]
+        datasetTable = self._schema.tables["dataset"]
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
         # TODO add producer
         result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
@@ -479,7 +479,7 @@ class SqlRegistry(Registry):
 
     def getDataset(self, id, datasetType=None, dataId=None):
         # Docstring inherited from Registry.getDataset
-        datasetTable = self._schema.tables["Dataset"]
+        datasetTable = self._schema.tables["dataset"]
         result = self._connection.execute(
             select([datasetTable]).where(datasetTable.c.dataset_id == id)).fetchone()
         if result is None:
@@ -498,7 +498,7 @@ class SqlRegistry(Registry):
         for componentRef in ref.components.values():
             self.removeDataset(componentRef)
 
-        datasetTable = self._schema.tables["Dataset"]
+        datasetTable = self._schema.tables["dataset"]
 
         # Remove related quanta.  We actually delete from Execution, because
         # Quantum's primary key (quantum_id) is also a foreign key to
@@ -509,8 +509,8 @@ class SqlRegistry(Registry):
         # Dataset to be deleting without removing the Quanta that refer to
         # them.  A Dataset is still quite usable without provenance, but
         # provenance is worthless if it's inaccurate.
-        executionTable = self._schema.tables["Execution"]
-        datasetConsumersTable = self._schema.tables["DatasetConsumers"]
+        executionTable = self._schema.tables["execution"]
+        datasetConsumersTable = self._schema.tables["dataset_consumers"]
         selectProducer = select(
             [datasetTable.c.quantum_id]
         ).where(
@@ -546,7 +546,7 @@ class SqlRegistry(Registry):
             raise AmbiguousDatasetError(f"Cannot attach component to dataset {parent} without ID.")
         if component.id is None:
             raise AmbiguousDatasetError(f"Cannot attach component {component} without ID.")
-        datasetCompositionTable = self._schema.tables["DatasetComposition"]
+        datasetCompositionTable = self._schema.tables["dataset_composition"]
         values = dict(component_name=name,
                       parent_dataset_id=parent.id,
                       component_dataset_id=component.id)
@@ -562,7 +562,7 @@ class SqlRegistry(Registry):
         # implementation is only concurrency-safe for databases that implement
         # transactions with database- or table-wide locks (e.g. SQLite).
 
-        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        datasetCollectionTable = self._schema.tables["dataset_collection"]
         insertQuery = datasetCollectionTable.insert()
         checkQuery = select([datasetCollectionTable.c.dataset_id], whereclause=and_(
             datasetCollectionTable.c.collection == collection,
@@ -595,7 +595,7 @@ class SqlRegistry(Registry):
     @transactional
     def disassociate(self, collection, refs):
         # Docstring inherited from Registry.disassociate.
-        datasetCollectionTable = self._schema.tables["DatasetCollection"]
+        datasetCollectionTable = self._schema.tables["dataset_collection"]
         for ref in refs:
             if ref.id is None:
                 raise AmbiguousDatasetError(f"Cannot disassociate dataset {ref} without ID.")
@@ -609,7 +609,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.addDatasetLocation.
         if ref.id is None:
             raise AmbiguousDatasetError(f"Cannot add location for dataset {ref} without ID.")
-        datasetStorageTable = self._schema.tables["DatasetStorage"]
+        datasetStorageTable = self._schema.tables["dataset_storage"]
         values = dict(dataset_id=ref.id,
                       datastore_name=datastoreName)
         self._connection.execute(datasetStorageTable.insert().values(**values))
@@ -618,7 +618,7 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.getDatasetLocation.
         if ref.id is None:
             raise AmbiguousDatasetError(f"Cannot add location for dataset {ref} without ID.")
-        datasetStorageTable = self._schema.tables["DatasetStorage"]
+        datasetStorageTable = self._schema.tables["dataset_storage"]
         result = self._connection.execute(
             select([datasetStorageTable.c.datastore_name]).where(
                 and_(datasetStorageTable.c.dataset_id == ref.id))).fetchall()
@@ -628,7 +628,7 @@ class SqlRegistry(Registry):
     @transactional
     def removeDatasetLocation(self, datastoreName, ref):
         # Docstring inherited from Registry.getDatasetLocation.
-        datasetStorageTable = self._schema.tables["DatasetStorage"]
+        datasetStorageTable = self._schema.tables["dataset_storage"]
         self._connection.execute(datasetStorageTable.delete().where(
             and_(datasetStorageTable.c.dataset_id == ref.id,
                  datasetStorageTable.c.datastore_name == datastoreName)))
@@ -636,7 +636,7 @@ class SqlRegistry(Registry):
     @transactional
     def addExecution(self, execution):
         # Docstring inherited from Registry.addExecution
-        executionTable = self._schema.tables["Execution"]
+        executionTable = self._schema.tables["execution"]
         kwargs = {}
         # Only pass in the execution_id to the insert statement if it is not
         # None. Otherwise, some databases attempt to insert a null and fail.
@@ -656,7 +656,7 @@ class SqlRegistry(Registry):
 
     def getExecution(self, id):
         # Docstring inherited from Registry.getExecution
-        executionTable = self._schema.tables["Execution"]
+        executionTable = self._schema.tables["execution"]
         result = self._connection.execute(
             select([executionTable.c.start_time,
                     executionTable.c.end_time,
@@ -689,7 +689,7 @@ class SqlRegistry(Registry):
     @transactional
     def addRun(self, run):
         # Docstring inherited from Registry.addRun
-        runTable = self._schema.tables["Run"]
+        runTable = self._schema.tables["run"]
         # TODO: this check is probably undesirable, as we may want to have
         # multiple Runs output to the same collection.  Fixing this requires
         # (at least) modifying getRun() accordingly.
@@ -708,8 +708,8 @@ class SqlRegistry(Registry):
 
     def getRun(self, id=None, collection=None):
         # Docstring inherited from Registry.getRun
-        executionTable = self._schema.tables["Execution"]
-        runTable = self._schema.tables["Run"]
+        executionTable = self._schema.tables["execution"]
+        runTable = self._schema.tables["run"]
         run = None
         # Retrieve by id
         if (id is not None) and (collection is None):
@@ -748,8 +748,8 @@ class SqlRegistry(Registry):
     @transactional
     def addQuantum(self, quantum):
         # Docstring inherited from Registry.addQuantum.
-        quantumTable = self._schema.tables["Quantum"]
-        datasetConsumersTable = self._schema.tables["DatasetConsumers"]
+        quantumTable = self._schema.tables["quantum"]
+        datasetConsumersTable = self._schema.tables["dataset_consumers"]
         # First add the Execution part
         self.addExecution(quantum)
         # Then the Quantum specific part
@@ -767,8 +767,8 @@ class SqlRegistry(Registry):
 
     def getQuantum(self, id):
         # Docstring inherited from Registry.getQuantum.
-        executionTable = self._schema.tables["Execution"]
-        quantumTable = self._schema.tables["Quantum"]
+        executionTable = self._schema.tables["execution"]
+        quantumTable = self._schema.tables["quantum"]
         result = self._connection.execute(
             select([quantumTable.c.task,
                     quantumTable.c.run_id,
@@ -785,7 +785,7 @@ class SqlRegistry(Registry):
                               host=result["host"],
                               id=id)
             # Add predicted and actual inputs to quantum
-            datasetConsumersTable = self._schema.tables["DatasetConsumers"]
+            datasetConsumersTable = self._schema.tables["dataset_consumers"]
             for result in self._connection.execute(select([datasetConsumersTable.c.dataset_id,
                                                            datasetConsumersTable.c.actual]).where(
                     datasetConsumersTable.c.quantum_id == id)):
@@ -800,7 +800,7 @@ class SqlRegistry(Registry):
     @transactional
     def markInputUsed(self, quantum, ref):
         # Docstring inherited from Registry.markInputUsed.
-        datasetConsumersTable = self._schema.tables["DatasetConsumers"]
+        datasetConsumersTable = self._schema.tables["dataset_consumers"]
         result = self._connection.execute(datasetConsumersTable.update().where(and_(
             datasetConsumersTable.c.quantum_id == quantum.id,
             datasetConsumersTable.c.dataset_id == ref.id)).values(actual=True))
@@ -890,15 +890,15 @@ class SqlRegistry(Registry):
                     **dataId
                 )
             )
-        # Update the join table between this Dimension and SkyPix, if it isn't
+        # Update the join table between this Dimension and skypix, if it isn't
         # itself a view.
-        join = dataId.dimensions().union(["SkyPix"]).joins().findIf(
+        join = dataId.dimensions().union(["skypix"]).joins().findIf(
             lambda join: join != holder and join.name not in self._schema.views
         )
         if join is None:
             return
         if update:
-            # Delete any old SkyPix join entries for this Dimension
+            # Delete any old skypix join entries for this Dimension
             self._connection.execute(
                 self._schema.tables[join.name].delete().where(
                     and_((self._schema.tables[join.name].c[name] == dataId[name]

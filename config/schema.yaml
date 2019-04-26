@@ -1,7 +1,7 @@
 schema:
   version: 0
   tables:
-    Dataset:
+    dataset:
       columns:
       -
         name: dataset_id
@@ -18,7 +18,7 @@ schema:
         nullable: false
         doc: >
           The name of the DatasetType associated with this dataset; a
-          reference to the DatasetType table.
+          reference to the dataset_type table.
       -
         name: run_id
         type: int
@@ -96,76 +96,76 @@ schema:
       foreignKeys:
       -
         src: dataset_type_name
-        tgt: DatasetType.dataset_type_name
+        tgt: dataset_type.dataset_type_name
       -
         src: run_id
-        tgt: Run.execution_id
+        tgt: run.execution_id
       -
         src: quantum_id
-        tgt: Quantum.execution_id
+        tgt: quantum.execution_id
         onDelete: SET NULL
       -
         src: abstract_filter
-        tgt: AbstractFilter.abstract_filter
+        tgt: abstract_filter.abstract_filter
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
       -
         src:
           - instrument
           - physical_filter
         tgt:
-          - PhysicalFilter.instrument
-          - PhysicalFilter.physical_filter
+          - physical_filter.instrument
+          - physical_filter.physical_filter
       -
         src:
           - instrument
           - detector
         tgt:
-          - Detector.instrument
-          - Detector.detector
+          - detector.instrument
+          - detector.detector
       -
         src:
           - instrument
           - visit
         tgt:
-          - Visit.instrument
-          - Visit.visit
+          - visit.instrument
+          - visit.visit
       -
         src:
           - instrument
           - exposure
         tgt:
-          - Exposure.instrument
-          - Exposure.exposure
+          - exposure.instrument
+          - exposure.exposure
       -
         src:
           - instrument
           - calibration_label
         tgt:
-          - CalibrationLabel.instrument
-          - CalibrationLabel.calibration_label
+          - calibration_label.instrument
+          - calibration_label.calibration_label
       -
         src: skymap
-        tgt: SkyMap.skymap
+        tgt: skymap.skymap
       -
         src:
           - skymap
           - tract
         tgt:
-          - Tract.skymap
-          - Tract.tract
+          - tract.skymap
+          - tract.tract
       -
         src:
           - skymap
           - tract
           - patch
         tgt:
-          - Patch.skymap
-          - Patch.tract
-          - Patch.patch
+          - patch.skymap
+          - patch.tract
+          - patch.patch
 
-    DatasetComposition:
+    dataset_composition:
       doc: >
         A self-join table that relates components of a dataset to their
         parent.
@@ -195,14 +195,14 @@ schema:
       foreignKeys:
       -
         src: parent_dataset_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
         onDelete: CASCADE
       -
         src: component_dataset_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
         onDelete: CASCADE
 
-    DatasetType:
+    dataset_type:
       doc: >
         A Table containing the set of registered DatasetTypes and their
         StorageClasses.
@@ -226,7 +226,7 @@ schema:
           so the set of allowed StorageClasses and their properties is
           maintained in the registry Python code rather than the database.
 
-    DatasetTypeDimensions:
+    dataset_type_dimensions:
       doc: >
         A Definition table indicating which dimension link fields in Dataset
         are non-NULL for Datasets with this DatasetType.
@@ -248,9 +248,9 @@ schema:
       foreignKeys:
       -
         src: dataset_type_name
-        tgt: DatasetType.dataset_type_name
+        tgt: dataset_type.dataset_type_name
 
-    DatasetTypeMetadata:
+    dataset_type_metadata:
       doc: >
         A table the indicating the Metadata tables that have entries for
         Datasets with this DatasetType.
@@ -273,9 +273,9 @@ schema:
       foreignKeys:
       -
         src: dataset_type_name
-        tgt: DatasetType.dataset_type_name
+        tgt: dataset_type.dataset_type_name
 
-    DatasetCollection:
+    dataset_collection:
       doc: >
           A table that associates Dataset records with Collections, which are
           implemented simply as string tags.
@@ -286,7 +286,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          Link to a unique record in the Dataset table.
+          Link to a unique record in the dataset table.
       -
         name: dataset_ref_hash
         type: hash
@@ -306,12 +306,12 @@ schema:
       foreignKeys:
       -
         src: dataset_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
         onDelete: CASCADE
       unique:
       - [dataset_ref_hash, collection]
 
-    Execution:
+    execution:
       doc: >
         A table whose entries represent any step in a production.
       columns:
@@ -329,30 +329,30 @@ schema:
         type: datetime
         nullable: true
         doc: >
-          The start time for the execution.  May have a different
-          interpretation for different kinds of execution.
+          The start time for the Execution.  May have a different
+          interpretation for different kinds of Execution.
       -
         name: end_time
         type: datetime
         nullable: true
         doc: >
-          The end time for the execution.  May have a different
-          interpretation for different kinds of execution.
+          The end time for the Execution.  May have a different
+          interpretation for different kinds of Execution.
       -
         name: host
         type: string
         length: 64
         nullable: true
         doc: >
-          The system on which the execution was run.  May have a different
-          interpretation for different kinds of execution.
+          The system on which the Execution was run.  May have a different
+          interpretation for different kinds of Execution.
 
-    Run:
+    run:
       doc: >
         A table used to capture coarse provenance for all Datasets. For
         Datasets produced by SuperTask Pipelines, a Run represents a single
-        execution of a single Pipeline. Each Run record is uniquely
-        associated with an Execution record.
+        execution of a single Pipeline. Each run record is uniquely
+        associated with an execution record.
       columns:
       -
         name: execution_id
@@ -361,7 +361,7 @@ schema:
         nullable: false
         doc: >
           A unique integer identifier for this Run, which
-          is also the execution_id for an associated Execution record.
+          is also the execution_id for an associated execution record.
       -
         name: collection
         type: string
@@ -384,22 +384,22 @@ schema:
       foreignKeys:
       -
         src: environment_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
         onDelete: SET NULL
       -
         src: pipeline_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
         onDelete: SET NULL
       -
         src: execution_id
-        tgt: Execution.execution_id
+        tgt: execution.execution_id
         onDelete: CASCADE
 
-    Quantum:
+    quantum:
       doc: >
         A table used to capture fine-grained provenance for Datasets
         produced by SuperTasks. Each Quantum record is uniquely associated
-        with an Execution record.
+        with an execution record.
       columns:
       -
         name: execution_id
@@ -408,13 +408,13 @@ schema:
         nullable: false
         doc: >
           A unique integer identifier for this Quantum,
-          which is also the execution_id for an associated Execution record.
+          which is also the execution_id for an associated execution record.
       -
         name: task
         type: string
         length: 256
         doc: >
-          Fully-qualified name of the SuperTask that executed this Quantum.
+          Fully-qualified name of the SuperTask that executed this quantum.
       -
         name: run_id
         type: int
@@ -423,14 +423,14 @@ schema:
       foreignKeys:
       -
         src: run_id
-        tgt: Run.execution_id
+        tgt: run.execution_id
         onDelete: CASCADE
       -
         src: execution_id
-        tgt: Execution.execution_id
+        tgt: execution.execution_id
         onDelete: CASCADE
 
-    DatasetConsumers:
+    dataset_consumers:
       doc: >
         A table relating Quantum records to the Datasets they used as inputs.
       columns:
@@ -456,14 +456,14 @@ schema:
       foreignKeys:
       -
         src: quantum_id
-        tgt: Quantum.execution_id
+        tgt: quantum.execution_id
         onDelete: CASCADE
       -
         src: dataset_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
         onDelete: CASCADE
 
-    DatasetStorage:
+    dataset_storage:
       doc: >
         A table that provides information on whether a Dataset is stored in
         one or more Datastores.  The presence or absence of a record in this
@@ -476,7 +476,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          Link to the Dataset table.
+          Link to the dataset table.
       - name: datastore_name
         type: string
         length: 256
@@ -487,12 +487,12 @@ schema:
       foreignKeys:
       -
         src: dataset_id
-        tgt: Dataset.dataset_id
+        tgt: dataset.dataset_id
 
 
-    Instrument:
+    instrument:
       doc: >
-        A definition table containing recognized Instrument values.
+        A definition table containing recognized instrument values.
       limited: false
       columns:
       -
@@ -501,30 +501,30 @@ schema:
         length: 16
         primary_key: true
         doc: >
-          Globally unique string indentifier for this Instrument.
+          Globally unique string indentifier for this instrument.
       -
         name: visit_max
         type: int
         doc: >
-          Maximum value for the 'visit' field for Visits associated with
+          Maximum value for the 'visit' field for visits associated with
           this instrument (exclusive).
       -
         name: exposure_max
         type: int
         doc: >
-          Maximum value for the 'exposure' field for Exposures associated with
+          Maximum value for the 'exposure' field for exposures associated with
           this instrument (exclusive).
       -
         name: detector_max
         type: int
         doc: >
-          Maximum value for the 'detector' field for Detectors associated with
+          Maximum value for the 'detector' field for detectors associated with
           this instrument (exclusive).
 
-    AbstractFilter:
+    abstract_filter:
       doc: >
-        A view aggregating all distinct AbstractFilters references by any
-        PhysicalFilter.
+        A view aggregating all distinct abstract_filter references by any
+        physical_filter.
       limited: false
       columns:
       -
@@ -536,13 +536,13 @@ schema:
           Name of the filter.
       sql: >
         SELECT DISTINCT abstract_filter
-        FROM PhysicalFilter;
+        FROM physical_filter;
       materialize: false
 
-    PhysicalFilter:
+    physical_filter:
       doc: >
-        An Instrument-populated table that relates a PhysicalFilter
-        to its Instrument and optional AbstractFilter.
+        An instrument-populated table that relates a physical_filter
+        to its instrument and optional abstract_filter.
       limited: false
       columns:
       -
@@ -551,7 +551,7 @@ schema:
         length: 16
         primary_key: true
         doc: >
-          Name of the Instrument with which this filter is associated.
+          Name of the instrument with which this filter is associated.
       -
         name: physical_filter
         type: string
@@ -559,26 +559,26 @@ schema:
         primary_key: true
         doc: >
           String name of the filter, typically a multi-letter code in a
-          convention defined by the Instrument (e.g. "HSC-I" or "F775W").
+          convention defined by the instrument (e.g. "HSC-I" or "F775W").
       -
         name: abstract_filter
         type: string
         length: 8
         doc: >
-          Name of the AbstractFilter with which this filter is associated.
+          Name of the abstract_filter with which this filter is associated.
       foreignKeys:
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
       foreignKeys:
       -
         src: abstract_filter
-        tgt: AbstractFilter.abstract_filter
+        tgt: abstract_filter.abstract_filter
 
-    Detector:
+    detector:
       doc: >
-        An Instrument-populated table that relates a Detector to its
-        Instrument and provides additional labels.
+        An instrument-populated table that relates a detector to its
+        instrument and provides additional labels.
       limited: false
       columns:
       -
@@ -588,43 +588,43 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          Name of the Instrument with which this Detector is associated.
+          Name of the instrument with which this detector is associated.
       -
         name: detector
         type: int
         primary_key: true
         nullable: false
         doc: >
-          A unique (with Instrument) integer identifier for the Detector.
+          A unique (with instrument) integer identifier for the detector.
       -
         name: name
         type: string
         length: 32
         doc: >
           An alternate string identifer for the detector; may or may not
-          be unique within an Instrument.
+          be unique within an instrument.
       -
         name: raft
         type: string
         length: 32
         doc: >
-          A string name for a group of detectors with an Instrument-dependent
+          A string name for a group of detectors with an instrument-dependent
           interpretation.
       -
         name: purpose
         type: string
         length: 32
         doc: >
-          Role of the Detector; typically one of "SCIENCE", "WAVEFRONT",
-          or "GUIDE", though Instruments may define additional values.
+          Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
+          or "GUIDE", though instruments may define additional values.
       foreignKeys:
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
 
-    Visit:
+    visit:
       doc: >
-        A table containing Instrument-generic metadata for a Visit.
+        A table containing instrument-generic metadata for a visit.
       limited: false
       columns:
       -
@@ -634,44 +634,44 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          The Instrument used to observe the Exposures associated with this
-          Visit.
+          The instrument used to observe the exposures associated with this
+          visit.
       -
         name: visit
         type: int
         primary_key: true
         nullable: false
         doc: >
-          Unique (with instrument) integer identifier for this Visit.
+          Unique (with instrument) integer identifier for this visit.
       -
         name: physical_filter
         type: string
         length: 16
         nullable: false
         doc: >
-          The bandpass filter used for all exposures in this Visit.
+          The bandpass filter used for all exposures in this visit.
       -
         name: datetime_begin
         type: datetime
         doc: >
-          TAI timestamp of the beginning of the Visit.  This should be the
-          same as the datetime_begin of the first Exposure associated
-          with this Visit.
+          TAI timestamp of the beginning of the visit.  This should be the
+          same as the datetime_begin of the first exposure associated
+          with this visit.
       -
         name: datetime_end
         type: datetime
         doc: >
-          TAI timestamp of the end of the Visit.  This should be the
-          same as the datetime_end of the last Exposure associated
-          with this Visit.
+          TAI timestamp of the end of the visit.  This should be the
+          same as the datetime_end of the last exposure associated
+          with this visit.
       -
         name: exposure_time
         type: float
         doc: >
-          The total exposure time of the Visit in seconds.  This should
+          The total exposure time of the visit in seconds.  This should
           be equal to the sum of the exposure_time values for all
-          constituent Exposures (i.e. it should not include time between
-          Exposures).
+          constituent exposures (i.e. it should not include time between
+          exposures).
       -
         name: seeing
         type: float
@@ -683,29 +683,29 @@ schema:
         type: region
         doc: >
           A spatial region on the sky that bounds the area covered by the
-          Visit.  This is expected to be more precise than the region covered
-          by the SkyPixels associated with the Visit, but may still be larger
-          than the Visit as long as it fully covers it.  Must also fully
-          cover all regions in the VisitDetectorRegion entries associated with
-          this Visit.
+          visit.  This is expected to be more precise than the region covered
+          by the skypix tiles associated with the visit, but may still be larger
+          than the visit as long as it fully covers it.  Must also fully
+          cover all regions in the visit_detector_region entries associated with
+          this visit.
           Regions are lsst.sphgeom.ConvexPolygon objects persisted as
           portable (but not human-readable) bytestrings using the encode
           and decode methods.
       foreignKeys:
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
       -
         src:
         - instrument
         - physical_filter
         tgt:
-        - PhysicalFilter.instrument
-        - PhysicalFilter.physical_filter
+        - physical_filter.instrument
+        - physical_filter.physical_filter
 
-    Exposure:
+    exposure:
       doc: >
-        A table containing Instrument-generic Exposure metadata.
+        A table containing instrument-generic exposure metadata.
       limited: false
       columns:
       -
@@ -715,19 +715,19 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          The Instrument used to observe the Exposure.
+          The instrument used to observe the exposure.
       -
         name: exposure
         type: int
         primary_key: true
         nullable: false
         doc: >
-          Unique (with instrument) integer identifier for this Exposure.
+          Unique (with instrument) integer identifier for this exposure.
       -
         name: visit
         type: int
         doc: >
-          ID of the Visit this Exposure is associated with.  Science
+          ID of the visit this exposure is associated with.  Science
           observations should essentially always be associated with a
           visit, but calibration observations may not be.
       -
@@ -736,53 +736,53 @@ schema:
         length: 16
         nullable: false
         doc: >
-          The bandpass filter used for all exposures in this Visit.
+          The bandpass filter used for all exposures in this visit.
       -
         name: snap
         type: int
         doc: >
-          If visit is not null, the index of this Exposure in the Visit,
+          If visit is not null, the index of this exposure in the visit,
           starting from zero.
       -
         name: datetime_begin
         type: datetime
         doc: >
-          TAI timestamp of the start of the Exposure.
+          TAI timestamp of the start of the exposure.
       -
         name: datetime_end
         type: datetime
         doc: >
-          TAI timestamp of the end of the Exposure.
+          TAI timestamp of the end of the exposure.
       -
         name: exposure_time
         type: float
-        doc: Duration of the Exposure with shutter open (seconds).
+        doc: Duration of the exposure with shutter open (seconds).
       -
         name: dark_time
         type: float
-        doc: Duration of the Exposure with shutter closed (seconds).
+        doc: Duration of the exposure with shutter closed (seconds).
       foreignKeys:
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
       -
         src:
         - instrument
         - visit
         tgt:
-        - Visit.instrument
-        - Visit.visit
+        - visit.instrument
+        - visit.visit
       -
         src:
         - instrument
         - physical_filter
         tgt:
-        - PhysicalFilter.instrument
-        - PhysicalFilter.physical_filter
+        - physical_filter.instrument
+        - physical_filter.physical_filter
 
-    SkyMap:
+    skymap:
       doc: >
-        A table containing registered SkyMaps and the the SHA1 hashes
+        A table containing registered skymaps and the the SHA1 hashes
         used to compare them.
       limited: false
       columns:
@@ -793,7 +793,7 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          A human-readable name for the SkyMap, used as its unique
+          A human-readable name for the skymap, used as its unique
           identifier.
       -
         name: hash
@@ -801,31 +801,31 @@ schema:
         nbytes: 40
         nullable: false
         doc: >
-          A hash of the SkyMap's parameters, used to prevent
-          duplicate SkyMaps with the different names from being
+          A hash of the skymap's parameters, used to prevent
+          duplicate skymaps with the different names from being
           registered.
 
       - name: tract_max
         type: int
         doc: >
-          Maximum ID for tracts in this SkyMap, exclusive.
+          Maximum ID for tracts in this skymap, exclusive.
 
       - name: patch_nx_max
         type: int
         doc: >
-          Number of patches in the x direction in each Tract.
+          Number of patches in the x direction in each tract.
 
       - name: patch_ny_max
         type: int
         doc: >
-          Number of patches in the y direction in each Tract.
+          Number of patches in the y direction in each tract.
 
       unique:
         - [hash]
 
-    Tract:
+    tract:
       doc: >
-        A SkyMap-populated table relating a Tract to its spatial region
+        A skymap-populated table relating a tract to its spatial region
         on the sky.
       limited: false
       columns:
@@ -836,14 +836,14 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          The SkyMap with which this Tract is associated.
+          The skymap with which this tract is associated.
       -
         name: tract
         type: int
         primary_key: true
         nullable: false
         doc: >
-          Unique (with SkyMap) integer identifier for the Tract.
+          Unique (with skymap) integer identifier for the tract.
       - name: ra
         type: float
         doc: >
@@ -857,20 +857,20 @@ schema:
         type: region
         doc: >
           A spatial region on the sky that bounds the area associated
-          with the Tract.  This is expected to be more precise than the
-          SkyPixels associated with the Visit (see TractSkyPixJoin), but
-          may still be larger than the Tract as long as it fully covers it.
+          with the tract.  This is expected to be more precise than the
+          skypix tiles associated with the visit (see tract_skypix_join), but
+          may still be larger than the tract as long as it fully covers it.
           Regions are lsst.sphgeom.ConvexPolygon objects persisted as
           portable (but not human-readable) bytestrings using the encode
           and decode methods.
       foreignKeys:
       -
         src: skymap
-        tgt: SkyMap.skymap
+        tgt: skymap.skymap
 
-    Patch:
+    patch:
       doc: >
-        A table relating a Patch to its position within a Tract and
+        A table relating a patch to its position within a tract and
         on the sky.
       limited: false
       columns:
@@ -881,57 +881,57 @@ schema:
         primary_key: true
         nullable: false
         doc: >
-          The SkyMap with which this Patch is associated.
+          The skymap with which this patch is associated.
       -
         name: tract
         type: int
         primary_key: true
         nullable: false
         doc: >
-          The Tract with which this Patch is associated.
+          The tract with which this patch is associated.
       -
         name: patch
         type: int
         primary_key: true
         nullable: false
         doc: >
-          Unique (with SkyMap and Tract) integer identifier for the Patch.
+          Unique (with skymap and tract) integer identifier for the patch.
       -
         name: cell_x
         type: int
         nullable: false
         doc: >
-          Which column this Patch occupies in the Tract's grid of Patches.
+          Which column this patch occupies in the tract's grid of patches.
       -
         name: cell_y
         type: int
         nullable: false
         doc: >
-          Which row this Patch occupies in the Tract's grid of Patches.
+          Which row this patch occupies in the tract's grid of patches.
       -
         name: region
         type: region
         doc: >
           A spatial region on the sky that bounds the area associated
-          with the Patch.  This is expected to be more precise than the
-          SkyPixels associated with the Visit (see PatchSkyPixJoin), but
-          may still be larger than the Patch as long as it fully covers it.
+          with the patch.  This is expected to be more precise than the
+          skypix tiles associated with the visit (see patch_skypix_join), but
+          may still be larger than the patch as long as it fully covers it.
           Regions are lsst.sphgeom.ConvexPolygon objects persisted as
           portable (but not human-readable) bytestrings using the encode
           and decode methods.
       foreignKeys:
       -
         src: skymap
-        tgt: SkyMap.skymap
+        tgt: skymap.skymap
       -
         src:
         - skymap
         - tract
         tgt:
-        - Tract.skymap
-        - Tract.tract
+        - tract.skymap
+        - tract.tract
 
-    CalibrationLabel:
+    calibration_label:
       doc: >
         A join table that associates an instrument and label with a date range,
         used to associate master calibration products with exposures.
@@ -952,7 +952,7 @@ schema:
         length: 128
         primary_key: true
         nullable: false
-        doc: Label used to identify a group of master calibration products.
+        doc: label used to identify a group of master calibration products.
       -
         name: valid_first
         type: datetime
@@ -968,11 +968,11 @@ schema:
       foreignKeys:
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
 
-    ExposureCalibrationLabelJoin:
+    exposure_calibration_label_join:
       doc: >
-        A many-to-many join table that relates Exposure to CalibrationLabel.
+        A many-to-many join table that relates exposure to calibration_label.
 
         This can and probably should be implemented as a view.
       columns:
@@ -991,52 +991,52 @@ schema:
         length: 128
         primary_key: true
         nullable: false
-        doc: Label used to identify a group of master calibration products.
+        doc: label used to identify a group of master calibration products.
       -
         name: exposure
         type: int
         primary_key: true
         nullable: false
         doc: >
-          Unique (with instrument) integer identifier for an Exposure.
+          Unique (with instrument) integer identifier for an exposure.
       foreignKeys:
       -
         src: instrument
-        tgt: Instrument.instrument
+        tgt: instrument.instrument
       -
         src:
         - instrument
         - exposure
         tgt:
-        - Exposure.instrument
-        - Exposure.exposure
+        - exposure.instrument
+        - exposure.exposure
       -
         src:
         - instrument
         - calibration_label
         tgt:
-        - CalibrationLabel.instrument
-        - CalibrationLabel.calibration_label
+        - calibration_label.instrument
+        - calibration_label.calibration_label
       sql: >
         SELECT DISTINCT
-            Exposure.instrument, Exposure.exposure, CalibrationLabel.calibration_label
+            exposure.instrument, exposure.exposure, calibration_label.calibration_label
         FROM
-            Exposure INNER JOIN CalibrationLabel ON (
-                Exposure.instrument = CalibrationLabel.instrument
+            exposure INNER JOIN calibration_label ON (
+                exposure.instrument = calibration_label.instrument
                 AND
-                Exposure.datetime_begin >= CalibrationLabel.valid_first
+                exposure.datetime_begin >= calibration_label.valid_first
                 AND
-                Exposure.datetime_end <= CalibrationLabel.valid_last
+                exposure.datetime_end <= calibration_label.valid_last
             );
       materialize: false
 
-    VisitDetectorRegion:
+    visit_detector_region:
       doc: >
         A one-to-many table join table that stores the spatial region
-        associated with a particular Visit-Detector combination. Entries are
+        associated with a particular visit-detector combination. Entries are
         expected to be calculated outside the database and added/updated
-        whenever the Visit's region is.  This table contains exactly one
-        entry for each Visit+Detector combination.
+        whenever the visit's region is.  This table contains exactly one
+        entry for each visit+detector combination.
       limited: false
       columns:
       -
@@ -1045,27 +1045,27 @@ schema:
         length: 16
         primary_key: true
         nullable: false
-        doc: Name of the Instrument associated with the Visit and Detector.
+        doc: Name of the instrument associated with the visit and detector.
       -
         name: visit
         type: int
         primary_key: true
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: detector
         type: int
         primary_key: true
         nullable: false
-        doc: Detector ID
+        doc: detector ID
       -
         name: region
         type: region
         doc: >
           A spatial region on the sky that bounds the area associated with
-          this Visit+Detector combination.  This is expected to be more
-          precise than the SkyPixels associated with the Visit+Detector (see
-          VisitDetectorSkyPixJoin), but may still be larger than the true
+          this visit+detector combination.  This is expected to be more
+          precise than the skypix tiles associated with the visit+detector (see
+          visit_detector_skypix_join), but may still be larger than the true
           region as long as it fully covers it.
           Regions are lsst.sphgeom.ConvexPolygon objects persisted as
           portable (but not human-readable) bytestrings using the encode
@@ -1076,17 +1076,17 @@ schema:
         - instrument
         - visit
         tgt:
-        - Visit.instrument
-        - Visit.visit
+        - visit.instrument
+        - visit.visit
       -
         src:
         - instrument
         - detector
         tgt:
-        - Detector.instrument
-        - Detector.detector
+        - detector.instrument
+        - detector.detector
 
-    VisitDetectorSkyPixJoin:
+    visit_detector_skypix_join:
       limited: false
       columns:
       -
@@ -1094,22 +1094,22 @@ schema:
         type: string
         length: 16
         nullable: false
-        doc: Name of the Instrument associated with the Visit and Detector.
+        doc: Name of the instrument associated with the visit and detector.
       -
         name: visit
         type: int
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: detector
         type: int
         nullable: false
-        doc: Detector ID
+        doc: detector ID
       -
         name: skypix
         type: int
         nullable: false
-        doc: ID of a SkyPix that overlaps the Visit+Detector combination.
+        doc: ID of a skypix that overlaps the visit+detector combination.
       foreignKeys:
       -
         src:
@@ -1117,11 +1117,11 @@ schema:
           - visit
           - detector
         tgt:
-          - VisitDetectorRegion.instrument
-          - VisitDetectorRegion.visit
-          - VisitDetectorRegion.detector
+          - visit_detector_region.instrument
+          - visit_detector_region.visit
+          - visit_detector_region.detector
 
-    VisitSkyPixJoin:
+    visit_skypix_join:
       limited: false
       columns:
       -
@@ -1129,31 +1129,31 @@ schema:
         type: string
         length: 16
         nullable: false
-        doc: Name of the Instrument associated with the Visit.
+        doc: Name of the instrument associated with the visit.
       -
         name: visit
         type: int
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: skypix
         type: int
         nullable: false
-        doc: ID of a SkyPix that overlaps the Visit combination.
+        doc: ID of a skypix that overlaps the visit combination.
       foreignKeys:
       -
         src:
           - instrument
           - visit
         tgt:
-          - Visit.instrument
-          - Visit.visit
+          - visit.instrument
+          - visit.visit
       sql: >
         SELECT DISTINCT instrument, visit, skypix
-        FROM VisitDetectorSkyPixJoin;
+        FROM visit_detector_skypix_join;
       materialize: false
 
-    PatchSkyPixJoin:
+    patch_skypix_join:
       limited: false
       columns:
       -
@@ -1161,22 +1161,22 @@ schema:
         type: string
         length: 64
         nullable: false
-        doc: Name of the SkyMap associated with the Patch.
+        doc: Name of the skymap associated with the patch.
       -
         name: tract
         type: int
         nullable: false
-        doc: Tract ID
+        doc: tract ID
       -
         name: patch
         type: int
         nullable: false
-        doc: Patch ID
+        doc: patch ID
       -
         name: skypix
         type: int
         nullable: false
-        doc: ID of a SkyPix that overlaps the Patch.
+        doc: ID of a skypix that overlaps the patch.
       foreignKeys:
       -
         src:
@@ -1184,11 +1184,11 @@ schema:
           - tract
           - patch
         tgt:
-          - Patch.skymap
-          - Patch.tract
-          - Patch.patch
+          - patch.skymap
+          - patch.tract
+          - patch.patch
 
-    TractSkyPixJoin:
+    tract_skypix_join:
       limited: false
       columns:
       -
@@ -1196,31 +1196,31 @@ schema:
         type: string
         length: 64
         nullable: false
-        doc: Name of the SkyMap associated with the Tract.
+        doc: Name of the skymap associated with the tract.
       -
         name: tract
         type: int
         nullable: false
-        doc: Tract ID
+        doc: tract ID
       -
         name: skypix
         type: int
         nullable: false
-        doc: ID of a SkyPix that overlaps the Tract.
+        doc: ID of a skypix that overlaps the tract.
       foreignKeys:
       -
         src:
           - skymap
           - tract
         tgt:
-          - Tract.skymap
-          - Tract.tract
+          - tract.skymap
+          - tract.tract
       sql: >
         SELECT DISTINCT skymap, tract, skypix
-        FROM PatchSkyPixJoin;
+        FROM patch_skypix_join;
       materialize: false
 
-    VisitDetectorPatchJoin:
+    visit_detector_patch_join:
       limited: false
       columns:
       -
@@ -1228,33 +1228,33 @@ schema:
         type: string
         length: 16
         nullable: false
-        doc: Name of the Instrument associated with the Visit and Detector.
+        doc: Name of the instrument associated with the visit and detector.
       -
         name: visit
         type: int
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: detector
         type: int
         nullable: false
-        doc: Detector ID
+        doc: detector ID
       -
         name: skymap
         type: string
         length: 64
         nullable: false
-        doc: Name of the SkyMap associated with the Patch.
+        doc: Name of the skymap associated with the patch.
       -
         name: tract
         type: int
         nullable: false
-        doc: Tract ID
+        doc: tract ID
       -
         name: patch
         type: int
         nullable: false
-        doc: Patch ID
+        doc: patch ID
       foreignKeys:
       -
         src:
@@ -1262,33 +1262,33 @@ schema:
           - visit
           - detector
         tgt:
-          - VisitDetectorRegion.instrument
-          - VisitDetectorRegion.visit
-          - VisitDetectorRegion.detector
+          - visit_detector_region.instrument
+          - visit_detector_region.visit
+          - visit_detector_region.detector
       -
         src:
           - skymap
           - tract
           - patch
         tgt:
-          - Patch.skymap
-          - Patch.tract
-          - Patch.patch
+          - patch.skymap
+          - patch.tract
+          - patch.patch
       sql: >
         SELECT DISTINCT
-          VisitDetectorSkyPixJoin.instrument,
-          VisitDetectorSkyPixJoin.visit,
-          VisitDetectorSkyPixJoin.detector,
-          PatchSkyPixJoin.skymap,
-          PatchSkyPixJoin.tract,
-          PatchSkyPixJoin.patch
+          visit_detector_skypix_join.instrument,
+          visit_detector_skypix_join.visit,
+          visit_detector_skypix_join.detector,
+          patch_skypix_join.skymap,
+          patch_skypix_join.tract,
+          patch_skypix_join.patch
         FROM
-          VisitDetectorSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
-            VisitDetectorSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+          visit_detector_skypix_join INNER JOIN patch_skypix_join ON (
+            visit_detector_skypix_join.skypix = patch_skypix_join.skypix
           );
       materialize: false
 
-    VisitPatchJoin:
+    visit_patch_join:
       limited: false
       columns:
       -
@@ -1296,59 +1296,59 @@ schema:
         type: string
         length: 16
         nullable: false
-        doc: Name of the Instrument associated with the Visit.
+        doc: Name of the instrument associated with the visit.
       -
         name: visit
         type: int
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: skymap
         type: string
         length: 64
         nullable: false
-        doc: Name of the SkyMap associated with the Patch.
+        doc: Name of the skymap associated with the patch.
       -
         name: tract
         type: int
         nullable: false
-        doc: Tract ID
+        doc: tract ID
       -
         name: patch
         type: int
         nullable: false
-        doc: Patch ID
+        doc: patch ID
       foreignKeys:
       -
         src:
           - instrument
           - visit
         tgt:
-          - Visit.instrument
-          - Visit.visit
+          - visit.instrument
+          - visit.visit
       -
         src:
           - skymap
           - tract
           - patch
         tgt:
-          - Patch.skymap
-          - Patch.tract
-          - Patch.patch
+          - patch.skymap
+          - patch.tract
+          - patch.patch
       sql: >
         SELECT DISTINCT
-          VisitSkyPixJoin.instrument,
-          VisitSkyPixJoin.visit,
-          PatchSkyPixJoin.skymap,
-          PatchSkyPixJoin.tract,
-          PatchSkyPixJoin.patch
+          visit_skypix_join.instrument,
+          visit_skypix_join.visit,
+          patch_skypix_join.skymap,
+          patch_skypix_join.tract,
+          patch_skypix_join.patch
         FROM
-          VisitSkyPixJoin INNER JOIN PatchSkyPixJoin ON (
-            VisitSkyPixJoin.skypix = PatchSkyPixJoin.skypix
+          visit_skypix_join INNER JOIN patch_skypix_join ON (
+            visit_skypix_join.skypix = patch_skypix_join.skypix
           );
       materialize: false
 
-    VisitDetectorTractJoin:
+    visit_detector_tract_join:
       limited: false
       columns:
       -
@@ -1356,28 +1356,28 @@ schema:
         type: string
         length: 16
         nullable: false
-        doc: Name of the Instrument associated with the Visit and Detector.
+        doc: Name of the instrument associated with the visit and detector.
       -
         name: visit
         type: int
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: detector
         type: int
         nullable: false
-        doc: Detector ID
+        doc: detector ID
       -
         name: skymap
         type: string
         length: 64
         nullable: false
-        doc: Name of the SkyMap associated with the Tract.
+        doc: Name of the skymap associated with the tract.
       -
         name: tract
         type: int
         nullable: false
-        doc: Tract ID
+        doc: tract ID
       foreignKeys:
       -
         src:
@@ -1385,30 +1385,30 @@ schema:
           - visit
           - detector
         tgt:
-          - VisitDetectorRegion.instrument
-          - VisitDetectorRegion.visit
-          - VisitDetectorRegion.detector
+          - visit_detector_region.instrument
+          - visit_detector_region.visit
+          - visit_detector_region.detector
       -
         src:
           - skymap
           - tract
         tgt:
-          - Tract.skymap
-          - Tract.tract
+          - tract.skymap
+          - tract.tract
       sql: >
         SELECT DISTINCT
-          VisitDetectorSkyPixJoin.instrument,
-          VisitDetectorSkyPixJoin.visit,
-          VisitDetectorSkyPixJoin.detector,
-          TractSkyPixJoin.skymap,
-          TractSkyPixJoin.tract
+          visit_detector_skypix_join.instrument,
+          visit_detector_skypix_join.visit,
+          visit_detector_skypix_join.detector,
+          tract_skypix_join.skymap,
+          tract_skypix_join.tract
         FROM
-          VisitDetectorSkyPixJoin INNER JOIN TractSkyPixJoin ON (
-            VisitDetectorSkyPixJoin.skypix = TractSkyPixJoin.skypix
+          visit_detector_skypix_join INNER JOIN tract_skypix_join ON (
+            visit_detector_skypix_join.skypix = tract_skypix_join.skypix
           );
       materialize: false
 
-    VisitTractJoin:
+    visit_tract_join:
       limited: false
       columns:
       -
@@ -1416,46 +1416,46 @@ schema:
         type: string
         length: 16
         nullable: false
-        doc: Name of the Instrument associated with the Visit.
+        doc: Name of the instrument associated with the visit.
       -
         name: visit
         type: int
         nullable: false
-        doc: Visit ID
+        doc: visit ID
       -
         name: skymap
         type: string
         length: 64
         nullable: false
-        doc: Name of the SkyMap associated with the Tract.
+        doc: Name of the skymap associated with the tract.
       -
         name: tract
         type: int
         nullable: false
-        doc: Tract ID
+        doc: tract ID
       foreignKeys:
       -
         src:
           - instrument
           - visit
         tgt:
-          - Visit.instrument
-          - Visit.visit
+          - visit.instrument
+          - visit.visit
       -
         src:
           - skymap
           - tract
         tgt:
-          - Tract.skymap
-          - Tract.tract
+          - tract.skymap
+          - tract.tract
       sql: >
         SELECT DISTINCT
-          VisitSkyPixJoin.instrument,
-          VisitSkyPixJoin.visit,
-          TractSkyPixJoin.skymap,
-          TractSkyPixJoin.tract
+          visit_skypix_join.instrument,
+          visit_skypix_join.visit,
+          tract_skypix_join.skymap,
+          tract_skypix_join.tract
         FROM
-          VisitSkyPixJoin INNER JOIN TractSkyPixJoin ON (
-            VisitSkyPixJoin.skypix = TractSkyPixJoin.skypix
+          visit_skypix_join INNER JOIN tract_skypix_join ON (
+            visit_skypix_join.skypix = tract_skypix_join.skypix
           );
       materialize: false

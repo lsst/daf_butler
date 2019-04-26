@@ -224,7 +224,7 @@ class Registry(metaclass=ABCMeta):
 
     @property
     def pixelization(self):
-        """Object that interprets SkyPix Dimension values
+        """Object that interprets skypix Dimension values
         (`lsst.sphgeom.Pixelization`).
 
         `None` for limited registries.
@@ -1064,8 +1064,8 @@ class Registry(metaclass=ABCMeta):
         if region and (update or dataId.region is None):
             holder = dataId.dimensions().getRegionHolder()
             if holder is not None:
-                if holder.name == "SkyPix":
-                    # SkyPix is special; we always obtain those regions from
+                if holder.name == "skypix":
+                    # skypix is special; we always obtain those regions from
                     # self.pixelization
                     dataId.region = self.pixelization.pixel(dataId["skypix"])
                 else:

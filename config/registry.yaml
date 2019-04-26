@@ -8,37 +8,37 @@ registry:
     cls: lsst.sphgeom.HtmPixelization
     level: 7
   dataIdPackers:
-    VisitDetector:
-      given: [Instrument]
-      required: [Instrument, Visit, Detector]
+    visit_detector:
+      given: [instrument]
+      required: [instrument, visit, detector]
       cls: lsst.daf.butler.instrument.ObservationDataIdPacker
       parameters:
-        instrument: Instrument.instrument
-        obsMax: Instrument.visit_max
-        detectorMax: Instrument.detector_max
-    ExposureDetector:
-      given: [Instrument]
-      required: [Instrument, Exposure, Detector]
+        instrument: instrument.instrument
+        obsMax: instrument.visit_max
+        detectorMax: instrument.detector_max
+    exposure_detector:
+      given: [instrument]
+      required: [instrument, exposure, detector]
       cls: lsst.daf.butler.instrument.ObservationDataIdPacker
       parameters:
-        instrument: Instrument.instrument
-        obsMax: Instrument.exposure_max
-        detectorMax: Instrument.detector_max
-    TractPatch:
-      given: [SkyMap]
-      required: [SkyMap, Tract, Patch]
+        instrument: instrument.instrument
+        obsMax: instrument.exposure_max
+        detectorMax: instrument.detector_max
+    tract_patch:
+      given: [skymap]
+      required: [skymap, tract, patch]
       cls: lsst.skymap.packers.SkyMapDataIdPacker
       parameters:
-        skymap: SkyMap.skymap
-        tractMax: SkyMap.tract_max
-        patchNxMax: SkyMap.patch_nx_max
-        patchNyMax: SkyMap.patch_ny_max
-    TractPatchAbstractFilter:
-      given: [SkyMap]
-      required: [SkyMap, Tract, Patch, AbstractFilter]
+        skymap: skymap.skymap
+        tractMax: skymap.tract_max
+        patchNxMax: skymap.patch_nx_max
+        patchNyMax: skymap.patch_ny_max
+    tract_patch_abstract_filter:
+      given: [skymap]
+      required: [skymap, tract, patch, abstract_filter]
       cls: lsst.skymap.packers.SkyMapDataIdPacker
       parameters:
-        skymap: SkyMap.skymap
-        tractMax: SkyMap.tract_max
-        patchNxMax: SkyMap.patch_nx_max
-        patchNyMax: SkyMap.patch_ny_max
+        skymap: skymap.skymap
+        tractMax: skymap.tract_max
+        patchNxMax: skymap.patch_nx_max
+        patchNyMax: skymap.patch_ny_max

@@ -34,7 +34,7 @@ from lsst.daf.butler import DataId, DataIdPacker
 
 
 class Instrument(metaclass=ABCMeta):
-    """Base class for Instrument-specific logic for the Gen3 Butler.
+    """Base class for instrument-specific logic for the Gen3 Butler.
 
     Concrete instrument subclasses should either be directly constructable
     with no arguments or provide a 'factory' `staticmethod`, `classmethod`, or
@@ -60,7 +60,7 @@ class Instrument(metaclass=ABCMeta):
 
     @abstractmethod
     def register(self, registry):
-        """Insert Instrument, PhysicalFilter, and Detector entries into a
+        """Insert instrument, physical_filter, and detector entries into a
         `Registry`.
         """
         raise NotImplementedError()
@@ -85,8 +85,8 @@ class Instrument(metaclass=ABCMeta):
 
 
 class ObservationDataIdPacker(DataIdPacker):
-    """A `DataIdPacker` for Visit+Detector or Exposure+Detector, given an
-    Instrument.
+    """A `DataIdPacker` for visit+detector or exposure+detector, given an
+    instrument.
 
     Parameters
     ----------
@@ -94,20 +94,20 @@ class ObservationDataIdPacker(DataIdPacker):
         Struct defining the "given" (at contructoin) and "required" (for
         packing) dimensions of this packer.
     instrument : `str`
-        Name of the Instrument for which this packer packs IDs.
+        Name of the instrument for which this packer packs IDs.
     obsMax : `int`
-        Maximum (exclusive) value for either Visit or Exposure IDs for this
-        Instrument, depending on which of those is present in
+        Maximum (exclusive) value for either visit or exposure IDs for this
+        instrument, depending on which of those is present in
         ``dimensions.required``.
     detectorMax : `int
-        Maximum (exclusive) value for Detectors for this Instrument.
+        Maximum (exclusive) value for detectors for this instrument.
     """
 
     def __init__(self, dimensions, instrument, obsMax, detectorMax):
         self._instrumentName = instrument
-        if dimensions.required == ("Instrument", "Visit", "Detector"):
+        if dimensions.required == ("instrument", "visit", "detector"):
             self._observationLink = "visit"
-        elif dimensions.required == ("Instrument", "Exposure", "Detector"):
+        elif dimensions.required == ("instrument", "exposure", "detector"):
             self._observationLink = "exposure"
         else:
             raise ValueError(f"Invalid dimensions for ObservationDataIdPacker: {dimensions.required}")
@@ -132,25 +132,25 @@ class ObservationDataIdPacker(DataIdPacker):
 
 
 def updateExposureEntryFromObsInfo(dataId, obsInfo):
-    """Construct an Exposure Dimension entry from
+    """Construct an exposure Dimension entry from
     `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
     dataId : `dict` or `DataId`
-        Dictionary of Dimension link fields for (at least) Exposure. If a true
+        Dictionary of Dimension link fields for (at least) exposure. If a true
         `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
-        the Exposure.
+        the exposure.
 
     Returns
     -------
     dataId : `DataId`
-        A data ID with the entry for the Exposure dimension updated.
+        A data ID with the entry for the exposure dimension updated.
     """
     dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions()["Exposure"]].update(
+    dataId.entries[dataId.dimensions()["exposure"]].update(
         datetime_begin=obsInfo.datetime_begin.to_datetime(),
         datetime_end=obsInfo.datetime_end.to_datetime(),
         exposure_time=obsInfo.exposure_time.to_value("s"),
@@ -160,25 +160,25 @@ def updateExposureEntryFromObsInfo(dataId, obsInfo):
 
 
 def updateVisitEntryFromObsInfo(dataId, obsInfo):
-    """Construct a Visit Dimension entry from
+    """Construct a visit Dimension entry from
     `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
     dataId : `dict` or `DataId`
-        Dictionary of Dimension link fields for (at least) Visit. If a true
+        Dictionary of Dimension link fields for (at least) visit. If a true
         `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
-        the Exposure.
+        the exposure.
 
     Returns
     -------
     dataId : `DataId`
-        A data ID with the entry for the Visit dimension updated.
+        A data ID with the entry for the visit dimension updated.
     """
     dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions()["Visit"]].update(
+    dataId.entries[dataId.dimensions()["visit"]].update(
         datetime_begin=obsInfo.datetime_begin.to_datetime(),
         datetime_end=obsInfo.datetime_end.to_datetime(),
         exposure_time=obsInfo.exposure_time.to_value("s"),
@@ -187,7 +187,7 @@ def updateVisitEntryFromObsInfo(dataId, obsInfo):
 
 
 def addUnboundedCalibrationLabel(registry, instrumentName):
-    """Add a special 'unbounded' CalibrationLabel dimension entry for the
+    """Add a special 'unbounded' calibration_label dimension entry for the
     given camera that is valid for any exposure.
 
     If such an entry already exists, this function just returns a `DataId`
@@ -207,12 +207,12 @@ def addUnboundedCalibrationLabel(registry, instrumentName):
     """
     d = dict(instrument=instrumentName, calibration_label="unbounded")
     try:
-        return registry.expandDataId(dimension="CalibrationLabel",
+        return registry.expandDataId(dimension="calibration_label",
                                      metadata=["valid_first", "valid_last"], **d)
     except LookupError:
         pass
     unboundedDataId = DataId(universe=registry.dimensions, **d)
-    unboundedDataId.entries["CalibrationLabel"]["valid_first"] = datetime.min
-    unboundedDataId.entries["CalibrationLabel"]["valid_last"] = datetime.max
-    registry.addDimensionEntry("CalibrationLabel", unboundedDataId)
+    unboundedDataId.entries["calibration_label"]["valid_first"] = datetime.min
+    unboundedDataId.entries["calibration_label"]["valid_last"] = datetime.max
+    registry.addDimensionEntry("calibration_label", unboundedDataId)
     return unboundedDataId

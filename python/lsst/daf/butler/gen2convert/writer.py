@@ -85,7 +85,7 @@ class ConversionWriter:
         self.repos = OrderedDict()
         self.datasetTypes = dict()
         self.runs = {k: Run(id=v, collection=k) for k, v in self.config["runs"].items()}
-        self.skyMapNames = {}  # mapping from hash to Gen3 SkyMap name
+        self.skyMapNames = {}  # mapping from hash to Gen3 skymap name
         skyMapConfig = self.config.get("skymaps", {})
         # Swap keys and values in skyMapConfig; the original can't be in
         # the order we want, because roots can have '.', and that gets
@@ -97,7 +97,7 @@ class ConversionWriter:
                 log.debug("Processing input skyMapRoot %s", root)
                 skyMapName = rootToSkyMapName.get(root, None)
                 if skyMapName is not None:
-                    log.debug("Using '%s' for SkyMap with hash=%s", skyMapName, hash.hex())
+                    log.debug("Using '%s' for skymap with hash=%s", skyMapName, hash.hex())
                     self.skyMapNames[hash] = skyMapName
                     break
         for gen2repo in gen2repos.values():
@@ -212,7 +212,7 @@ class ConversionWriter:
             self.insertObservationRegions(registry, datastore)
 
     def insertInstruments(self, registry):
-        """Check that all necessary Instruments are already present in the
+        """Check that all necessary instruments are already present in the
         Registry, and insert them if they are not.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
@@ -220,8 +220,8 @@ class ConversionWriter:
         for repo in self.repos.values():
             instruments.add(self.config["mappers", repo.gen2.MapperClass.__name__, "instrument"])
         for instrument in instruments:
-            log.debug("Looking for preexisting Instrument '%s'.", instrument)
-            if registry.findDimensionEntry("Instrument", {"instrument": instrument}) is None:
+            log.debug("Looking for preexisting instrument '%s'.", instrument)
+            if registry.findDimensionEntry("instrument", {"instrument": instrument}) is None:
                 factory = Instrument.factories.get(instrument)
                 if factory is None:
                     raise LookupError(
@@ -232,43 +232,43 @@ class ConversionWriter:
                 instance.register(registry)
 
     def insertSkyMaps(self, registry):
-        """Add all necessary SkyMap Dimensions (and associated Tracts and
-        Patches) to the Registry.
+        """Add all necessary SkyMap Dimensions (and associated tracts and
+        patches) to the Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for hash, skyMap in self.skyMaps.items():
             skyMapName = self.skyMapNames.get(hash, None)
             try:
-                existing, = registry.query("SELECT skymap FROM SkyMap WHERE hash=:hash",
+                existing, = registry.query("SELECT skymap FROM skymap WHERE hash=:hash",
                                            hash=hash)
                 if skyMapName is None:
                     skyMapName = existing["skymap"]
                     self.skyMapNames[hash] = skyMapName
-                    log.debug("Using preexisting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
+                    log.debug("Using preexisting skymap '%s' with hash=%s", skyMapName, hash.hex())
                 if skyMapName != existing["skymap"]:
                     raise ValueError(
-                        ("SkyMap with new name={} and hash={} already exists in the Registry "
+                        ("skymap with new name={} and hash={} already exists in the Registry "
                          "with name={}".format(skyMapName, hash.hex(), existing["skymap"]))
                     )
                 continue
             except ValueError:
-                # No SkyMap with this hash exists, so we need to insert it.
+                # No skymap with this hash exists, so we need to insert it.
                 pass
             if skyMapName is None:
                 raise LookupError(
-                    ("SkyMap with hash={} has no name "
+                    ("skymap with hash={} has no name "
                      "and does not already exist in the Registry.").format(hash.hex())
                 )
-            log.info("Inserting SkyMap '%s' with hash=%s", skyMapName, hash.hex())
+            log.info("Inserting skymap '%s' with hash=%s", skyMapName, hash.hex())
             skyMap.register(skyMapName, registry)
 
     def insertObservations(self, registry):
-        """Add all necessary Visit and Exposure Dimensions to the Registry.
+        """Add all necessary visit and exposure Dimensions to the Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for mapperName, nested in self.obsInfo.items():
             instrument = self.config["mappers", mapperName, "instrument"]
-            log.info("Inserting Exposure and Visit Dimensions for Instrument '%s'", instrument)
+            log.info("Inserting exposure and visit Dimensions for instrument '%s'", instrument)
             for obsInfoId, (obsInfo, filt) in nested.items():
                 # TODO: generalize this to instruments with snaps and/or
                 # compound gen2 visit/exposure IDs
@@ -279,12 +279,12 @@ class ConversionWriter:
                                 exposure=exposureId, universe=registry.dimensions)
                 updateVisitEntryFromObsInfo(dataId, obsInfo)
                 updateExposureEntryFromObsInfo(dataId, obsInfo)
-                log.debug("Inserting Exposure %d and Visit %d.", exposureId, visitId)
-                registry.addDimensionEntry("Visit", dataId)
-                registry.addDimensionEntry("Exposure", dataId)
+                log.debug("Inserting exposure %d and visit %d.", exposureId, visitId)
+                registry.addDimensionEntry("visit", dataId)
+                registry.addDimensionEntry("exposure", dataId)
 
     def insertCalibrationLabels(self, registry):
-        """Add all necessary CalibrationLabel Dimension entries to the
+        """Add all necessary calibration_label Dimension entries to the
         Registry.
         """
         log = Log.getLogger("lsst.daf.butler.gen2convert")
@@ -294,25 +294,25 @@ class ConversionWriter:
             # TODO: we currently implicitly assume that there is only one
             # calib repo being converted, or at least that different calib
             # repos don't have any of the same calibDates.  To fix that we
-            # probably need to add a column to the CalibrationLabel table
+            # probably need to add a column to the calibration_label table
             # to represent a "CalibrationSet", and provide a way to configure
             # which one a Registry uses.  We'll probably also want to use that
             # pattern for other dimensions in the future, such as systems of
             # observation relationships that define a particular mapping from
-            # Exposure to Visit.
+            # exposure to visit.
             mapperName = repo.gen2.MapperClass.__name__
             instrument = self.config["mappers", mapperName, "instrument"]
-            log.debug("Inserting unbounded CalibrationLabel.")
+            log.debug("Inserting unbounded calibration_label.")
             addUnboundedCalibrationLabel(registry, instrument)
             for (datasetTypeName, calibDate), (first, last) in repo.gen2.calibDict.items():
                 dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate),
                                 instrument=instrument,
                                 universe=registry.dimensions)
-                dataId.entries["CalibrationLabel"]["valid_first"] = first
-                dataId.entries["CalibrationLabel"]["valid_last"] = last
-                log.debug("Inserting CalibrationLabel %s with validity range %s - %s.",
+                dataId.entries["calibration_label"]["valid_first"] = first
+                dataId.entries["calibration_label"]["valid_last"] = last
+                log.debug("Inserting calibration_label %s with validity range %s - %s.",
                           dataId["calibration_label"], first, last)
-                registry.addDimensionEntry("CalibrationLabel", dataId)
+                registry.addDimensionEntry("calibration_label", dataId)
 
     def insertDatasetTypes(self, registry):
         """Add all necessary DatasetType registrations to the Registry.
@@ -401,31 +401,31 @@ class ConversionWriter:
                     registry.associate(potentialChildRepo.run.collection, refs)
 
     def insertObservationRegions(self, registry, datastore):
-        """Add spatial regions for Visit-Detector combinations.
+        """Add spatial regions for visit-detector combinations.
         """
-        sql = ("SELECT Wcs.instrument AS instrument, Wcs.visit AS visit, Wcs.detector AS detector, "
-               "        Wcs.dataset_id AS wcs, Metadata.dataset_id AS metadata "
-               "    FROM Dataset Wcs "
-               "        INNER JOIN DatasetCollection WcsCollection "
-               "            ON (Wcs.dataset_id = WcsCollection.dataset_id) "
-               "        INNER JOIN Dataset Metadata "
-               "            ON (Wcs.instrument = Metadata.instrument "
-               "                AND Wcs.visit = Metadata.visit "
-               "                AND Wcs.detector = Metadata.detector) "
-               "        INNER JOIN DatasetCollection MetadataCollection "
-               "            ON (Metadata.dataset_id = MetadataCollection.dataset_id) "
-               "    WHERE WcsCollection.collection = :collection "
-               "          AND MetadataCollection.collection = :collection "
-               "          AND Wcs.dataset_type_name = :wcsName"
-               "          AND Metadata.dataset_type_name = :metadataName")
+        sql = ("SELECT wcs.instrument AS instrument, wcs.visit AS visit, wcs.detector AS detector, "
+               "        wcs.dataset_id AS wcs, metadata.dataset_id AS metadata "
+               "    FROM dataset wcs "
+               "        INNER JOIN dataset_collection wcs_collection "
+               "            ON (wcs.dataset_id = wcs_collection.dataset_id) "
+               "        INNER JOIN dataset metadata "
+               "            ON (wcs.instrument = metadata.instrument "
+               "                AND wcs.visit = metadata.visit "
+               "                AND wcs.detector = metadata.detector) "
+               "        INNER JOIN dataset_collection metadata_collection "
+               "            ON (metadata.dataset_id = metadata_collection.dataset_id) "
+               "    WHERE wcs_collection.collection = :collection "
+               "          AND metadata_collection.collection = :collection "
+               "          AND wcs.dataset_type_name = :wcs_name"
+               "          AND metadata.dataset_type_name = :metadata_name")
         log = Log.getLogger("lsst.daf.butler.gen2convert")
         for config in self.config["regions"]:
             log.info("Adding observation regions using %s from %s.",
                      config["DatasetType"], config["collection"])
             visits = {}
             for row in registry.query(sql, collection=config["collection"],
-                                      wcsName="{}.wcs".format(config["DatasetType"]),
-                                      metadataName="{}.metadata".format(config["DatasetType"])):
+                                      wcs_name="{}.wcs".format(config["DatasetType"]),
+                                      metadata_name="{}.metadata".format(config["DatasetType"])):
                 wcsRef = registry.getDataset(row["wcs"])
                 metadataRef = registry.getDataset(row["metadata"])
                 wcs = datastore.get(wcsRef)

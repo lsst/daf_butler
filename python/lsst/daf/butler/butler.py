@@ -606,15 +606,15 @@ class Butler:
         # Find all the registered instruments
         instruments = set()
         if not self.registry.limited:
-            instrumentEntries = self.registry.findDimensionEntries("Instrument")
+            instrumentEntries = self.registry.findDimensionEntries("instrument")
             instruments = {e["instrument"] for e in instrumentEntries}
 
-        # For each datasetType that has an Instrument dimension, create
+        # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
         for datasetType in entities:
-            if "Instrument" in datasetType.dimensions:
+            if "instrument" in datasetType.dimensions:
                 for instrument in instruments:
                     datasetRef = DatasetRef(datasetType, {"instrument": instrument})
                     datasetRefs.append(datasetRef)

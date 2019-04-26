@@ -105,14 +105,14 @@ class ResultColumnsManager:
         """
         if holder in self._indicesForRegions:
             return
-        if holder.name == "SkyPix":
+        if holder.name == "skypix":
             # We obtain these regions directly from the registry, but require
             # that the "skypix" dimension link be present to do so.  We can't
             # add that ourselves (we don't know what selectable to obtain it
             # from), and we can't assume it's *already* been added.
             # Instead we'll remember that we do need it, and raise when trying
             # to create the full query (in `selectFrom`) if it's not present.
-            self._needSkyPixRegion = True
+            self._needskypixRegion = True
             return
         else:
             column = selectable.columns.region
@@ -153,7 +153,7 @@ class ResultColumnsManager:
             query.
         """
         if self._needSkyPixRegion and "skypix" not in self._indicesForDimensionLinks:
-            raise RuntimeError("SkyPix region added to query without associated link.")
+            raise RuntimeError("skypix region added to query without associated link.")
         return select(self._columns).select_from(fromClause)
 
     def manageRow(self, row):
@@ -207,7 +207,7 @@ class ResultColumnsManager:
             }
             skypix = self._dimensionLinks.get("skypix", None)
             if skypix is not None:
-                self._regions[self.registry.dimensions["SkyPix"]] = self.registry.pixelization.pixel(skypix)
+                self._regions[self.registry.dimensions["skypix"]] = self.registry.pixelization.pixel(skypix)
 
         def areRegionsDisjoint(self):
             """Test whether the regions in this result row are disjoint.

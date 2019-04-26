@@ -105,51 +105,52 @@ class DimensionTestCase(unittest.TestCase):
                 self.assertFalse(graph < copy)
                 self.assertFalse(graph > copy)
 
-    def testInstrumentDimensions(self):
-        """Test that the Instrument dimensions and joins we expect to be
+    def testinstrumentDimensions(self):
+        """Test that the instrument dimensions and joins we expect to be
         defined in ``dimensions.yaml`` are present and related correctly.
         """
         graph1 = self.universe.extract(
-            dim for dim in self.universe if "Instrument" in dim.dependencies()
+            dim for dim in self.universe if "instrument" in dim.dependencies()
         )
         self.checkGraphInvariants(graph1)
         self.assertCountEqual(graph1.names,
-                              ["Instrument", "Detector", "PhysicalFilter", "Visit", "Exposure",
-                               "CalibrationLabel"])
-        self.assertCountEqual(graph1.joins().names, ["VisitDetectorRegion", "ExposureCalibrationLabelJoin"])
-        self.assertEqual(graph1.getRegionHolder(), graph1.joins().get("VisitDetectorRegion"))
-        graph2 = graph1.intersection(["Visit"])
-        self.assertCountEqual(graph2.names, ["Instrument", "Visit"])
-        self.assertEqual(graph2.getRegionHolder(), graph1["Visit"])
+                              ["instrument", "detector", "physical_filter", "visit", "exposure",
+                               "calibration_label"])
+        self.assertCountEqual(graph1.joins().names, ["visit_detector_region",
+                                                     "exposure_calibration_label_join"])
+        self.assertEqual(graph1.getRegionHolder(), graph1.joins().get("visit_detector_region"))
+        graph2 = graph1.intersection(["visit"])
+        self.assertCountEqual(graph2.names, ["instrument", "visit"])
+        self.assertEqual(graph2.getRegionHolder(), graph1["visit"])
         self.assertCountEqual(graph2.joins().names, [])
         self.checkGraphInvariants(graph2)
-        graph3 = graph1.intersection(["Detector"])
+        graph3 = graph1.intersection(["detector"])
         self.checkGraphInvariants(graph3)
-        self.assertCountEqual(graph3.names, ["Instrument", "Detector"])
+        self.assertCountEqual(graph3.names, ["instrument", "detector"])
         self.assertIsNone(graph3.getRegionHolder())
         self.assertCountEqual(graph3.joins(), [])
-        visit = self.universe["Visit"]
+        visit = self.universe["visit"]
         self.assertCountEqual(visit.dependencies(implied=True).names,
-                              ["Instrument", "PhysicalFilter"])
-        self.assertCountEqual(visit.dependencies(implied=False).names, ["Instrument"])
+                              ["instrument", "physical_filter"])
+        self.assertCountEqual(visit.dependencies(implied=False).names, ["instrument"])
 
     def testSkyMapDimensions(self):
-        """Test that the SkyMap dimensions and joins we expect to be defined
+        """Test that the skymap dimensions and joins we expect to be defined
         in ``dimensions.yaml`` are present and related correctly.
         """
-        patchGraph = self.universe.extract(["Patch"])
+        patchGraph = self.universe.extract(["patch"])
         self.checkGraphInvariants(patchGraph)
-        self.assertCountEqual(patchGraph.names, ["SkyMap", "Tract", "Patch"])
+        self.assertCountEqual(patchGraph.names, ["skymap", "tract", "patch"])
         self.assertCountEqual(patchGraph.joins(), [])
-        self.assertEqual(patchGraph.getRegionHolder(), patchGraph["Patch"])
-        tractGraph = patchGraph.intersection(["Tract"])
+        self.assertEqual(patchGraph.getRegionHolder(), patchGraph["patch"])
+        tractGraph = patchGraph.intersection(["tract"])
         self.checkGraphInvariants(tractGraph)
-        self.assertCountEqual(tractGraph.names, ["SkyMap", "Tract"])
-        self.assertEqual(tractGraph.getRegionHolder(), tractGraph["Tract"])
+        self.assertCountEqual(tractGraph.names, ["skymap", "tract"])
+        self.assertEqual(tractGraph.getRegionHolder(), tractGraph["tract"])
         self.assertCountEqual(tractGraph.joins(), [])
-        skyMapOnly = tractGraph.intersection(["SkyMap"])
+        skyMapOnly = tractGraph.intersection(["skymap"])
         self.checkGraphInvariants(skyMapOnly)
-        self.assertCountEqual(skyMapOnly.names, ["SkyMap"])
+        self.assertCountEqual(skyMapOnly.names, ["skymap"])
         self.assertIsNone(skyMapOnly.getRegionHolder())
         self.assertCountEqual(skyMapOnly.joins(), [])
 
@@ -162,14 +163,14 @@ class DimensionTestCase(unittest.TestCase):
 
         misc = self.universe.extract(
             dim for dim in self.universe if (
-                dim.dependencies().names.isdisjoint(["Instrument", "SkyMap"]) and
-                dim.name not in ("Instrument", "SkyMap")
+                dim.dependencies().names.isdisjoint(["instrument", "skymap"]) and
+                dim.name not in ("instrument", "skymap")
             )
         )
         self.checkGraphInvariants(misc)
-        self.assertCountEqual(misc.names, ["SkyPix", "Label", "AbstractFilter"])
+        self.assertCountEqual(misc.names, ["skypix", "label", "abstract_filter"])
         self.assertCountEqual(misc.joins(), [])
-        self.assertEqual(misc.getRegionHolder(), misc["SkyPix"])
+        self.assertEqual(misc.getRegionHolder(), misc["skypix"])
 
     def checkSpatialJoin(self, lhsNames, rhsNames, joinName=None):
         """Test the spatial join that relates the given dimensions.
@@ -185,7 +186,7 @@ class DimensionTestCase(unittest.TestCase):
             concatenating ``lhsNames`` and ``rhsNames``.
         """
         if joinName is None:
-            joinName = "{}{}Join".format("".join(lhsNames), "".join(rhsNames))
+            joinName = "{}_{}_join".format("_".join(lhsNames), "_".join(rhsNames))
         lhs = self.universe.extract(lhsNames)
         rhs = self.universe.extract(rhsNames)
         both = self.universe.extract(joins=[joinName])
@@ -203,14 +204,14 @@ class DimensionTestCase(unittest.TestCase):
         """Test that the spatial joins defined in ``dimensions.yaml`` are
         present and related correctly.
         """
-        self.checkSpatialJoin(["Tract"], ["SkyPix"])
-        self.checkSpatialJoin(["Patch"], ["SkyPix"])
-        self.checkSpatialJoin(["Visit"], ["SkyPix"])
-        self.checkSpatialJoin(["Visit", "Detector"], ["SkyPix"])
-        self.checkSpatialJoin(["Visit"], ["Tract"])
-        self.checkSpatialJoin(["Visit", "Detector"], ["Tract"])
-        self.checkSpatialJoin(["Visit"], ["Patch"])
-        self.checkSpatialJoin(["Visit", "Detector"], ["Patch"])
+        self.checkSpatialJoin(["tract"], ["skypix"])
+        self.checkSpatialJoin(["patch"], ["skypix"])
+        self.checkSpatialJoin(["visit"], ["skypix"])
+        self.checkSpatialJoin(["visit", "detector"], ["skypix"])
+        self.checkSpatialJoin(["visit"], ["tract"])
+        self.checkSpatialJoin(["visit", "detector"], ["tract"])
+        self.checkSpatialJoin(["visit"], ["patch"])
+        self.checkSpatialJoin(["visit", "detector"], ["patch"])
 
     def testGraphSetOperations(self):
         """Test set-like operations on DimensionGraph.
@@ -221,14 +222,14 @@ class DimensionTestCase(unittest.TestCase):
         # characters in the keys (interpreted as sets) have same expected
         # relationships as the corresponding values
         graphs = {
-            # expands to [Detector, Instrument]
-            "di": self.universe.extract(["Detector"]),
-            # expands to [PhysicalFilter, Instrument, AbstractFilter]
-            "pia": self.universe.extract(["PhysicalFilter"], implied=True),
-            # expands to [Visit, PhysicalFilter, Instrument, AbstractFilter]
-            "vpia": self.universe.extract(["Visit"], implied=True),
-            # expands to [Tract, SkyMap]
-            "ts": self.universe.extract(["Tract"]),
+            # expands to [detector, instrument]
+            "di": self.universe.extract(["detector"]),
+            # expands to [physical_filter, instrument, abstract_filter]
+            "pia": self.universe.extract(["physical_filter"], implied=True),
+            # expands to [visit, physical_filter, instrument, abstract_filter]
+            "vpia": self.universe.extract(["visit"], implied=True),
+            # expands to [tract, skymap]
+            "ts": self.universe.extract(["tract"]),
             # empty
             "": self.universe.extract([]),
         }
@@ -253,12 +254,12 @@ class DimensionTestCase(unittest.TestCase):
         # A few more spot-checks for graph-creating operations to make sure
         # we get exactly what we expect in those cases.
         self.assertEqual(graphs["di"] | graphs["ts"],
-                         self.universe.extract(["Detector", "Tract"]))
+                         self.universe.extract(["detector", "tract"]))
         self.assertEqual(graphs["di"] & graphs["ts"],
                          self.universe.extract([]))
         self.assertEqual(graphs["di"] | graphs["pia"],
-                         self.universe.extract(["Detector", "PhysicalFilter"], implied=True))
-        self.assertEqual(graphs["di"] & graphs["pia"], self.universe.extract(["Instrument"]))
+                         self.universe.extract(["detector", "physical_filter"], implied=True))
+        self.assertEqual(graphs["di"] & graphs["pia"], self.universe.extract(["instrument"]))
         self.assertEqual(graphs["vpia"] | graphs["pia"], graphs["vpia"])
         self.assertEqual(graphs["vpia"] & graphs["pia"], graphs["pia"])
 
@@ -268,10 +269,10 @@ class DimensionTestCase(unittest.TestCase):
         # characters in the keys (interepreted as sets) have same expected
         # relationships as the corresponding values
         joins = {
-            "t": self.universe.joins().intersection(["TractSkyPixJoin"]),
-            "dt": self.universe.joins().intersection(["VisitDetectorSkyPixJoin", "TractSkyPixJoin"]),
-            "pt": self.universe.joins().intersection(["PatchSkyPixJoin", "TractSkyPixJoin"]),
-            "v": self.universe.joins().intersection(["VisitSkyPixJoin"]),
+            "t": self.universe.joins().intersection(["tract_skypix_join"]),
+            "dt": self.universe.joins().intersection(["visit_detector_skypix_join", "tract_skypix_join"]),
+            "pt": self.universe.joins().intersection(["patch_skypix_join", "tract_skypix_join"]),
+            "v": self.universe.joins().intersection(["visit_skypix_join"]),
             "": self.universe.joins().intersection([]),
         }
         # A big loop to test all of the combinations we can predict
@@ -300,23 +301,25 @@ class DimensionTestCase(unittest.TestCase):
         # we get exactly what we expect in those cases.
         self.assertEqual(joins["t"] | joins["pt"], joins["pt"])
         self.assertEqual(joins["t"] & joins["pt"], joins["t"])
-        self.assertEqual(joins["t"] ^ joins["pt"], self.universe.joins().intersection(["PatchSkyPixJoin"]))
-        self.assertEqual(joins["pt"] - joins["t"], self.universe.joins().intersection(["PatchSkyPixJoin"]))
+        self.assertEqual(joins["t"] ^ joins["pt"], self.universe.joins().intersection(["patch_skypix_join"]))
+        self.assertEqual(joins["pt"] - joins["t"], self.universe.joins().intersection(["patch_skypix_join"]))
         self.assertEqual(joins["dt"] | joins["pt"],
-                         self.universe.joins().intersection(["VisitDetectorSkyPixJoin", "TractSkyPixJoin",
-                                                             "PatchSkyPixJoin"]))
+                         self.universe.joins().intersection(["visit_detector_skypix_join",
+                                                             "tract_skypix_join",
+                                                             "patch_skypix_join"]))
         self.assertEqual(joins["dt"] & joins["pt"], joins["t"])
         self.assertEqual(joins["dt"] ^ joins["pt"],
-                         self.universe.joins().intersection(["VisitDetectorSkyPixJoin", "PatchSkyPixJoin"]))
+                         self.universe.joins().intersection(["visit_detector_skypix_join",
+                                                             "patch_skypix_join"]))
         self.assertEqual(joins["t"] | joins[""], joins["t"])
         self.assertEqual(joins["t"] & joins[""], joins[""])
         self.assertEqual(joins["t"] ^ joins[""], joins["t"])
         self.assertEqual(joins["t"] - joins[""], joins["t"])
         self.assertEqual(joins["t"] | joins["v"],
-                         self.universe.joins().intersection(["TractSkyPixJoin", "VisitSkyPixJoin"]))
+                         self.universe.joins().intersection(["tract_skypix_join", "visit_skypix_join"]))
         self.assertEqual(joins["t"] & joins["v"], joins[""])
         self.assertEqual(joins["t"] ^ joins["v"],
-                         self.universe.joins().intersection(["TractSkyPixJoin", "VisitSkyPixJoin"]))
+                         self.universe.joins().intersection(["tract_skypix_join", "visit_skypix_join"]))
         self.assertEqual(joins["t"] - joins["v"], joins["t"])
 
 
