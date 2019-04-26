@@ -21,9 +21,6 @@
 
 __all__ = ("OracleRegistry", )
 
-import re
-
-from sqlalchemy import event
 from sqlalchemy import create_engine
 
 
@@ -72,41 +69,4 @@ class OracleRegistry(SqlRegistry):
                          butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        tables = self.schemaConfig['tables'].keys()
-
-        # The following two function are used to ensure all table names are
-        # properly quoted when executing sql statements. These are needed
-        # because at present the Oracle database does not handle the case
-        # sensitivity of the Table names correctly without being quoted.
-        # This code may be able to be dropped in the future at such a time
-        # as the database is changed for different case sensitivity
-        # behavior
-        def _ignoreQuote(name, matchObj):
-            """ This function conditionally adds quotes around a given name
-            in a block of text if it has not already been quoted by either
-            single or double quotes
-            """
-            text = matchObj.group(0)
-            if text.startswith("'") and text.endswith("'"):
-                return text
-            elif text.startswith('"') and text.endswith('"'):
-                return text
-            else:
-                return text.replace(name, f'"{name}"')
-
-        def _oracleExecute(connection, cursor, statement, parameters, context, executemany):
-            """ This function compares the text of a sql query against a known
-            list of table names. If any name is found in the statement, the
-            name is replaced with a quoted version of that name if it is
-            not already quoted.
-            """
-            for name in tables:
-                if name in statement:
-                    # Regex translated: Optional open double quote, optional
-                    # single quote table name, word boundary, optional close
-                    # single quote, optional close double quote
-                    statement = re.sub(f"\"?'?{name}\\b'?\"?", lambda x: _ignoreQuote(name, x), statement)
-            return statement, parameters
-        engine = create_engine(self.config["db"], pool_size=1)
-        event.listen(engine, "before_cursor_execute", _oracleExecute, retval=True)
-        return engine
+        return create_engine(self.config["db"], pool_size=1)
