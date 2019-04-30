@@ -70,6 +70,12 @@ class SqlRegistry(Registry):
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
+    defaultChunkSize = 999
+    """This sets the chunksize that vectorized operations will be broken into.
+    This is needed as some dbapis cannot handle very long lists of records to
+    process, so the complete list must be chunked into smaller lists and
+    handled one at a time
+    """
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
@@ -831,6 +837,55 @@ class SqlRegistry(Registry):
         return dataId
 
     @disableWhenLimited
+    @transactional
+    def addDimensionEntryList(self, dimension, dataIdList, entry=None, **kwds):
+        # Docstring inherited from Registry.addDimensionEntryList.
+        dataIdList = [DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds) for dataId in
+                      dataIdList]
+        # The given dimension should be the only leaf dimension of the graph,
+        # and this should ensure it's a true `Dimension`, not a `str` name.
+        # all of dataIds should share a common dimension, so use the first
+        dimension, = dataIdList[0].dimensions().leaves
+        if entry is not None:
+            for dataId in dataIdList:
+                dataId.entries[dimension].update(entry)
+        table = self._schema.tables[dimension.name]
+        if table is None:
+            raise TypeError(f"Dimension '{dimension.name}' has no table.")
+        holder = dataIdList[0].dimensions().getRegionHolder()
+        if holder is not None:
+            # Update the join table between this Dimension and SkyPix, if it
+            # isn't itself a view.
+            skypixJoin = dataIdList[0].dimensions().union(["skypix"]).joins().findIf(
+                lambda join: join != holder and join.name not in self._schema.views
+            )
+        else:
+            skypixJoin = None
+        chunks = [dataIdList[i:i+self.defaultChunkSize] for i in range(0, len(dataIdList),
+                  self.defaultChunkSize)]
+        skypixParams = []
+        if skypixJoin is not None:
+            for dataId in dataIdList:
+                if dataId.region is not None:
+                    for begin, end in self.pixelization.envelope(dataId.region).ranges():
+                        for skypix in range(begin, end):
+                            skypixParams.append(dict(dataId, skypix=skypix))
+        skypixParamChunks = [skypixParams[i:i+self.defaultChunkSize] for i in range(0, len(skypixParams),
+                             self.defaultChunkSize)]
+        try:
+            for i, chunk in enumerate(chunks):
+                self._connection.execute(table.insert().values([dataId.fields(dimension, region=True) for
+                                                                dataId in chunk]))
+
+        except IntegrityError:
+            # TODO check for conflict, not just existence.
+            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry in {chunk}.")
+        # Insert all of the cunked up skypix entries into the skypix join table
+        for i, chunk in enumerate(skypixParamChunks):
+            self._connection.execute(self._schema.tables[skypixJoin.name].insert(), skypixParams)
+        return dataIdList
+
+    @disableWhenLimited
     def findDimensionEntries(self, dimension):
         # Docstring inherited from Registry.findDimensionEntries
         if not isinstance(dimension, Dimension):
@@ -878,7 +933,7 @@ class SqlRegistry(Registry):
                 table.update().where(
                     and_((table.columns[name] == dataId[name] for name in holder.links()))
                 ).values(
-                    region=dataId.region.encode()
+                    region=dataId.region
                 )
             )
             if result.rowcount == 0:
@@ -886,7 +941,7 @@ class SqlRegistry(Registry):
         else:  # Insert rather than update.
             self._connection.execute(
                 table.insert().values(
-                    region=dataId.region.encode(),
+                    region=dataId.region,
                     **dataId
                 )
             )

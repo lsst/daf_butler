@@ -274,8 +274,8 @@ class RegistryTests(metaclass=ABCMeta):
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         if not registry.limited:
-            registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-            registry.addDimensionEntry("instrument", {"instrument": "MyCam"})
+            registry.addDimensionEntryList("instrument", [{"instrument": "DummyCam"},
+                                                          {"instrument": "MyCam"}])
             registry.addDimensionEntry("physical_filter",
                                        {"instrument": "DummyCam", "physical_filter": "d-r"})
             registry.addDimensionEntry("physical_filter",
