@@ -25,6 +25,7 @@ __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
 
 import sys
 import functools
+from collections.abc import MutableMapping
 
 from lsst.utils import doImport
 
@@ -301,3 +302,58 @@ class PrivateConstructorMeta(type):
         in the usual way.
         """
         return type.__call__(cls, *args, **kwds)
+
+
+class NamedKeyDict(MutableMapping):
+    """A mapping that requires all keys to have a ``.name`` attribute, and
+    also permits lookups via those names.
+    """
+
+    def __init__(self, *args, **kwds):
+        self._byInstance = dict(*args, **kwds)
+        self._byName = {k.name: v for k, v in self._byInstance}
+
+    def __getitem__(self, k):
+        try:
+            return self._byName[k]
+        except KeyError:
+            pass
+        return self._byInstance[k]
+
+    def __setitem__(self, k, v):
+        try:
+            # If the item is already present, we permit modifying by name;
+            # otherwise the key must be an instance with a .name attribute.
+            k = self._byName[k]
+        except KeyError:
+            pass
+        self._byName[k.name] = v
+        self._byInstance[k] = v
+
+    def __delitem__(self, k):
+        try:
+            k = self._byName[k]
+        except KeyError:
+            pass
+        del self._byInstance[k]
+        del self._byName[k.name]
+
+    def __iter__(self):
+        return iter(self._byInstance)
+
+    def keys(self):
+        return self._byInstance.keys()
+
+    def values(self):
+        return self._byInstance.values()
+
+    def items(self):
+        return self._byInstance.items()
+
+    def names(self):
+        """Return a set-like view containing the names of all keys.
+        """
+        return self._byNames.keys()
+
+    def __len__(self):
+        return len(self._byInstance)

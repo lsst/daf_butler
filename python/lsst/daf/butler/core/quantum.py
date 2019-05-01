@@ -21,7 +21,7 @@
 
 __all__ = ("Quantum",)
 
-from .utils import slotValuesAreEqual
+from .utils import slotValuesAreEqual, NamedKeyDict
 
 from .execution import Execution
 
@@ -49,9 +49,9 @@ class Quantum(Execution):
         super().__init__(*args, **kwargs)
         self._task = task
         self._run = run
-        self._predictedInputs = {}
-        self._actualInputs = {}
-        self._outputs = {}
+        self._predictedInputs = NamedKeyDict()
+        self._actualInputs = NamedKeyDict()
+        self._outputs = NamedKeyDict()
 
     @property
     def task(self):
@@ -73,20 +73,18 @@ class Quantum(Execution):
 
     @property
     def predictedInputs(self):
-        r"""A `dict` of input datasets that were expected to be used,
-        with `DatasetType` names as keys and a list of `DatasetRef` instances
-        as values.
+        r"""A `NamedKeyDict` of input datasets that were expected to be used,
+        with `DatasetType` instances as keys and a list of `DatasetRef`
+        instances as values.
 
-        Input `Datasets` that have already been stored may be
-        `DatasetRef`\ s, and in many contexts may be guaranteed to be.
         Read-only; update via `Quantum.addPredictedInput()`.
         """
         return self._predictedInputs
 
     @property
     def actualInputs(self):
-        """A `dict` of input datasets that were actually used, with the same
-        form as `Quantum.predictedInputs`.
+        """A `NamedKeyDict` of input datasets that were actually used, with
+        the same form as `Quantum.predictedInputs`.
 
         All returned sets must be subsets of those in `predictedInputs`.
 
@@ -96,8 +94,8 @@ class Quantum(Execution):
 
     @property
     def outputs(self):
-        """A `dict` of output datasets (to be) generated for this quantum,
-        with the same form as `predictedInputs`.
+        """A `NamedKeyDict` of output datasets (to be) generated for this
+        quantum, with the same form as `predictedInputs`.
 
         Read-only; update via `addOutput()`.
         """
@@ -114,8 +112,7 @@ class Quantum(Execution):
         ref : `DatasetRef`
             Reference for a Dataset to add to the Quantum's predicted inputs.
         """
-        datasetTypeName = ref.datasetType.name
-        self._predictedInputs.setdefault(datasetTypeName, []).append(ref)
+        self._predictedInputs.setdefault(ref.datasetType, []).append(ref)
 
     def _markInputUsed(self, ref):
         """Mark an input as used.
@@ -123,14 +120,13 @@ class Quantum(Execution):
         This does not automatically update a `Registry`.
         For that use `Registry.markInputUsed()` instead.
         """
-        datasetTypeName = ref.datasetType.name
         # First validate against predicted
-        if datasetTypeName not in self._predictedInputs:
-            raise ValueError("Dataset type {} not in predicted inputs".format(datasetTypeName))
-        if ref not in self._predictedInputs[datasetTypeName]:
+        if ref.datasetType not in self._predictedInputs:
+            raise ValueError("Dataset type {} not in predicted inputs".format(ref.datasetType))
+        if ref not in self._predictedInputs[ref.datasetType]:
             raise ValueError("Actual input {} was not predicted".format(ref))
         # Now insert as actual
-        self._actualInputs.setdefault(datasetTypeName, []).append(ref)
+        self._actualInputs.setdefault(ref.datasetType, []).append(ref)
 
     def addOutput(self, ref):
         """Add an output `DatasetRef` to the `Quantum`.
@@ -143,5 +139,4 @@ class Quantum(Execution):
         ref : `DatasetRef`
             Reference for a Dataset to add to the Quantum's outputs.
         """
-        datasetTypeName = ref.datasetType.name
-        self._outputs.setdefault(datasetTypeName, []).append(ref)
+        self._outputs.setdefault(ref.datasetType, []).append(ref)
