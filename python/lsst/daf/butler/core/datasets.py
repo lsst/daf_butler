@@ -305,6 +305,11 @@ class DatasetType:
         universe : `DimensionGraph`
             The set of all known dimensions.
 
+        Returns
+        -------
+        self : `DatasetType`
+            The normalized `DatasetType` (also modified in-place).
+
         Raises
         ------
         ValueError
@@ -322,6 +327,7 @@ class DatasetType:
             self.storageClass
         except KeyError:
             raise ValueError(f"Storage class '{self._storageClassName}' not recognized.")
+        return self
 
 
 class DatasetRef:
