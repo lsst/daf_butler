@@ -83,6 +83,10 @@ class Butler:
         not exist, it will be created.  If "collection" is None, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
+    searchPaths : `list` of `str`, optional
+        Directory paths to search when calculating the full Butler
+        configuration.  Not used if the supplied config is already a
+        `ButlerConfig`.
 
     Raises
     ------
@@ -100,7 +104,7 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root, config=None, standalone=False, createRegistry=True):
+    def makeRepo(root, config=None, standalone=False, createRegistry=True, searchPaths=None):
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -124,6 +128,9 @@ class Butler:
             initializing `Butlers` to repos created with ``standalone=True``.
         createRegistry : `bool`
             If `True` create a new Registry.
+        searchPaths : `list` of `str`, optional
+            Directory paths to search when calculating the full butler
+            configuration.
 
         Returns
         -------
@@ -159,7 +166,7 @@ class Butler:
         if "root" in config:
             del config["root"]
 
-        full = ButlerConfig(config)  # this applies defaults
+        full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         registryClass = doImport(full["registry", "cls"])
@@ -171,10 +178,10 @@ class Butler:
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
-    def __init__(self, config=None, collection=None, run=None):
+    def __init__(self, config=None, collection=None, run=None, searchPaths=None):
         # save arguments for pickling
         self._args = (config, collection, run)
-        self.config = ButlerConfig(config)
+        self.config = ButlerConfig(config, searchPaths=searchPaths)
 
         if "root" in self.config:
             butlerRoot = self.config["root"]
