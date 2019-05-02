@@ -274,9 +274,6 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         if defer:
             if necessity is DatasetNecessityEnum.REQUIRED:
                 raise ValueError(f"Cannot defer search for required DatasetType {datasetType.name}.")
-            if necessity is DatasetNecessityEnum.OPTIONAL and perDatasetTypeLinks:
-                raise ValueError(f"Cannot defer search for optional DatasetType {datasetType.name} "
-                                 f"with per-DatasetType links {perDatasetTypeLinks}.")
             self._deferrals[datasetType] = _DeferralData(builder=builder, necessity=necessity,
                                                          joinLinks=joinLinks,
                                                          perDatasetTypeLinks=perDatasetTypeLinks)
