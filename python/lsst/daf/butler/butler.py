@@ -69,8 +69,11 @@ class Butler:
 
     Parameters
     ----------
-    config : `Config`
-        Configuration.
+    config : `ButlerConfig`, `Config` or `str`, optional.
+        Configuration. Anything acceptable to the
+        `ButlerConfig` constructor.  If a directory path
+        is given the configuration will be read from a ``butler.yaml`` file in
+        that location.  If `None` is given default values will be used.
     collection : `str`, optional
         Collection to use for all input lookups, overriding
         config["collection"] if provided.
@@ -106,10 +109,11 @@ class Butler:
         root : `str`
             Filesystem path to the root of the new repository.  Will be created
             if it does not exist.
-        config : `Config`, optional
+        config : `Config` or `str`, optional
             Configuration to write to the repository, after setting any
-            root-dependent Registry or Datastore config options.  If `None`,
-            default configuration will be used.
+            root-dependent Registry or Datastore config options.  Can not
+            be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
+            configuration will be used.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -120,11 +124,6 @@ class Butler:
             initializing `Butlers` to repos created with ``standalone=True``.
         createRegistry : `bool`
             If `True` create a new Registry.
-
-        Note that when ``standalone=False`` (the default), the configuration
-        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
-        construct the repository should also be used to construct any Butlers
-        to it to avoid configuration inconsistencies.
 
         Returns
         -------
@@ -140,6 +139,13 @@ class Butler:
         os.error
             Raised if the directory does not exist, exists but is not a
             directory, or cannot be created.
+
+        Notes
+        -----
+        Note that when ``standalone=False`` (the default), the configuration
+        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
+        construct the repository should also be used to construct any Butlers
+        to it to avoid configuration inconsistencies.
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
