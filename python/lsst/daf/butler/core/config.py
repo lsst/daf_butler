@@ -156,6 +156,10 @@ class Config(collections.abc.MutableMapping):
     """Default internal delimiter to use for components in the hierarchy when
     constructing keys for external use (see `Config.names()`)."""
 
+    includeKey = "includeConfigs"
+    """Key used to indicate that another config should be included at this
+    part of the hierarchy."""
+
     def __init__(self, other=None):
         self._data = {}
         self.configFile = None
@@ -170,6 +174,7 @@ class Config(collections.abc.MutableMapping):
         elif isinstance(other, str):
             # if other is a string, assume it is a file path.
             self.__initFromFile(other)
+            self._processExplicitIncludes()
         else:
             # if the config specified by other could not be recognized raise
             # a runtime error.
@@ -247,6 +252,71 @@ class Config(collections.abc.MutableMapping):
             content = {}
         self._data = content
         return self
+
+    def _processExplicitIncludes(self):
+        """Scan through the configuration searching for the special
+        includeConfigs directive and process the includes."""
+
+        # Search paths for config files
+        searchPaths = [os.path.curdir]
+        if self.configFile is not None:
+            searchPaths.append(os.path.abspath(os.path.dirname(self.configFile)))
+
+        # Ensure we know what delimiter to use
+        names = self.nameTuples()
+        for path in names:
+            if path[-1] == self.includeKey:
+
+                log.debug("Processing file include directive at %s", self._D + self._D.join(path))
+                basePath = path[:-1]
+
+                # Extract the includes and then delete them from the config
+                includes = self[path]
+                del self[path]
+
+                # Be consistent and convert to a list
+                if not isinstance(includes, list):
+                    includes = [includes]
+
+                # Read each file assuming it is a reference to a file
+                # The file can be relative to config file or cwd
+                # ConfigSubset search paths are not used
+                # At some point these might be URIs which we will have to
+                # assume resolve explicitly
+                subConfigs = []
+                for fileName in includes:
+                    found = None
+                    if os.path.isabs(fileName):
+                        found = fileName
+                    else:
+                        for dir in searchPaths:
+                            filePath = os.path.join(dir, fileName)
+                            if os.path.exists(filePath):
+                                found = os.path.normpath(os.path.abspath(filePath))
+                                break
+                    if not found:
+                        raise RuntimeError(f"Unable to find referenced include file: {fileName}")
+
+                    # Read the referenced Config as a Config
+                    subConfigs.append(type(self)(found))
+
+                # Now we need to merge these sub configs with the current
+                # information that was present in this node in the config
+                # tree with precedence given to the explicit values
+                newConfig = subConfigs.pop(0)
+                for sc in subConfigs:
+                    newConfig.update(sc)
+
+                # Explicit values take precedence
+                if not basePath:
+                    # This is an include at the root config
+                    newConfig.update(self)
+                    # Replace the current config
+                    self._data = newConfig._data
+                else:
+                    newConfig.update(self[basePath])
+                    # And reattach to the base config
+                    self[basePath] = newConfig
 
     @staticmethod
     def _splitIntoKeys(key):

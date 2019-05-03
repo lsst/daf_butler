@@ -69,8 +69,11 @@ class Butler:
 
     Parameters
     ----------
-    config : `Config`
-        Configuration.
+    config : `ButlerConfig`, `Config` or `str`, optional.
+        Configuration. Anything acceptable to the
+        `ButlerConfig` constructor.  If a directory path
+        is given the configuration will be read from a ``butler.yaml`` file in
+        that location.  If `None` is given default values will be used.
     collection : `str`, optional
         Collection to use for all input lookups, overriding
         config["collection"] if provided.
@@ -80,6 +83,10 @@ class Butler:
         not exist, it will be created.  If "collection" is None, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
+    searchPaths : `list` of `str`, optional
+        Directory paths to search when calculating the full Butler
+        configuration.  Not used if the supplied config is already a
+        `ButlerConfig`.
 
     Raises
     ------
@@ -97,7 +104,7 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root, config=None, standalone=False, createRegistry=True):
+    def makeRepo(root, config=None, standalone=False, createRegistry=True, searchPaths=None):
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -106,10 +113,11 @@ class Butler:
         root : `str`
             Filesystem path to the root of the new repository.  Will be created
             if it does not exist.
-        config : `Config`, optional
+        config : `Config` or `str`, optional
             Configuration to write to the repository, after setting any
-            root-dependent Registry or Datastore config options.  If `None`,
-            default configuration will be used.
+            root-dependent Registry or Datastore config options.  Can not
+            be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
+            configuration will be used.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -120,11 +128,9 @@ class Butler:
             initializing `Butlers` to repos created with ``standalone=True``.
         createRegistry : `bool`
             If `True` create a new Registry.
-
-        Note that when ``standalone=False`` (the default), the configuration
-        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
-        construct the repository should also be used to construct any Butlers
-        to it to avoid configuration inconsistencies.
+        searchPaths : `list` of `str`, optional
+            Directory paths to search when calculating the full butler
+            configuration.
 
         Returns
         -------
@@ -140,6 +146,13 @@ class Butler:
         os.error
             Raised if the directory does not exist, exists but is not a
             directory, or cannot be created.
+
+        Notes
+        -----
+        Note that when ``standalone=False`` (the default), the configuration
+        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
+        construct the repository should also be used to construct any Butlers
+        to avoid configuration inconsistencies.
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
@@ -153,7 +166,7 @@ class Butler:
         if "root" in config:
             del config["root"]
 
-        full = ButlerConfig(config)  # this applies defaults
+        full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
         registryClass = doImport(full["registry", "cls"])
@@ -165,10 +178,10 @@ class Butler:
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
-    def __init__(self, config=None, collection=None, run=None):
+    def __init__(self, config=None, collection=None, run=None, searchPaths=None):
         # save arguments for pickling
         self._args = (config, collection, run)
-        self.config = ButlerConfig(config)
+        self.config = ButlerConfig(config, searchPaths=searchPaths)
 
         if "root" in self.config:
             butlerRoot = self.config["root"]

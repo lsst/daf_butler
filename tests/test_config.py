@@ -509,6 +509,20 @@ class ConfigSubsetTestCase(unittest.TestCase):
         names = c.names(delimiter=delimiter)
         self.assertIn(delimiter.join(("", "comp3", "1", "comp", "item1")), names)
 
+    def testIncludeConfigs(self):
+        """Test the special includeConfigs key for pulling in additional
+        files."""
+        c = Config(os.path.join(self.configDir, "configIncludes.yaml"))
+        self.assertEqual(c["comp", "item2"], "hello")
+        self.assertEqual(c["comp", "item50"], 5000)
+        self.assertEqual(c["comp", "item1"], "first")
+        self.assertEqual(c["comp", "item10"], "tenth")
+        self.assertEqual(c["comp", "item11"], "eleventh")
+        self.assertEqual(c["unrelated"], 1)
+        self.assertEqual(c["addon", "comp", "item1"], "posix")
+        self.assertEqual(c["addon", "comp", "item11"], -1)
+        self.assertEqual(c["addon", "comp", "item50"], 500)
+
 
 if __name__ == "__main__":
     unittest.main()
