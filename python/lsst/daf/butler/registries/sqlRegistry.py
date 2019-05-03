@@ -70,12 +70,6 @@ class SqlRegistry(Registry):
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
-    defaultChunkSize = 999
-    """This sets the chunksize that vectorized operations will be broken into.
-    This is needed as some dbapis cannot handle very long lists of records to
-    process, so the complete list must be chunked into smaller lists and
-    handled one at a time
-    """
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
@@ -861,8 +855,6 @@ class SqlRegistry(Registry):
             )
         else:
             skypixJoin = None
-        chunks = [dataIdList[i:i+self.defaultChunkSize] for i in range(0, len(dataIdList),
-                  self.defaultChunkSize)]
         skypixParams = []
         if skypixJoin is not None:
             for dataId in dataIdList:
@@ -870,19 +862,15 @@ class SqlRegistry(Registry):
                     for begin, end in self.pixelization.envelope(dataId.region).ranges():
                         for skypix in range(begin, end):
                             skypixParams.append(dict(dataId, skypix=skypix))
-        skypixParamChunks = [skypixParams[i:i+self.defaultChunkSize] for i in range(0, len(skypixParams),
-                             self.defaultChunkSize)]
         try:
-            for i, chunk in enumerate(chunks):
-                self._connection.execute(table.insert().values([dataId.fields(dimension, region=True) for
-                                                                dataId in chunk]))
+            self._connection.execute(table.insert(), *[dataId.fields(dimension, region=True) for dataId in
+                                                       dataIdList])
 
         except IntegrityError:
             # TODO check for conflict, not just existence.
-            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry in {chunk}.")
-        # Insert all of the cunked up skypix entries into the skypix join table
-        for i, chunk in enumerate(skypixParamChunks):
-            self._connection.execute(self._schema.tables[skypixJoin.name].insert(), skypixParams)
+            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry.")
+        if skypixJoin is not None:
+            self._connection.execute(self._schema.tables[skypixJoin.name].insert(), *skypixParams)
         return dataIdList
 
     @disableWhenLimited
