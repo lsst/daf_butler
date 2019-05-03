@@ -152,7 +152,7 @@ class Butler:
         Note that when ``standalone=False`` (the default), the configuration
         search path (see `ConfigSubset.defaultSearchPaths`) that was used to
         construct the repository should also be used to construct any Butlers
-        to it to avoid configuration inconsistencies.
+        to avoid configuration inconsistencies.
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")

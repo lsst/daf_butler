@@ -5,7 +5,7 @@ Configuring a Butler
 
 A Butler repository is configured using YAML files.
 The main sections of the YAML file are handled separately by each sub configuration.
-Each config specialization, registry, schema, storage class, composites, and dimensions knows the name of the key for its section of the configuration and knows the names of files providing overrides and defaults for the configuration.
+Each config specialization, registry, schema, storage class, composites, and dimensions knows the name of the key for its own section of the configuration and knows the names of files providing overrides and defaults for the configuration.
 Additionally, if the sub configuration contains a ``cls`` key, that class is imported and an additional configuration file name can be provided by asking the class for its defaultConfigFile  property.
 All the keys within a sub configuration are processed by the class constructed from ``cls``.
 The primary source of default values comes from ``$DAF_BUTLER_DIR/config`` –- this directory contains YAML files matching the names specified in the sub config classes and also can include names specified by the corresponding component class (for example `~lsst.daf.butler.datastores.posixDatastore.PosixDatastore`  specifies that configuration should be found in ``datastores/posixDatastore.yaml``.
@@ -17,7 +17,7 @@ There are additional search paths that can be included when a config object is c
 To construct a Butler configuration object (`~lsst.daf.butler.ButlerConfig`) from a file the following happens:
 
 * The supplied config is read in.
-* If any leaf nodes in the configuration end in ``configIncludes`` they values (either a scalar or list) will be treated as the names of other config files.
+* If any leaf nodes in the configuration end in ``configIncludes`` the values (either a scalar or list) will be treated as the names of other config files.
   These files will be located either as an absolute path or relative to the current working directory, or the directory in which the original configuration file was found.
   The contents of these files will then be inserted into the configuration at the same hierarchy as the ``configIncludes`` directive, with priority given to the values defined explicitly in the parent configuration (for lists of include files later files overwrite content from earlier ones).
 * Each sub configuration class is constructed by supplying the relevant subset of the global config to the component Config constructor.

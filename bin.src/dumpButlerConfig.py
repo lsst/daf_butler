@@ -28,10 +28,10 @@ import logging
 from lsst.daf.butler import ButlerConfig
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Dump a Butler configuration to standard output "
-                                     "or a subset of one.")
+    parser = argparse.ArgumentParser(description="Dump either a subset or full Butler configuration to "
+                                     "standard output.")
     parser.add_argument("root",
-                        help=("Filesystem path for an existing Butler repository or path to config file."))
+                        help="Filesystem path for an existing Butler repository or path to config file.")
     parser.add_argument("--subset", "-s", default=None, type=str,
                         help="Subset of a configuration to report. This can be any key in the"
                              " hierarchy such as '.datastore.root' where the leading '.' specified"
