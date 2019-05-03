@@ -70,7 +70,7 @@ storageClasses:
   TransmissionCurve: TablePersistableTransmissionCurve
   BackgroundList: Background
   Config: Config
-  raw: ExposureU
+  raw: Exposure
 skip:
   # DatasetTypes that should never be converted, generally because they're
   # better added to Gen3 repos via some other means.
