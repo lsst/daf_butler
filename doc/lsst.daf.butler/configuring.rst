@@ -42,4 +42,14 @@ There is a command available to allow you to see how all these overrides and inc
 
    dumpButlerConfig.py --subset .registry.db ./repo/butler.yaml
 
-Note the leading ``.`` to indicate that you are using a ``.`` delimiter to specify the hierarchy within the configuration.
+Note the leading "``.``" to indicate that you are using a "``.``" delimiter to specify the hierarchy within the configuration.
+
+Overriding Root Paths
+---------------------
+
+In addition to the configuration options described above, there are some values that have a special meaning.
+For `~lsst.daf.butler.RegistryConfig` and `~lsst.daf.butler.DatastoreConfig` the ``root`` key, which can be used to specify paths, can include values using the special tag ``<butlerRoot>``.
+At run time, this tag will be replaced by a value derived from the location of the main butler configuration file, or else from the value of the ``root`` key found at the top of the butler configuration.
+
+Currently, if you create a butler configuration file that loads another butler configuration file, via ``configIncludes``, then any ``<butlerRoot>`` tags will be replaced with the location of the new file, not the original.
+It is therefore recommended that an explicit ``root`` be defined at the top level when defining butler overrides via a new top level butler configuration.
