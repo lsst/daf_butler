@@ -331,7 +331,7 @@ class ConversionWriter:
             refs = []
             for datasetTypeName, datasets in repo.gen2.datasets.items():
                 datasetType = self.datasetTypes.get(datasetTypeName, None)
-                if datasetType is None:
+                if datasetType is None or datasetTypeName in self.config.get("skip", []):
                     log.debug("Skipping insertion of '%s' from %s", datasetTypeName, repo.gen2.root)
                     continue
                 log.info("Inserting '%s' from %s", datasetTypeName, repo.gen2.root)
