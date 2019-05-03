@@ -3,7 +3,7 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: <butlerRoot>/butler_test_repository2
   records:
-    table: PosixDatastoreRecords2
+    table: posix_datastore_records_2
   constraints:
     accept:
       - metric

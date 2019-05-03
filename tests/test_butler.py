@@ -71,7 +71,7 @@ class ButlerConfigTests(unittest.TestCase):
 
         key = ("datastore", "records", "table")
         self.assertNotEqual(config1[key], config2[key])
-        self.assertEqual(config2[key], "OverrideRecord")
+        self.assertEqual(config2[key], "override_record")
 
 
 class ButlerTests:

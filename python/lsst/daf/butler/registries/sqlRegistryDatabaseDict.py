@@ -92,6 +92,8 @@ class SqlRegistryDatabaseDict(DatabaseDict):
             raise TypeError("No type provided for key {}".format(key))
         if not types.keys() >= frozenset(value._fields):
             raise TypeError("No type(s) provided for field(s) {}".format(set(value._fields) - types.keys()))
+        if not config["table"].islower():
+            raise ValueError(f"DatabaseDict tablename {config['table']} is not lowercase.")
         self._key = key
         self._value = value
         self._table = Table(config["table"], self.registry._schema.metadata, *allColumns, *allConstraints)
