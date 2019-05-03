@@ -74,4 +74,4 @@ storageClasses:
   TransmissionCurve: TablePersistableTransmissionCurve
   BackgroundList: Background
   Config: Config
-  raw: ExposureU
+  raw: Exposure
