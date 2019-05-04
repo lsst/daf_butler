@@ -73,7 +73,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         """Test that the key is not permitted to be part of the value."""
         value = namedtuple("TestValue", ["x", "y", "z"])
         with self.assertRaises(ValueError):
-            self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
+            self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
 
     def testKeyNotInValue(self):
         """Test when the value does not include the key."""
@@ -82,7 +82,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
             0: value(y="zero", z=0.0),
             1: value(y="one", z=0.1),
         }
-        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
         self.checkDatabaseDict(d, data)
 
     def testLengths(self):
@@ -92,7 +92,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
             0: value(y="passes", z=0.0),
             1: value(y="fails too long", z=0.1),
         }
-        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value,
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value,
                                            lengths={"y": 6})
 
         # This insert meets the constraint
@@ -109,7 +109,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         data = {
             0: value(y=0, z="zero"),
         }
-        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
         with self.assertRaises(TypeError):
             d[0] = data[0]
 
@@ -119,7 +119,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         data = {
             0: value(y="zero", z=0.0),
         }
-        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
         d["zero"] = data[0]
 
     def testExtraFieldsInTable(self):
@@ -134,7 +134,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
             0: value(y="zero"),
             1: value(y="one"),
         }
-        d = self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
         self.checkDatabaseDict(d, data)
 
     def testExtraFieldsInValue(self):
@@ -144,7 +144,7 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         """
         value = namedtuple("TestValue", ["y", "a"])
         with self.assertRaises(TypeError):
-            self.registry.makeDatabaseDict(table="TestTable", key=self.key, types=self.types, value=value)
+            self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
 
 
 if __name__ == "__main__":

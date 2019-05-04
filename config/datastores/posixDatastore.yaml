@@ -2,7 +2,7 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: <butlerRoot>/datastore
   records:
-    table: PosixDatastoreRecords
+    table: posix_datastore_records
   create: true
   templates:
     # valid_first and valid_last here are YYYYMMDD; we assume we'll switch to
