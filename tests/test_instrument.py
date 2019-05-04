@@ -65,6 +65,9 @@ class DummyCam(Instrument):
         """
         return None
 
+    def writeCuratedCalibrations(self, butler):
+        pass
+
 
 class InstrumentTestCase(unittest.TestCase):
     """Test for Instrument.

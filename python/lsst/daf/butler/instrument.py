@@ -83,6 +83,16 @@ class Instrument(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def writeCuratedCalibrations(self, butler):
+        """Write human-curated calibration Datasets to the given Butler with
+        the appropriate validity ranges.
+
+        This is a temporary API that should go away once obs_ packages have
+        a standardized approach to this problem.
+        """
+        raise NotImplementedError()
+
 
 class ObservationDataIdPacker(DataIdPacker):
     """A `DataIdPacker` for visit+detector or exposure+detector, given an
