@@ -48,10 +48,6 @@ collections:
     raw: raw
     ref_cat: ref/{name}
     ref_cat_config: ref/{name}
-    transmission_filter: calib
-    transmission_sensor: calib
-    transmission_optics: calib
-    transmission_atmosphere: calib
 runs:
   # Names of Collections (after processing via the above section)
   # that should be assigned to a particular Run (dict values are integer
@@ -75,3 +71,13 @@ storageClasses:
   BackgroundList: Background
   Config: Config
   raw: ExposureU
+skip:
+  # DatasetTypes that should never be converted, generally because they're
+  # better added to Gen3 repos via some other means.
+  # All of the below are handled by writeCuratedCalibrations (at least
+  # on HSC).
+  - bfKernel
+  - transmission_filter
+  - transmission_sensor
+  - transmission_optics
+  - transmission_atmosphere
