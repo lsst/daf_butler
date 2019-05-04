@@ -74,6 +74,10 @@ class Butler:
         `ButlerConfig` constructor.  If a directory path
         is given the configuration will be read from a ``butler.yaml`` file in
         that location.  If `None` is given default values will be used.
+    butler : `Butler`, optional.
+        If provided, construct a new Butler that uses the same registry and
+        datastore as the given one, but with the given collection and run.
+        Incompatible with the ``config`` and ``searchPaths`` arguments.
     collection : `str`, optional
         Collection to use for all input lookups, overriding
         config["collection"] if provided.
@@ -199,21 +203,30 @@ class Butler:
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
-    def __init__(self, config=None, collection=None, run=None, searchPaths=None):
-        # save arguments for pickling
-        self._args = (config, collection, run)
-        self.config = ButlerConfig(config, searchPaths=searchPaths)
-
-        if "root" in self.config:
-            butlerRoot = self.config["root"]
+    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
+        if butler is not None:
+            if config is not None or searchPaths is not None:
+                raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
+            # save arguments for pickling
+            self._args = (butler._args[0], collection, run)
+            self.registry = butler.registry
+            self.datastore = butler.datastore
+            self.storageClasses = butler.storageClasses
+            self.composites = butler.composites
+            self.config = butler.config
         else:
-            butlerRoot = self.config.configDir
-
-        self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
-        self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
-        self.storageClasses = StorageClassFactory()
-        self.storageClasses.addFromConfig(self.config)
-        self.composites = CompositesMap(self.config)
+            # save arguments for pickling
+            self._args = (config, collection, run)
+            self.config = ButlerConfig(config, searchPaths=searchPaths)
+            if "root" in self.config:
+                butlerRoot = self.config["root"]
+            else:
+                butlerRoot = self.config.configDir
+            self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
+            self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
+            self.storageClasses = StorageClassFactory()
+            self.storageClasses.addFromConfig(self.config)
+            self.composites = CompositesMap(self.config)
         if run is None:
             runCollection = self.config.get("run", None)
             self.run = None
