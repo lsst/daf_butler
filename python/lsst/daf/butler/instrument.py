@@ -93,6 +93,20 @@ class Instrument(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def applyConfigOverrides(self, name, config):
+        """Apply instrument-specific overrides for a task config.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the object being configured; typically the _DefaultName
+            of a Task.
+        config : `lsst.pex.config.Config`
+            Config instance to which overrides should be applied.
+        """
+        raise NotImplementedError()
+
 
 class ObservationDataIdPacker(DataIdPacker):
     """A `DataIdPacker` for visit+detector or exposure+detector, given an
