@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler",
+__all__ = ("Translator", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler",
            "makeCalibrationLabel")
 
 import itertools
@@ -33,13 +33,6 @@ def makeCalibrationLabel(datasetTypeName, calibDate):
     calibDate value.
     """
     return f"gen2/{datasetTypeName}_{calibDate}"
-
-
-class NoSkyMapError(LookupError):
-    """Exception thrown when a Translator cannot be created because it needs
-    a nonexistent SkyMap.
-    """
-    pass
 
 
 class KeyHandler(metaclass=ABCMeta):
@@ -227,36 +220,39 @@ class Translator:
         rulesForInstrumentAndDatasetType.append((frozenset(gen2keys), handler, consume))
 
     @classmethod
-    def makeMatching(cls, instrument, datasetType, skyMapNames, skyMaps):
+    def makeMatching(cls, datasetType, baseDataId, skyMap=None):
         """Construct a Translator appropriate for instances of the given
         dataset.
 
         Parameters
         ----------
+        baseDataId : `dict` or `DataId`
+            Gen3 data ID keys that may be a part of the converted data ID, and
+            can be used to dispatch how it is converted.  This should usually
+            include at least ``instrument`` and ``skymap`` keys, as these
+            cannot usually be inferred from Gen2 filenames but can be
+            determined from the Gen2 data repository as a whole.
         instrument : `str`
             String name of the Gen3 instrument associated with the Gen2
             repository this dataset is being translated from.
         datasetType : `Gen2DatasetType`
             A structure containing information about the Gen2 DatasetType,
             including its name and data ID keys.
-        skyMaps: `dict`
-            A dictionary mapping "coaddName" strings to Gen2SkyMap instances.
-        skyMapNames : `dict`
-            A dictionary mapping "coaddName" strings to Gen3 skymap names.
+        skyMap: `~lsst.skymap.BaseSkyMap`, optional
+            The skymap instance that defines any tract/patch data IDs.
+            `~lsst.skymap.BaseSkyMap` instances.
 
         Returns
         -------
         translator : `Translator`
             A translator whose translate() method can be used to transform Gen2
             data IDs to Gen3 dataIds.
-
-        Raises
-        ------
-        NoSkyMapError
-            Raised when the given skyMaps and/or skyMapNames dicts do not
-            contain a entry with the "coaddName" associated with this Dataset.
         """
-        rulesForInstrument = cls._rules.get(instrument, {None: []})
+        instrument = baseDataId.get("instrument", None)
+        if instrument is not None:
+            rulesForInstrument = cls._rules.get(instrument, {None: []})
+        else:
+            rulesForInstrument = {None: []}
         rulesForAnyInstrument = cls._rules[None]
         candidateRules = itertools.chain(
             rulesForInstrument.get(datasetType.name, []),     # this instrument, this DatasetType
@@ -270,24 +266,7 @@ class Translator:
             if ruleKeys.issubset(targetKeys):
                 matchedHandlers.append(ruleHandlers)
                 targetKeys -= consume
-        i = datasetType.name.find("Coadd")
-        if ("tract" in datasetType.keys or i > 0):
-            if len(skyMaps) == 1:
-                skyMap, = skyMaps.values()
-                skyMapName, = skyMapNames.values()
-            elif i > 0:
-                coaddName = datasetType.name[:i]
-                try:
-                    skyMap = skyMaps[coaddName]
-                    skyMapName = skyMapNames[coaddName]
-                except KeyError:
-                    raise NoSkyMapError("No skymap found for {}.".format(datasetType.name))
-            else:
-                raise NoSkyMapError("No skymap found for {}.".format(datasetType.name))
-        else:
-            skyMap = None
-            skyMapName = None
-        return Translator(matchedHandlers, skyMap=skyMap, skyMapName=skyMapName,
+        return Translator(matchedHandlers, skyMap=skyMap, skyMapName=baseDataId.get("skymap", None),
                           datasetTypeName=datasetType.name)
 
     def __init__(self, handlers, skyMap, skyMapName, datasetTypeName):
