@@ -114,9 +114,9 @@ class PosixDatastore(Datastore):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
-        Config.overrideParameters(DatastoreConfig, config, full,
-                                  toUpdate={"root": root},
-                                  toCopy=("cls", ("records", "table")), overwrite=overwrite)
+        Config.updateParameters(DatastoreConfig, config, full,
+                                toUpdate={"root": root},
+                                toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)

@@ -126,8 +126,8 @@ class Registry(metaclass=ABCMeta):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
-        Config.overrideParameters(RegistryConfig, config, full,
-                                  toCopy=(("skypix", "cls"), ("skypix", "level")), overwrite=overwrite)
+        Config.updateParameters(RegistryConfig, config, full,
+                                toCopy=(("skypix", "cls"), ("skypix", "level")), overwrite=overwrite)
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):

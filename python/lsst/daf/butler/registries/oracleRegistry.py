@@ -68,8 +68,8 @@ class OracleRegistry(SqlRegistry):
         This allows explicit values set in external configs to be retained.
         """
         super().setConfigRoot(root, config, full, overwrite=overwrite)
-        Config.overrideParameters(RegistryConfig, config, full,
-                                  toCopy=("cls", "deferDatasetIdQueries"), overwrite=overwrite)
+        Config.updateParameters(RegistryConfig, config, full,
+                                toCopy=("cls", "deferDatasetIdQueries"), overwrite=overwrite)
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
                  butlerRoot=None):

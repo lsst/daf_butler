@@ -731,13 +731,13 @@ class Config(collections.abc.MutableMapping):
             self.dump(f)
 
     @staticmethod
-    def overrideParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
-        """Generic helper function for overriding specific config parameters
+    def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
+        """Generic helper function for updating specific config parameters.
 
         Allows for named parameters to be set to new values in bulk, and
         for other values to be set by copying from a reference config.
 
-        Assumes that the supplied config is compatible with ```configType``
+        Assumes that the supplied config is compatible with ``configType``
         and will attach the updated values to the supplied config by
         looking for the related component key.  It is assumed that
         ``config`` and ``full`` are from the same part of the
