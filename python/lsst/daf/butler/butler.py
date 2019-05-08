@@ -613,6 +613,53 @@ class Butler:
             # This also implicitly disassociates.
             self.registry.removeDataset(ref)
 
+    @transactional
+    def ingest(self, path, datasetRefOrType, dataId=None, *, formatter=None, transfer=None, **kwds):
+        """Store and register a dataset that already exists on disk.
+
+        Parameters
+        ----------
+        path : `str`
+            Path to the file containing the dataset.
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` is provided, ``dataId`` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
+        formatter : `Formatter` (optional)
+            Formatter that should be used to retreive the Dataset.  If not
+            provided, the formatter will be constructed according to
+            Datastore configuration.
+        transfer : str (optional)
+            If not None, must be one of 'move', 'copy', 'hardlink', or
+            'symlink' indicating how to transfer the file.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the stored dataset, updated with the correct id if
+            given.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler was not constructed with a Run, and is hence
+            read-only.
+        NotImplementedError
+            Raised if the `Datastore` does not support the given transfer mode.
+        """
+        if self.run is None:
+            raise TypeError("Butler is read-only.")
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        ref = self.registry.addDataset(datasetType, dataId, run=self.run, recursive=True, **kwds)
+        self.datastore.ingest(path, ref, transfer=transfer, formatter=formatter)
+        return ref
+
     def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
         """Validate butler configuration.
 
