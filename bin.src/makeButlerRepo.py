@@ -22,6 +22,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import logging
 
 from lsst.daf.butler import Butler, Config
 
@@ -36,6 +37,16 @@ if __name__ == "__main__":
     parser.add_argument("--standalone", action="store_true", default=False,
                         help=("Include all defaults in the config file in the repo, insulating "
                               "the repo from changes in package defaults."))
+    parser.add_argument("--verbose", "-v", action="store_true",
+                        help="Turn on debug reporting.")
+    parser.add_argument("--override", "-o", action="store_true",
+                        help="Allow values in the supplied config to override any root settings.")
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.basicConfig(level=logging.DEBUG)
+
+    forceConfigRoot = not args.override
+
     config = Config(args.config) if args.config is not None else None
-    Butler.makeRepo(args.root, config=config, standalone=args.standalone)
+    Butler.makeRepo(args.root, config=config, standalone=args.standalone, forceConfigRoot=forceConfigRoot)
