@@ -761,7 +761,7 @@ class Config(collections.abc.MutableMapping):
 
             Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
-            should be copied from `full` to `Config`.
+            should be copied from ``full`` to ``config``.
         toUpdate : `dict`, optional
             A `dict` defining the keys to update and the new value to use.
             The keys and values can be any supported by `Config`
@@ -770,7 +770,7 @@ class Config(collections.abc.MutableMapping):
             `tuple` of keys whose values should be copied from ``full``
             into ``config``.
         overwrite : `bool`, optional
-            If `False`, do not modify a value in ``config`` if the value
+            If `False`, do not modify a value in ``config`` if the key
             already exists.  Default is always to overwrite.
 
         Raises

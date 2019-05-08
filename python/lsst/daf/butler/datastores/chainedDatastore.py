@@ -87,7 +87,7 @@ class ChainedDatastore(Datastore):
             modified by this method.
             Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
-            should be copied from `full` to `Config`.
+            should be copied from ``full`` to ``config``.
         overwrite : `bool`, optional
             If `False`, do not modify a value in ``config`` if the value
             already exists.  Default is always to overwrite with the provided
