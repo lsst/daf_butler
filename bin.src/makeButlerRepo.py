@@ -37,6 +37,9 @@ if __name__ == "__main__":
     parser.add_argument("--standalone", action="store_true", default=False,
                         help=("Include all defaults in the config file in the repo, insulating "
                               "the repo from changes in package defaults."))
+    parser.add_argument("--outfile", "-f", default=None, type=str,
+                        help="Name of output file to receive repository configuration."
+                             " Default is to write butler.yaml into the specified root.")
     parser.add_argument("--verbose", "-v", action="store_true",
                         help="Turn on debug reporting.")
     parser.add_argument("--override", "-o", action="store_true",
@@ -49,4 +52,5 @@ if __name__ == "__main__":
     forceConfigRoot = not args.override
 
     config = Config(args.config) if args.config is not None else None
-    Butler.makeRepo(args.root, config=config, standalone=args.standalone, forceConfigRoot=forceConfigRoot)
+    Butler.makeRepo(args.root, config=config, standalone=args.standalone, forceConfigRoot=forceConfigRoot,
+                    outfile=args.outfile)

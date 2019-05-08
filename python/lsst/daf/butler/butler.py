@@ -105,7 +105,7 @@ class Butler:
 
     @staticmethod
     def makeRepo(root, config=None, standalone=False, createRegistry=True, searchPaths=None,
-                 forceConfigRoot=True):
+                 forceConfigRoot=True, outfile=None):
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -141,6 +141,9 @@ class Butler:
             of the root directory for a datastore or registry to be given.
             If this parameter is `True` the values for ``root`` will be
             forced into the resulting config if appropriate.
+        outfile : `str`, optional
+            If not-`None`, the output configuration will be written to this
+            location rather than into the repository itself.
 
         Returns
         -------
@@ -183,7 +186,15 @@ class Butler:
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         if standalone:
             config.merge(full)
-        config.dumpToFile(os.path.join(root, "butler.yaml"))
+
+        # Write out the config
+        if outfile is not None:
+            # Force root so that we can find everything else
+            config["root"] = root
+        else:
+            outfile = os.path.join(root, "butler.yaml")
+        config.dumpToFile(outfile)
+
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
