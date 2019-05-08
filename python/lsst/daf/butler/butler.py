@@ -117,7 +117,9 @@ class Butler:
             Configuration to write to the repository, after setting any
             root-dependent Registry or Datastore config options.  Can not
             be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
-            configuration will be used.
+            configuration will be used.  Root-dependent config options
+            specified in this config are not overwritten.  This allows
+            specialist defaults to be specified.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -168,9 +170,9 @@ class Butler:
 
         full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
-        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
+        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=False)
         registryClass = doImport(full["registry", "cls"])
-        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
+        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=False)
         if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))

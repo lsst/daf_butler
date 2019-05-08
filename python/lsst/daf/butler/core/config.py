@@ -731,7 +731,7 @@ class Config(collections.abc.MutableMapping):
             self.dump(f)
 
     @staticmethod
-    def overrideParameters(configType, config, full, toUpdate=None, toCopy=None):
+    def overrideParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
         """Generic helper function for overriding specific config parameters
 
         Allows for named parameters to be set to new values in bulk, and
@@ -769,6 +769,9 @@ class Config(collections.abc.MutableMapping):
         toCopy : `tuple`, optional
             `tuple` of keys whose values should be copied from ``full``
             into ``config``.
+        overwrite : `bool`, optional
+            If `False`, do not modify a value in ``config`` if the value
+            already exists.  Default is always to overwrite.
 
         Raises
         ------
@@ -791,12 +794,20 @@ class Config(collections.abc.MutableMapping):
 
         if toUpdate:
             for key, value in toUpdate.items():
-                localConfig[key] = value
+                if key in localConfig and not overwrite:
+                    log.debug("Not overriding key '%s' with value '%s' in config %s",
+                              key, value, localConfig.__class__.__name__)
+                else:
+                    localConfig[key] = value
 
         if toCopy:
             localFullConfig = configType(full, mergeDefaults=False)
             for key in toCopy:
-                localConfig[key] = localFullConfig[key]
+                if key in localConfig and not overwrite:
+                    log.debug("Not overriding key '%s' from defaults in config %s",
+                              key, value, localConfig.__class__.__name__)
+                else:
+                    localConfig[key] = localFullConfig[key]
 
         # Reattach to parent if this is a child config
         if configType.component in config:

@@ -84,7 +84,7 @@ class PosixDatastore(Datastore):
                                                       "checksum", "file_size"])
 
     @classmethod
-    def setConfigRoot(cls, root, config, full):
+    def setConfigRoot(cls, root, config, full, overwrite=True):
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
 
@@ -103,10 +103,20 @@ class PosixDatastore(Datastore):
             Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
+        overwrite : `bool`, optional
+            If `False`, do not modify a value in ``config`` if the value
+            already exists.  Default is always to overwrite with the provided
+            ``root``.
+
+        Notes
+        -----
+        If a keyword is explicitly defined in the supplied ``config`` it
+        will not be overridden by this method if ``overwrite`` is `False`.
+        This allows explicit values set in external configs to be retained.
         """
         Config.overrideParameters(DatastoreConfig, config, full,
                                   toUpdate={"root": root},
-                                  toCopy=("cls", ("records", "table")))
+                                  toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
