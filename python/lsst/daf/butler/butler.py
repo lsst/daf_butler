@@ -104,7 +104,8 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root, config=None, standalone=False, createRegistry=True, searchPaths=None):
+    def makeRepo(root, config=None, standalone=False, createRegistry=True, searchPaths=None,
+                 forceConfigRoot=True):
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -118,8 +119,8 @@ class Butler:
             root-dependent Registry or Datastore config options.  Can not
             be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
             configuration will be used.  Root-dependent config options
-            specified in this config are not overwritten.  This allows
-            specialist defaults to be specified.
+            specified in this config are overwritten if ``forceConfigRoot``
+            is `True`.
         standalone : `bool`
             If True, write all expanded defaults, not just customized or
             repository-specific settings.
@@ -128,11 +129,18 @@ class Butler:
             may be good or bad, depending on the nature of the changes).
             Future *additions* to the defaults will still be picked up when
             initializing `Butlers` to repos created with ``standalone=True``.
-        createRegistry : `bool`
+        createRegistry : `bool`, optional
             If `True` create a new Registry.
         searchPaths : `list` of `str`, optional
             Directory paths to search when calculating the full butler
             configuration.
+        forceConfigRoot : `bool`, optional
+            If `False`, any values present in the supplied ``config`` that
+            would normally be reset are not overridden and will appear
+            directly in the output config.  This allows non-standard overrides
+            of the root directory for a datastore or registry to be given.
+            If this parameter is `True` the values for ``root`` will be
+            forced into the resulting config if appropriate.
 
         Returns
         -------
@@ -170,9 +178,9 @@ class Butler:
 
         full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
-        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=False)
+        datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         registryClass = doImport(full["registry", "cls"])
-        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=False)
+        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         if standalone:
             config.merge(full)
         config.dumpToFile(os.path.join(root, "butler.yaml"))
