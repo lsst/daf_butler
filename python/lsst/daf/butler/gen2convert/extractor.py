@@ -19,10 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Extractor",)
+__all__ = ("Extractor", "FilePathParser")
 
 import re
-from collections import OrderedDict
+from collections import OrderedDict  # used instead of dict for move_to_end
 
 from .structures import Gen2Dataset, Gen2DatasetType
 
@@ -32,7 +32,7 @@ TEMPLATE_RE = re.compile(r"\%\((?P<name>\w+)\)[^\%]*?(?P<type>[idrs])")
 
 
 class FilePathParser:
-    """A callable object that extracts Gen2Dataset instances from filenames
+    """A callable object that extracts Gen2 data IDs from filenames
     corresponding to a particular Gen2 DatasetType.
 
     External code should use the `fromMapping` method to construct instances.
@@ -44,6 +44,13 @@ class FilePathParser:
     regex : regular expression object
         Regular expression pattern with named groups for all data ID keys.
     """
+    def __init__(self, datasetType, regex):
+        self.datasetType = datasetType
+        self.regex = regex
+
+    # Regular expression that matches a single substitution in
+    # Gen2 CameraMapper template, such as "%(tract)04d".
+    TEMPLATE_RE = re.compile(r"\%\((?P<name>\w+)\)[^\%]*?(?P<type>[idrs])")
 
     @classmethod
     def fromMapping(cls, mapping):
@@ -67,7 +74,7 @@ class FilePathParser:
         last = 0
         terms = []
         allKeys = mapping.keys()
-        for match in TEMPLATE_RE.finditer(template):
+        for match in cls.TEMPLATE_RE.finditer(template):
             # Copy the (escaped) regular string between the last substitution
             # and this one to the terms that will form the regex.
             terms.append(re.escape(template[last:match.start()]))
@@ -94,27 +101,24 @@ class FilePathParser:
         terms.append(re.escape(template[last:]))
         return cls(datasetType=datasetType, regex=re.compile("".join(terms)))
 
-    def __init__(self, datasetType, regex):
-        self.datasetType = datasetType
-        self.regex = regex
-
-    def __call__(self, filePath, root):
-        """Extract a Gen2Dataset instance from the given path.
+    def __call__(self, filePath):
+        """Extract a Gen2 data ID dictionary from the given path.
 
         Parameters
         ----------
         filePath : `str`
-            Path and filename relative to `root`.
-        root : `str`
-            Absolute path to the root of the Gen2 data repository containing
-            this file.
+            Path and filename relative to the repository root.
+
+        Returns
+        -------
+        dataId : `dict`
+            Dictionary used to identify the dataset in the Gen2 butler, or
+            None if the file was not recognized.
         """
         m = self.regex.fullmatch(filePath)
         if m is None:
             return None
-        dataId = {k: v(m.group(k)) for k, v in self.datasetType.keys.items()}
-        return Gen2Dataset(datasetType=self.datasetType, dataId=dataId,
-                           filePath=filePath, root=root)
+        return {k: v(m.group(k)) for k, v in self.datasetType.keys.items()}
 
 
 class Extractor:
@@ -123,8 +127,11 @@ class Extractor:
 
     Parameters
     ----------
-    repo : `Gen2Repo`
-        Structure describing the repository this Extractor will process.
+    mapper : `lsst.obs.base.CameraMapper`
+        Gen2 mapper instance for the repository dataset are to be extracted
+        from.
+    root : `str`
+        Root filename for the Gen2 data repository.
     """
 
     def __init__(self, repo):
@@ -150,8 +157,9 @@ class Extractor:
             by this mapper.
         """
         for parser in self.parsers.values():
-            dataset = parser(filePath, root=self.repo.root)
-            if dataset is not None:
+            dataId = parser(filePath)
+            if dataId is not None:
+                dataset = Gen2Dataset(parser.datasetType, dataId, filePath, self.repo.root)
                 break
         else:
             return None

@@ -22,3 +22,5 @@
 from .walker import ConversionWalker
 from .writer import ConversionWriter
 from .translators import *
+from .extractor import *
+from .structures import *
