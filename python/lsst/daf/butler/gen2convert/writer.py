@@ -184,7 +184,7 @@ class ConversionWriter:
             self.datasetTypes[datasetTypeName] = DatasetType(
                 name=datasetTypeName,
                 storageClass=storageClass,
-                dimensions=translators[datasetTypeName].gen3units
+                dimensions=translators[datasetTypeName].dimensions
             )
         converted = ConvertedRepo(gen2repo, instrument=instrument, run=run, translators=translators)
         # Add parent repositories first, so self.repos is sorted topologically.

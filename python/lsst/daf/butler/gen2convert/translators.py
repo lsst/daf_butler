@@ -25,6 +25,8 @@ __all__ = ("Translator", "NoSkyMapError", "KeyHandler", "CopyKeyHandler", "Const
 import itertools
 from abc import ABCMeta, abstractmethod
 
+from ..core import DimensionNameSet
+
 
 def makeCalibrationLabel(datasetTypeName, calibDate):
     """Make a Gen3 calibration_label string from a Gen2 dataset type name and
@@ -46,23 +48,19 @@ class KeyHandler(metaclass=ABCMeta):
 
     Parameters
     ----------
-    gen3key : `str`
-        Name of the Gen3 Data ID key (Dimension link field name) populated by
+    dimension : `str`
+        Name of the Gen3 dimension (data ID key) populated by
         this handler (e.g. "visit" or "abstract_filter")
-    gen3unit : `str`
-        Name of the Gen3 Dimension associated with `gen3key` (e.g. "visit" or
-        "abstract_filter").
     """
 
-    __slots__ = ("gen3key", "gen3unit")
+    __slots__ = ("dimension",)
 
-    def __init__(self, gen3key, gen3unit):
-        self.gen3key = gen3key
-        self.gen3unit = gen3unit
+    def __init__(self, dimension):
+        self.dimension = dimension
 
     def translate(self, gen2id, gen3id, skyMap, skyMapName, datasetTypeName):
-        gen3id[self.gen3key] = self.extract(gen2id, skyMap=skyMap, skyMapName=skyMapName,
-                                            datasetTypeName=datasetTypeName)
+        gen3id[self.dimension] = self.extract(gen2id, skyMap=skyMap, skyMapName=skyMapName,
+                                              datasetTypeName=datasetTypeName)
 
     @abstractmethod
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
@@ -74,8 +72,8 @@ class ConstantKeyHandler(KeyHandler):
 
     __slots__ = ("value",)
 
-    def __init__(self, gen3key, gen3unit, value):
-        super().__init__(gen3key, gen3unit)
+    def __init__(self, dimension, value):
+        super().__init__(dimension)
         self.value = value
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
@@ -87,9 +85,7 @@ class CopyKeyHandler(KeyHandler):
 
     Parameters
     ----------
-    gen3key : `str`
-        Name of the Gen3 data ID key produced by this handler.
-    gen3unit : `str`
+    dimension : `str`
         Name of the Gen3 dimension produced by this handler.
     dtype : `type`, optional
         If not `None`, the type that values for this key must be an
@@ -98,9 +94,9 @@ class CopyKeyHandler(KeyHandler):
 
     __slots__ = ("gen2key", "dtype")
 
-    def __init__(self, gen3key, gen3unit, gen2key=None, dtype=None):
-        super().__init__(gen3key, gen3unit)
-        self.gen2key = gen2key if gen2key is not None else gen3key
+    def __init__(self, dimension, gen2key=None, dtype=None):
+        super().__init__(dimension)
+        self.gen2key = gen2key if gen2key is not None else dimension
         self.dtype = dtype
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
@@ -110,7 +106,7 @@ class CopyKeyHandler(KeyHandler):
                 r = self.dtype(r)
             except ValueError as err:
                 raise TypeError(
-                    f"'{r}' is not a valid value for {self.gen3key}; "
+                    f"'{r}' is not a valid value for {self.dimension}; "
                     f"expected {self.dtype.__name__}, got {type(r).__name__}."
                 ) from err
         return r
@@ -122,7 +118,7 @@ class PatchKeyHandler(KeyHandler):
     __slots__ = ()
 
     def __init__(self):
-        super().__init__("patch", "patch")
+        super().__init__("patch")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         tract = gen2id["tract"]
@@ -138,7 +134,7 @@ class SkyMapKeyHandler(KeyHandler):
     __slots__ = ()
 
     def __init__(self):
-        super().__init__("skymap", "skymap")
+        super().__init__("skymap")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return skyMapName
@@ -156,7 +152,7 @@ class CalibKeyHandler(KeyHandler):
     __slots__ = ()
 
     def __init__(self):
-        super().__init__("calibration_label", "calibration_label")
+        super().__init__("calibration_label")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
         return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"])
@@ -310,21 +306,16 @@ class Translator:
         return gen3id
 
     @property
-    def gen3keys(self):
-        """The Gen3 data ID keys populated by this Translator (`frozenset`)."""
-        return frozenset(h.gen3key for h in self.handlers)
-
-    @property
-    def gen3units(self):
-        """The Gen3 Dimension (names) populated by this Translator
-        (`frozenset`)."""
-        return frozenset(h.gen3unit for h in self.handlers)
+    def dimensions(self):
+        """The dimensions populated by this Translator
+        (`~lsst.daf.butler.DimensionNameSet`)."""
+        return DimensionNameSet(h.dimension for h in self.handlers)
 
 
 # Add "skymap" to Gen3 ID if Gen2 ID has a "tract" key.
 Translator.addRule(SkyMapKeyHandler(), gen2keys=("tract",), consume=False)
 
-# Add "skymap" to Gen3 Id if DatasetType is one of a few specific ones
+# Add "skymap" to Gen3 ID if DatasetType is one of a few specific ones
 for coaddName in ("deep", "goodSeeing", "psfMatched", "dcr"):
     Translator.addRule(SkyMapKeyHandler(), datasetTypeName=f"{coaddName}Coadd_skyMap")
 
@@ -332,18 +323,18 @@ for coaddName in ("deep", "goodSeeing", "psfMatched", "dcr"):
 Translator.addRule(PatchKeyHandler(), gen2keys=("patch",))
 
 # Copy Gen2 "tract" to Gen3 "tract".
-Translator.addRule(CopyKeyHandler("tract", "tract", dtype=int), gen2keys=("tract",))
+Translator.addRule(CopyKeyHandler("tract", dtype=int), gen2keys=("tract",))
 
 # Add valid_first, valid_last to instrument-level transmission/ datasets;
 # these are considered calibration products in Gen3.
 for datasetTypeName in ("transmission_sensor", "transmission_optics", "transmission_filter"):
-    Translator.addRule(ConstantKeyHandler("calibration_label", "calibration_label", "unbounded"),
+    Translator.addRule(ConstantKeyHandler("calibration_label", "unbounded"),
                        datasetTypeName=datasetTypeName)
 
 # Translate Gen2 pixel_id to Gen3 skypix.
 # For now, we just assume that the Gen3 Registry's pixelization happens to be
 # the same as what the ref_cat indexer uses.
-Translator.addRule(CopyKeyHandler("skypix", "skypix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))
+Translator.addRule(CopyKeyHandler("skypix", gen2key="pixel_id", dtype=int), gen2keys=("pixel_id",))
 
 # Translate Gen2 calibDate and datasetType to Gen3 calibration_label.
 Translator.addRule(CalibKeyHandler(), gen2keys=("calibDate",))
