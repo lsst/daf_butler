@@ -69,7 +69,7 @@ class ChainedDatastore(Datastore):
     """Key to specify where child datastores are configured."""
 
     @classmethod
-    def setConfigRoot(cls, root, config, full):
+    def setConfigRoot(cls, root, config, full, overwrite=True):
         """Set any filesystem-dependent config options for child Datastores to
         be appropriate for a new empty repository with the given root.
 
@@ -87,7 +87,17 @@ class ChainedDatastore(Datastore):
             modified by this method.
             Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
-            should be copied from `full` to `Config`.
+            should be copied from ``full`` to ``config``.
+        overwrite : `bool`, optional
+            If `False`, do not modify a value in ``config`` if the value
+            already exists.  Default is always to overwrite with the provided
+            ``root``.
+
+        Notes
+        -----
+        If a keyword is explicitly defined in the supplied ``config`` it
+        will not be overridden by this method if ``overwrite`` is `False`.
+        This allows explicit values set in external configs to be retained.
         """
 
         # Extract the part of the config we care about updating
@@ -108,7 +118,7 @@ class ChainedDatastore(Datastore):
             fullChildConfig = DatastoreConfig(fullChild, mergeDefaults=False)
             datastoreClass = doImport(fullChildConfig["cls"])
             newroot = "{}/{}_{}".format(root, datastoreClass.__qualname__, idx)
-            datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig)
+            datastoreClass.setConfigRoot(newroot, childConfig, fullChildConfig, overwrite=overwrite)
 
             # Reattach to parent
             datastoreConfig[containerKey, idx] = childConfig

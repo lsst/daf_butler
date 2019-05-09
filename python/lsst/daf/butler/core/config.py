@@ -731,13 +731,13 @@ class Config(collections.abc.MutableMapping):
             self.dump(f)
 
     @staticmethod
-    def overrideParameters(configType, config, full, toUpdate=None, toCopy=None):
-        """Generic helper function for overriding specific config parameters
+    def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
+        """Generic helper function for updating specific config parameters.
 
         Allows for named parameters to be set to new values in bulk, and
         for other values to be set by copying from a reference config.
 
-        Assumes that the supplied config is compatible with ```configType``
+        Assumes that the supplied config is compatible with ``configType``
         and will attach the updated values to the supplied config by
         looking for the related component key.  It is assumed that
         ``config`` and ``full`` are from the same part of the
@@ -761,7 +761,7 @@ class Config(collections.abc.MutableMapping):
 
             Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
-            should be copied from `full` to `Config`.
+            should be copied from ``full`` to ``config``.
         toUpdate : `dict`, optional
             A `dict` defining the keys to update and the new value to use.
             The keys and values can be any supported by `Config`
@@ -769,6 +769,9 @@ class Config(collections.abc.MutableMapping):
         toCopy : `tuple`, optional
             `tuple` of keys whose values should be copied from ``full``
             into ``config``.
+        overwrite : `bool`, optional
+            If `False`, do not modify a value in ``config`` if the key
+            already exists.  Default is always to overwrite.
 
         Raises
         ------
@@ -791,12 +794,20 @@ class Config(collections.abc.MutableMapping):
 
         if toUpdate:
             for key, value in toUpdate.items():
-                localConfig[key] = value
+                if key in localConfig and not overwrite:
+                    log.debug("Not overriding key '%s' with value '%s' in config %s",
+                              key, value, localConfig.__class__.__name__)
+                else:
+                    localConfig[key] = value
 
         if toCopy:
             localFullConfig = configType(full, mergeDefaults=False)
             for key in toCopy:
-                localConfig[key] = localFullConfig[key]
+                if key in localConfig and not overwrite:
+                    log.debug("Not overriding key '%s' from defaults in config %s",
+                              key, value, localConfig.__class__.__name__)
+                else:
+                    localConfig[key] = localFullConfig[key]
 
         # Reattach to parent if this is a child config
         if configType.component in config:
