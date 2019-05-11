@@ -28,11 +28,28 @@ from abc import ABCMeta, abstractmethod
 from ..core import DimensionNameSet
 
 
-def makeCalibrationLabel(datasetTypeName, calibDate):
-    """Make a Gen3 calibration_label string from a Gen2 dataset type name and
-    calibDate value.
+def makeCalibrationLabel(datasetTypeName, calibDate, ccd=None, filter=None):
+    """Make a Gen3 calibration_label string.
+
+    Parameters
+    ----------
+    datasetTypeName : `str`
+        Name of the dataset type this calibration label identifies.
+    calibDate : `str`
+        Date string used in the Gen2 template.
+    ccd : `int`, optional
+        Detector ID used in the Gen2 template.
+    filter : `str`, optional
+        Filter used in the Gen2 template.
     """
-    return f"gen2/{datasetTypeName}_{calibDate}"
+    # TODO: this function is probably HSC-specific, but I don't know how other
+    # obs calib registries behave so I don't know (yet) how to generalize it.
+    elements = [datasetTypeName, calibDate]
+    if ccd is not None:
+        elements.append(f"{ccd:03d}")
+    if filter is not None:
+        elements.append(filter)
+    return "gen2/{}".format("_".join(elements))
 
 
 class KeyHandler(metaclass=ABCMeta):
@@ -135,11 +152,6 @@ class SkyMapKeyHandler(KeyHandler):
 
 class CalibKeyHandler(KeyHandler):
     """A KeyHandler for master calibration datasets.
-
-    This translator currently assumes that dataset type name and
-    the "calibDate" value from the Gen2 calibration registry together
-    have a unique mapping to a validity range (i.e. there are no overrides
-    for e.g. detector or filter).
     """
 
     __slots__ = ()
@@ -148,7 +160,8 @@ class CalibKeyHandler(KeyHandler):
         super().__init__("calibration_label")
 
     def extract(self, gen2id, skyMap, skyMapName, datasetTypeName):
-        return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"])
+        return makeCalibrationLabel(datasetTypeName, gen2id["calibDate"],
+                                    ccd=gen2id.get("ccd"), filter=gen2id.get("filter"))
 
 
 class Translator:
