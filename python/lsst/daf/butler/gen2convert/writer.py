@@ -320,8 +320,9 @@ class ConversionWriter:
             instrument = self.config["mappers", mapperName, "instrument"]
             log.debug("Inserting unbounded calibration_label.")
             addUnboundedCalibrationLabel(registry, instrument)
-            for (datasetTypeName, calibDate), (first, last) in repo.gen2.calibDict.items():
-                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate),
+            for (datasetTypeName, calibDate, ccd, filter), (first, last) in repo.gen2.calibDict.items():
+                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate,
+                                                                       ccd=ccd, filter=filter),
                                 instrument=instrument,
                                 universe=registry.dimensions)
                 dataId.entries["calibration_label"]["valid_first"] = first

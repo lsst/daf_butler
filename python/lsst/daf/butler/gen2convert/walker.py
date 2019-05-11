@@ -245,11 +245,12 @@ class ConversionWalker:
             Dictionary mapping tuples of (datasetTypeName, calibDate) to
             tuples of (valid_first, valid_last).
         """
+        log = Log.getLogger("lsst.daf.butler.gen2convert")
         result = {}
         with sqlite3.connect(calibPath) as calibConn:
             calibConn.row_factory = sqlite3.Row
             c = calibConn.cursor()
-
+            typesWithFilters = ("sky", "flat", "fringe")
             queryList = []
             # This query only includes calibration types that are known at
             # this time
@@ -262,15 +263,13 @@ class ConversionWalker:
             query = " UNION ".join(queryList)
 
             for row in c.execute(query):
-                key = (row["type"], row["calibDate"])
+                ccd = row["ccd"]
+                filter = row["filter"] if row["type"] in typesWithFilters else None
+                key = (row["type"], row["calibDate"], ccd, filter)
                 value = (datetime.datetime.strptime(row["validStart"], "%Y-%m-%d"),
                          datetime.datetime.strptime(row["validEnd"], "%Y-%m-%d"))
-                oldValue = result.get(key)
-                if oldValue is not None and oldValue != value:
-                    raise NotImplementedError(
-                        "gen2convert assumes calibration validity ranges do not depend on CCD or filter."
-                    )
                 result[key] = value
+                log.debug("Read Gen2 validity range %s -> %s", key, value)
         return result
 
     @property
