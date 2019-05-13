@@ -34,6 +34,7 @@ import io
 from yaml.representer import Representer
 
 from . import utils
+from .s3utils import parsePathToUriElements
 
 try:
     import boto3
@@ -244,7 +245,7 @@ class Config(collections.abc.MutableMapping):
             raise ModuleNotFoundError(('boto3 not found.'
                                        'Are you sure it is installed?'))
 
-        scheme, bucket, key = utils.parsePath2Uri(path)
+        scheme, bucket, key = parsePathToUriElements(path)
         s3 = boto3.client('s3')
         try:
             response = s3.get_object(Bucket=bucket, Key=key)

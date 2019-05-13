@@ -37,7 +37,8 @@ except ImportError:
     boto3 = None
 
 from lsst.utils import doImport
-from .core.utils import transactional, parsePathToUriElements
+from .core.utils import transactional
+from .core.s3utils import parsePathToUriElements
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .core.registry import Registry
@@ -57,6 +58,7 @@ log = logging.getLogger(__name__)
 class ButlerValidationError(ValidationError):
     """There is a problem with the Butler configuration."""
     pass
+
 
 
 class Butler:
@@ -93,7 +95,10 @@ class Butler:
         not exist, it will be created.  If "collection" is None, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
-
+    searchPaths : `list` of `str`, optional
+        Directory paths to search when calculating the full Butler
+        configuration.  Not used if the supplied config is already a
+        `ButlerConfig`.
     Raises
     ------
     ValueError
@@ -103,7 +108,6 @@ class Butler:
 
     GENERATION = 3
     """This is a Generation 3 Butler.
-
     This attribute may be removed in the future, once the Generation 2 Butler
     interface has been fully retired; it should only be used in transitional
     code.
@@ -165,15 +169,18 @@ class Butler:
         os.error
             Raised if the directory does not exist, exists but is not a
             directory, or cannot be created.
+
+        Notes
+        -----
+        Note that when ``standalone=False`` (the default), the configuration
+        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
+        construct the repository should also be used to construct any Butlers
+        to avoid configuration inconsistencies.
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
-        root = os.path.abspath(root)
-        if not os.path.isdir(root):
-            safeMakeDir(root)
-        config = Config(config)
 
-        scheme, rootpath, relpath = parsePath2Uri(root)
+        scheme, rootpath, relpath = parsePathToUriElements(root)
         if scheme == 'file://':
             root = os.path.abspath(root)
             if not os.path.isdir(root):
@@ -183,6 +190,7 @@ class Butler:
             # implies bucket exists, if not another level of checks
             bucket = s3.Bucket(rootpath)
             bucket.put_object(Bucket=rootpath, Key=(relpath))
+        config = Config(config)
 
         # If we are creating a new repo from scratch with relative roots
         # do not propagate an explicit root from the config file
@@ -192,7 +200,6 @@ class Butler:
         full = ButlerConfig(config)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
-        datastoreClass.setConfigRoot(root, config, full)
         registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         if standalone:
@@ -203,11 +210,9 @@ class Butler:
         elif scheme == 's3://':
             config.dumpToS3(rootpath, os.path.join(relpath, 'butler.yaml'))
 
-
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
-
 
     def __init__(self, config=None, collection=None, run=None):
         self._args = (config, butler, collection, run, searchPaths)

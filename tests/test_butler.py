@@ -65,30 +65,6 @@ def makeExampleMetrics():
                           )
 
 
-def checkFileExists(uri):
-    """Returns True if file exists at the URI location; returns False
-    otherwise.
-
-    Given a 'file://' prefixed URI this is equivalent to `os.path.exists`.
-    Given an 's3://' prefixed URI this is equivalent to
-    `lsst.daf.butler.core.utils.s3CheckFileExists`.
-
-    Parameters
-    ----------
-    uri : URI
-        Assumed location of the file.
-    """
-    scheme, root, relpath = parsePathToUriElements(uri)
-    if scheme == 'file://':
-        return os.path.exists(os.path.join(root, relpath))
-    elif scheme == 's3://':
-        if boto3 is None:
-            raise ModuleNotFoundError(("Could not find boto3. "
-                                       "Are you sure it is installed?"))
-        client = boto3.client('s3')
-        return s3CheckFileExists(client, root, relpath)[0]
-
-
 class TransactionTestError(Exception):
     """Specific error for testing transactions, to prevent misdiagnosing
     that might otherwise occur when a standard exception is used.
@@ -292,66 +268,6 @@ class ButlerTests:
         collections = butler.registry.getAllCollections()
         self.assertEqual(collections, {"ingest", })
 
-    def putTemplates(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile)
-
-        # Add needed Dimensions
-        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCamComp"})
-        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCamComp",
-                                                              "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 423,
-                                                    "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 425,
-                                                    "physical_filter": "d-r"})
-
-        # Create and store a dataset
-        metric = makeExampleMetrics()
-
-        # Create two almost-identical DatasetTypes (both will use default
-        # template)
-        dimensions = ("instrument", "visit")
-        butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
-        butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
-        butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
-
-        dataId1 = {"instrument": "DummyCamComp", "visit": 423}
-        dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
-        dataId3 = {"instrument": "DummyCamComp", "visit": 425}
-
-        # Put with exactly the data ID keys needed
-        ref = butler.put(metric, "metric1", dataId1)
-        scheme, root, relpath = parsePathToUriElements(butler.datastore.root)
-        uri = scheme + os.path.join(root, relpath,
-                                    "ingest/metric1/DummyCamComp_423.pickle")
-        self.assertTrue(checkFileExists(uri))
-
-        # Check the template based on dimensions
-        butler.datastore.templates.validateTemplates([ref])
-
-        # Put with extra data ID keys (physical_filter is an optional
-        # dependency); should not change template (at least the way we're
-        # defining them  to behave now; the important thing is that they
-        # must be consistent).
-        ref = butler.put(metric, "metric2", dataId2)
-        uri = scheme + os.path.join(root, relpath,
-                                    "ingest/metric2/DummyCamComp_423.pickle")
-        self.assertTrue(checkFileExists(uri))
-
-        # Check the template based on dimensions
-        butler.datastore.templates.validateTemplates([ref])
-
-        # Now use a file template that will not result in unique filenames
-        ref = butler.put(metric, "metric3", dataId1)
-
-        # Check the template based on dimensions. This one is a bad template
-        with self.assertRaises(FileTemplateValidationError):
-            butler.datastore.templates.validateTemplates([ref])
-
-        with self.assertRaises(FileExistsError):
-            butler.put(metric, "metric3", dataId3)
-
-
     def testPickle(self):
         """Test pickle support.
         """
@@ -514,8 +430,70 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     datastoreName = [f"POSIXDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3'"
 
+    def checkFileExists(self, root, path):
+        """Checks if file exists at a given path (relative to root).
+
+        Test testPutTemplates verifies actual physical existance of the files
+        in the requested location. For POSIXDatastore this test is equivalent to
+        `os.path.exist` call.
+        """
+        return os.path.exists(os.path.join(root, path))
+
     def testPutTemplates(self):
-        self.putTemplates()
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        butler = Butler(self.tmpConfigFile)
+
+        # Add needed Dimensions
+        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCamComp"})
+        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCamComp",
+                                                              "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 423,
+                                                    "physical_filter": "d-r"})
+        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 425,
+                                                    "physical_filter": "d-r"})
+
+        # Create and store a dataset
+        metric = makeExampleMetrics()
+
+        # Create two almost-identical DatasetTypes (both will use default
+        # template)
+        dimensions = ("instrument", "visit")
+        butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
+        butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
+        butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
+
+        dataId1 = {"instrument": "DummyCamComp", "visit": 423}
+        dataId2 = {"instrument": "DummyCamComp", "visit": 423, "physical_filter": "d-r"}
+        dataId3 = {"instrument": "DummyCamComp", "visit": 425}
+
+        # Put with exactly the data ID keys needed
+        ref = butler.put(metric, "metric1", dataId1)
+        self.assertTrue(self.checkFileExists(butler.datastore.root,
+                                             "ingest/metric1/DummyCamComp_423.pickle"))
+
+        # Check the template based on dimensions
+        butler.datastore.templates.validateTemplates([ref])
+
+        # Put with extra data ID keys (physical_filter is an optional
+        # dependency); should not change template (at least the way we're
+        # defining them  to behave now; the important thing is that they
+        # must be consistent).
+        ref = butler.put(metric, "metric2", dataId2)
+        self.assertTrue(self.checkFileExists(butler.datastore.root,
+                                             "ingest/metric2/DummyCamComp_423.pickle"))
+
+        # Check the template based on dimensions
+        butler.datastore.templates.validateTemplates([ref])
+
+        # Now use a file template that will not result in unique filenames
+        ref = butler.put(metric, "metric3", dataId1)
+
+        # Check the template based on dimensions. This one is a bad template
+        with self.assertRaises(FileTemplateValidationError):
+            butler.datastore.templates.validateTemplates([ref])
+
+        with self.assertRaises(FileExistsError):
+            butler.put(metric, "metric3", dataId3)
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -596,7 +574,7 @@ class ButlerConfigNoRunTestCase(unittest.TestCase):
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
-class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
+class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
     """S3Datastore specialization of a butler; an S3 storage Datastore +
     a local in-memory SqlRegistry.
     """
@@ -604,7 +582,27 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = None
     validationCanFail = True
 
+    bucketName = 'anybucketname'
+    """Name of the Bucket that will be used in the tests. The name is read from the
+    config file used with the tests during set-up.
+    """
+
+    root = 'butlerRoot/'
+    """Root repository directory expected to be used in case useTempRoot=False.
+    Otherwise the root is set to a 20 characters long randomly generated string
+    during set-up.
+    """
+
+    datastoreStr = [f"datastore={root}"]
+    """Contains all expected root locations in a format expected to be
+    returned by Butler stringification.
+    """
+
+    datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
+    """The expected format of the S3Datastore string."""
+
     registryStr = f"registry='sqlite:///:memory:'"
+    """Expected format of the Registry string."""
 
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
@@ -625,8 +623,6 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         if self.useTempRoot:
             self.root = self.genRoot()
-        else:
-            self.root = root
         rooturi = f's3://{self.bucketName}/{self.root}'
         config.update({'datastore': {'datastore': {'root': rooturi}}})
 
@@ -655,192 +651,20 @@ class S3DatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
 
-    def testPutTemplates(self):
-        self.putTemplates()
+    def checkFileExists(self, root, relpath):
+        """Checks if file exists at a given path (relative to root).
 
-
-@unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not installed!")
-@mock_s3
-class S3RdsButlerTestCase(S3DatastoreButlerTestCase):
-    """An Amazon cloud oriented Butler. DataStore is the S3 Storage and the Registry
-    is an RDS PostgreSql service.
-    """
-    configFile = os.path.join(TESTDIR, "config/basic/butler-s3rds.yaml")
-    fullConfigKey = None # ".datastore.formatters"
-    validationCanFail = True
-
-    def genRoot(self):
-        """Returns a random string of len 20 to serve as a root
-        name for the temporary bucket repo.
+        Test testPutTemplates verifies actual physical existance of the files
+        in the requested location. For S3Datastore this test is equivalent to
+        `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
         """
-        rndstr = ''.join(
-            random.choice(string.ascii_lowercase) for _ in range(20)
-        )
-        return rndstr
+        if boto3 is None:
+            raise ModuleNotFoundError(("Could not find boto3. "
+                                       "Are you sure it is installed?"))
+        scheme, bucketname, relpath = parsePathToUriElements(root)
+        client = boto3.client('s3')
+        return s3CheckFileExists(client, bucketname, relpath)[0]
 
-    def setUp(self):
-        config =  Config(configFile)
-        schema, bucket, root = parsePathToUriElements(config['.datastore.datastore.root'])
-        self.bucketName = bucket
-
-        if self.useTempRoot:
-            self.root = self.genRoot()
-        else:
-            self.root = root
-        rooturi = f's3://{self.bucketName}/{self.root}'
-        config.update({'datastore': {'datastore': {'root': rooturi}}})
-
-        tmpconstr = config['.registry.registry.db']
-        defaultName = tmpconstr.split('/')[-1]
-        constr = tmpconstr[:-len(defaultName)]+'{dbname}'
-        self.connectionStr = constr
-
-        # create a new test bucket so that moto knows it exists
-        s3 = boto3.resource('s3')
-        s3.create_bucket(Bucket=self.bucketName)
-
-        # create a new repo root - analog of tempdir
-        if self.useTempRoot:
-            self.root = self.genRoot()
-        else:
-            self.root = self.permRoot
-        # datastoreStr and Name need to be created here, otherwise how can we tell the
-        # name of the randomly created root, I'm not sure how to work this out with the magical
-        # BUTLER_ROOT_TAG
-        rooturi = f's3://{self.bucketName}/{self.root}'
-        self.registryStr = self.connectionStr.format(dbname=self.root)
-        self.datastoreStr = f"datastore={self.root}"
-        self.datastoreName = [f"S3Datastore@{rooturi}"]
-
-        # [SANITY WARNING] - Multiple DBs as individual repositories
-        # Sqlalchemy won't be able to create a new db by just connecting to a new name.
-        # In PostgreSql CREATE DATABSE statement can not be issued within a transaction.
-        # So pure execute won't work since it creates a Connection implicitly. That Connection
-        # needs to be closed before CREATE statement can be issued. This means users need to have
-        # sufficient permissions to create DBs if they want to run this test.
-        from sqlalchemy import create_engine
-        import urllib.parse as urlparse
-        import configparser
-
-        # First, replace the default connection string with a db that we know will always exist.
-        # The name will always be last, but its easier to just replace it than to deconstruct and
-        # then reconstruct the whole string
-        defaultName = self.connectionStr.split('/')[-1]
-        constr = self.connectionStr.replace(defaultName, 'postgres')
-
-        # Second, get the local connection credentials from ~/.rds
-        parsed = urlparse.urlparse(constr)
-        localconf = configparser.ConfigParser()
-        localconf.read(os.path.expanduser('~/.rds/credentials'))
-
-        username = localconf[parsed.username]['username']
-        password = localconf[parsed.username]['password']
-        constr = constr.replace(parsed.username, f'{username}:{password}')
-
-        # Third, connect as that user, commit to drop out of transaction scope and create new DB
-        engine = create_engine(constr)
-        connection = engine.connect()
-        connection.execute('commit')
-        connection.execute(f'CREATE DATABASE {self.root}')
-        connection.close()
-
-        # Finally, now that we know that DB exists, replace the connection string from yaml
-        # config file for a one, that points to newly created temporary DB, and create new repo
-        config = Config(self.configFile)
-        config['.registry.registry.db'] = self.registryStr
-        Butler.makeRepo(rooturi, config=config)
-        self.tmpConfigFile = rooturi+"/butler.yaml"
-
-    def tearDown(self):
-        # clean up the test bucket
-        s3 = boto3.resource('s3')
-        try:
-            s3.Object(self.bucketName, self.root).load()
-            bucket = s3.Bucket(self.bucketName)
-            bucket.objects.all().delete()
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == '404':
-                # the key was not reachable, pass
-                pass
-            else:
-                raise
-
-        bucket = s3.Bucket(self.bucketName)
-        bucket.delete()
-
-        # [SANITY WARNING #2] - Multiple DBs as repositories strike back
-        # We have to undo everything done in setup. The quickest way is to just drop the
-        # temporary database. PostgreSql won't allow dropping the DB as long as there are
-        # users connected to it. RDS service seems to do a lot in the background with these
-        # DBs since seemingly there is always a process attached. So we need to ban all future
-        # connections to the DB, kill all current connections to it, and then attempt to drop
-        # the DB.
-        from sqlalchemy.exc import OperationalError
-        from sqlalchemy import create_engine
-        import urllib.parse as urlparse
-        import configparser
-
-        # First, replace the default connection string with a db that we know will always exist.
-        defaultName = self.connectionStr.split('/')[-1]
-        constr = self.connectionStr.replace(defaultName, 'postgres')
-
-        # Second, get the local connection credentials from ~/.rds
-        parsed = urlparse.urlparse(constr)
-        localconf = configparser.ConfigParser()
-        localconf.read(os.path.expanduser('~/.rds/credentials'))
-
-        username = localconf[parsed.username]['username']
-        password = localconf[parsed.username]['password']
-        constr = constr.replace(parsed.username, f'{username}:{password}')
-
-        # Third, connect as that user, commit to drop out of transaction scope and create new DB
-        engine = create_engine(constr)
-        connection = engine.connect()
-        connection.execute("commit")
-
-        # Fourth, ban all future connections. Make sure to end transaction scope.
-        connection.execute(f'REVOKE CONNECT ON DATABASE "{self.root}" FROM public;')
-        connection.execute('commit')
-
-        # Fifth, kill all currently connected processes, except ours.
-        # IT IS INCREDIBLY IMPORTANT that the db name is single-quoted!!!
-        connection.execute((f'SELECT pid, pg_terminate_backend(pid) '
-                            'FROM pg_stat_activity WHERE '
-                            f'datname = \'{self.root}\' and pid <> pg_backend_pid();'))
-        connection.execute('commit')
-
-        # Sixth, attempt to drop the table. It does not seem like processes detach *immediatelly*
-        # always, so give them some time
-        import time
-        dropped = False
-        for i in range(3):
-            try:
-                connection.execute(f'DROP DATABASE {self.root}')
-                break
-            except OperationalError as e:
-                time.sleep(1)
-                # if database isn't dropped on 3 attempts add details for debugging and reraise it
-                if i>=2:
-                    columns = ('datid', 'datname', 'pid', 'usesysid', 'usename',
-                               'application_name', 'client_addr', 'client_hostname',
-                               'client_port', 'wait_event_type', 'wait_event', 'state',
-                               'query')
-                    places = ['{'+str(i)+':15}' for i in range(0, len(columns))]
-                    frmtstr = "".join(places)+"\n"
-                    header = frmtstr.format(*columns)
-                    queryCols = ", ".join(columns)
-                    res = connection.execute((f'SELECT {queryCols} FROM pg_stat_activity WHERE '
-                                              f'datname = \'{self.root}\' and pid <> pg_backend_pid();'))
-
-                    details = header
-                    for row in res:
-                        row = [str(val) for val in row.values()] if None in row.values() else row.values()
-                        details += frmtstr.format(*row)
-
-                    e.add_detail(details)
-                    raise e
-            connection.execute('commit')
-        connection.close()
 
 
 if __name__ == "__main__":

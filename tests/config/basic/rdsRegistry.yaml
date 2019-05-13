@@ -1,7 +1,0 @@
-# Default with a postgreSQL registry
-registry:
-  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-  db: 'postgresql://DEFAULT@gen3registry.cejsinjimzit.us-west-2.rds.amazonaws.com:5432/gen3registry'
-  # we could also do it very atomically, I don't know what's the prefered style here.
-  port: 5432
-  dbname: 'gen3registry'

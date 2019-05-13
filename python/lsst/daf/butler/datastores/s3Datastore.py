@@ -31,13 +31,17 @@ from collections import namedtuple
 from urllib.parse import urlparse
 import tempfile
 
-import boto3
+try:
+    import boto3
+except ImportError:
+    boto3 = None
 
 from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory, S3LocationFactory,
                              Location, FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
                              StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
                              DatastoreValidationError, FileTemplateValidationError)
-from lsst.daf.butler.core.utils import transactional, getInstanceOf, s3CheckFileExists, parsePathToUriElements
+from lsst.daf.butler.core.utils import transactional, getInstanceOf
+from lsst.daf.butler.core.s3utils import s3CheckFileExists, parsePathToUriElements
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 
@@ -90,7 +94,7 @@ class S3Datastore(Datastore):
                                                    "checksum", "file_size"])
 
     @classmethod
-    def setConfigRoot(cls, root, config, full):
+    def setConfigRoot(cls, root, config, full, overwrite=True):
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
 
@@ -108,20 +112,31 @@ class S3Datastore(Datastore):
             modified by this method.
             Repository-specific options that should not be obtained
             from defaults when Butler instances are constructed
-            should be copied from `full` to `Config`.
+            should be copied from ``full`` to ``config``.
+        overwrite : `bool`, optional
+            If `False`, do not modify a value in ``config`` if the value
+            already exists.  Default is always to overwrite with the provided
+            ``root``.
+
+        Notes
+        -----
+        If a keyword is explicitly defined in the supplied ``config`` it
+        will not be overridden by this method if ``overwrite`` is `False`.
+        This allows explicit values set in external configs to be retained.
         """
-        if 'butlerRoot' in full['.datastore.root']:
-            Config.overrideParameters(DatastoreConfig, config, full,
-                                      toUpdate={"root": root},
-                                      toCopy=("cls", ("records", "table")))
-        else:
-            Config.overrideParameters(DatastoreConfig, config, full,
-                                      toCopy=("cls", ("records", "table")))
+        Config.updateParameters(DatastoreConfig, config, full,
+                                toUpdate={"root": root},
+                                toCopy=("cls", ("records", "table")), overwrite=overwrite)
+
 
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
+
+        if boto3 is None:
+            raise ModuleNotFoundError(('boto3 not found.'
+                                       'Are you sure it is installed?'))
 
         # Name ourselves either using an explicit name or a name
         # derived from the (unexpanded) root
@@ -310,11 +325,12 @@ class S3Datastore(Datastore):
         formatter = getInstanceOf(storedFileInfo.formatter)
         formatterParams, assemblerParams = formatter.segregateParameters(parameters)
 
-        # I don't know how to make this prettier. If I stick this under the if-else condition that tests
-        # whether a particular formatter has a _fromBytes method then it looks really bad. But its pointless
-        # to make them methods or functions because the signature is large - everything is needed. This at
-        # least makes a visual distinction without descending 4 indentations deep. I don't know what
-        # is the accepted style here.
+        # I don't know how to make this prettier. If I stick this under an if-else
+        # condition that tests whether a particular formatter has a _fromBytes method
+        # then it looks really bad. But its pointless to make them methods or
+        # functions because the signature is large - everything is needed. This at
+        # least makes a visual distinction without descending 4 indentations deep.
+        # I don't know what is the accepted style here.
         def downloadBytes():
             """Downloads a dataset from an object storage as a bytestring and returns it as an
             appropriate python object.
@@ -331,7 +347,7 @@ class S3Datastore(Datastore):
             try:
                 result = formatter.fromBytes(pickledDataset, fileDescriptor, component=component)
             except Exception as e:
-                raise ValueError("Failure from formatter for Dataset {}: {}".format(ref.id, e))
+                raise ValueError("Failure from formatter for Dataset {}: {}".format(ref.id, e)) from e
 
             return result, fileDescriptor
 
@@ -550,10 +566,6 @@ class S3Datastore(Datastore):
         path = os.path.join(self.bucket, relpath)
         location = self.s3locationFactory.fromPath(path)
 
-        # Create Storage information in the registry
-        # TODO: fix the checksum calcs already
-        #checksum = self.computeChecksum(fullPath)
-
         # the file should exist on the bucket by now
         exists, size = s3CheckFileExists(self.client, location.bucket, relpath)
         self.registry.addDatasetLocation(ref, self.name)
@@ -734,44 +746,3 @@ class S3Datastore(Datastore):
                 self.templates[lookupKey].validateTemplate(entity)
             except FileTemplateValidationError as e:
                 raise DatastoreValidationError(e) from e
-
-    @staticmethod
-    def computeChecksum(filename, algorithm="blake2b", block_size=8192):
-        """Compute the checksum of the supplied file.
-
-        Parameters
-        ----------
-        filename : `str`
-            Name of file to calculate checksum from.
-        algorithm : `str`, optional
-            Name of algorithm to use. Must be one of the algorithms supported
-            by :py:class`hashlib`.
-        block_size : `int`
-            Number of bytes to read from file at one time.
-
-        Returns
-        -------
-        hexdigest : `str`
-            Hex digest of the file.
-        """
-        if algorithm not in hashlib.algorithms_guaranteed:
-            raise NameError("The specified algorithm '{}' is not supported by hashlib".format(algorithm))
-
-        hasher = hashlib.new(algorithm)
-
-        tmpdir = "/home/dinob/uni/lsstspark/simple_repo/s3_repo"
-        scheme, root, relpath = parsePathToUriElements(filename)
-        dirpath, name = os.path.split(relpath)
-        potentialloc = os.path.join(tmpdir, name)
-        if os.path.exists(potentialloc):
-            filename = potentialloc
-        else:
-            client = boto3.client('s3')
-            client.download_file(root, relpath, potentialloc)
-            filename = potentialloc
-
-        with open(filename, "rb") as f:
-            for chunk in iter(lambda: f.read(block_size), b""):
-                hasher.update(chunk)
-
-        return hasher.hexdigest()

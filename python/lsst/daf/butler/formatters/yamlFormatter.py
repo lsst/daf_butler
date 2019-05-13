@@ -55,19 +55,20 @@ class YamlFormatter(FileFormatter):
         The `~yaml.UnsafeLoader` is used when parsing the YAML file.
         """
         try:
-            with open(path, "r") as fd:
-                data = yaml.load(fd, Loader=yaml.UnsafeLoader)
+            with open(path, "rb") as fd:
+                #data = yaml.load(fd, Loader=yaml.UnsafeLoader)
+                data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
 
         return data
 
-    def _fromBytes(self, pickledDataset, pytype):
+    def _fromBytes(self, inMemoryDataset, pytype=None):
         """Read the bytes object as a python object.
 
         Parameters
         ----------
-        pickledDataset : `str`
+        inMemoryDataset : `bytes`
             Bytes object to unserialize.
         pytype : `class`, optional
             Not used by this implementation.
@@ -79,18 +80,20 @@ class YamlFormatter(FileFormatter):
             if the string could not be read.
         """
         try:
-            data = pickle.loads(pickledDataset)
-        except pickle.PicklingError:
+            data = yaml.load(inMemoryDataset, Loader=yaml.UnsafeLoader)
+        except yaml.YAMLError:
             data = None
         try:
             data = data.exportAsDict()
         except AttributeError:
-            # its either my mis-use of yaml or intended behaviour but yaml wants
-            # to return a dictionary sometimes and an actual object other times.
-            # Later FileFormatter assembles and checkes if only one of objects
-            # components was requested. Pickle, however, always gets back the object.
-            # I didn't want to figure out what is involved in the two different cases
-            # so I return all my yamls as dicts and let the assembler figure it out
+            # its either my mis-use of yaml or intended behaviour, but yaml returns
+            # an py object, a list or an dictionary. Later however, FileFormatter
+            # assembles and checkes if only one of objects components was requested.
+            # It does so by forcingassembling the full object and then coercing one of
+            # its parts to a pytype. I didn't want to figure out what is involved in
+            # the assembly process and if I can short-cut it so I return all yamls
+            # as dicts and let the assembler figure it out.
+            # Pickle, however, always gets back the object.
             pass
         return data
 
@@ -126,14 +129,14 @@ class YamlFormatter(FileFormatter):
         Returns
         -------
         data : `str`
-            Bytes object representing the pickled object.
+            YAML string encoded to bytes.
 
         Raises
         ------
         Exception
-            The object could not be pickled.
+            The object could not be serialized.
         """
-        return pickle.dumps(inMemoryDataset, protocol=-1)
+        return yaml.dump(inMemoryDataset)
 
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.

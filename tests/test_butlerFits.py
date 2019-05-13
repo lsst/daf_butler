@@ -26,9 +26,18 @@ import shutil
 import string
 import random
 
-import boto3
-import botocore
-from moto import mock_s3
+try:
+    import boto3
+    import botocore
+    from moto import mock_s3
+except ImportError:
+    boto3 = None
+    def mock_s3(cls):
+        """A no-op decorator in case moto mock_s3 can not be imported.
+        """
+        return cls
+
+from lsst.daf.butler.core.s3utils import parsePathToUriElements
 
 import lsst.utils.tests
 
@@ -155,49 +164,63 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     """
     configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
 
-    bucketName = 'bucketname'
-    permRoot = 'root/'
+    bucketName = 'anybucketname'
+    """Name of the Bucket that will be used in the tests. The name is read from the
+    config file used with the tests during set-up.
+    """
+
+    root = 'butlerRoot/'
+    """Root repository directory expected to be used in case useTempRoot=False.
+    Otherwise the root is set to a 20 characters long randomly generated string
+    during set-up.
+    """
 
     def genRoot(self):
         """Returns a random string of len 20 to serve as a root
         name for the temporary bucket repo.
+
+        This is equivalent to tempfile.mkdtemp as this is what self.root
+        becomes when useTempRoot is True.
         """
         rndstr = ''.join(
             random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
         )
-        return rndstr
+        return rndstr + '/'
 
     def setUp(self):
-        # create a new test bucket so that moto knows it exists
+        config = Config(self.configFile)
+        schema, bucket, root = parsePathToUriElements(config['.datastore.datastore.root'])
+        self.bucketName = bucket
+
+        if self.useTempRoot:
+            self.root = self.genRoot()
+        rooturi = f's3://{self.bucketName}/{self.root}'
+        config.update({'datastore': {'datastore': {'root': rooturi}}})
+
+        # MOTO needs to know that we expect Bucket bucketname to exist
+        # (this used to be the class attribute bucketName)
         s3 = boto3.resource('s3')
         s3.create_bucket(Bucket=self.bucketName)
 
-        # create new repo after we're sure it doesn't exist anymore
-        if self.useTempRoot:
-            self.root = self.genRoot()+'/'
-        else:
-            self.root = self.permRoot
-        rooturi = f's3://{self.bucketName}/{self.root}'
-        Butler.makeRepo(rooturi, config=Config(self.configFile))
+        self.datastoreStr = f"datastore={self.root}"
+        self.datastoreName = [f"S3Datastore@{rooturi}"]
+        Butler.makeRepo(rooturi, config=config)
         self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
 
     def tearDown(self):
-        # clean up the test bucket
         s3 = boto3.resource('s3')
+        bucket = s3.Bucket(self.bucketName)
         try:
-            s3.Object(self.bucketName, self.root).load()
-            bucket = s3.Bucket(self.bucketName)
-            bucket.objects.filter(Prefix=self.root).delete()
+            bucket.objects.all().delete()
         except botocore.exceptions.ClientError as e:
             if e.response['Error']['Code'] == '404':
-                # the key was not reachable (i.e. doesn't exist)
+                # the key was not reachable - pass
                 pass
             else:
                 raise
-        else:
-            # key exists, remove it
-            bucket = s3.Bucket(self.bucketName)
-            bucket.objects.filter(Prefix=self.root).delete()
+
+        bucket = s3.Bucket(self.bucketName)
+        bucket.delete()
 
 if __name__ == "__main__":
     unittest.main()

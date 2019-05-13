@@ -181,28 +181,29 @@ class FileFormatter(Formatter):
         path = fileDescriptor.location.path
         data = self._readFile(path, fileDescriptor.storageClass.pytype)
 
-        if data is None:
-            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
-
         # Assemble the requested dataset and potentially return only its component
         # coercing it to its appropriate ptype
         data = self._assembleDataset(data, fileDescriptor, component)
 
+        if data is None:
+            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
+
         return data
 
-    def fromBytes(self, pickledDataset, fileDescriptor, component=None):
+    def fromBytes(self, inMemoryDataset, fileDescriptor, component=None):
         """Read data from a bytestring.
 
         Parameters
         ----------
-        pickledDataset : `str`
-            Bytes object to unserialize
+        dataset : `bytes`
+            Bytes object to unserialize.
+        fileDescriptor : `FileDescriptor`
+            Identifies the file to read, type to read it into and parameters
+            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
-        pytype : 'class'
-            Class to use to read the dataset into a python object.
 
         Returns
         -------
@@ -216,13 +217,15 @@ class FileFormatter(Formatter):
             Component requested but this file does not seem to be a concrete
             composite.
         """
-        data = self._fromBytes(pickledDataset, fileDescriptor.storageClass.pytype)
-        if data is None:
-            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
+        data = self._fromBytes(inMemoryDataset, fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its component
         # coercing it to its appropriate ptype
         data = self._assembleDataset(data, fileDescriptor, component)
+        
+        if data is None:
+            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
+
         return data
 
     def write(self, inMemoryDataset):
@@ -256,8 +259,8 @@ class FileFormatter(Formatter):
 
         Returns
         -------
-        pickedDataset : `str`
-            The bytestring representing the pickled dataset.
+        serializedDataset : `str`
+            bytes representing the serialized dataset.
         """
         fileDescriptor.location.updateExtension(self.extension)
         return self._toBytes(inMemoryDataset)
