@@ -22,20 +22,30 @@
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict", "getClassOf")
+           "NamedKeyDict", "getClassOf"
+           "checkFileExists", "s3CheckFileExists", "parsePathToUriElements", "bucketExists")
 
 import builtins
 import sys
 import functools
-import boto3
 import urllib
 from urllib.parse import urlparse
+
+try:
+    import boto3
+except:
+    boto3 = None
 
 from lsst.utils import doImport
 
 
 def s3CheckFileExists(client, bucket, filepath):
-    """Checks that the file exists and if it does returns its size.
+    """Returns (True, filesize) if file exists in the bucket
+    and (False, -1) if the file is not found.
+
+    You are getting charged for a Bucket GET request. The request
+    returns the list of all files matching the given filepath.
+    Multiple matches are considered a non-match.
 
     Parameters
     ----------
@@ -45,19 +55,23 @@ def s3CheckFileExists(client, bucket, filepath):
         Name of the bucket in which to look.
     filepath : 'str'
         Path to file.
+
+    Returns
+    -------
+    (`bool`, `int`) : `tuple`
+       Tuple (exists, size). If file exists (True, filesize)
+       and (False, -1) when the file is not found.
     """
-    # I am downright not sure why checking if file exists is so complicated
+    # this has maxkeys kwarg, limited to 1000 by default
+    # apparently this is the fastest way do look-ups as it avoids having
+    # to create and add a new HTTP connection to pool
     # https://github.com/boto/botocore/issues/1248
     # https://github.com/boto/boto3/issues/1128
-    # https://stackoverflow.com/questions/33842944/check-if-a-key-exists-in-a-bucket-in-s3-using-boto3
-
-    # this has maxkeys kwarg, limited to 1000
     response = client.list_objects_v2(
         Bucket=bucket,
         Prefix=filepath
     )
     # Hopefully multiple identical files will never exist?
-    # if not then this returns list len 1 if found, this is charged for - worth it?
     matches = [x for x in response.get('Contents', []) if x["Key"] == filepath]
     if len(matches) == 1:
         return (True, matches[0]['Size'])
@@ -65,44 +79,51 @@ def s3CheckFileExists(client, bucket, filepath):
         return (False, -1)
 
 
-# it would be great if this can be better
-def parsePath2Uri(path):
+def parsePathToUriElements(path):
     """If the path is a local filesystem path constructs elements of a URI.
-    If path is an s3:// URI returns the URI elements.
+    If path is an URI returns the URI elements: (schema, root, relpath).
 
     Parameters
     ----------
     uri : `str`
-        URI to parse.
+        URI or a POSIX-like path to parse.
 
     Returns
     -------
     scheme : 'str'
         Either 'file://' or 's3://'.
     root : 'str'
-        S3 Bucket name or Posix-like path to the top of the relative path
+        S3 Bucket name or Posix absolute path up to the top of
+        the relative path
     relpath : 'str'
-        Posix-like path relative to roothpath.
+        Posix-like path relative to root.
     """
     parsed = urlparse(path)
-    # if the parsed path is the supplied one - filesystem
-    if parsed.path == path:
+
+    # urllib assumes only absolute paths exist in URIs
+    # It will not parse rel and abs paths the same way.
+    # We want handle POSIX like paths too.
+    # 'file://' prefixed URIs and POSIX paths
+    if parsed.scheme == 'file' or not parsed.scheme:
         scheme = 'file://'
-        if os.path.isabs(path):
+        # Absolute paths in URI and absolute POSIX paths
+        if not parsed.netloc or not os.path.isabs(parsed.path):
             root = '/'
             relpath = parsed.path.lstrip('/')
+        # Relative paths in URI and relative POSIX paths
         else:
-            root = os.path.abspath(path).split(path)[0]
-            relpath = path
+            relpath = os.path.join(parsed.netloc, parsed.path.lstrip('/'))
+            root = os.path.abspath(relpath).split(relpath)[0]
+    # S3 URIs are always s3://bucketName/root/subdir/file.ext
     elif parsed.scheme == 's3':
         scheme = 's3://'
-        # this ends up being the bucketname
         root = parsed.netloc
         relpath = parsed.path.lstrip('/')
     else:
         raise urllib.error.URLError(f'Can not parse path: {path}')
 
     return scheme, root, relpath
+
 
 def bucketExists(uri):
     """Check if the S3 bucket at a given URI actually exists.
@@ -117,6 +138,10 @@ def bucketExists(uri):
     exists : `bool`
         True if it exists, False if no Bucket with specified parameters is found.
     """
+    if boto3 is None:
+        raise ModuleNotFoundError(("Could not find boto3. "
+                                   "Are you sure it is installed?"))
+
     session = boto3.Session(profile_name='default')
     client = boto3.client('s3')
     scheme, root, relpath = parsePath2Uri(uri)
@@ -127,13 +152,6 @@ def bucketExists(uri):
         return True
     except client.exceptions.NoSuchBucket:
         return False
-
-#        # creating new buckets, generalizations hard?
-#        client.create_bucket(ACL='authenticated-read',
-#                             Bucket=bucket,
-#                             LocationConstraint = {'LocationConstraint':'us-west-2'}
-#        )
-
 
 
 def iterable(a):

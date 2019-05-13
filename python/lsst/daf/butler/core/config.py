@@ -30,7 +30,15 @@ import pprint
 import os
 import yaml
 import sys
+import io
 from yaml.representer import Representer
+
+from . import utils
+
+try:
+    import boto3
+except:
+    boto3 = None
 
 import lsst.utils
 
@@ -217,9 +225,34 @@ class Config(collections.abc.MutableMapping):
             To a persisted config file.
         """
         if path.endswith("yaml"):
-            self.__initFromYamlFile(path)
+            if path.startswith('s3://'):
+                self.__initFromS3File(path)
+            else:
+                self.__initFromYamlFile(path)
         else:
             raise RuntimeError("Unhandled config file type:%s" % path)
+
+    def __initFromS3File(self, path):
+        """Load a file from path pointing to an S3 Bucket.
+
+        Parameters
+        ----------
+        path : `str`
+            To a persisted config file.
+        """
+        if boto3 is None:
+            raise ModuleNotFoundError(('boto3 not found.'
+                                       'Are you sure it is installed?'))
+
+        scheme, bucket, key = utils.parsePath2Uri(path)
+        s3 = boto3.client('s3')
+        try:
+            response = s3.get_object(Bucket=bucket, Key=key)
+        except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
+            raise FileNotFoundError(f'No such file or directory: {path}') from err
+        byteStr = response['Body'].read()
+        confDict = yaml.safe_load(byteStr)
+        self.update(confDict)
 
     def __initFromYamlFile(self, path):
         """Opens a file at a given path and attempts to load it in from yaml.
@@ -729,6 +762,26 @@ class Config(collections.abc.MutableMapping):
         """
         with open(path, "w") as f:
             self.dump(f)
+
+    def dumpToS3(self, bucket, key):
+        """Writes the config to a file in S3 Bucket.
+
+        Parameters
+        ----------
+        bucketname: `str`
+            Name of the Bucket into which config will be written.
+        key : `str`
+            Path to the file to use for output, relative to the bucket.
+        """
+        if boto3 is None:
+            raise ModuleNotFoundError(("Could not find boto3. "
+                                       "Are you sure it is installed?"))
+        stream = io.StringIO()
+        self.dump(stream)
+        stream.seek(0)
+
+        s3 = boto3.client('s3')
+        s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
 
     @staticmethod
     def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):

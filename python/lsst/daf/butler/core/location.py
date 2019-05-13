@@ -175,11 +175,23 @@ class ButlerURI:
         new : `ButlerURI`
             New `ButlerURI` object with updated values.
         """
+
+    def __init__(self, datastoreRoot):
+        """Constructor
+        Parameters
+        ----------
+        datastoreRoot : `str`
+            Root location of the `Datastore` in the filesystem.
+        """
         return self.__class__(self._uri._replace(**kwargs))
 
     def updateFile(self, newfile):
         """Update in place the final component of the path with the supplied
         file name.
+        """
+
+    def fromUri(self, uri):
+        """Factory function to create a `Location` from a URI.
 
         Parameters
         ----------
@@ -207,21 +219,6 @@ class ButlerURI:
     @staticmethod
     def _fixupFileUri(parsed, root=None, forceAbsolute=False):
         """Fix up relative paths in file URI instances.
-
-        Parameters
-        ----------
-        parsed : `~urllib.parse.ParseResult`
-            The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
-            Path to use as root when converting relative to absolute.
-            If `None`, it will be the current working directory. This
-            is a local file system path, not a URI.
-        forceAbsolute : `bool`
-            If `True`, scheme-less relative URI will be converted to an
-            absolute path using a ``file`` scheme. If `False` scheme-less URI
-            will remain scheme-less and will not be updated to ``file`` or
-            absolute path. URIs with a defined scheme will not be affected
-            by this parameter.
 
         Returns
         -------
@@ -309,10 +306,8 @@ class Location:
         Relative path within datastore.  Assumed to be using the local
         path separator if a ``file`` scheme is being used for the URI,
         else a POSIX separator.
+
     """
-
-    __slots__ = ("_datastoreRootUri", "_path")
-
     def __init__(self, datastoreRootUri, path):
         if isinstance(datastoreRootUri, str):
             datastoreRootUri = ButlerURI(datastoreRootUri)
@@ -358,12 +353,13 @@ class Location:
 
     @property
     def pathInStore(self):
-        """Path corresponding to location relative to `Datastore` root.
+        """Path corresponding to S3Location relative to `S3Datastore` root.
         """
         return self._uri.path.lstrip("/")
 
     def updateExtension(self, ext):
         """Update the file extension associated with this `Location`.
+
         Parameters
         ----------
         ext : `str`
@@ -390,36 +386,43 @@ class LocationFactory:
 
     def __init__(self, datastoreRoot):
         """Constructor
+
         Parameters
         ----------
         datastoreRoot : `str`
-            Root location of the `Datastore` in the filesystem.
+            Root location of the `S3Datastore` in the Bucket.
         """
         self._datastoreRoot = datastoreRoot
 
     def fromUri(self, uri):
-        """Factory function to create a `Location` from a URI.
+        """Factory function to create a `S3Location` from a URI.
+
         Parameters
         ----------
         uri : `str`
             A valid Universal Resource Identifier.
+
         Returns
-        location : `Location`
-            The equivalent `Location`.
+        -------
+        location : `S3Location`
+            The equivalent `S3Location`.
         """
         if uri is None or not isinstance(uri, str):
             raise ValueError("URI must be a string and not {}".format(uri))
         return Location(self._datastoreRoot, uri)
 
     def fromPath(self, path):
-        """Factory function to create a `Location` from a POSIX path.
+        """Factory function to create a `S3Location` from a POSIX-like path.
+
         Parameters
         ----------
         path : `str`
-            A standard POSIX path, relative to the `Datastore` root.
+            A POSIX-like path, relative to the `S3Datastore` root.
+
         Returns
-        location : `Location`
-            The equivalent `Location`.
+        -------
+        location : `S3Location`
+            The equivalent `S3Location`.
         """
         uri = urllib.parse.urljoin("file://", path)
         return self.fromUri(uri)

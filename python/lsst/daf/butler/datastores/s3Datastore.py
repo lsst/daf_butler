@@ -37,7 +37,7 @@ from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory
                              Location, FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
                              StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
                              DatastoreValidationError, FileTemplateValidationError)
-from lsst.daf.butler.core.utils import transactional, getInstanceOf, s3CheckFileExists, parsePath2Uri
+from lsst.daf.butler.core.utils import transactional, getInstanceOf, s3CheckFileExists, parsePathToUriElements
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 
@@ -110,9 +110,13 @@ class S3Datastore(Datastore):
             from defaults when Butler instances are constructed
             should be copied from `full` to `Config`.
         """
-        Config.overrideParameters(DatastoreConfig, config, full,
-                                  toUpdate={"root": root},
-                                  toCopy=("cls", ("records", "table")))
+        if 'butlerRoot' in full['.datastore.root']:
+            Config.overrideParameters(DatastoreConfig, config, full,
+                                      toUpdate={"root": root},
+                                      toCopy=("cls", ("records", "table")))
+        else:
+            Config.overrideParameters(DatastoreConfig, config, full,
+                                      toCopy=("cls", ("records", "table")))
 
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
@@ -144,15 +148,7 @@ class S3Datastore(Datastore):
         # would be required - but generalizations are hard? Lot of options when opening.
         self.client = boto3.client('s3')
         self.bucket = self.s3locationFactory._bucket
-        try:
-            self.client.get_bucket_location(Bucket=self.bucket)
-            # bucket exsists - all is well
-            pass
-        except self.client.exceptions.NoSuchBucket:
-            client.create_bucket(ACL='authenticated-read',
-                                 Bucket=self.bucket,
-                                 LocationConstraint = {'LocationConstraint':'us-west-2'}
-            )
+        self.client.get_bucket_location(Bucket=self.bucket)
 
         self.formatterFactory = FormatterFactory()
         self.storageClassFactory = StorageClassFactory()
@@ -507,7 +503,7 @@ class S3Datastore(Datastore):
         # Practically, there is an additional case, when ingest is called by put - the file was already
         # uploaded in put (it exists in bucket). This ends up being equal to the case where download and
         # upload locations are the same - as long as the location is verifiably within store root its fine.
-        scheme, root, relpath = parsePath2Uri(path)
+        scheme, root, relpath = parsePathToUriElements(path)
         if (scheme != 'file://') and (scheme != 's3://'):
             raise NotImplementedError('Scheme type {} not supported.'.format(scheme))
 
@@ -523,7 +519,7 @@ class S3Datastore(Datastore):
                 # There is no equivalent of os.isdir/os.isfile for the S3 - problem for parsing.
                 # The string comparisons will fail since one of them will have the '/' and the other not.
                 #I hope I just don't know how to use urllib or something because this is crap.
-                rootSchema, bucketname, rootDir = parsePath2Uri(self.root)
+                rootSchema, bucketname, rootDir = parsePathToUriElements(self.root)
                 topDir = relpath.split('/')[0] + '/'
                 rootDir = rootDir + '/' if rootDir[-1] != '/' else rootDir
                 if (bucketname != root) or (rootDir != topDir):
@@ -764,7 +760,7 @@ class S3Datastore(Datastore):
         hasher = hashlib.new(algorithm)
 
         tmpdir = "/home/dinob/uni/lsstspark/simple_repo/s3_repo"
-        scheme, root, relpath = parsePath2Uri(filename)
+        scheme, root, relpath = parsePathToUriElements(filename)
         dirpath, name = os.path.split(relpath)
         potentialloc = os.path.join(tmpdir, name)
         if os.path.exists(potentialloc):

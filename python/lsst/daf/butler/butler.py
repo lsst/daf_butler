@@ -30,16 +30,14 @@ import contextlib
 import logging
 import itertools
 import tempfile
-import io
 
-NO_BOTO = False
 try:
     import boto3
 except ImportError:
-    NO_BOTO = True
+    boto3 = None
 
 from lsst.utils import doImport
-from .core.utils import transactional, parsePath2Uri
+from .core.utils import transactional, parsePathToUriElements
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .core.registry import Registry
@@ -59,97 +57,6 @@ log = logging.getLogger(__name__)
 class ButlerValidationError(ValidationError):
     """There is a problem with the Butler configuration."""
     pass
-
-
-# I didn't want to clog up the butler with more classmethods or a long makeRepo with ifs
-# Realistically this seems to warrant a S3RDSButler that inherits from Butler and has a
-# different makeRepo method, but I like having just one Butler. It could be re-assigned
-# dynamically in __new__, or the methods can be just added as classmethods.
-# Don't think that's really my call to make so there we go and here we are
-def _makeLocalRepo(root, config=None, standalone=False, createRegistry=True):
-    """Create an empty data repository by adding a butler.yaml config
-    to a repository root directory on a local filesystem.
-    """
-    if isinstance(config, (ButlerConfig, ConfigSubset)):
-        raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
-
-    root = os.path.abspath(root)
-    if not os.path.isdir(root):
-        safeMakeDir(root)
-
-    config = Config(config)
-
-    # If we are creating a new repo from scratch with relative roots,
-    # do not propagate an explicit root from the config file
-    if "root" in config:
-        del config["root"]
-
-    full = ButlerConfig(config)  # this applies defaults
-    datastoreClass = doImport(full["datastore", "cls"])
-
-    datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
-    registryClass = doImport(full["registry", "cls"])
-    registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
-    if standalone:
-        config.merge(full)
-
-    config.dumpToFile(os.path.join(root, "butler.yaml"))
-
-    # Create Registry and populate tables
-    registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
-    return config
-
-
-def _makeBucketRepo(root, config=None, standalone=False, createRegistry=True):
-    """Create an empty data repository by adding a butler.yaml config
-    to a repository root directory in a S3 Bucket.
-    """
-    if NO_BOTO:
-        raise ModuleNotFoundError("Could not find boto3. Are you sure it is installed?")
-
-    if isinstance(config, (ButlerConfig, ConfigSubset)):
-        raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
-
-    # Assumes bucket exists. Another level of checks is needed to verify, but the DataStore
-    # is what should have the bucket creation code, so that's where it was placed (example only)
-    scheme, rootpath, relpath = parsePath2Uri(root)
-    s3 = boto3.resource('s3')
-    bucket = s3.Bucket(rootpath)
-    bucket.put_object(Bucket=rootpath, Key=(relpath))
-
-    # this part is the same for both makerepo functions, except BUTLER_ROOT_TAG
-    # I was not sure what the deal with butler root tag is so I didn't touch it. It appeared
-    # after merging upstream and I didn't want to spend time figuring out paths again
-    config = Config(config)
-    # If we are creating a new repo from scratch with relative roots
-    # do not propagate an explicit root from the config file
-    #if "root" in config:
-    #    del config["root"]
-    full = ButlerConfig(config)  # this applies defaults
-
-    datastoreClass = doImport(full["datastore", "cls"])
-    datastoreClass.setConfigRoot(root, config, full)
-    registryClass = doImport(full["registry", "cls"])
-    # this if here is a monkeypatch for the bucket datastore, local repo tests
-    # I don't really understand the BUTLER_ROOT_TAG thing
-    if full['.registry.db'] != 'sqlite:///:memory:':
-        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full)
-    if standalone:
-        config.merge(full)
-
-    # instead of a lot of temporary files, dump to stream, rewind and read
-    stream = io.StringIO()
-    config.dump(stream)
-    stream.seek(0)
-
-    s3 = boto3.client('s3')
-    bucketpath = os.path.join(relpath, 'butler.yaml')
-    s3.put_object(Bucket=rootpath, Key=bucketpath, Body=stream.read())
-
-    # Create Registry and populate tables
-    registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
-    return config
-
 
 
 class Butler:
@@ -186,10 +93,6 @@ class Butler:
         not exist, it will be created.  If "collection" is None, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
-    searchPaths : `list` of `str`, optional
-        Directory paths to search when calculating the full Butler
-        configuration.  Not used if the supplied config is already a
-        `ButlerConfig`.
 
     Raises
     ------
@@ -217,7 +120,7 @@ class Butler:
         root : `str`
             Filesystem path to the root of the new repository.  Will be created
             if it does not exist.
-        config : `Config` or `str`, optional
+        config : `Config`, optional
             Configuration to write to the repository, after setting any
             root-dependent Registry or Datastore config options.  Can not
             be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
@@ -262,13 +165,6 @@ class Butler:
         os.error
             Raised if the directory does not exist, exists but is not a
             directory, or cannot be created.
-
-        Notes
-        -----
-        Note that when ``standalone=False`` (the default), the configuration
-        search path (see `ConfigSubset.defaultSearchPaths`) that was used to
-        construct the repository should also be used to construct any Butlers
-        to avoid configuration inconsistencies.
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
@@ -288,7 +184,7 @@ class Butler:
             bucket = s3.Bucket(rootpath)
             bucket.put_object(Bucket=rootpath, Key=(relpath))
 
-        # If we are creating a new repo from scratch with relative roots,
+        # If we are creating a new repo from scratch with relative roots
         # do not propagate an explicit root from the config file
         if "root" in config:
             del config["root"]
@@ -307,12 +203,13 @@ class Butler:
         elif scheme == 's3://':
             config.dumpToS3(rootpath, os.path.join(relpath, 'butler.yaml'))
 
+
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
-    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
-        # save arguments for pickling
+
+    def __init__(self, config=None, collection=None, run=None):
         self._args = (config, butler, collection, run, searchPaths)
         if butler is not None:
             if config is not None or searchPaths is not None:
@@ -364,23 +261,6 @@ class Butler:
             self.run = self.registry.getRun(collection=runCollection)
             if self.run is None:
                 self.run = self.registry.makeRun(runCollection)
-
-    def __del__(self):
-        # Attempt to close any open resources when this object is
-        # garbage collected. Python does not guarantee that this method
-        # will be called, or that it will be called in the proper order
-        # so if possible the user should explicitly call close. This
-        # exists only to make an attempt to shut things down as a last
-        # resort if at all possible.
-        self.close()
-
-    def close(self):
-        """This method should be called to properly close any resources the
-        butler may have open. The instance on which this method is closed
-        should be considered unusable and no further methods should be called
-        on it.
-        """
-        self.registry.close()
 
     def __reduce__(self):
         """Support pickling.
@@ -508,7 +388,6 @@ class Butler:
         else:
             # This is an entity without a disassembler.
             self.datastore.put(obj, ref)
-
 
         return ref
 
@@ -828,12 +707,12 @@ class Butler:
             instrumentEntries = self.registry.findDimensionEntries("instrument")
             instruments = {e["instrument"] for e in instrumentEntries}
 
-        # For each datasetType that has an instrument dimension, create
+        # For each datasetType that has an Instrument dimension, create
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
         for datasetType in entities:
-            if "instrument" in datasetType.dimensions:
+            if "Instrument" in datasetType.dimensions:
                 for instrument in instruments:
                     datasetRef = DatasetRef(datasetType, {"instrument": instrument})
                     datasetRefs.append(datasetRef)

@@ -93,10 +93,14 @@ class SqliteRegistry(SqlRegistry):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
-        super().setConfigRoot(root, config, full, overwrite=overwrite)
-        Config.updateParameters(RegistryConfig, config, full,
-                                toUpdate={"db": f"sqlite:///{root}/gen3.sqlite3"},
-                                toCopy=("cls",), overwrite=overwrite)
+        super().setConfigRoot(root, config, full)
+        if ':memory:' in full['.registry.db']:
+            Config.overrideParameters(RegistryConfig, config, full,
+                                      toCopy=("cls", "deferDatasetIdQueries"))
+        else:
+            Config.overrideParameters(RegistryConfig, config, full,
+                                      toUpdate={"db": f"sqlite:///{root}/gen3.sqlite3"},
+                                      toCopy=("cls", "deferDatasetIdQueries"))
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)

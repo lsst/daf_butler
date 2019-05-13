@@ -25,20 +25,6 @@ Configuration classes specific to the Butler
 
 __all__ = ("ButlerConfig",)
 
-# we can do this, or we can have as-neccessary imports
-# where we need them, when we need them, or all of this could live
-# in home __init__ where NOBOTO would be global
-NO_BOTO = False
-try:
-    import boto3
-except ImportError:
-    NO_BOTO = True
-    pass
-
-import yaml
-import tempfile
-import shutil
-import errno
 import os.path
 
 from . import utils
@@ -67,15 +53,8 @@ class ButlerConfig(Config):
     other : `str`, `Config`, optional
         Path to butler configuration YAML file or a directory containing a
         "butler.yaml" file. If `None` the butler will
-        be configured based entirely on defaults read from the environment
-        or from ``searchPaths``.
+        be configured based entirely on defaults read from the environment.
         No defaults will be read if a `ButlerConfig` is supplied directly.
-    searchPaths : `list` or `tuple`, optional
-        Explicit additional paths to search for defaults. They should
-        be supplied in priority order. These paths have higher priority
-        than those read from the environment in
-        `ConfigSubset.defaultSearchPaths()`.  They are only read if ``other``
-        refers to a configuration file or directory.
     """
 
     def __init__(self, other=None, searchPaths=None):
@@ -91,20 +70,12 @@ class ButlerConfig(Config):
             return
 
         if isinstance(other, str):
-            scheme, root, relpath = utils.parsePath2Uri(other)
-            if scheme == 'file://':
+            if other.startswith('s3://') and not other.endswith('.yaml'):
+                scheme, root, relpath = utils.parsePathToUriElements(other)
+                other = scheme + os.path.join(root, relpath, "butler.yaml")
+            else:
                 if  os.path.isdir(other):
                     other = os.path.join(other, "butler.yaml")
-            elif scheme == 's3://' and utils.bucketExists(other):
-                if NO_BOTO:
-                    raise ModuleNotFoundError(('boto3 not found.'
-                                               'Are you sure it is installed?'))
-                # I wonder if it would be a good idea to add a 'load' and 'loadFromfile' to
-                # Config instead of relying on its __init__
-                s3 = boto3.client('s3')
-                response = s3.get_object(Bucket=root, Key=relpath)
-                byteStr = response['Body'].read()
-                other = yaml.safe_load(byteStr)
 
         # Create an empty config for us to populate
         super().__init__()
