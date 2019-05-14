@@ -633,7 +633,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
 
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"S3Datastore@{rooturi}"]
-        Butler.makeRepo(rooturi, config=config)
+        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
 
     def tearDown(self):

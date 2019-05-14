@@ -197,7 +197,7 @@ class Butler:
         if "root" in config:
             del config["root"]
 
-        full = ButlerConfig(config)  # this applies defaults
+        full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         registryClass = doImport(full["registry", "cls"])

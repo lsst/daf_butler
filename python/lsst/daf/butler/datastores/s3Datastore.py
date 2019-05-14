@@ -90,7 +90,7 @@ class S3Datastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    RecordTuple = namedtuple("S3DatastoreRecord", ["formatter", "path", "storage_class",
+    RecordTuple = namedtuple("s3datastorerecord", ["formatter", "path", "storage_class",
                                                    "checksum", "file_size"])
 
     @classmethod
@@ -175,9 +175,6 @@ class S3Datastore(Datastore):
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"])
         self.templates.normalizeDimensions(self.registry.dimensions)
-
-        # Name ourselves
-        self.name = "S3Datastore@{}".format(self.root)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,

@@ -56,8 +56,8 @@ class YamlFormatter(FileFormatter):
         """
         try:
             with open(path, "rb") as fd:
-                #data = yaml.load(fd, Loader=yaml.UnsafeLoader)
-                data = self._fromBytes(fd.read())
+                data = yaml.load(fd, Loader=yaml.UnsafeLoader)
+                #data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
 
