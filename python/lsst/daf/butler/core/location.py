@@ -426,3 +426,8 @@ class LocationFactory:
         """
         uri = urllib.parse.urljoin("file://", path)
         return self.fromUri(uri)
+        if os.path.isabs(path):
+            raise ValueError(('A path whose absolute location is in an S3 bucket '
+                             'can not have an absolute path: {}').format(path))
+
+        return self.fromUri('s3://' + os.path.join(self._bucket, self._datastoreRoot, path))

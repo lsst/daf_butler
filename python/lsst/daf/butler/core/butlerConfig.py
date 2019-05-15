@@ -28,6 +28,7 @@ __all__ = ("ButlerConfig",)
 import os.path
 
 from . import utils
+from .s3utils import parsePathToUriElements
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
@@ -42,19 +43,25 @@ CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig,
 
 class ButlerConfig(Config):
     """Contains the configuration for a `Butler`
-
     The configuration is read and merged with default configurations for
     the particular classes. The defaults are read according to the rules
     outlined in `ConfigSubset`. Each component of the configuration associated
     with a configuration class reads its own defaults.
-
+    
     Parameters
     ----------
     other : `str`, `Config`, optional
         Path to butler configuration YAML file or a directory containing a
         "butler.yaml" file. If `None` the butler will
-        be configured based entirely on defaults read from the environment.
+        be configured based entirely on defaults read from the environment
+        or from ``searchPaths``.
         No defaults will be read if a `ButlerConfig` is supplied directly.
+    searchPaths : `list` or `tuple`, optional
+        Explicit additional paths to search for defaults. They should
+        be supplied in priority order. These paths have higher priority
+        than those read from the environment in
+        `ConfigSubset.defaultSearchPaths()`.  They are only read if ``other``
+        refers to a configuration file or directory.
     """
 
     def __init__(self, other=None, searchPaths=None):
@@ -71,10 +78,10 @@ class ButlerConfig(Config):
 
         if isinstance(other, str):
             if other.startswith('s3://') and not other.endswith('.yaml'):
-                scheme, root, relpath = utils.parsePathToUriElements(other)
+                scheme, root, relpath = parsePathToUriElements(other)
                 other = scheme + os.path.join(root, relpath, "butler.yaml")
             else:
-                if  os.path.isdir(other):
+                if os.path.isdir(other):
                     other = os.path.join(other, "butler.yaml")
 
         # Create an empty config for us to populate

@@ -55,7 +55,7 @@ class PickleFormatter(FileFormatter):
         """
         try:
             with open(path, "rb") as fd:
-                data = pickle.load(fd)
+                data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
 

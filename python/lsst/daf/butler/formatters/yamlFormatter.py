@@ -23,7 +23,6 @@ __all__ = ("YamlFormatter", )
 
 import builtins
 import yaml
-import pickle
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
@@ -56,8 +55,7 @@ class YamlFormatter(FileFormatter):
         """
         try:
             with open(path, "rb") as fd:
-                data = yaml.load(fd, Loader=yaml.UnsafeLoader)
-                #data = self._fromBytes(fd.read())
+                data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
 
@@ -86,14 +84,15 @@ class YamlFormatter(FileFormatter):
         try:
             data = data.exportAsDict()
         except AttributeError:
-            # its either my mis-use of yaml or intended behaviour, but yaml returns
-            # an py object, a list or an dictionary. Later however, FileFormatter
-            # assembles and checkes if only one of objects components was requested.
-            # It does so by forcingassembling the full object and then coercing one of
-            # its parts to a pytype. I didn't want to figure out what is involved in
-            # the assembly process and if I can short-cut it so I return all yamls
-            # as dicts and let the assembler figure it out.
-            # Pickle, however, always gets back the object.
+            # its either my mis-use of yaml or intended behaviour, but yaml
+            # returns an py object, a list or an dictionary. Later, however,
+            # FileFormatter assembles and checks if only one of objects
+            # components was requested. It does so by forcing assembly of the
+            # full object and then coercing one of its parts to a pytype. I
+            # didn't want to figure out what is involved in the assembly
+            # process but it seems as if it only wants an dict. Pickle,
+            # however, always gets back the object. There is short-cutting
+            # potential here I believe (but in fileformatter)
             pass
         return data
 
@@ -116,7 +115,7 @@ class YamlFormatter(FileFormatter):
         with open(self.fileDescriptor.location.path, "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            yaml.dump(inMemoryDataset, stream=fd)
+            fd.write(self._toBytes(inMemoryDataset))
 
     def _toBytes(self, inMemoryDataset):
         """Write the in memory dataset to a bytestring.

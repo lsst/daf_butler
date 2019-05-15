@@ -29,7 +29,6 @@ import os
 import contextlib
 import logging
 import itertools
-import tempfile
 
 try:
     import boto3
@@ -58,7 +57,6 @@ log = logging.getLogger(__name__)
 class ButlerValidationError(ValidationError):
     """There is a problem with the Butler configuration."""
     pass
-
 
 
 class Butler:
@@ -99,6 +97,7 @@ class Butler:
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
         `ButlerConfig`.
+
     Raises
     ------
     ValueError
@@ -108,6 +107,7 @@ class Butler:
 
     GENERATION = 3
     """This is a Generation 3 Butler.
+
     This attribute may be removed in the future, once the Generation 2 Butler
     interface has been fully retired; it should only be used in transitional
     code.
@@ -124,7 +124,7 @@ class Butler:
         root : `str`
             Filesystem path to the root of the new repository.  Will be created
             if it does not exist.
-        config : `Config`, optional
+        config : `Config` or `str`, optional
             Configuration to write to the repository, after setting any
             root-dependent Registry or Datastore config options.  Can not
             be a `ButlerConfig` or a `ConfigSubset`.  If `None`, default
@@ -192,7 +192,7 @@ class Butler:
             bucket.put_object(Bucket=rootpath, Key=(relpath))
         config = Config(config)
 
-        # If we are creating a new repo from scratch with relative roots
+        # If we are creating a new repo from scratch with relative roots,
         # do not propagate an explicit root from the config file
         if "root" in config:
             del config["root"]
@@ -712,12 +712,12 @@ class Butler:
             instrumentEntries = self.registry.findDimensionEntries("instrument")
             instruments = {e["instrument"] for e in instrumentEntries}
 
-        # For each datasetType that has an Instrument dimension, create
+        # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
         datasetRefs = []
 
         for datasetType in entities:
-            if "Instrument" in datasetType.dimensions:
+            if "instrument" in datasetType.dimensions:
                 for instrument in instruments:
                     datasetRef = DatasetRef(datasetType, {"instrument": instrument})
                     datasetRefs.append(datasetRef)

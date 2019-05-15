@@ -28,14 +28,15 @@ try:
     from moto import mock_s3
 except ImportError:
     boto3 = None
+
     def mock_s3(cls):
         """A no-op decorator in case moto mock_s3 can not be imported.
         """
         return cls
 
 from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
-#from lsst.daf.butler.core.s3utils import s3CheckFileExists, parsePathToUriElements, bucketExists
-from lsst.daf.butler.core.s3utils import *
+from lsst.daf.butler.core.s3utils import (bucketExists, parsePathToUriElements,
+                                          s3CheckFileExists)
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
 
@@ -219,26 +220,52 @@ class TestButlerUtils(unittest.TestCase):
             self.assertEqual(getFullTypeName(item), typeName)
 
     def testParsePathToUriElements(self):
-#s3a = 's3://bucketname/root/relative/file.ext' # s3:// bucketname/root, relative
-#poa = 'file:///root/relative/file.ext'  # file:// /root relative...
-#pob = 'file://relative/file.ext'  #file:// '' relative..
-#poc = 'relative/file.ext'         #file:// '' relative
-#pod = '/root/relative/file.ext'   #file:// /root relative
-#poe = '~/root/relative/file.ext'  #file:// /home.../root relative
-#pof = '../root/relative/file.ext' #file:// cwd/root relative
-        import pdb
-        pdb.set_trace()
-        self.assertEqual(parsePathToUriElements('s3://bucketname/root/file.ext'),
-                         ('s3://', 'bucketname', 'root/file.ext'))
+        absPaths = [
+            'file:///rootDir/relative/file.ext',
+            '/rootDir/relative/file.ext'
+        ]
+        relPaths = [
+            'file://relative/file.ext',
+            'relative/file.ext'
+        ]
+        s3Path = 's3://bucketname/rootDir/relative/file.ext'
+        globPath1 = '~/relative/file.ext'
+        globPath2 = '../relative/file.ext'
+        globPath3 = 'test/../relative/file.ext'
 
-        fullpath = '/root/relative/path/file.ext'
-        root = '/root'
-        relpart = 'relative/path/file.ext'
-        abspath = os.path.abspath(relpath).split(relpath)[0]
-        self.assertEqual(parsePathToUriElements('file://relative/path/file.ext'),
-                         ('file://', abspath, relpath))
-        self.assertEqual(parsePathToUriElements('file:///absolute/path/file.ext'),
-                         ('file://', '/', 'absolute/path/file.ext'))
+        # absolute paths take precedence over additionaly supplied root paths
+        for path in absPaths:
+            self.assertEqual(parsePathToUriElements(path),
+                             ('file://', '/rootDir/relative', 'file.ext'))
+            self.assertEqual(parsePathToUriElements(path, '/<butlerRootDir>'),
+                             ('file://', '/rootDir/relative', 'file.ext'))
+
+        self.assertEqual(parsePathToUriElements(globPath1, '/<butlerRoot>/rootDir'),
+                         ('file://', os.path.expanduser('~/relative'), 'file.ext'))
+        self.assertEqual(parsePathToUriElements(globPath1),
+                         ('file://', os.path.expanduser('~/relative'), 'file.ext'))
+
+        # relative paths should not expand, unless root to which they are
+        # relative to is also provided
+        for path in relPaths:
+            self.assertEqual(parsePathToUriElements(path, '/<butlerRoot>'),
+                             ('file://', '/<butlerRoot>', 'relative/file.ext'))
+            self.assertEqual(parsePathToUriElements(path),
+                             ('file://', '', 'relative/file.ext'))
+
+        # basic globbing should work relative to given root or not at all
+        self.assertEqual(parsePathToUriElements(globPath2, '/<butlerRoot>/rootDir'),
+                         ('file://', '/<butlerRoot>', 'relative/file.ext'))
+        self.assertEqual(parsePathToUriElements(globPath3, '/<butlerRoot>'),
+                         ('file://', '/<butlerRoot>', 'relative/file.ext'))
+        self.assertEqual(parsePathToUriElements(globPath2),
+                         ('file://', '', globPath2))
+
+        self.assertEqual(parsePathToUriElements(s3Path),
+                         ('s3://', 'bucketname', 'rootDir/relative/file.ext'))
+        self.assertEqual(parsePathToUriElements(s3Path, '/<butlerRoot>'),
+                         ('s3://', 'bucketname', 'rootDir/relative/file.ext'))
+
 
 if __name__ == "__main__":
     unittest.main()

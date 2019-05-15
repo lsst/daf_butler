@@ -32,6 +32,7 @@ try:
     from moto import mock_s3
 except ImportError:
     boto3 = None
+
     def mock_s3(cls):
         """A no-op decorator in case moto mock_s3 can not be imported.
         """
@@ -155,6 +156,7 @@ class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase)
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
+
 @mock_s3
 class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     """"S3Datastore specialization of a butler. This is a S3 backed DataStore +
@@ -165,8 +167,8 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
 
     bucketName = 'anybucketname'
-    """Name of the Bucket that will be used in the tests. The name is read from the
-    config file used with the tests during set-up.
+    """Name of the Bucket that will be used in the tests. The name is read from
+    the config file used with the tests during set-up.
     """
 
     root = 'butlerRoot/'
@@ -204,7 +206,7 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
 
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"S3Datastore@{rooturi}"]
-        Butler.makeRepo(rooturi, config=config)
+        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
         self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
 
     def tearDown(self):
@@ -221,6 +223,7 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
 
 if __name__ == "__main__":
     unittest.main()

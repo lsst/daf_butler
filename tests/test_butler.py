@@ -40,6 +40,7 @@ try:
     from moto import mock_s3
 except ImportError:
     boto3 = None
+
     def mock_s3(cls):
         """A no-op decorator in case moto mock_s3 can not be imported.
         """
@@ -404,10 +405,9 @@ class ButlerTests:
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
     def testStringification(self):
-        # is root declared in the self.configFile, which one exactly is this?
         butler = Butler(self.tmpConfigFile)
-
         butlerStr = str(butler)
+
         if self.datastoreStr is not None:
             for testStr in self.datastoreStr:
                 self.assertIn(testStr, butlerStr)
@@ -434,8 +434,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         """Checks if file exists at a given path (relative to root).
 
         Test testPutTemplates verifies actual physical existance of the files
-        in the requested location. For POSIXDatastore this test is equivalent to
-        `os.path.exist` call.
+        in the requested location. For POSIXDatastore this test is equivalent
+        to `os.path.exist` call.
         """
         return os.path.exists(os.path.join(root, path))
 
@@ -583,8 +583,8 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
     validationCanFail = True
 
     bucketName = 'anybucketname'
-    """Name of the Bucket that will be used in the tests. The name is read from the
-    config file used with the tests during set-up.
+    """Name of the Bucket that will be used in the tests. The name is read from
+    the config file used with the tests during set-up.
     """
 
     root = 'butlerRoot/'
@@ -664,7 +664,6 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         scheme, bucketname, relpath = parsePathToUriElements(root)
         client = boto3.client('s3')
         return s3CheckFileExists(client, bucketname, relpath)[0]
-
 
 
 if __name__ == "__main__":

@@ -33,12 +33,11 @@ import sys
 import io
 from yaml.representer import Representer
 
-from . import utils
 from .s3utils import parsePathToUriElements
 
 try:
     import boto3
-except:
+except ImportError:
     boto3 = None
 
 import lsst.utils

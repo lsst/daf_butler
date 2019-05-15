@@ -77,27 +77,6 @@ class FileFormatter(Formatter):
         """
         pass
 
-    def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
-        """Coerce the supplied inMemoryDataset to type `pytype`.
-
-        Usually a no-op.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Object to coerce to expected type.
-        storageClass : `StorageClass`
-            StorageClass associated with ``inMemoryDataset``.
-        pytype : `class`, optional
-            Override type to use for conversion.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            Object of expected type `pytype`.
-        """
-        return inMemoryDataset
-
     def _assembleDataset(self, data, fileDescriptor, component):
         """Assembles and coerces the dataset, or one of its components,
         into an appropriate python type and returns it.
@@ -120,8 +99,8 @@ class FileFormatter(Formatter):
         Returns
         -------
         inMemoryDataset : `object`
-            Object of expected type `pytype`.
-
+            The requested data as a Python object. The type of object
+            is controlled by the specific formatter.
         """
         fileDescriptor = self.fileDescriptor
 
@@ -150,6 +129,27 @@ class FileFormatter(Formatter):
                                 pytype=fileDescriptor.readStorageClass.pytype)
 
         return data
+
+    def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
+        """Coerce the supplied inMemoryDataset to type `pytype`.
+
+        Usually a no-op.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to coerce to expected type.
+        storageClass : `StorageClass`
+            StorageClass associated with ``inMemoryDataset``.
+        pytype : `class`, optional
+            Override type to use for conversion.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Object of expected type `pytype`.
+        """
+        return inMemoryDataset
 
     def read(self, component=None):
         """Read data from a file.
@@ -181,12 +181,12 @@ class FileFormatter(Formatter):
         path = fileDescriptor.location.path
         data = self._readFile(path, fileDescriptor.storageClass.pytype)
 
-        # Assemble the requested dataset and potentially return only its component
-        # coercing it to its appropriate ptype
+        # Assemble the requested dataset and potentially return only its
+        # component coercing it to its appropriate ptype
         data = self._assembleDataset(data, fileDescriptor, component)
 
         if data is None:
-            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
+            raise ValueError(f"Unable to read data with URI {fileDescriptor.location.uri}")
 
         return data
 
@@ -217,14 +217,15 @@ class FileFormatter(Formatter):
             Component requested but this file does not seem to be a concrete
             composite.
         """
-        data = self._fromBytes(inMemoryDataset, fileDescriptor.storageClass.pytype)
+        data = self._fromBytes(inMemoryDataset,
+                               fileDescriptor.storageClass.pytype)
 
-        # Assemble the requested dataset and potentially return only its component
-        # coercing it to its appropriate ptype
+        # Assemble the requested dataset and potentially return only its
+        # component coercing it to its appropriate ptype
         data = self._assembleDataset(data, fileDescriptor, component)
-        
+
         if data is None:
-            raise ValueError("Unable to read data with URI {}".format(fileDescriptor.location.uri))
+            raise ValueError(f"Unable to read data with URI {fileDescriptor.location.uri}")
 
         return data
 
@@ -263,8 +264,8 @@ class FileFormatter(Formatter):
             bytes representing the serialized dataset.
         """
         fileDescriptor.location.updateExtension(self.extension)
-        return self._toBytes(inMemoryDataset)
 
+        return self._toBytes(inMemoryDataset)
 
     @classmethod
     def predictPathFromLocation(cls, location):

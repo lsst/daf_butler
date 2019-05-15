@@ -26,10 +26,9 @@ __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "checkFileExists", "s3CheckFileExists", "parsePathToUriElements", "bucketExists")
 
 import builtins
+import os
 import sys
 import functools
-import urllib
-from urllib.parse import urlparse
 
 from lsst.utils import doImport
 
