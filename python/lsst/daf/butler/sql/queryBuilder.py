@@ -143,18 +143,23 @@ class QueryBuilder(ABC):
         Initial FROM clause for the query.
     whereClause : SQLAlchemy boolean expression, optional
         Expression to use as the initial WHERE clause.
+    prefix : `str`, optional
+        String prefix to add to the aliases of all tables joined
+        into the query, to avoid ambiguity when the QueryBuilder
+        is used to build a subquery.
     """
 
-    def __init__(self, registry, *, fromClause=None, whereClause=None):
+    def __init__(self, registry, *, fromClause=None, whereClause=None, prefix=None):
         self.registry = registry
         self._resultColumns = ResultColumnsManager(self.registry)
         self._fromClause = fromClause
         self._whereClause = whereClause
         self._selectablesForDimensionElements = {}
         self._elementsCache = None
+        self.prefix = prefix
 
     @classmethod
-    def fromDimensions(cls, registry, dimensions, addResultColumns=True):
+    def fromDimensions(cls, registry, dimensions, addResultColumns=True, prefix=None):
         """Construct a query for a complete `DimensionGraph`.
 
         This ensures that all `DimensionJoin` tables that relate the given
@@ -169,8 +174,12 @@ class QueryBuilder(ABC):
         addResultColumns : `bool`
             If `True` (default), automatically include all link columns for
             the given dimensions in the SELECT clause for the query.
+        prefix : `str`, optional
+            String prefix to add to the aliases of all tables joined
+            into the query, to avoid ambiguity when the QueryBuilder
+            is used to build a subquery.
         """
-        self = cls(registry)
+        self = cls(registry, prefix=prefix)
         for dimension in dimensions:
             self.joinDimensionElement(dimension)
         for join in dimensions.joins(summaries=False):
@@ -208,7 +217,7 @@ class QueryBuilder(ABC):
         """
         return self._resultColumns
 
-    def join(self, selectable, links, isOuter=False):
+    def join(self, selectable, links, isOuter=False, name=None):
         """Join a new selectable (table, view, or subquery) into the query.
 
         Parameters
@@ -224,7 +233,15 @@ class QueryBuilder(ABC):
         isOuter : `bool`
             If `True`, perform a LEFT OUTER JOIN instead of a regular (INNER)
             JOIN.
+        name : `str`, optional
+            A name to to be used as the alias for selectable in the query, or,
+            if ``self.prefix is not None``, the end of that alias (with
+            ``self.prefix`` the beginning).
         """
+        if self.prefix is not None:
+            name = getattr(selectable, "name", None)
+            if name is not None:
+                selectable = selectable.alias(self.prefix + name)
         if self.fromClause is None:
             self._fromClause = selectable
             return
@@ -439,7 +456,7 @@ class QueryBuilder(ABC):
             # Invalidate accessor cache, since we're about to mutate self.
             self._elementsCache = None
             # We found a table, add it to the FROM clause.
-            self.join(table, element.links(implied=True))
+            self.join(table, element.links(implied=True), name=element.name)
             # Now that we've updated self.fromClause, record that we have a
             # table for this element in the query.
             self._selectablesForDimensionElements[element] = table

@@ -53,11 +53,15 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         If `True` (default), add result columns to ``self.resultColumns``
         for the dataset ID and dimension links used to identify this
         `DatasetType.
+    prefix : `str`, optional
+        String prefix to add to the aliases of all tables joined
+        into the query, to avoid ambiguity when the QueryBuilder
+        is used to build a subquery.
     """
 
     def __init__(self, registry, *, datasetType, selectableForDataset, fromClause=None, whereClause=None,
-                 addResultColumns=True):
-        super().__init__(registry, fromClause=fromClause, whereClause=whereClause)
+                 addResultColumns=True, prefix=None):
+        super().__init__(registry, fromClause=fromClause, whereClause=whereClause, prefix=prefix)
         self._datasetType = datasetType
         self._selectableForDataset = selectableForDataset
         if addResultColumns:
@@ -66,7 +70,7 @@ class SingleDatasetQueryBuilder(QueryBuilder):
                 self.resultColumns.addDimensionLink(selectableForDataset, link)
 
     @classmethod
-    def fromSingleCollection(cls, registry, datasetType, collection, addResultColumns=True):
+    def fromSingleCollection(cls, registry, datasetType, collection, addResultColumns=True, prefix=None):
         """Construct a builder that searches a single collection for datasets
         of a single dataset type.
 
@@ -82,6 +86,10 @@ class SingleDatasetQueryBuilder(QueryBuilder):
             If `True` (default), add result columns to ``self.resultColumns``
             for the dataset ID and dimension links used to identify this
             `DatasetType.
+        prefix : `str`, optional
+            String prefix to add to the aliases of all tables joined
+            into the query, to avoid ambiguity when the QueryBuilder
+            is used to build a subquery.
 
         Returns
         -------
@@ -109,6 +117,9 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         """
         datasetTable = registry._schema.tables["dataset"]
         datasetCollectionTable = registry._schema.tables["dataset_collection"]
+        if prefix is not None:
+            datasetTable = datasetTable.alias(prefix + "dataset")
+            datasetCollectionTable = datasetCollectionTable.alias(prefix + "dataset_collection")
         fromClause = datasetTable.join(
             datasetCollectionTable,
             datasetTable.columns.dataset_id == datasetCollectionTable.columns.dataset_id
@@ -116,10 +127,10 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         whereClause = and_(datasetTable.columns.dataset_type_name == datasetType.name,
                            datasetCollectionTable.columns.collection == collection)
         return cls(registry, fromClause=fromClause, whereClause=whereClause, datasetType=datasetType,
-                   selectableForDataset=datasetTable, addResultColumns=addResultColumns)
+                   selectableForDataset=datasetTable, addResultColumns=addResultColumns, prefix=prefix)
 
     @classmethod
-    def fromCollections(cls, registry, datasetType, collections, addResultColumns=True):
+    def fromCollections(cls, registry, datasetType, collections, addResultColumns=True, prefix=None):
         """Construct a builder that searches a multiple collections for
         datasets single dataset type.
 
@@ -136,6 +147,10 @@ class SingleDatasetQueryBuilder(QueryBuilder):
             If `True` (default), add result columns to ``self.resultColumns``
             for the dataset ID and dimension links used to identify this
             `DatasetType.
+        prefix : `str`, optional
+            String prefix to add to the aliases of all tables joined
+            into the query, to avoid ambiguity when the QueryBuilder
+            is used to build a subquery.
 
         Returns
         -------

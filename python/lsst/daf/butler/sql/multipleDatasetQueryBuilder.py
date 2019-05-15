@@ -118,16 +118,20 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         Initial FROM clause for the query.
     whereClause : SQLAlchemy boolean expression, optional
         Expression to use as the initial WHERE clause.
+    prefix : `str`, optional
+        String prefix to add to the aliases of all tables joined
+        into the query, to avoid ambiguity when the QueryBuilder
+        is used to build a subquery.
     """
 
-    def __init__(self, registry, *, fromClause=None, whereClause=None):
-        super().__init__(registry, fromClause=fromClause, whereClause=whereClause)
+    def __init__(self, registry, *, fromClause=None, whereClause=None, prefix=None):
+        super().__init__(registry, fromClause=fromClause, whereClause=whereClause, prefix=prefix)
         self._subqueries = {}
         self._deferrals = {}
 
     @classmethod
     def fromDatasetTypes(cls, registry, originInfo, required=(), optional=(), prerequisite=(),
-                         perDatasetTypeDimensions=(), defer=False, addResultColumns=True):
+                         perDatasetTypeDimensions=(), defer=False, addResultColumns=True, prefix=None):
         r"""Build a query that relates multiple `DatasetType`s via their
         dimensions.
 
@@ -168,6 +172,10 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         addResultColumns : `bool`
             If `True` (default), add result columns to the SELECT clause for
             all dataset IDs and dimension links.
+        prefix : `str`, optional
+            String prefix to add to the aliases of all tables joined
+            into the query, to avoid ambiguity when the QueryBuilder
+            is used to build a subquery.
         """
         required = set(required)
         optional = set(optional)
@@ -196,7 +204,8 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         if not commonDimensions.isdisjoint(perDatasetTypeDimensions):
             raise ValueError("Some per-DatasetType dimensions are dependencies of common dimensions")
 
-        self = cls.fromDimensions(registry, dimensions=commonDimensions, addResultColumns=addResultColumns)
+        self = cls.fromDimensions(registry, dimensions=commonDimensions, addResultColumns=addResultColumns,
+                                  prefix=prefix)
 
         for datasetType in required:
             self.joinDataset(datasetType, originInfo.getInputCollections(datasetType.name),
@@ -260,7 +269,8 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         """
         if datasetType in self._subqueries:
             raise ValueError(f"DatasetType {datasetType.name} already included in query.")
-        builder = SingleDatasetQueryBuilder.fromCollections(self.registry, datasetType, collections)
+        builder = SingleDatasetQueryBuilder.fromCollections(self.registry, datasetType, collections,
+                                                            prefix=datasetType.name + "__")
         if commonDimensions is not None:
             perDatasetTypeLinks = datasetType.dimensions.links() - commonDimensions.links()
         else:
