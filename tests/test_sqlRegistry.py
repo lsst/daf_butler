@@ -24,14 +24,15 @@ import unittest
 from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
 from itertools import combinations
-
-import lsst.sphgeom
+import string
+import random
 
 from sqlalchemy.exc import OperationalError
 from lsst.daf.butler import (Execution, Run, DatasetType, Registry,
                              StorageClass, ButlerConfig, DataId,
                              ConflictingDefinitionError, OrphanedRecordError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
+from lsst.daf.butler.registries.postgresqlRegistry import PostgreSqlRegistry
 
 """Tests for SqlRegistry.
 """
@@ -670,6 +671,180 @@ class LimitedSqlRegistryTestCase(unittest.TestCase, RegistryTests):
         registry = self.makeRegistry()
         self.assertIsInstance(registry, SqlRegistry)
         self.assertTrue(registry.limited)
+
+class PostgreSqlRegistryTestCase(unittest.TestCase, RegistryTests):
+    """Test for PostgreSqlRegistry.
+    """
+    configFile = os.path.join(os.path.abspath(os.path.dirname(__file__)),
+                              "config/basic/butler-rds.yaml")
+
+    def genRoot(self):
+        """Returns a random string of len 20 to serve as a root
+        name for the temporary bucket repo.
+        """
+        rndstr = ''.join(
+            random.choice(string.ascii_lowercase) for _ in range(20)
+        )
+        return rndstr
+
+    def setUp(self):
+        self.root = self.genRoot()
+
+        config =  Config(self.configFile)
+
+        tmpconstr = config['.registry.registry.db']
+        defaultName = tmpconstr.split('/')[-1]
+        constr = tmpconstr[:-len(defaultName)]+'{dbname}'
+        self.connectionStr = constr
+        self.registryStr = self.connectionStr.format(dbname=self.root)
+
+        # [SANITY WARNING] - Multiple DBs as individual repositories
+        # Sqlalchemy won't be able to create a new db by just connecting to a new name.
+        # In PostgreSql CREATE DATABSE statement can not be issued within a transaction.
+        # So pure execute won't work since it creates a Connection implicitly. That Connection
+        # needs to be closed before CREATE statement can be issued. This means users need to have
+        # sufficient permissions to create DBs if they want to run this test.
+        from sqlalchemy import create_engine
+        import urllib.parse as urlparse
+        import configparser
+
+        # First, replace the default connection string with a db that we know will always exist.
+        # The name will always be last, but its easier to just replace it than to deconstruct and
+        # then reconstruct the whole string
+        defaultName = self.connectionStr.split('/')[-1]
+        constr = self.connectionStr.replace(defaultName, 'postgres')
+
+        # Second, get the local connection credentials from ~/.rds
+        parsed = urlparse.urlparse(constr)
+        localconf = configparser.ConfigParser()
+        localconf.read(os.path.expanduser('~/.rds/credentials'))
+
+        username = localconf[parsed.username]['username']
+        password = localconf[parsed.username]['password']
+        constr = constr.replace(parsed.username, f'{username}:{password}')
+
+        # Third, connect as that user, commit to drop out of transaction scope and create new DB
+        engine = create_engine(constr)
+        connection = engine.connect()
+        connection.execute('commit')
+        connection.execute(f'CREATE DATABASE {self.root}')
+        connection.close()
+
+        # Finally, now that we know that DB exists, replace the connection string from yaml
+        # config file for a one, that points to newly created temporary DB, and create new repo
+        config = Config(self.configFile)
+        config['.registry.registry.db'] = self.registryStr
+
+    def tearDown(self):
+        # [SANITY WARNING #2] - Multiple DBs as repositories strike back
+        # We have to undo everything done in setup. The quickest way is to just drop the
+        # temporary database. PostgreSql won't allow dropping the DB as long as there are
+        # users connected to it. RDS service seems to do a lot in the background with these
+        # DBs since seemingly there is always a process attached. So we need to ban all future
+        # connections to the DB, kill all current connections to it, and then attempt to drop
+        # the DB.
+        from sqlalchemy.exc import OperationalError
+        from sqlalchemy import create_engine
+        import urllib.parse as urlparse
+        import configparser
+
+        # First, replace the default connection string with a db that we know will always exist.
+        defaultName = self.connectionStr.split('/')[-1]
+        constr = self.connectionStr.replace(defaultName, 'postgres')
+
+        # Second, get the local connection credentials from ~/.rds
+        parsed = urlparse.urlparse(constr)
+        localconf = configparser.ConfigParser()
+        localconf.read(os.path.expanduser('~/.rds/credentials'))
+
+        username = localconf[parsed.username]['username']
+        password = localconf[parsed.username]['password']
+        constr = constr.replace(parsed.username, f'{username}:{password}')
+
+        # Third, connect as that user, commit to drop out of transaction scope and create new DB
+        engine = create_engine(constr)
+        connection = engine.connect()
+        connection.execute("commit")
+
+        # Fourth, ban all future connections. Make sure to end transaction scope.
+        connection.execute(f'REVOKE CONNECT ON DATABASE "{self.root}" FROM public;')
+        connection.execute('commit')
+
+        # Fifth, kill all currently connected processes, except ours.
+        # IT IS INCREDIBLY IMPORTANT that the db name is single-quoted!!!
+        connection.execute((f'SELECT pid, pg_terminate_backend(pid) '
+                            'FROM pg_stat_activity WHERE '
+                            f'datname = \'{self.root}\' and pid <> pg_backend_pid();'))
+        connection.execute('commit')
+
+        # Sixth, attempt to drop the table. It does not seem like processes detach *immediatelly*
+        # always, so give them some time
+        import time
+        dropped = False
+        for i in range(3):
+            try:
+                connection.execute(f'DROP DATABASE {self.root}')
+                break
+            except OperationalError as e:
+                time.sleep(1)
+                # if database isn't dropped on 3 attempts add details for debugging and reraise it
+                if i>=2:
+                    columns = ('datid', 'datname', 'pid', 'usesysid', 'usename',
+                               'application_name', 'client_addr', 'client_hostname',
+                               'client_port', 'wait_event_type', 'wait_event', 'state',
+                               'query')
+                    places = ['{'+str(i)+':15}' for i in range(0, len(columns))]
+                    frmtstr = "".join(places)+"\n"
+                    header = frmtstr.format(*columns)
+                    queryCols = ", ".join(columns)
+                    res = connection.execute((f'SELECT {queryCols} FROM pg_stat_activity WHERE '
+                                              f'datname = \'{self.root}\' and pid <> pg_backend_pid();'))
+
+                    details = header
+                    for row in res:
+                        row = [str(val) for val in row.values()] if None in row.values() else row.values()
+                        details += frmtstr.format(*row)
+
+                    e.add_detail(details)
+                    raise e
+            connection.execute('commit')
+        connection.close()
+
+
+    def makeRegistry(self):
+        testDir = os.path.dirname(__file__)
+        configFile = os.path.join(testDir, "config/basic/butler-rds.yaml")
+        butlerConfig = ButlerConfig(configFile)
+        return Registry.fromConfig(butlerConfig, create=True)
+
+    def testInitFromConfig(self):
+        registry = self.makeRegistry()
+        self.assertIsInstance(registry, PostgreSqlRegistry)
+        self.assertFalse(registry.limited)
+
+    def testNestedTransaction(self):
+        registry = self.makeRegistry()
+        dimension = "instrument"
+        dataId1 = {"instrument": "DummyCam"}
+        dataId2 = {"instrument": "DummyCam2"}
+        checkpointReached = False
+        with registry.transaction():
+            # This should be added and (ultimately) committed.
+            registry.addDimensionEntry(dimension, dataId1)
+            with self.assertRaises(ConflictingDefinitionError):
+                with registry.transaction():
+                    # This does not conflict, and should succeed (but not
+                    # be committed).
+                    registry.addDimensionEntry(dimension, dataId2)
+                    checkpointReached = True
+                    # This should conflict and raise, triggerring a rollback
+                    # of the previous insertion within the same transaction
+                    # context, but not the original insertion in the outer
+                    # block.
+                    registry.addDimensionEntry(dimension, dataId1)
+        self.assertTrue(checkpointReached)
+        self.assertIsNotNone(registry.findDimensionEntry(dimension, dataId1))
+        self.assertIsNone(registry.findDimensionEntry(dimension, dataId2))
 
 
 if __name__ == "__main__":

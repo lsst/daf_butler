@@ -39,6 +39,11 @@ class DropView(DDLElement):
         self.name = name
 
 
+@compiler.compiles(CreateView, 'postgresql')
+def compileCreateView(element, compiler, **kw):
+    return "CREATE OR REPLACE VIEW %s AS %s" % (element.name,
+                                                   compiler.sql_compiler.process(element.selectable))
+
 @compiler.compiles(CreateView)
 def compileCreateView(element, compiler, **kw):
     return "CREATE VIEW IF NOT EXISTS %s AS %s" % (element.name,

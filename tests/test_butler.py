@@ -43,6 +43,11 @@ except ImportError:
         """
         return cls
 
+try:
+    import boto3
+except ImportError:
+    boto3 = None
+
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
