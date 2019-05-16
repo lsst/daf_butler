@@ -389,6 +389,8 @@ class LocationFactory:
 
         Parameters
         ----------
+        bucket : `str`
+            Name of the Bucket that is used.
         datastoreRoot : `str`
             Root location of the `S3Datastore` in the Bucket.
         """

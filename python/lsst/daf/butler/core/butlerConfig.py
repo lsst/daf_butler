@@ -27,7 +27,6 @@ __all__ = ("ButlerConfig",)
 
 import os.path
 
-from . import utils
 from .s3utils import parsePathToUriElements
 from .config import Config
 from .datastore import DatastoreConfig
@@ -43,11 +42,12 @@ CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig,
 
 class ButlerConfig(Config):
     """Contains the configuration for a `Butler`
+
     The configuration is read and merged with default configurations for
     the particular classes. The defaults are read according to the rules
     outlined in `ConfigSubset`. Each component of the configuration associated
     with a configuration class reads its own defaults.
-    
+
     Parameters
     ----------
     other : `str`, `Config`, optional

@@ -191,17 +191,16 @@ class FileFormatter(Formatter):
         return data
 
     def fromBytes(self, inMemoryDataset, fileDescriptor, component=None):
-        """Read data from a bytestring.
+        """Reads serialized data into a Dataset or its component.
 
         Parameters
         ----------
         dataset : `bytes`
             Bytes object to unserialize.
         fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
+            Identifies read type and parameters to be used for reading.
         component : `str`, optional
-            Component to read from the file. Only used if the `StorageClass`
+            Component to read from the Dataset. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
 
@@ -214,9 +213,12 @@ class FileFormatter(Formatter):
         Raises
         ------
         ValueError
-            Component requested but this file does not seem to be a concrete
+            Component requested but this Dataset does not seem to be a concrete
             composite.
         """
+        if not hasattr(self, '_fromBytes'):
+            raise NotImplementedError("Type does not support reading from bytes.")
+
         data = self._fromBytes(inMemoryDataset,
                                fileDescriptor.storageClass.pytype)
 
@@ -251,18 +253,23 @@ class FileFormatter(Formatter):
         return fileDescriptor.location.pathInStore
 
     def toBytes(self, inMemoryDataset, fileDescriptor):
-        """Write a Python object to a bytestring.
+        """Serialize the Dataset to bytes based on formatter.
 
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Python object to store.
+            The Python object to serialize.
+        fileDescriptor : `FileDescriptor`
+            Identifies read type and parameters to be used for reading.
 
         Returns
         -------
         serializedDataset : `str`
             bytes representing the serialized dataset.
         """
+        if not hasattr(self, '_toBytes'):
+            raise NotImplementedError("Type does not support reading from bytes.")
+
         fileDescriptor.location.updateExtension(self.extension)
 
         return self._toBytes(inMemoryDataset)

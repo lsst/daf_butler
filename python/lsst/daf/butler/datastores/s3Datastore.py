@@ -29,17 +29,13 @@ from collections import namedtuple
 from urllib.parse import urlparse
 import tempfile
 
-try:
-    import boto3
-except ImportError:
-    boto3 = None
+import boto3
 
-from lsst.daf.butler import (Config, Datastore, DatastoreConfig,
-                             S3LocationFactory, Location, FileDescriptor,
-                             FormatterFactory, FileTemplates, StoredFileInfo,
-                             StorageClassFactory, DatasetTypeNotSupportedError,
-                             DatabaseDict, DatastoreValidationError,
-                             FileTemplateValidationError)
+from lsst.daf.butler import (Config, Datastore, DatastoreConfig, S3LocationFactory,
+                             Location, FileDescriptor, FormatterFactory, FileTemplates,
+                             StoredFileInfo, StorageClassFactory, DatasetTypeNotSupportedError,
+                             DatabaseDict, DatastoreValidationError, FileTemplateValidationError,
+                             Constraints)
 from lsst.daf.butler.core.utils import transactional, getInstanceOf
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists,
                                           parsePathToUriElements)
@@ -98,7 +94,6 @@ class S3Datastore(Datastore):
     def setConfigRoot(cls, root, config, full, overwrite=True):
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
-
         Parameters
         ----------
         root : `str`
@@ -118,7 +113,6 @@ class S3Datastore(Datastore):
             If `False`, do not modify a value in ``config`` if the value
             already exists.  Default is always to overwrite with the provided
             ``root``.
-
         Notes
         -----
         If a keyword is explicitly defined in the supplied ``config`` it
@@ -127,17 +121,12 @@ class S3Datastore(Datastore):
         """
         Config.updateParameters(DatastoreConfig, config, full,
                                 toUpdate={"root": root},
-                                toCopy=("cls", ("records", "table")),
-                                overwrite=overwrite)
+                                toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
-
-        if boto3 is None:
-            raise ModuleNotFoundError(('boto3 not found.'
-                                       'Are you sure it is installed?'))
 
         # Name ourselves either using an explicit name or a name
         # derived from the (unexpanded) root
@@ -153,31 +142,40 @@ class S3Datastore(Datastore):
         self.s3locationFactory = S3LocationFactory(parsed.netloc, parsed.path)
 
         self.client = boto3.client('s3')
-        self.bucket = self.s3locationFactory._bucket
-        self.client.get_bucket_location(Bucket=self.bucket)
+        # self.bucket = self.s3locationFactory.bucket
+        # we check if a bucket actually exists or not. For PosixDatastore this
+        # would be checking if directory exists, and if not, it would create
+        # one. Call to client.create_bucket is possible but also requires ACL
+        # LocationConstraints, Permissions and other configuration parameters.
+        try:
+            # bucket exsists - all is well
+            self.client.get_bucket_location(Bucket=parsed.netloc)
+        except self.client.exceptions.NoSuchBucket:
+            raise IOError(f"Bucket {parsed.netloc} does not exists!")
 
         self.formatterFactory = FormatterFactory()
         self.storageClassFactory = StorageClassFactory()
 
         # Now associate formatters with storage classes
-        self.formatterFactory.registerFormatters(self.config["formatters"])
-        self.formatterFactory.normalizeDimensions(self.registry.dimensions)
+        self.formatterFactory.registerFormatters(self.config["formatters"],
+                                                 universe=self.registry.dimensions)
 
         # Read the file naming templates
-        self.templates = FileTemplates(self.config["templates"])
-        self.templates.normalizeDimensions(self.registry.dimensions)
+        self.templates = FileTemplates(self.config["templates"],
+                                       universe=self.registry.dimensions)
+
+        # And read the constraints list
+        constraintsConfig = self.config.get("constraints")
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
         types = {"path": str, "formatter": str, "storage_class": str,
                  "file_size": int, "checksum": str, "dataset_id": int}
         lengths = {"path": 256, "formatter": 128, "storage_class": 64,
                    "checksum": 128}
-        self.records = DatabaseDict.fromConfig(self.config["records"],
-                                               types=types,
-                                               value=self.RecordTuple,
-                                               key="dataset_id",
-                                               lengths=lengths,
-                                               registry=registry)
+        self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
+                                               value=self.RecordTuple, key="dataset_id",
+                                               lengths=lengths, registry=registry)
 
     def __str__(self):
         return self.root
@@ -185,7 +183,6 @@ class S3Datastore(Datastore):
     def addStoredFileInfo(self, ref, info):
         """Record internal storage information associated with this
         `DatasetRef`
-
         Parameters
         ----------
         ref : `DatasetRef`
@@ -193,15 +190,12 @@ class S3Datastore(Datastore):
         info : `StoredFileInfo`
             Metadata associated with the stored Dataset.
         """
-        self.records[ref.id] = self.RecordTuple(formatter=info.formatter,
-                                                path=info.path,
+        self.records[ref.id] = self.RecordTuple(formatter=info.formatter, path=info.path,
                                                 storage_class=info.storageClass.name,
-                                                checksum=info.checksum,
-                                                file_size=info.size)
+                                                checksum=info.checksum, file_size=info.size)
 
     def removeStoredFileInfo(self, ref):
         """Remove information about the file associated with this dataset.
-
         Parameters
         ----------
         ref : `DatasetRef`
@@ -212,17 +206,14 @@ class S3Datastore(Datastore):
     def getStoredFileInfo(self, ref):
         """Retrieve information associated with file stored in this
         `Datastore`.
-
         Parameters
         ----------
         ref : `DatasetRef`
             The Dataset that is to be queried.
-
         Returns
         -------
         info : `StoredFileInfo`
             Stored information about this file and its formatter.
-
         Raises
         ------
         KeyError
@@ -230,8 +221,7 @@ class S3Datastore(Datastore):
         """
         record = self.records.get(ref.id, None)
         if record is None:
-            raise KeyError(("Unable to retrieve formatter associated with "
-                            f"Dataset {ref.id}"))
+            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
         return StoredFileInfo(record.formatter, record.path, storageClass,
@@ -256,7 +246,6 @@ class S3Datastore(Datastore):
         except KeyError:
             return False
 
-        # Use the path to determine the location instead of self.bucket
         loc = self.s3locationFactory.fromPath(storedFileInfo.path)
         return s3CheckFileExists(self.client, loc.bucket, loc.path)[0]
 
@@ -296,19 +285,25 @@ class S3Datastore(Datastore):
 
         location = self.s3locationFactory.fromPath(storedFileInfo.path)
 
-        # Too expensive to recalculate the checksum on fetch
-        # but we can check size and existence
-        exists, size = s3CheckFileExists(self.client, location.bucket,
-                                         location.path)
-        if not exists:
-            errstr = ("Dataset with Id {} does not seem to exists at expected "
-                      "location of {}")
-            raise FileNotFoundError(errstr.format(ref.id, location.path))
+        # checks for existence were done through listing request
+        # (s3CheckFileExists), but since we have to make a GET request to S3
+        # anyhow (for download) we might as well use the HEADER metadata for
+        # size comparison instead
+        try:
+            response = self.client.get_object(Bucket=location.bucket, Key=location.path)
+        except self.client.exceptions.ClientError as err:
+            if err['Error']['Code'] == '404':
+                errstr = ("Dataset with Id {} does not exists at expected "
+                          "location {}")
+                raise FileNotFoundError(errstr.format(ref.id, location.path)) from err
+            # other errors are reraised also, but less descriptively
+            raise err
 
-        if size != storedFileInfo.size:
+        if response['ContentLength'] != storedFileInfo.size:
             errstr = ("Integrity failure in Datastore. Size of file {} ({}) "
                       "does not match recorded size of {}")
-            raise RuntimeError(errstr.format(location.path, size,
+            raise RuntimeError(errstr.format(location.path,
+                                             response['ContentLength'],
                                              storedFileInfo.size))
 
         # We have a write storage class and a read storage class and they
@@ -321,71 +316,31 @@ class S3Datastore(Datastore):
 
         # Is this a component request?
         component = ref.datasetType.component()
-
         formatter = getInstanceOf(storedFileInfo.formatter)
         formatterParams, assemblerParams = formatter.segregateParameters(parameters)
 
-        # I don't know how to make this prettier. If I stick this under an
-        # if-else condition then it looks really bad. But its pointless to make
-        # them methods or functions because the signature would be very large.
-        # I don't know what is the accepted style here.
-        def downloadBytes():
-            """Downloads a dataset from an object storage as a bytestring and
-            returns it as an appropriate python object.
-            """
-            try:
-                response = self.client.get_object(Bucket=location.bucket,
-                                                  Key=location.path)
-            except self.client.exceptions.ClientError as err:
-                if err['Error']['Code'] == '404':
-                    raise FileNotFoundError(f'Could not find dataset {location.uri}') from err
+        # download the data as bytes
+        serializedDataset = response['Body'].read()
+        fileDescriptor = FileDescriptor(location,
+                                        readStorageClass=readStorageClass,
+                                        storageClass=writeStorageClass,
+                                        parameters=parameters)
 
-            pickledDataset = response['Body'].read()
-            fileDescriptor = FileDescriptor(location,
-                                            readStorageClass=readStorageClass,
-                                            storageClass=writeStorageClass,
-                                            parameters=parameters)
-            try:
-                result = formatter.fromBytes(pickledDataset, fileDescriptor,
-                                             component=component)
-            except Exception as e:
-                raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
-
-            return result, fileDescriptor
-
-        def downloadFile():
-            """Downloads a dataset from an object storage into a temporary file
-            from which it is read as an appropriate python object.
-            """
-            with tempfile.TemporaryDirectory() as tmpRootDir:
-                datasetName = location.path.split('/')[-1]
-                tmpLoc = Location(tmpRootDir, datasetName)
-
-                if os.path.exists(tmpLoc.path):
-                    raise FileExistsError(f"Cannot write file for ref {ref} "
-                                          f"as output file {tmpLoc.path} "
-                                          "exists")
-
-                # removing the tmpdir not neccesary? Just a rollback
-                with self.transaction() as transaction:
-                    self.client.download_file(location.bucket, location.path,
-                                              tmpLoc.path)
-                    fileDescriptor = FileDescriptor(tmpLoc,
-                                                    readStorageClass=readStorageClass,
-                                                    storageClass=writeStorageClass,
-                                                    parameters=parameters)
-                    try:
-                        result = formatter.read(fileDescriptor,
-                                                component=component)
-                    except Exception as e:
-                        raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}")
-
-            return result, fileDescriptor
-
-        if hasattr(formatter, '_fromBytes'):
-            result, fileDescriptor = downloadBytes()
-        else:
-            result, fileDescriptor = downloadFile()
+        # format the downloaded bytes into appropriate object directly, or via
+        # tempfile (when formatter does not support to/from/Bytes)
+        try:
+            result = formatter.fromBytes(serializedDataset, fileDescriptor,
+                                         component=component)
+        except NotImplementedError:
+            with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
+                tmpFile.file.write(serializedDataset)
+                # This makes me think that there is a reason to have both
+                # Location and S3Location factories in this class, where
+                # Location would track the temporary files and directories.
+                fileDescriptor.location = Location('/', tmpFile.name)
+                result = formatter.read(fileDescriptor, component=component)
+        except Exception as e:
+            raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
 
         # Process any left over parameters
         if parameters:
@@ -421,10 +376,15 @@ class S3Datastore(Datastore):
 
         # Sanity check
         if not isinstance(inMemoryDataset, storageClass.pytype):
-            errmsg = ("Inconsistency between supplied object ({}) "
-                      "and storage class type ({})")
-            raise TypeError(errmsg.format(type(inMemoryDataset),
-                                          storageClass.pytype))
+            raise TypeError("Inconsistency between supplied object ({}) "
+                            "and storage class type ({})".format(type(inMemoryDataset),
+                                                                 storageClass.pytype))
+
+        # Confirm that we can accept this dataset
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
 
         # Work out output file name
         try:
@@ -440,41 +400,31 @@ class S3Datastore(Datastore):
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
+        # in PosixDatastore a directory can be created by `safeMakeDir` and
+        # then the file is written if checks against overwriting an existing
+        # file pass. But in S3 `Keys` instead only look like directories, but
+        # are not. We check if an exact full key already exists before writing
+        # instead.
         location.updateExtension(formatter.extension)
         if s3CheckFileExists(self.client, location.bucket, location.path)[0]:
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {location.uri} exists.")
 
-        # unlike get, the existance of the bucket has been verified at init
-        # and ButlerConfig downloads, therefore not a lot of error handling is
-        # required
-        if hasattr(formatter, '_toBytes'):
-            with self.transaction() as transaction:
-                fileDescriptor = FileDescriptor(location,
-                                                storageClass=storageClass)
-                pickledDataset = formatter.toBytes(inMemoryDataset,
-                                                   fileDescriptor)
-                self.client.put_object(Bucket=location.bucket,
-                                       Key=location.path,
-                                       Body=pickledDataset)
-            log.debug("Wrote file to %s", location.uri)
-        else:
-            # we can't change location attrs, so we need to make up a new one
-            # that we clean up afterwards.
-            with tempfile.TemporaryDirectory() as tmpRootDir:
-                datasetName = location.path.split('/')[-1]
-                tmpLoc = Location(tmpRootDir, datasetName)
-                # this should never happen
-                if os.path.exists(tmpLoc.path):
-                    raise FileExistsError((f"Cannot write file for ref {ref}. "
-                                          f"Output file {tmpLoc.uri} exists."))
-
-                with self.transaction() as transaction:
-                    tmpPath = formatter.write(inMemoryDataset,
-                                              FileDescriptor(tmpLoc, storageClass=storageClass))
-                    assert tmpLoc.path == os.path.join(tmpRootDir, tmpPath)
-                    self.client.upload_file(tmpLoc.path, location.bucket,
-                                            location.path)
+        # upload the file directly from bytes or by using a temporary file
+        fileDescriptor = FileDescriptor(location, storageClass=storageClass)
+        try:
+            serializedDataset = formatter.toBytes(inMemoryDataset, fileDescriptor)
+            self.client.put_object(Bucket=location.bucket, Key=location.path,
+                                   Body=serializedDataset)
+            log.debug("Wrote file directly to %s", location.uri)
+        except NotImplementedError:
+            with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
+                # same as in get - is it worthwile carrying a factory for
+                # tempfile overrides like these
+                fileDescriptor.location = Location('/', tmpFile.name)
+                formatter.write(inMemoryDataset, fileDescriptor)
+                self.client.upload_file(Bucket=location.bucket, Key=location.path,
+                                        Filename=tmpFile.name)
                 log.debug("Wrote file to %s via a temporary directory.",
                           location.uri)
 
@@ -504,11 +454,10 @@ class S3Datastore(Datastore):
             provided, the formatter will be constructed according to
             Datastore configuration.
         transfer : str (optional)
-            If not None, must be one of 'move', 'copy', 'hardlink', or
-            'symlink' indicating how to transfer the file.  The new
-            filename and location will be determined via template substitution,
-            as with ``put``.  If the file is outside the datastore root, it
-            must be transferred somehow.
+            If not None, must be one of 'move' or 'copy' indicating how to
+            transfer the file.  The new filename and location will be
+            determined via template substitution, as with ``put``.  If the file
+            is outside the datastore root, it must be transferred somehow.
 
         Raises
         ------
@@ -549,7 +498,7 @@ class S3Datastore(Datastore):
                 if (bucketname != root) or (rootDir != topDir):
                     raise RuntimeError((f"'{path}' is not inside repository "
                                         f"root '{self.root}'"))
-        elif transfer == 'upload' or transfer == 'copy':
+        elif transfer == 'move' or transfer == 'copy':
             if scheme == 'file://':
                 # reuploads not allowed?
                 if s3CheckFileExists(self.client, root, relpath)[0]:
@@ -559,17 +508,28 @@ class S3Datastore(Datastore):
                 location = self.s3locationFactory.fromPath(template.format(ref))
                 location.updateExtension(formatter.extension)
 
-                with self.transaction() as transaction:
-                    self.client.upload_file(path, location.bucket,
-                                            location.path)
+                self.client.upload_file(Bucket=location.bucket,
+                                        Key=location.path,
+                                        Filename=path)
+                if transfer == 'move':
+                    os.remove(path)
+
             if scheme == 's3://':
                 # ingesting is done from another bucket - not tested
                 if s3CheckFileExists(self.client, root, relpath)[0]:
                     fullpath = os.path.join(root, relpath)
-                    raise FileExistsError("File '{scheme+fullpath}' exists.")
+                    raise FileExistsError(f"File '{scheme+fullpath}' exists.")
 
                 copySrc = {'Bucket': root, 'Key': relpath}
-                self.client.copy(copySrc, self.bucket, relpath)
+                self.client.copy(copySrc, self.s3locationFactory._bucket,
+                                 relpath)
+
+                if transfer == 'move':
+                    # https://github.com/boto/boto3/issues/507 - there is no
+                    # way of knowing if the file was actually deleted except
+                    # for checking all the keys again, reponse just ends up
+                    # being HTTP 204 OK request all the time
+                    self.client.delete(Bucket=root, Key=relpath)
         else:
             raise NotImplementedError(f"Transfer type '{transfer}' not supported.")
 
@@ -661,8 +621,6 @@ class S3Datastore(Datastore):
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
         """
-        # Get file metadata and internal metadata
-
         try:
             storedFileInfo = self.getStoredFileInfo(ref)
         except KeyError:
@@ -670,6 +628,9 @@ class S3Datastore(Datastore):
         location = self.s3locationFactory.fromPath(storedFileInfo.path)
         if not s3CheckFileExists(self.client, location.bucket, location.path):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
+
+        # https://github.com/boto/boto3/issues/507 - there is no way of knowing
+        # if the file was actually deleted
         self.client.delete_object(Bucket=location.bucket, Key=location.path)
 
         # Remove rows from registries
