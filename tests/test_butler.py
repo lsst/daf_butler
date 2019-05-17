@@ -28,6 +28,7 @@ import unittest
 import tempfile
 import shutil
 import pickle
+<<<<<<< HEAD
 import string
 import random
 
@@ -47,6 +48,16 @@ try:
     import boto3
 except ImportError:
     boto3 = None
+||||||| parent of 6d08b41... Added PostgreSqlRegistry+PosixDatastore test to test_butler.py.
+
+try:
+    import boto3
+except ImportError:
+    boto3 = None
+=======
+import random
+import string
+>>>>>>> 6d08b41... Added PostgreSqlRegistry+PosixDatastore test to test_butler.py.
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig

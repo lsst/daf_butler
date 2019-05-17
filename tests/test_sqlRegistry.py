@@ -24,15 +24,14 @@ import unittest
 from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
 from itertools import combinations
-import string
-import random
+
+import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
 from lsst.daf.butler import (Execution, Run, DatasetType, Registry,
                              StorageClass, ButlerConfig, DataId,
                              ConflictingDefinitionError, OrphanedRecordError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
-from lsst.daf.butler.registries.postgresqlRegistry import PostgreSqlRegistry
 
 """Tests for SqlRegistry.
 """

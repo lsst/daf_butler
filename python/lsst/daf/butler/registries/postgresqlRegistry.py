@@ -44,28 +44,6 @@ class PostgreSqlRegistry(OracleRegistry):
         Load configuration
     """
 
-    @classmethod
-    def setConfigRoot(cls, root, config, full):
-        """Set any filesystem-dependent config options for this Registry to
-        be appropriate for a new empty repository with the given root.
-
-        Parameters
-        ----------
-        root : `str`
-            Filesystem path to the root of the data repository.
-        config : `Config`
-            A Butler-level config object to update (but not a
-            `ButlerConfig`, to avoid included expanded defaults).
-        full : `ButlerConfig`
-            A complete Butler config with all defaults expanded;
-            repository-specific options that should not be obtained
-            from defaults when Butler instances are constructed
-            should be copied from `full` to `Config`.
-        """
-        super().setConfigRoot(root, config, full)
-        Config.overrideParameters(RegistryConfig, config, full,
-                                  toCopy=("cls", "deferDatasetIdQueries"))
-
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
                  butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
