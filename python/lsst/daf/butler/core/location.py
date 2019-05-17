@@ -51,13 +51,13 @@ class Location:
 
         This path includes the root of the `Datastore`.
         """
-        return os.path.join(self._datastoreRoot, self._uri.path.lstrip("/"))
+        return  self._uri.path
 
     @property
     def pathInStore(self):
         """Path corresponding to location relative to `Datastore` root.
         """
-        return self._uri.path.lstrip("/")
+        return self._uri.path.split(self._datastoreRoot)[-1].lstrip(os.sep)
 
     def updateExtension(self, ext):
         """Update the file extension associated with this `Location`.
@@ -92,9 +92,10 @@ class LocationFactory:
         Parameters
         ----------
         datastoreRoot : `str`
-            Root location of the `Datastore` in the filesystem.
+            Root location of the `Datastore` in the filesystem. Assumed relative
+            to current directory unless absolute.
         """
-        self._datastoreRoot = datastoreRoot
+        self._datastoreRoot = os.path.abspath(os.path.expanduser(datastoreRoot))
 
     def fromUri(self, uri):
         """Factory function to create a `Location` from a URI.
@@ -110,6 +111,18 @@ class LocationFactory:
         """
         if uri is None or not isinstance(uri, str):
             raise ValueError("URI must be a string and not {}".format(uri))
+
+        parsed = urllib.parse.urlparse(uri)
+        if parsed.scheme == 'file' and parsed.netloc:
+            # should we try and guess if we are working with path intended to be
+            # relative to self._datastoreRoot or just treat it as an error?
+            path = os.path.join(self._datastoreRoot, parsed.netloc, parsed.path.lstrip(os.sep))
+            uri = urllib.parse.urlunparse((parsed.scheme, '', path, '', '', ''))
+            parsed = urllib.parse.urlparse(uri)
+        if os.path.commonprefix((parsed.path, self._datastoreRoot)) != self._datastoreRoot:
+            raise ValueError((f'URI {uri} does not share the same datastore root '
+                              f'used by this Location factory: {self._datastoreRoot}.'))
+
         return Location(self._datastoreRoot, uri)
 
     def fromPath(self, path):
