@@ -316,9 +316,14 @@ class QueryBuilder(ABC):
         if whereSql is not None:
             query = query.where(whereSql)
         if _LOG.isEnabledFor(logging.DEBUG):
-            _LOG.debug("building query: %s",
-                       query.compile(bind=self.registry._connection.engine,
-                                     compile_kwargs={"literal_binds": True}))
+            try:
+                compiled = query.compile(bind=self.registry._connection.engine,
+                                         compile_kwargs={"literal_binds": True})
+            except AttributeError:
+                # Workaround apparent SQLAlchemy bug that sometimes treats a
+                # list as if it were a string.
+                compiled = str(query)
+            _LOG.debug("building query: %s", compiled)
         return query
 
     def execute(self, whereSql=None, **kwds):

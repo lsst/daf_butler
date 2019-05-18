@@ -314,14 +314,16 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         more dimensions in ``otherDimensions``.
         """
         allDimensions = self.datasetType.dimensions.union(otherDimensions)
-        missingDimensions = self.datasetType.dimensions.toSet().difference(otherDimensions)
+        missingLinks = set(self.datasetType.dimensions.links().difference(otherDimensions.links()))
         newLinks = set()
-        for missingLink in missingDimensions.links():
+        while missingLinks:
+            missingLink = missingLinks.pop()
             related = False
             for element in self.registry.dimensions.withLink(missingLink):
                 if (isinstance(element, DimensionJoin) and not element.asNeeded and
                         element.links().issubset(allDimensions.links())):
                     self.joinDimensionElement(element)
+                    missingLinks -= element.links()
                     newLinks.update(element.links())
                     related = True
             if not related:

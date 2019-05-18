@@ -83,6 +83,30 @@ class Instrument(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
+    @abstractmethod
+    def writeCuratedCalibrations(self, butler):
+        """Write human-curated calibration Datasets to the given Butler with
+        the appropriate validity ranges.
+
+        This is a temporary API that should go away once obs_ packages have
+        a standardized approach to this problem.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def applyConfigOverrides(self, name, config):
+        """Apply instrument-specific overrides for a task config.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the object being configured; typically the _DefaultName
+            of a Task.
+        config : `lsst.pex.config.Config`
+            Config instance to which overrides should be applied.
+        """
+        raise NotImplementedError()
+
 
 class ObservationDataIdPacker(DataIdPacker):
     """A `DataIdPacker` for visit+detector or exposure+detector, given an

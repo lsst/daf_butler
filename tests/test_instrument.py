@@ -65,6 +65,12 @@ class DummyCam(Instrument):
         """
         return None
 
+    def writeCuratedCalibrations(self, butler):
+        pass
+
+    def applyConfigOverrides(self, name, config):
+        pass
+
 
 class InstrumentTestCase(unittest.TestCase):
     """Test for Instrument.

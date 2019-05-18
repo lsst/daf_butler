@@ -74,6 +74,10 @@ class Butler:
         `ButlerConfig` constructor.  If a directory path
         is given the configuration will be read from a ``butler.yaml`` file in
         that location.  If `None` is given default values will be used.
+    butler : `Butler`, optional.
+        If provided, construct a new Butler that uses the same registry and
+        datastore as the given one, but with the given collection and run.
+        Incompatible with the ``config`` and ``searchPaths`` arguments.
     collection : `str`, optional
         Collection to use for all input lookups, overriding
         config["collection"] if provided.
@@ -199,21 +203,30 @@ class Butler:
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
-    def __init__(self, config=None, collection=None, run=None, searchPaths=None):
-        # save arguments for pickling
-        self._args = (config, collection, run)
-        self.config = ButlerConfig(config, searchPaths=searchPaths)
-
-        if "root" in self.config:
-            butlerRoot = self.config["root"]
+    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
+        if butler is not None:
+            if config is not None or searchPaths is not None:
+                raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
+            # save arguments for pickling
+            self._args = (butler._args[0], collection, run)
+            self.registry = butler.registry
+            self.datastore = butler.datastore
+            self.storageClasses = butler.storageClasses
+            self.composites = butler.composites
+            self.config = butler.config
         else:
-            butlerRoot = self.config.configDir
-
-        self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
-        self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
-        self.storageClasses = StorageClassFactory()
-        self.storageClasses.addFromConfig(self.config)
-        self.composites = CompositesMap(self.config)
+            # save arguments for pickling
+            self._args = (config, collection, run)
+            self.config = ButlerConfig(config, searchPaths=searchPaths)
+            if "root" in self.config:
+                butlerRoot = self.config["root"]
+            else:
+                butlerRoot = self.config.configDir
+            self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
+            self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
+            self.storageClasses = StorageClassFactory()
+            self.storageClasses.addFromConfig(self.config)
+            self.composites = CompositesMap(self.config)
         if run is None:
             runCollection = self.config.get("run", None)
             self.run = None
@@ -599,6 +612,53 @@ class Butler:
         else:
             # This also implicitly disassociates.
             self.registry.removeDataset(ref)
+
+    @transactional
+    def ingest(self, path, datasetRefOrType, dataId=None, *, formatter=None, transfer=None, **kwds):
+        """Store and register a dataset that already exists on disk.
+
+        Parameters
+        ----------
+        path : `str`
+            Path to the file containing the dataset.
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` is provided, ``dataId`` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the second argument.
+        formatter : `Formatter` (optional)
+            Formatter that should be used to retreive the Dataset.  If not
+            provided, the formatter will be constructed according to
+            Datastore configuration.
+        transfer : str (optional)
+            If not None, must be one of 'move', 'copy', 'hardlink', or
+            'symlink' indicating how to transfer the file.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the stored dataset, updated with the correct id if
+            given.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler was not constructed with a Run, and is hence
+            read-only.
+        NotImplementedError
+            Raised if the `Datastore` does not support the given transfer mode.
+        """
+        if self.run is None:
+            raise TypeError("Butler is read-only.")
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        ref = self.registry.addDataset(datasetType, dataId, run=self.run, recursive=True, **kwds)
+        self.datastore.ingest(path, ref, transfer=transfer, formatter=formatter)
+        return ref
 
     def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
         """Validate butler configuration.

@@ -34,7 +34,7 @@ from ..core import Config, Run, DatasetType, StorageClassFactory, DataId
 from ..instrument import (Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo,
                           addUnboundedCalibrationLabel)
 from .structures import ConvertedRepo
-from .translators import Translator, NoSkyMapError, makeCalibrationLabel
+from .translators import Translator, makeCalibrationLabel
 
 
 class ConversionWriter:
@@ -134,18 +134,34 @@ class ConversionWriter:
         scFactory = StorageClassFactory()
         scConfig = self.config["storageClasses"]
         for datasetTypeName in gen2repo.datasets.keys():
-            gen2dst = gen2repo.datasetTypes[datasetTypeName]
-            try:
-                translators[datasetTypeName] = Translator.makeMatching(instrument=instrument,
-                                                                       datasetType=gen2dst,
-                                                                       skyMaps=gen2repo.skyMaps,
-                                                                       skyMapNames=skyMapNamesByCoaddName)
-            except NoSkyMapError:
-                log.warn("No SkyMap associated with DatasetType %s in %s; skipping.",
-                         datasetTypeName, gen2repo.root)
-                continue
             if datasetTypeName in self.datasetTypes:
                 continue
+            gen2dst = gen2repo.datasetTypes[datasetTypeName]
+            baseDataId = {"instrument": instrument}
+            # If this dataset uses skymap dimensions, look for a Gen2 dataset
+            # that defines it and the Gen3 name associated with it.
+            skyMap = None
+            i = datasetTypeName.find("Coadd")
+            if ("tract" in gen2dst.keys or i > 0):
+                if len(gen2repo.skyMaps) == 1:
+                    skyMap, = gen2repo.skyMaps.values()
+                    baseDataId["skymap"], = skyMapNamesByCoaddName.values()
+                elif i > 0:
+                    coaddName = datasetTypeName[:i]
+                    try:
+                        skyMap = gen2repo.skyMaps[coaddName]
+                        baseDataId["skymap"] = skyMapNamesByCoaddName[coaddName]
+                    except KeyError:
+                        pass
+                if skyMap is None:
+                    log.warn("No SkyMap associated with DatasetType %s in %s; skipping.",
+                             datasetTypeName, gen2repo.root)
+                    continue
+            else:
+                skyMap = None
+            translators[datasetTypeName] = Translator.makeMatching(baseDataId=baseDataId,
+                                                                   datasetType=gen2dst,
+                                                                   skyMap=skyMap)
             log.debug("Looking for StorageClass configured for %s by datasetType", gen2dst.name)
             storageClassName = scConfig.get(datasetTypeName, None)
             if storageClassName is None:
@@ -184,7 +200,7 @@ class ConversionWriter:
             self.datasetTypes[datasetTypeName] = DatasetType(
                 name=datasetTypeName,
                 storageClass=storageClass,
-                dimensions=translators[datasetTypeName].gen3units
+                dimensions=translators[datasetTypeName].dimensions
             )
         converted = ConvertedRepo(gen2repo, instrument=instrument, run=run, translators=translators)
         # Add parent repositories first, so self.repos is sorted topologically.
@@ -304,8 +320,9 @@ class ConversionWriter:
             instrument = self.config["mappers", mapperName, "instrument"]
             log.debug("Inserting unbounded calibration_label.")
             addUnboundedCalibrationLabel(registry, instrument)
-            for (datasetTypeName, calibDate), (first, last) in repo.gen2.calibDict.items():
-                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate),
+            for (datasetTypeName, calibDate, ccd, filter), (first, last) in repo.gen2.calibDict.items():
+                dataId = DataId(calibration_label=makeCalibrationLabel(datasetTypeName, calibDate,
+                                                                       ccd=ccd, filter=filter),
                                 instrument=instrument,
                                 universe=registry.dimensions)
                 dataId.entries["calibration_label"]["valid_first"] = first
