@@ -204,11 +204,11 @@ class Butler:
         return config
 
     def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
+        # save arguments for pickling
+        self._args = (config, butler, collection, run, searchPaths)
         if butler is not None:
             if config is not None or searchPaths is not None:
                 raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
-            # save arguments for pickling
-            self._args = (butler._args[0], collection, run)
             self.registry = butler.registry
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
@@ -216,7 +216,6 @@ class Butler:
             self.config = butler.config
         else:
             # save arguments for pickling
-            self._args = (config, collection, run)
             self.config = ButlerConfig(config, searchPaths=searchPaths)
             if "root" in self.config:
                 butlerRoot = self.config["root"]
