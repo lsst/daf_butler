@@ -257,6 +257,8 @@ class ButlerTests:
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
+        self.assertEqual(butlerOut.collection, butler.collection)
+        self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self):
         butler = Butler(self.tmpConfigFile)
