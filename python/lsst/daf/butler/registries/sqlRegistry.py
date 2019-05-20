@@ -79,6 +79,7 @@ class SqlRegistry(Registry):
         self._datasetTypes = {}
         self._engine = self._createEngine()
         self._connection = self._createConnection(self._engine)
+        self._cachedRuns = {}   # Run objects, keyed by id or collection
         if create:
             # In our tables we have columns that make use of sqlalchemy
             # Sequence objects. There is currently a bug in sqlalchmey
@@ -704,7 +705,7 @@ class SqlRegistry(Registry):
                                                           collection=run.collection,
                                                           environment_id=None,  # TODO add environment
                                                           pipeline_id=None))    # TODO add pipeline
-        # TODO: set given Run's "id" attribute.
+        # TODO: set given Run's "id" attribute, add to self,_cachedRuns.
 
     def getRun(self, id=None, collection=None):
         # Docstring inherited from Registry.getRun
@@ -713,6 +714,9 @@ class SqlRegistry(Registry):
         run = None
         # Retrieve by id
         if (id is not None) and (collection is None):
+            run = self._cachedRuns.get(id)
+            if run is not None:
+                return run
             result = self._connection.execute(select([executionTable.c.execution_id,
                                                       executionTable.c.start_time,
                                                       executionTable.c.end_time,
@@ -724,6 +728,9 @@ class SqlRegistry(Registry):
                 runTable.c.execution_id == id)).fetchone()
         # Retrieve by collection
         elif (collection is not None) and (id is None):
+            run = self._cachedRuns.get(collection, None)
+            if run is not None:
+                return run
             result = self._connection.execute(select([executionTable.c.execution_id,
                                                       executionTable.c.start_time,
                                                       executionTable.c.end_time,
@@ -743,6 +750,8 @@ class SqlRegistry(Registry):
                       collection=result["collection"],
                       environment=None,  # TODO add environment
                       pipeline=None)     # TODO add pipeline
+            self._cachedRuns[run.id] = run
+            self._cachedRuns[run.collection] = run
         return run
 
     @transactional
