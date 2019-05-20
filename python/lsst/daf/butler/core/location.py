@@ -51,7 +51,7 @@ class Location:
 
         This path includes the root of the `Datastore`.
         """
-        return  self._uri.path
+        return self._uri.path
 
     @property
     def pathInStore(self):
@@ -92,8 +92,8 @@ class LocationFactory:
         Parameters
         ----------
         datastoreRoot : `str`
-            Root location of the `Datastore` in the filesystem. Assumed relative
-            to current directory unless absolute.
+            Root location of the `Datastore` in the filesystem. Assumed
+            relative to current directory unless absolute.
         """
         self._datastoreRoot = os.path.abspath(os.path.expanduser(datastoreRoot))
 
@@ -114,10 +114,18 @@ class LocationFactory:
 
         parsed = urllib.parse.urlparse(uri)
         if parsed.scheme == 'file' and parsed.netloc:
-            # should we try and guess if we are working with path intended to be
-            # relative to self._datastoreRoot or just treat it as an error?
-            path = os.path.join(self._datastoreRoot, parsed.netloc, parsed.path.lstrip(os.sep))
-            uri = urllib.parse.urlunparse((parsed.scheme, '', path, '', '', ''))
+            # should we try and guess if we are working with path intended to
+            # be relative to self._datastoreRoot or just treat it as an error?
+            # When the path is just a filename relative to curdir it gets
+            # registered as a netloc, then joining root, netloc and path
+            # produces a '/' at the end we don't want but can't remove because
+            # perhaps it's a dir?
+            if not parsed.path:
+                path = os.path.join(self._datastoreRoot, parsed.netloc)
+            else:
+                path = os.path.join(self._datastoreRoot, parsed.netloc, parsed.path.lstrip(os.sep))
+            # scheme, netloc, path, query, fragment, user, pass, host, port
+            uri = urllib.parse.urlunparse((parsed.scheme, '', path, '', '', parsed.fragment))
             parsed = urllib.parse.urlparse(uri)
         if os.path.commonprefix((parsed.path, self._datastoreRoot)) != self._datastoreRoot:
             raise ValueError((f'URI {uri} does not share the same datastore root '
@@ -137,5 +145,6 @@ class LocationFactory:
         location : `Location`
             The equivalent `Location`.
         """
-        uri = urllib.parse.urljoin("file://", path)
+        # am I guaranteed POSIX-only paths here?
+        uri = 'file://' + path
         return self.fromUri(uri)

@@ -266,7 +266,6 @@ class PosixDatastore(Datastore):
         ValueError
             Formatter failed to process the dataset.
         """
-
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
         # Get file metadata and internal metadata
@@ -536,7 +535,6 @@ class PosixDatastore(Datastore):
             guessing is not allowed.
 
         """
-
         # if this has never been written then we have to guess
         if not self.exists(ref):
             if not predict:
