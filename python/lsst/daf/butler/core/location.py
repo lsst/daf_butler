@@ -24,6 +24,7 @@ __all__ = ("Location", "LocationFactory")
 import os
 import os.path
 import urllib
+import posixpath
 
 
 class Location:
@@ -114,20 +115,16 @@ class LocationFactory:
 
         parsed = urllib.parse.urlparse(uri)
         if parsed.scheme == 'file' and parsed.netloc:
-            # should we try and guess if we are working with path intended to
-            # be relative to self._datastoreRoot or just treat it as an error?
-            # When the path is just a filename relative to curdir it gets
-            # registered as a netloc, then joining root, netloc and path
-            # produces a '/' at the end we don't want but can't remove because
-            # perhaps it's a dir?
+            # joining with an empty string produces an '/' we don't want
             if not parsed.path:
-                path = os.path.join(self._datastoreRoot, parsed.netloc)
+                path = posixpath.join(self._datastoreRoot, parsed.netloc)
             else:
-                path = os.path.join(self._datastoreRoot, parsed.netloc, parsed.path.lstrip(os.sep))
+                path = posixpath.join(self._datastoreRoot, parsed.netloc,
+                                      parsed.path.lstrip('/'))
             # scheme, netloc, path, query, fragment, user, pass, host, port
             uri = urllib.parse.urlunparse((parsed.scheme, '', path, '', '', parsed.fragment))
             parsed = urllib.parse.urlparse(uri)
-        if os.path.commonprefix((parsed.path, self._datastoreRoot)) != self._datastoreRoot:
+        if posixpath.commonprefix([parsed.path, self._datastoreRoot]) != self._datastoreRoot:
             raise ValueError((f'URI {uri} does not share the same datastore root '
                               f'used by this Location factory: {self._datastoreRoot}.'))
 
@@ -145,6 +142,5 @@ class LocationFactory:
         location : `Location`
             The equivalent `Location`.
         """
-        # am I guaranteed POSIX-only paths here?
         uri = 'file://' + path
         return self.fromUri(uri)
