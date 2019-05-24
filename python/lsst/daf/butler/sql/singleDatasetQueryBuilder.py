@@ -22,7 +22,7 @@
 __all__ = ("SingleDatasetQueryBuilder",)
 
 import logging
-from sqlalchemy.sql import select, and_, functions, case
+from sqlalchemy.sql import select, and_, func, functions, case
 from ..core import DimensionJoin
 from .queryBuilder import QueryBuilder
 
@@ -152,80 +152,67 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         If there are multiple collections, then there can be multiple matching
         Datasets for the same DataId. In that case we need only one Dataset
         record, which comes from earliest collection (in the user-provided
-        order). Here things become complicated; we have to:
-        - replace collection names with their order in input list
-        - select all combinations of rows from dataset and dataset_collection
-          which match collection names and dataset type name
-        - from those only select rows with lowest collection position if
-          there are multiple collections for the same DataId
+        order). Here things become complicated. In previous version of this
+        code we used a MIN(collection_order) with GROUP BY the dataset link
+        values and then joined that with another sub-query to select dataset
+        rows. In the new implementation we use window function to avoid
+        self-joining. The sub-query with window function looks like
 
-        Replacing collection names with positions is easy:
+            SELECT ds.dataset_id, ds.link1, ds.link2, ...,
+                dc.collection,
+                MIN(<coll_order>) OVER (PARTITION BY ds.link1, ds.link2, ...)
+            FROM dataset ds
+                JOIN dataset_collection dc ON ds.dataset_id = dc.dataset_id
+            WHERE ds.dataset_type_name = <dsType.name>
+                AND dc.collection IN (<collections>)
 
-            SELECT dataset_id,
-                CASE collection
-                    WHEN 'collection1' THEN 0
-                    WHEN 'collection2' THEN 1
+        where <coll_order> is some value which reflects order of the
+        collection in the collection list. The expression that gives that
+        value can be a CASE like this:
+
+                CASE dc.collection
+                    WHEN 'collection1' THEN '000collection1'
+                    WHEN 'collection2' THEN '001collection2'
                     ...
-                END AS collorder
-            FROM dataset_collection
+                END
 
-        Combined query will look like (CASE ... END is as above):
+        This special format when resulting value is the name of the collection
+        itself prefixed with its order value has the advantage that prefix can
+        be stripped to obtain the name of the collection again. Above SELECT
+        can be written now as:
 
-            SELECT dataset.dataset_id AS dataset_id,
-                CASE dataset_collection.collection ... END AS collorder,
-                dataset.link1,
-                ...
-                dataset.linkN
-            FROM dataset JOIN dataset_collection
-                ON dataset.dataset_id = dataset_collection.dataset_id
-            WHERE dataset.dataset_type_name = <dsType.name>
-                AND dataset_collection.collection IN (<collections>)
+            SELECT ds.dataset_id dataset_id,
+                ds.link1 link1, ds.link2 link2, ...,
+                dc.collection collection,
+                SUBSTR(
+                    MIN(CASE dc.collection
+                        WHEN 'collection1' THEN '000collection1'
+                        WHEN 'collection2' THEN '001collection2'
+                        ...
+                    END) OVER (PARTITION BY ds.link1, ds.link2, ...),
+                    5) first_collection
+            FROM dataset ds
+                JOIN dataset_collection dc ON ds.dataset_id = dc.dataset_id
+            WHERE ds.dataset_type_name = <dsType.name>
+                AND dc.collection IN (<collections>)
 
-        Filtering is complicated; it would be simpler to use Common Table
-        Expressions (WITH clause) but not all databases support CTEs, so we
-        will have to do with the repeating sub-queries. We use GROUP BY for
-        the data ID (link columns) and MIN(collorder) to find ``collorder``
-        for a particular DataId, then join it with previous combined selection:
+        Now we need to filter rows for wich ``collection`` is the same as
+        ``first_collection``, for that we need to run this as a subquery:
 
-            SELECT
-                DS.dataset_id AS dataset_id,
-                DS.link1 AS link1,
-                ...
-                DS.linkN AS linkN
-            FROM (
-                SELECT dataset.dataset_id AS dataset_id,
-                    CASE ... END AS collorder,
-                    dataset.link1,
-                    ...
-                    dataset.linkN
-                FROM dataset JOIN dataset_collection
-                    ON dataset.dataset_id = dataset_collection.dataset_id
-                WHERE dataset.dataset_type_name = <dsType.name>
-                    AND dataset_collection.collection IN (<collections>)
-                ) DS
-            INNER JOIN (
-                SELECT
-                    MIN(CASE ... END AS) collorder,
-                    dataset.link1,
-                    ...
-                    dataset.linkN
-                FROM dataset JOIN dataset_collection
-                    ON dataset.dataset_id = dataset_collection.dataset_id
-                WHERE dataset.dataset_type_name = <dsType.name>
-                   AND dataset_collection.collection IN (<collections>)
-                GROUP BY (
-                    dataset.link1,
-                    ...
-                    dataset.linkN
-                    )
-                ) DSG
-            ON (DS.colpos = DSG.colpos
-                    AND
-                DS.link1 = DSG.link1
-                    AND
-                ...
-                    AND
-                DS.linkN = DSG.linkN)
+            SELECT dataset_id, link1, link2, ...
+            FROM (<above SELECT>)
+            WHERE collection = first_collection;
+
+        and the same can be written using Common Table Expression (CTE):
+
+            WITH subq AS (<above SELECT>)
+            SELECT subq.dataset_id, subq.link1, subq.link2, ...
+            WHERE subq.collection = subq.first_collection;
+
+        CTE may be preferred for reasons of query analysis and optimization
+        but we cannot use it now due to the way our code is structured (the
+        complete query is built seprately from pieces defined here). If CTE
+        is needed then some restructuring of the code should be done.
         """
         if len(collections) == 1:
             return cls.fromSingleCollection(registry, datasetType, collections[0],
@@ -242,8 +229,7 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         # full set of link names for this DatasetType
         links = list(datasetType.dimensions.links())
 
-        # Starting point for both subqueries below: a join of dataset to
-        # dataset_collection
+        # Starting point is a join of dataset to dataset_collection
         subJoin = datasetTable.join(
             datasetCollectionTable,
             datasetTable.columns.dataset_id == datasetCollectionTable.columns.dataset_id
@@ -251,29 +237,23 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         subWhere = and_(datasetTable.columns.dataset_type_name == datasetType.name,
                         datasetCollectionTable.columns.collection.in_(collections))
 
-        # CASE clause that transforms collection name to position in the given
-        # list of collections
-        collorder = case([
-            (datasetCollectionTable.columns.collection == coll, pos) for pos, coll in enumerate(collections)
-        ])
+        # CASE clause that transforms collection name to prefixed name, plus
+        # MIN window function, plus SUBSTR
+        nDigits = 3
+        collFmt = f"{{:0{nDigits}d}}{{}}"
+        collCase = case({coll: collFmt.format(pos, coll) for pos, coll in enumerate(collections)},
+                        value=datasetCollectionTable.columns.collection)
+        collMin = functions.min(collCase).over(partition_by=_columns(datasetTable, links))
+        firstColl = func.substr(collMin, nDigits+1).label("first_collection")
 
-        # first GROUP BY sub-query, find minimum `collorder` for each DataId
-        columns = [functions.min(collorder).label("collorder")] + _columns(datasetTable, links)
-        groupSubq = select(columns).select_from(subJoin).where(subWhere)
-        groupSubq = groupSubq.group_by(*links)
-        groupSubq = groupSubq.alias("sub1" + datasetType.name)
+        columns = _columns(datasetTable, ["dataset_id"] + links) + \
+            _columns(datasetCollectionTable, ["collection"]) + [firstColl]
 
-        # next combined sub-query
-        columns = [collorder.label("collorder")] + _columns(datasetTable, ["dataset_id"] + links)
-        combined = select(columns).select_from(subJoin).where(subWhere)
-        combined = combined.alias("sub2" + datasetType.name)
+        subq = select(columns).select_from(subJoin).where(subWhere)
+        whereClause = subq.columns.collection == subq.columns.first_collection
 
-        # now join these two
-        joinsOn = [groupSubq.columns.collorder == combined.columns.collorder] + \
-                  [groupSubq.columns[colName] == combined.columns[colName] for colName in links]
-
-        return cls(registry, fromClause=combined.join(groupSubq, and_(*joinsOn)),
-                   datasetType=datasetType, selectableForDataset=combined, addResultColumns=addResultColumns)
+        return cls(registry, fromClause=subq, whereClause=whereClause, datasetType=datasetType,
+                   selectableForDataset=subq, addResultColumns=addResultColumns)
 
     @property
     def datasetType(self):
