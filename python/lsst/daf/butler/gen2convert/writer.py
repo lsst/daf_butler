@@ -23,6 +23,7 @@ __all__ = ("ConversionWriter,")
 
 import os
 import re
+from datetime import timedelta
 from collections import OrderedDict
 
 from lsst.afw.image import bboxFromMetadata
@@ -326,7 +327,7 @@ class ConversionWriter:
                                 instrument=instrument,
                                 universe=registry.dimensions)
                 dataId.entries["calibration_label"]["valid_first"] = first
-                dataId.entries["calibration_label"]["valid_last"] = last
+                dataId.entries["calibration_label"]["valid_last"] = last + timedelta(days=1)
                 log.debug("Inserting calibration_label %s with validity range %s - %s.",
                           dataId["calibration_label"], first, last)
                 registry.addDimensionEntry("calibration_label", dataId)
