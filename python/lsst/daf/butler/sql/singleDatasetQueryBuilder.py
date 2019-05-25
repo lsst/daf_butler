@@ -250,6 +250,8 @@ class SingleDatasetQueryBuilder(QueryBuilder):
             _columns(datasetCollectionTable, ["collection"]) + [firstColl]
 
         subq = select(columns).select_from(subJoin).where(subWhere)
+        # subquery needs a unique alias name
+        subq = subq.alias("mcsubq_" + datasetType.name)
         whereClause = subq.columns.collection == subq.columns.first_collection
 
         return cls(registry, fromClause=subq, whereClause=whereClause, datasetType=datasetType,
