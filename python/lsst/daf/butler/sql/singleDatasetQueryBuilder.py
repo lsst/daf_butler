@@ -22,7 +22,8 @@
 __all__ = ("SingleDatasetQueryBuilder",)
 
 import logging
-from sqlalchemy.sql import select, and_, func, functions, case
+from sqlalchemy.sql import select, and_, func, functions, case, literal
+from sqlalchemy import String
 from ..core import DimensionJoin
 from .queryBuilder import QueryBuilder
 
@@ -241,7 +242,9 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         # MIN window function, plus SUBSTR
         nDigits = 3
         collFmt = f"{{:0{nDigits}d}}{{}}"
-        collCase = case({coll: collFmt.format(pos, coll) for pos, coll in enumerate(collections)},
+        # literal() for key is needed to avoid ORA-12704 error
+        collCase = case({literal(coll, String): collFmt.format(pos, coll)
+                         for pos, coll in enumerate(collections)},
                         value=datasetCollectionTable.columns.collection)
         collMin = functions.min(collCase).over(partition_by=_columns(datasetTable, links))
         firstColl = func.substr(collMin, nDigits+1).label("first_collection")
