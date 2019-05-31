@@ -19,13 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Location", "LocationFactory")
+__all__ = ("Location", "LocationFactory", "ButlerURI")
 
 import os
 import os.path
 import urllib
 import posixpath
 from pathlib import Path
+import copy
 
 if os.sep == posixpath.sep:
     IS_POSIX = True
@@ -81,12 +82,206 @@ def posix2os(path):
     return os.path.join(*posixpaths)
 
 
+class ButlerURI:
+    """Convenience wrapper around URI parsers.
+
+    Provides access to URI components and can convert file
+    paths into absolute path URIs. Schemeless URIs are treated as if
+    they are local file system paths and are converted to absolute URIs.
+
+    Parameters
+    ----------
+    uri : `str` or `urllib.parse.ParseResult`
+        URI in string form.  Can be scheme-less if referring to a local
+        filesystem path.
+    root : `str`, optional
+        When fixing up a relative path in a `file` scheme or if scheme-less,
+        use this as the root. Must be absolute.  If `None` the current
+        working directory will be used.
+    forceAbsolute : `bool`
+        If `True`, scheme-less relative URI will be converted to an absolute
+        path using a `file` scheme. If `False` scheme-less URI will remain
+        scheme-less and will not be updated to `file` or absolute path.
+    """
+
+    def __init__(self, uri, root=None, forceAbsolute=True):
+        if isinstance(uri, str):
+            parsed = urllib.parse.urlparse(uri)
+        elif isinstance(uri, urllib.parse.ParseResult):
+            parsed = copy.copy(uri)
+
+        parsed = self._fixupFileUri(parsed, root=root, forceAbsolute=forceAbsolute)
+        self._uri = parsed
+
+    @property
+    def scheme(self):
+        return self._uri.scheme
+
+    @property
+    def netloc(self):
+        return self._uri.netloc
+
+    @property
+    def path(self):
+        return self._uri.path
+
+    @property
+    def fragment(self):
+        return self._uri.fragment
+
+    @property
+    def params(self):
+        return self._uri.params
+
+    @property
+    def query(self):
+        return self._uri.query
+
+    def geturl(self):
+        """Return the URI in string form.
+
+        Returns
+        -------
+        url : `str`
+            String form of URI.
+        """
+        return self._uri.geturl()
+
+    def replace(self, **kwargs):
+        """Replace components in a URI with new values and return a new
+        instance.
+
+        Returns
+        -------
+        new : `ButlerURI`
+            New `ButlerURI` object with updated values.
+        """
+        return self.__class__(self._uri._replace(**kwargs))
+
+    def replaceFile(self, newfile):
+        """Replace the final component of the path with the supplied file
+        name.
+
+        Parameters
+        ----------
+        newfile : `str`
+            File name with no path component.
+
+        Notes
+        -----
+        Updates the URI in place.
+        """
+        if self.scheme:
+            # POSIX
+            pathclass = posixpath
+        else:
+            pathclass = os.path
+
+        print(f"Processing path {self.path}")
+        dir, _ = pathclass.split(self.path)
+        newpath = pathclass.join(dir, newfile)
+
+        self._uri = self._uri._replace(path=newpath)
+
+    def __str__(self):
+        return self.geturl()
+
+    @staticmethod
+    def _fixupFileUri(parsed, root=None, forceAbsolute=False):
+        """Fix up relative paths in file URI instances.
+
+        Parameters
+        ----------
+        parsed : `~urllib.parse.ParseResult`
+            The result from parsing a URI using `urllib.parse`.
+        root : `str`, optional
+            Path to use as root when converting relative to absolute.
+            If `None`, it will be the current working directory. This
+            is a local file system path, not a URI.
+        forceAbsolute : `bool`
+            If `True`, scheme-less relative URI will be converted to an
+            absolute path using a `file` scheme. If `False` scheme-less URI
+            will remain scheme-less and will not be updated to `file` or
+            absolute path. URIs with a defined scheme will not be affected
+            by this parameter.
+
+        Returns
+        -------
+        modified : `~urllib.parse.ParseResult`
+            Update result if a file URI is being handled.
+
+        Notes
+        -----
+        Relative paths are explicitly not supported by RFC8089 but `urllib`
+        does accept URIs of the form ``file:relative/path.ext``. They need
+        to be turned into absolute paths before they can be used.  This is
+        always done regardless of the ``forceAbsolute`` parameter.
+
+        Scheme-less paths are normalized.
+        """
+        if not parsed.scheme or parsed.scheme == "file":
+
+            # Replacement values for the URI
+            replacements = {}
+
+            if root is None:
+                root = os.path.abspath(os.path.curdir)
+
+            if not parsed.scheme:
+                # if there was no scheme this is a local OS file path
+                # which can support tilde expansion.
+                expandedPath = os.path.expanduser(parsed.path)
+
+                # Ensure that this is a file URI if it is already absolute
+                if os.path.isabs(expandedPath):
+                    replacements["scheme"] = "file"
+                    replacements["path"] = os2posix(os.path.normpath(expandedPath))
+                elif forceAbsolute:
+                    # This can stay in OS path form, do not change to file
+                    # scheme.
+                    replacements["path"] = os.path.normpath(os.path.join(root, expandedPath))
+                else:
+                    # No change needed for relative local path staying relative
+                    # except normalization
+                    replacements["path"] = os.path.normpath(expandedPath)
+
+                # normpath strips trailing "/" which makes it hard to keep
+                # track of directory vs file when calling replaceFile
+                # put it back.
+                if "scheme" in replacements:
+                    sep = posixpath.sep
+                else:
+                    sep = os.sep
+
+                if expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep):
+                    replacements["path"] += sep
+
+            elif parsed.scheme == "file":
+                # file URI implies POSIX path separators so split as posix,
+                # then join as os, and convert to abspath. Do not handle
+                # home directories since `file` scheme is explicitly documented
+                # to not do tilde expansion.
+                if posixpath.isabs(parsed.path):
+                    # No change needed
+                    return copy.copy(parsed)
+
+                replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
+
+            else:
+                raise RuntimeError("Unexpectedly got confused by URI scheme")
+
+            # ParseResult is a NamedTuple so _replace is standard API
+            parsed = parsed._replace(**replacements)
+
+        return parsed
+
+
 class Location:
     """Identifies a location within the `Datastore`.
 
     Parameters
     ----------
-    datastoreRootUri : `urllib.parse.ParseResult`
+    datastoreRootUri : `ButlerURI` or `str`
         Base URI for this datastore, must include an absolute path.
     path : `str`
         Relative path within datastore.  Assumed to be using the local
@@ -97,14 +292,13 @@ class Location:
     __slots__ = ("_datastoreRootUri", "_path")
 
     def __init__(self, datastoreRootUri, path):
-        if not isinstance(datastoreRootUri, urllib.parse.ParseResult):
-            raise ValueError("Datastore root must be a URI ParseResult instance")
+        if isinstance(datastoreRootUri, str):
+            datastoreRootUri = ButlerURI(datastoreRootUri)
+        elif not isinstance(datastoreRootUri, ButlerURI):
+            raise ValueError("Datastore root must be a ButlerURI instance")
 
         if not posixpath.isabs(datastoreRootUri.path):
             raise ValueError(f"Supplied URI must be an absolute path (given {datastoreRootUri}).")
-
-        if not datastoreRootUri.scheme:
-            datastoreRootUri = datastoreRootUri._replace(scheme="file")
 
         self._datastoreRootUri = datastoreRootUri
 
@@ -123,10 +317,10 @@ class Location:
 
     @property
     def uri(self):
-        """URI corresponding to fully-specified location in datastore.
+        """URI string corresponding to fully-specified location in datastore.
         """
         uriPath = os2posix(self.path)
-        return self._datastoreRootUri._replace(path=uriPath).geturl()
+        return self._datastoreRootUri.replace(path=uriPath).geturl()
 
     @property
     def path(self):
@@ -190,69 +384,10 @@ class LocationFactory:
     """
 
     def __init__(self, datastoreRoot):
-        parsed = urllib.parse.urlparse(datastoreRoot)
-        parsed = self._fixupFileUri(parsed)
-        self._datastoreRootUri = parsed
-
-    @staticmethod
-    def _fixupFileUri(parsed, root=None):
-        """Fix up relative paths in file URI instances.
-
-        Parameters
-        ----------
-        parsed : `~urllib.parse.ParseResult`
-            The result from parsing a URI using `urllib.parse`.
-        root : `str`, optional
-            Path to use as root when converting relative to absolute.
-            If `None`, it will be the current working directory.
-
-        Returns
-        -------
-        modified : `~urllib.parse.ParseResult`
-            Update result if a file URI is being handled.
-
-        Notes
-        -----
-        If a file URI is supplied with a relative path, the returned result
-        will be converted to an absolute path.  If the supplied result has
-        no scheme defined, ``file`` scheme will be assumed and the path
-        will be converted to an absolute path.
-
-        Relative paths are explicitly not supported by RFC8089 but `urllib`
-        does accept URIs of the form `file:relative/path.ext`, but they need
-        to be turned into absolute paths before they can be used.
-        """
-        if not parsed.scheme or parsed.scheme == "file":
-
-            if root is None:
-                root = os.path.abspath(os.path.curdir)
-
-            if not parsed.scheme:
-                # if there was no scheme this is a local OS file path
-                # which can support tilde expansion.
-                expandedPath = os.path.expanduser(parsed.path)
-            elif parsed.scheme == "file":
-                # file URI implies POSIX path separators so split as posix,
-                # then join as os, and convert to abspath. Do not handle
-                # home directories since `file` scheme is explicitly documented
-                # to not do tilde expansion.
-                expandedPath = posix2os(parsed.path)
-            else:
-                raise RuntimeError("Unexpectedly got confused by URI scheme")
-
-            if not os.path.isabs(expandedPath):
-                expandedPath = os.path.join(root, expandedPath)
-
-            # Recalculate the path by converting from os path to posixpath
-            uriPath = os2posix(os.path.normpath(expandedPath))
-
-            # ParseResult is a NamedTuple so _replace is standard API
-            parsed = parsed._replace(path=uriPath, scheme="file")
-
-        return parsed
+        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True)
 
     def __str__(self):
-        return f"{self.__class__.__name__}@{self._datastoreRootUri.geturl()}"
+        return f"{self.__class__.__name__}@{self._datastoreRootUri}"
 
     def fromPath(self, path):
         """Factory function to create a `Location` from a POSIX path.
