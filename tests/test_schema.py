@@ -81,8 +81,9 @@ class SchemaTestCase(unittest.TestCase):
         table = self.schema.tables[tableName]
         self.assertIsInstance(table, TableClause)
         for columnDescription in tableDescription["columns"]:
-            column = getattr(table.c, columnDescription["name"])
-            self.assertIsInstance(column, Column)
+            with self.subTest(column=columnDescription["name"]):
+                column = getattr(table.c, columnDescription["name"])
+                self.assertIsInstance(column, Column)
 
     def assertTable(self, tableName, tableDescription):
         """Check that a generated table matches its `tableDescription`.
@@ -90,7 +91,8 @@ class SchemaTestCase(unittest.TestCase):
         table = self.schema.tables[tableName]
         self.assertIsInstance(table, Table)
         for columnDescription in tableDescription["columns"]:
-            self.assertColumn(table, columnDescription["name"], columnDescription)
+            with self.subTest(column=columnDescription["name"]):
+                self.assertColumn(table, columnDescription["name"], columnDescription)
         if "foreignKeys" in tableDescription:
             self.assertForeignKeyConstraints(table, tableDescription["foreignKeys"])
 
