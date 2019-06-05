@@ -72,7 +72,7 @@ class SqlRegistry(Registry):
         registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dimensionConfig=dimensionConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = self._createSchema(schemaConfig)
+        self._schema = self._createSchema(schemaConfig.toSpec())
         self._datasetTypes = {}
         self._engine = self._createEngine()
         self._connection = self._createConnection(self._engine)
@@ -112,7 +112,7 @@ class SqlRegistry(Registry):
             trans.rollback()
             raise
 
-    def _createSchema(self, schemaConfig):
+    def _createSchema(self, spec):
         """Create and return an `lsst.daf.butler.Schema` object containing
         SQLAlchemy table definitions.
 
@@ -124,8 +124,13 @@ class SqlRegistry(Registry):
         in the database - it is called even when an existing database is used
         in order to construct the SQLAlchemy representation of the expected
         schema.
+
+        Parameters
+        ----------
+        spec : `dict` mapping `str` to `TableSpec`
+            Specification of the logical tables to be created.
         """
-        return Schema(config=schemaConfig)
+        return Schema(spec=spec)
 
     def _createEngine(self):
         """Create and return a `sqlalchemy.Engine` for this `Registry`.

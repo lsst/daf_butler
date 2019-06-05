@@ -6,9 +6,9 @@ schema:
       -
         name: dataset_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
-        autoinc: true
+        autoincrement: true
         doc: >
           A unique autoincrement field used the primary key for dataset.
       -
@@ -95,75 +95,88 @@ schema:
           calibration products.
       foreignKeys:
       -
-        src: dataset_type_name
-        tgt: dataset_type.dataset_type_name
+        table: dataset_type
+        source: dataset_type_name
+        target: dataset_type_name
       -
-        src: run_id
-        tgt: run.execution_id
+        table: run
+        source: run_id
+        target: execution_id
       -
-        src: quantum_id
-        tgt: quantum.execution_id
+        table: quantum
+        source: quantum_id
+        target: execution_id
         onDelete: SET NULL
       -
-        src: abstract_filter
-        tgt: abstract_filter.abstract_filter
+        table: abstract_filter
+        source: abstract_filter
+        target: abstract_filter
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
       -
-        src:
+        table: physical_filter
+        source:
           - instrument
           - physical_filter
-        tgt:
-          - physical_filter.instrument
-          - physical_filter.physical_filter
+        target:
+          - instrument
+          - physical_filter
       -
-        src:
+        table: detector
+        source:
           - instrument
           - detector
-        tgt:
-          - detector.instrument
-          - detector.detector
+        target:
+          - instrument
+          - detector
       -
-        src:
+        table: visit
+        source:
           - instrument
           - visit
-        tgt:
-          - visit.instrument
-          - visit.visit
+        target:
+          - instrument
+          - visit
       -
-        src:
+        table: exposure
+        source:
           - instrument
           - exposure
-        tgt:
-          - exposure.instrument
-          - exposure.exposure
+        target:
+          - instrument
+          - exposure
       -
-        src:
+        table: calibration_label
+        source:
           - instrument
           - calibration_label
-        tgt:
-          - calibration_label.instrument
-          - calibration_label.calibration_label
+        target:
+          - instrument
+          - calibration_label
       -
-        src: skymap
-        tgt: skymap.skymap
+        table: skymap
+        source: skymap
+        target: skymap
       -
-        src:
+        table: tract
+        source:
           - skymap
           - tract
-        tgt:
-          - tract.skymap
-          - tract.tract
+        target:
+          - skymap
+          - tract
       -
-        src:
+        table: patch
+        source:
           - skymap
           - tract
           - patch
-        tgt:
-          - patch.skymap
-          - patch.tract
-          - patch.patch
+        target:
+          - skymap
+          - tract
+          - patch
 
     dataset_composition:
       doc: >
@@ -173,14 +186,14 @@ schema:
       -
         name: parent_dataset_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Link to the Dataset entry for the parent/composite dataset.
       -
         name: component_dataset_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Link (with component_dataset_id) to the Dataset entry for a
@@ -194,12 +207,14 @@ schema:
           Name of this component within this composite.
       foreignKeys:
       -
-        src: parent_dataset_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: parent_dataset_id
+        target: dataset_id
         onDelete: CASCADE
       -
-        src: component_dataset_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: component_dataset_id
+        target: dataset_id
         onDelete: CASCADE
 
     dataset_type:
@@ -211,7 +226,7 @@ schema:
         name: dataset_type_name
         type: string
         length: 128
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Globally unique name for this DatasetType.
@@ -247,8 +262,9 @@ schema:
           The name of a Dimension associated with this DatasetType.
       foreignKeys:
       -
-        src: dataset_type_name
-        tgt: dataset_type.dataset_type_name
+        table: dataset_type
+        source: dataset_type_name
+        target: dataset_type_name
 
     dataset_type_metadata:
       doc: >
@@ -272,8 +288,9 @@ schema:
           entry with this DatasetType.
       foreignKeys:
       -
-        src: dataset_type_name
-        tgt: dataset_type.dataset_type_name
+        table: dataset_type
+        source: dataset_type_name
+        target: dataset_type_name
 
     dataset_collection:
       doc: >
@@ -283,7 +300,7 @@ schema:
       -
         name: dataset_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Link to a unique record in the dataset table.
@@ -299,14 +316,15 @@ schema:
         name: collection
         type: string
         length: 128
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Name of a Collection with which this Dataset is associated.
       foreignKeys:
       -
-        src: dataset_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: dataset_id
+        target: dataset_id
         onDelete: CASCADE
       unique:
       - [dataset_ref_hash, collection]
@@ -318,9 +336,9 @@ schema:
       -
         name: execution_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
-        autoinc: true
+        autoincrement: true
         doc: >
           A unique autoincrement field used as the primary key for
           Execution.
@@ -357,7 +375,7 @@ schema:
       -
         name: execution_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           A unique integer identifier for this Run, which
@@ -383,16 +401,19 @@ schema:
           the SuperTask Pipeline used for this Run (if any).
       foreignKeys:
       -
-        src: environment_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: environment_id
+        target: dataset_id
         onDelete: SET NULL
       -
-        src: pipeline_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: pipeline_id
+        target: dataset_id
         onDelete: SET NULL
       -
-        src: execution_id
-        tgt: execution.execution_id
+        table: execution
+        source: execution_id
+        target: execution_id
         onDelete: CASCADE
 
     quantum:
@@ -404,7 +425,7 @@ schema:
       -
         name: execution_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           A unique integer identifier for this Quantum,
@@ -422,12 +443,14 @@ schema:
           Link to the Run this Quantum is a part of.
       foreignKeys:
       -
-        src: run_id
-        tgt: run.execution_id
+        table: run
+        source: run_id
+        target: execution_id
         onDelete: CASCADE
       -
-        src: execution_id
-        tgt: execution.execution_id
+        table: execution
+        source: execution_id
+        target: execution_id
         onDelete: CASCADE
 
     dataset_consumers:
@@ -455,12 +478,14 @@ schema:
           (as opposed to just predicted to be used during preflight).
       foreignKeys:
       -
-        src: quantum_id
-        tgt: quantum.execution_id
+        table: quantum
+        source: quantum_id
+        target: execution_id
         onDelete: CASCADE
       -
-        src: dataset_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: dataset_id
+        target: dataset_id
         onDelete: CASCADE
 
     dataset_storage:
@@ -473,21 +498,22 @@ schema:
       -
         name: dataset_id
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Link to the dataset table.
       - name: datastore_name
         type: string
         length: 256
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Name of the Datastore this entry corresponds to.
       foreignKeys:
       -
-        src: dataset_id
-        tgt: dataset.dataset_id
+        table: dataset
+        source: dataset_id
+        target: dataset_id
 
 
     instrument:
@@ -498,7 +524,7 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         doc: >
           Globally unique string indentifier for this instrument.
       -
@@ -529,13 +555,12 @@ schema:
         name: abstract_filter
         type: string
         length: 8
-        primary_key: true
+        primaryKey: true
         doc: >
           Name of the filter.
       sql: >
         SELECT DISTINCT abstract_filter
         FROM physical_filter;
-      materialize: false
 
     physical_filter:
       doc: >
@@ -546,14 +571,14 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         doc: >
           Name of the instrument with which this filter is associated.
       -
         name: physical_filter
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         doc: >
           String name of the filter, typically a multi-letter code in a
           convention defined by the instrument (e.g. "HSC-I" or "F775W").
@@ -565,12 +590,14 @@ schema:
           Name of the abstract_filter with which this filter is associated.
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
       foreignKeys:
       -
-        src: abstract_filter
-        tgt: abstract_filter.abstract_filter
+        table: abstract_filter
+        source: abstract_filter
+        target: abstract_filter
 
     detector:
       doc: >
@@ -581,14 +608,14 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Name of the instrument with which this detector is associated.
       -
         name: detector
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           A unique (with instrument) integer identifier for the detector.
@@ -615,8 +642,9 @@ schema:
           or "GUIDE", though instruments may define additional values.
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
 
     visit:
       doc: >
@@ -626,7 +654,7 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           The instrument used to observe the exposures associated with this
@@ -634,7 +662,7 @@ schema:
       -
         name: visit
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Unique (with instrument) integer identifier for this visit.
@@ -688,15 +716,17 @@ schema:
           and decode methods.
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
       -
-        src:
+        table: physical_filter
+        source:
         - instrument
         - physical_filter
-        tgt:
-        - physical_filter.instrument
-        - physical_filter.physical_filter
+        target:
+        - instrument
+        - physical_filter
 
     exposure:
       doc: >
@@ -706,14 +736,14 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           The instrument used to observe the exposure.
       -
         name: exposure
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Unique (with instrument) integer identifier for this exposure.
@@ -757,22 +787,25 @@ schema:
         doc: Duration of the exposure with shutter closed (seconds).
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
       -
-        src:
+        table: visit
+        source:
         - instrument
         - visit
-        tgt:
-        - visit.instrument
-        - visit.visit
+        target:
+        - instrument
+        - visit
       -
-        src:
+        table: physical_filter
+        source:
         - instrument
         - physical_filter
-        tgt:
-        - physical_filter.instrument
-        - physical_filter.physical_filter
+        target:
+        - instrument
+        - physical_filter
 
     skymap:
       doc: >
@@ -783,7 +816,7 @@ schema:
         name: skymap
         type: string
         length: 64
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           A human-readable name for the skymap, used as its unique
@@ -825,14 +858,14 @@ schema:
         name: skymap
         type: string
         length: 64
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           The skymap with which this tract is associated.
       -
         name: tract
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Unique (with skymap) integer identifier for the tract.
@@ -857,8 +890,9 @@ schema:
           and decode methods.
       foreignKeys:
       -
-        src: skymap
-        tgt: skymap.skymap
+        table: skymap
+        source: skymap
+        target: skymap
 
     patch:
       doc: >
@@ -869,21 +903,21 @@ schema:
         name: skymap
         type: string
         length: 64
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           The skymap with which this patch is associated.
       -
         name: tract
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           The tract with which this patch is associated.
       -
         name: patch
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Unique (with skymap and tract) integer identifier for the patch.
@@ -912,15 +946,17 @@ schema:
           and decode methods.
       foreignKeys:
       -
-        src: skymap
-        tgt: skymap.skymap
+        table: skymap
+        source: skymap
+        target: skymap
       -
-        src:
+        table: tract
+        source:
         - skymap
         - tract
-        tgt:
-        - tract.skymap
-        - tract.tract
+        target:
+        - skymap
+        - tract
 
     calibration_label:
       doc: >
@@ -931,7 +967,7 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Name of the instrument associated with these master calibration
@@ -940,7 +976,7 @@ schema:
         name: calibration_label
         type: string
         length: 128
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: label used to identify a group of master calibration products.
       -
@@ -957,8 +993,9 @@ schema:
           May be far in the future to indicate an open interval.
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
 
     exposure_calibration_label_join:
       doc: >
@@ -970,7 +1007,7 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Name of the instrument associated with these master calibration
@@ -979,34 +1016,37 @@ schema:
         name: calibration_label
         type: string
         length: 128
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: label used to identify a group of master calibration products.
       -
         name: exposure
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: >
           Unique (with instrument) integer identifier for an exposure.
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
       -
-        src:
+        table: exposure
+        source:
         - instrument
         - exposure
-        tgt:
-        - exposure.instrument
-        - exposure.exposure
+        target:
+        - instrument
+        - exposure
       -
-        src:
+        table: calibration_label
+        source:
         - instrument
         - calibration_label
-        tgt:
-        - calibration_label.instrument
-        - calibration_label.calibration_label
+        target:
+        - instrument
+        - calibration_label
       sql: >
         SELECT DISTINCT
             exposure.instrument, exposure.exposure, calibration_label.calibration_label
@@ -1018,7 +1058,6 @@ schema:
                 AND
                 exposure.datetime_end <= calibration_label.valid_last
             );
-      materialize: false
 
     visit_calibration_label_join:
       doc: >
@@ -1051,22 +1090,25 @@ schema:
           Unique (with instrument) integer identifier for a visit.
       foreignKeys:
       -
-        src: instrument
-        tgt: instrument.instrument
+        table: instrument
+        source: instrument
+        target: instrument
       -
-        src:
+        table: visit
+        source:
         - instrument
         - visit
-        tgt:
-        - visit.instrument
-        - visit.visit
+        target:
+        - instrument
+        - visit
       -
-        src:
+        table: calibration_label
+        source:
         - instrument
         - calibration_label
-        tgt:
-        - calibration_label.instrument
-        - calibration_label.calibration_label
+        target:
+        - instrument
+        - calibration_label
       sql: >
         SELECT DISTINCT
             visit.instrument, visit.visit, calibration_label.calibration_label
@@ -1092,19 +1134,19 @@ schema:
         name: instrument
         type: string
         length: 16
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: Name of the instrument associated with the visit and detector.
       -
         name: visit
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: visit ID
       -
         name: detector
         type: int
-        primary_key: true
+        primaryKey: true
         nullable: false
         doc: detector ID
       -
@@ -1121,19 +1163,21 @@ schema:
           and decode methods.
       foreignKeys:
       -
-        src:
+        table: visit
+        source:
         - instrument
         - visit
-        tgt:
-        - visit.instrument
-        - visit.visit
+        target:
+        - instrument
+        - visit
       -
-        src:
+        table: detector
+        source:
         - instrument
         - detector
-        tgt:
-        - detector.instrument
-        - detector.detector
+        target:
+        - instrument
+        - detector
 
     visit_detector_skypix_join:
       columns:
@@ -1160,14 +1204,15 @@ schema:
         doc: ID of a skypix that overlaps the visit+detector combination.
       foreignKeys:
       -
-        src:
+        table: visit_detector_region
+        source:
           - instrument
           - visit
           - detector
-        tgt:
-          - visit_detector_region.instrument
-          - visit_detector_region.visit
-          - visit_detector_region.detector
+        target:
+          - instrument
+          - visit
+          - detector
 
     visit_skypix_join:
       columns:
@@ -1189,16 +1234,16 @@ schema:
         doc: ID of a skypix that overlaps the visit combination.
       foreignKeys:
       -
-        src:
+        table: visit
+        source:
           - instrument
           - visit
-        tgt:
-          - visit.instrument
-          - visit.visit
+        target:
+          - instrument
+          - visit
       sql: >
         SELECT DISTINCT instrument, visit, skypix
         FROM visit_detector_skypix_join;
-      materialize: false
 
     patch_skypix_join:
       columns:
@@ -1225,14 +1270,15 @@ schema:
         doc: ID of a skypix that overlaps the patch.
       foreignKeys:
       -
-        src:
+        table: patch
+        source:
           - skymap
           - tract
           - patch
-        tgt:
-          - patch.skymap
-          - patch.tract
-          - patch.patch
+        target:
+          - skymap
+          - tract
+          - patch
 
     tract_skypix_join:
       columns:
@@ -1254,16 +1300,16 @@ schema:
         doc: ID of a skypix that overlaps the tract.
       foreignKeys:
       -
-        src:
+        table: tract
+        source:
           - skymap
           - tract
-        tgt:
-          - tract.skymap
-          - tract.tract
+        target:
+          - skymap
+          - tract
       sql: >
         SELECT DISTINCT skymap, tract, skypix
         FROM patch_skypix_join;
-      materialize: false
 
     visit_detector_patch_join:
       columns:
@@ -1301,23 +1347,25 @@ schema:
         doc: patch ID
       foreignKeys:
       -
-        src:
+        table: visit_detector_region
+        source:
           - instrument
           - visit
           - detector
-        tgt:
-          - visit_detector_region.instrument
-          - visit_detector_region.visit
-          - visit_detector_region.detector
+        target:
+          - instrument
+          - visit
+          - detector
       -
-        src:
+        table: patch
+        source:
           - skymap
           - tract
           - patch
-        tgt:
-          - patch.skymap
-          - patch.tract
-          - patch.patch
+        target:
+          - skymap
+          - tract
+          - patch
       sql: >
         SELECT DISTINCT
           visit_detector_skypix_join.instrument,
@@ -1330,7 +1378,6 @@ schema:
           visit_detector_skypix_join INNER JOIN patch_skypix_join ON (
             visit_detector_skypix_join.skypix = patch_skypix_join.skypix
           );
-      materialize: false
 
     visit_patch_join:
       columns:
@@ -1363,21 +1410,23 @@ schema:
         doc: patch ID
       foreignKeys:
       -
-        src:
+        table: visit
+        source:
           - instrument
           - visit
-        tgt:
-          - visit.instrument
-          - visit.visit
+        target:
+          - instrument
+          - visit
       -
-        src:
+        table: patch
+        source:
           - skymap
           - tract
           - patch
-        tgt:
-          - patch.skymap
-          - patch.tract
-          - patch.patch
+        target:
+          - skymap
+          - tract
+          - patch
       sql: >
         SELECT DISTINCT
           visit_skypix_join.instrument,
@@ -1389,7 +1438,6 @@ schema:
           visit_skypix_join INNER JOIN patch_skypix_join ON (
             visit_skypix_join.skypix = patch_skypix_join.skypix
           );
-      materialize: false
 
     visit_detector_tract_join:
       columns:
@@ -1422,21 +1470,23 @@ schema:
         doc: tract ID
       foreignKeys:
       -
-        src:
+        table: visit_detector_region
+        source:
           - instrument
           - visit
           - detector
-        tgt:
-          - visit_detector_region.instrument
-          - visit_detector_region.visit
-          - visit_detector_region.detector
+        target:
+          - instrument
+          - visit
+          - detector
       -
-        src:
+        table: tract
+        source:
           - skymap
           - tract
-        tgt:
-          - tract.skymap
-          - tract.tract
+        target:
+          - skymap
+          - tract
       sql: >
         SELECT DISTINCT
           visit_detector_skypix_join.instrument,
@@ -1448,7 +1498,6 @@ schema:
           visit_detector_skypix_join INNER JOIN tract_skypix_join ON (
             visit_detector_skypix_join.skypix = tract_skypix_join.skypix
           );
-      materialize: false
 
     visit_tract_join:
       columns:
@@ -1476,19 +1525,21 @@ schema:
         doc: tract ID
       foreignKeys:
       -
-        src:
+        table: visit
+        source:
           - instrument
           - visit
-        tgt:
-          - visit.instrument
-          - visit.visit
+        target:
+          - instrument
+          - visit
       -
-        src:
+        table: tract
+        source:
           - skymap
           - tract
-        tgt:
-          - tract.skymap
-          - tract.tract
+        target:
+          - skymap
+          - tract
       sql: >
         SELECT DISTINCT
           visit_skypix_join.instrument,
@@ -1499,4 +1550,3 @@ schema:
           visit_skypix_join INNER JOIN tract_skypix_join ON (
             visit_skypix_join.skypix = tract_skypix_join.skypix
           );
-      materialize: false
