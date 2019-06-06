@@ -54,8 +54,8 @@ class TestCompositesConfig(unittest.TestCase):
             self.assertIsInstance(c[f".{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
 
     def testMap(self):
-        c = CompositesMap(self.configFile)
         universe = DimensionUniverse.fromConfig()
+        c = CompositesMap(self.configFile, universe=universe)
 
         # Check that a str is not supported
         with self.assertRaises(ValueError):
