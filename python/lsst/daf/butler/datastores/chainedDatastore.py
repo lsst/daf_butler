@@ -176,7 +176,7 @@ class ChainedDatastore(Datastore):
                                                " differs from number of constraints overrides"
                                                f" {len(overrides)}")
 
-            self.datastoreConstraints = [Constraints(c.get("constraints"))
+            self.datastoreConstraints = [Constraints(c.get("constraints"), universe=self.registry.dimensions)
                                          for c in overrides]
 
         else:

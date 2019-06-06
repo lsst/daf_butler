@@ -26,7 +26,7 @@ __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
 import logging
 from .config import Config
-from .configSupport import LookupKey, processLookupConfigList, normalizeLookupKeys
+from .configSupport import LookupKey, processLookupConfigList
 from .exceptions import ValidationError
 
 log = logging.getLogger(__name__)
@@ -52,18 +52,16 @@ class Constraints:
     config : `ConstraintsConfig` or `str`
         Load configuration.  If `None` then this is equivalent to having
         no restrictions.
-    universe : `DimensionUniverse`, optional
-        The set of all known dimensions. If not `None`, any look up keys
-        involving dimensions will be normalized.  Normalization only happens
-        once.
+    universe : `DimensionUniverse`
+        The set of all known dimensions, used to normalize any lookup keys
+        involving dimensions.
     """
 
     matchAllKey = LookupKey("all")
     """Configuration key associated with matching everything."""
 
-    def __init__(self, config, universe=None):
+    def __init__(self, config, *, universe):
         # Default is to accept all and reject nothing
-        self.normalized = False
         self._accept = set()
         self._reject = set()
 
@@ -71,16 +69,13 @@ class Constraints:
             self.config = ConstraintsConfig(config)
 
             if "accept" in self.config:
-                self._accept = processLookupConfigList(self.config["accept"])
+                self._accept = processLookupConfigList(self.config["accept"], universe=universe)
             if "reject" in self.config:
-                self._reject = processLookupConfigList(self.config["reject"])
+                self._reject = processLookupConfigList(self.config["reject"], universe=universe)
 
         if self.matchAllKey in self._accept and self.matchAllKey in self._reject:
             raise ConstraintsValidationError("Can not explicitly accept 'all' and reject 'all'"
                                              " in one configuration")
-
-        # Normalize all the dimensions given the supplied universe
-        self.normalizeDimensions(universe)
 
     def __str__(self):
         # Standard stringification
@@ -106,17 +101,6 @@ class Constraints:
         allowed : `bool`
             `True` if the entity is allowed.
         """
-
-        # normalize the registry if not already done and we have access
-        # to a universe
-        if not self.normalized:
-            try:
-                universe = entity.dimensions.universe
-            except AttributeError:
-                pass
-            else:
-                self.normalizeDimensions(universe)
-
         # Get the names to use for lookup
         names = set(entity._lookupNames())
 
@@ -163,38 +147,3 @@ class Constraints:
         """
         all = self._accept | self._accept
         return set(a for a in all if a.name != self.matchAllKey.name)
-
-    def normalizeDimensions(self, universe):
-        """Normalize consraint lookups that use dimensions.
-
-        Parameters
-        ----------
-        universe : `DimensionUniverse`
-            The set of all known dimensions. If `None`, returns without
-            action.
-
-        Notes
-        -----
-        Goes through all constraint lookups, and for keys that include
-        dimensions, rewrites those keys to use a verified set of
-        dimensions.
-
-        Returns without action if the keys have already been
-        normalized.
-
-        Raises
-        ------
-        ValueError
-            Raised if a key exists where a dimension is not part of
-            the ``universe``.
-        """
-        if self.normalized:
-            return
-
-        # Normalize as a dict to reuse the existing infrastructure
-        for attr in ("_accept", "_reject"):
-            temp = {k: None for k in getattr(self, attr)}
-            normalizeLookupKeys(temp, universe)
-            setattr(self, attr, set(temp))
-
-        self.normalized = True
