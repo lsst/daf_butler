@@ -158,7 +158,7 @@ class TestFileTemplates(unittest.TestCase):
         """Test reading from config file"""
         configRoot = os.path.join(TESTDIR, "config", "templates")
         config1 = FileTemplatesConfig(os.path.join(configRoot, "templates-nodefault.yaml"))
-        templates = FileTemplates(config1)
+        templates = FileTemplates(config1, universe=self.dimensions)
         ref = self.makeDatasetRef("calexp")
         tmpl = templates.getTemplate(ref)
         self.assertIsInstance(tmpl, FileTemplate)
@@ -216,30 +216,30 @@ class TestFileTemplates(unittest.TestCase):
 
         # Format config file with defaulting
         config2 = FileTemplatesConfig(os.path.join(configRoot, "templates-withdefault.yaml"))
-        templates = FileTemplates(config2)
+        templates = FileTemplates(config2, universe=self.dimensions)
         tmpl = templates.getTemplate(ref2)
         self.assertIsInstance(tmpl, FileTemplate)
 
         # Format config file with bad format string
         with self.assertRaises(FileTemplateValidationError):
-            FileTemplates(os.path.join(configRoot, "templates-bad.yaml"))
+            FileTemplates(os.path.join(configRoot, "templates-bad.yaml"), universe=self.dimensions)
 
         # Config file with no defaulting mentioned
         config3 = os.path.join(configRoot, "templates-nodefault2.yaml")
-        templates = FileTemplates(config3)
+        templates = FileTemplates(config3, universe=self.dimensions)
         with self.assertRaises(KeyError):
             templates.getTemplate(ref2)
 
         # Try again but specify a default in the constructor
         default = "{run}/{datasetType}/{physical_filter}"
-        templates = FileTemplates(config3, default=default)
+        templates = FileTemplates(config3, default=default, universe=self.dimensions)
         tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)
 
     def testValidation(self):
         configRoot = os.path.join(TESTDIR, "config", "templates")
         config1 = FileTemplatesConfig(os.path.join(configRoot, "templates-nodefault.yaml"))
-        templates = FileTemplates(config1)
+        templates = FileTemplates(config1, universe=self.dimensions)
 
         entities = {}
         entities["calexp"] = self.makeDatasetRef("calexp", storageClassName="StorageClassX",
