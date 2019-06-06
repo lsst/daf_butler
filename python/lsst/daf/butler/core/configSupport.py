@@ -27,7 +27,7 @@ __all__ = ("LookupKey", "processLookupConfigs", "normalizeLookupKeys",
 import logging
 import re
 from collections.abc import Mapping
-from .dimensions import DimensionNameSet, DimensionGraph
+from .dimensions import DimensionGraph, conformSet
 
 log = logging.getLogger(__name__)
 
@@ -51,9 +51,13 @@ class LookupKey:
         if ``name`` is also specified.
     dataId : `dict`, optional
         Keys and values from a dataId that should control lookups.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to expand and validate ``name`` or
+        ``dimensions``.  Required if the key represents dimensions and a
+        full `DimensionGraph` is not provided.
     """
 
-    def __init__(self, name=None, dimensions=None, dataId=None):
+    def __init__(self, name=None, dimensions=None, dataId=None, *, universe=None):
         if name is None and dimensions is None:
             raise ValueError("At least one of name or dimensions must be given")
 
@@ -72,11 +76,20 @@ class LookupKey:
                 # If we are given a single dimension we use the "+" to
                 # indicate this but have to filter out the empty value
                 dimensions = [n for n in name.split("+") if n]
-                self._dimensions = DimensionNameSet(dimensions)
+                if universe is None:
+                    self._dimensions = conformSet(dimensions)
+                else:
+                    self._dimensions = universe.extract(dimensions)
             else:
                 self._name = name
         else:
-            self._dimensions = dimensions
+            if not isinstance(dimensions, DimensionGraph):
+                if universe is None:
+                    self._dimensions = conformSet(dimensions)
+                else:
+                    self._dimensions = universe.extract(dimensions)
+            else:
+                self._dimensions = dimensions
 
         # The dataId is converted to a frozenset of key/value
         # tuples so that it is not mutable
@@ -220,7 +233,7 @@ def normalizeLookupKeys(toUpdate, universe):
             toUpdate[newKey] = oldValue
 
 
-def processLookupConfigs(config):
+def processLookupConfigs(config, *, universe=None):
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
@@ -230,6 +243,9 @@ def processLookupConfigs(config):
         A `Config` representing a configuration mapping keys to values where
         the keys can be dataset type names, storage class names, dimensions
         or dataId components.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to expand and validate any used
+        in lookup keys.
 
     Returns
     -------
@@ -279,18 +295,18 @@ def processLookupConfigs(config):
                 dataIdKey = kv.group(1)
                 dataIdValue = kv.group(2)
                 for subKey, subStr in value.items():
-                    lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
+                    lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue}, universe=universe)
                     contents[lookup] = subStr
             else:
                 raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
-            lookup = LookupKey(name=name)
+            lookup = LookupKey(name=name, universe=universe)
             contents[lookup] = value
 
     return contents
 
 
-def processLookupConfigList(config):
+def processLookupConfigList(config, *, universe=None):
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
@@ -302,6 +318,9 @@ def processLookupConfigList(config):
         or dataId components.  DataId components are represented as entries
         in the `list` of `dicts` with a single key with a value of a `list`
         of new keys.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to expand and validate any used
+        in lookup keys.
 
     Returns
     -------
@@ -325,11 +344,11 @@ def processLookupConfigList(config):
                     dataIdKey = kv.group(1)
                     dataIdValue = kv.group(2)
                     for subKey in subKeys:
-                        lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
+                        lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue}, universe=universe)
                         contents.add(lookup)
                 else:
                     raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
-            contents.add(LookupKey(name=name))
+            contents.add(LookupKey(name=name, universe=universe))
 
     return contents
