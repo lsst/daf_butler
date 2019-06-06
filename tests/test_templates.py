@@ -37,15 +37,12 @@ class TestFileTemplates(unittest.TestCase):
         """Make a simple DatasetRef"""
         if dataId is None:
             dataId = self.dataId
-        if datasetTypeName not in self.datasetTypes:
-            self.datasetTypes[datasetTypeName] = DatasetType(datasetTypeName, list(dataId.keys()),
-                                                             StorageClass(storageClassName))
-        datasetType = self.datasetTypes[datasetTypeName]
+        datasetType = DatasetType(datasetTypeName, dataId.keys(),
+                                  StorageClass(storageClassName))
         return DatasetRef(datasetType, dataId, run=Run(id=2, collection="run2"))
 
     def setUp(self):
         self.dataId = {"visit": 52, "filter": "U"}
-        self.datasetTypes = {}
 
     def assertTemplate(self, template, answer, ref):
         fileTmpl = FileTemplate(template)
