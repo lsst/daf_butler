@@ -60,8 +60,8 @@ class RegistryTests(metaclass=ABCMeta):
         datasetTypeName = "test"
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = ("instrument", "visit")
-        differentDimensions = ("instrument", "patch")
+        dimensions = registry.dimensions.extract(("instrument", "visit"))
+        differentDimensions = registry.dimensions.extract(("instrument", "patch"))
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         # Inserting for the first time should return True
         self.assertTrue(registry.registerDatasetType(inDatasetType))
@@ -79,7 +79,7 @@ class RegistryTests(metaclass=ABCMeta):
         datasetTypeName = "testNoneTemplate"
         storageClass = StorageClass("testDatasetType2")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = ("instrument", "visit")
+        dimensions = registry.dimensions.extract(("instrument", "visit"))
         inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         registry.registerDatasetType(inDatasetType)
         outDatasetType2 = registry.getDatasetType(datasetTypeName)
@@ -93,7 +93,8 @@ class RegistryTests(metaclass=ABCMeta):
         run = registry.makeRun(collection="test")
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="testtype", dimensions=("instrument",), storageClass=storageClass)
+        datasetType = DatasetType(name="testtype", dimensions=registry.dimensions.extract(("instrument",)),
+                                  storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         dataId = {"instrument": "DummyCam"}
         if not registry.limited:
@@ -115,11 +116,14 @@ class RegistryTests(metaclass=ABCMeta):
                                           components={"child1": childStorageClass,
                                                       "child2": childStorageClass})
         registry.storageClasses.registerStorageClass(parentStorageClass)
-        parentDatasetType = DatasetType(name="parent", dimensions=("instrument",),
+        parentDatasetType = DatasetType(name="parent",
+                                        dimensions=registry.dimensions.extract(("instrument",)),
                                         storageClass=parentStorageClass)
-        childDatasetType1 = DatasetType(name="parent.child1", dimensions=("instrument",),
+        childDatasetType1 = DatasetType(name="parent.child1",
+                                        dimensions=registry.dimensions.extract(("instrument",)),
                                         storageClass=childStorageClass)
-        childDatasetType2 = DatasetType(name="parent.child2", dimensions=("instrument",),
+        childDatasetType2 = DatasetType(name="parent.child2",
+                                        dimensions=registry.dimensions.extract(("instrument",)),
                                         storageClass=childStorageClass)
         registry.registerDatasetType(parentDatasetType)
         registry.registerDatasetType(childDatasetType1)
@@ -196,10 +200,12 @@ class RegistryTests(metaclass=ABCMeta):
         storageClass = StorageClass("testQuantum")
         registry.storageClasses.registerStorageClass(storageClass)
         # Make two predicted inputs
-        datasetType1 = DatasetType(name="dst1", dimensions=("instrument",), storageClass=storageClass)
+        datasetType1 = DatasetType(name="dst1", dimensions=registry.dimensions.extract(("instrument",)),
+                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType1)
         ref1 = registry.addDataset(datasetType1, dataId={"instrument": "DummyCam"}, run=run)
-        datasetType2 = DatasetType(name="dst2", dimensions=("instrument",), storageClass=storageClass)
+        datasetType2 = DatasetType(name="dst2", dimensions=registry.dimensions.extract(("instrument",)),
+                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType2)
         ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
         # Create and add a Quantum
@@ -228,8 +234,10 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testStorageInfo")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="test", dimensions=("instrument",), storageClass=storageClass)
-        datasetType2 = DatasetType(name="test2", dimensions=("instrument",), storageClass=storageClass)
+        datasetType = DatasetType(name="test", dimensions=registry.dimensions.extract(("instrument",)),
+                                  storageClass=storageClass)
+        datasetType2 = DatasetType(name="test2", dimensions=registry.dimensions.extract(("instrument",)),
+                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
         if not registry.limited:
@@ -270,7 +278,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testFind")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="dummytype", dimensions=("instrument", "visit"),
+        datasetType = DatasetType(name="dummytype",
+                                  dimensions=registry.dimensions.extract(("instrument", "visit")),
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         if not registry.limited:
@@ -319,7 +328,8 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testCollections")
         registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="dummytype", dimensions=("instrument", "visit"),
+        datasetType = DatasetType(name="dummytype",
+                                  dimensions=registry.dimensions.extract(("instrument", "visit")),
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         if not registry.limited:
@@ -367,7 +377,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testAssociate")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = ("instrument", "visit")
+        dimensions = registry.dimensions.extract(("instrument", "visit"))
         datasetType1 = DatasetType(name="dummytype", dimensions=dimensions, storageClass=storageClass)
         registry.registerDatasetType(datasetType1)
         datasetType2 = DatasetType(name="smartytype", dimensions=dimensions, storageClass=storageClass)
@@ -475,7 +485,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = ("instrument", )
+        dimensions = registry.dimensions.extract(("instrument",))
         dataId = {"instrument": "DummyCam"}
         datasetTypeA = DatasetType(name="A",
                                    dimensions=dimensions,

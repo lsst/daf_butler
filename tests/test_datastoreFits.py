@@ -82,8 +82,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         datastore = self.makeDatastore()
 
         # Put
-        dimensions = frozenset(("visit", "filter"))
-        dataId = {"visit": 123456, "filter": "blue"}
+        dimensions = self.registry.dimensions.extract(("visit", "physical_filter"))
+        dataId = {"visit": 123456, "physical_filter": "blue", "instrument": "dummy"}
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
 
         ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
@@ -114,8 +114,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
         # Put
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
-        dimensions = frozenset(("visit", "filter"))
-        dataId = {"visit": 1234567, "filter": "blue"}
+        dimensions = self.registry.dimensions.extract(("visit", "physical_filter"))
+        dataId = {"visit": 1234567, "physical_filter": "blue", "instrument": "dummy"}
 
         ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
         datastore.put(catalog, ref)
@@ -142,8 +142,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
     def testTransfer(self):
         catalog = self.makeExampleCatalog()
-        dimensions = frozenset(("visit", "filter"))
-        dataId = {"visit": 12345, "filter": "red"}
+        dimensions = self.registry.dimensions.extract(("visit", "physical_filter"))
+        dataId = {"visit": 12345, "physical_filter": "red", "instrument": "dummy"}
 
         storageClass = self.storageClassFactory.getStorageClass("SourceCatalog")
         ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
@@ -162,8 +162,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         exposure = lsst.afw.image.ExposureF(example)
         datastore = self.makeDatastore()
         # Put
-        dimensions = frozenset(("visit", "filter"))
-        dataId = {"visit": 231, "filter": "Fc"}
+        dimensions = self.registry.dimensions.extract(("visit", "physical_filter"))
+        dataId = {"visit": 231, "physical_filter": "Fc", "instrument": "dummy"}
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureF")
         ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
 
@@ -198,8 +198,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         exposure = lsst.afw.image.ExposureF(example)
         datastore = self.makeDatastore()
         # Put
-        dimensions = frozenset(("visit", "filter"))
-        dataId = {"visit": 23, "filter": "F"}
+        dimensions = self.registry.dimensions.extract(("visit", "physical_filter"))
+        dataId = {"visit": 23, "physical_filter": "F", "instrument": "dummy"}
         storageClass = datastore.storageClassFactory.getStorageClass("ExposureCompositeF")
         ref = self.makeDatasetRef("calexp", dimensions, storageClass, dataId)
 

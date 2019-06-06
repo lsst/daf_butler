@@ -24,7 +24,7 @@
 import os.path
 import unittest
 
-from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, \
+from lsst.daf.butler import DatasetType, DatasetRef, FileTemplates, DimensionUniverse, \
     FileTemplate, FileTemplatesConfig, StorageClass, Run, FileTemplateValidationError
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -37,12 +37,13 @@ class TestFileTemplates(unittest.TestCase):
         """Make a simple DatasetRef"""
         if dataId is None:
             dataId = self.dataId
-        datasetType = DatasetType(datasetTypeName, dataId.keys(),
+        datasetType = DatasetType(datasetTypeName, self.dimensions.extract(dataId.keys()),
                                   StorageClass(storageClassName))
         return DatasetRef(datasetType, dataId, run=Run(id=2, collection="run2"))
 
     def setUp(self):
-        self.dataId = {"visit": 52, "filter": "U"}
+        self.dimensions = DimensionUniverse.fromConfig()
+        self.dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "U"}
 
     def assertTemplate(self, template, answer, ref):
         fileTmpl = FileTemplate(template)
@@ -50,11 +51,11 @@ class TestFileTemplates(unittest.TestCase):
         self.assertEqual(path, answer)
 
     def testBasic(self):
-        tmplstr = "{run:02d}/{datasetType}/{visit:05d}/{filter}"
+        tmplstr = "{run:02d}/{datasetType}/{visit:05d}/{physical_filter}"
         self.assertTemplate(tmplstr,
                             "02/calexp/00052/U",
                             self.makeDatasetRef("calexp"))
-        tmplstr = "{collection}/{datasetType}/{visit:05d}/{filter}-trail"
+        tmplstr = "{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail"
         self.assertTemplate(tmplstr,
                             "run2/calexp/00052/U-trail",
                             self.makeDatasetRef("calexp"))
@@ -69,7 +70,7 @@ class TestFileTemplates(unittest.TestCase):
             FileTemplate("{run}_{datasetType}")
 
     def testRunOrCollectionNeeded(self):
-        tmplstr = "{datasetType}/{visit:05d}/{filter}"
+        tmplstr = "{datasetType}/{visit:05d}/{physical_filter}"
         with self.assertRaises(FileTemplateValidationError):
             self.assertTemplate(tmplstr,
                                 "02/calexp/00052/U",
@@ -78,27 +79,27 @@ class TestFileTemplates(unittest.TestCase):
     def testOptional(self):
         """Optional units in templates."""
         ref = self.makeDatasetRef("calexp")
-        tmplstr = "{run:02d}/{datasetType}/v{visit:05d}_f{filter:?}"
+        tmplstr = "{run:02d}/{datasetType}/v{visit:05d}_f{physical_filter:?}"
         self.assertTemplate(tmplstr, "02/calexp/v00052_fU",
                             self.makeDatasetRef("calexp"))
 
-        du = {"visit": 48, "tract": 265}
+        du = {"visit": 48, "tract": 265, "skymap": "big", "instrument": "dummy"}
         self.assertTemplate(tmplstr, "02/calexpT/v00048",
                             self.makeDatasetRef("calexpT", du))
 
         # Ensure that this returns a relative path even if the first field
         # is optional
-        tmplstr = "{run:02d}/{tract:?}/{visit:?}/f{filter}"
+        tmplstr = "{run:02d}/{tract:?}/{visit:?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/52/fU", ref)
 
         # Ensure that // from optionals are converted to singles
-        tmplstr = "{run:02d}/{datasetType}/{patch:?}/{tract:?}/f{filter}"
+        tmplstr = "{run:02d}/{datasetType}/{patch:?}/{tract:?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/calexp/fU", ref)
 
         # Optionals with some text between fields
-        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{tract:?}/f{filter}"
+        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{tract:?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/calexp/p/fU", ref)
-        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{visit:04d?}/f{filter}"
+        tmplstr = "{run:02d}/{datasetType}/p{patch:?}_t{visit:04d?}/f{physical_filter}"
         self.assertTemplate(tmplstr, "02/calexp/p_t0052/fU", ref)
 
     def testComponent(self):
@@ -125,8 +126,8 @@ class TestFileTemplates(unittest.TestCase):
     def testFields(self):
         # Template, mandatory fields, optional non-special fields,
         # special fields, optional special fields
-        testData = (("{collection}/{datasetType}/{visit:05d}/{filter}-trail",
-                     set(["visit", "filter"]),
+        testData = (("{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail",
+                     set(["visit", "physical_filter"]),
                      set(),
                      set(["collection", "datasetType"]),
                      set()),
@@ -135,8 +136,8 @@ class TestFileTemplates(unittest.TestCase):
                      set(),
                      set(["collection"]),
                      set(["component"]),),
-                    ("{run}/{component:?}_{visit:?}_{filter}_{instrument}_{datasetType}",
-                     set(["filter", "instrument"]),
+                    ("{run}/{component:?}_{visit:?}_{physical_filter}_{instrument}_{datasetType}",
+                     set(["physical_filter", "instrument"]),
                      set(["visit"]),
                      set(["run", "datasetType"]),
                      set(["component"]),),
@@ -230,7 +231,7 @@ class TestFileTemplates(unittest.TestCase):
             templates.getTemplate(ref2)
 
         # Try again but specify a default in the constructor
-        default = "{run}/{datasetType}/{filter}"
+        default = "{run}/{datasetType}/{physical_filter}"
         templates = FileTemplates(config3, default=default)
         tmpl = templates.getTemplate(ref2)
         self.assertEqual(tmpl.template, default)
@@ -242,7 +243,8 @@ class TestFileTemplates(unittest.TestCase):
 
         entities = {}
         entities["calexp"] = self.makeDatasetRef("calexp", storageClassName="StorageClassX",
-                                                 dataId={"physical_filter": "i", "visit": 52})
+                                                 dataId={"instrument": "dummy", "physical_filter": "i",
+                                                         "visit": 52})
 
         with self.assertLogs(level="WARNING") as cm:
             templates.validateTemplates(entities.values(), logFailures=True)
@@ -250,13 +252,14 @@ class TestFileTemplates(unittest.TestCase):
         self.assertIn("StorageClassX", cm.output[0])
 
         entities["pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
-                                              dataId={"physical_filter": "i"})
+                                              dataId={"instrument": "dummy", "physical_filter": "i"})
         entities["StorageClassX"] = self.makeDatasetRef("storageClass",
                                                         storageClassName="StorageClassX",
-                                                        dataId={"visit": 2})
+                                                        dataId={"instrument": "dummy", "visit": 2})
         entities["calexp.wcs"] = self.makeDatasetRef("calexp.wcs",
                                                      storageClassName="StorageClassX",
-                                                     dataId={"physical_filter": "i", "visit": 23})
+                                                     dataId={"instrument": "dummy",
+                                                             "physical_filter": "i", "visit": 23})
 
         entities["instrument+physical_filter"] = self.makeDatasetRef("filter+inst",
                                                                      storageClassName="StorageClassX",

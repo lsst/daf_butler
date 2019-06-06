@@ -23,7 +23,7 @@
 
 import unittest
 
-from lsst.daf.butler import Constraints, ConstraintsConfig, StorageClass, ValidationError
+from lsst.daf.butler import Constraints, ConstraintsConfig, StorageClass, ValidationError, DimensionUniverse
 from datasetsHelper import DatasetTestHelper
 
 
@@ -33,12 +33,13 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.id = 0
 
         # Create DatasetRefs to test against constraints model
-        dimensions = frozenset(("visit", "physical_filter", "instrument"))
+        self.universe = DimensionUniverse.fromConfig()
+        dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         self.calexpA = self.makeDatasetRef("calexp", dimensions, sc, {"instrument": "A",
                                                                       "physical_filter": "u"})
 
-        dimensions = frozenset(("visit", "calibration_label", "instrument"))
+        dimensions = self.universe.extract(("visit", "calibration_label", "instrument"))
         self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A",
                                                                 "visit": 1})
         self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B",

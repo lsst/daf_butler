@@ -21,6 +21,8 @@
 
 from contextlib import contextmanager
 
+from lsst.daf.butler import DimensionUniverse
+
 
 class DummyRegistry:
     """Dummy Registry, for Datastore test purposes.
@@ -31,7 +33,7 @@ class DummyRegistry:
     def __init__(self):
         self._counter = 0
         self._entries = {}
-        self.dimensions = None
+        self.dimensions = DimensionUniverse.fromConfig()
 
     def addDatasetLocation(self, ref, datastoreName):
         # Only set ID if ID is 0 or None

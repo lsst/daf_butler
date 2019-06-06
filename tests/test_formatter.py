@@ -62,7 +62,8 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         storageClassName = "TestClass"
         sc = StorageClass(storageClassName, dict, None)
 
-        datasetType = DatasetType("calexp", {}, sc)
+        universe = DimensionUniverse.fromConfig()
+        datasetType = DatasetType("calexp", universe.extract([]), sc)
 
         # Store using an instance
         self.factory.registerFormatter(sc, formatterTypeName)
@@ -92,7 +93,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Create a DatasetRef with and without instrument matching the
         # one in the config file.
-        dimensions = frozenset(("visit", "physical_filter", "instrument"))
+        dimensions = universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
                                                                 "physical_filter": "v"})
@@ -114,7 +115,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using StorageClass
-        dimensionsNoV = frozenset(("physical_filter", "instrument"))
+        dimensionsNoV = universe.extract(("physical_filter", "instrument"))
         refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
                                                                             "physical_filter": "v"})
         refPvixNotHscDims_fmt = self.factory.getFormatter(refPvixNotHscDims)
