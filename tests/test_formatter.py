@@ -26,7 +26,7 @@ import os.path
 import unittest
 
 from datasetsHelper import DatasetTestHelper
-from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType, Config
+from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType, Config, DimensionUniverse
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -89,7 +89,8 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testRegistryConfig(self):
         configFile = os.path.join(TESTDIR, "config", "basic", "posixDatastore.yaml")
         config = Config(configFile)
-        self.factory.registerFormatters(config["datastore", "formatters"])
+        universe = DimensionUniverse.fromConfig()
+        self.factory.registerFormatters(config["datastore", "formatters"], universe=universe)
 
         # Create a DatasetRef with and without instrument matching the
         # one in the config file.
