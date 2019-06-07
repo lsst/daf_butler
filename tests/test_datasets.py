@@ -61,6 +61,29 @@ class DatasetTypeTestCase(unittest.TestCase):
         self.assertEqual(datasetType.storageClass, storageClass)
         self.assertEqual(datasetType.dimensions.names, dimensions)
 
+    def testNameValidation(self):
+        """Test that dataset type names only contain certain characters
+        in certain positions.
+        """
+        dimensions = self.universe.extract(("instrument", "visit"))
+        storageClass = StorageClass("test_StructuredData")
+        goodNames = ("a", "A", "z1", "Z1", "a_1B", "A_1b")
+        badNames = ("1", "_", "a%b", "B+Z", "T[0]")
+        for name in goodNames:
+            self.assertEqual(DatasetType(name, dimensions, storageClass).name, name)
+            for suffix in goodNames:
+                full = f"{name}.{suffix}"
+                self.assertEqual(DatasetType(full, dimensions, storageClass).name, full)
+            for suffix in badNames:
+                full = f"{name}.{suffix}"
+                with self.subTest(full=full):
+                    with self.assertRaises(ValueError):
+                        DatasetType(full, dimensions, storageClass)
+        for name in badNames:
+            with self.subTest(name=name):
+                with self.assertRaises(ValueError):
+                    DatasetType(name, dimensions, storageClass)
+
     def testEquality(self):
         storageA = StorageClass("test_a")
         storageB = StorageClass("test_b")

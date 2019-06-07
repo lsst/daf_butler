@@ -261,14 +261,14 @@ class TestFileTemplates(unittest.TestCase):
                                                      dataId={"instrument": "dummy",
                                                              "physical_filter": "i", "visit": 23})
 
-        entities["instrument+physical_filter"] = self.makeDatasetRef("filter+inst",
+        entities["instrument+physical_filter"] = self.makeDatasetRef("filter_inst",
                                                                      storageClassName="StorageClassX",
                                                                      dataId={"physical_filter": "i",
                                                                              "instrument": "SCUBA"})
         entities["hsc+pvi"] = self.makeDatasetRef("pvi", storageClassName="StorageClassX",
                                                   dataId={"physical_filter": "i", "instrument": "HSC"})
 
-        entities["hsc+instrument+physical_filter"] = self.makeDatasetRef("filter+inst",
+        entities["hsc+instrument+physical_filter"] = self.makeDatasetRef("filter_inst",
                                                                          storageClassName="StorageClassX",
                                                                          dataId={"physical_filter": "i",
                                                                                  "instrument": "HSC"})

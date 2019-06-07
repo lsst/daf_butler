@@ -23,6 +23,7 @@ __all__ = ("DatasetType", "DatasetRef")
 
 from copy import deepcopy
 import hashlib
+import re
 
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
@@ -52,7 +53,11 @@ class DatasetType:
     ----------
     name : `str`
         A string name for the Dataset; must correspond to the same
-        `DatasetType` across all Registries.
+        `DatasetType` across all Registries.  Names must start with an
+        upper or lowercase letter, and may contain only letters, numbers,
+        and underscores.  Component dataset types should contain a single
+        period separating the base dataset type name from the component name
+        (and may be recursive).
     dimensions : `DimensionGraph` or iterable of `str`
         Dimensions used to label and relate instances of this `DatasetType`,
         or names thereof.
@@ -66,6 +71,8 @@ class DatasetType:
     """
 
     __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName")
+
+    VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
     @staticmethod
     def nameWithComponent(datasetTypeName, componentName):
@@ -88,6 +95,8 @@ class DatasetType:
         return "{}.{}".format(datasetTypeName, componentName)
 
     def __init__(self, name, dimensions, storageClass, *, universe=None):
+        if self.VALID_NAME_REGEX.match(name) is None:
+            raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
         if not isinstance(dimensions, DimensionGraph):
             if universe is None:
