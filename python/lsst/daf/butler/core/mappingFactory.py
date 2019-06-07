@@ -22,7 +22,7 @@
 __all__ = ("MappingFactory", )
 
 from .utils import getInstanceOf
-from .configSupport import LookupKey, normalizeLookupKeys
+from .configSupport import LookupKey
 
 
 class MappingFactory:
@@ -44,7 +44,6 @@ class MappingFactory:
     """
 
     def __init__(self, refType):
-        self.normalized = False
         self._registry = {}
         self.refType = refType
 
@@ -64,37 +63,6 @@ class MappingFactory:
         """
         key = self._getNameKey(key)
         return key in self._registry
-
-    def normalizeRegistryDimensions(self, universe):
-        """Normalize dimensions used in registry keys to the supplied universe.
-
-        Parameters
-        ----------
-        universe : `DimensionUniverse`
-            The set of all known dimensions. If `None`, returns without
-            action.
-
-        Notes
-        -----
-        Goes through all registered templates, and for keys that include
-        dimensions, rewrites those keys to use a verified set of
-        dimensions.
-
-        Returns without action if the template keys have already been
-        normalized.
-
-        Raises
-        ------
-        ValueError
-            Raised if a key exists where a dimension is not part of the
-            ``universe``.
-        """
-        if self.normalized:
-            return
-
-        normalizeLookupKeys(self._registry, universe)
-
-        self.normalized = True
 
     def getLookupKeys(self):
         """Retrieve the look up keys for all the registry entries.
