@@ -25,14 +25,17 @@ import os
 import os.path
 import urllib
 import posixpath
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 import copy
 
 # Determine if the path separator for the OS looks like POSIX
 IS_POSIX = os.sep == posixpath.sep
 
+# Root path for this operating system
+OS_ROOT_PATH = Path().resolve().root
 
-def os2posix(path):
+
+def os2posix(ospath):
     """Convert a local path description to a POSIX path description.
 
     Parameters
@@ -46,23 +49,25 @@ def os2posix(path):
         Path using POSIX path separator
     """
     if IS_POSIX:
-        return path
+        return ospath
 
-    # Split on OS path separator but have to restore root directory
-    # Untested on Windows
-    ospaths = path.split(os.sep)
-    if ospaths[0] == "":
-        ospaths[0] = Path(path).root
+    posix = PurePath(ospath).as_posix()
 
-    return posixpath.join(*ospaths)
+    # PurePath strips trailing "/" from paths such that you can no
+    # longer tell if a path is meant to be referring to a directory
+    # Try to fix this.
+    if ospath.endswith(os.sep) and not posix.endswith(posixpath.sep):
+        posix += posixpath.sep
+
+    return posix
 
 
-def posix2os(path):
+def posix2os(posix):
     """Convert a POSIX path description to a local path description.
 
     Parameters
     ----------
-    path : `str`
+    posix : `str`
         Path using the POSIX path separator.
 
     Returns
@@ -71,13 +76,21 @@ def posix2os(path):
         Path using OS path separator
     """
     if IS_POSIX:
-        return path
+        return posix
 
-    # Have to restore the root directory after splitting
-    posixpaths = path.split(posixpath.sep)
-    if posixpaths[0] == "":
-        posixpaths[0] = posixpath.sep
-    return os.path.join(*posixpaths)
+    posixPath = PurePosixPath(posix)
+    paths = list(posixPath.parts)
+
+    # Have to convert the root directory after splitting
+    if paths[0] == posixPath.root:
+        paths[0] = OS_ROOT_PATH
+
+    # Trailing "/" is stripped so we need to add back an empty path
+    # for consistency
+    if posix.endswith(posixpath.sep):
+        paths.append("")
+
+    return os.path.join(*paths)
 
 
 class ButlerURI:
@@ -272,6 +285,10 @@ class ButlerURI:
 
                 replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
 
+                # normpath strips trailing "/" so put it back if necessary
+                if parsed.path.endswith(posixpath.sep) and not replacements["path"].endswith(posixpath.sep):
+                    replacements["path"] += posixpath.sep
+
             else:
                 raise RuntimeError("Unexpectedly got confused by URI scheme")
 
@@ -335,10 +352,13 @@ class Location:
         non-path components of the root URI.  If a file URI scheme is being
         used the path will be returned with the local OS path separator.
         """
-        if self._datastoreRootUri.scheme != "file":
-            return posixpath.join(self._datastoreRootUri.path, self.pathInStore)
-        else:
+        if not self._datastoreRootUri.scheme:
+            # Entirely local file system
+            return os.path.normpath(os.path.join(self._datastoreRootUri.path, self.pathInStore))
+        elif self._datastoreRootUri.scheme == "file":
             return os.path.normpath(os.path.join(posix2os(self._datastoreRootUri.path), self.pathInStore))
+        else:
+            return posixpath.join(self._datastoreRootUri.path, self.pathInStore)
 
     @property
     def pathInStore(self):

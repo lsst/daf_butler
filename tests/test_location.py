@@ -24,6 +24,7 @@ import os.path
 import posixpath
 
 from lsst.daf.butler import LocationFactory, ButlerURI
+from lsst.daf.butler.core.location import os2posix, posix2os
 
 
 class LocationTestCase(unittest.TestCase):
@@ -38,11 +39,14 @@ class LocationTestCase(unittest.TestCase):
         uriStrings = (
             # Test string, forceAbsolute, scheme, netloc, path
             # These are being tested with forceAbsolute=True
-            ("file:///rootDir/relative/file.ext", True, "file", "", "/rootDir/relative/file.ext"),
-            ("/rootDir/relative/file.ext", True, "file", "", "/rootDir/relative/file.ext"),
-            ("/rootDir/relative/file.ext", False, "file", "", "/rootDir/relative/file.ext"),
+            ("file:///rootDir/absolute/file.ext", True, "file", "", "/rootDir/absolute/file.ext"),
+            ("/rootDir/absolute/file.ext", True, "file", "", "/rootDir/absolute/file.ext"),
+            ("/rootDir/absolute/file.ext", False, "file", "", "/rootDir/absolute/file.ext"),
+            ("/rootDir/absolute/", True, "file", "", "/rootDir/absolute/"),
             ("file:relative/file.ext", True, "file", "", posixpath.join(testRoot, "relative/file.ext")),
+            ("file:relative/directory/", True, "file", "", posixpath.join(testRoot, "relative/directory/")),
             ("file://relative/file.ext", True, "file", "relative", "/file.ext"),
+            ("file:///absolute/directory/", True, "file", "", "/absolute/directory/"),
             ("relative/file.ext", True, "", "", os.path.join(testRoot, "relative/file.ext")),
             ("relative/file.ext", False, "", "", "relative/file.ext"),
             ("s3://bucketname/rootDir/relative/file.ext", True, "s3", "bucketname",
@@ -120,6 +124,13 @@ class LocationTestCase(unittest.TestCase):
         self.assertTrue(loc1.uri.endswith("file.ext"))
         loc1.updateExtension("fits")
         self.assertTrue(loc1.uri.endswith("file.fits"))
+
+    def testPosix2OS(self):
+        """Test round tripping of the posix to os.path conversion helpers."""
+        testPaths = ("/a/b/c.e", "a/b", "a/b/", "/a/b", "/a/b/", "a/b/c.e")
+        for p in testPaths:
+            with self.subTest(path=p):
+                self.assertEqual(os2posix(posix2os(p)), p)
 
 
 if __name__ == "__main__":
