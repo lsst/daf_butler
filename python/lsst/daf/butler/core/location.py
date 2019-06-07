@@ -28,10 +28,8 @@ import posixpath
 from pathlib import Path
 import copy
 
-if os.sep == posixpath.sep:
-    IS_POSIX = True
-else:
-    IS_POSIX = False
+# Determine if the path separator for the OS looks like POSIX
+IS_POSIX = os.sep == posixpath.sep
 
 
 def os2posix(path):
@@ -86,7 +84,7 @@ class ButlerURI:
     """Convenience wrapper around URI parsers.
 
     Provides access to URI components and can convert file
-    paths into absolute path URIs. Schemeless URIs are treated as if
+    paths into absolute path URIs. Scheme-less URIs are treated as if
     they are local file system paths and are converted to absolute URIs.
 
     Parameters
@@ -95,13 +93,13 @@ class ButlerURI:
         URI in string form.  Can be scheme-less if referring to a local
         filesystem path.
     root : `str`, optional
-        When fixing up a relative path in a `file` scheme or if scheme-less,
+        When fixing up a relative path in a ``file`` scheme or if scheme-less,
         use this as the root. Must be absolute.  If `None` the current
         working directory will be used.
-    forceAbsolute : `bool`
+    forceAbsolute : `bool`, optional
         If `True`, scheme-less relative URI will be converted to an absolute
-        path using a `file` scheme. If `False` scheme-less URI will remain
-        scheme-less and will not be updated to `file` or absolute path.
+        path using a ``file`` scheme. If `False` scheme-less URI will remain
+        scheme-less and will not be updated to ``file`` or absolute path.
     """
 
     def __init__(self, uri, root=None, forceAbsolute=True):
@@ -109,32 +107,40 @@ class ButlerURI:
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
             parsed = copy.copy(uri)
+        else:
+            raise ValueError("Supplied URI must be either string or ParseResult")
 
         parsed = self._fixupFileUri(parsed, root=root, forceAbsolute=forceAbsolute)
         self._uri = parsed
 
     @property
     def scheme(self):
+        """The URI scheme (``://`` is not part of the scheme)."""
         return self._uri.scheme
 
     @property
     def netloc(self):
+        """The URI network location."""
         return self._uri.netloc
 
     @property
     def path(self):
+        """The path component of the URI."""
         return self._uri.path
 
     @property
     def fragment(self):
+        """The fragment component of the URI."""
         return self._uri.fragment
 
     @property
     def params(self):
+        """Any parameters included in the URI."""
         return self._uri.params
 
     @property
     def query(self):
+        """Any query strings included in the URI."""
         return self._uri.query
 
     def geturl(self):
@@ -158,9 +164,9 @@ class ButlerURI:
         """
         return self.__class__(self._uri._replace(**kwargs))
 
-    def replaceFile(self, newfile):
-        """Replace the final component of the path with the supplied file
-        name.
+    def updateFile(self, newfile):
+        """Update in place the final component of the path with the supplied
+        file name.
 
         Parameters
         ----------
@@ -177,7 +183,6 @@ class ButlerURI:
         else:
             pathclass = os.path
 
-        print(f"Processing path {self.path}")
         dir, _ = pathclass.split(self.path)
         newpath = pathclass.join(dir, newfile)
 
@@ -200,8 +205,8 @@ class ButlerURI:
             is a local file system path, not a URI.
         forceAbsolute : `bool`
             If `True`, scheme-less relative URI will be converted to an
-            absolute path using a `file` scheme. If `False` scheme-less URI
-            will remain scheme-less and will not be updated to `file` or
+            absolute path using a ``file`` scheme. If `False` scheme-less URI
+            will remain scheme-less and will not be updated to ``file`` or
             absolute path. URIs with a defined scheme will not be affected
             by this parameter.
 
@@ -259,7 +264,7 @@ class ButlerURI:
             elif parsed.scheme == "file":
                 # file URI implies POSIX path separators so split as posix,
                 # then join as os, and convert to abspath. Do not handle
-                # home directories since `file` scheme is explicitly documented
+                # home directories since "file" scheme is explicitly documented
                 # to not do tilde expansion.
                 if posixpath.isabs(parsed.path):
                     # No change needed

@@ -54,7 +54,6 @@ class LocationTestCase(unittest.TestCase):
         )
 
         for uriInfo in uriStrings:
-            print(uriInfo)
             uri = ButlerURI(uriInfo[0], root=testRoot, forceAbsolute=uriInfo[1])
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.scheme, uriInfo[2], "test scheme")
@@ -72,7 +71,7 @@ class LocationTestCase(unittest.TestCase):
 
         for uriInfo in uriStrings:
             uri = ButlerURI(uriInfo[0], forceAbsolute=False)
-            uri.replaceFile(uriInfo[1])
+            uri.updateFile(uriInfo[1])
             with self.subTest(uri=uriInfo[0]):
                 self.assertEqual(uri.path, uriInfo[2])
 
@@ -120,6 +119,7 @@ class LocationTestCase(unittest.TestCase):
         self.assertTrue(loc1.uri.startswith("https://"))
         self.assertTrue(loc1.uri.endswith("file.ext"))
         loc1.updateExtension("fits")
+        self.assertTrue(loc1.uri.endswith("file.fits"))
 
 
 if __name__ == "__main__":
