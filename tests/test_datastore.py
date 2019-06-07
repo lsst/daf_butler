@@ -115,12 +115,6 @@ class DatastoreTests(DatastoreTestsBase):
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore.validateConfiguration([ref])
 
-        dataId = {"visit": 52, "physical_filter": "V", "foo": "bar"}
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-        if self.validationCanFail:
-            with self.assertRaises(DatastoreValidationError):
-                datastore.validateConfiguration([ref])
-
     def testParameterValidation(self):
         """Check that parameters are validated"""
         sc = self.storageClassFactory.getStorageClass("ThingOne")
