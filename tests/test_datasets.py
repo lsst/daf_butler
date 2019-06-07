@@ -38,9 +38,8 @@ class DatasetTypeTestCase(unittest.TestCase):
     def testConstructor(self):
         """Test construction preserves values.
 
-        Note that construction doesn't check for valid storageClass or
-        dimensions parameters.
-        These can only be verified for a particular schema.
+        Note that construction doesn't check for valid storageClass.
+        This can only be verified for a particular schema.
         """
         datasetTypeName = "test"
         storageClass = StorageClass("test_StructuredData")

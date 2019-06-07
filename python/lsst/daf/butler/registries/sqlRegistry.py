@@ -243,8 +243,6 @@ class SqlRegistry(Registry):
         """
         if datasetType is None:
             datasetType = self.getDatasetType(row["dataset_type_name"])
-        else:
-            datasetType.normalize(universe=self.dimensions)
         run = self.getRun(id=row.run_id)
         datasetRefHash = row["dataset_ref_hash"]
         if dataId is None:
@@ -302,8 +300,6 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.find
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
-        else:
-            datasetType.normalize(universe=self.dimensions)
         dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
         datasetTable = self._schema.tables["dataset"]
         datasetCollectionTable = self._schema.tables["dataset_collection"]
@@ -356,7 +352,6 @@ class SqlRegistry(Registry):
     @transactional
     def registerDatasetType(self, datasetType):
         # Docstring inherited from Registry.getDatasetType.
-        datasetType.normalize(universe=self.dimensions)
         # If the DatasetType is already in the cache, we assume it's already in
         # the DB (note that we don't actually provide a way to remove them from
         # the DB).
@@ -440,8 +435,6 @@ class SqlRegistry(Registry):
 
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
-        else:
-            datasetType.normalize(universe=self.dimensions)
 
         # Make a full DataId up front, so we don't do multiple times
         # in calls below.  Note that calling DataId with a full DataId
@@ -574,9 +567,6 @@ class SqlRegistry(Registry):
             datasetCollectionTable.c.dataset_ref_hash == bindparam("hash")))
 
         for ref in refs:
-
-            ref.datasetType.normalize(universe=self.dimensions)
-
             if ref.id is None:
                 raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
 
@@ -975,8 +965,6 @@ class SqlRegistry(Registry):
         def standardize(dsType):
             if not isinstance(dsType, DatasetType):
                 dsType = self.getDatasetType(dsType)
-            else:
-                dsType.normalize(universe=self.dimensions)
             return dsType
 
         required = [standardize(t) for t in required]

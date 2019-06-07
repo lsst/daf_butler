@@ -31,7 +31,7 @@ from lsst.geom import Box2D
 from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
-from ..core import Config, Run, DatasetType, StorageClassFactory, DataId
+from ..core import Config, Run, DatasetType, StorageClassFactory, DataId, DimensionUniverse
 from ..instrument import (Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo,
                           addUnboundedCalibrationLabel)
 from .structures import ConvertedRepo
@@ -101,10 +101,15 @@ class ConversionWriter:
                     log.debug("Using '%s' for skymap with hash=%s", skyMapName, hash.hex())
                     self.skyMapNames[hash] = skyMapName
                     break
+        # Ideally we'd get the dimension universe from a Registry, but that
+        # would require restructuring things in breaking ways, and I'm hoping
+        # to just remove all of this code in favor of
+        # obs.base.gen3.RepoConverter anyway.
+        universe = DimensionUniverse.fromConfig()
         for gen2repo in gen2repos.values():
-            self._addConvertedRepoSorted(gen2repo)
+            self._addConvertedRepoSorted(gen2repo, universe)
 
-    def _addConvertedRepoSorted(self, gen2repo):
+    def _addConvertedRepoSorted(self, gen2repo, universe):
         """Recursively create ConvertedRepo objects from Gen2Repo objects,
         adding them to self.repos in a way that sorts them such that parents
         always precede their children.
@@ -201,7 +206,8 @@ class ConversionWriter:
             self.datasetTypes[datasetTypeName] = DatasetType(
                 name=datasetTypeName,
                 storageClass=storageClass,
-                dimensions=translators[datasetTypeName].dimensions
+                dimensions=translators[datasetTypeName].dimensions,
+                universe=universe
             )
         converted = ConvertedRepo(gen2repo, instrument=instrument, run=run, translators=translators)
         # Add parent repositories first, so self.repos is sorted topologically.
