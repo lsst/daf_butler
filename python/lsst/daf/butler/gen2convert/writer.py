@@ -206,13 +206,13 @@ class ConversionWriter:
             self.datasetTypes[datasetTypeName] = DatasetType(
                 name=datasetTypeName,
                 storageClass=storageClass,
-                dimensions=translators[datasetTypeName].dimensions,
+                dimensions=translators[datasetTypeName].dimensionNames,
                 universe=universe
             )
         converted = ConvertedRepo(gen2repo, instrument=instrument, run=run, translators=translators)
         # Add parent repositories first, so self.repos is sorted topologically.
         for parent in gen2repo.parents:
-            self._addConvertedRepoSorted(parent)
+            self._addConvertedRepoSorted(parent, universe)
         # Now we can finally add the current repo to self.repos.
         self.repos[gen2repo.root] = converted
         return converted

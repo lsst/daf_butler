@@ -44,9 +44,9 @@ class LookupKey:
     name : `str`, optional
         Primary index string for lookup.  If this string looks like it
         represents dimensions (via ``dim1+dim2+dim3`` syntax) the name
-        is converted to a `DimensionNameSet` and stored in ``dimensions``
+        is converted to a `DimensionGraph` and stored in ``dimensions``
         property.
-    dimensions : `DimensionNameSet` or `DimensionGraph`, optional
+    dimensions : `DimensionGraph`, optional
         Dimensions that are relevant for lookup. Should not be specified
         if ``name`` is also specified.
     dataId : `dict`, optional
@@ -135,8 +135,7 @@ class LookupKey:
 
     @property
     def dimensions(self):
-        """Dimensions associated with lookup.
-        (`DimensionGraph` or `DimensionNameSet`)"""
+        """Dimensions associated with lookup. (`DimensionGraph`)"""
         return self._dimensions
 
     @property
@@ -163,7 +162,7 @@ class LookupKey:
         name : `str`, optional
             Primary index string for lookup.  Will override ``dimensions``
             if ``dimensions`` are set.
-        dimensions : `DimensionNameSet`, optional
+        dimensions : `DimensionGraph`, optional
             Dimensions that are relevant for lookup. Will override ``name``
             if ``name`` is already set.
         dataId : `dict`, optional

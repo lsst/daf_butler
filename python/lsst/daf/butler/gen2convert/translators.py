@@ -25,8 +25,6 @@ __all__ = ("Translator", "KeyHandler", "CopyKeyHandler", "ConstantKeyHandler",
 import itertools
 from abc import ABCMeta, abstractmethod
 
-from ..core import DimensionNameSet
-
 
 def makeCalibrationLabel(datasetTypeName, calibDate, ccd=None, filter=None):
     """Make a Gen3 calibration_label string.
@@ -298,10 +296,11 @@ class Translator:
         return gen3id
 
     @property
-    def dimensions(self):
-        """The dimensions populated by this Translator
-        (`~lsst.daf.butler.DimensionNameSet`)."""
-        return DimensionNameSet(h.dimension for h in self.handlers)
+    def dimensionNames(self):
+        """The names of the dimensions populated by this Translator
+        (`frozenset`).
+        """
+        return frozenset(h.dimension for h in self.handlers)
 
 
 # Add "skymap" to Gen3 ID if Gen2 ID has a "tract" key.

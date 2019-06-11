@@ -445,7 +445,7 @@ class DimensionUniverse(DimensionGraph):
         subgraph : `DimensionGraph`
             A new graph containing the given elements and their dependencies.
         """
-        dimensions = conformSet(dimensions)
+        dimensions = conformSet(dimensions, self.universe)
 
         if not joins:
             dimensionNames = frozenset(dimensions.names)
