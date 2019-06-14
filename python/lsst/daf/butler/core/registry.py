@@ -994,60 +994,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
-    @disableWhenLimited
-    def selectMultipleDatasetTypes(self, originInfo, expression=None, required=(), optional=(),
-                                   prerequisite=(), perDatasetTypeDimensions=(), expandDataIds=True):
-        """Evaluate a filter expression and lists of
-        `DatasetTypes <DatasetType>` and return a set of dimension values.
-
-        The returned rows consists of combinations of dimensions participating
-        in the transformation from ``required`` to ``optional`` dataset types,
-        restricted by existing datasets and filter expression.
-
-        Parameters
-        ----------
-        originInfo : `DatasetOriginInfo`
-            Object which provides names of the input/output collections.
-        expression : `str`
-            An expression that limits the `Dimensions <Dimension>` and
-            (indirectly) the Datasets returned.
-        required : iterable of `DatasetType` or `str`
-            The `list` of DatasetTypes whose Dimensions will be included in
-            the returned column set. Output is limited to the the Datasets of
-            these DatasetTypes which already exist in the registry.
-        optional : iterable of `DatasetType` or `str`
-            The `list` of DatasetTypes whose Dimensions will be included in
-            the returned column set. Datasets of these types may or may not
-            existin the registry.
-        prerequisite : iterable of `DatasetType` or `str`
-            DatasetTypes that should not constrain the query results, but must
-            be present for all result rows.  These are included with a LEFT
-            OUTER JOIN, but the results are checked for NULL.  Unlike regular
-            inputs, prerequisite inputs lookups may be deferred (by some
-            `Registry` implementations). Any DatasetTypes that are present in
-            both ``required`` and ``prerequisite`` are considered
-            ``prerequisite``.
-        perDatasetTypeDimensions : iterable of `Dimension` or `str`, optional
-            Dimensions (or `str` names thereof) for which different dataset
-            types do not need to have the same values in each result row.
-        expandDataIds : `bool`
-            If `True` (default), expand all data IDs when returning them.
-
-        Yields
-        ------
-        row : `~lsst.daf.butler.sql.MultipleDatasetQueryRow`
-            Single row is a unique combination of units in a transform.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
-        LookupError
-            Raised (during iteration) if a prerequisite dataset is not found.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
     @disableWhenLimited
     def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False,
                      **kwds):

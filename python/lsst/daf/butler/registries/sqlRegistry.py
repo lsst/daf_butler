@@ -44,7 +44,6 @@ from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.dimensions import DataId, Dimension
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
-from ..sql import MultipleDatasetQueryBuilder
 
 
 class SqlRegistryConfig(RegistryConfig):
@@ -957,34 +956,6 @@ class SqlRegistry(Registry):
                 parameters.append(dict(dataId, skypix=skypix))
         self._connection.execute(self._schema.tables[join.name].insert(), parameters)
         return dataId
-
-    @disableWhenLimited
-    def selectMultipleDatasetTypes(self, originInfo, expression=None, required=(), optional=(),
-                                   prerequisite=(), perDatasetTypeDimensions=(), expandDataIds=True):
-        # Docstring inherited from Registry.selectDimensions
-        def standardize(dsType):
-            if not isinstance(dsType, DatasetType):
-                dsType = self.getDatasetType(dsType)
-            return dsType
-
-        required = [standardize(t) for t in required]
-        optional = [standardize(t) for t in optional]
-        prerequisite = [standardize(t) for t in prerequisite]
-
-        builder = MultipleDatasetQueryBuilder.fromDatasetTypes(
-            self,
-            originInfo,
-            required=required,
-            optional=optional,
-            prerequisite=prerequisite,
-            perDatasetTypeDimensions=perDatasetTypeDimensions,
-            defer=self.config["deferDatasetIdQueries"]
-        )
-
-        if expression is not None:
-            builder.whereParsedExpression(expression)
-
-        return builder.execute(expandDataIds=expandDataIds)
 
     @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):
