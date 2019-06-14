@@ -137,7 +137,7 @@ class ResultColumnsManager:
         self._indicesForDatasetIds[datasetType] = len(self._columns)
         self._columns.append(column)
 
-    def selectFrom(self, fromClause):
+    def selectFrom(self, fromClause, distinct=False):
         """Return a select query that extracts the managed columns from the
         given from clause.
 
@@ -145,6 +145,8 @@ class ResultColumnsManager:
         ----------
         fromClause : `sqlalchemy.FromClause`
             SQLAlchemy object representing the full FROM clause for the query.
+        distinct : `bool`
+            If `True`, perform a ``SELECT DISTINCT`` query.
 
         Returns
         -------
@@ -154,7 +156,7 @@ class ResultColumnsManager:
         """
         if self._needSkyPixRegion and "skypix" not in self._indicesForDimensionLinks:
             raise RuntimeError("skypix region added to query without associated link.")
-        return select(self._columns).select_from(fromClause)
+        return select(self._columns, distinct=distinct).select_from(fromClause)
 
     def manageRow(self, row):
         """Return an object that manages raw query result row.

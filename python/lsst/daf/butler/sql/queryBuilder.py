@@ -143,15 +143,18 @@ class QueryBuilder(ABC):
         Initial FROM clause for the query.
     whereClause : SQLAlchemy boolean expression, optional
         Expression to use as the initial WHERE clause.
+    distinct : `bool`
+        If `True`, generate a ``SELECT DISTINCT`` query.
     """
 
-    def __init__(self, registry, *, fromClause=None, whereClause=None):
+    def __init__(self, registry, *, fromClause=None, whereClause=None, distinct=False):
         self.registry = registry
         self._resultColumns = ResultColumnsManager(self.registry)
         self._fromClause = fromClause
         self._whereClause = whereClause
         self._selectablesForDimensionElements = {}
         self._elementsCache = None
+        self._distinct = distinct
 
     @classmethod
     def fromDimensions(cls, registry, dimensions, addResultColumns=True):
@@ -224,6 +227,12 @@ class QueryBuilder(ABC):
         isOuter : `bool`
             If `True`, perform a LEFT OUTER JOIN instead of a regular (INNER)
             JOIN.
+
+        Returns
+        -------
+        joinLinks : `set` of `str`
+            The names of the link fields used to join the selectable to the
+            rest of the query.  Always a subset of ``links``.
         """
         if self.fromClause is None:
             self._fromClause = selectable
@@ -310,7 +319,7 @@ class QueryBuilder(ABC):
             `fromClause`, the WHERE clause represented by `whereClause`,
             and the SELECT clause managed by `resultColumns`.
         """
-        query = self.resultColumns.selectFrom(self.fromClause)
+        query = self.resultColumns.selectFrom(self.fromClause, distinct=self._distinct)
         if self._whereClause is not None:
             query = query.where(self._whereClause)
         if whereSql is not None:
