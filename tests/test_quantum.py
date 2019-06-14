@@ -22,6 +22,7 @@
 import unittest
 from datetime import datetime
 
+from lsst.daf.butler import DimensionUniverse
 from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
 from lsst.daf.butler.core.quantum import Quantum
 from lsst.daf.butler.core.storageClass import StorageClass
@@ -61,11 +62,11 @@ class QuantumTestCase(unittest.TestCase):
 
         # start with empty
         self.assertEqual(quantum.predictedInputs, dict())
-
+        universe = DimensionUniverse.fromConfig()
         instrument = "DummyCam"
         datasetTypeName = "test_ds"
         storageClass = StorageClass("testref_StructuredData")
-        datasetType = DatasetType(datasetTypeName, ("instrument", "visit"), storageClass)
+        datasetType = DatasetType(datasetTypeName, universe.extract(("instrument", "visit")), storageClass)
 
         # add one ref
         ref = DatasetRef(datasetType, dict(instrument=instrument, visit=42))

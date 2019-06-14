@@ -19,223 +19,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DimensionSet", "DimensionNameSet", "conformSet")
+__all__ = ("DimensionSet", "conformSet")
 
-from abc import ABCMeta, abstractmethod
-from collections.abc import Set, MutableSet
+from collections.abc import Set
 from collections import OrderedDict
 from .elements import DimensionElement
 from ..exceptions import ValidationError
 
 
-def conformSet(container):
+def conformSet(container, universe):
     """Transform an iterable of `DimensionElement` or names thereof into an
     object with a set-like ``.names`` attribute.
-
-    Also accepts objects with a ``.names`` attribute that are not themselves
-    iterable, such as `DimensionNameSet` itself.
     """
     from .graph import DimensionGraph
-    if isinstance(container, (DimensionGraph, DimensionSetBase)):
+    if isinstance(container, (DimensionGraph, DimensionSet)):
         return container
     elif isinstance(container, str):
         # Friendlier error for easy mistake, e.g. union("Name") instead of
         # union(["Name"])
         raise TypeError("Argument must be an *iterable* over `DimensionElement` or `str`; got `str`")
-    return DimensionNameSet(element.name if isinstance(element, DimensionElement) else element
-                            for element in container)
+    return DimensionSet(universe, container)
 
 
-class DimensionSetBase(metaclass=ABCMeta):
-    """Abstract base class to share common implementations between
-    `DimensionSet` and `DimensionNameSet`.
-    """
-
-    @property
-    @abstractmethod
-    def names(self):
-        """The names of all elements (`set`-like, immutable).
-
-        The order of the names is consistent with the iteration order of the
-        set itself.
-        """
-        raise NotImplementedError()
-
-    def __len__(self):
-        return len(self.names)
-
-    def __str__(self):
-        return "{{{}}}".format(", ".join(self.names))
-
-    def __hash__(self):
-        # self.names can be either a frozenset or OrderedDict keys view,
-        # make sure that hash is always consistent by converting to frozenset
-        return hash(frozenset(self.names))
-
-    def __eq__(self, other):
-        return self.names == conformSet(other).names
-
-    def __le__(self, other):
-        return self.names <= conformSet(other).names
-
-    def __lt__(self, other):
-        return self.names < conformSet(other).names
-
-    def __ge__(self, other):
-        return self.names >= conformSet(other).names
-
-    def __gt__(self, other):
-        return self.names > conformSet(other).names
-
-    def issubset(self, other):
-        """Return `True` if all elements in ``self`` are also in ``other``.
-
-        The empty set is a subset of all sets (including the empty set).
-        """
-        return self <= other
-
-    def issuperset(self, other):
-        """Return `True` if all elements in ``other`` are also in ``self``,
-        and `False` otherwise.
-
-        All sets (including the empty set) are supersets of the empty set.
-        """
-        return self >= other
-
-    def isdisjoint(self, other):
-        """Return `True` if there are no elements in both ``self`` and
-        ``other``, and `False` otherwise.
-
-        All sets (including the empty set) are disjoint with the empty set.
-        """
-        return self.names.isdisjoint(conformSet(other).names)
-
-    def union(self, *others):
-        """Return a new set containing all elements that are in ``self`` or
-        any of the other given sets.
-
-        Parameters
-        ----------
-        *others : iterable over `DimensionElement` or `str`.
-            Other sets whose elements should be included in the result.
-
-        Returns
-        -------
-        result : `DimensionNameSet` or `DimensionSet`
-            A new set containing all elements in any input set.  A full
-            `DimensionSet` is returned if any argument is a full
-            `DimensionSet` or `DimensionGraph`.
-        """
-        names = set(self.names)
-        universe = getattr(self, "universe", None)
-        for other in others:
-            names |= conformSet(other).names
-            universe = getattr(other, "universe", universe)
-        if universe is not None:
-            return DimensionSet(universe, names)
-        else:
-            return DimensionNameSet(names)
-
-    def intersection(self, *others):
-        """Return a new set containing all elements that are in both  ``self``
-        and all of the other given sets.
-
-        Parameters
-        ----------
-        others : iterable over `DimensionElement` or `str`.
-            Other sets whose elements may be included in the result.
-
-        Returns
-        -------
-        result : `DimensionNameSet` or `DimensionSet`
-            A new set containing any elements in all input sets.  A full
-            `DimensionSet` is returned if any argument is a full `DimensionSet`
-            or `DimensionGraph`.
-        """
-        names = set(self.names)
-        universe = getattr(self, "universe", None)
-        for other in others:
-            names &= conformSet(other).names
-            universe = getattr(other, "universe", universe)
-        if universe is not None:
-            return DimensionSet(universe, names)
-        else:
-            return DimensionNameSet(names)
-
-    def symmetric_difference(self, other):
-        """Return a new set containing all elements that are in either ``self``
-        or other, but not both.
-
-        Parameters
-        ----------
-        other : iterable of `DimensionElement` or `str`.
-            The other set from which to draw potential result elements.
-
-        Returns
-        -------
-        result : `DimensionNameSet` or `DimensionSet`
-            A new set containing elements ``self`` or ``other``, but not both.
-            A full `DimensionSet` is returned if any argument is a full
-            `DimensionSet` or `DimensionGraph`.
-        """
-        names = self.names ^ conformSet(other).names
-        universe = getattr(self, "universe", None)
-        universe = getattr(other, "universe", universe)
-        if universe is not None:
-            return DimensionSet(universe, names)
-        else:
-            return DimensionNameSet(names)
-
-    def difference(self, other):
-        """Return a new set containing all elements that are in ``self``
-        but not other.
-
-        Parameters
-        ----------
-        other : iterable of `DimensionElement` or `str`.
-            The other set containing elements that should not be included
-            in the result.
-
-        Returns
-        -------
-        result : `DimensionNameSet` or `DimensionSet`
-            A new set containing elements in ``self`` but not ``other``.
-            A full `DimensionSet` is returned if any argument is a full
-            `DimensionSet` or `DimensionGraph`.
-        """
-        names = self.names - conformSet(other).names
-        universe = getattr(self, "universe", None)
-        universe = getattr(other, "universe", universe)
-        if universe is not None:
-            return DimensionSet(universe, names)
-        else:
-            return DimensionNameSet(names)
-
-    # Operators that return sets are only enabled when operands on both sides
-    # have the same type, to avoid confusion about return types.
-
-    def __or__(self, other):
-        if type(self) == type(other):
-            return self.union(other)
-        return NotImplemented
-
-    def __and__(self, other):
-        if isinstance(other, DimensionSet):
-            return self.intersection(other)
-        return NotImplemented
-
-    def __xor__(self, other):
-        if isinstance(other, DimensionSet):
-            return self.symmetric_difference(other)
-        return NotImplemented
-
-    def __sub__(self, other):
-        if isinstance(other, DimensionSet):
-            return self.difference(other)
-        return NotImplemented
-
-
-class DimensionSet(DimensionSetBase, Set):
+class DimensionSet(Set):
     r"""A custom set/dict hybrid class for collections of `DimensionElement`\s.
 
     `DimensionSet` objects implement the full (immutable)
@@ -402,57 +208,155 @@ class DimensionSet(DimensionSetBase, Set):
             return default
         return t[0]
 
+    def __len__(self):
+        return len(self._elements)
 
-class DimensionNameSet(DimensionSetBase):
-    r"""An incomplete, name-only stand-in for `DimensionSet` or
-    `DimensionGraph`.
+    def __str__(self):
+        return "{{{}}}".format(", ".join(self._elements.keys()))
 
-    Parameters
-    ----------
-    names : iterable of `str`
-        The names of elements to conceptually include in the set.
+    def __hash__(self):
+        # Keys are guaranteed to be deterministically sorted (topological then
+        # lexicographical) at construction.
+        return hash(tuple(self._elements.keys()))
 
-    Notes
-    -----
-    Because true `DimensionSet`\s and `DimensionGraph`\s cannot be constructed
-    without access to a "universe" `DimensionGraph` loaded from config,
-    requiring one of these classes in API also makes that API more difficult
-    to use.  `DimensionNameSet` partially solves that problem by being easy to
-    construct (only the names of the `DimensionElement`\s are needed, and no
-    sorting or checking is done) and behaving as much like a `DimensionSet` or
-    `DimensionGraph` as possible.  This enables the following pattern:
+    def __eq__(self, other):
+        return self.names == conformSet(other, self._universe).names
 
-     - Accept either `DimensionNameSet` as well as `DimensionSet` and/or
-       `DimensionGraph` when construting objects that need a container of
-       `DimensionElement`\s.  This may limit the functionality of the
-       constructed object if only a `DimensionNameSet` is passed, of course.
+    def __le__(self, other):
+        return self.names <= conformSet(other, self._universe).names
 
-     - "Upgrade" from `DimensionNameSet` to one of the more complete classes
-       when the object is rendezvouzed with a "universe" `DimensionGraph`.
-       This upgrade process also serves to validate the names.
+    def __lt__(self, other):
+        return self.names < conformSet(other, self._universe).names
 
-    The `DatasetType` class provides an example of this pattern;
-    `DatasetType`\s may be constructed with only the names of `Dimension`\s,
-    but are modified transparently by `Registry` operations to hold actual
-    `Dimension` objects.
-    """
+    def __ge__(self, other):
+        return self.names >= conformSet(other, self._universe).names
 
-    def __init__(self, names):
-        if not isinstance(names, Set) or isinstance(names, MutableSet):
-            # Usually want to ensure this is a frozenset, but we also accept
-            # the keys view of an OrderedDict, and when get that we don't want
-            # to transform it as that would discard the ordering.
-            names = frozenset(names)
-        self._names = names
+    def __gt__(self, other):
+        return self.names > conformSet(other, self._universe).names
 
-    def __repr__(self):
-        return f"DimensionNameSet({self.names})"
+    def issubset(self, other):
+        """Return `True` if all elements in ``self`` are also in ``other``.
 
-    @property
-    def names(self):
-        """The names of all elements (`set`-like, immutable).
-
-        Unlike a real `DimensionElement` container, these names are *not*
-        topologically sorted.
+        The empty set is a subset of all sets (including the empty set).
         """
-        return self._names
+        return self <= other
+
+    def issuperset(self, other):
+        """Return `True` if all elements in ``other`` are also in ``self``,
+        and `False` otherwise.
+
+        All sets (including the empty set) are supersets of the empty set.
+        """
+        return self >= other
+
+    def isdisjoint(self, other):
+        """Return `True` if there are no elements in both ``self`` and
+        ``other``, and `False` otherwise.
+
+        All sets (including the empty set) are disjoint with the empty set.
+        """
+        return self.names.isdisjoint(conformSet(other, self._universe).names)
+
+    def union(self, *others):
+        """Return a new set containing all elements that are in ``self`` or
+        any of the other given sets.
+
+        Parameters
+        ----------
+        *others : iterable over `DimensionElement` or `str`.
+            Other sets whose elements should be included in the result.
+
+        Returns
+        -------
+        result : `DimensionNameSet` or `DimensionSet`
+            A new set containing all elements in any input set.  A full
+            `DimensionSet` is returned if any argument is a full
+            `DimensionSet` or `DimensionGraph`.
+        """
+        names = set(self.names)
+        for other in others:
+            names |= conformSet(other, self._universe).names
+        return DimensionSet(self.universe, names)
+
+    def intersection(self, *others):
+        """Return a new set containing all elements that are in both  ``self``
+        and all of the other given sets.
+
+        Parameters
+        ----------
+        others : iterable over `DimensionElement` or `str`.
+            Other sets whose elements may be included in the result.
+
+        Returns
+        -------
+        result : `DimensionNameSet` or `DimensionSet`
+            A new set containing any elements in all input sets.  A full
+            `DimensionSet` is returned if any argument is a full `DimensionSet`
+            or `DimensionGraph`.
+        """
+        names = set(self.names)
+        for other in others:
+            names &= conformSet(other, self._universe).names
+        return DimensionSet(self.universe, names)
+
+    def symmetric_difference(self, other):
+        """Return a new set containing all elements that are in either ``self``
+        or other, but not both.
+
+        Parameters
+        ----------
+        other : iterable of `DimensionElement` or `str`.
+            The other set from which to draw potential result elements.
+
+        Returns
+        -------
+        result : `DimensionNameSet` or `DimensionSet`
+            A new set containing elements ``self`` or ``other``, but not both.
+            A full `DimensionSet` is returned if any argument is a full
+            `DimensionSet` or `DimensionGraph`.
+        """
+        names = self.names ^ conformSet(other, self._universe).names
+        return DimensionSet(self.universe, names)
+
+    def difference(self, other):
+        """Return a new set containing all elements that are in ``self``
+        but not other.
+
+        Parameters
+        ----------
+        other : iterable of `DimensionElement` or `str`.
+            The other set containing elements that should not be included
+            in the result.
+
+        Returns
+        -------
+        result : `DimensionNameSet` or `DimensionSet`
+            A new set containing elements in ``self`` but not ``other``.
+            A full `DimensionSet` is returned if any argument is a full
+            `DimensionSet` or `DimensionGraph`.
+        """
+        names = self.names - conformSet(other, self._universe).names
+        return DimensionSet(self.universe, names)
+
+    # Operators that return sets are only enabled when operands on both sides
+    # have the same type, to avoid confusion about return types.
+
+    def __or__(self, other):
+        if isinstance(other, DimensionSet):
+            return self.union(other)
+        return NotImplemented
+
+    def __and__(self, other):
+        if isinstance(other, DimensionSet):
+            return self.intersection(other)
+        return NotImplemented
+
+    def __xor__(self, other):
+        if isinstance(other, DimensionSet):
+            return self.symmetric_difference(other)
+        return NotImplemented
+
+    def __sub__(self, other):
+        if isinstance(other, DimensionSet):
+            return self.difference(other)
+        return NotImplemented

@@ -160,33 +160,7 @@ class FormatterFactory:
         """
         return key in self._mappingFactory
 
-    def normalizeDimensions(self, universe):
-        """Normalize formatter lookups that use dimensions.
-
-        Parameters
-        ----------
-        universe : `DimensionUniverse`
-            The set of all known dimensions. If `None`, returns without
-            action.
-
-        Notes
-        -----
-        Goes through all registered formatters, and for keys that include
-        dimensions, rewrites those keys to use a verified set of
-        dimensions.
-
-        Returns without action if the formatter keys have already been
-        normalized.
-
-        Raises
-        ------
-        ValueError
-            Raised if a key exists where a dimension is not part of
-            the ``universe``.
-        """
-        return self._mappingFactory.normalizeRegistryDimensions(universe)
-
-    def registerFormatters(self, config, universe=None):
+    def registerFormatters(self, config, *, universe):
         """Bulk register formatters from a config.
 
         Parameters
@@ -194,10 +168,8 @@ class FormatterFactory:
         config : `Config`
             ``formatters`` section of a configuration.
         universe : `DimensionUniverse`, optional
-            The set of all known dimensions. If not `None`, any look up keys
-            involving dimensions will be normalized.  The normalization flag
-            will be cleared each time this method is called without a
-            universe.
+            Set of all known dimensions, used to expand and validate any used
+            in lookup keys.
 
         Notes
         -----
@@ -211,16 +183,9 @@ class FormatterFactory:
         The config is parsed using the function
         `~lsst.daf.butler.configSubset.processLookupConfigs`.
         """
-        contents = processLookupConfigs(config)
+        contents = processLookupConfigs(config, universe=universe)
         for key, f in contents.items():
             self.registerFormatter(key, f)
-
-        if universe is not None:
-            self.normalizeDimensions(universe)
-        else:
-            # Trigger new normalization round since new formatters have
-            # been added without a universe.
-            self._mappingFactory.normalized = False
 
     def getLookupKeys(self):
         """Retrieve the look up keys for all the registry entries.
@@ -255,15 +220,6 @@ class FormatterFactory:
         if isinstance(entity, str):
             names = (entity,)
         else:
-            # Normalize the registry to a universe if not already done
-            if not self._mappingFactory.normalized:
-                try:
-                    universe = entity.dimensions.universe
-                except AttributeError:
-                    pass
-                else:
-                    self._mappingFactory.normalizeRegistryDimensions(universe)
-
             names = entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(*names)
         log.debug("Retrieved formatter from key '%s' for entity '%s'", matchKey, entity)

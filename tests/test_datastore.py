@@ -26,7 +26,7 @@ import yaml
 import tempfile
 import lsst.utils
 
-from lsst.daf.butler import StorageClassFactory, StorageClass
+from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 
 from lsst.utils import doImport
@@ -71,6 +71,7 @@ class DatastoreTestsBase(DatasetTestHelper, DatastoreTestHelper):
         # name here, but rely on the configuration file itself)
         datastoreConfig = DatastoreConfig(cls.configFile)
         cls.datastoreType = doImport(datastoreConfig["cls"])
+        cls.universe = DimensionUniverse.fromConfig()
 
     def setUp(self):
         self.setUpDatastoreTests(DummyRegistry, DatastoreConfig)
@@ -109,24 +110,16 @@ class DatastoreTests(DatastoreTestsBase):
             with self.assertRaises(DatastoreValidationError):
                 datastore.validateConfiguration([sc2], logFailures=True)
 
-        # Without a universe testing is limited but create a
-        # ref that has valid dataId and one that does not
-        dimensions = frozenset(("visit", "physical_filter"))
-        dataId = {"visit": 52, "physical_filter": "V"}
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore.validateConfiguration([ref])
-
-        dataId = {"visit": 52, "physical_filter": "V", "foo": "bar"}
-        ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
-        if self.validationCanFail:
-            with self.assertRaises(DatastoreValidationError):
-                datastore.validateConfiguration([ref])
 
     def testParameterValidation(self):
         """Check that parameters are validated"""
         sc = self.storageClassFactory.getStorageClass("ThingOne")
-        dimensions = frozenset(("visit", "physical_filter"))
-        dataId = {"visit": 52, "physical_filter": "V"}
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
         datastore = self.makeDatastore()
         data = {1: 2, 3: 4}
@@ -146,8 +139,8 @@ class DatastoreTests(DatastoreTestsBase):
                                      "StructuredDataJson",
                                      "StructuredDataPickle")]
 
-        dimensions = frozenset(("visit", "physical_filter"))
-        dataId = {"visit": 52, "physical_filter": "V"}
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
 
         for sc in storageClasses:
             ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
@@ -208,8 +201,8 @@ class DatastoreTests(DatastoreTestsBase):
                                      "StructuredCompositeTestA",
                                      "StructuredCompositeTestB")]
 
-        dimensions = frozenset(("visit", "Filter"))
-        dataId = {"visit": 428, "physical_filter": "R"}
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 428, "physical_filter": "R"}
 
         for sc in storageClasses:
             print("Using storageClass: {}".format(sc.name))
@@ -243,8 +236,8 @@ class DatastoreTests(DatastoreTestsBase):
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
         # Put
-        dimensions = frozenset(("visit", "physical_filter"))
-        dataId = {"visit": 638, "physical_filter": "U"}
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 638, "physical_filter": "U"}
 
         sc = self.storageClassFactory.getStorageClass("StructuredData")
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
@@ -276,8 +269,8 @@ class DatastoreTests(DatastoreTestsBase):
     def testTransfer(self):
         metrics = makeExampleMetrics()
 
-        dimensions = frozenset(("visit", "physical_filter"))
-        dataId = {"visit": 2048, "physical_filter": "Uprime"}
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 2048, "physical_filter": "Uprime"}
 
         sc = self.storageClassFactory.getStorageClass("StructuredData")
         ref = self.makeDatasetRef("metric", dimensions, sc, dataId)
@@ -294,9 +287,9 @@ class DatastoreTests(DatastoreTestsBase):
     def testBasicTransaction(self):
         datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = frozenset(("visit", "physical_filter"))
+        dimensions = self.universe.extract(("visit", "physical_filter"))
         nDatasets = 6
-        dataIds = [{"visit": i, "physical_filter": "V"} for i in range(nDatasets)]
+        dataIds = [{"instrument": "dummy", "visit": i, "physical_filter": "V"} for i in range(nDatasets)]
         data = [(self.makeDatasetRef("metric", dimensions, storageClass, dataId), makeExampleMetrics())
                 for dataId in dataIds]
         succeed = data[:nDatasets//2]
@@ -333,19 +326,19 @@ class DatastoreTests(DatastoreTestsBase):
     def testNestedTransaction(self):
         datastore = self.makeDatastore()
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = frozenset(("visit", "physical_filter"))
+        dimensions = self.universe.extract(("visit", "physical_filter"))
         metrics = makeExampleMetrics()
 
-        dataId = {"visit": 0, "physical_filter": "V"}
+        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V"}
         refBefore = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         datastore.put(metrics, refBefore)
         with self.assertRaises(TransactionTestError):
             with datastore.transaction():
-                dataId = {"visit": 1, "physical_filter": "V"}
+                dataId = {"instrument": "dummy", "visit": 1, "physical_filter": "V"}
                 refOuter = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
                 datastore.put(metrics, refOuter)
                 with datastore.transaction():
-                    dataId = {"visit": 2, "physical_filter": "V"}
+                    dataId = {"instrument": "dummy", "visit": 2, "physical_filter": "V"}
                     refInner = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
                     datastore.put(metrics, refInner)
                 # All datasets should exist
@@ -365,9 +358,9 @@ class DatastoreTests(DatastoreTestsBase):
 
     def runIngestTest(self, func, expectOutput=True):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        dimensions = frozenset(("visit", "physical_filter"))
+        dimensions = self.universe.extract(("visit", "physical_filter"))
         metrics = makeExampleMetrics()
-        dataId = {"visit": 0, "physical_filter": "V"}
+        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V"}
         ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId)
         with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=expectOutput) as path:
             with open(path, 'w') as fd:
@@ -502,7 +495,7 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 
         sc1 = self.storageClassFactory.getStorageClass("StructuredData")
         sc2 = self.storageClassFactory.getStorageClass("StructuredDataJson")
-        dimensions = frozenset(("visit", "physical_filter", "Instrument"))
+        dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         dataId = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
 
         # Write empty file suitable for ingest check
@@ -586,7 +579,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
         sc1 = self.storageClassFactory.getStorageClass("StructuredData")
         sc2 = self.storageClassFactory.getStorageClass("StructuredDataJson")
-        dimensions = frozenset(("visit", "physical_filter", "instrument"))
+        dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         dataId1 = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
         dataId2 = {"visit": 52, "physical_filter": "V", "instrument": "HSC"}
 

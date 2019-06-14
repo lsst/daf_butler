@@ -56,9 +56,12 @@ class CompositesMap:
     ----------
     config : `str`, `ButlerConfig`, or `CompositesConfig`
         Configuration to control composites disassembly.
+    universe : `DimensionUniverse`
+        Set of all known dimensions, used to expand and validate any used
+        in lookup keys.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, *, universe):
         if not isinstance(config, type(self)):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)
@@ -66,7 +69,7 @@ class CompositesMap:
 
         # Calculate the disassembly lookup table -- no need to process
         # the values
-        self._lut = processLookupConfigs(self.config[DISASSEMBLY_KEY])
+        self._lut = processLookupConfigs(self.config[DISASSEMBLY_KEY], universe=universe)
 
     def shouldBeDisassembled(self, entity):
         """Given some choices, indicate whether the entity should be

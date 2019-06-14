@@ -225,7 +225,7 @@ class Butler:
             self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self.config)
-            self.composites = CompositesMap(self.config)
+            self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
         if run is None:
             runCollection = self.config.get("run", None)
             self.run = None

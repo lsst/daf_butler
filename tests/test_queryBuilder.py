@@ -96,10 +96,12 @@ class QueryBuilderTestCase(unittest.TestCase):
         run2 = registry.makeRun(collection=collection2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW", dimensions=("instrument", "exposure", "detector"),
+        rawType = DatasetType(name="RAW",
+                              dimensions=registry.dimensions.extract(("instrument", "exposure", "detector")),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        calexpType = DatasetType(name="CALEXP", dimensions=("instrument", "visit", "detector"),
+        calexpType = DatasetType(name="CALEXP",
+                                 dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
@@ -315,17 +317,23 @@ class QueryBuilderTestCase(unittest.TestCase):
         run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testExposureRange")
         registry.storageClasses.registerStorageClass(storageClass)
-        rawType = DatasetType(name="RAW", dimensions=("instrument", "detector", "exposure"),
+        rawType = DatasetType(name="RAW",
+                              dimensions=registry.dimensions.extract(("instrument", "detector", "exposure")),
                               storageClass=storageClass)
         registry.registerDatasetType(rawType)
-        biasType = DatasetType(name="BIAS", dimensions=("instrument", "detector", "calibration_label"),
+        biasType = DatasetType(name="BIAS",
+                               dimensions=registry.dimensions.extract(("instrument", "detector",
+                                                                       "calibration_label")),
                                storageClass=storageClass)
         registry.registerDatasetType(biasType)
         flatType = DatasetType(name="FLAT",
-                               dimensions=("instrument", "detector", "physical_filter", "calibration_label"),
+                               dimensions=registry.dimensions.extract(("instrument", "detector",
+                                                                       "physical_filter",
+                                                                       "calibration_label")),
                                storageClass=storageClass)
         registry.registerDatasetType(flatType)
-        calexpType = DatasetType(name="CALEXP", dimensions=("instrument", "visit", "detector"),
+        calexpType = DatasetType(name="CALEXP",
+                                 dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
@@ -489,15 +497,18 @@ class QueryBuilderTestCase(unittest.TestCase):
         run = registry.makeRun(collection=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
-        calexpType = DatasetType(name="deepCoadd_calexp", dimensions=("skymap", "tract", "patch",
-                                                                      "abstract_filter"),
+        calexpType = DatasetType(name="deepCoadd_calexp",
+                                 dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
+                                                                         "abstract_filter")),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
-        mergeType = DatasetType(name="deepCoadd_mergeDet", dimensions=("skymap", "tract", "patch"),
+        mergeType = DatasetType(name="deepCoadd_mergeDet",
+                                dimensions=registry.dimensions.extract(("skymap", "tract", "patch")),
                                 storageClass=storageClass)
         registry.registerDatasetType(mergeType)
-        measType = DatasetType(name="deepCoadd_meas", dimensions=("skymap", "tract", "patch",
-                                                                  "abstract_filter"),
+        measType = DatasetType(name="deepCoadd_meas",
+                               dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
+                                                                       "abstract_filter")),
                                storageClass=storageClass)
         registry.registerDatasetType(measType)
 
@@ -587,12 +598,14 @@ class QueryBuilderTestCase(unittest.TestCase):
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
 
-        calexpType = DatasetType(name="CALEXP", dimensions=("instrument", "visit", "detector"),
+        calexpType = DatasetType(name="CALEXP",
+                                 dimensions=registry.dimensions.extract(("instrument", "visit", "detector")),
                                  storageClass=storageClass)
         registry.registerDatasetType(calexpType)
 
-        coaddType = DatasetType(name="deepCoadd_calexp", dimensions=("skymap", "tract", "patch",
-                                                                     "abstract_filter"),
+        coaddType = DatasetType(name="deepCoadd_calexp",
+                                dimensions=registry.dimensions.extract(("skymap", "tract", "patch",
+                                                                        "abstract_filter")),
                                 storageClass=storageClass)
         registry.registerDatasetType(coaddType)
 

@@ -23,11 +23,12 @@ __all__ = ("DatasetType", "DatasetRef")
 
 from copy import deepcopy
 import hashlib
+import re
 
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, DimensionNameSet, DataId
+from .dimensions import DimensionGraph, DataId
 from .configSupport import LookupKey
 
 
@@ -52,16 +53,26 @@ class DatasetType:
     ----------
     name : `str`
         A string name for the Dataset; must correspond to the same
-        `DatasetType` across all Registries.
+        `DatasetType` across all Registries.  Names must start with an
+        upper or lowercase letter, and may contain only letters, numbers,
+        and underscores.  Component dataset types should contain a single
+        period separating the base dataset type name from the component name
+        (and may be recursive).
     dimensions : `DimensionGraph` or iterable of `str`
-        Dimensions used to label and relate instances of this DatasetType,
-        or string names thereof.
+        Dimensions used to label and relate instances of this `DatasetType`,
+        or names thereof.
+        If not a `DimensionGraph`, ``universe`` must be provided as well.
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to normalize ``dimensions`` if it
+        is not already a `DimensionGraph`.
     """
 
     __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName")
+
+    VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
     @staticmethod
     def nameWithComponent(datasetTypeName, componentName):
@@ -83,12 +94,16 @@ class DatasetType:
         """
         return "{}.{}".format(datasetTypeName, componentName)
 
-    def __init__(self, name, dimensions, storageClass):
+    def __init__(self, name, dimensions, storageClass, *, universe=None):
+        if self.VALID_NAME_REGEX.match(name) is None:
+            raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
-        if isinstance(dimensions, (DimensionGraph, DimensionNameSet)):
-            self._dimensions = dimensions
-        else:
-            self._dimensions = DimensionNameSet(names=dimensions)
+        if not isinstance(dimensions, DimensionGraph):
+            if universe is None:
+                raise ValueError("If dimensions is not a normalized DimensionGraph, "
+                                 "a universe must be provided.")
+            dimensions = universe.extract(dimensions)
+        self._dimensions = dimensions
         assert isinstance(storageClass, (StorageClass, str))
         if isinstance(storageClass, StorageClass):
             self._storageClass = storageClass
@@ -128,12 +143,7 @@ class DatasetType:
     @property
     def dimensions(self):
         r"""The `Dimension`\ s that label and relate instances of this
-        `DatasetType` (`DimensionGraph` or `DimensionNameSet`).
-
-        If this `DatasetType` was not obtained from or registered with a
-        `Registry`, this will typically be a `DimensionNameSet`, with much
-        less functionality (just an unsorted ``.names`` and comparison
-        operators) than a full `DimensionGraph`.
+        `DatasetType` (`DimensionGraph`).
         """
         return self._dimensions
 
@@ -294,34 +304,6 @@ class DatasetType:
         return DatasetType(name=deepcopy(self.name, memo),
                            dimensions=deepcopy(self.dimensions, memo),
                            storageClass=deepcopy(self._storageClass or self._storageClassName, memo))
-
-    def normalize(self, universe):
-        """Ensure the dimensions and storage class name are valid, and make
-        ``self.dimensions`` a true `DimensionGraph` instance if it isn't
-        already.
-
-        Parameters
-        ----------
-        universe : `DimensionGraph`
-            The set of all known dimensions.
-
-        Raises
-        ------
-        ValueError
-            Raised if the DatasetType is invalid, either because one or more
-            dimensions in ``self.dimensions`` is not in ``universe``, or the
-            storage class name is not recognized.
-        """
-        if not isinstance(self._dimensions, DimensionGraph):
-            self._dimensions = universe.extract(self._dimensions)
-        try:
-            # Trigger lookup of StorageClass instance from StorageClass name.
-            # KeyError (sort of) makes sense in that context, but it doesn't
-            # make as much sense in the context in which normalize() is called,
-            # so we translate it to ValueError.
-            self.storageClass
-        except KeyError:
-            raise ValueError(f"Storage class '{self._storageClassName}' not recognized.")
 
 
 class DatasetRef:

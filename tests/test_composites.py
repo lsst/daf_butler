@@ -22,7 +22,7 @@
 import os
 import unittest
 
-from lsst.daf.butler import CompositesConfig, CompositesMap, StorageClass, DatasetType
+from lsst.daf.butler import CompositesConfig, CompositesMap, StorageClass, DatasetType, DimensionUniverse
 
 TESTDIR = os.path.dirname(__file__)
 
@@ -54,7 +54,8 @@ class TestCompositesConfig(unittest.TestCase):
             self.assertIsInstance(c[f".{rootKey}.{k}"], bool, f"Testing {rootKey}.{k}")
 
     def testMap(self):
-        c = CompositesMap(self.configFile)
+        universe = DimensionUniverse.fromConfig()
+        c = CompositesMap(self.configFile, universe=universe)
 
         # Check that a str is not supported
         with self.assertRaises(ValueError):
@@ -62,7 +63,7 @@ class TestCompositesConfig(unittest.TestCase):
 
         # These will fail (not a composite)
         sc = StorageClass("StructuredDataJson")
-        d = DatasetType("dummyTrue", ("a", "b"), sc)
+        d = DatasetType("dummyTrue", universe.extract([]), sc)
         self.assertFalse(sc.isComposite())
         self.assertFalse(d.isComposite())
         self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
@@ -71,23 +72,23 @@ class TestCompositesConfig(unittest.TestCase):
         # Repeat but this time use a composite storage class
         sccomp = StorageClass("Dummy")
         sc = StorageClass("StructuredDataJson", components={"dummy": sccomp})
-        d = DatasetType("dummyTrue", ("a", "b"), sc)
+        d = DatasetType("dummyTrue", universe.extract([]), sc)
         self.assertTrue(sc.isComposite())
         self.assertTrue(d.isComposite())
         self.assertTrue(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
         self.assertFalse(c.shouldBeDisassembled(sc), f"Test with StorageClass: {sc}")
 
         # Override with False
-        d = DatasetType("dummyFalse", ("a", "b"), sc)
+        d = DatasetType("dummyFalse", universe.extract([]), sc)
         self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
         # DatasetType that has no explicit entry
-        d = DatasetType("dummyFred", ("a", "b"), sc)
+        d = DatasetType("dummyFred", universe.extract([]), sc)
         self.assertFalse(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
         # StorageClass that will be disassembled
         sc = StorageClass("StructuredComposite", components={"dummy": sccomp})
-        d = DatasetType("dummyFred", ("a", "b"), sc)
+        d = DatasetType("dummyFred", universe.extract([]), sc)
         self.assertTrue(c.shouldBeDisassembled(d), f"Test with DatasetType: {d}")
 
 

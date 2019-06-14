@@ -23,7 +23,7 @@
 
 import unittest
 
-from lsst.daf.butler import Constraints, ConstraintsConfig, StorageClass, ValidationError
+from lsst.daf.butler import Constraints, ConstraintsConfig, StorageClass, ValidationError, DimensionUniverse
 from datasetsHelper import DatasetTestHelper
 
 
@@ -33,12 +33,13 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         self.id = 0
 
         # Create DatasetRefs to test against constraints model
-        dimensions = frozenset(("visit", "physical_filter", "instrument"))
+        self.universe = DimensionUniverse.fromConfig()
+        dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         self.calexpA = self.makeDatasetRef("calexp", dimensions, sc, {"instrument": "A",
                                                                       "physical_filter": "u"})
 
-        dimensions = frozenset(("visit", "calibration_label", "instrument"))
+        dimensions = self.universe.extract(("visit", "calibration_label", "instrument"))
         self.pviA = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "A",
                                                                 "visit": 1})
         self.pviB = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "B",
@@ -46,20 +47,20 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
 
     def testSimpleAccept(self):
         config = ConstraintsConfig({"accept": ["calexp", "ExposureF"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
         # Dimension accept
         config = ConstraintsConfig({"accept": ["visit+physical_filter+instrument", "ExposureF"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
         config = ConstraintsConfig({"accept": ["visit+calibration_label+instrument", "ExposureF"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -67,7 +68,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Only accept instrument A pvi
         config = ConstraintsConfig({"accept": [{"instrument<A>": ["pvi"]}]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -76,7 +77,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         # Accept PVI for instrument B but not instrument A
         config = ConstraintsConfig({"accept": ["calexp",
                                                {"instrument<B>": ["pvi"]}]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
@@ -84,7 +85,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
 
     def testSimpleReject(self):
         config = ConstraintsConfig({"reject": ["calexp", "ExposureF"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -92,14 +93,14 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
     def testAcceptReject(self):
         # Reject everything except calexp
         config = ConstraintsConfig({"accept": ["calexp"], "reject": ["all"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
         # Accept everything except calexp
         config = ConstraintsConfig({"reject": ["calexp"], "accept": ["all"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -108,7 +109,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         # Reject all instrument A but accept everything else
         # The reject here is superfluous
         config = ConstraintsConfig({"accept": [{"instrument<A>": ["pvi"]}], "reject": ["pvi"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -116,7 +117,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
 
         # Accept everything except pvi from other than instrument A
         config = ConstraintsConfig({"accept": ["all", {"instrument<A>": ["pvi"]}], "reject": ["pvi"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -125,14 +126,14 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
     def testWildcardReject(self):
         # Reject everything
         config = ConstraintsConfig({"reject": ["all"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
 
         # Reject all instrument A but accept everything else
         config = ConstraintsConfig({"reject": [{"instrument<A>": ["all"]}]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertFalse(constraints.isAcceptable(self.calexpA))
         self.assertFalse(constraints.isAcceptable(self.pviA))
@@ -141,27 +142,27 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
     def testWildcardAccept(self):
         # Accept everything
         config = ConstraintsConfig({})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
 
         # Accept everything
-        constraints = Constraints(None)
+        constraints = Constraints(None, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
 
         # Accept everything explicitly
         config = ConstraintsConfig({"accept": ["all"]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
 
         # Accept all instrument A but reject everything else
         config = ConstraintsConfig({"accept": [{"instrument<A>": ["all"]}]})
-        constraints = Constraints(config)
+        constraints = Constraints(config, universe=self.universe)
 
         self.assertTrue(constraints.isAcceptable(self.calexpA))
         self.assertTrue(constraints.isAcceptable(self.pviA))
@@ -171,7 +172,7 @@ class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):
         # Accept everything and reject everything
         config = ConstraintsConfig({"accept": ["all"], "reject": ["all"]})
         with self.assertRaises(ValidationError):
-            Constraints(config)
+            Constraints(config, universe=self.universe)
 
 
 if __name__ == "__main__":

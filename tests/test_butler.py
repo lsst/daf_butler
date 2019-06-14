@@ -143,7 +143,7 @@ class ButlerTests:
         self.assertEqual(collections, set())
 
         # Create and register a DatasetType
-        dimensions = ("instrument", "visit")
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
 
         datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
@@ -262,7 +262,7 @@ class ButlerTests:
 
     def testGetDatasetTypes(self):
         butler = Butler(self.tmpConfigFile)
-        dimensions = ("instrument", "visit", "physical_filter")
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
                             ("instrument", {"instrument": "DummyHSC"}),
                             ("instrument", {"instrument": "DummyCamComp"}),
@@ -309,7 +309,7 @@ class ButlerTests:
     def testTransaction(self):
         butler = Butler(self.tmpConfigFile)
         datasetTypeName = "test_metric"
-        dimensions = ("instrument", "visit")
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
                             ("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
                             ("visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
@@ -429,7 +429,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         # Create two almost-identical DatasetTypes (both will use default
         # template)
-        dimensions = ("instrument", "visit")
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))

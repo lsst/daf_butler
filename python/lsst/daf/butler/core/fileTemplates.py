@@ -29,7 +29,7 @@ import logging
 from types import MappingProxyType
 
 from .config import Config
-from .configSupport import processLookupConfigs, LookupKey, normalizeLookupKeys
+from .configSupport import processLookupConfigs, LookupKey
 from .exceptions import ValidationError
 
 log = logging.getLogger(__name__)
@@ -56,10 +56,9 @@ class FileTemplates:
     default : `str`, optional
         If not `None`, a default template to use if no template has
         been specified explicitly in the configuration.
-    universe : `DimensionUniverse`, optional
-        The set of all known dimensions. If not `None`, any look up keys
-        involving dimensions will be normalized.  Normalization only happens
-        once.
+    universe : `DimensionUniverse`
+        The set of all known dimensions, used to normalize any lookup keys
+        involving dimensions.
 
     Notes
     -----
@@ -81,12 +80,11 @@ class FileTemplates:
     defaultKey = LookupKey("default")
     """Configuration key associated with the default template."""
 
-    def __init__(self, config, default=None, universe=None):
+    def __init__(self, config, default=None, *, universe):
         self.config = FileTemplatesConfig(config)
         self._templates = {}
-        self.normalized = False
         self.default = FileTemplate(default) if default is not None else None
-        contents = processLookupConfigs(self.config)
+        contents = processLookupConfigs(self.config, universe=universe)
 
         # Convert all the values to FileTemplate, handling defaults
         for key, templateStr in contents.items():
@@ -97,9 +95,6 @@ class FileTemplates:
                     self.default = FileTemplate(templateStr)
             else:
                 self._templates[key] = FileTemplate(templateStr)
-
-        # Normalize all the dimensions given the supplied universe
-        self.normalizeDimensions(universe)
 
     @property
     def templates(self):
@@ -221,17 +216,6 @@ class FileTemplates:
         KeyError
             Raised if no template could be located for this Dataset type.
         """
-
-        # normalize the registry if not already done and we have access
-        # to a universe
-        if not self.normalized:
-            try:
-                universe = entity.dimensions.universe
-            except AttributeError:
-                pass
-            else:
-                self.normalizeDimensions(universe)
-
         # Get the names to use for lookup
         names = entity._lookupNames()
 
@@ -280,37 +264,6 @@ class FileTemplates:
         """
         _, template = self.getTemplateWithMatch(entity)
         return template
-
-    def normalizeDimensions(self, universe):
-        """Normalize template lookups that use dimensions.
-
-        Parameters
-        ----------
-        universe : `DimensionUniverse`
-            The set of all known dimensions. If `None`, returns without
-            action.
-
-        Notes
-        -----
-        Goes through all registered templates, and for keys that include
-        dimensions, rewrites those keys to use a verified set of
-        dimensions.
-
-        Returns without action if the template keys have already been
-        normalized.
-
-        Raises
-        ------
-        ValueError
-            Raised if a key exists where a dimension is not part of
-            the ``universe``.
-        """
-        if self.normalized:
-            return
-
-        normalizeLookupKeys(self._templates, universe)
-
-        self.normalized = True
 
 
 class FileTemplate:

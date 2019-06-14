@@ -21,13 +21,13 @@
 
 """Support for configuration snippets"""
 
-__all__ = ("LookupKey", "processLookupConfigs", "normalizeLookupKeys",
+__all__ = ("LookupKey", "processLookupConfigs",
            "processLookupConfigList")
 
 import logging
 import re
 from collections.abc import Mapping
-from .dimensions import DimensionNameSet, DimensionGraph
+from .dimensions import DimensionGraph
 
 log = logging.getLogger(__name__)
 
@@ -44,16 +44,20 @@ class LookupKey:
     name : `str`, optional
         Primary index string for lookup.  If this string looks like it
         represents dimensions (via ``dim1+dim2+dim3`` syntax) the name
-        is converted to a `DimensionNameSet` and stored in ``dimensions``
+        is converted to a `DimensionGraph` and stored in ``dimensions``
         property.
-    dimensions : `DimensionNameSet` or `DimensionGraph`, optional
+    dimensions : `DimensionGraph`, optional
         Dimensions that are relevant for lookup. Should not be specified
         if ``name`` is also specified.
     dataId : `dict`, optional
         Keys and values from a dataId that should control lookups.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to expand and validate ``name`` or
+        ``dimensions``.  Required if the key represents dimensions and a
+        full `DimensionGraph` is not provided.
     """
 
-    def __init__(self, name=None, dimensions=None, dataId=None):
+    def __init__(self, name=None, dimensions=None, dataId=None, *, universe=None):
         if name is None and dimensions is None:
             raise ValueError("At least one of name or dimensions must be given")
 
@@ -72,11 +76,21 @@ class LookupKey:
                 # If we are given a single dimension we use the "+" to
                 # indicate this but have to filter out the empty value
                 dimensions = [n for n in name.split("+") if n]
-                self._dimensions = DimensionNameSet(dimensions)
+                if universe is None:
+                    raise ValueError(f"Cannot construct LookupKey for {name} without dimension universe.")
+                else:
+                    self._dimensions = universe.extract(dimensions)
             else:
                 self._name = name
         else:
-            self._dimensions = dimensions
+            if not isinstance(dimensions, DimensionGraph):
+                if universe is None:
+                    raise ValueError(f"Cannot construct LookupKey for dimensions={dimensions} "
+                                     f"without universe.")
+                else:
+                    self._dimensions = universe.extract(dimensions)
+            else:
+                self._dimensions = dimensions
 
         # The dataId is converted to a frozenset of key/value
         # tuples so that it is not mutable
@@ -121,8 +135,7 @@ class LookupKey:
 
     @property
     def dimensions(self):
-        """Dimensions associated with lookup.
-        (`DimensionGraph` or `DimensionNameSet`)"""
+        """Dimensions associated with lookup. (`DimensionGraph`)"""
         return self._dimensions
 
     @property
@@ -149,7 +162,7 @@ class LookupKey:
         name : `str`, optional
             Primary index string for lookup.  Will override ``dimensions``
             if ``dimensions`` are set.
-        dimensions : `DimensionNameSet`, optional
+        dimensions : `DimensionGraph`, optional
             Dimensions that are relevant for lookup. Will override ``name``
             if ``name`` is already set.
         dataId : `dict`, optional
@@ -176,51 +189,7 @@ class LookupKey:
         return self.__class__(name=name, dimensions=dimensions, dataId=dataId)
 
 
-def normalizeLookupKeys(toUpdate, universe):
-    """Normalize dimensions used in keys of supplied dict.
-
-    Parameters
-    ----------
-    toUpdate : `dict` with keys of `LookupKey`
-        Dictionary to update.  The values are reassigned to normalized
-        versions of the keys.  Keys are ignored that are not `LookupKey`.
-    universe : `DimensionUniverse`
-        The set of all known dimensions. If `None`, returns without
-        action.
-
-    Notes
-    -----
-    Goes through all keys, and for keys that include
-    dimensions, rewrites those keys to use a verified set of
-    dimensions.
-
-    Raises
-    ------
-    ValueError
-        Raised if a key exists where a dimension is not part of
-        the ``universe``.
-    """
-    if universe is None:
-        return
-
-    # Get the keys because we are going to change them
-    allKeys = list(toUpdate.keys())
-
-    for k in allKeys:
-        if not isinstance(k, LookupKey):
-            continue
-        if k.dimensions is not None and not isinstance(k.dimensions, DimensionGraph):
-            newDimensions = universe.extract(k.dimensions)
-            newKey = k.clone(dimensions=newDimensions)
-            # Delete before adding the new version since LookupKeys hash
-            # to the same value regardless of DimensionGraph vs
-            # DimensionNameSet
-            oldValue = toUpdate[k]
-            del toUpdate[k]
-            toUpdate[newKey] = oldValue
-
-
-def processLookupConfigs(config):
+def processLookupConfigs(config, *, universe=None):
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
@@ -230,6 +199,9 @@ def processLookupConfigs(config):
         A `Config` representing a configuration mapping keys to values where
         the keys can be dataset type names, storage class names, dimensions
         or dataId components.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to expand and validate any used
+        in lookup keys.
 
     Returns
     -------
@@ -279,18 +251,18 @@ def processLookupConfigs(config):
                 dataIdKey = kv.group(1)
                 dataIdValue = kv.group(2)
                 for subKey, subStr in value.items():
-                    lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
+                    lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue}, universe=universe)
                     contents[lookup] = subStr
             else:
                 raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
-            lookup = LookupKey(name=name)
+            lookup = LookupKey(name=name, universe=universe)
             contents[lookup] = value
 
     return contents
 
 
-def processLookupConfigList(config):
+def processLookupConfigList(config, *, universe=None):
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
@@ -302,6 +274,9 @@ def processLookupConfigList(config):
         or dataId components.  DataId components are represented as entries
         in the `list` of `dicts` with a single key with a value of a `list`
         of new keys.
+    universe : `DimensionUniverse`, optional
+        Set of all known dimensions, used to expand and validate any used
+        in lookup keys.
 
     Returns
     -------
@@ -325,11 +300,11 @@ def processLookupConfigList(config):
                     dataIdKey = kv.group(1)
                     dataIdValue = kv.group(2)
                     for subKey in subKeys:
-                        lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue})
+                        lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue}, universe=universe)
                         contents.add(lookup)
                 else:
                     raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
-            contents.add(LookupKey(name=name))
+            contents.add(LookupKey(name=name, universe=universe))
 
     return contents
