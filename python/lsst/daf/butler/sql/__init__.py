@@ -6,3 +6,4 @@ from .resultColumnsManager import *
 from .queryBuilder import *
 from .singleDatasetQueryBuilder import *
 from .multipleDatasetQueryBuilder import *
+from .dataIdQueryBuilder import *
