@@ -45,7 +45,7 @@ class QuantumTestCase(unittest.TestCase):
         startTime = datetime(2018, 1, 1)
         endTime = datetime(2018, 1, 2)
         host = "localhost"
-        quantum = Quantum(task, run, startTime, endTime, host)
+        quantum = Quantum(task, run, startTime=startTime, endTime=endTime, host=host)
         self.assertEqual(quantum.task, task)
         self.assertEqual(quantum.run, run)
         self.assertEqual(quantum.predictedInputs, dict())
