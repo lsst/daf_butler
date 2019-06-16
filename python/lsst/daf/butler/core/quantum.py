@@ -30,9 +30,10 @@ class Quantum(Execution):
     """A discrete unit of work that may depend on one or more datasets and
     produces one or more datasets.
 
-    Most Quanta will be executions of a particular `SuperTask`’s `runQuantum`
-    method, but they can also be used to represent discrete units of work
-    performed manually by human operators or other software agents.
+    Most Quanta will be executions of a particular ``PipelineTask``’s
+    ``runQuantum`` method, but they can also be used to represent discrete
+    units of work performed manually by human operators or other software
+    agents.
 
     Parameters
     ----------
@@ -40,15 +41,18 @@ class Quantum(Execution):
         Fully-qualified name of the SuperTask that executed this Quantum.
     run : `Run`
         The Run this Quantum is a part of.
+    dataId : `DataId`, optional
+        The dimension values that idnetify this quantum.
     """
 
-    __slots__ = ("_task", "_run", "_predictedInputs", "_actualInputs", "_outputs")
+    __slots__ = ("_task", "_run", "_dataId", "_predictedInputs", "_actualInputs", "_outputs")
     __eq__ = slotValuesAreEqual
 
-    def __init__(self, task, run, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, task, run, *, dataId=None, **kwargs):
+        super().__init__(**kwargs)
         self._task = task
         self._run = run
+        self._dataId = dataId
         self._predictedInputs = {}
         self._actualInputs = {}
         self._outputs = {}
@@ -70,6 +74,12 @@ class Quantum(Execution):
         """The Run this Quantum is a part of (`Run`).
         """
         return self._run
+
+    @property
+    def dataId(self):
+        """The dimension values of the unit of processing (`DataId`).
+        """
+        return self._dataId
 
     @property
     def predictedInputs(self):
