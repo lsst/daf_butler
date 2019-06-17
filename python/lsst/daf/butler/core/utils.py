@@ -21,10 +21,12 @@
 
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
-           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta")
+           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
+           "NamedKeyDict")
 
 import sys
 import functools
+from collections.abc import MutableMapping
 
 from lsst.utils import doImport
 
@@ -301,3 +303,88 @@ class PrivateConstructorMeta(type):
         in the usual way.
         """
         return type.__call__(cls, *args, **kwds)
+
+
+class NamedKeyDict(MutableMapping):
+    """A dictionary wrapper that require keys to have a ``.name`` attribute,
+    and permits lookups using either key objects or their names.
+
+    Names can be used in place of keys when updating existing items, but not
+    when adding new items.
+
+    It is assumed (but asserted) that all name equality is equivalent to key
+    equality, either because the key objects define equality this way, or
+    because different objects with the same name are never included in the same
+    dictionary.
+
+    Parameters
+    ----------
+    args
+        All positional constructor arguments are forwarded directly to `dict`.
+        Keyword arguments are not accepted, because plain strings are not valid
+        keys for `NamedKeyDict`.
+
+    Raises
+    ------
+    AttributeError
+        Raised when an attempt is made to add an object with no ``.name``
+        attribute to the dictionary.
+    AssertionError
+        Raised when multiple keys have the same name.
+    """
+
+    __slots__ = ("_dict", "_names",)
+
+    def __init__(self, *args):
+        self._dict = dict(*args)
+        self._names = {key.name: key for key in self._dict}
+        assert len(self._names) == len(self._dict), "Duplicate names in keys."
+
+    @property
+    def names(self):
+        """The set of names associated with the keys, in the same order
+        (`~collections.abc.KeysView`).
+        """
+        return self._names.keys()
+
+    def byName(self):
+        """Return a `dict` with names as keys and the same values as ``self``.
+        """
+        return dict(zip(self._names.keys(), self._dict.values()))
+
+    def __len__(self):
+        return len(self._dict)
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __getitem__(self, key):
+        if hasattr(key, "name"):
+            return self._dict[key]
+        else:
+            return self._dict[self._names[key]]
+
+    def __setitem__(self, key, value):
+        if hasattr(key, "name"):
+            assert self._names.get(key.name, key) == key, "Name is already associated with a different key."
+            self._dict[key] = value
+            self._names[key.name] = key
+        else:
+            self._dict[self._names[key]] = value
+
+    def __delitem__(self, key):
+        if hasattr(key, "name"):
+            del self._dict[key]
+            del self._names[key.name]
+        else:
+            del self._dict[self._names[key]]
+            del self._names[key]
+
+    def keys(self):
+        return self._dict.keys()
+
+    def values(self):
+        return self._dict.values()
+
+    def items(self):
+        return self._dict.items()
