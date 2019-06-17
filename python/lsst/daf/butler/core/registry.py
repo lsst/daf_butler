@@ -756,60 +756,6 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @transactional
-    def addQuantum(self, quantum):
-        r"""Add a new `Quantum` to the `Registry`.
-
-        Parameters
-        ----------
-        quantum : `Quantum`
-            Instance to add to the `Registry`.
-            The given `Quantum` must not already be present in the
-            `Registry` (or any other), therefore its:
-
-            - `run` attribute must be set to an existing `Run`.
-            - `predictedInputs` attribute must be fully populated with
-              `DatasetRef`\ s, and its.
-            - `actualInputs` and `outputs` will be ignored.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def getQuantum(self, id):
-        """Retrieve an Quantum.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the Quantum.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def markInputUsed(self, quantum, ref):
-        """Record the given `DatasetRef` as an actual (not just predicted)
-        input of the given `Quantum`.
-
-        This updates both the `Registry`"s `Quantum` table and the Python
-        `Quantum.actualInputs` attribute.
-
-        Parameters
-        ----------
-        quantum : `Quantum`
-            Producer to update.
-            Will be updated in this call.
-        ref : `DatasetRef`
-            To set as actually used input.
-
-        Raises
-        ------
-        KeyError
-            If ``quantum`` is not a predicted consumer for ``ref``.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
     @disableWhenLimited
     @transactional
     def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):

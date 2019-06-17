@@ -21,7 +21,6 @@
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
-import itertools
 import contextlib
 import warnings
 
@@ -39,7 +38,6 @@ from ..core.registry import (RegistryConfig, Registry, disableWhenLimited,
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
-from ..core.quantum import Quantum
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.dimensions import DataId, Dimension
@@ -746,69 +744,6 @@ class SqlRegistry(Registry):
             self._cachedRuns[run.id] = run
             self._cachedRuns[run.collection] = run
         return run
-
-    @transactional
-    def addQuantum(self, quantum):
-        # Docstring inherited from Registry.addQuantum.
-        quantumTable = self._schema.tables["quantum"]
-        datasetConsumersTable = self._schema.tables["dataset_consumers"]
-        # First add the Execution part
-        self.addExecution(quantum)
-        # Then the Quantum specific part
-        self._connection.execute(quantumTable.insert().values(execution_id=quantum.id,
-                                                              task=quantum.task,
-                                                              run_id=quantum.run.id))
-        # Attach dataset consumers
-        # We use itertools.chain here because quantum.predictedInputs is a
-        # dict of ``name : [DatasetRef, ...]`` and we need to flatten it
-        # for inserting.
-        flatInputs = itertools.chain.from_iterable(quantum.predictedInputs.values())
-        self._connection.execute(datasetConsumersTable.insert(),
-                                 [{"quantum_id": quantum.id, "dataset_id": ref.id, "actual": False}
-                                     for ref in flatInputs])
-
-    def getQuantum(self, id):
-        # Docstring inherited from Registry.getQuantum.
-        executionTable = self._schema.tables["execution"]
-        quantumTable = self._schema.tables["quantum"]
-        result = self._connection.execute(
-            select([quantumTable.c.task,
-                    quantumTable.c.run_id,
-                    executionTable.c.start_time,
-                    executionTable.c.end_time,
-                    executionTable.c.host]).select_from(quantumTable.join(executionTable)).where(
-                quantumTable.c.execution_id == id)).fetchone()
-        if result is not None:
-            run = self.getRun(id=result["run_id"])
-            quantum = Quantum(task=result["task"],
-                              run=run,
-                              startTime=result["start_time"],
-                              endTime=result["end_time"],
-                              host=result["host"],
-                              id=id)
-            # Add predicted and actual inputs to quantum
-            datasetConsumersTable = self._schema.tables["dataset_consumers"]
-            for result in self._connection.execute(select([datasetConsumersTable.c.dataset_id,
-                                                           datasetConsumersTable.c.actual]).where(
-                    datasetConsumersTable.c.quantum_id == id)):
-                ref = self.getDataset(result["dataset_id"])
-                quantum.addPredictedInput(ref)
-                if result["actual"]:
-                    quantum._markInputUsed(ref)
-            return quantum
-        else:
-            return None
-
-    @transactional
-    def markInputUsed(self, quantum, ref):
-        # Docstring inherited from Registry.markInputUsed.
-        datasetConsumersTable = self._schema.tables["dataset_consumers"]
-        result = self._connection.execute(datasetConsumersTable.update().where(and_(
-            datasetConsumersTable.c.quantum_id == quantum.id,
-            datasetConsumersTable.c.dataset_id == ref.id)).values(actual=True))
-        if result.rowcount != 1:
-            raise KeyError("{} is not a predicted consumer for {}".format(ref, quantum))
-        quantum._markInputUsed(ref)
 
     @disableWhenLimited
     @transactional
