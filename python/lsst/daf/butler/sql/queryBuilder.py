@@ -326,6 +326,17 @@ class QueryBuilder(ABC):
             _LOG.debug("building query: %s", compiled)
         return query
 
+    def __str__(self):
+        query = self.build()
+        try:
+            compiled = str(query.compile(bind=self.registry._connection.engine,
+                                         compile_kwargs={"literal_binds": True}))
+        except AttributeError:
+            # Workaround apparent SQLAlchemy bug that sometimes treats a
+            # list as if it were a string.
+            compiled = str(query)
+        return compiled
+
     def execute(self, whereSql=None, **kwds):
         """Build and execute the query, iterating over result rows.
 
