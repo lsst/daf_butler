@@ -24,7 +24,7 @@ import unittest
 
 from lsst.daf.butler import (ButlerConfig, DatasetType, Registry, DataId,
                              DatasetOriginInfoDef, StorageClass)
-from lsst.daf.butler.sql import DataIdQueryBuilder
+from lsst.daf.butler.sql import DataIdQueryBuilder, SingleDatasetQueryBuilder
 from lsst.sphgeom import Angle, Box, LonLat, NormalizedAngle
 
 
@@ -342,6 +342,42 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         rows = list(builder.execute())
         self.assertEqual(len(rows), 0)
+
+    def testCalibrationLabelIndirection(self):
+        """Test that SingleDatasetQueryBuilder can look up datasets with
+        calibration_label dimensions from a data ID with exposure dimensions.
+        """
+        # exposure <-> calibration_label lookups for master calibrations
+        flat = DatasetType(
+            "flat",
+            self.registry.dimensions.extract(
+                ["instrument", "detector", "physical_filter", "calibration_label"]
+            ),
+            "ImageU"
+        )
+        builder = SingleDatasetQueryBuilder.fromSingleCollection(self.registry, flat, collection="calib")
+        newLinks = builder.relateDimensions(
+            self.registry.dimensions.extract(["instrument", "exposure", "detector"], implied=True)
+        )
+        self.assertEqual(newLinks, set(["exposure"]))
+        self.assertIsNotNone(builder.findSelectableByName("exposure_calibration_label_join"))
+
+    def testSkyPixIndirection(self):
+        """Test that SingleDatasetQueryBuilder can look up datasets with
+        skypix dimensions from a data ID with visit+detector dimensions.
+        """
+        # exposure <-> calibration_label lookups for master calibrations
+        refcat = DatasetType(
+            "refcat",
+            self.registry.dimensions.extract(["skypix"]),
+            "ImageU"
+        )
+        builder = SingleDatasetQueryBuilder.fromSingleCollection(self.registry, refcat, collection="refcats")
+        newLinks = builder.relateDimensions(
+            self.registry.dimensions.extract(["instrument", "visit", "detector"], implied=True)
+        )
+        self.assertEqual(newLinks, set(["instrument", "visit", "detector"]))
+        self.assertIsNotNone(builder.findSelectableByName("visit_detector_skypix_join"))
 
 
 if __name__ == "__main__":
