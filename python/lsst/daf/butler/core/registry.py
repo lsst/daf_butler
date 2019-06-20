@@ -997,7 +997,7 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     @disableWhenLimited
     def selectMultipleDatasetTypes(self, originInfo, expression=None, required=(), optional=(),
-                                   prerequisite=(), perDatasetTypeDimensions=(), expandDataIds=True):
+                                   prerequisite=(), expandDataIds=True):
         """Evaluate a filter expression and lists of
         `DatasetTypes <DatasetType>` and return a set of dimension values.
 
@@ -1028,9 +1028,6 @@ class Registry(metaclass=ABCMeta):
             `Registry` implementations). Any DatasetTypes that are present in
             both ``required`` and ``prerequisite`` are considered
             ``prerequisite``.
-        perDatasetTypeDimensions : iterable of `Dimension` or `str`, optional
-            Dimensions (or `str` names thereof) for which different dataset
-            types do not need to have the same values in each result row.
         expandDataIds : `bool`
             If `True` (default), expand all data IDs when returning them.
 

@@ -27,7 +27,7 @@ from abc import ABCMeta, abstractmethod
 from enum import Enum, auto
 from sqlalchemy.sql import and_
 
-from ..core import DimensionSet, DatasetRef
+from ..core import DatasetRef
 from .queryBuilder import QueryBuilder
 from .singleDatasetQueryBuilder import SingleDatasetQueryBuilder
 
@@ -272,7 +272,7 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
 
     @classmethod
     def fromDatasetTypes(cls, registry, originInfo, required=(), optional=(), prerequisite=(),
-                         perDatasetTypeDimensions=(), defer=False, addResultColumns=True):
+                         defer=False, addResultColumns=True):
         r"""Build a query that relates multiple `DatasetType`s via their
         dimensions.
 
@@ -303,9 +303,6 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
             (see the documentaiton ``defer`` argument).
             Any `DatasetType`'s that are present in both ``required`` and
             ``prerequisite`` are considered ``prerequisite``.
-        perDatasetTypeDimensions : iterable of `Dimension` or `str`, optional
-            Dimensions (or `str` names thereof) for which different dataset
-            types do not need to have the same values in each result row.
         defer : `bool`
             If `True`, defer queries for optional and prerequisite dataset IDs
             until row-by-row processing of the main query's results. Queries
@@ -321,25 +318,21 @@ class MultipleDatasetQueryBuilder(QueryBuilder):
         assert required.isdisjoint(optional)
         assert prerequisite.isdisjoint(optional)
 
-        perDatasetTypeDimensions = DimensionSet(registry.dimensions, perDatasetTypeDimensions)
-        resultDimensions = registry.dimensions.extract(
+        prerequisiteDimensions = registry.dimensions.extract(
+            itertools.chain.from_iterable(dsType.dimensions.names for dsType in prerequisite),
+            implied=True
+        )
+        commonDimensions = registry.dimensions.extract(
             itertools.chain(
                 itertools.chain.from_iterable(dsType.dimensions.names for dsType in required),
                 itertools.chain.from_iterable(dsType.dimensions.names for dsType in optional),
-                itertools.chain.from_iterable(dsType.dimensions.names for dsType in prerequisite),
-            )
-        )
-        _LOG.debug("Original dimensions (needed by DatasetTypes): %s", resultDimensions)
-        allDimensions = resultDimensions.union(resultDimensions.implied())
-        _LOG.debug("All dimensions (expanded to include implied): %s", allDimensions)
-        commonDimensions = registry.dimensions.extract(
-            allDimensions.toSet().difference(perDatasetTypeDimensions),
+            ),
             implied=True
         )
-        _LOG.debug("Per-DatasetType dimensions: %s", perDatasetTypeDimensions)
-        _LOG.debug("Common dimensions (per-DatasetType dimensions removed): %s", commonDimensions)
-        if not commonDimensions.isdisjoint(perDatasetTypeDimensions):
-            raise ValueError("Some per-DatasetType dimensions are dependencies of common dimensions")
+        perDatasetTypeDimensions = prerequisiteDimensions.toSet().difference(commonDimensions.toSet())
+
+        _LOG.debug("Common dimensions (used by regular inputs and outputs): %s", commonDimensions)
+        _LOG.debug("Per-DatasetType dimensions (used only by prerequisites): %s", perDatasetTypeDimensions)
 
         self = cls.fromDimensions(registry, dimensions=commonDimensions, addResultColumns=addResultColumns)
 

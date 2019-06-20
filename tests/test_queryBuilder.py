@@ -253,8 +253,8 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(row.dataId["detector"] for row in rows), (1, 2, 3))
 
     def testCalibrationLabel(self):
-        """Test the calibration_label dimension and the
-        perDatasetTypeDimensions option to `Registry.selectDimensions`.
+        """Test the calibration_label dimension and indirect dimension
+        lookups `Registry.selectDimensions`.
         """
         registry = self.registry
 
@@ -367,7 +367,6 @@ class QueryBuilderTestCase(unittest.TestCase):
             originInfo=originInfo,
             required=[rawType],
             optional=[calexpType],
-            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         rows = list(builder.execute())
@@ -385,7 +384,6 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[biasType],
-            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         rows = list(builder.execute())
@@ -403,7 +401,6 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[flatType],
-            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         with self.assertRaises(LookupError):
@@ -416,7 +413,6 @@ class QueryBuilderTestCase(unittest.TestCase):
             originInfo=originInfo,
             required=[rawType, flatType],
             optional=[calexpType],
-            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         rows = list(builder.execute())
@@ -424,7 +420,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         for row in rows:
             self.assertCountEqual(row.dataId.keys(),
                                   ("instrument", "detector", "exposure", "visit",
-                                   "physical_filter", "abstract_filter"))
+                                   "physical_filter", "abstract_filter", "calibration_label"))
             self.assertCountEqual(row.datasetRefs.keys(), (rawType, flatType, calexpType))
 
         # use both bias and flat, plus expression
@@ -434,7 +430,6 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[flatType, biasType],
-            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         builder.whereParsedExpression("detector IN (1, 3) AND exposure NOT IN (100, 101, 201)")
@@ -453,7 +448,6 @@ class QueryBuilderTestCase(unittest.TestCase):
             required=[rawType],
             optional=[calexpType],
             prerequisite=[flatType, biasType],
-            perDatasetTypeDimensions=["calibration_label"],
             defer=self.DEFER
         )
         builder.whereParsedExpression("exposure.exposure = 110 AND detector.detector = 1")
