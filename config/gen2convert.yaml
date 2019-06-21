@@ -81,3 +81,4 @@ skip:
   - transmission_sensor
   - transmission_optics
   - transmission_atmosphere
+  - defects
