@@ -22,10 +22,8 @@
 import unittest
 from datetime import datetime
 
-from lsst.daf.butler import DimensionUniverse
-from lsst.daf.butler.core.datasets import DatasetType, DatasetRef
-from lsst.daf.butler.core.quantum import Quantum
-from lsst.daf.butler.core.storageClass import StorageClass
+from lsst.daf.butler import Quantum, DimensionUniverse, StorageClass, DatasetType, DatasetRef
+from lsst.daf.butler.core.utils import NamedKeyDict
 
 """Tests for Quantum.
 """
@@ -40,16 +38,17 @@ class QuantumTestCase(unittest.TestCase):
         """
         # Quantum specific arguments
         run = None  # TODO add Run
-        task = "some.task.object"  # TODO Add a `SuperTask`?
+        taskName = "some.task.object"  # can't use a real PipelineTask due to inverted package dependency
         # Base class arguments
         startTime = datetime(2018, 1, 1)
         endTime = datetime(2018, 1, 2)
         host = "localhost"
-        quantum = Quantum(task, run, startTime=startTime, endTime=endTime, host=host)
-        self.assertEqual(quantum.task, task)
+        quantum = Quantum(taskName=taskName, run=run, startTime=startTime, endTime=endTime, host=host)
+        self.assertEqual(quantum.taskName, taskName)
         self.assertEqual(quantum.run, run)
-        self.assertEqual(quantum.predictedInputs, dict())
-        self.assertEqual(quantum.actualInputs, dict())
+        self.assertEqual(quantum.predictedInputs, NamedKeyDict())
+        self.assertEqual(quantum.actualInputs, NamedKeyDict())
+        self.assertIsNone(quantum.dataId)
         self.assertIsNone(quantum.id)
         self.assertEqual(quantum.startTime, startTime)
         self.assertEqual(quantum.endTime, endTime)
@@ -58,7 +57,7 @@ class QuantumTestCase(unittest.TestCase):
     def testAddInputsOutputs(self):
         """Test of addPredictedInput() method.
         """
-        quantum = Quantum(task="some.task.object", run=None)
+        quantum = Quantum(taskName="some.task.object", run=None)
 
         # start with empty
         self.assertEqual(quantum.predictedInputs, dict())
