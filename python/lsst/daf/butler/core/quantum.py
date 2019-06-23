@@ -21,8 +21,9 @@
 
 __all__ = ("Quantum",)
 
-from .utils import slotValuesAreEqual
+from lsst.utils import doImport
 
+from .utils import NamedKeyDict
 from .execution import Execution
 
 
@@ -37,37 +38,71 @@ class Quantum(Execution):
 
     Parameters
     ----------
-    task : `str` or `SuperTask`
-        Fully-qualified name of the SuperTask that executed this Quantum.
-    run : `Run`
-        The Run this Quantum is a part of.
+    taskName : `str`, optional
+        Fully-qualified name of the Task class that executed or will execute
+        this Quantum.  If not provided, ``taskClass`` must be.
+    taskClass : `type`, optional
+        The Task class that executed or will execute this Quantum.  If not
+        provided, ``taskName`` must be.  Overrides ``taskName`` if both are
+        provided.
     dataId : `DataId`, optional
-        The dimension values that idnetify this quantum.
+        The dimension values that identify this `Quantum`.
+    run : `Run`, optional
+        The Run this Quantum is a part of.
+    initInputs : collection of `DatasetRef`, optional
+        Datasets that are needed to construct an instance of the Task.  May
+        be a flat iterable of `DatasetRef` instances or a mapping from
+        `DatasetType` to `DatasetRef`.
+    predictedInputs : `~collections.abc.Mapping`, optional
+        Inputs identified prior to execution, organized as a mapping from
+        `DatasetType` to a list of `DatasetRef`.  Must be a superset of
+        ``actualInputs``.
+    actualInputs : `~collections.abc.Mapping`, optional
+        Inputs actually used during execution, organized as a mapping from
+        `DatasetType` to a list of `DatasetRef`.  Must be a subset of
+        ``predictedInputs``.
+    outputs : `~collections.abc.Mapping`, optional
+        Outputs from executing this quantum of work, organized as a mapping
+        from `DatasetType` to a list of `DatasetRef`.
+    kwargs
+        Additional arguments are forwarded to the base `Execution` constructor.
     """
 
-    __slots__ = ("_task", "_run", "_dataId", "_predictedInputs", "_actualInputs", "_outputs")
-    __eq__ = slotValuesAreEqual
+    __slots__ = ("_taskName", "_taskClass", "_dataId", "_run",
+                 "_initInputs", "_predictedInputs", "_actualInputs", "_outputs")
 
-    def __init__(self, task, run, *, dataId=None, **kwargs):
+    def __init__(self, *, taskName=None, taskClass=None, dataId=None, run=None,
+                 initInputs=None, predictedInputs=(), actualInputs=(), outputs=(),
+                 **kwargs):
         super().__init__(**kwargs)
-        self._task = task
+        if taskClass is not None:
+            taskName = f"{taskClass.__module__}.{taskClass.__name__}"
+        self._taskName = taskName
+        self._taskClass = taskClass
         self._run = run
         self._dataId = dataId
-        self._predictedInputs = {}
-        self._actualInputs = {}
-        self._outputs = {}
+        if initInputs is None:
+            initInputs = {}
+        elif not hasattr(initInputs, "keys"):
+            initInputs = {ref.datasetType: ref for ref in initInputs}
+        self._initInputs = NamedKeyDict(initInputs)
+        self._predictedInputs = NamedKeyDict(predictedInputs)
+        self._actualInputs = NamedKeyDict(actualInputs)
+        self._outputs = NamedKeyDict(outputs)
 
     @property
-    def task(self):
-        """Task associated with this `Quantum`.
-
-        If the `Quantum` is associated with a `SuperTask`, this is the
-        `SuperTask` instance that produced and should execute this set of
-        inputs and outputs. If not, a human-readable string identifier
-        for the operation. Some Registries may permit the value to be
-        `None`, but are not required to in general.
+    def taskClass(self):
+        """Task class associated with this `Quantum` (`type`).
         """
-        return self._task
+        if self._taskClass is None:
+            self._taskClass = doImport(self._taskName)
+        return self._taskClass
+
+    @property
+    def taskName(self):
+        """Fully-qualified name of the task associated with `Quantum` (`str`).
+        """
+        return self._taskName
 
     @property
     def run(self):
@@ -82,34 +117,50 @@ class Quantum(Execution):
         return self._dataId
 
     @property
-    def predictedInputs(self):
-        r"""A `dict` of input datasets that were expected to be used,
-        with `DatasetType` names as keys and a list of `DatasetRef` instances
-        as values.
+    def initInputs(self):
+        """A mapping of datasets used to construct the Task,
+        with `DatasetType` instances as keys (names can also be used for
+        lookups) and `DatasetRef` instances as values.
+        """
+        return self._initInputs
 
-        Input `Datasets` that have already been stored may be
-        `DatasetRef`\ s, and in many contexts may be guaranteed to be.
-        Read-only; update via `Quantum.addPredictedInput()`.
+    @property
+    def predictedInputs(self):
+        """A mapping of input datasets that were expected to be used,
+        with `DatasetType` instances as keys (names can also be used for
+        lookups) and a list of `DatasetRef` instances as values.
+
+        Notes
+        -----
+        We cannot use `set` instead of `list` for the nested container because
+        `DatasetRef` instances cannot be compared reliably when some have
+        integers IDs and others do not.
         """
         return self._predictedInputs
 
     @property
     def actualInputs(self):
-        """A `dict` of input datasets that were actually used, with the same
+        """A mapping of input datasets that were actually used, with the same
         form as `Quantum.predictedInputs`.
 
-        All returned sets must be subsets of those in `predictedInputs`.
-
-        Read-only; update via `Registry.markInputUsed()`.
+        Notes
+        -----
+        We cannot use `set` instead of `list` for the nested container because
+        `DatasetRef` instances cannot be compared reliably when some have
+        integers IDs and others do not.
         """
         return self._actualInputs
 
     @property
     def outputs(self):
-        """A `dict` of output datasets (to be) generated for this quantum,
+        """A mapping of output datasets (to be) generated for this quantum,
         with the same form as `predictedInputs`.
 
-        Read-only; update via `addOutput()`.
+        Notes
+        -----
+        We cannot use `set` instead of `list` for the nested container because
+        `DatasetRef` instances cannot be compared reliably when some have
+        integers IDs and others do not.
         """
         return self._outputs
 
@@ -124,8 +175,7 @@ class Quantum(Execution):
         ref : `DatasetRef`
             Reference for a Dataset to add to the Quantum's predicted inputs.
         """
-        datasetTypeName = ref.datasetType.name
-        self._predictedInputs.setdefault(datasetTypeName, []).append(ref)
+        self._predictedInputs.setdefault(ref.datasetType, []).append(ref)
 
     def _markInputUsed(self, ref):
         """Mark an input as used.
@@ -133,14 +183,13 @@ class Quantum(Execution):
         This does not automatically update a `Registry`.
         For that use `Registry.markInputUsed()` instead.
         """
-        datasetTypeName = ref.datasetType.name
         # First validate against predicted
-        if datasetTypeName not in self._predictedInputs:
-            raise ValueError("Dataset type {} not in predicted inputs".format(datasetTypeName))
-        if ref not in self._predictedInputs[datasetTypeName]:
+        if ref.datasetType not in self._predictedInputs:
+            raise ValueError("Dataset type {} not in predicted inputs".format(ref.datasetType.name))
+        if ref not in self._predictedInputs[ref.datasetType]:
             raise ValueError("Actual input {} was not predicted".format(ref))
         # Now insert as actual
-        self._actualInputs.setdefault(datasetTypeName, []).append(ref)
+        self._actualInputs.setdefault(ref.datasetType, []).append(ref)
 
     def addOutput(self, ref):
         """Add an output `DatasetRef` to the `Quantum`.
@@ -153,5 +202,4 @@ class Quantum(Execution):
         ref : `DatasetRef`
             Reference for a Dataset to add to the Quantum's outputs.
         """
-        datasetTypeName = ref.datasetType.name
-        self._outputs.setdefault(datasetTypeName, []).append(ref)
+        self._outputs.setdefault(ref.datasetType, []).append(ref)
