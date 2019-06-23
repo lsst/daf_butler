@@ -581,3 +581,23 @@ class DataId(Mapping):
         args = (None,)
         kwargs = dict(dimensions=self.dimensions())
         return (args, kwargs)
+
+    def matches(self, other):
+        """Compare two data IDs with possibly differing dimensions.
+
+        Parameters
+        ----------
+        other : `DataId` or `dict`
+            Other data ID to compare to.
+
+        Returns
+        -------
+        relationship : `bool` or `None`
+            `True` if all of the keys ``self`` and ``other`` have in common
+            have the same values; `False` if one or more do not have the same
+            values, and `None` if there are no common keys.
+        """
+        keys = self.keys() & other.keys()
+        if not keys:
+            return None
+        return all(self[k] == other[k] for k in keys)
