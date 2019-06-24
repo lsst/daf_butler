@@ -423,9 +423,18 @@ class DimensionUniverse(DimensionGraph):
         super().__init__(universe=self, elements=elements, dimensions=dimensions, joins=joins)
         self._backrefs = {}
         self._subgraphCache = {}
+        self._empty = None
 
     def __repr__(self):
         return f"DimensionUniverse({self._dimensions}, joins={self._joins})"
+
+    @property
+    def empty(self):
+        """Return an empty graph in this universe (`DimensionGraph`).
+        """
+        if self._empty is None:
+            self._empty = self.extract()
+        return self._empty
 
     def extract(self, dimensions=(), joins=(), implied=False):
         r"""Return a new graph containing the given elements.
