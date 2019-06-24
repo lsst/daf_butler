@@ -1030,6 +1030,66 @@ schema:
             );
       materialize: false
 
+    visit_calibration_label_join:
+      doc: >
+        A many-to-many join table that relates visit to calibration_label.
+
+        This can and probably should be implemented as a view.
+      columns:
+      -
+        name: instrument
+        type: string
+        length: 16
+        primary_key: true
+        nullable: false
+        doc: >
+          Name of the instrument associated with these master calibration
+          products.
+      -
+        name: calibration_label
+        type: string
+        length: 128
+        primary_key: true
+        nullable: false
+        doc: label used to identify a group of master calibration products.
+      -
+        name: visit
+        type: int
+        primary_key: true
+        nullable: false
+        doc: >
+          Unique (with instrument) integer identifier for an visit.
+      foreignKeys:
+      -
+        src: instrument
+        tgt: instrument.instrument
+      -
+        src:
+        - instrument
+        - visit
+        tgt:
+        - visit.instrument
+        - visit.visit
+      -
+        src:
+        - instrument
+        - calibration_label
+        tgt:
+        - calibration_label.instrument
+        - calibration_label.calibration_label
+      sql: >
+        SELECT DISTINCT
+            visit.instrument, visit.visit, calibration_label.calibration_label
+        FROM
+            visit INNER JOIN calibration_label ON (
+                visit.instrument = calibration_label.instrument
+                AND
+                visit.datetime_begin >= calibration_label.valid_first
+                AND
+                visit.datetime_end <= calibration_label.valid_last
+            );
+      materialize: false
+
     visit_detector_region:
       doc: >
         A one-to-many table join table that stores the spatial region
