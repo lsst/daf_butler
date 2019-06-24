@@ -342,7 +342,7 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         newLinks : `set` of `str`
             The names of additional dimension link columns provided by the
             subquery via the added joins.  This is a subset of
-            ``otherDimensions.link()`` and disjoint from
+            ``otherDimensions.links()`` and disjoint from
             ``self.datasetType.dimensions.links()``.
 
         Notes
