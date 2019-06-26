@@ -37,7 +37,6 @@ except ImportError:
 
 from lsst.utils import doImport
 from .core.utils import transactional
-from .core.s3utils import parsePathToUriElements
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .core.registry import Registry
@@ -50,6 +49,7 @@ from .core.dimensions import DataId
 from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
+from . core.location import ButlerURI
 
 log = logging.getLogger(__name__)
 
@@ -180,16 +180,18 @@ class Butler:
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
-        scheme, rootpath, relpath = parsePathToUriElements(root)
-        if scheme == 'file://':
+        uri = ButlerURI(root)
+        if uri.scheme == 'file':
             root = os.path.abspath(root)
             if not os.path.isdir(root):
-                os.makedirs(root)
-        elif scheme == 's3://':
+                safeMakeDir(root)
+        elif uri.scheme == 's3':
             s3 = boto3.resource('s3')
             # implies bucket exists, if not another level of checks
-            bucket = s3.Bucket(rootpath)
-            bucket.put_object(Bucket=rootpath, Key=(relpath))
+            bucket = s3.Bucket(uri.netloc)
+            bucket.put_object(Bucket=uri.netloc, Key=(uri.path.lstrip('/')))
+        else:
+            raise ValueError(f'Unrecognized scheme: {uri.scheme}')
         config = Config(config)
 
         # If we are creating a new repo from scratch with relative roots,
@@ -202,19 +204,17 @@ class Butler:
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
+
         if standalone:
             config.merge(full)
-
-        if scheme == 'file://':
-            config.dumpToFile(os.path.join(root, "butler.yaml"))
-        elif scheme == 's3://':
-            config.dumpToS3(rootpath, os.path.join(relpath, 'butler.yaml'))
+        config.dumpToUri(uri)
 
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
-    def __init__(self, config=None, collection=None, run=None):
+    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
+        # save arguments for pickling
         self._args = (config, butler, collection, run, searchPaths)
         if butler is not None:
             if config is not None or searchPaths is not None:

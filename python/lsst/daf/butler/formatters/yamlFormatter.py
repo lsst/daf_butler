@@ -61,7 +61,7 @@ class YamlFormatter(FileFormatter):
 
         return data
 
-    def _fromBytes(self, inMemoryDataset, pytype=None):
+    def _fromBytes(self, bytesObject, pytype=None):
         """Read the bytes object as a python object.
 
         Parameters
@@ -74,25 +74,16 @@ class YamlFormatter(FileFormatter):
         Returns
         -------
         data : `object`
-            Either data as Python object read from the pickled string, or None
-            if the string could not be read.
+            Either data as Python object read from bytes, or None if the string
+            could not be read.
         """
         try:
-            data = yaml.load(inMemoryDataset, Loader=yaml.UnsafeLoader)
+            data = yaml.load(bytesObject, Loader=yaml.UnsafeLoader)
         except yaml.YAMLError:
             data = None
         try:
             data = data.exportAsDict()
         except AttributeError:
-            # its either my mis-use of yaml or intended behaviour, but yaml
-            # returns an py object, a list or an dictionary. Later, however,
-            # FileFormatter assembles and checks if only one of objects
-            # components was requested. It does so by forcing assembly of the
-            # full object and then coercing one of its parts to a pytype. I
-            # didn't want to figure out what is involved in the assembly
-            # process but it seems as if it only wants an dict. Pickle,
-            # however, always gets back the object. There is short-cutting
-            # potential here I believe (but in fileformatter)
             pass
         return data
 
@@ -115,7 +106,7 @@ class YamlFormatter(FileFormatter):
         with open(self.fileDescriptor.location.path, "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            fd.write(self._toBytes(inMemoryDataset))
+            fd.write(self._toBytes(inMemoryDataset).decode())
 
     def _toBytes(self, inMemoryDataset):
         """Write the in memory dataset to a bytestring.
@@ -127,7 +118,7 @@ class YamlFormatter(FileFormatter):
 
         Returns
         -------
-        data : `str`
+        data : `bytes`
             YAML string encoded to bytes.
 
         Raises
@@ -135,7 +126,7 @@ class YamlFormatter(FileFormatter):
         Exception
             The object could not be serialized.
         """
-        return yaml.dump(inMemoryDataset)
+        return yaml.dump(inMemoryDataset).encode()
 
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.

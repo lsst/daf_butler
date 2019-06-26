@@ -30,10 +30,6 @@ import pickle
 import string
 import random
 
-# I suspect botocore might exist if boto2 exists but we only
-# use it to reference boto3 generic ClientError class. moto
-# should not be able to exist without boto3. Are these good enough
-# reasons to bundle them all together?
 try:
     import boto3
     import botocore
@@ -53,7 +49,8 @@ from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.core.s3utils import parsePathToUriElements, s3CheckFileExists
+from lsst.daf.butler.core.location import ButlerURI
+from lsst.daf.butler.core.s3utils import s3CheckFileExists
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -405,9 +402,10 @@ class ButlerTests:
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
     def testStringification(self):
+        # is root declared in the self.configFile, which one exactly is this?
         butler = Butler(self.tmpConfigFile)
-        butlerStr = str(butler)
 
+        butlerStr = str(butler)
         if self.datastoreStr is not None:
             for testStr in self.datastoreStr:
                 self.assertIn(testStr, butlerStr)
@@ -435,7 +433,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         Test testPutTemplates verifies actual physical existance of the files
         in the requested location. For POSIXDatastore this test is equivalent
-        to `os.path.exist` call.
+        to `os.path.exists` call.
         """
         return os.path.exists(os.path.join(root, path))
 
@@ -457,7 +455,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         # Create two almost-identical DatasetTypes (both will use default
         # template)
-        dimensions = ("instrument", "visit")
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         butler.registry.registerDatasetType(DatasetType("metric1", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric2", dimensions, storageClass))
         butler.registry.registerDatasetType(DatasetType("metric3", dimensions, storageClass))
@@ -618,8 +616,8 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
 
     def setUp(self):
         config = Config(self.configFile)
-        schema, bucket, root = parsePathToUriElements(config['.datastore.datastore.root'])
-        self.bucketName = bucket
+        uri = ButlerURI(config['.datastore.datastore.root'])
+        self.bucketName = uri.netloc
 
         if self.useTempRoot:
             self.root = self.genRoot()
@@ -661,9 +659,9 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         if boto3 is None:
             raise ModuleNotFoundError(("Could not find boto3. "
                                        "Are you sure it is installed?"))
-        scheme, bucketname, relpath = parsePathToUriElements(root)
+        uri = ButlerURI(root)
         client = boto3.client('s3')
-        return s3CheckFileExists(client, bucketname, relpath)[0]
+        return s3CheckFileExists(client, uri.netloc, uri.path.lstrip('/'))[0]
 
 
 if __name__ == "__main__":

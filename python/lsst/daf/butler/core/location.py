@@ -175,23 +175,11 @@ class ButlerURI:
         new : `ButlerURI`
             New `ButlerURI` object with updated values.
         """
-
-    def __init__(self, datastoreRoot):
-        """Constructor
-        Parameters
-        ----------
-        datastoreRoot : `str`
-            Root location of the `Datastore` in the filesystem.
-        """
         return self.__class__(self._uri._replace(**kwargs))
 
     def updateFile(self, newfile):
         """Update in place the final component of the path with the supplied
         file name.
-        """
-
-    def fromUri(self, uri):
-        """Factory function to create a `Location` from a URI.
 
         Parameters
         ----------
@@ -219,6 +207,21 @@ class ButlerURI:
     @staticmethod
     def _fixupFileUri(parsed, root=None, forceAbsolute=False):
         """Fix up relative paths in file URI instances.
+
+        Parameters
+        ----------
+        parsed : `~urllib.parse.ParseResult`
+            The result from parsing a URI using `urllib.parse`.
+        root : `str`, optional
+            Path to use as root when converting relative to absolute.
+            If `None`, it will be the current working directory. This
+            is a local file system path, not a URI.
+        forceAbsolute : `bool`
+            If `True`, scheme-less relative URI will be converted to an
+            absolute path using a ``file`` scheme. If `False` scheme-less URI
+            will remain scheme-less and will not be updated to ``file`` or
+            absolute path. URIs with a defined scheme will not be affected
+            by this parameter.
 
         Returns
         -------
@@ -306,8 +309,10 @@ class Location:
         Relative path within datastore.  Assumed to be using the local
         path separator if a ``file`` scheme is being used for the URI,
         else a POSIX separator.
-
     """
+
+    __slots__ = ("_datastoreRootUri", "_path")
+
     def __init__(self, datastoreRootUri, path):
         if isinstance(datastoreRootUri, str):
             datastoreRootUri = ButlerURI(datastoreRootUri)
@@ -347,15 +352,44 @@ class Location:
     @property
     def path(self):
         """Path corresponding to location.
-        This path includes the root of the `Datastore`.
+
+        This path includes the root of the `Datastore`, but does not include
+        non-path components of the root URI.  If a file URI scheme is being
+        used the path will be returned with the local OS path separator.
         """
-        return os.path.join(self._datastoreRoot, self._uri.path.lstrip("/"))
+        if not self._datastoreRootUri.scheme:
+            # Entirely local file system
+            return os.path.normpath(os.path.join(self._datastoreRootUri.path, self.pathInStore))
+        elif self._datastoreRootUri.scheme == "file":
+            return os.path.normpath(os.path.join(posix2os(self._datastoreRootUri.path), self.pathInStore))
+        else:
+            return posixpath.join(self._datastoreRootUri.path, self.pathInStore)
 
     @property
     def pathInStore(self):
-        """Path corresponding to S3Location relative to `S3Datastore` root.
+        """Path corresponding to location relative to `Datastore` root.
+
+        Uses the same path separator as supplied to the object constructor.
         """
-        return self._uri.path.lstrip("/")
+        return self._path
+
+    @property
+    def bucketName(self):
+        """If Location is an S3 protocol, returns the bucket name."""
+        if self._datastoreRootUri.scheme == 's3':
+            return self._datastoreRootUri.netloc
+        else:
+            raise AttributeError(f'Path {self} is not a valid S3 protocol.')
+
+    @property
+    def pathInBucket(self):
+        """Returns the path in an S3 Bucket, normalized so that directory
+        structure in the bucket matches that of a local filesystem.
+
+        Effectively, this is the path property with posix separator stipped
+        from the left hand side of the path.
+        """
+        return self.path.lstrip('/')
 
     def updateExtension(self, ext):
         """Update the file extension associated with this `Location`.
@@ -368,68 +402,67 @@ class Location:
         """
         if ext is None:
             return
-        path, _ = os.path.splitext(self._uri.path)
+
+        path, _ = os.path.splitext(self.pathInStore)
 
         # Ensure that we have a leading "." on file extension (and we do not
         # try to modify the empty string)
         if ext and not ext.startswith("."):
             ext = "." + ext
 
-        parts = list(self._uri)
-        parts[2] = path + ext
-        self._uri = urllib.parse.urlparse(urllib.parse.urlunparse(parts))
+        self._path = path + ext
 
 
 class LocationFactory:
     """Factory for `Location` instances.
+
+    The factory is constructed from the root location of the datastore.
+    This location can be a path on the file system (absolute or relative)
+    or as a URI.
+
+    Parameters
+    ----------
+    datastoreRoot : `str`
+        Root location of the `Datastore` either as a path in the local
+        filesystem or as a URI.  File scheme URIs can be used. If a local
+        filesystem path is used without URI scheme, it will be converted
+        to an absolute path and any home directory indicators expanded.
+        If a file scheme is used with a relative path, the path will
+        be treated as a posixpath but then converted to an absolute path.
     """
 
     def __init__(self, datastoreRoot):
-        """Constructor
+        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True)
 
-        Parameters
-        ----------
-        bucket : `str`
-            Name of the Bucket that is used.
-        datastoreRoot : `str`
-            Root location of the `S3Datastore` in the Bucket.
-        """
-        self._datastoreRoot = datastoreRoot
+    def __str__(self):
+        return f"{self.__class__.__name__}@{self._datastoreRootUri}"
 
-    def fromUri(self, uri):
-        """Factory function to create a `S3Location` from a URI.
+    @property
+    def bucketName(self):
+        """If Location is an S3 protocol, returns the bucket name."""
+        if self._datastoreRootUri.scheme == 's3':
+            return self._datastoreRootUri.netloc
+        else:
+            raise AttributeError(f'Path {self} is not a valid S3 protocol.')
 
-        Parameters
-        ----------
-        uri : `str`
-            A valid Universal Resource Identifier.
-
-        Returns
-        -------
-        location : `S3Location`
-            The equivalent `S3Location`.
-        """
-        if uri is None or not isinstance(uri, str):
-            raise ValueError("URI must be a string and not {}".format(uri))
-        return Location(self._datastoreRoot, uri)
+    @property
+    def datastoreRootName(self):
+        """Returns the name of the directory used as datastore's root."""
+        return os.path.basename(self._datastoreRootUri.path)
 
     def fromPath(self, path):
-        """Factory function to create a `S3Location` from a POSIX-like path.
+        """Factory function to create a `Location` from a POSIX path.
 
         Parameters
         ----------
         path : `str`
-            A POSIX-like path, relative to the `S3Datastore` root.
+            A standard POSIX path, relative to the `Datastore` root.
 
         Returns
         -------
-        location : `S3Location`
-            The equivalent `S3Location`.
+        location : `Location`
+            The equivalent `Location`.
         """
-        uri = urllib.parse.urljoin("file://", path)
-        return self.fromUri(uri)
         if os.path.isabs(path):
-            raise ValueError(('A path whose absolute location is in an S3 bucket '
-                             'can not have an absolute path: {}').format(path))
-
-        return self.fromUri('s3://' + os.path.join(self._bucket, self._datastoreRoot, path))
+            raise ValueError("LocationFactory path must be relative to datastore, not absolute.")
+        return Location(self._datastoreRootUri, path)

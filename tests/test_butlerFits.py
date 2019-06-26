@@ -38,13 +38,12 @@ except ImportError:
         """
         return cls
 
-from lsst.daf.butler.core.s3utils import parsePathToUriElements
-
 import lsst.utils.tests
 
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType
+from lsst.daf.butler.core.location import ButlerURI
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 
 try:
@@ -191,8 +190,8 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
 
     def setUp(self):
         config = Config(self.configFile)
-        schema, bucket, root = parsePathToUriElements(config['.datastore.datastore.root'])
-        self.bucketName = bucket
+        uri = ButlerURI(config['.datastore.datastore.root'])
+        self.bucketName = uri.netloc
 
         if self.useTempRoot:
             self.root = self.genRoot()
@@ -214,8 +213,9 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
         bucket = s3.Bucket(self.bucketName)
         try:
             bucket.objects.all().delete()
-        except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == '404':
+        except botocore.exceptions.ClientError as err:
+            errorcode = err.response["ResponseMetadata"]["HTTPStatusCode"]
+            if errorcode == 404:
                 # the key was not reachable - pass
                 pass
             else:

@@ -1,6 +1,6 @@
 datastore:
   cls: lsst.daf.butler.datastores.s3Datastore.S3Datastore
-  root: s3://anybucketname
+  root: s3://anybucketname/butlerRoot
   templates:
     default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
     calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"

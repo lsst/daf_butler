@@ -76,14 +76,14 @@ class JsonFormatter(FileFormatter):
         with open(self.fileDescriptor.location.path, "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            fd.write(self._toBytes(inMemoryDataset))
+            fd.write(self._toBytes(inMemoryDataset).decode())
 
-    def _fromBytes(self, inMemoryDataset, pytype=None):
+    def _fromBytes(self, bytesObject, pytype=None):
         """Read the bytes object as a python object.
 
         Parameters
         ----------
-        pickledDataset : `bytes`
+        serializedDataset : `bytes`
             Bytes object to unserialize.
         pytype : `class`, optional
             Not used by this implementation.
@@ -91,11 +91,11 @@ class JsonFormatter(FileFormatter):
         Returns
         -------
         data : `object`
-            Either data as Python object read from the pickled string, or None
-            if the string could not be read.
+            Either data as Python object read from bytes, or None if the string
+            could not be read.
         """
         try:
-            data = json.loads(inMemoryDataset)
+            data = json.loads(bytesObject)
         except json.JSONDecodeError:
             data = None
 
@@ -112,14 +112,14 @@ class JsonFormatter(FileFormatter):
         Returns
         -------
         data : `bytes`
-            Bytes object representing the pickled object.
+            Object stored as bytes.
 
         Raises
         ------
         Exception
-            The object could not be pickled.
+            The object could not be serialized.
         """
-        return json.dumps(inMemoryDataset)
+        return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.
