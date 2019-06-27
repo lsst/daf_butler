@@ -807,7 +807,7 @@ class Config(collections.abc.MutableMapping):
         elif uri.scheme == 's3':
             # we guesstimate if dir or a file. Paths that *end* on strings with
             # dots `[A-Za-z0-9].[A-Za-z0-9]` are assumed to be files.
-            isDirExpression = re.compile("\w*\.\w*$")
+            isDirExpression = re.compile(r"\w*\.\w*$")
             if isDirExpression.search(uri.path) is None:
                 # trailing '/' is mandatory for dirs, otherwise ButlerURI
                 # has a hard time updating files in URIs.

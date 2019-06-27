@@ -661,7 +661,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
                                        "Are you sure it is installed?"))
         uri = ButlerURI(root)
         client = boto3.client('s3')
-        return s3CheckFileExists(client, uri.netloc, uri.path.lstrip('/'))[0]
+        return s3CheckFileExists(client, uri)[0]
 
 
 if __name__ == "__main__":

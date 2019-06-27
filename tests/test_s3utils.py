@@ -34,6 +34,7 @@ except ImportError:
         return cls
 
 from lsst.daf.butler.core.s3utils import bucketExists, s3CheckFileExists
+from lsst.daf.butler.core.location import Location, ButlerURI
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
@@ -75,15 +76,24 @@ class S3UtilsTestCase(unittest.TestCase):
 
     def testFileExists(self):
         s3 = boto3.client('s3')
-        self.assertTrue(s3CheckFileExists(s3, self.bucketName, self.fileName,
-                                          cheap=True)[0])
-        self.assertFalse(s3CheckFileExists(s3, self.bucketName, self.fileName+'_NO_EXIST',
-                                           cheap=True)[0])
+        self.assertTrue(s3CheckFileExists(s3, bucket=self.bucketName,
+                                          filepath=self.fileName, cheap=True)[0])
+        self.assertFalse(s3CheckFileExists(s3, bucket=self.bucketName,
+                                           filepath=self.fileName+'_NO_EXIST', cheap=True)[0])
 
-        self.assertTrue(s3CheckFileExists(s3, self.bucketName, self.fileName,
-                                          cheap=False)[0])
-        self.assertFalse(s3CheckFileExists(s3, self.bucketName, self.fileName+'_NO_EXIST',
-                                           cheap=False)[0])
+        self.assertTrue(s3CheckFileExists(s3, bucket=self.bucketName,
+                                          filepath=self.fileName, cheap=False)[0])
+        self.assertFalse(s3CheckFileExists(s3, bucket=self.bucketName,
+                                           filepath=self.fileName+'_NO_EXIST', cheap=False)[0])
+
+        datastoreRootUri = f's3://{self.bucketName}/'
+        uri = f's3://{self.bucketName}/{self.fileName}'
+
+        buri = ButlerURI(uri)
+        location = Location(datastoreRootUri, self.fileName)
+
+        self.assertTrue(s3CheckFileExists(s3, buri)[0])
+        self.assertTrue(s3CheckFileExists(s3, location)[0])
 
 
 if __name__ == "__main__":

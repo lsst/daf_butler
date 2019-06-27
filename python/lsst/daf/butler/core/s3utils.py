@@ -26,6 +26,8 @@ try:
 except ImportError:
     boto3 = None
 
+from lsst.daf.butler.core.location import ButlerURI, Location
+
 
 def s3CheckFileExistsGET(client, bucket, filepath):
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
@@ -107,7 +109,7 @@ def s3CheckFileExistsLIST(client, bucket, filepath):
         return (False, -1)
 
 
-def s3CheckFileExists(client, bucket, filepath, cheap=True):
+def s3CheckFileExists(client, path=None, bucket=None, filepath=None, cheap=True):
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
@@ -129,9 +131,20 @@ def s3CheckFileExists(client, bucket, filepath, cheap=True):
        Tuple (exists, size). If file exists (True, filesize)
        and (False, -1) when the file is not found.
     """
+    if isinstance(path, ButlerURI):
+        bucket = path.netloc
+        filepath = path.path.lstrip('/')
+    elif isinstance(path, Location):
+        bucket = path.bucketName
+        filepath = path.pathInBucket
+
+    if bucket is None and filepath is None:
+        raise ValueError(('Expected ButlerURI, Location or (bucket, filepath) pair '
+                          f'but got {path}, ({bucket}, {filepath}) instead.'))
+
     if cheap:
-        return s3CheckFileExistsGET(client, bucket, filepath)
-    return s3CheckFileExistsLIST(client, bucket, filepath)
+        return s3CheckFileExistsGET(client, bucket=bucket, filepath=filepath)
+    return s3CheckFileExistsLIST(client, bucket=bucket, filepath=filepath)
 
 
 def bucketExists(bucketName):
