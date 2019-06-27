@@ -138,13 +138,13 @@ class S3Datastore(Datastore):
         self.locationFactory = LocationFactory(self.root)
 
         self.client = boto3.client('s3')
-        if not bucketExists(self.locationFactory.bucketName):
+        if not bucketExists(self.locationFactory.netloc):
             # PosixDatastore creates the root directory if one does not exist.
             # Calling s3 client.create_bucket is possible but also requires
             # ACL LocationConstraints, Permissions and other configuration
             # parameters, so for now we do not create a bucket if one is
             # missing. Further discussion can make this happen though.
-            raise IOError(f"Bucket {self.locationFactory.bucketName} does not exists!")
+            raise IOError(f"Bucket {self.locationFactory.netloc} does not exists!")
 
         self.formatterFactory = FormatterFactory()
         self.storageClassFactory = StorageClassFactory()
@@ -282,8 +282,8 @@ class S3Datastore(Datastore):
         # might as well use the HEADER metadata for size comparison instead.
         # s3CheckFileExists would just duplicate GET/LIST charges in this case.
         try:
-            response = self.client.get_object(Bucket=location.bucketName,
-                                              Key=location.pathInBucket)
+            response = self.client.get_object(Bucket=location.netloc,
+                                              Key=location.relativeToNetloc)
         except self.client.exceptions.ClientError as err:
             errorcode = err.response["ResponseMetadata"]["HTTPStatusCode"]
             # the HTTPS code 403 should be reserved for authorization failures.
@@ -424,14 +424,14 @@ class S3Datastore(Datastore):
         fileDescriptor = FileDescriptor(location, storageClass=storageClass)
         try:
             serializedDataset = formatter.toBytes(inMemoryDataset, fileDescriptor)
-            self.client.put_object(Bucket=location.bucketName, Key=location.pathInBucket,
+            self.client.put_object(Bucket=location.netloc, Key=location.relativeToNetloc,
                                    Body=serializedDataset)
             log.debug("Wrote file directly to %s", location.uri)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
                 fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 formatter.write(inMemoryDataset, fileDescriptor)
-                self.client.upload_file(Bucket=location.bucketName, Key=location.pathInBucket,
+                self.client.upload_file(Bucket=location.netloc, Key=location.relativeToNetloc,
                                         Filename=tmpFile.name)
                 log.debug("Wrote file to %s via a temporary directory.", location.uri)
 
@@ -506,7 +506,7 @@ class S3Datastore(Datastore):
                 template = self.templates.getTemplate(ref)
                 location = self.locationFactory.fromPath(template.format(ref))
                 location.updateExtension(formatter.extension)
-                self.client.upload_file(Bucket=location.bucketName, Key=location.path,
+                self.client.upload_file(Bucket=location.netloc, Key=location.relativeToNetloc,
                                         Filename=path)
                 if transfer == 'move':
                     os.remove(path)
@@ -517,7 +517,7 @@ class S3Datastore(Datastore):
 
                 relpath = uri.path.lstrip('/')
                 copySrc = {'Bucket': uri.netloc, 'Key': relpath}
-                self.client.copy(copySrc, self.locationFactory.bucketName,
+                self.client.copy(copySrc, self.locationFactory.netloc,
                                  relpath)
                 if transfer == 'move':
                     # https://github.com/boto/boto3/issues/507 - there is no
@@ -533,7 +533,7 @@ class S3Datastore(Datastore):
         location = self.locationFactory.fromPath(path)
 
         # the file should exist on the bucket by now
-        exists, size = s3CheckFileExists(self.client, bucket=location.bucketName,
+        exists, size = s3CheckFileExists(self.client, bucket=location.netloc,
                                          filepath=uri.path.lstrip('/'))
         self.registry.addDatasetLocation(ref, self.name)
 
@@ -627,7 +627,7 @@ class S3Datastore(Datastore):
 
         # https://github.com/boto/boto3/issues/507 - there is no way of knowing
         # if the file was actually deleted
-        self.client.delete_object(Bucket=location.bucketName, Key=location.pathInBucket)
+        self.client.delete_object(Bucket=location.netloc, Key=location.relativeToNetloc)
 
         # Remove rows from registries
         self.removeStoredFileInfo(ref)

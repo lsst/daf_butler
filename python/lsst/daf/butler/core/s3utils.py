@@ -135,8 +135,8 @@ def s3CheckFileExists(client, path=None, bucket=None, filepath=None, cheap=True)
         bucket = path.netloc
         filepath = path.path.lstrip('/')
     elif isinstance(path, Location):
-        bucket = path.bucketName
-        filepath = path.pathInBucket
+        bucket = path.netloc
+        filepath = path.relativeToNetloc
 
     if bucket is None and filepath is None:
         raise ValueError(('Expected ButlerURI, Location or (bucket, filepath) pair '

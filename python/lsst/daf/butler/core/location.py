@@ -164,7 +164,8 @@ class ButlerURI:
         url : `str`
             String form of URI.
         """
-        return self._uri.geturl()
+        return urllib.parse.urlunparse(self._uri)
+#        return self._uri.geturl()
 
     def replace(self, **kwargs):
         """Replace components in a URI with new values and return a new
@@ -256,8 +257,11 @@ class ButlerURI:
                     replacements["path"] = os2posix(os.path.normpath(expandedPath))
                 elif forceAbsolute:
                     # This can stay in OS path form, do not change to file
-                    # scheme.
+                    # scheme. Why? If we know we are relative to current dir,
+                    # why not be explicit about it?
                     replacements["path"] = os.path.normpath(os.path.join(root, expandedPath))
+                    replacements["scheme"] = 'file'
+                    replacements["netloc"] = 'localhost'
                 else:
                     # No change needed for relative local path staying relative
                     # except normalization
@@ -274,13 +278,27 @@ class ButlerURI:
                 if expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep):
                     replacements["path"] += sep
 
+                if (
+                        'netloc' not in replacements and
+                        not parsed.netloc and
+                        'scheme' in replacements or parsed.scheme
+                ):
+                    replacements['netloc'] = 'localhost'
+
             elif parsed.scheme == "file":
                 # file URI implies POSIX path separators so split as posix,
                 # then join as os, and convert to abspath. Do not handle
                 # home directories since "file" scheme is explicitly documented
                 # to not do tilde expansion.
+
+                if 'netloc' not in replacements and not parsed.netloc:
+                    replacements['netloc'] = 'localhost'
+
                 if posixpath.isabs(parsed.path):
-                    # No change needed
+                    # Adding localhost as netloc for uniformity is the only
+                    # change required. ParseResult is a NamedTuple so _replace
+                    # is standard API
+                    parsed = parsed._replace(**replacements)
                     return copy.copy(parsed)
 
                 replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
@@ -288,6 +306,9 @@ class ButlerURI:
                 # normpath strips trailing "/" so put it back if necessary
                 if parsed.path.endswith(posixpath.sep) and not replacements["path"].endswith(posixpath.sep):
                     replacements["path"] += posixpath.sep
+
+                if 'netloc' not in replacements:
+                    replacements['netloc'] = 'localhost'
 
             else:
                 raise RuntimeError("Unexpectedly got confused by URI scheme")
@@ -374,20 +395,17 @@ class Location:
         return self._path
 
     @property
-    def bucketName(self):
+    def netloc(self):
         """If Location is an S3 protocol, returns the bucket name."""
-        if self._datastoreRootUri.scheme == 's3':
-            return self._datastoreRootUri.netloc
-        else:
-            raise AttributeError(f'Path {self} is not a valid S3 protocol.')
+        return self._datastoreRootUri.netloc
 
     @property
-    def pathInBucket(self):
+    def relativeToNetloc(self):
         """Returns the path in an S3 Bucket, normalized so that directory
         structure in the bucket matches that of a local filesystem.
 
         Effectively, this is the path property with posix separator stipped
-        from the left hand side of the path.
+        from the left hand side of the path, i.e. path relative to netloc.
         """
         return self.path.lstrip('/')
 
@@ -438,17 +456,12 @@ class LocationFactory:
         return f"{self.__class__.__name__}@{self._datastoreRootUri}"
 
     @property
-    def bucketName(self):
+    def netloc(self):
         """If Location is an S3 protocol, returns the bucket name."""
         if self._datastoreRootUri.scheme == 's3':
             return self._datastoreRootUri.netloc
         else:
             raise AttributeError(f'Path {self} is not a valid S3 protocol.')
-
-    @property
-    def datastoreRootName(self):
-        """Returns the name of the directory used as datastore's root."""
-        return os.path.basename(self._datastoreRootUri.path)
 
     def fromPath(self, path):
         """Factory function to create a `Location` from a POSIX path.
