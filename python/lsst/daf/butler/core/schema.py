@@ -97,9 +97,6 @@ class Schema:
     config : `SchemaConfig` or `str`, optional
         Load configuration. Defaults will be read if ``config`` is not
         a `SchemaConfig`.
-    limited : `bool`
-        If `True`, ignore tables, views, and associated foreign keys whose
-        config descriptions include a "limited" key set to `False`.
 
     Attributes
     ----------
@@ -112,10 +109,10 @@ class Schema:
         The names of entries in ``tables`` that are actually implemented as
         views.
     """
-    def __init__(self, config=None, limited=False):
+    def __init__(self, config=None):
         if config is None or not isinstance(config, SchemaConfig):
             config = SchemaConfig(config)
-        builder = SchemaBuilder(config, limited=limited)
+        builder = SchemaBuilder(config)
         self.metadata = builder.metadata
         self.views = frozenset(builder.views)
         self.tables = builder.tables
@@ -128,9 +125,6 @@ class SchemaBuilder:
     ----------
     config : `SchemaConfig`
         Configuration to parse.
-    limited : `bool`
-        If `True`, ignore tables, views, and associated foreign keys whose
-        config descriptions include a "limited" key set to `False`.
 
     Attributes
     ----------
@@ -147,12 +141,11 @@ class SchemaBuilder:
                           "bool": Boolean, "blob": LargeBinary, "datetime": DateTime,
                           "hash": Base64Bytes}
 
-    def __init__(self, config, limited=False):
+    def __init__(self, config):
         self.config = config
         self.metadata = MetaData()
         self.tables = {}
         self.views = set()
-        self._limited = limited
         for tableName, tableDescription in self.config["tables"].items():
             self.addTable(tableName, tableDescription)
 
@@ -194,8 +187,6 @@ class SchemaBuilder:
         description = self.config["tables"].get(name, None)
         if description is None:
             return False
-        if self._limited:
-            return description.get("limited", True)
         return True
 
     def addTable(self, tableName, tableDescription):
@@ -276,8 +267,8 @@ class SchemaBuilder:
     def addForeignKeyConstraint(self, table, constraintDescription):
         """Add a ForeignKeyConstraint to a table.
 
-        If the table or the ForeignKeyConstraint's target are views, or should
-        not be included in this schema (because it is limited), does nothing.
+        If the table or the ForeignKeyConstraint's target are views, does
+        nothing.
 
         Parameters
         ----------
