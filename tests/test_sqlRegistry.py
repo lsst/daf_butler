@@ -97,8 +97,7 @@ class RegistryTests(metaclass=ABCMeta):
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         dataId = {"instrument": "DummyCam"}
-        if not registry.limited:
-            registry.addDimensionEntry("instrument", dataId)
+        registry.addDimensionEntry("instrument", dataId)
         ref = registry.addDataset(datasetType, dataId=dataId, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
@@ -129,8 +128,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
         dataId = {"instrument": "DummyCam"}
-        if not registry.limited:
-            registry.addDimensionEntry("instrument", dataId)
+        registry.addDimensionEntry("instrument", dataId)
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId=dataId, run=run)
         children = {"child1": registry.addDataset(childDatasetType1, dataId=dataId, run=run),
@@ -202,8 +200,7 @@ class RegistryTests(metaclass=ABCMeta):
                                    storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
-        if not registry.limited:
-            registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
+        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
         ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
@@ -244,21 +241,13 @@ class RegistryTests(metaclass=ABCMeta):
                                   dimensions=registry.dimensions.extract(("instrument", "visit")),
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        if not registry.limited:
-            registry.addDimensionEntryList("instrument", [{"instrument": "DummyCam"},
-                                                          {"instrument": "MyCam"}])
-            registry.addDimensionEntry("physical_filter",
-                                       {"instrument": "DummyCam", "physical_filter": "d-r"})
-            registry.addDimensionEntry("physical_filter",
-                                       {"instrument": "MyCam", "physical_filter": "m-r"})
-            registry.addDimensionEntry("visit",
-                                       {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit",
-                                       {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit",
-                                       {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit",
-                                       {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"})
+        registry.addDimensionEntryList("instrument", [{"instrument": "DummyCam"}, {"instrument": "MyCam"}])
+        registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"})
+        registry.addDimensionEntry("physical_filter", {"instrument": "MyCam", "physical_filter": "m-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"})
         collection = "test"
         dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
         run = registry.makeRun(collection=collection)
@@ -294,25 +283,17 @@ class RegistryTests(metaclass=ABCMeta):
                                   dimensions=registry.dimensions.extract(("instrument", "visit")),
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        if not registry.limited:
-            registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-            registry.addDimensionEntry("physical_filter",
-                                       {"instrument": "DummyCam", "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit",
-                                       {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit",
-                                       {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
+        registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
         # Dataset.physical_filter should be populated as well here from the
-        # visit Dimension values, if the Registry isn't limited.
+        # visit Dimension values.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
-        if registry.limited:
-            dataId1.update(physical_filter="d-r", abstract_filter=None)
         inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
         dataId2 = {"instrument": "DummyCam", "visit": 1}
-        if registry.limited:
-            dataId2.update(physical_filter="d-r", abstract_filter=None)
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
         # We should be able to find both datasets in their Run.collection
         outputRef = registry.find(run.collection, datasetType, dataId1)
@@ -344,24 +325,17 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(datasetType1)
         datasetType2 = DatasetType(name="smartytype", dimensions=dimensions, storageClass=storageClass)
         registry.registerDatasetType(datasetType2)
-        if not registry.limited:
-            registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-            registry.addDimensionEntry("physical_filter",
-                                       {"instrument": "DummyCam", "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0,
-                                       "physical_filter": "d-r"})
-            registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1,
-                                       "physical_filter": "d-r"})
+        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
+        registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
+        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
         run1 = registry.makeRun(collection="ingest1")
         run2 = registry.makeRun(collection="ingest2")
         run3 = registry.makeRun(collection="ingest3")
         # Dataset.physical_filter should be populated as well here
-        # from the visit Dimension values, if the Registry isn't limited.
+        # from the visit Dimension values.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
         dataId2 = {"instrument": "DummyCam", "visit": 1}
-        if registry.limited:
-            dataId1.update(physical_filter="d-r", abstract_filter=None)
-            dataId2.update(physical_filter="d-r", abstract_filter=None)
         ref1_run1 = registry.addDataset(datasetType1, dataId=dataId1, run=run1)
         ref2_run1 = registry.addDataset(datasetType1, dataId=dataId2, run=run1)
         ref1_run2 = registry.addDataset(datasetType2, dataId=dataId1, run=run2)
@@ -403,10 +377,6 @@ class RegistryTests(metaclass=ABCMeta):
         registry = self.makeRegistry()
         dimensionName = "instrument"
         dimensionValue = {"instrument": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
-        if registry.limited:
-            with self.assertRaises(NotImplementedError):
-                registry.addDimensionEntry(dimensionName, dimensionValue)
-            return  # the remainder of this test does not apply to limited Registry
         registry.addDimensionEntry(dimensionName, dimensionValue)
         # Inserting the same value twice should fail
         with self.assertRaises(ConflictingDefinitionError):
@@ -466,8 +436,7 @@ class RegistryTests(metaclass=ABCMeta):
             with registry.transaction():
                 registry.registerDatasetType(datasetTypeB)
                 registry.registerDatasetType(datasetTypeC)
-                if not registry.limited:
-                    registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
+                registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
                 ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
                 refId = ref.id
                 raise ValueError("Oops, something went wrong")
@@ -482,13 +451,10 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertIsNotNone(refId)
         self.assertIsNone(registry.getDataset(refId))
         # Or the Dimension entries
-        if not registry.limited:
-            self.assertIsNone(registry.findDimensionEntry("instrument", {"instrument": "DummyCam"}))
+        self.assertIsNone(registry.findDimensionEntry("instrument", {"instrument": "DummyCam"}))
 
     def testRegions(self):
         registry = self.makeRegistry()
-        if registry.limited:
-            return
         regionTract = lsst.sphgeom.ConvexPolygon((lsst.sphgeom.UnitVector3d(1, 0, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 1, 0),
                                                   lsst.sphgeom.UnitVector3d(0, 0, 1)))
@@ -582,8 +548,6 @@ class RegistryTests(metaclass=ABCMeta):
 
     def testDataIdPacker(self):
         registry = self.makeRegistry()
-        if registry.limited:
-            return
         registry.addDimensionEntry(
             "instrument",
             {"instrument": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
@@ -628,7 +592,6 @@ class SqlRegistryTestCase(unittest.TestCase, RegistryTests):
     def testInitFromConfig(self):
         registry = self.makeRegistry()
         self.assertIsInstance(registry, SqlRegistry)
-        self.assertFalse(registry.limited)
 
     def testNestedTransaction(self):
         registry = self.makeRegistry()
@@ -653,23 +616,6 @@ class SqlRegistryTestCase(unittest.TestCase, RegistryTests):
         self.assertTrue(checkpointReached)
         self.assertIsNotNone(registry.findDimensionEntry(dimension, dataId1))
         self.assertIsNone(registry.findDimensionEntry(dimension, dataId2))
-
-
-class LimitedSqlRegistryTestCase(unittest.TestCase, RegistryTests):
-    """Test for SqlRegistry with limited=True.
-    """
-
-    def makeRegistry(self):
-        testDir = os.path.dirname(__file__)
-        configFile = os.path.join(testDir, "config/basic/butler.yaml")
-        butlerConfig = ButlerConfig(configFile)
-        butlerConfig["registry", "limited"] = True
-        return Registry.fromConfig(butlerConfig, create=True)
-
-    def testInitFromConfig(self):
-        registry = self.makeRegistry()
-        self.assertIsInstance(registry, SqlRegistry)
-        self.assertTrue(registry.limited)
 
 
 if __name__ == "__main__":

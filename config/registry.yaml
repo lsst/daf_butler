@@ -6,7 +6,6 @@ registry:
     postgresql: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
     oracle: lsst.daf.butler.registries.oracleRegistry.OracleRegistry
   db: 'sqlite:///:memory:'
-  limited: false
   skypix:
     cls: lsst.sphgeom.HtmPixelization
     level: 7

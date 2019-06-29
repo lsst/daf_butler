@@ -33,7 +33,7 @@ from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registryConfig import RegistryConfig
-from ..core.registry import (Registry, disableWhenLimited, ConflictingDefinitionError,
+from ..core.registry import (Registry, ConflictingDefinitionError,
                              AmbiguousDatasetError, OrphanedRecordError)
 from ..core.schema import Schema
 from ..core.execution import Execution
@@ -125,7 +125,7 @@ class SqlRegistry(Registry):
         in order to construct the SQLAlchemy representation of the expected
         schema.
         """
-        return Schema(config=schemaConfig, limited=self.limited)
+        return Schema(config=schemaConfig)
 
     def _createEngine(self):
         """Create and return a `sqlalchemy.Engine` for this `Registry`.
@@ -435,8 +435,7 @@ class SqlRegistry(Registry):
 
         # Expand Dimension links to insert into the table to include implied
         # dependencies.
-        if not self.limited:
-            self.expandDataId(dataId)
+        self.expandDataId(dataId)
         links = dataId.implied()
 
         # Add the Dataset table entry itself.  Note that this will get rolled
@@ -741,7 +740,6 @@ class SqlRegistry(Registry):
             self._cachedRuns[run.collection] = run
         return run
 
-    @disableWhenLimited
     @transactional
     def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):
         # Docstring inherited from Registry.addDimensionEntry.
@@ -764,7 +762,6 @@ class SqlRegistry(Registry):
             self.setDimensionRegion(dataId)
         return dataId
 
-    @disableWhenLimited
     @transactional
     def addDimensionEntryList(self, dimension, dataIdList, entry=None, **kwds):
         # Docstring inherited from Registry.addDimensionEntryList.
@@ -807,7 +804,6 @@ class SqlRegistry(Registry):
             self._connection.execute(self._schema.tables[skypixJoin.name].insert(), *skypixParams)
         return dataIdList
 
-    @disableWhenLimited
     def findDimensionEntries(self, dimension):
         # Docstring inherited from Registry.findDimensionEntries
         if not isinstance(dimension, Dimension):
@@ -821,7 +817,6 @@ class SqlRegistry(Registry):
         entries = [dict(r.items()) for r in result]
         return entries
 
-    @disableWhenLimited
     def findDimensionEntry(self, dimension, dataId=None, **kwds):
         # Docstring inherited from Registry.findDimensionEntry
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions)
@@ -836,7 +831,6 @@ class SqlRegistry(Registry):
         else:
             return None
 
-    @disableWhenLimited
     @transactional
     def setDimensionRegion(self, dataId=None, *, update=True, region=None, **kwds):
         # Docstring inherited from Registry.setDimensionRegion
@@ -889,7 +883,6 @@ class SqlRegistry(Registry):
         self._connection.execute(self._schema.tables[join.name].insert(), parameters)
         return dataId
 
-    @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):
         # Docstring inherited from Registry._queryMetadata.
         # TODO: Hard-coding of instrument and skymap as the dimensions to cache

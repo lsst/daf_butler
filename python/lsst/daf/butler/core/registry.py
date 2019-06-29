@@ -19,13 +19,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Registry", "disableWhenLimited", "AmbiguousDatasetError",
-           "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import contextlib
-import functools
 
 from lsst.utils import doImport
 from .config import Config
@@ -52,23 +50,6 @@ class OrphanedRecordError(Exception):
     """Exception raised when trying to remove or modify a database record
     that is still being used in some other table.
     """
-
-
-def disableWhenLimited(func):
-    """Decorator that indicates that a method should raise NotImplementedError
-    on Registries whose ``limited`` attribute is `True`.
-
-    This implements that check and raise for all subclasses.
-    """
-    @functools.wraps(func)
-    def inner(self, *args, **kwargs):
-        if self.limited:
-            raise NotImplementedError(
-                "Operation not implemented for limited Registry; note that data IDs may need to be expanded "
-                "by a full Registry before being used for some operations on a limited Registry."
-            )
-        return func(self, *args, **kwargs)
-    return inner
 
 
 class Registry(metaclass=ABCMeta):
@@ -199,12 +180,6 @@ class Registry(metaclass=ABCMeta):
     def __str__(self):
         return "None"
 
-    @property
-    def limited(self):
-        """If True, this Registry does not maintain Dimension metadata or
-        relationships (`bool`)."""
-        return self.config.get("limited", False)
-
     @contextlib.contextmanager
     def transaction(self):
         """Optionally implemented in `Registry` subclasses to provide exception
@@ -232,11 +207,7 @@ class Registry(metaclass=ABCMeta):
     def pixelization(self):
         """Object that interprets skypix Dimension values
         (`lsst.sphgeom.Pixelization`).
-
-        `None` for limited registries.
         """
-        if self.limited:
-            return None
         if self._pixelization is None:
             pixelizationCls = doImport(self.config["skypix", "cls"])
             self._pixelization = pixelizationCls(level=self.config["skypix", "level"])
@@ -747,7 +718,6 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @disableWhenLimited
     @transactional
     def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):
         """Add a new `Dimension` entry.
@@ -786,13 +756,10 @@ class Registry(metaclass=ABCMeta):
         ConflictingDefinitionError
             If an entry with the primary-key defined in `values` is already
             present.
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @disableWhenLimited
     @transactional
     def addDimensionEntryList(self, dimension, dataIdList, entry=None, **kwds):
         """Add a new `Dimension` entry.
@@ -830,13 +797,10 @@ class Registry(metaclass=ABCMeta):
         ConflictingDefinitionError
             If an entry with the primary-key defined in `values` is already
             present.
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @disableWhenLimited
     def findDimensionEntries(self, dimension):
         """Return all `Dimension` entries corresponding to the named dimension.
 
@@ -851,16 +815,10 @@ class Registry(metaclass=ABCMeta):
             List with `dict` containing the `Dimension` values for each variant
             of the `Dimension`.  Returns empty list if no entries have been
             added for this dimension.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @disableWhenLimited
     def findDimensionEntry(self, dimension, dataId=None, **kwds):
         """Return a `Dimension` entry corresponding to a `DataId`.
 
@@ -884,16 +842,10 @@ class Registry(metaclass=ABCMeta):
             Dictionary with all `Dimension` values, or `None` if no matching
             entry is found.  `None` if there is no entry for the given
             `DataId`.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @disableWhenLimited
     @transactional
     def setDimensionRegion(self, dataId=None, *, update=True, region=None, **kwds):
         """Set the region field for a Dimension instance or a combination
@@ -923,15 +875,9 @@ class Registry(metaclass=ABCMeta):
         -------
         dataId : `DataId`
             A Data ID with its ``region`` attribute set.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @disableWhenLimited
     def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False,
                      **kwds):
         """Expand a data ID to include additional information.
@@ -973,11 +919,6 @@ class Registry(metaclass=ABCMeta):
         -------
         dataId : `DataId`
             A Data ID with all requested data populated.
-
-        Raises
-        ------
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
 
@@ -1072,7 +1013,6 @@ class Registry(metaclass=ABCMeta):
         return dataId
 
     @abstractmethod
-    @disableWhenLimited
     def _queryMetadata(self, element, dataId, columns):
         """Get metadata associated with a dataId.
 
@@ -1101,8 +1041,6 @@ class Registry(metaclass=ABCMeta):
         ------
         LookupError
             Raised if no entry for the given data ID exists.
-        NotImplementedError
-            Raised if `limited` is `True`.
         """
         raise NotImplementedError("Must be implemented by subclass")
 

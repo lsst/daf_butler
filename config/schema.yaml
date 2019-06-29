@@ -493,7 +493,6 @@ schema:
     instrument:
       doc: >
         A definition table containing recognized instrument values.
-      limited: false
       columns:
       -
         name: instrument
@@ -525,7 +524,6 @@ schema:
       doc: >
         A view aggregating all distinct abstract_filter references by any
         physical_filter.
-      limited: false
       columns:
       -
         name: abstract_filter
@@ -543,7 +541,6 @@ schema:
       doc: >
         An instrument-populated table that relates a physical_filter
         to its instrument and optional abstract_filter.
-      limited: false
       columns:
       -
         name: instrument
@@ -579,7 +576,6 @@ schema:
       doc: >
         An instrument-populated table that relates a detector to its
         instrument and provides additional labels.
-      limited: false
       columns:
       -
         name: instrument
@@ -625,7 +621,6 @@ schema:
     visit:
       doc: >
         A table containing instrument-generic metadata for a visit.
-      limited: false
       columns:
       -
         name: instrument
@@ -706,7 +701,6 @@ schema:
     exposure:
       doc: >
         A table containing instrument-generic exposure metadata.
-      limited: false
       columns:
       -
         name: instrument
@@ -784,7 +778,6 @@ schema:
       doc: >
         A table containing registered skymaps and the the SHA1 hashes
         used to compare them.
-      limited: false
       columns:
       -
         name: skymap
@@ -827,7 +820,6 @@ schema:
       doc: >
         A skymap-populated table relating a tract to its spatial region
         on the sky.
-      limited: false
       columns:
       -
         name: skymap
@@ -872,7 +864,6 @@ schema:
       doc: >
         A table relating a patch to its position within a tract and
         on the sky.
-      limited: false
       columns:
       -
         name: skymap
@@ -935,7 +926,6 @@ schema:
       doc: >
         A join table that associates an instrument and label with a date range,
         used to associate master calibration products with exposures.
-      limited: false
       columns:
       -
         name: instrument
@@ -1097,7 +1087,6 @@ schema:
         expected to be calculated outside the database and added/updated
         whenever the visit's region is.  This table contains exactly one
         entry for each visit+detector combination.
-      limited: false
       columns:
       -
         name: instrument
@@ -1147,7 +1136,6 @@ schema:
         - detector.detector
 
     visit_detector_skypix_join:
-      limited: false
       columns:
       -
         name: instrument
@@ -1182,7 +1170,6 @@ schema:
           - visit_detector_region.detector
 
     visit_skypix_join:
-      limited: false
       columns:
       -
         name: instrument
@@ -1214,7 +1201,6 @@ schema:
       materialize: false
 
     patch_skypix_join:
-      limited: false
       columns:
       -
         name: skymap
@@ -1249,7 +1235,6 @@ schema:
           - patch.patch
 
     tract_skypix_join:
-      limited: false
       columns:
       -
         name: skymap
@@ -1281,7 +1266,6 @@ schema:
       materialize: false
 
     visit_detector_patch_join:
-      limited: false
       columns:
       -
         name: instrument
@@ -1349,7 +1333,6 @@ schema:
       materialize: false
 
     visit_patch_join:
-      limited: false
       columns:
       -
         name: instrument
@@ -1409,7 +1392,6 @@ schema:
       materialize: false
 
     visit_detector_tract_join:
-      limited: false
       columns:
       -
         name: instrument
@@ -1469,7 +1451,6 @@ schema:
       materialize: false
 
     visit_tract_join:
-      limited: false
       columns:
       -
         name: instrument
