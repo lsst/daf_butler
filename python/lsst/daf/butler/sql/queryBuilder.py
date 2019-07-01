@@ -249,7 +249,7 @@ class QueryBuilder(ABC):
 
         Parameters
         ----------
-        sqlExpression : `str`
+        sqlExpression: `sqlalchemy.sql.ColumnElement`
             SQLAlchemy boolean column expression.
         op : `sqlalchemy.sql.operator`
             Binary operator to use if a WHERE expression already exists.
@@ -260,12 +260,12 @@ class QueryBuilder(ABC):
             self._whereClause = op(self.whereClause, sqlExpression)
 
     def whereParsedExpression(self, expression, op=and_):
-        """Add a SQL expression to the query's WHERE clause.
+        """Add a parsed dimension expression to the query's WHERE clause.
 
         Parameters
         ----------
-        sqlExpression
-            SQLAlchemy boolean column expression.
+        expression : `str`
+            String expression involving dimensions.
         op : `sqlalchemy.sql.operator`
             Binary operator to use if a WHERE expression already exists.
         """
