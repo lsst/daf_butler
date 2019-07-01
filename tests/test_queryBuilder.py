@@ -361,6 +361,10 @@ class QueryBuilderTestCase(unittest.TestCase):
         )
         self.assertEqual(newLinks, set(["exposure"]))
         self.assertIsNotNone(builder.findSelectableByName("exposure_calibration_label_join"))
+        usedLinks = builder.whereDataId(DataId(instrument="HSC", exposure=12, detector=34,
+                                               physical_filter="HSC-R2", abstract_filter="r",
+                                               universe=self.registry.dimensions))
+        self.assertEqual(usedLinks, set(["instrument", "exposure", "detector", "physical_filter"]))
 
     def testSkyPixIndirection(self):
         """Test that SingleDatasetQueryBuilder can look up datasets with
@@ -378,6 +382,10 @@ class QueryBuilderTestCase(unittest.TestCase):
         )
         self.assertEqual(newLinks, set(["instrument", "visit", "detector"]))
         self.assertIsNotNone(builder.findSelectableByName("visit_detector_skypix_join"))
+        usedLinks = builder.whereDataId(DataId(instrument="HSC", visit=12, detector=34,
+                                               physical_filter="HSC-R2", abstract_filter="r",
+                                               universe=self.registry.dimensions))
+        self.assertEqual(usedLinks, set(["instrument", "visit", "detector"]))
 
 
 if __name__ == "__main__":
