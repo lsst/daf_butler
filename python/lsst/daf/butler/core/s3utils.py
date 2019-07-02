@@ -113,15 +113,20 @@ def s3CheckFileExists(client, path=None, bucket=None, filepath=None, cheap=True)
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
+    Accepts a fully specified Location or ButlerURI to the file or can accept
+    bucket name and filepath as separate strings.
+
     Parameters
     ----------
     client : `boto3.client`
         S3 Client object to query.
-    bucket : `str`
+    path : `Location, ButlerURI`, optional
+        Location or ButlerURI containing the bucket name and filepath.
+    bucket : `str`, optional
         Name of the bucket in which to look.
-    filepath : `str`
+    filepath : `str`, optional
         Path to file.
-    cheap : `bool`
+    cheap : `bool`, optional
         If True, makes a GET request to S3 instead of a LIST request. See
         `s3CheckFileExistsGET` or `s3CheckFileExistsLIST` for more details.
 

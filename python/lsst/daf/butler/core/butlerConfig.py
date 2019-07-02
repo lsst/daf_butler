@@ -26,6 +26,7 @@ Configuration classes specific to the Butler
 __all__ = ("ButlerConfig",)
 
 import os.path
+import posixpath
 
 from .location import ButlerURI
 from .config import Config
@@ -82,7 +83,8 @@ class ButlerConfig(Config):
                 if os.path.isdir(uri.path):
                     other = os.path.join(other, "butler.yaml")
             elif uri.scheme == 's3':
-                if not uri.path.endswith('yaml'):
+                path, ext = posixpath.splitext(uri.path)
+                if not ext:
                     if not uri.path.endswith('/'):
                         uri = ButlerURI(uri.geturl()+'/')
                     uri.updateFile('butler.yaml')

@@ -24,6 +24,7 @@
 __all__ = ("Config", "ConfigSubset")
 
 import collections
+import posixpath
 import copy
 import logging
 import pprint
@@ -31,7 +32,6 @@ import os
 import yaml
 import sys
 import io
-import re
 from yaml.representer import Representer
 from lsst.daf.butler.core.location import ButlerURI
 
@@ -217,23 +217,25 @@ class Config(collections.abc.MutableMapping):
         return type(self)(self)
 
     def __initFromFile(self, path):
-        """Load a file from path.
+        """Load a file from a path or an URI.
 
         Parameters
         ----------
         path : `str`
-            To a persisted config file.
+            Path or an URI to a persisted config file.
         """
-        if path.endswith("yaml"):
-            if path.startswith('s3://'):
-                self.__initFromS3File(path)
+        uri = ButlerURI(path)
+        if uri.path.endswith("yaml"):
+            if uri.scheme == 's3':
+                self.__initFromS3YamlFile(path)
             else:
                 self.__initFromYamlFile(path)
         else:
-            raise RuntimeError("Unhandled config file type:%s" % path)
+            raise RuntimeError("Unhandled config file type:%s" % uri)
 
-    def __initFromS3File(self, path):
-        """Load a file from path pointing to an S3 Bucket.
+    def __initFromS3YamlFile(self, path):
+        """Load a file at a given S3 Bucket uri and attempts to load it from
+        yaml.
 
         Parameters
         ----------
@@ -250,9 +252,13 @@ class Config(collections.abc.MutableMapping):
             response = s3.get_object(Bucket=uri.netloc, Key=uri.path.lstrip('/'))
         except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
             raise FileNotFoundError(f'No such file or directory: {path}') from err
-        byteStr = response['Body'].read()
-        confDict = yaml.safe_load(byteStr)
-        self.update(confDict)
+
+        # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
+        # Loader will raise an error that the stream has no name. A hackish
+        # solution is to name it explicitly.
+        response['Body'].name = path
+        self.__initFromYaml(response['Body'])
+        response['Body'].close()
 
     def __initFromYamlFile(self, path):
         """Opens a file at a given path and attempts to load it in from yaml.
@@ -752,6 +758,42 @@ class Config(collections.abc.MutableMapping):
         if data:
             yaml.safe_dump(data, output, default_flow_style=False)
 
+    def dumpToUri(self, uri, updateFile=True, defaultFileName='butler.yaml'):
+        """Writes the config to location pointed to by given URI.
+
+        Currently supports 's3' and 'file' URI schemes.
+
+        Parameters
+        ----------
+        uri: `str` or `ButlerURI`
+            URI of location where the Config will be written.
+        updateFile : bool, optional
+            If True and uri does not end on a filename with extension, will
+            append `defaultFileName` to the target uri. True by default.
+        defaultFileName : bool, optional
+            The file name that will be appended to target uri if updateFile is
+            True and uri does not end on a file with an extension.
+        """
+        if isinstance(uri, str):
+            uri = ButlerURI(uri)
+
+        if uri.scheme == 'file':
+            if os.path.isdir(uri.path) and updateFile:
+                uri = ButlerURI(os.path.join(uri.path, defaultFileName))
+            self.dumpToFile(uri.path)
+        elif uri.scheme == 's3':
+            # Assumed a file if it has a filetype extension
+            path, ext = posixpath.splitext(uri.path)
+            if not ext and updateFile:
+                # trailing '/' is mandatory for dirs, otherwise ButlerURI
+                # has a hard time updating files in URIs.
+                if not uri.path.endswith('/'):
+                    uri = ButlerURI(uri.geturl()+'/')
+                uri.updateFile(defaultFileName)
+            self.dumpToS3File(uri.netloc, uri.path.lstrip('/'))
+        else:
+            raise ValueError(f'Unrecognized URI scheme: {uri.scheme}')
+
     def dumpToFile(self, path):
         """Writes the config to a file.
 
@@ -763,7 +805,7 @@ class Config(collections.abc.MutableMapping):
         with open(path, "w") as f:
             self.dump(f)
 
-    def dumpToS3(self, bucket, key):
+    def dumpToS3File(self, bucket, key):
         """Writes the config to a file in S3 Bucket.
 
         Parameters
@@ -773,50 +815,15 @@ class Config(collections.abc.MutableMapping):
         key : `str`
             Path to the file to use for output, relative to the bucket.
         """
-        stream = io.StringIO()
-        self.dump(stream)
-        stream.seek(0)
-
-        s3 = boto3.client('s3')
-        s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
-
-        stream.close()
-
-    def dumpToUri(self, uri):
-        """Writes the config to location pointed to by given URI.
-
-        If URI does not specify the filename, by default `butler.yaml` will be
-        used. Currently supports 's3' and 'file' URI schemes.
-
-        Parameters
-        ----------
-        uri: `str` or `ButlerURI`
-            URI of location where the Config will be written.
-        """
         if boto3 is None:
             raise ModuleNotFoundError(("Could not find boto3. "
                                        "Are you sure it is installed?"))
 
-        if isinstance(uri, str):
-            uri = ButlerURI(uri)
-
-        if uri.scheme == 'file':
-            if os.path.isdir(uri.path):
-                uri = ButlerURI(os.path.join(uri.path, 'butler.yaml'))
-            self.dumpToFile(uri.path)
-        elif uri.scheme == 's3':
-            # we guesstimate if dir or a file. Paths that *end* on strings with
-            # dots `[A-Za-z0-9].[A-Za-z0-9]` are assumed to be files.
-            isDirExpression = re.compile(r"\w*\.\w*$")
-            if isDirExpression.search(uri.path) is None:
-                # trailing '/' is mandatory for dirs, otherwise ButlerURI
-                # has a hard time updating files in URIs.
-                if not uri.path.endswith('/'):
-                    uri = ButlerURI(uri.geturl()+'/')
-                uri.updateFile('butler.yaml')
-            self.dumpToS3(uri.netloc, uri.path.lstrip('/'))
-        else:
-            raise ValueError(f'Unrecognized URI scheme: {uri.scheme}')
+        s3 = boto3.client('s3')
+        with io.StringIO() as stream:
+            self.dump(stream)
+            stream.seek(0)
+            s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
 
     @staticmethod
     def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
