@@ -29,6 +29,7 @@ import tempfile
 import shutil
 import pickle
 <<<<<<< HEAD
+<<<<<<< HEAD
 import string
 import random
 
@@ -58,6 +59,11 @@ except ImportError:
 import random
 import string
 >>>>>>> 6d08b41... Added PostgreSqlRegistry+PosixDatastore test to test_butler.py.
+||||||| parent of 0976c83... Removed RDSButlerTestCase.
+import random
+import string
+=======
+>>>>>>> 0976c83... Removed RDSButlerTestCase.
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig

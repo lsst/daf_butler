@@ -21,19 +21,12 @@
 
 __all__ = ("PostgreSqlRegistry", )
 
-import re
-import configparser
-import urllib.parse as urlparse
-import os
-
-from sqlalchemy import event
 from sqlalchemy import create_engine
 
-from lsst.daf.butler.core.config import Config
-from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.registry import ConnectionStringBuilder
 
 from .oracleRegistry import OracleRegistry
-from .sqlRegistry import SqlRegistryConfig
+
 
 class PostgreSqlRegistry(OracleRegistry):
     """Registry backed by an PostgreSQL Amazon RDS service.
@@ -43,27 +36,9 @@ class PostgreSqlRegistry(OracleRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
-
-    def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
-                 butlerRoot=None):
-        registryConfig = SqlRegistryConfig(registryConfig)
-        self.schemaConfig = schemaConfig
-        super().__init__(registryConfig, schemaConfig, dimensionConfig, create,
-                         butlerRoot=butlerRoot)
+    dialect = 'postgres'
+    driver = 'psycopg2'
 
     def _createEngine(self):
-        constr = self.config['db']
-
-        # if both username and pass are in the db string - all is well
-        # if username and pass are a nick that exists in a local conf file
-        # read username and password from there
-        parsed = urlparse.urlparse(constr)
-        if parsed.username and (parsed.password is None):
-            localconf = configparser.ConfigParser()
-            localconf.read(os.path.expanduser('~/.rds/credentials'))
-
-            username = localconf[parsed.username]['username']
-            password = localconf[parsed.username]['password']
-            constr = constr.replace(parsed.username, f'{username}:{password}')
-
-        return create_engine(constr, pool_size=1)
+        return create_engine(ConnectionStringBuilder.fromConfig(self.config),
+                             pool_size=1)

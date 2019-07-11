@@ -1,0 +1,4 @@
+# test default case is unchanged
+registry:
+  cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
+  expected: 'sqlite+pysqlite:///:memory:'

@@ -1,0 +1,11 @@
+# test fully explicit configuration works, also tests explicit keyes override db-auth.paf
+registry:
+  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
+  dialect: 'postgres'
+  driver: 'psycopg2'
+  username: 'user'
+  password: 'password'
+  host: 'lsst-db.ncsa.illinois.edu'
+  port: 1234
+  dbname: 'conf2'
+  expected: 'postgres+psycopg2://user:password@lsst-db.ncsa.illinois.edu:1234/conf2'

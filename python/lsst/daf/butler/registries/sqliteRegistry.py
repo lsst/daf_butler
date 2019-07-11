@@ -30,7 +30,7 @@ from sqlalchemy.pool import NullPool
 from sqlite3 import Connection as SQLite3Connection
 
 from lsst.daf.butler.core.config import Config
-from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.registry import RegistryConfig, ConnectionStringBuilder
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
@@ -64,6 +64,8 @@ class SqliteRegistry(SqlRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
+    dialect = 'sqlite'
+    driver = 'pysqlite'
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -107,8 +109,8 @@ class SqliteRegistry(SqlRegistry):
         super().__init__(registryConfig, schemaConfig, dimensionConfig, create, butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        engine = create_engine(self.config["db"], poolclass=NullPool,
-                               connect_args={"check_same_thread": False})
+        engine = create_engine(ConnectionStringBuilder.fromConfig(self.config),
+                               poolclass=NullPool, connect_args={"check_same_thread": False})
         event.listen(engine, "connect", _onSqlite3Connect)
         event.listen(engine, "begin", _onSqlite3Begin)
         return engine

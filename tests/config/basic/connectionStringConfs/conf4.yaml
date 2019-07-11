@@ -1,0 +1,6 @@
+# test that combinations of 'db' and explicit keys work (f.e. port)
+registry:
+  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
+  db: 'lsst-db.ncsa.illinois.edu:3307'
+  dbname: 'conf4'
+  expected: 'postgres+psycopg2://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf4'

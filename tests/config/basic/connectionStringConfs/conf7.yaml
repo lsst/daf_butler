@@ -1,0 +1,8 @@
+# test that explicit keys take precedence over 'db' keys (f.e. port)
+# test that 'db' keys have precedence over db-auth.paf
+registry:
+  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
+  db: 'postgres+psycopg2://user:password@some.host.com:1234'
+  dbname: 'conf7'
+  port: 4321
+  expected: 'postgres+psycopg2://user:password@some.host.com:4321/conf7'
