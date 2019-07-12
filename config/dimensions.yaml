@@ -160,6 +160,15 @@ dimensions:
       lhs: [exposure]
       rhs: [calibration_label]
 
+    visit_calibration_label_join:
+      doc: >
+        A many-to-many join table that relates visit to calibration_label.
+
+        This can and probably should be implemented as a view.
+      lhs: [visit]
+      rhs: [calibration_label]
+      summarizes: [exposure_calibration_label_join]
+
     visit_detector_region:
       doc: >
         A many-to-many join table that provides region information for

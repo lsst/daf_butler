@@ -28,7 +28,7 @@ from itertools import combinations
 import lsst.sphgeom
 
 from sqlalchemy.exc import OperationalError
-from lsst.daf.butler import (Execution, Quantum, Run, DatasetType, Registry,
+from lsst.daf.butler import (Execution, Run, DatasetType, Registry,
                              StorageClass, ButlerConfig, DataId,
                              ConflictingDefinitionError, OrphanedRecordError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
@@ -191,44 +191,6 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertIsInstance(execution.id, int)
         outExecution = registry.getExecution(execution.id)
         self.assertEqual(outExecution, execution)
-
-    def testQuantum(self):
-        registry = self.makeRegistry()
-        if not registry.limited:
-            registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-        run = registry.makeRun(collection="test")
-        storageClass = StorageClass("testQuantum")
-        registry.storageClasses.registerStorageClass(storageClass)
-        # Make two predicted inputs
-        datasetType1 = DatasetType(name="dst1", dimensions=registry.dimensions.extract(("instrument",)),
-                                   storageClass=storageClass)
-        registry.registerDatasetType(datasetType1)
-        ref1 = registry.addDataset(datasetType1, dataId={"instrument": "DummyCam"}, run=run)
-        datasetType2 = DatasetType(name="dst2", dimensions=registry.dimensions.extract(("instrument",)),
-                                   storageClass=storageClass)
-        registry.registerDatasetType(datasetType2)
-        ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
-        # Create and add a Quantum
-        quantum = Quantum(run=run,
-                          task="some.fully.qualified.SuperTask",
-                          startTime=datetime(2018, 1, 1),
-                          endTime=datetime(2018, 1, 2),
-                          host="localhost")
-        quantum.addPredictedInput(ref1)
-        quantum.addPredictedInput(ref2)
-        # Quantum is not yet in Registry, so can't mark input as actual
-        with self.assertRaises(KeyError):
-            registry.markInputUsed(quantum, ref1)
-        registry.addQuantum(quantum)
-        # Now we can
-        registry.markInputUsed(quantum, ref1)
-        outQuantum = registry.getQuantum(quantum.id)
-        self.assertEqual(outQuantum, quantum)
-        # Removing a predictedInput dataset should be enough to remove the
-        # Quantum; we don't want to allow Quantums with inaccurate information
-        # to exist.
-        registry.removeDataset(ref1)
-        self.assertIsNone(registry.getQuantum(quantum.id))
 
     def testDatasetLocations(self):
         registry = self.makeRegistry()

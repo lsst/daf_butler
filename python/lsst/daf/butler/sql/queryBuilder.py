@@ -249,7 +249,7 @@ class QueryBuilder(ABC):
 
         Parameters
         ----------
-        sqlExpression : `str`
+        sqlExpression: `sqlalchemy.sql.ColumnElement`
             SQLAlchemy boolean column expression.
         op : `sqlalchemy.sql.operator`
             Binary operator to use if a WHERE expression already exists.
@@ -260,12 +260,12 @@ class QueryBuilder(ABC):
             self._whereClause = op(self.whereClause, sqlExpression)
 
     def whereParsedExpression(self, expression, op=and_):
-        """Add a SQL expression to the query's WHERE clause.
+        """Add a parsed dimension expression to the query's WHERE clause.
 
         Parameters
         ----------
-        sqlExpression
-            SQLAlchemy boolean column expression.
+        expression : `str`
+            String expression involving dimensions.
         op : `sqlalchemy.sql.operator`
             Binary operator to use if a WHERE expression already exists.
         """
@@ -279,6 +279,37 @@ class QueryBuilder(ABC):
             sqlExpression = expression.visit(visitor)
             _LOG.debug("where from expression: %s", sqlExpression)
             self.whereSqlExpression(sqlExpression, op=op)
+
+    def whereDataId(self, dataId, op=and_):
+        """Add a dimension constraint from a data ID to the query's WHERE
+        clause.
+
+        All data ID values that correspond to dimension values already included
+        in the query will be used in the constraint; any others will be
+        ignored.
+
+        Parameters
+        ----------
+        dataId : `DataId` or `dict`
+            Data ID to require (at least partial) dimension equality with.
+        op : `sqlalchemy.sql.operator`
+            Binary operator to use if a WHERE expression already exists.
+
+        Returns
+        -------
+        links : `set` of `str`
+            The data ID keys actually used in the constraint.
+        """
+        links = set()
+        terms = []
+        for key, value in dataId.items():
+            selectable = self.findSelectableForLink(key)
+            if selectable is not None:
+                links.add(key)
+                terms.append(selectable.columns[key] == value)
+        if terms:
+            self.whereSqlExpression(and_(*terms), op=op)
+        return links
 
     def selectDimensionLink(self, link):
         """Add a dimension link column to the SELECT clause of the query.
@@ -325,6 +356,17 @@ class QueryBuilder(ABC):
                 compiled = str(query)
             _LOG.debug("building query: %s", compiled)
         return query
+
+    def __str__(self):
+        query = self.build()
+        try:
+            compiled = str(query.compile(bind=self.registry._connection.engine,
+                                         compile_kwargs={"literal_binds": True}))
+        except AttributeError:
+            # Workaround apparent SQLAlchemy bug that sometimes treats a
+            # list as if it were a string.
+            compiled = str(query)
+        return compiled
 
     def execute(self, whereSql=None, **kwds):
         """Build and execute the query, iterating over result rows.

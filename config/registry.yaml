@@ -3,7 +3,6 @@ registry:
   cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
   db: 'sqlite:///:memory:'
   limited: false
-  deferDatasetIdQueries: true
   skypix:
     cls: lsst.sphgeom.HtmPixelization
     level: 7

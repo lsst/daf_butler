@@ -117,6 +117,7 @@ class DimensionTestCase(unittest.TestCase):
                               ["instrument", "detector", "physical_filter", "visit", "exposure",
                                "calibration_label"])
         self.assertCountEqual(graph1.joins().names, ["visit_detector_region",
+                                                     "visit_calibration_label_join",
                                                      "exposure_calibration_label_join"])
         self.assertEqual(graph1.getRegionHolder(), graph1.joins().get("visit_detector_region"))
         graph2 = graph1.intersection(["visit"])

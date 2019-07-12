@@ -107,11 +107,10 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         self._lenSql = select([func.count(keyColumn)])
 
     def __getitem__(self, key):
-        with self.registry._connection.begin():
-            row = self.registry._connection.execute(self._getSql, key=key).fetchone()
-            if row is None:
-                raise KeyError("{} not found".format(key))
-            return self._value._make(row)
+        row = self.registry._connection.execute(self._getSql, key=key).fetchone()
+        if row is None:
+            raise KeyError("{} not found".format(key))
+        return self._value._make(row)
 
     def __setitem__(self, key, value):
         assert isinstance(value, self._value)
@@ -119,7 +118,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         # pattern.
         kwds = value._asdict()
         kwds[self._key] = key
-        with self.registry._connection.begin():
+        with self.registry._connection.begin_nested():
             try:
                 self.registry._connection.execute(self._table.insert(), **kwds)
                 return
@@ -136,7 +135,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         # If we fail due to an IntegrityError (i.e. duplicate primary key
         # values), try to do an update instead.
         kwds.pop(self._key, None)
-        with self.registry._connection.begin():
+        with self.registry._connection.begin_nested():
             try:
                 self.registry._connection.execute(self._updateSql, key=key, **kwds)
             except StatementError as err:
@@ -153,13 +152,11 @@ class SqlRegistryDatabaseDict(DatabaseDict):
                 raise KeyError("{} not found".format(key))
 
     def __iter__(self):
-        with self.registry._connection.begin():
-            for row in self.registry._connection.execute(self._keysSql).fetchall():
-                yield row[0]
+        for row in self.registry._connection.execute(self._keysSql).fetchall():
+            yield row[0]
 
     def __len__(self):
-        with self.registry._connection.begin():
-            return self.registry._connection.execute(self._lenSql).scalar()
+        return self.registry._connection.execute(self._lenSql).scalar()
 
     # TODO: add custom view objects for at views() and items(), so we don't
     # invoke a __getitem__ call for every key.

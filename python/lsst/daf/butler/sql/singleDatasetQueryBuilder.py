@@ -22,11 +22,51 @@
 __all__ = ("SingleDatasetQueryBuilder",)
 
 import logging
+from dataclasses import dataclass
+from typing import Set
 from sqlalchemy.sql import select, and_, functions, case
 from ..core import DimensionJoin
 from .queryBuilder import QueryBuilder
 
 _LOG = logging.getLogger(__name__)
+
+
+@dataclass
+class RelateCandidate:
+    """Helper struct for `SingleDatasetQueryBuilder.relateDimensions`.
+    """
+
+    join: DimensionJoin
+    """The dimension join being considered as a way to relate the dataset's
+    dimensions to the given dimensions.
+    """
+
+    linksSharedWithDataset: Set[str]
+    """The set of dimension links this join shares with the dataset's
+    dimensions."""
+
+    linksSharedWithOther: Set[str]
+    """The set of dimension links this join shares with the given dimensions.
+    """
+
+    @property
+    def score(self):
+        """A combination of the number of links shared used as a preliminary
+        comparison between candidates.
+        """
+        return len(self.linksSharedWithDataset)*len(self.linksSharedWithOther)
+
+    def isBetterThan(self, other):
+        """Return `True` if this candidate is clearly better than the other
+        (`False` is returned for both ties and when `other` is clearly better).
+        """
+        if other is None:
+            return True
+        if self.score > other.score:
+            return True
+        elif self.score == other.score:
+            return self.join in other.join.summarizes
+        return False
 
 
 class SingleDatasetQueryBuilder(QueryBuilder):
@@ -302,7 +342,7 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         newLinks : `set` of `str`
             The names of additional dimension link columns provided by the
             subquery via the added joins.  This is a subset of
-            ``otherDimensions.link()`` and disjoint from
+            ``otherDimensions.links()`` and disjoint from
             ``self.datasetType.dimensions.links()``.
 
         Notes
@@ -314,20 +354,25 @@ class SingleDatasetQueryBuilder(QueryBuilder):
         more dimensions in ``otherDimensions``.
         """
         allDimensions = self.datasetType.dimensions.union(otherDimensions)
-        missingLinks = set(self.datasetType.dimensions.links().difference(otherDimensions.links()))
+        missingLinks = set(self.datasetType.dimensions.links() - otherDimensions.links())
         newLinks = set()
         while missingLinks:
-            missingLink = missingLinks.pop()
-            related = False
-            for element in self.registry.dimensions.withLink(missingLink):
-                if (isinstance(element, DimensionJoin) and not element.asNeeded and
-                        element.links().issubset(allDimensions.links())):
-                    self.joinDimensionElement(element)
-                    missingLinks -= element.links()
-                    newLinks.update(element.links())
-                    related = True
-            if not related:
-                raise ValueError(f"No join found relating link {missingLink} to {otherDimensions.links()}")
+            best = None
+            for join in allDimensions.joins():
+                if join.asNeeded or missingLinks.isdisjoint(join.links()):
+                    continue
+                candidate = RelateCandidate(
+                    join=join,
+                    linksSharedWithDataset=self.datasetType.dimensions.links() & join.links(),
+                    linksSharedWithOther=otherDimensions.links() & join.links(),
+                )
+                if candidate.isBetterThan(best):
+                    best = candidate
+            if best is None:
+                raise ValueError(f"No join found relating links {missingLinks} to {otherDimensions.links()}")
+            self.joinDimensionElement(best.join)
+            missingLinks -= best.join.links()
+            newLinks.update(best.join.links())
         newLinks -= self.datasetType.dimensions.links()
         if addResultColumns:
             for link in newLinks:
