@@ -20,8 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
+from collections import namedtuple
 
-from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
+from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton, NamedKeyDict
 from lsst.daf.butler.core.formatter import Formatter
 from lsst.daf.butler import StorageClass
 

@@ -22,13 +22,13 @@
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict", "getClassOf"
-           "checkFileExists", "s3CheckFileExists", "parsePathToUriElements", "bucketExists")
+           "NamedKeyDict")
 
 import builtins
 import os
 import sys
 import functools
+from collections.abc import MutableMapping
 
 from lsst.utils import doImport
 
