@@ -34,7 +34,7 @@ from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 try:
     import lsst.afw.image
     from lsst.afw.image import LOCAL
-    from lsst.geom import Box2I, Point2I
+    from lsst.geom import Box2I, Point2I, Extent2I
 except ImportError:
     lsst.afw = None
 
@@ -114,8 +114,7 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
             #                       compRef.datasetType.storageClass.pytype)
             compsRead[compName] = component
         # Simple check of WCS
-        bbox = lsst.afw.geom.Box2I(lsst.afw.geom.Point2I(0, 0),
-                                   lsst.afw.geom.Extent2I(9, 9))
+        bbox = Box2I(Point2I(0, 0), Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(compsRead["wcs"], exposure.getWcs(), bbox)
 
         # With parameters
