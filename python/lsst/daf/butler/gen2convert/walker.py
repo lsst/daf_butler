@@ -227,6 +227,7 @@ class ConversionWalker:
                 obsInfoId = tuple(dataset.dataId[k] for k in config["uniqueKeys"])
                 if obsInfoId in instrumentObsInfo:
                     continue
+                # Metadata will be corrected by the call to ObservationInfo
                 md = readMetadata(dataset.fullPath)
                 filt = repo.mapper.queryMetadata(config["DatasetType"], ("filter",), dataset.dataId)[0][0]
                 instrumentObsInfo[obsInfoId] = (ObservationInfo(md), filt)

@@ -23,6 +23,7 @@ __all__ = ("FitsExposureFormatter", )
 
 import copy
 
+from astro_metadata_translator import fix_header
 from lsst.daf.butler import Formatter
 
 
@@ -66,7 +67,9 @@ class FitsExposureFormatter(Formatter):
             Header metadata.
         """
         from lsst.afw.image import readMetadata
-        return readMetadata(fileDescriptor.location.path)
+        md = readMetadata(fileDescriptor.location.path)
+        fix_header(md)
+        return md
 
     def stripMetadata(self, metadata):
         """Remove metadata entries that are parsed into components.
