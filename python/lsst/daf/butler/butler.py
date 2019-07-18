@@ -29,6 +29,7 @@ import os
 import contextlib
 import logging
 import itertools
+import typing
 
 try:
     import boto3
@@ -38,6 +39,7 @@ except ImportError:
 from lsst.utils import doImport
 from .core.utils import transactional
 from .core.datasets import DatasetRef, DatasetType
+from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.run import Run
@@ -446,6 +448,35 @@ class Butler:
             # single entity in datastore
             raise FileNotFoundError("Unable to locate ref {} in datastore {}".format(ref.id,
                                                                                      self.datastore.name))
+
+    def getDeferred(self, datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
+                    dataId: typing.Union[dict, DataId] = None, parameters: typing.Union[dict, None] = None,
+                    **kwds) -> dDH.DeferredDatasetHandle:
+
+        """Create a `DeferredDatasetHandle` which can later retrieve a dataset
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataId`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        parameters : `dict`
+            Additional StorageClass-defined options to control reading,
+            typically used to efficiently read only a subset of the dataset.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        obj : `DeferredDatasetHandle`
+            A handle which can be used to retrieve a dataset at a later time
+        """
+        return dDH.DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
 
     def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
         """Retrieve a stored dataset.
