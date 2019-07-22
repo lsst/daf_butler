@@ -93,6 +93,7 @@ class SqliteRegistry(SqlRegistry):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
+        super().setConfigRoot(root, config, full, overwrite=overwrite)
         Config.updateParameters(RegistryConfig, config, full,
                                 toUpdate={"db": f"sqlite:///{root}/gen3.sqlite3"},
                                 toCopy=("cls",), overwrite=overwrite)

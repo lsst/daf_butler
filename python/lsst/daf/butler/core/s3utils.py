@@ -44,19 +44,20 @@ def s3CheckFileExistsGET(client, bucket, filepath):
 
     Returns
     -------
-    (`bool`, `int`) : `tuple`
-       Tuple (exists, size). If file exists (True, filesize)
-       and (False, -1) when the file is not found.
+    exists : `bool`
+        True if key exists, False otherwise.
+    size : `int`
+        Size of the key, if key exists, in bytes, otherwise -1
 
     Notes
     -----
-    A Bucket GET request will be charged against your account. This is on
+    A Bucket HEAD request will be charged against your account. This is on
     average 10x cheaper than a LIST request (see `s3CheckFileExistsLIST`
     function) but can be up to 90% slower whenever additional work is done with
-    the s3 client. See PR:
-        ``https://github.com/boto/botocore/issues/1248``
-    for details, in boto3 versions >=1.11.0 the loss of performance should not
-    be an issue anymore.
+    the s3 client. See `PR-1248<https://github.com/boto/botocore/issues/1248>`_
+    and `PR-1128<https://github.com/boto/boto3/issues/1128>`_ for details. In
+    boto3 versions >=1.11.0 the loss of performance should not be an issue
+    anymore.
     S3 Paths are sensitive to leading and trailing path separators.
     """
     try:
@@ -83,19 +84,26 @@ def s3CheckFileExistsLIST(client, bucket, filepath):
 
     Returns
     -------
-    (`bool`, `int`) : `tuple`
-       Tuple (exists, size). If file exists (True, filesize)
-       and (False, -1) when the file is not found.
+    exists : `bool`
+        True if key exists, False otherwise
+    size : `int`
+        Size of the key, if key exists, in bytes, otherwise -1
 
     Notes
     -----
     You are getting charged for a Bucket LIST request. This is on average 10x
     more expensive than a GET request (see `s3CheckFileExistsGET` fucntion) but
     can be up to 90% faster whenever additional work is done with the s3
-    client. For details, see PR:
-        ``https://github.com/boto/botocore/issues/1248``
-    Boto3 versions >=1.11.0 the loss of performance should not be an issue
+    client. See `PR-1248<https://github.com/boto/botocore/issues/1248>`_
+    and `PR-1128<https://github.com/boto/boto3/issues/1128>`_ for details. In
+    boto3 versions >=1.11.0 the loss of performance should not be an issue
     anymore.
+    A LIST request can, by default, return up to 1000 matching keys, however,
+    the LIST response is filtered on `filepath` key which, in this context, is
+    expected to be unique. Non-unique matches are treated as a non-existant
+    file.
+    This function can not be used to retrieve all keys that start with
+    `filepath`.
     """
     response = client.list_objects_v2(
         Bucket=bucket,

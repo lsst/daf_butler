@@ -80,13 +80,11 @@ class ButlerConfig(Config):
         if isinstance(other, str):
             uri = ButlerURI(other)
             if uri.scheme == 'file':
-                if os.path.isdir(uri.path):
-                    other = os.path.join(other, "butler.yaml")
+                if os.path.isdir(uri.ospath):
+                    other = os.path.join(uri.ospath, "butler.yaml")
             elif uri.scheme == 's3':
-                path, ext = posixpath.splitext(uri.path)
-                if not ext:
-                    if not uri.path.endswith('/'):
-                        uri = ButlerURI(uri.geturl()+'/')
+                head, filename = posixpath.split(uri.path)
+                if "." not in filename:
                     uri.updateFile('butler.yaml')
                 other = uri.geturl()
             else:

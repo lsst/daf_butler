@@ -49,7 +49,7 @@ from .core.dimensions import DataId
 from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
-from . core.location import ButlerURI
+from .core.location import ButlerURI
 
 log = logging.getLogger(__name__)
 
@@ -182,9 +182,8 @@ class Butler:
 
         uri = ButlerURI(root)
         if uri.scheme == 'file':
-            root = os.path.abspath(root)
-            if not os.path.isdir(root):
-                safeMakeDir(root)
+            if not os.path.isdir(uri.ospath):
+                safeMakeDir(uri.ospath)
         elif uri.scheme == 's3':
             s3 = boto3.resource('s3')
             # implies bucket exists, if not another level of checks

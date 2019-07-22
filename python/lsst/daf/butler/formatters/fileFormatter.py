@@ -87,8 +87,8 @@ class FileFormatter(Formatter):
             Identifies the file to read, type to read it into and parameters
             to be used for reading.
         data : `dict` or `object`
-            a composite or a dict that, or which component, needs to be
-            coerced to a ptype
+            Composite or a dict that, or which component, needs to be
+            coerced to the python type specified in "fileDescriptor"
         fileDescriptor : `FileDescriptor`
             Identifies the file to read, type to read it into and parameters
             to be used for reading.
@@ -96,6 +96,7 @@ class FileFormatter(Formatter):
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
+
         Returns
         -------
         inMemoryDataset : `object`
@@ -175,14 +176,15 @@ class FileFormatter(Formatter):
         ValueError
             Component requested but this file does not seem to be a concrete
             composite.
+        NotImplementedError
+            Formatter does not implement a method to read from files.
         """
 
         # Read the file naively
         path = fileDescriptor.location.path
         data = self._readFile(path, fileDescriptor.storageClass.pytype)
 
-        # Assemble the requested dataset and potentially return only its
-        # component coercing it to its appropriate ptype
+        # Assemble the requested dataset return it as its appropriate ptype
         data = self._assembleDataset(data, fileDescriptor, component)
 
         if data is None:
@@ -190,12 +192,12 @@ class FileFormatter(Formatter):
 
         return data
 
-    def fromBytes(self, inMemoryDataset, fileDescriptor, component=None):
+    def fromBytes(self, serializedDataset, fileDescriptor, component=None):
         """Reads serialized data into a Dataset or its component.
 
         Parameters
         ----------
-        dataset : `bytes`
+        serializedDataset : `bytes`
             Bytes object to unserialize.
         fileDescriptor : `FileDescriptor`
             Identifies read type and parameters to be used for reading.
@@ -209,17 +211,11 @@ class FileFormatter(Formatter):
         inMemoryDataset : `object`
             The requested data as a Python object. The type of object
             is controlled by the specific formatter.
-
-        Raises
-        ------
-        ValueError
-            Component requested but this Dataset does not seem to be a concrete
-            composite.
         """
         if not hasattr(self, '_fromBytes'):
             raise NotImplementedError("Type does not support reading from bytes.")
 
-        data = self._fromBytes(inMemoryDataset,
+        data = self._fromBytes(serializedDataset,
                                fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its
@@ -258,19 +254,17 @@ class FileFormatter(Formatter):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Python object to serialize.
+            Object to serialize.
         fileDescriptor : `FileDescriptor`
             Identifies read type and parameters to be used for reading.
 
         Returns
         -------
         serializedDataset : `bytes`
-            bytes representing the serialized dataset.
+            Bytes representing the serialized dataset.
         """
         if not hasattr(self, '_toBytes'):
             raise NotImplementedError("Type does not support reading from bytes.")
-
-        fileDescriptor.location.updateExtension(self.extension)
 
         return self._toBytes(inMemoryDataset)
 

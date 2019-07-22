@@ -50,7 +50,7 @@ class JsonFormatter(FileFormatter):
             if the file could not be opened.
         """
         try:
-            with open(path, "r") as fd:
+            with open(path, "rb") as fd:
                 data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
@@ -76,26 +76,24 @@ class JsonFormatter(FileFormatter):
         with open(self.fileDescriptor.location.path, "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            fd.write(self._toBytes(inMemoryDataset).decode())
+            fd.write(self._toBytes(inMemoryDataset))
 
-    def _fromBytes(self, bytesObject, pytype=None):
+    def _fromBytes(self, serializedDataset):
         """Read the bytes object as a python object.
 
         Parameters
         ----------
         serializedDataset : `bytes`
             Bytes object to unserialize.
-        pytype : `class`, optional
-            Not used by this implementation.
 
         Returns
         -------
-        data : `object`
-            Either data as Python object read from bytes, or None if the string
-            could not be read.
+        inMemoryDataset : `object`
+            The requested data as a Python object or None if the string could
+            not be read.
         """
         try:
-            data = json.loads(bytesObject)
+            data = json.loads(serializedDataset)
         except json.JSONDecodeError:
             data = None
 
@@ -111,8 +109,8 @@ class JsonFormatter(FileFormatter):
 
         Returns
         -------
-        data : `bytes`
-            Object stored as bytes.
+        serializedDataset : `bytes`
+            bytes representing the serialized dataset.
 
         Raises
         ------

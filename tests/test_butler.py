@@ -656,9 +656,6 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         in the requested location. For S3Datastore this test is equivalent to
         `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
         """
-        if boto3 is None:
-            raise ModuleNotFoundError(("Could not find boto3. "
-                                       "Are you sure it is installed?"))
         uri = ButlerURI(root)
         client = boto3.client('s3')
         return s3CheckFileExists(client, uri)[0]

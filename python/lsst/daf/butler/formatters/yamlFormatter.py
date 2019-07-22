@@ -61,24 +61,24 @@ class YamlFormatter(FileFormatter):
 
         return data
 
-    def _fromBytes(self, bytesObject, pytype=None):
+    def _fromBytes(self, serializedDataset, pytype=None):
         """Read the bytes object as a python object.
 
         Parameters
         ----------
-        inMemoryDataset : `bytes`
+        serializedDataset : `bytes`
             Bytes object to unserialize.
         pytype : `class`, optional
             Not used by this implementation.
 
         Returns
         -------
-        data : `object`
-            Either data as Python object read from bytes, or None if the string
-            could not be read.
+        inMemoryDataset : `object`
+            The requested data as an object, or None if the string could
+            not be read.
         """
         try:
-            data = yaml.load(bytesObject, Loader=yaml.UnsafeLoader)
+            data = yaml.load(serializedDataset, Loader=yaml.UnsafeLoader)
         except yaml.YAMLError:
             data = None
         try:
@@ -106,7 +106,7 @@ class YamlFormatter(FileFormatter):
         with open(self.fileDescriptor.location.path, "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            fd.write(self._toBytes(inMemoryDataset).decode())
+            fd.write(self._toBytes(inMemoryDataset))
 
     def _toBytes(self, inMemoryDataset):
         """Write the in memory dataset to a bytestring.
@@ -118,7 +118,7 @@ class YamlFormatter(FileFormatter):
 
         Returns
         -------
-        data : `bytes`
+        serializedDataset : `bytes`
             YAML string encoded to bytes.
 
         Raises

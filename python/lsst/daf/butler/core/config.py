@@ -243,8 +243,8 @@ class Config(collections.abc.MutableMapping):
             To a persisted config file.
         """
         if boto3 is None:
-            raise ModuleNotFoundError(('boto3 not found.'
-                                       'Are you sure it is installed?'))
+            raise ModuleNotFoundError('boto3 not found.'
+                                      'Are you sure it is installed?')
 
         uri = ButlerURI(path)
         s3 = boto3.client('s3')
@@ -782,13 +782,8 @@ class Config(collections.abc.MutableMapping):
                 uri = ButlerURI(os.path.join(uri.path, defaultFileName))
             self.dumpToFile(uri.path)
         elif uri.scheme == 's3':
-            # Assumed a file if it has a filetype extension
-            path, ext = posixpath.splitext(uri.path)
-            if not ext and updateFile:
-                # trailing '/' is mandatory for dirs, otherwise ButlerURI
-                # has a hard time updating files in URIs.
-                if not uri.path.endswith('/'):
-                    uri = ButlerURI(uri.geturl()+'/')
+            head, filename = posixpath.split(uri.path)
+            if "." not in filename:
                 uri.updateFile(defaultFileName)
             self.dumpToS3File(uri.netloc, uri.path.lstrip('/'))
         else:
@@ -816,8 +811,8 @@ class Config(collections.abc.MutableMapping):
             Path to the file to use for output, relative to the bucket.
         """
         if boto3 is None:
-            raise ModuleNotFoundError(("Could not find boto3. "
-                                       "Are you sure it is installed?"))
+            raise ModuleNotFoundError("Could not find boto3. "
+                                      "Are you sure it is installed?")
 
         s3 = boto3.client('s3')
         with io.StringIO() as stream:
@@ -900,7 +895,7 @@ class Config(collections.abc.MutableMapping):
             for key in toCopy:
                 if key in localConfig and not overwrite:
                     log.debug("Not overriding key '%s' from defaults in config %s",
-                              key, value, localConfig.__class__.__name__)
+                              key, localConfig.__class__.__name__)
                 else:
                     localConfig[key] = localFullConfig[key]
 

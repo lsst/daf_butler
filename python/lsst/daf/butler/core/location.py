@@ -142,6 +142,11 @@ class ButlerURI:
         return self._uri.path
 
     @property
+    def ospath(self):
+        """Path component of the URI localized to current OS."""
+        return posix2os(self._uri.path)
+
+    @property
     def fragment(self):
         """The fragment component of the URI."""
         return self._uri.fragment
@@ -164,8 +169,7 @@ class ButlerURI:
         url : `str`
             String form of URI.
         """
-        return urllib.parse.urlunparse(self._uri)
-#        return self._uri.geturl()
+        return self._uri.geturl()
 
     def replace(self, **kwargs):
         """Replace components in a URI with new values and return a new
@@ -396,16 +400,16 @@ class Location:
 
     @property
     def netloc(self):
-        """If Location is an S3 protocol, returns the bucket name."""
+        """The URI network location."""
         return self._datastoreRootUri.netloc
 
     @property
     def relativeToNetloc(self):
-        """Returns the path in an S3 Bucket, normalized so that directory
-        structure in the bucket matches that of a local filesystem.
+        """Returns the path component of the URI relative to the network
+        location.
 
         Effectively, this is the path property with posix separator stipped
-        from the left hand side of the path, i.e. path relative to netloc.
+        from the left hand side of the path.
         """
         return self.path.lstrip('/')
 
@@ -457,11 +461,8 @@ class LocationFactory:
 
     @property
     def netloc(self):
-        """If Location is an S3 protocol, returns the bucket name."""
-        if self._datastoreRootUri.scheme == 's3':
-            return self._datastoreRootUri.netloc
-        else:
-            raise AttributeError(f'Path {self} is not a valid S3 protocol.')
+        """Returns the network location of datastoreRoot."""
+        return self._datastoreRootUri.netloc
 
     def fromPath(self, path):
         """Factory function to create a `Location` from a POSIX path.
