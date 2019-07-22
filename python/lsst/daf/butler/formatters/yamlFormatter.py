@@ -42,6 +42,8 @@ class YamlFormatter(FileFormatter):
         ----------
         path : `str`
             Path to use to open YAML format file.
+        pytype : `class`, optional
+            Not used by this implementation.
 
         Returns
         -------

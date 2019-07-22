@@ -515,7 +515,7 @@ class S3Datastore(Datastore):
                 if s3CheckFileExists(self.client, uri)[0]:
                     raise FileExistsError(f"File '{uri}' exists.")
 
-                relpath = uri.path.lstrip('/')
+                relpath = uri.relativeToNetloc
                 copySrc = {'Bucket': uri.netloc, 'Key': relpath}
                 self.client.copy(copySrc, self.locationFactory.netloc,
                                  relpath)
@@ -534,7 +534,7 @@ class S3Datastore(Datastore):
 
         # the file should exist on the bucket by now
         exists, size = s3CheckFileExists(self.client, bucket=location.netloc,
-                                         filepath=uri.path.lstrip('/'))
+                                         filepath=uri.relativeToNetloc)
         self.registry.addDatasetLocation(ref, self.name)
 
         # Associate this dataset with the formatter for later read.

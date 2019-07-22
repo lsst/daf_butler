@@ -101,9 +101,9 @@ def s3CheckFileExistsLIST(client, bucket, filepath):
     A LIST request can, by default, return up to 1000 matching keys, however,
     the LIST response is filtered on `filepath` key which, in this context, is
     expected to be unique. Non-unique matches are treated as a non-existant
-    file.
-    This function can not be used to retrieve all keys that start with
+    file. This function can not be used to retrieve all keys that start with
     `filepath`.
+    S3 Paths are sensitive to leading and trailing path separators.
     """
     response = client.list_objects_v2(
         Bucket=bucket,
@@ -117,7 +117,7 @@ def s3CheckFileExistsLIST(client, bucket, filepath):
         return (False, -1)
 
 
-def s3CheckFileExists(client, path=None, bucket=None, filepath=None, cheap=True):
+def s3CheckFileExists(client, path=None, bucket=None, filepath=None, slow=True):
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
@@ -128,26 +128,29 @@ def s3CheckFileExists(client, path=None, bucket=None, filepath=None, cheap=True)
     ----------
     client : `boto3.client`
         S3 Client object to query.
-    path : `Location, ButlerURI`, optional
+    path : `Location`, `ButlerURI`, optional
         Location or ButlerURI containing the bucket name and filepath.
     bucket : `str`, optional
         Name of the bucket in which to look.
     filepath : `str`, optional
         Path to file.
-    cheap : `bool`, optional
-        If True, makes a GET request to S3 instead of a LIST request. See
-        `s3CheckFileExistsGET` or `s3CheckFileExistsLIST` for more details.
+    slow : `bool`, optional
+        If True, makes a GET request to S3 instead of a LIST request. This
+        is cheaper, but also slower. See `s3CheckFileExistsGET` or
+        `s3CheckFileExistsLIST` for more details.
 
     Returns
     -------
-    (`bool`, `int`) : `tuple`
-       Tuple (exists, size). If file exists (True, filesize)
-       and (False, -1) when the file is not found.
+    exists : `bool`
+        True if file exists, False otherwise
+    size : `int`
+        Size of the key, if key exists, in bytes, otherwise -1
+
+    Notes
+    -----
+    S3 Paths are sensitive to leading and trailing path separators.
     """
-    if isinstance(path, ButlerURI):
-        bucket = path.netloc
-        filepath = path.path.lstrip('/')
-    elif isinstance(path, Location):
+    if isinstance(path, (ButlerURI, Location)):
         bucket = path.netloc
         filepath = path.relativeToNetloc
 
@@ -155,7 +158,7 @@ def s3CheckFileExists(client, path=None, bucket=None, filepath=None, cheap=True)
         raise ValueError(('Expected ButlerURI, Location or (bucket, filepath) pair '
                           f'but got {path}, ({bucket}, {filepath}) instead.'))
 
-    if cheap:
+    if slow:
         return s3CheckFileExistsGET(client, bucket=bucket, filepath=filepath)
     return s3CheckFileExistsLIST(client, bucket=bucket, filepath=filepath)
 

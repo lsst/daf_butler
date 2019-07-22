@@ -188,7 +188,7 @@ class Butler:
             s3 = boto3.resource('s3')
             # implies bucket exists, if not another level of checks
             bucket = s3.Bucket(uri.netloc)
-            bucket.put_object(Bucket=uri.netloc, Key=(uri.path.lstrip('/')))
+            bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToNetloc)
         else:
             raise ValueError(f'Unrecognized scheme: {uri.scheme}')
         config = Config(config)
@@ -203,7 +203,6 @@ class Butler:
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
-
         if standalone:
             config.merge(full)
         config.dumpToUri(uri)

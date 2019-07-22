@@ -402,10 +402,9 @@ class ButlerTests:
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
     def testStringification(self):
-        # is root declared in the self.configFile, which one exactly is this?
         butler = Butler(self.tmpConfigFile)
-
         butlerStr = str(butler)
+
         if self.datastoreStr is not None:
             for testStr in self.datastoreStr:
                 self.assertIn(testStr, butlerStr)

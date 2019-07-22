@@ -24,16 +24,15 @@
 __all__ = ("Config", "ConfigSubset")
 
 import collections
-import posixpath
 import copy
 import logging
 import pprint
 import os
 import yaml
 import sys
-import io
 from yaml.representer import Representer
-from lsst.daf.butler.core.location import ButlerURI
+import io
+import posixpath
 
 try:
     import boto3
@@ -41,8 +40,8 @@ except ImportError:
     boto3 = None
 
 import lsst.utils
-
 from lsst.utils import doImport
+from lsst.daf.butler.core.location import ButlerURI
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
@@ -249,7 +248,7 @@ class Config(collections.abc.MutableMapping):
         uri = ButlerURI(path)
         s3 = boto3.client('s3')
         try:
-            response = s3.get_object(Bucket=uri.netloc, Key=uri.path.lstrip('/'))
+            response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToNetloc)
         except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
             raise FileNotFoundError(f'No such file or directory: {path}') from err
 
@@ -779,13 +778,13 @@ class Config(collections.abc.MutableMapping):
 
         if uri.scheme == 'file':
             if os.path.isdir(uri.path) and updateFile:
-                uri = ButlerURI(os.path.join(uri.path, defaultFileName))
-            self.dumpToFile(uri.path)
+                uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
+            self.dumpToFile(uri.ospath)
         elif uri.scheme == 's3':
             head, filename = posixpath.split(uri.path)
             if "." not in filename:
                 uri.updateFile(defaultFileName)
-            self.dumpToS3File(uri.netloc, uri.path.lstrip('/'))
+            self.dumpToS3File(uri.netloc, uri.relativeToNetloc)
         else:
             raise ValueError(f'Unrecognized URI scheme: {uri.scheme}')
 

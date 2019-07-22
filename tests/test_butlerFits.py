@@ -158,10 +158,8 @@ class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase)
 
 @mock_s3
 class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
-    """"S3Datastore specialization of a butler. This is a S3 backed DataStore +
-    a local in memory SqliteRegistry
-
-    Very practical for testing the S3Datastore quickly.
+    """S3Datastore specialization of a butler; an S3 storage Datastore +
+    a local in-memory SqlRegistry.
     """
     configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
 

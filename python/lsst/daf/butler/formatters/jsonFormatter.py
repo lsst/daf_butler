@@ -78,13 +78,15 @@ class JsonFormatter(FileFormatter):
                 inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
-    def _fromBytes(self, serializedDataset):
+    def _fromBytes(self, serializedDataset, pytype=None):
         """Read the bytes object as a python object.
 
         Parameters
         ----------
         serializedDataset : `bytes`
             Bytes object to unserialize.
+        pytype : `class`, optional
+            Not used by this implementation.
 
         Returns
         -------

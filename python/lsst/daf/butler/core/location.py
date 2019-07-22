@@ -147,6 +147,15 @@ class ButlerURI:
         return posix2os(self._uri.path)
 
     @property
+    def relativeToNetloc(self):
+        """Returns path relative to network location.
+
+        Effectively, this is the path property with posix separator stipped
+        from the left hand side of the path.
+        """
+        return self._uri.path.lstrip('/')
+
+    @property
     def fragment(self):
         """The fragment component of the URI."""
         return self._uri.fragment
@@ -263,7 +272,7 @@ class ButlerURI:
                     # This can stay in OS path form, do not change to file
                     # scheme. Why? If we know we are relative to current dir,
                     # why not be explicit about it?
-                    replacements["path"] = os.path.normpath(os.path.join(root, expandedPath))
+                    replacements["path"] = os2posix(os.path.normpath(os.path.join(root, expandedPath)))
                     replacements["scheme"] = 'file'
                     replacements["netloc"] = 'localhost'
                 else:
@@ -461,7 +470,7 @@ class LocationFactory:
 
     @property
     def netloc(self):
-        """Returns the network location of datastoreRoot."""
+        """Returns the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
     def fromPath(self, path):

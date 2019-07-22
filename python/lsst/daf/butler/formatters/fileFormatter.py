@@ -184,7 +184,8 @@ class FileFormatter(Formatter):
         path = fileDescriptor.location.path
         data = self._readFile(path, fileDescriptor.storageClass.pytype)
 
-        # Assemble the requested dataset return it as its appropriate ptype
+        # Assemble the requested dataset and potentially return only its
+        # component coercing it to its appropriate pytype
         data = self._assembleDataset(data, fileDescriptor, component)
 
         if data is None:
@@ -211,6 +212,11 @@ class FileFormatter(Formatter):
         inMemoryDataset : `object`
             The requested data as a Python object. The type of object
             is controlled by the specific formatter.
+
+        Raises
+        ------
+        NotImplementedError
+            Formatter does not support reading from bytes.
         """
         if not hasattr(self, '_fromBytes'):
             raise NotImplementedError("Type does not support reading from bytes.")
@@ -262,6 +268,11 @@ class FileFormatter(Formatter):
         -------
         serializedDataset : `bytes`
             Bytes representing the serialized dataset.
+
+        Raises
+        ------
+        NotImplementedError
+            Formatter does not support reading from bytes.
         """
         if not hasattr(self, '_toBytes'):
             raise NotImplementedError("Type does not support reading from bytes.")

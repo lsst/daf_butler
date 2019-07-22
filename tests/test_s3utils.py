@@ -42,15 +42,15 @@ from lsst.daf.butler.core.location import Location, ButlerURI
 class S3UtilsTestCase(unittest.TestCase):
     """Test for the S3 related utilities.
     """
-    bucketName = 'testBucketName'
-    fileName = 'testFileName'
+    bucketName = "testBucketName"
+    fileName = "testFileName"
 
     def setUp(self):
-        s3 = boto3.client('s3')
+        s3 = boto3.client("s3")
         try:
             s3.create_bucket(Bucket=self.bucketName)
             s3.put_object(Bucket=self.bucketName, Key=self.fileName,
-                          Body=b'test content')
+                          Body=b"test content")
         except s3.exceptions.BucketAlreadyExists:
             pass
 
@@ -71,23 +71,23 @@ class S3UtilsTestCase(unittest.TestCase):
         bucket.delete()
 
     def testBucketExists(self):
-        self.assertTrue(bucketExists(f'{self.bucketName}'))
-        self.assertFalse(bucketExists(f'{self.bucketName}_NO_EXIST'))
+        self.assertTrue(bucketExists(f"{self.bucketName}"))
+        self.assertFalse(bucketExists(f"{self.bucketName}_NO_EXIST"))
 
     def testFileExists(self):
         s3 = boto3.client('s3')
         self.assertTrue(s3CheckFileExists(s3, bucket=self.bucketName,
-                                          filepath=self.fileName, cheap=True)[0])
+                                          filepath=self.fileName, slow=True)[0])
         self.assertFalse(s3CheckFileExists(s3, bucket=self.bucketName,
-                                           filepath=self.fileName+'_NO_EXIST', cheap=True)[0])
+                                           filepath=self.fileName+"_NO_EXIST", slow=True)[0])
 
         self.assertTrue(s3CheckFileExists(s3, bucket=self.bucketName,
-                                          filepath=self.fileName, cheap=False)[0])
+                                          filepath=self.fileName, slow=False)[0])
         self.assertFalse(s3CheckFileExists(s3, bucket=self.bucketName,
-                                           filepath=self.fileName+'_NO_EXIST', cheap=False)[0])
+                                           filepath=self.fileName+"_NO_EXIST", slow=False)[0])
 
-        datastoreRootUri = f's3://{self.bucketName}/'
-        uri = f's3://{self.bucketName}/{self.fileName}'
+        datastoreRootUri = f"s3://{self.bucketName}/"
+        uri = f"s3://{self.bucketName}/{self.fileName}"
 
         buri = ButlerURI(uri)
         location = Location(datastoreRootUri, self.fileName)
