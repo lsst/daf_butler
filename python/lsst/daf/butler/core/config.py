@@ -894,7 +894,7 @@ class Config(collections.abc.MutableMapping):
             for key in toCopy:
                 if key in localConfig and not overwrite:
                     log.debug("Not overriding key '%s' from defaults in config %s",
-                              key, localConfig.__class__.__name__)
+                              key, value, localConfig.__class__.__name__)
                 else:
                     localConfig[key] = localFullConfig[key]
 
