@@ -156,6 +156,7 @@ class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase)
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
 
 
+@unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
 class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     """S3Datastore specialization of a butler; an S3 storage Datastore +
