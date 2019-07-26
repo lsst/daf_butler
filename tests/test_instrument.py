@@ -37,6 +37,9 @@ class DummyCam(Instrument):
     def getName(cls):
         return "DummyCam"
 
+    def getCamera(self):
+        return None
+
     def register(self, registry):
         """Insert Instrument, physical_filter, and detector entries into a
         `Registry`.

@@ -22,9 +22,11 @@
 __all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo",
            "ObservationDataIdPacker", "addUnboundedCalibrationLabel")
 
+import os.path
 from datetime import datetime
 from inspect import isabstract
 from abc import ABCMeta, abstractmethod
+
 from lsst.daf.butler import DataId, DataIdPacker
 
 
@@ -47,6 +49,13 @@ class Instrument(metaclass=ABCMeta):
     a no-argument callable that can be used to construct a Python instance.
     """
 
+    configPaths = []
+    """Paths to config files to read for specific Tasks.
+
+    The paths in this list should contain files of the form `task.py`, for
+    each of the Tasks that requires special configuration.
+    """
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not isabstract(cls):
@@ -56,6 +65,15 @@ class Instrument(metaclass=ABCMeta):
     @classmethod
     @abstractmethod
     def getName(cls):
+        raise NotImplementedError()
+
+    @abstractmethod
+    def getCamera(self):
+        """Retrieve the cameraGeom representation of this instrument.
+
+        This is a temporary API that should go away once obs_ packages have
+        a standardized approach to writing versioned cameras to a Gen3 repo.
+        """
         raise NotImplementedError()
 
     @abstractmethod
@@ -93,7 +111,6 @@ class Instrument(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def applyConfigOverrides(self, name, config):
         """Apply instrument-specific overrides for a task config.
 
@@ -105,7 +122,10 @@ class Instrument(metaclass=ABCMeta):
         config : `lsst.pex.config.Config`
             Config instance to which overrides should be applied.
         """
-        raise NotImplementedError()
+        for root in self.configPaths:
+            path = os.path.join(root, f"{name}.py")
+            if os.path.exists(path):
+                config.load(path)
 
 
 class ObservationDataIdPacker(DataIdPacker):
