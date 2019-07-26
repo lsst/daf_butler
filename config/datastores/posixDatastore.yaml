@@ -11,14 +11,14 @@ datastore:
     default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{label:?}/{abstract_filter:?}/{physical_filter:?}/{visit:?}/{datasetType}_{component:?}_{tract:?}_{patch:?}_{label:?}_{abstract_filter:?}_{physical_filter:?}_{calibration_label:?}_{visit:?}_{exposure:?}_{detector:?}_{instrument:?}_{skymap:?}_{skypix:?}_{run}"
   formatters:
     TablePersistable: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableWcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistablePsf: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableCoaddInputs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableVisitInfo: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableApCorr: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistablePhotoCalib: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableTransmissionCurve: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
-    TablePersistableCamera: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Wcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Psf: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    CoaddInputs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    VisitInfo: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    ApCorr: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    PhotoCalib: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    TransmissionCurve: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+    Camera: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     ImageF: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     MaskX: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
     Exposure: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter

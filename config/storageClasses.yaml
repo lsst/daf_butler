@@ -5,21 +5,21 @@ storageClasses:
     pytype: list
   TablePersistable:
     pytype: lsst.afw.table.io.Persistable
-  TablePersistableWcs:
+  Wcs:
     pytype: lsst.afw.geom.skyWcs.SkyWcs
-  TablePersistablePsf:
+  Psf:
     pytype: lsst.afw.detection.Psf
-  TablePersistableCoaddInputs:
+  CoaddInputs:
     pytype: lsst.afw.image.CoaddInputs
-  TablePersistableVisitInfo:
+  VisitInfo:
     pytype: lsst.afw.image.VisitInfo
-  TablePersistableApCorr:
+  ApCorr:
     pytype: lsst.afw.image.ApCorrMap
-  TablePersistablePhotoCalib:
+  PhotoCalib:
     pytype: lsst.afw.image.PhotoCalib
-  TablePersistableTransmissionCurve:
+  TransmissionCurve:
     pytype: lsst.afw.image.TransmissionCurve
-  TablePersistableCamera:
+  Camera:
     pytype: lsst.afw.cameraGeom.Camera
   Image: &Image
     pytype: lsst.afw.image.Image
@@ -91,13 +91,13 @@ storageClasses:
       image: Image
       mask: Mask
       variance: Image
-      wcs: TablePersistableWcs
-      psf: TablePersistablePsf
-      photoCalib: TablePersistablePhotoCalib
-      visitInfo: TablePersistableVisitInfo
-      apCorrMap: TablePersistableApCorr
-      coaddInputs: TablePersistableCoaddInputs
-      transmissionCurve: TablePersistableTransmissionCurve
+      wcs: Wcs
+      psf: Psf
+      photoCalib: PhotoCalib
+      visitInfo: VisitInfo
+      apCorrMap: ApCorr
+      coaddInputs: CoaddInputs
+      transmissionCurve: TransmissionCurve
       metadata: PropertyList
   ExposureF:
     inheritsFrom: Exposure
