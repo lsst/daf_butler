@@ -67,7 +67,7 @@ storageClasses:
   # StorageClass names themselves.
   BaseSkyMap: SkyMap
   BaseCatalog: Catalog
-  TransmissionCurve: TablePersistableTransmissionCurve
+  TransmissionCurve: TransmissionCurve
   BackgroundList: Background
   Config: Config
   raw: Exposure
