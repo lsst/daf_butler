@@ -79,16 +79,16 @@ class ButlerConfig(Config):
 
         if isinstance(other, str):
             uri = ButlerURI(other)
-            if uri.scheme == 'file':
+            if uri.scheme == "file":
                 if os.path.isdir(uri.ospath):
                     other = os.path.join(uri.ospath, "butler.yaml")
-            elif uri.scheme == 's3':
+            elif uri.scheme == "s3":
                 head, filename = posixpath.split(uri.path)
                 if "." not in filename:
-                    uri.updateFile('butler.yaml')
+                    uri.updateFile("butler.yaml")
                 other = uri.geturl()
             else:
-                raise ValueError(f'Unrecognized URI scheme: {uri.scheme}')
+                raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
 
         # Create an empty config for us to populate
         super().__init__()

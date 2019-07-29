@@ -270,11 +270,8 @@ class ButlerURI:
                     replacements["path"] = os2posix(os.path.normpath(expandedPath))
                 elif forceAbsolute:
                     # This can stay in OS path form, do not change to file
-                    # scheme. Why? If we know we are relative to current dir,
-                    # why not be explicit about it?
-                    replacements["path"] = os2posix(os.path.normpath(os.path.join(root, expandedPath)))
-                    replacements["scheme"] = 'file'
-                    replacements["netloc"] = 'localhost'
+                    # scheme.
+                    replacements["path"] = os.path.normpath(os.path.join(root, expandedPath))
                 else:
                     # No change needed for relative local path staying relative
                     # except normalization
@@ -291,27 +288,13 @@ class ButlerURI:
                 if expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep):
                     replacements["path"] += sep
 
-                if (
-                        'netloc' not in replacements and
-                        not parsed.netloc and
-                        'scheme' in replacements or parsed.scheme
-                ):
-                    replacements['netloc'] = 'localhost'
-
             elif parsed.scheme == "file":
                 # file URI implies POSIX path separators so split as posix,
                 # then join as os, and convert to abspath. Do not handle
                 # home directories since "file" scheme is explicitly documented
                 # to not do tilde expansion.
-
-                if 'netloc' not in replacements and not parsed.netloc:
-                    replacements['netloc'] = 'localhost'
-
                 if posixpath.isabs(parsed.path):
-                    # Adding localhost as netloc for uniformity is the only
-                    # change required. ParseResult is a NamedTuple so _replace
-                    # is standard API
-                    parsed = parsed._replace(**replacements)
+                    # No change needed
                     return copy.copy(parsed)
 
                 replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
@@ -319,9 +302,6 @@ class ButlerURI:
                 # normpath strips trailing "/" so put it back if necessary
                 if parsed.path.endswith(posixpath.sep) and not replacements["path"].endswith(posixpath.sep):
                     replacements["path"] += posixpath.sep
-
-                if 'netloc' not in replacements:
-                    replacements['netloc'] = 'localhost'
 
             else:
                 raise RuntimeError("Unexpectedly got confused by URI scheme")
@@ -420,7 +400,7 @@ class Location:
         Effectively, this is the path property with posix separator stipped
         from the left hand side of the path.
         """
-        return self.path.lstrip('/')
+        return self.path.lstrip("/")
 
     def updateExtension(self, ext):
         """Update the file extension associated with this `Location`.

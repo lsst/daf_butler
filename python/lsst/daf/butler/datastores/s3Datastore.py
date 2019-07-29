@@ -137,7 +137,7 @@ class S3Datastore(Datastore):
         self.root = replaceRoot(self.config["root"], butlerRoot)
         self.locationFactory = LocationFactory(self.root)
 
-        self.client = boto3.client('s3')
+        self.client = boto3.client("s3")
         if not bucketExists(self.locationFactory.netloc):
             # PosixDatastore creates the root directory if one does not exist.
             # Calling s3 client.create_bucket is possible but also requires
@@ -302,11 +302,11 @@ class S3Datastore(Datastore):
             # other errors are reraised also, but less descriptively
             raise err
 
-        if response['ContentLength'] != storedFileInfo.size:
+        if response["ContentLength"] != storedFileInfo.size:
             errstr = ("Integrity failure in Datastore. Size of file {} ({}) "
                       "does not match recorded size of {}")
             raise RuntimeError(errstr.format(location.path,
-                                             response['ContentLength'],
+                                             response["ContentLength"],
                                              storedFileInfo.size))
 
         # We have a write storage class and a read storage class and they
@@ -323,7 +323,7 @@ class S3Datastore(Datastore):
         formatterParams, assemblerParams = formatter.segregateParameters(parameters)
 
         # download the data as bytes
-        serializedDataset = response['Body'].read()
+        serializedDataset = response["Body"].read()
         fileDescriptor = FileDescriptor(location,
                                         readStorageClass=readStorageClass,
                                         storageClass=writeStorageClass,
@@ -482,23 +482,23 @@ class S3Datastore(Datastore):
 
         # we can not assume that root is the same as self.root when ingesting
         uri = ButlerURI(path)
-        if (uri.scheme != 'file') and (uri.scheme != 's3'):
-            raise NotImplementedError(f'Scheme type {uri.scheme} not supported.')
+        if (uri.scheme != "file") and (uri.scheme != "s3"):
+            raise NotImplementedError(f"Scheme type {uri.scheme} not supported.")
 
         if transfer is None:
-            if uri.scheme == 'file':
+            if uri.scheme == "file":
                 # ingest a local file, but not transfer it to object storage
                 errmsg = (f"'{uri}' is not inside repository root '{self.root}'. "
                           "Ingesting local data to S3Datastore without upload "
                           "to S3 is not allowed.")
                 raise RuntimeError(errmsg.format(uri, self.root))
-            elif uri.scheme == 's3':
+            elif uri.scheme == "s3":
                 # if transfer is None and scheme is s3, put already uploaded it
                 rooturi = ButlerURI(self.root)
                 if not uri.path.startswith(rooturi.path):
                     raise RuntimeError(f"'{uri}' is not inside repository root '{rooturi}'.")
-        elif transfer == 'move' or transfer == 'copy':
-            if uri.scheme == 'file':
+        elif transfer == "move" or transfer == "copy":
+            if uri.scheme == "file":
                 # uploading file from local disk and potentially deleting it
                 if s3CheckFileExists(self.client, uri)[0]:
                     raise FileExistsError(f"File '{path}' exists!")
@@ -508,18 +508,18 @@ class S3Datastore(Datastore):
                 location.updateExtension(formatter.extension)
                 self.client.upload_file(Bucket=location.netloc, Key=location.relativeToNetloc,
                                         Filename=path)
-                if transfer == 'move':
+                if transfer == "move":
                     os.remove(path)
-            elif uri.scheme == 's3':
+            elif uri.scheme == "s3":
                 # copying files between buckets, potentially deleting src files
                 if s3CheckFileExists(self.client, uri)[0]:
                     raise FileExistsError(f"File '{uri}' exists.")
 
                 relpath = uri.relativeToNetloc
-                copySrc = {'Bucket': uri.netloc, 'Key': relpath}
+                copySrc = {"Bucket": uri.netloc, "Key": relpath}
                 self.client.copy(copySrc, self.locationFactory.netloc,
                                  relpath)
-                if transfer == 'move':
+                if transfer == "move":
                     # https://github.com/boto/boto3/issues/507 - there is no
                     # way of knowing if the file was actually deleted except
                     # for checking all the keys again, reponse just ends up
@@ -529,7 +529,7 @@ class S3Datastore(Datastore):
             raise NotImplementedError(f"Transfer type '{transfer}' not supported.")
 
         if path.startswith(self.root):
-            path = path[len(self.root):].lstrip('/')
+            path = path[len(self.root):].lstrip("/")
         location = self.locationFactory.fromPath(path)
 
         # the file should exist on the bucket by now

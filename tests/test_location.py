@@ -39,24 +39,21 @@ class LocationTestCase(unittest.TestCase):
         uriStrings = (
             # Test string, forceAbsolute, scheme, netloc, path
             # These are being tested with forceAbsolute=True
-            ("file:///rootDir/absolute/file.ext", True, "file", "localhost", "/rootDir/absolute/file.ext"),
-            ("/rootDir/absolute/file.ext", True, "file", "localhost", "/rootDir/absolute/file.ext"),
-            ("/rootDir/absolute/file.ext", False, "file", "localhost", "/rootDir/absolute/file.ext"),
-            ("/rootDir/absolute/", True, "file", "localhost", "/rootDir/absolute/"),
-            ("file:relative/file.ext", True, "file", "localhost",
-             posixpath.join(testRoot, "relative/file.ext")),
-            ("file:relative/directory/", True, "file", "localhost",
-             posixpath.join(testRoot, "relative/directory/")),
+            ("file:///rootDir/absolute/file.ext", True, "file", "", "/rootDir/absolute/file.ext"),
+            ("/rootDir/absolute/file.ext", True, "file", "", "/rootDir/absolute/file.ext"),
+            ("/rootDir/absolute/file.ext", False, "file", "", "/rootDir/absolute/file.ext"),
+            ("/rootDir/absolute/", True, "file", "", "/rootDir/absolute/"),
+            ("file:relative/file.ext", True, "file", "", posixpath.join(testRoot, "relative/file.ext")),
+            ("file:relative/directory/", True, "file", "", posixpath.join(testRoot, "relative/directory/")),
             ("file://relative/file.ext", True, "file", "relative", "/file.ext"),
-            ("file:///absolute/directory/", True, "file", "localhost", "/absolute/directory/"),
-            ("relative/file.ext", True, "file", "localhost", os.path.join(testRoot, "relative/file.ext")),
+            ("file:///absolute/directory/", True, "file", "", "/absolute/directory/"),
+            ("relative/file.ext", True, "", "", os.path.join(testRoot, "relative/file.ext")),
             ("relative/file.ext", False, "", "", "relative/file.ext"),
             ("s3://bucketname/rootDir/relative/file.ext", True, "s3", "bucketname",
              "/rootDir/relative/file.ext"),
-            ("~/relative/file.ext", True, "file", "localhost", os.path.expanduser("~/relative/file.ext")),
-            ("~/relative/file.ext", False, "file", "localhost", os.path.expanduser("~/relative/file.ext")),
-            ("test/../relative/file.ext", True, "file", "localhost",
-             os.path.join(testRoot, "relative/file.ext")),
+            ("~/relative/file.ext", True, "file", "", os.path.expanduser("~/relative/file.ext")),
+            ("~/relative/file.ext", False, "file", "", os.path.expanduser("~/relative/file.ext")),
+            ("test/../relative/file.ext", True, "", "", os.path.join(testRoot, "relative/file.ext")),
             ("test/../relative/file.ext", False, "", "", "relative/file.ext"),
         )
 
@@ -90,9 +87,10 @@ class LocationTestCase(unittest.TestCase):
 
         pathInStore = "relative/path/file.ext"
         loc1 = factory.fromPath(pathInStore)
+
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
-        self.assertTrue(loc1.uri.startswith("file://localhost"))
+        self.assertTrue(loc1.uri.startswith("file:///"))
         self.assertTrue(loc1.uri.endswith("file.ext"))
         loc1.updateExtension("fits")
         self.assertTrue(loc1.uri.endswith("file.fits"))
@@ -111,7 +109,7 @@ class LocationTestCase(unittest.TestCase):
 
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
-        self.assertTrue(loc1.uri.startswith("file://localhost"))
+        self.assertTrue(loc1.uri.startswith("file:///"))
 
     def testHttpLocation(self):
         root = "https://www.lsst.org/butler/datastore"

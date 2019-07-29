@@ -62,7 +62,7 @@ def s3CheckFileExistsGET(client, bucket, filepath):
     """
     try:
         obj = client.head_object(Bucket=bucket, Key=filepath)
-        return (True, obj['ContentLength'])
+        return (True, obj["ContentLength"])
     except client.exceptions.ClientError as err:
         if err.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
             return (False, -1)
@@ -110,9 +110,9 @@ def s3CheckFileExistsLIST(client, bucket, filepath):
         Prefix=filepath
     )
     # Hopefully multiple identical files will never exist?
-    matches = [x for x in response.get('Contents', []) if x["Key"] == filepath]
+    matches = [x for x in response.get("Contents", []) if x["Key"] == filepath]
     if len(matches) == 1:
-        return (True, matches[0]['Size'])
+        return (True, matches[0]["Size"])
     else:
         return (False, -1)
 
@@ -155,8 +155,8 @@ def s3CheckFileExists(client, path=None, bucket=None, filepath=None, slow=True):
         filepath = path.relativeToNetloc
 
     if bucket is None and filepath is None:
-        raise ValueError(('Expected ButlerURI, Location or (bucket, filepath) pair '
-                          f'but got {path}, ({bucket}, {filepath}) instead.'))
+        raise ValueError(("Expected ButlerURI, Location or (bucket, filepath) pair "
+                          f"but got {path}, ({bucket}, {filepath}) instead."))
 
     if slow:
         return s3CheckFileExistsGET(client, bucket=bucket, filepath=filepath)
@@ -181,7 +181,7 @@ def bucketExists(bucketName):
         raise ModuleNotFoundError(("Could not find boto3. "
                                    "Are you sure it is installed?"))
 
-    s3 = boto3.client('s3')
+    s3 = boto3.client("s3")
     try:
         s3.get_bucket_location(Bucket=bucketName)
         return True

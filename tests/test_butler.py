@@ -425,7 +425,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
     datastoreStr = ["/tmp"]
     datastoreName = [f"POSIXDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "/gen3.sqlite3'"
+    registryStr = "/gen3.sqlite3"
 
     def checkFileExists(self, root, path):
         """Checks if file exists at a given path (relative to root).
@@ -579,12 +579,12 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
     fullConfigKey = None
     validationCanFail = True
 
-    bucketName = 'anybucketname'
+    bucketName = "anybucketname"
     """Name of the Bucket that will be used in the tests. The name is read from
     the config file used with the tests during set-up.
     """
 
-    root = 'butlerRoot/'
+    root = "butlerRoot/"
     """Root repository directory expected to be used in case useTempRoot=False.
     Otherwise the root is set to a 20 characters long randomly generated string
     during set-up.
@@ -608,24 +608,24 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         This is equivalent to tempfile.mkdtemp as this is what self.root
         becomes when useTempRoot is True.
         """
-        rndstr = ''.join(
+        rndstr = "".join(
             random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
         )
-        return rndstr + '/'
+        return rndstr + "/"
 
     def setUp(self):
         config = Config(self.configFile)
-        uri = ButlerURI(config['.datastore.datastore.root'])
+        uri = ButlerURI(config[".datastore.datastore.root"])
         self.bucketName = uri.netloc
 
         if self.useTempRoot:
             self.root = self.genRoot()
-        rooturi = f's3://{self.bucketName}/{self.root}'
-        config.update({'datastore': {'datastore': {'root': rooturi}}})
+        rooturi = f"s3://{self.bucketName}/{self.root}"
+        config.update({"datastore": {"datastore": {"root": rooturi}}})
 
         # MOTO needs to know that we expect Bucket bucketname to exist
         # (this used to be the class attribute bucketName)
-        s3 = boto3.resource('s3')
+        s3 = boto3.resource("s3")
         s3.create_bucket(Bucket=self.bucketName)
 
         self.datastoreStr = f"datastore={self.root}"
@@ -634,12 +634,12 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
 
     def tearDown(self):
-        s3 = boto3.resource('s3')
+        s3 = boto3.resource("s3")
         bucket = s3.Bucket(self.bucketName)
         try:
             bucket.objects.all().delete()
         except botocore.exceptions.ClientError as e:
-            if e.response['Error']['Code'] == '404':
+            if e.response["Error"]["Code"] == "404":
                 # the key was not reachable - pass
                 pass
             else:
@@ -656,7 +656,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
         """
         uri = ButlerURI(root)
-        client = boto3.client('s3')
+        client = boto3.client("s3")
         return s3CheckFileExists(client, uri)[0]
 
 
