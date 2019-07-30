@@ -54,7 +54,7 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         for regConf, fileName in zip(regConfigs, self.configFiles):
             conStr = ConnectionStringBuilder.fromConfig(regConf)
             with self.subTest(confFile=fileName):
-                self.assertEqual(conStr, regConf['expected'],
+                self.assertEqual(str(conStr), regConf['expected'],
                                  "test connection string built from config")
 
     def testRelVsAbsPath(self):
@@ -63,20 +63,4 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
 
         regConf['db'] = 'sqlite:///relative/path/conf1.sqlite3'
         conStr = ConnectionStringBuilder.fromConfig(regConf)
-        self.assertEqual(conStr, 'sqlite+pysqlite:///relative/path/conf1.sqlite3')
-
-        regConf['db'] = 'sqlite+pysqlite:////absolute/path/conf2.sqlite3'
-        conStr = ConnectionStringBuilder.fromConfig(regConf)
-        self.assertEqual(conStr, 'sqlite+pysqlite:////absolute/path/conf2.sqlite3')
-
-    def testHostKeyIsHostnameOnly(self):
-        """Tests that relative and absolute paths are preserved."""
-        regConf = RegistryConfig(os.path.join(self.configDir, 'conf2.yaml'))
-
-        regConf['host'] = 'some.host.com:1234'
-        with self.assertRaises(ValueError):
-            ConnectionStringBuilder.fromConfig(regConf)
-
-        regConf['host'] = 'some.host.com:1234/dbname'
-        with self.assertRaises(ValueError):
-            ConnectionStringBuilder.fromConfig(regConf)
+        self.assertEqual(str(conStr), 'sqlite:///relative/path/conf1.sqlite3')

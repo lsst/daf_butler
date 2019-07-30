@@ -64,8 +64,6 @@ class SqliteRegistry(SqlRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
-    dialect = 'sqlite'
-    driver = 'pysqlite'
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):

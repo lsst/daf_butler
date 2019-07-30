@@ -1,5 +1,0 @@
-run: ingest
-datastore: !include posixDatastore.yaml
-registry: !include rdsRegistry.yaml
-storageClasses: !include storageClasses.yaml
-composites: !include composites.yaml

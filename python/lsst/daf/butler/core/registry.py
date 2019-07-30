@@ -25,8 +25,9 @@ __all__ = ("RegistryConfig", "Registry", "disableWhenLimited", "AmbiguousDataset
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import contextlib
-import urllib.parse as urlparse
 import functools
+
+from sqlalchemy.engine import url
 
 from lsst.utils import doImport
 from .config import Config, ConfigSubset
@@ -80,181 +81,60 @@ class RegistryConfig(ConfigSubset):
 
 class ConnectionStringBuilder:
     """Builds a connection string by parsing (in order of precedence):
-    I)   RegistryConfig for explicitly defined keys,
-    II)  'db' key in RegistryConfig and
-    III) and ~/.lsst/db-auth.paf file.
 
-    When not stated explicitly, or included in the 'db' string, dialect and
-    driver are inferred from targeted registry class defaults. The returned
-    connection string has the following format:
+    1. 'db' key in RegistryConfig and
+    2. RegistryConfig for explicitly defined keys,
+    3. and ~/.lsst/db-auth.paf file.
 
-        `dialect+driver://(username:password@?)(host?)/(dbname?)(:port?))`
+    The 'db' string must be a connection URL, i.e. must start with a database
+    dialect and contain, at least, the `database` component or the host name.
 
-    Where host, port, username and password are not returned for sqlite
-    dialects, making dbname effectively the path to the DB. Username and
-    password are optional in other cases, such as when credentials hadling
-    are be left to the DB itself.
+    Components `username`, `password`, `host`, `port` or `database` can also be
+    specified explicitly as keys in the config when not part of the `db` string
+    in Config.
+    When `username` and `password` are not part of the `db` string or stated
+    explicitly in Config they will be read from `~/.lsst/db-auth.paf` file by
+    matching matching `host` and `port` components of provided URL.
     """
-    requiredKeys = ('dialect', 'driver', 'username', 'password', 'host', 'port',
-                    'dbname')
-    """Keys required to construct a fully qualified connection string."""
+    keys = ('username', 'password', 'host', 'port', 'database')
 
     @classmethod
-    def _dictFromRegistryConf(cls, regConf):
-        """Looks for explicit (key, value) pairs required for connection string
-        in a Yaml config. Missing values are returned as None.
-
-        Explicitly given keywords take precedence over values found in 'db'
-        string.
+    def fromConfig(cls, config):
+        """Parses a Config 'db' string and other keywords and returns an
+        `sqlalchemy.engine.url.URL` object containing the components of a URL
+        used to connect to a database.
 
         Parameters
         ----------
-        regConf : `lsst.daf.butler.Config`, `str`
-            Config or path to Yaml config file to parse.
+        config : `Config` or `RegistryConfig`
+            Config to parse for connection string components.
 
         Returns
         -------
-        dsnKwargs : `dict`
-            Dictionary containing found values (or None) for keys required for
-            a connection string.
+        conStr : `sqlalchemy.engine.url.URL`
+            URL object suitable to be passed into `sqlalchemy.create_engine`
+            function.
         """
-        #
-        #    Parse the explicit keywords in the config file.
-        #
-        #
-        regConf = RegistryConfig(regConf)
-        explicitKwargs, conStrKwargs = dict(), dict()
-        for key in cls.requiredKeys:
-            explicitKwargs[key] = regConf.get(key)
-            conStrKwargs[key] = None
+        regConf = RegistryConfig(config)
+        conStr = url.make_url(regConf['db'])
 
-        # ensure host is only the hostname and not mistaken for the 'db' key as
-        # there is no additional parsing for host unlike 'db'.
-        if explicitKwargs['host'] is not None:
-            parsed = urlparse.urlparse(explicitKwargs['host'])
-            if parsed.scheme or parsed.netloc or ':' in parsed.path:
-                raise ValueError(("Invalid 'host' key, 'host' should only be "
-                                  "the hostname. For URLs/URIs use 'db' key. "
-                                  f"Received host: {explicitKwargs['host']}. "))
+        for key in cls.keys:
+            if getattr(conStr, key) is None:
+                setattr(conStr, key, regConf.get(key))
 
-        #
-        #    Parse the keywords from the connection string.
-        #
-        parsed = urlparse.urlparse(regConf['db'])
-        registryCls = doImport(regConf['cls'])
+        # DBAuth type requirement, for now
+        host, port = str(conStr.host), str(conStr.port)
+        # if DB is not a host but a file, does this case exist?
+        if conStr.host is None:
+            host = str(conStr.database)
 
-        # URLs with scheme (f.e. dialect(+driver?)://(netloc?)/(path?)(:port?))
-        if parsed.scheme and not parsed.netloc:
-            # driver is infered from target registry class when not explicit
-            if '+' in parsed.scheme:
-                conStrKwargs['dialect'], conStrKwargs['driver'] = parsed.scheme.split('+')
-            else:
-                conStrKwargs['driver'] = registryCls.driver
+        if DbAuth.available(host, port):
+            if conStr.username is None:
+                conStr.username = DbAuth.username(host, port)
+            if conStr.password is None:
+                conStr.password = DbAuth.password(host, port)
 
-            # when dialects match use it, when they don't 'db' is an URI, URL
-            # (handled later) or inherited from default (handled now).
-            # Everything else is resolved according to urllib.
-            if registryCls.dialect == parsed.scheme:
-                conStrKwargs['dialect'] = parsed.scheme
-            elif registryCls.dialect != parsed.scheme:
-                conStrKwargs['dialect'] = registryCls.dialect
-                conStrKwargs['driver'] = registryCls.driver
-            else:
-                conStrKwargs['dialect'] = parsed.scheme
-                conStrKwargs['dbname'] = parsed.path
-
-            conStrKwargs['dbname'] = parsed.path
-            conStrKwargs['port'] = parsed.port
-
-        # scheme-less URLs (f.e. host.com(:port?)(/dbname?)) or its sqlite so
-        # it's safe to ignore it (all cases handled by first or last section)
-        if (not parsed.scheme and not parsed.netloc) or 'sqlite' not in parsed.scheme:
-            tmpparse = urlparse.urlparse('http://'+regConf['db'])
-            conStrKwargs['dialect'] = registryCls.dialect
-            conStrKwargs['driver'] = registryCls.driver
-            conStrKwargs['host'] = tmpparse.hostname
-            conStrKwargs['port'] = tmpparse.port
-            conStrKwargs['dbname'] = tmpparse.path
-
-        # fully qualified URI
-        if parsed.scheme and parsed.netloc:
-            if '+' in parsed.scheme:
-                conStrKwargs['dialect'], conStrKwargs['driver'] = parsed.scheme.split('+')
-            else:
-                conStrKwargs['dialect'] = parsed.scheme
-                conStrKwargs['driver'] = registryCls.driver
-            conStrKwargs['host'] = parsed.hostname
-            conStrKwargs['port'] = parsed.port
-            conStrKwargs['dbname'] = parsed.path
-
-        # are explicit plain text passwords in config files allowed?
-        # I like the ability to at least target a specific user explicitly
-        conStrKwargs['username'] = parsed.username
-        conStrKwargs['password'] = parsed.password
-
-        #
-        #    Merge the information from the two dictionaries.
-        #
-        mergedKwargs = dict()
-        for key, val in explicitKwargs.items():
-            mergedKwargs[key] = val
-            if val is None:
-                mergedKwargs[key] = conStrKwargs[key]
-
-        return mergedKwargs
-
-    @classmethod
-    def fromConfig(cls, config, withPass=True):
-        conKwargs = cls._dictFromRegistryConf(config)
-        validationKeys = list(cls.requiredKeys)
-        constr = "{dialect}+{driver}://{username}:{password}@{host}:{port}{dbname}"
-
-        if not withPass:
-            constr = "{dialect}+{driver}://{host}:{port}{dbname}"
-        # special case of sqlite where user and pass are not really supported
-        # am I safe in assuming I can skip user/pass for sqlite?
-        # https://www.sqlite.org/src/doc/trunk/ext/userauth/user-auth.txt
-        if conKwargs['dialect'] == 'sqlite':
-            constr = '{dialect}+{driver}://{dbname}'
-            withPass = False
-            validationKeys.remove('host')
-            validationKeys.remove('port')
-
-        if withPass:
-            # if there are no matching host or port a RuntimeError will be
-            # raised, if host & port match, but keys are missing a
-            # NameNotFoundError is raised, can DbAuth be left to raise or do I
-            # need to 'raise from'?
-            # DBAuth demands str(port). I don't think that's neccessary, is it
-            # allowed to overload DBAuth method?
-            host, port = conKwargs['host'], str(conKwargs['port'])
-            if not DbAuth.available(host, port):
-                if not all([conKwargs['username'], conKwargs['password']]):
-                    raise ValueError("Username and password for {host}:{port} not found in db-auth.paf.")
-
-            if conKwargs['username'] is None:
-                conKwargs['username'] = DbAuth.username(host, port)
-            if conKwargs['password'] is None:
-                conKwargs['password'] = DbAuth.password(host, port)
-        else:
-            validationKeys.remove('password')
-            validationKeys.remove('username')
-
-        missing = [key for key in validationKeys if conKwargs[key] is None]
-        if len(missing) >= 1:
-            misstr = (','.join(missing)).strip(',')
-            raise ValueError('Required key(s) missing from Config or db-auth.paf '
-                             f'Key(s): {misstr}')
-
-        # to preserve absolute VS relative paths in URIs the leading '/' have
-        # not been altered. If 'dbname' has not got a leading '/' at this point
-        # however, the returned URI would not be valid. This can happen when
-        # dbname is given explicitly without the leading '/'. This is the one
-        # only ugly hack in this class.
-        if not conKwargs['dbname'].startswith('/'):
-            conKwargs['dbname'] = '/' + conKwargs['dbname']
-
-        return constr.format(**conKwargs)
+        return conStr
 
 
 class Registry(metaclass=ABCMeta):

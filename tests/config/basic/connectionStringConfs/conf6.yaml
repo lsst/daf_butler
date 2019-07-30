@@ -1,5 +1,0 @@
-# test that db-auth.paf is correctly substituted when db is an URI
-registry:
-  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-  db: 'postgres://lsst-db.ncsa.illinois.edu:3307/conf6'
-  expected: 'postgres+psycopg2://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf6'

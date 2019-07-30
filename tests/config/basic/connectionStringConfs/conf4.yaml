@@ -1,6 +1,6 @@
-# test that combinations of 'db' and explicit keys work (f.e. port)
+# test that db without port, database etc. keys can work too
+# test local filesystem paths are acceptable and that no-username-no-password works
 registry:
-  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-  db: 'lsst-db.ncsa.illinois.edu:3307'
-  dbname: 'conf4'
-  expected: 'postgres+psycopg2://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf4'
+  cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
+  db: 'sqlite:///path/to/db.sqlite3'
+  expected: 'sqlite:///path/to/db.sqlite3'

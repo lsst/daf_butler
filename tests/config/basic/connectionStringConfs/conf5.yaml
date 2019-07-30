@@ -1,5 +1,0 @@
-# test db as an URI
-registry:
-  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-  db: 'postgres://user:password@lsst-db.ncsa.illinois.edu:3307/conf5'
-  expected: 'postgres+psycopg2://user:password@lsst-db.ncsa.illinois.edu:3307/conf5'

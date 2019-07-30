@@ -23,9 +23,8 @@ __all__ = ("OracleRegistry", )
 
 from sqlalchemy import create_engine
 
-
 from lsst.daf.butler.core.config import Config
-from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.registry import RegistryConfig, ConnectionStringBuilder
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
@@ -38,8 +37,6 @@ class OracleRegistry(SqlRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
-    dialect = 'oracle'
-    driver = 'cx_oracle'
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -81,4 +78,5 @@ class OracleRegistry(SqlRegistry):
                          butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        return create_engine(self.config["db"], pool_size=1)
+        return create_engine(ConnectionStringBuilder.fromConfig(self.config),
+                             pool_size=1)

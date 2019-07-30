@@ -28,8 +28,6 @@ import unittest
 import tempfile
 import shutil
 import pickle
-<<<<<<< HEAD
-<<<<<<< HEAD
 import string
 import random
 
@@ -44,26 +42,6 @@ except ImportError:
         """A no-op decorator in case moto mock_s3 can not be imported.
         """
         return cls
-
-try:
-    import boto3
-except ImportError:
-    boto3 = None
-||||||| parent of 6d08b41... Added PostgreSqlRegistry+PosixDatastore test to test_butler.py.
-
-try:
-    import boto3
-except ImportError:
-    boto3 = None
-=======
-import random
-import string
->>>>>>> 6d08b41... Added PostgreSqlRegistry+PosixDatastore test to test_butler.py.
-||||||| parent of 0976c83... Removed RDSButlerTestCase.
-import random
-import string
-=======
->>>>>>> 0976c83... Removed RDSButlerTestCase.
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig

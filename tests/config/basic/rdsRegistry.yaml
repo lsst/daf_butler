@@ -1,8 +1,0 @@
-# Default with a postgreSQL registry
-registry:
-  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-  host: 'gen3registry.cejsinjimzit.us-west-2.rds.amazonaws.com'
-  port: 5432
-  dbname: 'gen3registry'
-  user: 'postgres'
-  
