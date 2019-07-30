@@ -188,7 +188,7 @@ class Butler:
             s3 = boto3.resource("s3")
             # implies bucket exists, if not another level of checks
             bucket = s3.Bucket(uri.netloc)
-            bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToNetloc)
+            bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)

@@ -110,7 +110,7 @@ class Loader(yaml.CSafeLoader):
                 raise ModuleNotFoundError("Could not find boto3. Are you sure it is installed?")
             s3 = boto3.client("s3")
             try:
-                response = s3.get_object(Bucket=fileuri.netloc, Key=fileuri.relativeToNetloc)
+                response = s3.get_object(Bucket=fileuri.netloc, Key=fileuri.relativeToPathRoot)
             except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
                 raise FileNotFoundError(f'No such file or directory: {fileuri}') from err
 
@@ -266,7 +266,7 @@ class Config(collections.abc.MutableMapping):
         uri = ButlerURI(path)
         s3 = boto3.client("s3")
         try:
-            response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToNetloc)
+            response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
             raise FileNotFoundError(f"No such file or directory: {path}") from err
 
@@ -802,7 +802,7 @@ class Config(collections.abc.MutableMapping):
             head, filename = posixpath.split(uri.path)
             if "." not in filename:
                 uri.updateFile(defaultFileName)
-            self.dumpToS3File(uri.netloc, uri.relativeToNetloc)
+            self.dumpToS3File(uri.netloc, uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
 

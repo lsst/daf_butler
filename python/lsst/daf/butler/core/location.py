@@ -147,7 +147,7 @@ class ButlerURI:
         return posix2os(self._uri.path)
 
     @property
-    def relativeToNetloc(self):
+    def relativeToPathRoot(self):
         """Returns path relative to network location.
 
         Effectively, this is the path property with posix separator stipped
@@ -393,7 +393,7 @@ class Location:
         return self._datastoreRootUri.netloc
 
     @property
-    def relativeToNetloc(self):
+    def relativeToPathRoot(self):
         """Returns the path component of the URI relative to the network
         location.
 
