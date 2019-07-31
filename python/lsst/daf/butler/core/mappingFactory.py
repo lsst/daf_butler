@@ -74,15 +74,19 @@ class MappingFactory:
         """
         return set(self._registry)
 
-    def getFromRegistryWithMatch(self, *targetClasses):
+    def getFromRegistryWithMatch(self, targetClasses, *args, **kwargs):
         """Get a new instance of the object stored in the registry along with
         the matching key.
 
         Parameters
         ----------
-        *targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
+        targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
+        args : `tuple`
+            Positional arguments to use pass to the object constructor.
+        kwargs : `dict`
+            Keyword arguments to pass to object constructor.
 
         Returns
         -------
@@ -110,21 +114,25 @@ class MappingFactory:
                 except KeyError:
                     pass
                 else:
-                    return key, getInstanceOf(typeName)
+                    return key, getInstanceOf(typeName, *args, **kwargs)
 
         # Convert list to a string for error reporting
         msg = ", ".join(str(k) for k in attempts)
         plural = "" if len(attempts) == 1 else "s"
         raise KeyError(f"Unable to find item in registry with key{plural}: {msg}")
 
-    def getFromRegistry(self, *targetClasses):
+    def getFromRegistry(self, targetClasses, *args, **kwargs):
         """Get a new instance of the object stored in the registry.
 
         Parameters
         ----------
-        *targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
+        targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
             Each item is tested in turn until a match is found in the registry.
             Items with `None` value are skipped.
+        args : `tuple`
+            Positional arguments to use pass to the object constructor.
+        kwargs : `dict`
+            Keyword arguments to pass to object constructor.
 
         Returns
         -------
@@ -138,7 +146,7 @@ class MappingFactory:
             Raised if none of the supplied target classes match an item in the
             registry.
         """
-        _, instance = self.getFromRegistryWithMatch(*targetClasses)
+        _, instance = self.getFromRegistryWithMatch(targetClasses, *args, **kwargs)
         return instance
 
     def placeInRegistry(self, registryKey, typeName):
