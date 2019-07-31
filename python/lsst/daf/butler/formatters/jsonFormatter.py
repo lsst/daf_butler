@@ -57,7 +57,7 @@ class JsonFormatter(FileFormatter):
 
         return data
 
-    def _writeFile(self, inMemoryDataset, fileDescriptor):
+    def _writeFile(self, inMemoryDataset):
         """Write the in memory dataset to file on disk.
 
         Will look for `_asdict()` method to aid JSON serialization, following
@@ -67,15 +67,13 @@ class JsonFormatter(FileFormatter):
         ----------
         inMemoryDataset : `object`
             Object to serialize.
-        fileDescriptor : `FileDescriptor`
-            Details of the file to be written.
 
         Raises
         ------
         Exception
             The file could not be written.
         """
-        with open(fileDescriptor.location.path, "w") as fd:
+        with open(self.fileDescriptor.location.path, "w") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
             json.dump(inMemoryDataset, fd)

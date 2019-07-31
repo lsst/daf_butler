@@ -71,19 +71,17 @@ class PexConfigFormatter(FileFormatter):
         instance.load(path)
         return instance
 
-    def _writeFile(self, inMemoryDataset, fileDescriptor):
+    def _writeFile(self, inMemoryDataset):
         """Write the in memory dataset to file on disk.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to serialize.
-        fileDescriptor : `FileDescriptor`
-            Details of the file to be written.
 
         Raises
         ------
         Exception
             The file could not be written.
         """
-        inMemoryDataset.save(fileDescriptor.location.path)
+        inMemoryDataset.save(self.fileDescriptor.location.path)

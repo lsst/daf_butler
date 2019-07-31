@@ -32,7 +32,7 @@ class FitsExposureFormatter(Formatter):
     """
     extension = ".fits"
 
-    def readImageComponent(self, fileDescriptor, component):
+    def readImageComponent(self, component):
         """Read the image, mask, or variance component of an Exposure.
 
         Parameters
@@ -50,16 +50,11 @@ class FitsExposureFormatter(Formatter):
         """
         # TODO: could be made more efficient *if* Exposure type objects
         # held the class objects of their components.
-        full = self.readFull(fileDescriptor, fileDescriptor.parameters)
-        return fileDescriptor.storageClass.assembler().getComponent(full, component)
+        full = self.readFull()
+        return self.fileDescriptor.storageClass.assembler().getComponent(full, component)
 
-    def readMetadata(self, fileDescriptor):
+    def readMetadata(self):
         """Read all header metadata directly into a PropertyList.
-
-        Parameters
-        ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read and parameters to be used for reading.
 
         Returns
         -------
@@ -67,7 +62,7 @@ class FitsExposureFormatter(Formatter):
             Header metadata.
         """
         from lsst.afw.image import readMetadata
-        md = readMetadata(fileDescriptor.location.path)
+        md = readMetadata(self.fileDescriptor.location.path)
         fix_header(md)
         return md
 
@@ -92,13 +87,11 @@ class FitsExposureFormatter(Formatter):
         bboxFromMetadata(metadata)  # always strips
         makeSkyWcs(metadata, strip=True)
 
-    def readInfoComponent(self, fileDescriptor, component):
+    def readInfoComponent(self, component):
         """Read a component held by ExposureInfo.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read and parameters to be used for reading.
         component : `str`, optional
             Component to read from the file.
 
@@ -110,16 +103,14 @@ class FitsExposureFormatter(Formatter):
         from lsst.afw.image import LOCAL
         from lsst.geom import Box2I, Point2I
         parameters = dict(bbox=Box2I(minimum=Point2I(0, 0), maximum=Point2I(0, 0)), origin=LOCAL)
-        tiny = self.readFull(fileDescriptor, parameters)
-        return fileDescriptor.storageClass.assembler().getComponent(tiny, component)
+        tiny = self.readFull(parameters)
+        return self.fileDescriptor.storageClass.assembler().getComponent(tiny, component)
 
-    def readFull(self, fileDescriptor, parameters=None):
+    def readFull(self, parameters=None):
         """Read the full Exposure object.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read and parameters to be used for reading.
         parameters : `dict`, optional
             If specified a dictionary of slicing parameters that overrides
             those in ``fileDescriptor`.
@@ -129,6 +120,7 @@ class FitsExposureFormatter(Formatter):
         exposure : `~lsst.afw.image.Exposure`
             Complete in-memory exposure.
         """
+        fileDescriptor = self.fileDescriptor
         if parameters is None:
             parameters = fileDescriptor.parameters
         if parameters is None:
@@ -136,14 +128,11 @@ class FitsExposureFormatter(Formatter):
         fileDescriptor.storageClass.validateParameters(parameters)
         return fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **parameters)
 
-    def read(self, fileDescriptor, component=None):
+    def read(self, component=None):
         """Read data from a file.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -164,31 +153,29 @@ class FitsExposureFormatter(Formatter):
             Raised when parameters passed with fileDescriptor are not
             supported.
         """
+        fileDescriptor = self.fileDescriptor
         if fileDescriptor.readStorageClass != fileDescriptor.storageClass:
             if component == "metadata":
-                md = self.readMetadata(fileDescriptor)
+                md = self.readMetadata()
                 self.stripMetadata(md)
                 return md
             elif component in ("image", "variance", "mask"):
-                return self.readImageComponent(fileDescriptor, component)
+                return self.readImageComponent(component)
             elif component is not None:
-                return self.readInfoComponent(fileDescriptor, component)
+                return self.readInfoComponent(component)
             else:
                 raise ValueError("Storage class inconsistency ({} vs {}) but no"
                                  " component requested".format(fileDescriptor.readStorageClass.name,
                                                                fileDescriptor.storageClass.name))
-        return self.readFull(fileDescriptor)
+        return self.readFull()
 
-    def write(self, inMemoryDataset, fileDescriptor):
+    def write(self, inMemoryDataset):
         """Write a Python object to a file.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             The Python object to store.
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
 
         Returns
         -------
@@ -196,19 +183,27 @@ class FitsExposureFormatter(Formatter):
             The `URI` where the primary file is stored.
         """
         # Update the location with the formatter-preferred file extension
-        fileDescriptor.location.updateExtension(self.extension)
-        inMemoryDataset.writeFits(fileDescriptor.location.path)
-        return fileDescriptor.location.pathInStore
+        self.fileDescriptor.location.updateExtension(self.extension)
+        inMemoryDataset.writeFits(self.fileDescriptor.location.path)
+        return self.fileDescriptor.location.pathInStore
 
-    def predictPath(self, location):
+    def predictPath(self, location=None):
         """Return the path that would be returned by write, without actually
         writing.
 
         Parameters
         ----------
-        location : `Location`
-            The location to simulate writing to.
+        location : `Location`, optional
+            Location of file for which path prediction is required.  If
+            `None` the location associated with the formatter will be used.
+
+        Returns
+        -------
+        path : `str`
+            Path that would be returned by a call to `Formatter.write()`.
         """
+        if location is None:
+            location = self.fileDescriptor.location
         location = copy.deepcopy(location)
         location.updateExtension(self.extension)
         return location.pathInStore

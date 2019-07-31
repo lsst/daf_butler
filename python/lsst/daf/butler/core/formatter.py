@@ -27,6 +27,7 @@ import logging
 from .configSupport import processLookupConfigs
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
+from .fileDescriptor import FileDescriptor
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +35,12 @@ log = logging.getLogger(__name__)
 class Formatter(metaclass=ABCMeta):
     """Interface for reading and writing Datasets with a particular
     `StorageClass`.
+
+    Parameters
+    ----------
+    fileDescriptor : `FileDescriptor`
+        Identifies the file to read or write, and the associated storage
+        classes and parameter information.
     """
 
     unsupportedParameters = frozenset()
@@ -42,6 +49,15 @@ class Formatter(metaclass=ABCMeta):
     are supported.
     """
 
+    def __init__(self, fileDescriptor):
+        if fileDescriptor is not None and not isinstance(fileDescriptor, FileDescriptor):
+            raise TypeError("File descriptor must be a FileDescriptor")
+        self._fileDescriptor = fileDescriptor
+
+    @property
+    def fileDescriptor(self):
+        return self._fileDescriptor
+
     @classmethod
     def name(cls):
         """Returns the fully qualified name of the formatter.
@@ -49,14 +65,11 @@ class Formatter(metaclass=ABCMeta):
         return getFullTypeName(cls)
 
     @abstractmethod
-    def read(self, fileDescriptor, component=None):
+    def read(self, component=None):
         """Read a Dataset.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -70,15 +83,13 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support reading")
 
     @abstractmethod
-    def write(self, inMemoryDataset, fileDescriptor):
+    def write(self, inMemoryDataset):
         """Write a Dataset.
 
         Parameters
         ----------
         inMemoryDataset : `InMemoryDataset`
             The Dataset to store.
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to write.
 
         Returns
         -------
@@ -88,16 +99,24 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing")
 
     @abstractmethod
-    def predictPath(self, location):
+    def predictPath(self, location=None):
         """Return the path that would be returned by write, without actually
         writing.
 
-        location : `Location`
-            The location to simulate writing to.
+        Parameters
+        ----------
+        location : `Location`, optional
+            Location of file for which path prediction is required.  If
+            `None` the location associated with the formatter will be used.
+
+        Returns
+        -------
+        path : `str`
+            Path that would be returned by a call to `Formatter.write()`.
         """
         raise NotImplementedError("Type does not support writing")
 
-    def segregateParameters(self, parameters):
+    def segregateParameters(self, parameters=None):
         """Segregate the supplied parameters into those understood by the
         formatter and those not understood by the formatter.
 
@@ -106,9 +125,10 @@ class Formatter(metaclass=ABCMeta):
 
         Parameters
         ----------
-        parameters : `dict`
+        parameters : `dict`, optional
             Parameters with values that have been supplied by the caller
-            and which might be relevant for the formatter.
+            and which might be relevant for the formatter.  If `None`
+            parameters will be read from the registered `FileDescriptor`.
 
         Returns
         -------
@@ -117,6 +137,9 @@ class Formatter(metaclass=ABCMeta):
         unsupported : `dict`
             Those parameters not supported by this formatter.
         """
+
+        if parameters is None:
+            parameters = self.fileDescriptor.parameters
 
         if parameters is None:
             return {}, {}
@@ -197,7 +220,7 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterWithMatch(self, entity):
+    def getFormatterWithMatch(self, entity, *args, **kwargs):
         """Get a new formatter instance along with the matching registry
         key.
 
@@ -209,6 +232,10 @@ class FormatterFactory:
             or `DatasetType` instance is provided.  Supports instrument
             override if a `DatasetRef` is provided configured with an
             ``instrument`` value for the data ID.
+        args : `tuple`
+            Positional arguments to use pass to the object constructor.
+        kwargs : `dict`
+            Keyword arguments to pass to object constructor.
 
         Returns
         -------
@@ -221,12 +248,12 @@ class FormatterFactory:
             names = (entity,)
         else:
             names = entity._lookupNames()
-        matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(*names)
+        matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
         log.debug("Retrieved formatter from key '%s' for entity '%s'", matchKey, entity)
 
         return matchKey, formatter
 
-    def getFormatter(self, entity):
+    def getFormatter(self, entity, *args, **kwargs):
         """Get a new formatter instance.
 
         Parameters
@@ -237,13 +264,17 @@ class FormatterFactory:
             or `DatasetType` instance is provided.  Supports instrument
             override if a `DatasetRef` is provided configured with an
             ``instrument`` value for the data ID.
+        args : `tuple`
+            Positional arguments to use pass to the object constructor.
+        kwargs : `dict`
+            Keyword arguments to pass to object constructor.
 
         Returns
         -------
         formatter : `Formatter`
             An instance of the registered formatter.
         """
-        _, formatter = self.getFormatterWithMatch(entity)
+        _, formatter = self.getFormatterWithMatch(entity, *args, **kwargs)
         return formatter
 
     def registerFormatter(self, type_, formatter):

@@ -299,17 +299,17 @@ class PosixDatastore(Datastore):
         # Is this a component request?
         component = ref.datasetType.component()
 
-        formatter = getInstanceOf(storedFileInfo.formatter)
-        formatterParams, assemblerParams = formatter.segregateParameters(parameters)
+        formatter = getInstanceOf(storedFileInfo.formatter,
+                                  FileDescriptor(location, readStorageClass=readStorageClass,
+                                                 storageClass=writeStorageClass, parameters=parameters))
+        formatterParams, assemblerParams = formatter.segregateParameters()
         try:
-            result = formatter.read(FileDescriptor(location, readStorageClass=readStorageClass,
-                                                   storageClass=writeStorageClass, parameters=parameters),
-                                    component=component)
+            result = formatter.read(component=component)
         except Exception as e:
-            raise ValueError("Failure from formatter for Dataset {}: {}".format(ref.id, e))
+            raise ValueError(f"Failure from formatter '{formatter.name()}' for Dataset {ref.id}: {e}")
 
         # Process any left over parameters
-        if parameters:
+        if assemblerParams:
             result = readStorageClass.assembler().handleParameters(result, assemblerParams)
 
         # Validate the returned data type matches the expected data type
@@ -370,7 +370,9 @@ class PosixDatastore(Datastore):
 
         # Get the formatter based on the storage class
         try:
-            formatter = self.formatterFactory.getFormatter(ref)
+            formatter = self.formatterFactory.getFormatter(ref,
+                                                           FileDescriptor(location,
+                                                                          storageClass=storageClass))
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
@@ -380,14 +382,14 @@ class PosixDatastore(Datastore):
                 safeMakeDir(storageDir)
 
         # Write the file
-        predictedFullPath = os.path.join(self.root, formatter.predictPath(location))
+        predictedFullPath = os.path.join(self.root, formatter.predictPath())
 
         if os.path.exists(predictedFullPath):
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {predictedFullPath} already exists")
 
         with self._transaction.undoWith("write", os.remove, predictedFullPath):
-            path = formatter.write(inMemoryDataset, FileDescriptor(location, storageClass=storageClass))
+            path = formatter.write(inMemoryDataset)
             assert predictedFullPath == os.path.join(self.root, path)
             log.debug("Wrote file to %s", path)
 
@@ -443,7 +445,7 @@ class PosixDatastore(Datastore):
                                                " configuration.")
 
         if formatter is None:
-            formatter = self.formatterFactory.getFormatter(ref)
+            formatter = self.formatterFactory.getFormatter(ref, None)
 
         fullPath = os.path.normpath(os.path.join(self.root, path))
         if not os.path.exists(fullPath):
@@ -639,7 +641,7 @@ class PosixDatastore(Datastore):
         formatterFailed = []
         for entity in entities:
             try:
-                self.formatterFactory.getFormatter(entity)
+                self.formatterFactory.getFormatter(entity, None)
             except KeyError as e:
                 formatterFailed.append(str(e))
                 if logFailures:
