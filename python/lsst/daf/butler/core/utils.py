@@ -135,7 +135,7 @@ def getFullTypeName(cls):
     return cls.__module__ + "." + cls.__qualname__
 
 
-def getInstanceOf(typeOrName):
+def getInstanceOf(typeOrName, *args, **kwargs):
     """Given the type name or a type, instantiate an object of that type.
 
     If a type name is given, an attempt will be made to import the type.
@@ -144,12 +144,16 @@ def getInstanceOf(typeOrName):
     ----------
     typeOrName : `str` or Python class
         A string describing the Python class to load or a Python type.
+    args : `tuple`
+        Positional arguments to use pass to the object constructor.
+    kwargs : `dict`
+        Keyword arguments to pass to object constructor.
     """
     if isinstance(typeOrName, str):
         cls = doImport(typeOrName)
     else:
         cls = typeOrName
-    return cls()
+    return cls(*args, **kwargs)
 
 
 class Singleton(type):
