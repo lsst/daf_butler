@@ -306,7 +306,7 @@ class PosixDatastore(Datastore):
         try:
             result = formatter.read(component=component)
         except Exception as e:
-            raise ValueError(f"Failure from formatter '{formatter.name()}' for Dataset {ref.id}: {e}")
+            raise ValueError(f"Failure from formatter '{formatter.name()}' for Dataset {ref.id}") from e
 
         # Process any left over parameters
         if assemblerParams:
