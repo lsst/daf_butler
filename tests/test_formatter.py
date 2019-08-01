@@ -45,7 +45,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         formatterTypeName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
-        f = self.factory.getFormatter(storageClassName, None)
+        f = self.factory.getFormatter(storageClassName)
         self.assertIsInstance(f, Formatter)
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
@@ -53,7 +53,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertEqual(type(f), FitsCatalogFormatter)
 
         with self.assertRaises(KeyError):
-            f = self.factory.getFormatter("Missing", None)
+            f = self.factory.getFormatter("Missing")
 
     def testRegistryWithStorageClass(self):
         """Test that the registry can be given a StorageClass object.
@@ -69,11 +69,11 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.factory.registerFormatter(sc, formatterTypeName)
 
         # Retrieve using the class
-        f = self.factory.getFormatter(sc, None)
+        f = self.factory.getFormatter(sc)
         self.assertIsInstance(f, Formatter)
 
         # Retrieve using the DatasetType
-        f2 = self.factory.getFormatter(datasetType, None)
+        f2 = self.factory.getFormatter(datasetType)
         self.assertIsInstance(f, Formatter)
         self.assertEqual(f.name(), f2.name())
 
@@ -98,20 +98,20 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         sc = StorageClass("DummySC", dict, None)
         refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
                                                                 "physical_filter": "v"})
-        refPviHscFmt = self.factory.getFormatter(refPviHsc, None)
+        refPviHscFmt = self.factory.getFormatter(refPviHsc)
         self.assertIsInstance(refPviHscFmt, Formatter)
         self.assertIn("JsonFormatter", refPviHscFmt.name())
 
         refPviNotHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
                                                                    "physical_filter": "v"})
-        refPviNotHscFmt = self.factory.getFormatter(refPviNotHsc, None)
+        refPviNotHscFmt = self.factory.getFormatter(refPviNotHsc)
         self.assertIsInstance(refPviNotHscFmt, Formatter)
         self.assertIn("PickleFormatter", refPviNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using Dimensions
         refPvixHsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
                                                                   "physical_filter": "v"})
-        refPvixNotHscFmt = self.factory.getFormatter(refPvixHsc, None)
+        refPvixNotHscFmt = self.factory.getFormatter(refPvixHsc)
         self.assertIsInstance(refPvixNotHscFmt, Formatter)
         self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
@@ -119,7 +119,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         dimensionsNoV = universe.extract(("physical_filter", "instrument"))
         refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
                                                                             "physical_filter": "v"})
-        refPvixNotHscDims_fmt = self.factory.getFormatter(refPvixNotHscDims, None)
+        refPvixNotHscDims_fmt = self.factory.getFormatter(refPvixNotHscDims)
         self.assertIsInstance(refPvixNotHscDims_fmt, Formatter)
         self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 

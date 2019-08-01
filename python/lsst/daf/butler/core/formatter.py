@@ -38,9 +38,10 @@ class Formatter(metaclass=ABCMeta):
 
     Parameters
     ----------
-    fileDescriptor : `FileDescriptor`
+    fileDescriptor : `FileDescriptor`, optional
         Identifies the file to read or write, and the associated storage
-        classes and parameter information.
+        classes and parameter information.  Its value can be `None` if the
+        caller will never call `Formatter.read` or `Formatter.write`.
     """
 
     unsupportedParameters = frozenset()
@@ -49,7 +50,7 @@ class Formatter(metaclass=ABCMeta):
     are supported.
     """
 
-    def __init__(self, fileDescriptor):
+    def __init__(self, fileDescriptor=None):
         if fileDescriptor is not None and not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
