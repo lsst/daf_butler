@@ -31,6 +31,16 @@ class FitsExposureFormatter(Formatter):
     """Interface for reading and writing Exposures to and from FITS files.
     """
     extension = ".fits"
+    _metadata = None
+
+    @property
+    def metadata(self):
+        """The metadata read from this file. It will be stripped as
+        components are extracted from it.
+        """
+        if self._metadata is None:
+            self._metadata = self.readMetadata()
+        return self._metadata
 
     def readImageComponent(self, component):
         """Read the image, mask, or variance component of an Exposure.
@@ -66,7 +76,7 @@ class FitsExposureFormatter(Formatter):
         fix_header(md)
         return md
 
-    def stripMetadata(self, metadata):
+    def stripMetadata(self):
         """Remove metadata entries that are parsed into components.
 
         This is only called when just the metadata is requested; stripping
@@ -84,8 +94,8 @@ class FitsExposureFormatter(Formatter):
         # that doesn't yet exist in afw.image.ExposureInfo.
         from lsst.afw.image import bboxFromMetadata
         from lsst.afw.geom import makeSkyWcs
-        bboxFromMetadata(metadata)  # always strips
-        makeSkyWcs(metadata, strip=True)
+        bboxFromMetadata(self.metadata)  # always strips
+        makeSkyWcs(self.metadata, strip=True)
 
     def readInfoComponent(self, component):
         """Read a component held by ExposureInfo.
@@ -156,9 +166,8 @@ class FitsExposureFormatter(Formatter):
         fileDescriptor = self.fileDescriptor
         if fileDescriptor.readStorageClass != fileDescriptor.storageClass:
             if component == "metadata":
-                md = self.readMetadata()
-                self.stripMetadata(md)
-                return md
+                self.stripMetadata()
+                return self.metadata
             elif component in ("image", "variance", "mask"):
                 return self.readImageComponent(component)
             elif component is not None:
