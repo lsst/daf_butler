@@ -221,6 +221,56 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
+    def getFormatterClassWithMatch(self, entity):
+        """Get a the matching formatter class along with the matching registry
+        key.
+
+        Parameters
+        ----------
+        entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
+            Entity to use to determine the formatter to return.
+            `StorageClass` will be used as a last resort if `DatasetRef`
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        matchKey : `LookupKey`
+            The key that resulted in the successful match.
+        formatter : `type`
+            The class of the registered formatter.
+        """
+        if isinstance(entity, str):
+            names = (entity,)
+        else:
+            names = entity._lookupNames()
+        matchKey, formatter = self._mappingFactory.getClassFromRegistryWithMatch(names)
+        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
+                  matchKey, entity)
+
+        return matchKey, formatter
+
+    def getFormatterClass(self, entity):
+        """Get the matching formatter class.
+
+        Parameters
+        ----------
+        entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
+            Entity to use to determine the formatter to return.
+            `StorageClass` will be used as a last resort if `DatasetRef`
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        formatter : `type`
+            The class of the registered formatter.
+        """
+        _, formatter = self.getFormatterClassWithMatch(entity)
+        return formatter
+
     def getFormatterWithMatch(self, entity, *args, **kwargs):
         """Get a new formatter instance along with the matching registry
         key.
@@ -250,7 +300,8 @@ class FormatterFactory:
         else:
             names = entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
-        log.debug("Retrieved formatter from key '%s' for entity '%s'", matchKey, entity)
+        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
+                  matchKey, entity)
 
         return matchKey, formatter
 
