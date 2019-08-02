@@ -642,7 +642,7 @@ class PosixDatastore(Datastore):
         formatterFailed = []
         for entity in entities:
             try:
-                self.formatterFactory.getFormatter(entity, None)
+                self.formatterFactory.getFormatterClass(entity)
             except KeyError as e:
                 formatterFailed.append(str(e))
                 if logFailures:
