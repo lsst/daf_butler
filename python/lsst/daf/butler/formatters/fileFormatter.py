@@ -172,13 +172,14 @@ class FileFormatter(Formatter):
 
         return fileDescriptor.location.pathInStore
 
-    def predictPath(self, location=None):
+    @classmethod
+    def predictPathFromLocation(cls, location):
         """Return the path that would be returned by write, without actually
         writing.
 
         Parameters
         ----------
-        location : `Location`, optional
+        location : `Location`
             Location of file for which path prediction is required.  If
             `None` the location associated with the formatter will be used.
 
@@ -187,8 +188,6 @@ class FileFormatter(Formatter):
         path : `str`
             Path that would be returned by a call to `Formatter.write()`.
         """
-        if location is None:
-            location = self.fileDescriptor.location
         location = copy.deepcopy(location)
-        location.updateExtension(self.extension)
+        location.updateExtension(cls.extension)
         return location.pathInStore

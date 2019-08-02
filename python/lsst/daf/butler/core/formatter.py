@@ -99,16 +99,16 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
+    @classmethod
     @abstractmethod
-    def predictPath(self, location=None):
+    def predictPathFromLocation(cls, location):
         """Return the path that would be returned by write, without actually
         writing.
 
         Parameters
         ----------
-        location : `Location`, optional
-            Location of file for which path prediction is required.  If
-            `None` the location associated with the formatter will be used.
+        location : `Location`
+            Location of file for which path prediction is required.
 
         Returns
         -------
@@ -116,6 +116,19 @@ class Formatter(metaclass=ABCMeta):
             Path that would be returned by a call to `Formatter.write()`.
         """
         raise NotImplementedError("Type does not support writing")
+
+    def predictPath(self):
+        """Return the path that would be returned by write, without actually
+        writing.
+
+        Uses the `FileDescriptor` associated with the instance.
+
+        Returns
+        -------
+        path : `str`
+            Path that would be returned by a call to `Formatter.write()`.
+        """
+        return self.predictPathFromLocation(self.fileDescriptor.location)
 
     def segregateParameters(self, parameters=None):
         """Segregate the supplied parameters into those understood by the
