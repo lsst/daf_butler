@@ -413,10 +413,11 @@ class PosixDatastore(Datastore):
             absolute.
         ref : `DatasetRef`
             Reference to the associated Dataset.
-        formatter : `Formatter` (optional)
+        formatter : `Formatter`, optional
             Formatter that should be used to retreive the Dataset.  If not
             provided, the formatter will be constructed according to
-            Datastore configuration.
+            Datastore configuration.  Can be a the Formatter class or an
+            instance.
         transfer : str (optional)
             If not None, must be one of 'move', 'copy', 'hardlink', or
             'symlink' indicating how to transfer the file.  The new
@@ -445,7 +446,7 @@ class PosixDatastore(Datastore):
                                                " configuration.")
 
         if formatter is None:
-            formatter = self.formatterFactory.getFormatter(ref, None)
+            formatter = self.formatterFactory.getFormatterClass(ref)
 
         fullPath = os.path.normpath(os.path.join(self.root, path))
         if not os.path.exists(fullPath):
@@ -464,7 +465,7 @@ class PosixDatastore(Datastore):
         else:
             template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))
-            newPath = formatter.predictPath(location)
+            newPath = formatter.predictPathFromLocation(location)
             newFullPath = os.path.join(self.root, newPath)
             if os.path.exists(newFullPath):
                 raise FileExistsError("File '{}' already exists".format(newFullPath))
