@@ -21,7 +21,7 @@
 
 __all__ = ("MappingFactory", )
 
-from .utils import getInstanceOf
+from .utils import getClassOf
 from .configSupport import LookupKey
 
 
@@ -74,6 +74,73 @@ class MappingFactory:
         """
         return set(self._registry)
 
+    def getClassFromRegistryWithMatch(self, targetClasses):
+        """Get the class stored in the registry along with
+        the matching key.
+
+        Parameters
+        ----------
+        targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
+            Each item is tested in turn until a match is found in the registry.
+            Items with `None` value are skipped.
+
+        Returns
+        -------
+        matchKey : `LookupKey`
+            The key that resulted in the successful match.
+        cls : `type`
+            Class stored in registry associated with the first
+            matching target class.
+
+        Raises
+        ------
+        KeyError
+            Raised if none of the supplied target classes match an item in the
+            registry.
+        """
+        attempts = []
+        for t in (targetClasses):
+            if t is None:
+                attempts.append(t)
+            else:
+                key = self._getNameKey(t)
+                attempts.append(key)
+                try:
+                    typeName = self._registry[key]
+                except KeyError:
+                    pass
+                else:
+                    return key, getClassOf(typeName)
+
+        # Convert list to a string for error reporting
+        msg = ", ".join(str(k) for k in attempts)
+        plural = "" if len(attempts) == 1 else "s"
+        raise KeyError(f"Unable to find item in registry with key{plural}: {msg}")
+
+    def getClassFromRegistry(self, targetClasses, *args, **kwargs):
+        """Get the matching class stored in the registry.
+
+        Parameters
+        ----------
+        targetClasses : `LookupKey`, `str` or objects with ``name`` attribute
+            Each item is tested in turn until a match is found in the registry.
+            Items with `None` value are skipped.
+
+        Returns
+        -------
+        cls : `type`
+            Class stored in registry associated with the first
+            matching target class.
+
+        Raises
+        ------
+        KeyError
+            Raised if none of the supplied target classes match an item in the
+            registry.
+        """
+        _, cls = self.getClassFromRegistryWithMatch(targetClasses)
+        return cls
+
     def getFromRegistryWithMatch(self, targetClasses, *args, **kwargs):
         """Get a new instance of the object stored in the registry along with
         the matching key.
@@ -102,24 +169,8 @@ class MappingFactory:
             Raised if none of the supplied target classes match an item in the
             registry.
         """
-        attempts = []
-        for t in (targetClasses):
-            if t is None:
-                attempts.append(t)
-            else:
-                key = self._getNameKey(t)
-                attempts.append(key)
-                try:
-                    typeName = self._registry[key]
-                except KeyError:
-                    pass
-                else:
-                    return key, getInstanceOf(typeName, *args, **kwargs)
-
-        # Convert list to a string for error reporting
-        msg = ", ".join(str(k) for k in attempts)
-        plural = "" if len(attempts) == 1 else "s"
-        raise KeyError(f"Unable to find item in registry with key{plural}: {msg}")
+        key, cls = self.getClassFromRegistryWithMatch(targetClasses)
+        return key, cls(*args, **kwargs)
 
     def getFromRegistry(self, targetClasses, *args, **kwargs):
         """Get a new instance of the object stored in the registry.
