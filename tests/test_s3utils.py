@@ -76,15 +76,10 @@ class S3UtilsTestCase(unittest.TestCase):
 
     def testFileExists(self):
         s3 = boto3.client('s3')
-        self.assertTrue(s3CheckFileExists(s3, bucket=self.bucketName,
-                                          filepath=self.fileName, slow=True)[0])
-        self.assertFalse(s3CheckFileExists(s3, bucket=self.bucketName,
-                                           filepath=self.fileName+"_NO_EXIST", slow=True)[0])
-
-        self.assertTrue(s3CheckFileExists(s3, bucket=self.bucketName,
-                                          filepath=self.fileName, slow=False)[0])
-        self.assertFalse(s3CheckFileExists(s3, bucket=self.bucketName,
-                                           filepath=self.fileName+"_NO_EXIST", slow=False)[0])
+        self.assertTrue(s3CheckFileExists(client=s3, bucket=self.bucketName,
+                                          path=self.fileName)[0])
+        self.assertFalse(s3CheckFileExists(client=s3, bucket=self.bucketName,
+                                           path=self.fileName+"_NO_EXIST")[0])
 
         datastoreRootUri = f"s3://{self.bucketName}/"
         uri = f"s3://{self.bucketName}/{self.fileName}"
@@ -92,8 +87,14 @@ class S3UtilsTestCase(unittest.TestCase):
         buri = ButlerURI(uri)
         location = Location(datastoreRootUri, self.fileName)
 
-        self.assertTrue(s3CheckFileExists(s3, buri)[0])
-        self.assertTrue(s3CheckFileExists(s3, location)[0])
+        self.assertTrue(s3CheckFileExists(client=s3, path=buri)[0])
+        # just to make sure the overloaded keyword works correctly
+        self.assertTrue(s3CheckFileExists(buri, client=s3)[0])
+        self.assertTrue(s3CheckFileExists(client=s3, path=location)[0])
+
+        # make sure supplying strings resolves correctly too
+        self.assertTrue(s3CheckFileExists(uri, client=s3))
+        self.assertTrue(s3CheckFileExists(uri))
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@
 """
 
 import os
+import posixpath
 import unittest
 import tempfile
 import shutil
@@ -631,7 +632,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         self.datastoreStr = f"datastore={self.root}"
         self.datastoreName = [f"S3Datastore@{rooturi}"]
         Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
-        self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
+        self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
 
     def tearDown(self):
         s3 = boto3.resource("s3")
@@ -657,7 +658,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         """
         uri = ButlerURI(root)
         client = boto3.client("s3")
-        return s3CheckFileExists(client, uri)[0]
+        return s3CheckFileExists(uri, client=client)[0]
 
 
 if __name__ == "__main__":

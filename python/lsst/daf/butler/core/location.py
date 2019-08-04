@@ -144,16 +144,19 @@ class ButlerURI:
     @property
     def ospath(self):
         """Path component of the URI localized to current OS."""
+        if self.scheme == 's3':
+            raise AttributeError('S3 URIs have no OS path.')
         return posix2os(self._uri.path)
 
     @property
     def relativeToPathRoot(self):
         """Returns path relative to network location.
 
-        Effectively, this is the path property with posix separator stipped
+        Effectively, this is the path property with posix separator stripped
         from the left hand side of the path.
         """
-        return self._uri.path.lstrip('/')
+        p = PurePosixPath(self._uri.path)
+        return str(p.relative_to(p.root))
 
     @property
     def fragment(self):
@@ -400,7 +403,9 @@ class Location:
         Effectively, this is the path property with posix separator stipped
         from the left hand side of the path.
         """
-        return self.path.lstrip("/")
+        p = PurePosixPath(os2posix(self.path))
+        stripped = p.relative_to(p.root)
+        return str(posix2os(stripped))
 
     def updateExtension(self, ext):
         """Update the file extension associated with this `Location`.

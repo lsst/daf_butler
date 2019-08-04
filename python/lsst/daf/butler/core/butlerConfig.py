@@ -79,7 +79,7 @@ class ButlerConfig(Config):
 
         if isinstance(other, str):
             uri = ButlerURI(other)
-            if uri.scheme == "file":
+            if uri.scheme == "file" or not uri.scheme:
                 if os.path.isdir(uri.ospath):
                     other = os.path.join(uri.ospath, "butler.yaml")
             elif uri.scheme == "s3":

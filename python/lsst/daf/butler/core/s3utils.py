@@ -29,18 +29,20 @@ except ImportError:
 from lsst.daf.butler.core.location import ButlerURI, Location
 
 
-def s3CheckFileExistsGET(client, bucket, filepath):
+def s3CheckFileExists(path, bucket=None, client=None):
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
     Parameters
     ----------
-    client : `boto3.client`
-        S3 Client object to query.
-    bucket : `str`
-        Name of the bucket in which to look.
-    filepath : `str`
-        Path to file.
+    path : `Location`, `ButlerURI`, `str`
+        Location or ButlerURI containing the bucket name and filepath.
+    bucket : `str`, optional
+        Name of the bucket in which to look. If provided, path will be assumed
+        to correspond to be relative to the given bucket.
+    client : `boto3.client`, optional
+        S3 Client object to query, if not supplied boto3 will try to resolve
+        the credentials as in order described in its manual_.
 
     Returns
     -------
@@ -51,131 +53,68 @@ def s3CheckFileExistsGET(client, bucket, filepath):
 
     Notes
     -----
-    A Bucket HEAD request will be charged against your account. This is on
-    average 10x cheaper than a LIST request (see `s3CheckFileExistsLIST`
-    function) but can be up to 90% slower whenever additional work is done with
-    the s3 client. See `PR-1248<https://github.com/boto/botocore/issues/1248>`_
-    and `PR-1128<https://github.com/boto/boto3/issues/1128>`_ for details. In
-    boto3 versions >=1.11.0 the loss of performance should not be an issue
-    anymore.
     S3 Paths are sensitive to leading and trailing path separators.
+
+    .. _manual: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/\
+    configuration.html#configuring-credentials
     """
+    if boto3 is None:
+        raise ModuleNotFoundError(("Could not find boto3. "
+                                   "Are you sure it is installed?"))
+
+    if client is None:
+        client = boto3.client('s3')
+
+    if isinstance(path, str):
+        if bucket is not None:
+            filepath = path
+        else:
+            uri = ButlerURI(path)
+            bucket = uri.netloc
+            filepath = uri.relativeToPathRoot
+    elif isinstance(path, (ButlerURI, Location)):
+        bucket = path.netloc
+        filepath = path.relativeToPathRoot
+
     try:
         obj = client.head_object(Bucket=bucket, Key=filepath)
         return (True, obj["ContentLength"])
     except client.exceptions.ClientError as err:
+        # resource unreachable error means key does not exist
         if err.response["ResponseMetadata"]["HTTPStatusCode"] == 404:
             return (False, -1)
+        # head_object returns 404 when object does not exist only when user has
+        # s3:ListBucket permission. If list permission does not exist a 403 is
+        # returned. In practical terms this generally means that the file does
+        # not exist, but it could also mean user lacks s3:GetObject permission:
+        # https://docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
+        # I don't think its possible to discern which case is it with certainty
+        if err.response["ResponseMetadata"]["HTTPStatusCode"] == 403:
+            raise PermissionError("Forbidden HEAD operation error occured. "
+                                  "Verify s3:ListBucket and s3:GetObject "
+                                  "permissions are granted for your IAM user. ") from err
         raise
 
 
-def s3CheckFileExistsLIST(client, bucket, filepath):
-    """Returns (True, filesize) if file exists in the bucket and (False, -1) if
-    the file is not found.
-
-    Parameters
-    ----------
-    client : `boto3.client`
-        S3 Client object to query.
-    bucket : `str`
-        Name of the bucket in which to look.
-    filepath : `str`
-        Path to file.
-
-    Returns
-    -------
-    exists : `bool`
-        True if key exists, False otherwise
-    size : `int`
-        Size of the key, if key exists, in bytes, otherwise -1
-
-    Notes
-    -----
-    You are getting charged for a Bucket LIST request. This is on average 10x
-    more expensive than a GET request (see `s3CheckFileExistsGET` fucntion) but
-    can be up to 90% faster whenever additional work is done with the s3
-    client. See `PR-1248<https://github.com/boto/botocore/issues/1248>`_
-    and `PR-1128<https://github.com/boto/boto3/issues/1128>`_ for details. In
-    boto3 versions >=1.11.0 the loss of performance should not be an issue
-    anymore.
-    A LIST request can, by default, return up to 1000 matching keys, however,
-    the LIST response is filtered on `filepath` key which, in this context, is
-    expected to be unique. Non-unique matches are treated as a non-existant
-    file. This function can not be used to retrieve all keys that start with
-    `filepath`.
-    S3 Paths are sensitive to leading and trailing path separators.
-    """
-    response = client.list_objects_v2(
-        Bucket=bucket,
-        Prefix=filepath
-    )
-    # Hopefully multiple identical files will never exist?
-    matches = [x for x in response.get("Contents", []) if x["Key"] == filepath]
-    if len(matches) == 1:
-        return (True, matches[0]["Size"])
-    else:
-        return (False, -1)
-
-
-def s3CheckFileExists(client, path=None, bucket=None, filepath=None, slow=True):
-    """Returns (True, filesize) if file exists in the bucket and (False, -1) if
-    the file is not found.
-
-    Accepts a fully specified Location or ButlerURI to the file or can accept
-    bucket name and filepath as separate strings.
-
-    Parameters
-    ----------
-    client : `boto3.client`
-        S3 Client object to query.
-    path : `Location`, `ButlerURI`, optional
-        Location or ButlerURI containing the bucket name and filepath.
-    bucket : `str`, optional
-        Name of the bucket in which to look.
-    filepath : `str`, optional
-        Path to file.
-    slow : `bool`, optional
-        If True, makes a GET request to S3 instead of a LIST request. This
-        is cheaper, but also slower. See `s3CheckFileExistsGET` or
-        `s3CheckFileExistsLIST` for more details.
-
-    Returns
-    -------
-    exists : `bool`
-        True if file exists, False otherwise
-    size : `int`
-        Size of the key, if key exists, in bytes, otherwise -1
-
-    Notes
-    -----
-    S3 Paths are sensitive to leading and trailing path separators.
-    """
-    if isinstance(path, (ButlerURI, Location)):
-        bucket = path.netloc
-        filepath = path.relativeToPathRoot
-
-    if bucket is None and filepath is None:
-        raise ValueError(("Expected ButlerURI, Location or (bucket, filepath) pair "
-                          f"but got {path}, ({bucket}, {filepath}) instead."))
-
-    if slow:
-        return s3CheckFileExistsGET(client, bucket=bucket, filepath=filepath)
-    return s3CheckFileExistsLIST(client, bucket=bucket, filepath=filepath)
-
-
-def bucketExists(bucketName):
+def bucketExists(bucketName, client=None):
     """Check if the S3 bucket with the given name actually exists.
 
     Parameters
     ----------
     bucketName : `str`
         Name of the S3 Bucket
+    client : `boto3.client`, optional
+        S3 Client object to query, if not supplied boto3 will try to resolve
+        the credentials as in order described in its manual_.
 
     Returns
     -------
     exists : `bool`
         True if it exists, False if no Bucket with specified parameters is
         found.
+
+    .. _manual: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/\
+    configuration.html#configuring-credentials
     """
     if boto3 is None:
         raise ModuleNotFoundError(("Could not find boto3. "

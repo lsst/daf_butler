@@ -244,13 +244,13 @@ class Config(collections.abc.MutableMapping):
         uri = ButlerURI(path)
         if uri.path.endswith("yaml"):
             if uri.scheme == "s3":
-                self.__initFromS3YamlFile(path)
+                self.__initFromS3YamlFile(uri.geturl())
             else:
-                self.__initFromYamlFile(path)
+                self.__initFromYamlFile(uri.ospath)
         else:
             raise RuntimeError("Unhandled config file type:%s" % uri)
 
-    def __initFromS3YamlFile(self, path):
+    def __initFromS3YamlFile(self, url):
         """Load a file at a given S3 Bucket uri and attempts to load it from
         yaml.
 
@@ -263,7 +263,7 @@ class Config(collections.abc.MutableMapping):
             raise ModuleNotFoundError("boto3 not found."
                                       "Are you sure it is installed?")
 
-        uri = ButlerURI(path)
+        uri = ButlerURI(url)
         s3 = boto3.client("s3")
         try:
             response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
@@ -273,7 +273,7 @@ class Config(collections.abc.MutableMapping):
         # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
         # Loader will raise an error that the stream has no name. A hackish
         # solution is to name it explicitly.
-        response["Body"].name = path
+        response["Body"].name = url
         self.__initFromYaml(response["Body"])
         response["Body"].close()
 

@@ -240,7 +240,7 @@ class S3Datastore(Datastore):
             return False
 
         loc = self.locationFactory.fromPath(storedFileInfo.path)
-        return s3CheckFileExists(self.client, loc)[0]
+        return s3CheckFileExists(loc, client=self.client)[0]
 
     def get(self, ref, parameters=None):
         """Load an InMemoryDataset from the store.
@@ -415,7 +415,7 @@ class S3Datastore(Datastore):
         # instead, if it does not the insert key operation will be equivalent
         # to creating a directory and the file together.
         location.updateExtension(formatter.extension)
-        if s3CheckFileExists(self.client, location)[0]:
+        if s3CheckFileExists(location, client=self.client,)[0]:
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {location.uri} exists.")
 
@@ -500,7 +500,7 @@ class S3Datastore(Datastore):
         elif transfer == "move" or transfer == "copy":
             if uri.scheme == "file":
                 # uploading file from local disk and potentially deleting it
-                if s3CheckFileExists(self.client, uri)[0]:
+                if s3CheckFileExists(uri, client=self.client)[0]:
                     raise FileExistsError(f"File '{path}' exists!")
 
                 template = self.templates.getTemplate(ref)
@@ -512,7 +512,7 @@ class S3Datastore(Datastore):
                     os.remove(path)
             elif uri.scheme == "s3":
                 # copying files between buckets, potentially deleting src files
-                if s3CheckFileExists(self.client, uri)[0]:
+                if s3CheckFileExists(uri, client=self.client)[0]:
                     raise FileExistsError(f"File '{uri}' exists.")
 
                 relpath = uri.relativeToPathRoot
@@ -533,8 +533,9 @@ class S3Datastore(Datastore):
         location = self.locationFactory.fromPath(path)
 
         # the file should exist on the bucket by now
-        exists, size = s3CheckFileExists(self.client, bucket=location.netloc,
-                                         filepath=uri.relativeToPathRoot)
+        exists, size = s3CheckFileExists(path=uri.relativeToPathRoot,
+                                         bucket=location.netloc,
+                                         client=self.client)
         self.registry.addDatasetLocation(ref, self.name)
 
         # Associate this dataset with the formatter for later read.
@@ -622,7 +623,7 @@ class S3Datastore(Datastore):
         except KeyError:
             raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
         location = self.locationFactory.fromPath(storedFileInfo.path)
-        if not s3CheckFileExists(self.client, location):
+        if not s3CheckFileExists(location, client=self.client):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
 
         # https://github.com/boto/boto3/issues/507 - there is no way of knowing
