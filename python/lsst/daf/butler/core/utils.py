@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
@@ -27,7 +28,8 @@ __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
 import builtins
 import sys
 import functools
-from collections.abc import MutableMapping
+from typing import TypeVar, MutableMapping, Iterator, KeysView, ValuesView, ItemsView, Dict, Union
+from types import MappingProxyType
 
 from lsst.utils import doImport
 
@@ -348,7 +350,11 @@ class PrivateConstructorMeta(type):
         return type.__call__(cls, *args, **kwds)
 
 
-class NamedKeyDict(MutableMapping):
+K = TypeVar("K")
+V = TypeVar("V")
+
+
+class NamedKeyDict(MutableMapping[K, V]):
     """A dictionary wrapper that require keys to have a ``.name`` attribute,
     and permits lookups using either key objects or their names.
 
@@ -384,30 +390,36 @@ class NamedKeyDict(MutableMapping):
         assert len(self._names) == len(self._dict), "Duplicate names in keys."
 
     @property
-    def names(self):
+    def names(self) -> KeysView[str]:
         """The set of names associated with the keys, in the same order
         (`~collections.abc.KeysView`).
         """
         return self._names.keys()
 
-    def byName(self):
+    def byName(self) -> Dict[str, V]:
         """Return a `dict` with names as keys and the same values as ``self``.
         """
         return dict(zip(self._names.keys(), self._dict.values()))
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._dict)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[K]:
         return iter(self._dict)
 
-    def __getitem__(self, key):
+    def __str__(self) -> str:
+        return "{{{}}}".format(", ".join(f"{str(k)}: {str(v)}" for k, v in self.items()))
+
+    def __repr__(self) -> str:
+        return "NamedKeyDict({{{}}})".format(", ".join(f"{repr(k)}: {repr(v)}" for k, v in self.items()))
+
+    def __getitem__(self, key: Union[str, K]) -> V:
         if hasattr(key, "name"):
             return self._dict[key]
         else:
             return self._dict[self._names[key]]
 
-    def __setitem__(self, key, value):
+    def __setitem__(self, key: Union[str, K], value: V):
         if hasattr(key, "name"):
             assert self._names.get(key.name, key) == key, "Name is already associated with a different key."
             self._dict[key] = value
@@ -415,7 +427,7 @@ class NamedKeyDict(MutableMapping):
         else:
             self._dict[self._names[key]] = value
 
-    def __delitem__(self, key):
+    def __delitem__(self, key: Union[str, K]):
         if hasattr(key, "name"):
             del self._dict[key]
             del self._names[key.name]
@@ -423,11 +435,24 @@ class NamedKeyDict(MutableMapping):
             del self._dict[self._names[key]]
             del self._names[key]
 
-    def keys(self):
+    def keys(self) -> KeysView[K]:
         return self._dict.keys()
 
-    def values(self):
+    def values(self) -> ValuesView[V]:
         return self._dict.values()
 
-    def items(self):
+    def items(self) -> ItemsView[K, V]:
         return self._dict.items()
+
+    def copy(self) -> NamedKeyDict[K, V]:
+        result = NamedKeyDict.__new__(NamedKeyDict)
+        result._dict = dict(self._dict)
+        result._names = dict(self._names)
+        return result
+
+    def freeze(self):
+        """Disable all mutators, effectively transforming ``self`` into
+        an immutable mapping.
+        """
+        if not isinstance(self._dict, MappingProxyType):
+            self._dict = MappingProxyType(self._dict)
