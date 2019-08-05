@@ -18,15 +18,41 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
-from .elements import *
-from .graph import *
-from .universe import *
-from .coordinate import *
-from .records import *
-from .packer import *
-from .config import *
+__all__ = ("Timespan",)
 
-# The schema, storage, and sql module symbols are deliberately not lifted to
-# package scope, as they contain functionality that is mostly internal to
-# daf_butler.
+import operator
+from typing import Generic, Optional, TypeVar
+
+
+T = TypeVar("T")
+
+
+class Timespan(Generic[T], tuple):
+
+    def __new__(cls, begin: T, end: T):
+        return tuple.__new__(cls, (begin, end))
+
+    def overlaps(self, other, ops=operator):
+        return ops.not_(ops.or_(self.end < other.begin, self.begin > other.end))
+
+    def intersection(*args) -> Optional[Timespan]:
+        if len(args) == 0:
+            return None
+        elif len(args) == 1:
+            return args[0]
+        else:
+            begin = max(*[ts.begin for ts in args])
+            end = min(*[ts.end for ts in args])
+            if begin > end:
+                return None
+            return Timespan(begin=begin, end=end)
+
+    @property
+    def begin(self) -> T:
+        return self[0]
+
+    @property
+    def end(self) -> T:
+        return self[1]

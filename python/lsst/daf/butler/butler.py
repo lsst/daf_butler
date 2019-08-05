@@ -47,7 +47,7 @@ from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
-from .core.dimensions import DataId
+from .core.dimensions import DataCoordinate, DataId
 from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
@@ -296,13 +296,14 @@ class Butler:
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
         kwds
             Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
 
         Returns
         -------
@@ -349,7 +350,7 @@ class Butler:
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` is provided, ``dataId`` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
@@ -357,7 +358,8 @@ class Butler:
             The producer.
         kwds
             Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
 
         Returns
         -------
@@ -382,8 +384,9 @@ class Butler:
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.
+        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer,
-                                       recursive=not isVirtualComposite, **kwds)
+                                       recursive=not isVirtualComposite)
 
         # Check to see if this datasetType requires disassembly
         if isVirtualComposite:
@@ -450,7 +453,7 @@ class Butler:
                                                                                      self.datastore.name))
 
     def getDeferred(self, datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
-                    dataId: typing.Union[dict, DataId] = None, parameters: typing.Union[dict, None] = None,
+                    dataId: typing.Optional[DataId] = None, parameters: typing.Union[dict, None] = None,
                     **kwds) -> dDH.DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset
 
@@ -459,7 +462,7 @@ class Butler:
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`, optional
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
@@ -485,7 +488,7 @@ class Butler:
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
@@ -494,7 +497,8 @@ class Butler:
             typically used to efficiently read only a subset of the dataset.
         kwds
             Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
 
         Returns
         -------
@@ -507,6 +511,7 @@ class Butler:
             idNumber = datasetRefOrType.id
         else:
             idNumber = None
+        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
         ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
@@ -525,7 +530,7 @@ class Butler:
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
@@ -534,7 +539,8 @@ class Butler:
             been written.
         kwds
             Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
 
         Returns
         -------
@@ -554,7 +560,7 @@ class Butler:
             guessing is not allowed.
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.registry.dimensions, **kwds)
+        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref = self.registry.find(self.collection, datasetType, dataId)
         if ref is None:
             if predict:
@@ -573,13 +579,14 @@ class Butler:
         datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
             When `DatasetRef` the `dataId` should be `None`.
             Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
         kwds
             Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
 
         Raises
         ------
@@ -587,7 +594,8 @@ class Butler:
             Raised if the Dataset is not even present in the Registry.
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
+        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
+        ref = self.registry.find(self.collection, datasetType, dataId)
         if ref is None:
             raise LookupError(
                 "{} with {} not found in collection {}".format(datasetType, dataId, self.collection)
@@ -634,7 +642,8 @@ class Butler:
             in a `Datastore` not recognized by this `Butler` client.
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
+        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
+        ref = self.registry.find(self.collection, datasetType, dataId)
         if delete:
             for r in itertools.chain([ref], ref.components.values()):
                 # If dataset is a composite, we don't know whether it's the
@@ -737,9 +746,9 @@ class Butler:
             ignore = set()
 
         # Find all the registered instruments
-        instruments = set()
-        instrumentEntries = self.registry.findDimensionEntries("instrument")
-        instruments = {e["instrument"] for e in instrumentEntries}
+        instruments = set(
+            dataId["instrument"] for dataId in self.registry.queryDimensions(["instrument"])
+        )
 
         # For each datasetType that has an instrument dimension, create
         # a DatasetRef for each defined instrument
@@ -748,7 +757,7 @@ class Butler:
         for datasetType in entities:
             if "instrument" in datasetType.dimensions:
                 for instrument in instruments:
-                    datasetRef = DatasetRef(datasetType, {"instrument": instrument})
+                    datasetRef = DatasetRef(datasetType, {"instrument": instrument}, conform=False)
                     datasetRefs.append(datasetRef)
 
         entities.extend(datasetRefs)

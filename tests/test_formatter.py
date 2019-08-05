@@ -27,8 +27,8 @@ import os.path
 import unittest
 
 from datasetsHelper import DatasetTestHelper
-from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType, Config, DimensionUniverse
-from lsst.daf.butler import FileDescriptor, Location
+from lsst.daf.butler import (Formatter, FormatterFactory, StorageClass, DatasetType, Config,
+                             FileDescriptor, Location, DimensionUniverse, DimensionGraph)
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -87,8 +87,8 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         storageClassName = "TestClass"
         sc = StorageClass(storageClassName, dict, None)
 
-        universe = DimensionUniverse.fromConfig()
-        datasetType = DatasetType("calexp", universe.extract([]), sc)
+        universe = DimensionUniverse()
+        datasetType = DatasetType("calexp", universe.empty, sc)
 
         # Store using an instance
         self.factory.registerFormatter(sc, formatterTypeName)
@@ -119,7 +119,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testRegistryConfig(self):
         configFile = os.path.join(TESTDIR, "config", "basic", "posixDatastore.yaml")
         config = Config(configFile)
-        universe = DimensionUniverse.fromConfig()
+        universe = DimensionUniverse()
         self.factory.registerFormatters(config["datastore", "formatters"], universe=universe)
 
         # Create a DatasetRef with and without instrument matching the
@@ -127,28 +127,32 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         dimensions = universe.extract(("visit", "physical_filter", "instrument"))
         sc = StorageClass("DummySC", dict, None)
         refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
-                                                                "physical_filter": "v"})
+                                                                "physical_filter": "v"},
+                                        conform=False)
         refPviHscFmt = self.factory.getFormatterClass(refPviHsc)
         self.assertIsFormatter(refPviHscFmt)
         self.assertIn("JsonFormatter", refPviHscFmt.name())
 
         refPviNotHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
-                                                                   "physical_filter": "v"})
+                                                                   "physical_filter": "v"},
+                                           conform=False)
         refPviNotHscFmt = self.factory.getFormatterClass(refPviNotHsc)
         self.assertIsFormatter(refPviNotHscFmt)
         self.assertIn("PickleFormatter", refPviNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using Dimensions
         refPvixHsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
-                                                                  "physical_filter": "v"})
+                                                                  "physical_filter": "v"},
+                                         conform=False)
         refPvixNotHscFmt = self.factory.getFormatterClass(refPvixHsc)
         self.assertIsFormatter(refPvixNotHscFmt)
         self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using StorageClass
-        dimensionsNoV = universe.extract(("physical_filter", "instrument"))
+        dimensionsNoV = DimensionGraph(universe, names=("physical_filter", "instrument"))
         refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
-                                                                            "physical_filter": "v"})
+                                                                            "physical_filter": "v"},
+                                                conform=False)
         refPvixNotHscDims_fmt = self.factory.getFormatterClass(refPvixNotHscDims)
         self.assertIsFormatter(refPvixNotHscDims_fmt)
         self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())

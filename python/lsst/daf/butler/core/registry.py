@@ -23,15 +23,18 @@ __all__ = ("RegistryConfig", "Registry",
            "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 from abc import ABCMeta, abstractmethod
-from collections.abc import Mapping
 import contextlib
+from typing import Optional, Mapping, Union, Iterable, Iterator
 
 from lsst.utils import doImport
 from .config import Config, ConfigSubset
-from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKeyDict
+from .dimensions import (DimensionConfig, DimensionUniverse, DimensionGraph, DataId, DimensionElement,
+                         DimensionRecord)
+from .datasets import DatasetRef
 from .schema import SchemaConfig
 from .utils import transactional
-from .dataIdPacker import DataIdPackerFactory
+from .dimensions import Dimension, DataCoordinate
+from .queries import DatasetTypeExpression, CollectionsExpression
 
 
 class AmbiguousDatasetError(Exception):
@@ -108,8 +111,7 @@ class Registry(metaclass=ABCMeta):
         will not be overridden by this method if ``overwrite`` is `False`.
         This allows explicit values set in external configs to be retained.
         """
-        Config.updateParameters(RegistryConfig, config, full,
-                                toCopy=(("skypix", "cls"), ("skypix", "level")), overwrite=overwrite)
+        Config.updateParameters(RegistryConfig, config, full, toCopy=(), overwrite=overwrite)
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):
@@ -149,7 +151,7 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Schema configuration: {}".format(schemaConfig))
 
         if dimensionConfig is None:
-            # Try to instantiate a schema configuration from the supplied
+            # Try to instantiate a dimension configuration from the supplied
             # registry configuration.
             dimensionConfig = DimensionConfig(registryConfig)
         elif not isinstance(dimensionConfig, DimensionConfig):
@@ -171,15 +173,7 @@ class Registry(metaclass=ABCMeta):
                  butlerRoot=None):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
-        self._pixelization = None
-        self.dimensions = DimensionUniverse.fromConfig(dimensionConfig)
-        self._dataIdPackerFactories = {
-            name: DataIdPackerFactory.fromConfig(self.dimensions, subconfig)
-            for name, subconfig in registryConfig.get("dataIdPackers", {}).items()
-        }
-        self._fieldsToAlwaysGet = DimensionKeyDict(keys=self.dimensions.elements, factory=set)
-        for packerFactory in self._dataIdPackerFactories.values():
-            packerFactory.updateFieldsToGet(self._fieldsToAlwaysGet)
+        self.dimensions = DimensionUniverse(dimensionConfig)
 
     def __str__(self):
         return "None"
@@ -206,16 +200,6 @@ class Registry(metaclass=ABCMeta):
             subclass that guarantees a particular level of exception safety.
         """
         yield
-
-    @property
-    def pixelization(self):
-        """Object that interprets skypix Dimension values
-        (`lsst.sphgeom.Pixelization`).
-        """
-        if self._pixelization is None:
-            pixelizationCls = doImport(self.config["skypix", "cls"])
-            self._pixelization = pixelizationCls(level=self.config["skypix", "level"])
-        return self._pixelization
 
     @abstractmethod
     def makeDatabaseDict(self, table, types, key, value, lengths=None):
@@ -277,13 +261,13 @@ class Registry(metaclass=ABCMeta):
             Identifies the collection to search.
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
-        dataId : `dict` or `DataId`, optional
+        dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
         kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
+            Additional keyword arguments passed to
+            `DataCoordinate.standardize` to convert ``dataId`` to a true
+            `DataCoordinate` or augment an existing one.
 
         Returns
         -------
@@ -373,7 +357,7 @@ class Registry(metaclass=ABCMeta):
         ----------
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
-        dataId : `dict` or `DataId`
+        dataId : `dict` or `DataCoordinate`
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
         run : `Run`
@@ -388,8 +372,9 @@ class Registry(metaclass=ABCMeta):
             If True, recursively add Dataset and attach entries for component
             Datasets as well.
         kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
+            Additional keyword arguments passed to
+            `DataCoordinate.standardize` to convert ``dataId`` to a
+            true `DataCoordinate` or augment an existing
             one.
 
         Returns
@@ -420,10 +405,10 @@ class Registry(metaclass=ABCMeta):
             The `DatasetType` of the dataset to retrieve.  This is used to
             short-circuit retrieving the `DatasetType`, so if provided, the
             caller is guaranteeing that it is what would have been retrieved.
-        dataId : `DataId`, optional
+        dataId : `DataCoordinate`, optional
             A `Dimension`-based identifier for the dataset within a
             collection, possibly containing additional metadata. This is used
-            to short-circuit retrieving the `DataId`, so if provided, the
+            to short-circuit retrieving the dataId, so if provided, the
             caller is guaranteeing that it is what would have been retrieved.
 
         Returns
@@ -711,9 +696,9 @@ class Registry(metaclass=ABCMeta):
         Parameters
         ----------
         id : `int`, optional
-            Lookup by run `id`, or:
+            Retrieve the run with the given integer ``id``.
         collection : `str`
-            If given, lookup by `collection` name instead.
+            If given, lookup by ``collection`` name instead.
 
         Returns
         -------
@@ -728,378 +713,150 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @transactional
-    def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):
-        """Add a new `Dimension` entry.
+    def expandDataId(self, dataId: Optional[DataId] = None, *, graph: DimensionGraph = None, **kwds):
+        """Expand a dimension-based data ID to include additional
+        information.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
 
-        dimension : `str` or `Dimension`
-            Either a `Dimension` object or the name of one.
-        dataId : `dict` or `DataId`, optional
-            A `dict`-like object containing the `Dimension` links that form
-            the primary key of the row to insert.  If this is a full `DataId`
-            object, ``dataId.entries[dimension]`` will be updated with
-            ``entry`` and then inserted into the `Registry`.
-        entry : `dict`
-            Dictionary that maps column name to column value.
+    @abstractmethod
+    def insertDimensionData(self, element: Union[DimensionElement, str],
+                            *data: Union[dict, DimensionRecord],
+                            conform: bool = True):
+        """Insert one or more dimension records into the database.
+
+        Parameters
+        ----------
+        element : `DimensionElement` or `str`
+            The `DimensionElement` or name thereof that identifies the table
+            records will be inserted into.
+        data : `dict` or `DimensionRecord` (variadic)
+            One or more records to insert.
+        conform : `bool`, optional
+            If `False` (`True` is default) perform no checking or conversions,
+            and assume that ``element`` is a `DimensionElement` instance and
+            ``data`` is a one or more `DimensionRecord` instances of the
+            appropriate subclass.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def queryDimensions(self, dimensions: Iterable[Union[Dimension, str]], *,
+                        dataId: Optional[DataId] = None,
+                        datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
+                        where: Optional[str] = None,
+                        expand: bool = True,
+                        **kwds) -> Iterator[DataCoordinate]:
+        """Query for and iterate over data IDs matching user-provided criteria.
+
+        Parameters
+        ----------
+        dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
+            The dimensions of the data IDs to yield, as either `Dimension`
+            instances or `str`.  Will be automatically expanded to a complete
+            `DimensionGraph`.
+        dataId : `dict` or `DataCoordinate`, optional
+            A data ID whose key-value pairs are used as equality constraints
+            in the query.
+        datasets : `~collections.abc.Mapping`, optional
+            Datasets whose existence in the registry constrain the set of data
+            IDs returned.  This is a mapping from a dataset type expression
+            (a `str` name, a true `DatasetType` instance, a `Like` pattern
+            for the name, or ``...`` for all DatasetTypes) to a collections
+            expression (a sequence of `str` or `Like` patterns, or `...` for
+            all collections).
+        where : `str`, optional
+            A string expression similar to a SQL WHERE clause.  May involve
+            any column of a dimension table or (as a shortcut for the primary
+            key column of a dimension table) dimension name.
+        expand : `bool`, optional
+            If `True` (default) yield `ExpandedDataCoordinate` instead of
+            minimal `DataCoordinate` base-class instances.
         kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
+            Additional keyword arguments are forwarded to
+            `DataCoordinate.standardize` when processing the ``dataId``
+            argument (and may be used to provide a constraining data ID even
+            when the ``dataId`` argument is `None`).
 
-        If ``values`` includes a "region" key, `setDimensionRegion` will
-        automatically be called to set it any associated spatial join
-        tables.
-        Region fields associated with a combination of Dimensions must be
-        explicitly set separately.
+        Yields
+        ------
+        dataId : `DataCoordinate`
+            Data IDs matching the given query parameters.  Order is
+            unspecified.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
 
-        Returns
-        -------
-        dataId : `DataId`
-            A Data ID for exactly the given dimension that includes the added
-            entry.
+    @abstractmethod
+    def queryDatasets(self, datasetType: DatasetTypeExpression, *,
+                      collections: CollectionsExpression,
+                      dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
+                      dataId: Optional[DataId] = None,
+                      where: Optional[str] = None,
+                      deduplicate: bool = False,
+                      **kwds) -> Iterator[DatasetRef]:
+        """Query for and iterate over dataset references matching user-provided
+        criteria.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType`, `str`, `Like`, or ``...``
+            An expression indicating type(s) of datasets to query for.
+            ``...`` may be used to query for all known DatasetTypes.
+            Multiple explicitly-provided dataset types cannot be queried in a
+            single call to `queryDatasets` even though wildcard expressions
+            can, because the results would be identical to chaining the
+            iterators produced by multiple calls to `queryDatasets`.
+        collections: `~collections.abc.Sequence` of `str` or `Like`, or ``...``
+            An expression indicating the collections to be searched for
+            datasets.  ``...`` may be passed to search all collections.
+        dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
+            Dimensions to include in the query (in addition to those used
+            to identify the queried dataset type(s)), either to constrain
+            the resulting datasets to those for which a matching dimension
+            exists, or to relate the dataset type's dimensions to dimensions
+            referenced by the ``dataId`` or ``where`` arguments.
+        dataId : `dict` or `DataCoordinate`, optional
+            A data ID whose key-value pairs are used as equality constraints
+            in the query.
+        where : `str`, optional
+            A string expression similar to a SQL WHERE clause.  May involve
+            any column of a dimension table or (as a shortcut for the primary
+            key column of a dimension table) dimension name.
+        deduplicate : `bool`, optional
+            If `True` (`False` is default), for each result data ID, only
+            yield one `DatasetRef` of each `DatasetType`, from the first
+            collection in which a dataset of that dataset type appears
+            (according to the order of ``collections`` passed in).  Cannot be
+            used if ``collections``.
+        kwds
+            Additional keyword arguments are forwarded to
+            `DataCoordinate.standardize` when processing the ``dataId``
+            argument (and may be used to provide a constraining data ID even
+            when the ``dataId`` argument is `None`).
+
+        Yields
+        ------
+        ref : `DatasetRef`
+            Dataset references matching the given query criteria.  These
+            are grouped by `DatasetType` if the query evaluates to multiple
+            dataset types, but order is otherwise unspecified.
 
         Raises
         ------
         TypeError
-            If the given `Dimension` does not have explicit entries in the
-            registry.
-        ConflictingDefinitionError
-            If an entry with the primary-key defined in `values` is already
-            present.
+            Raised when the arguments are incompatible, such as when a
+            collection wildcard is pass when ``deduplicate`` is `True`.
+
+        Notes
+        -----
+        When multiple dataset types are queried via a wildcard expression, the
+        results of this operation are equivalent to querying for each dataset
+        type separately in turn, and no information about the relationships
+        between datasets of different types is included.  In contexts where
+        that kind of information is important, the recommended pattern is to
+        use `queryDimensions` to first obtain data IDs (possibly with the
+        desired dataset types and collections passed as constraints to the
+        query), and then use multiple (generally much simpler) calls to
+        `queryDatasets` with the returned data IDs passed as constraints.
         """
         raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def addDimensionEntryList(self, dimension, dataIdList, entry=None, **kwds):
-        """Add a new `Dimension` entry.
-
-        dimension : `str` or `Dimension`
-            Either a `Dimension` object or the name of one.
-        dataId : `list` of `dict` or `DataId`
-            A list of `dict`-like objects containing the `Dimension` links that
-            form the primary key of the rows to insert.  If these are a full
-            `DataId` object, ``dataId.entries[dimension]`` will be updated with
-            ``entry`` and then inserted into the `Registry`.
-        entry : `dict`
-            Dictionary that maps column name to column value.
-        kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
-
-        If ``values`` includes a "region" key, regions will automatically be
-        added to set it any associated spatial join tables.
-        Region fields associated with a combination of Dimensions must be
-        explicitly set separately.
-
-        Returns
-        -------
-        dataId : `DataId`
-            A Data ID for exactly the given dimension that includes the added
-            entry.
-
-        Raises
-        ------
-        TypeError
-            If the given `Dimension` does not have explicit entries in the
-            registry.
-        ConflictingDefinitionError
-            If an entry with the primary-key defined in `values` is already
-            present.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def findDimensionEntries(self, dimension):
-        """Return all `Dimension` entries corresponding to the named dimension.
-
-        Parameters
-        ----------
-        dimension : `str` or `Dimension`
-            Either a `Dimension` object or the name of one.
-
-        Returns
-        -------
-        entries : `list` of `dict`
-            List with `dict` containing the `Dimension` values for each variant
-            of the `Dimension`.  Returns empty list if no entries have been
-            added for this dimension.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def findDimensionEntry(self, dimension, dataId=None, **kwds):
-        """Return a `Dimension` entry corresponding to a `DataId`.
-
-        Parameters
-        ----------
-        dimension : `str` or `Dimension`
-            Either a `Dimension` object or the name of one.
-        dataId : `dict` or `DataId`, optional
-            A `dict`-like object containing the `Dimension` links that form
-            the primary key of the row to retreive.  If this is a full `DataId`
-            object, ``dataId.entries[dimension]`` will be updated with the
-            entry obtained from the `Registry`.
-        kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
-
-        Returns
-        -------
-        entry : `dict`
-            Dictionary with all `Dimension` values, or `None` if no matching
-            entry is found.  `None` if there is no entry for the given
-            `DataId`.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def setDimensionRegion(self, dataId=None, *, update=True, region=None, **kwds):
-        """Set the region field for a Dimension instance or a combination
-        thereof and update associated spatial join tables.
-
-        Parameters
-        ----------
-        dataId : `dict` or `DataId`
-            A `dict`-like object containing the `Dimension` links that form
-            the primary key of the row to insert or update.  If this is a full
-            `DataId`, ``dataId.region`` will be set to ``region`` (if
-            ``region`` is not `None`) and then used to update or insert into
-            the `Registry`.
-        update : `bool`
-            If True, existing region information for these Dimensions is being
-            replaced.  This is usually required because Dimension entries are
-            assumed to be pre-inserted prior to calling this function.
-        region : `lsst.sphgeom.ConvexPolygon`, optional
-            The region to update or insert into the `Registry`.  If not present
-            ``dataId.region`` must not be `None`.
-        kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
-
-        Returns
-        -------
-        dataId : `DataId`
-            A Data ID with its ``region`` attribute set.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def expandDataId(self, dataId=None, *, dimension=None, metadata=None, region=False, update=False,
-                     **kwds):
-        """Expand a data ID to include additional information.
-
-        `expandDataId` always returns a true `DataId` and ensures that its
-        `~DataId.entries` dict contains (at least) values for all implied
-        dependencies.
-
-        Parameters
-        ----------
-        dataId : `dict` or `DataId`
-            A `dict`-like object containing the `Dimension` links that include
-            the primary keys of the rows to query.  If this is a true `DataId`,
-            the object will be updated in-place.
-        dimension : `Dimension` or `str`
-            A dimension passed to the `DataId` constructor to create a true
-            `DataId` or augment an existing one.
-        metadata : `collections.abc.Mapping`, optional
-            A mapping from `Dimension` or `str` name to column name, indicating
-            fields to read into ``dataId.entries``.
-            If ``dimension`` is provided, may instead be a sequence of column
-            names for that dimension.
-        region : `bool`
-            If `True` and the given `DataId` is uniquely associated with a
-            region on the sky, obtain that region from the `Registry` and
-            attach it as ``dataId.region``.
-        update : `bool`
-            If `True`, assume existing entries and regions in the given
-            `DataId` are out-of-date and should be updated by values in the
-            database.  If `False`, existing values will be assumed to be
-            correct and database queries will only be executed if they are
-            missing.
-        kwds
-            Additional keyword arguments passed to the `DataId` constructor
-            to convert ``dataId`` to a true `DataId` or augment an existing
-            one.
-
-        Returns
-        -------
-        dataId : `DataId`
-            A Data ID with all requested data populated.
-        """
-        dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
-
-        fieldsToGet = DimensionKeyDict(keys=dataId.dimensions(implied=True).elements, factory=set)
-        fieldsToGet.updateValues(self._fieldsToAlwaysGet)
-
-        # Interpret the 'metadata' argument and initialize the 'fieldsToGet'
-        # dict, which maps each DimensionElement instance to a set of field
-        # names.
-        if metadata is not None:
-            if dimension is not None and not isinstance(metadata, Mapping):
-                # If a single dimension was passed explicitly, permit
-                # 'metadata' to be a sequence corresponding to just that
-                # dimension by updating our mapping-of-sets for that dimension.
-                fieldsToGet[dimension].update(metadata)
-            else:
-                fieldsToGet.updateValues(metadata)
-
-        # If 'region' was passed, add a query for that to fieldsToGet as well.
-        if region and (update or dataId.region is None):
-            holder = dataId.dimensions().getRegionHolder()
-            if holder is not None:
-                if holder.name == "skypix":
-                    # skypix is special; we always obtain those regions from
-                    # self.pixelization
-                    dataId.region = self.pixelization.pixel(dataId["skypix"])
-                else:
-                    fieldsToGet[holder].add("region")
-
-        # We now process fieldsToGet with calls to _queryMetadata via a
-        # depth-first traversal of the dependency graph.  As we traverse, we
-        # update...
-
-        # A dictionary containing all link values.  This starts with the given
-        # dataId, but we'll update it to include links for optional
-        # dependencies.
-        allLinks = dict(dataId)
-
-        # A set of DimensionElement names recording the vertices we've
-        # processed:
-        visited = set()
-
-        def visit(element):
-            if element.name in visited:
-                return
-            assert element.links() <= allLinks.keys()
-            entries = dataId.entries[element]
-            dependencies = element.dependencies(implied=True)
-            # Get the set of fields we want to retrieve.
-            fieldsToGetNow = fieldsToGet[element]
-            # Note which links to dependencies we need to query for and which
-            # we already know.  Make sure the ones we know are in the entries
-            # dict for this element.
-            linksWeKnow = dependencies.links().intersection(allLinks.keys())
-            linksWeNeed = dependencies.links() - linksWeKnow
-            fieldsToGetNow |= linksWeNeed
-            entries.update((link, allLinks[link]) for link in linksWeKnow)
-            # Remove fields that are already present in the dataId.
-            if not update:
-                fieldsToGetNow -= entries.keys()
-            # Remove fields that are part of the primary key of this element;
-            # we have to already know those if the query is going to work.
-            # (and we asserted that we do know them up at the top).
-            fieldsToGetNow -= element.links()
-            # Actually do the query - only if there's actually anything left
-            # to query.  Put the results in the entries dict.
-            if fieldsToGetNow:
-                result = self._queryMetadata(element, allLinks, fieldsToGetNow)
-                if "region" in result:
-                    dataId.region = result.pop("region")
-                entries.update(result)
-            # Update the running dictionary of link values and the marker set.
-            allLinks.update((link, entries[link]) for link in dependencies.links())
-            visited.add(element.name)
-            # Recurse to dependencies.  Note that at this point we know that
-            # allLinks has all of the links for any element we're recursing to,
-            # either because we started with them in the data ID, they were
-            # already in the entries dict, or we queried for them above.
-            for other in dependencies:
-                visit(other)
-
-        # Kick off the traversal with joins, which are never dependencies of
-        # any other elements.
-        for join in dataId.dimensions().joins():
-            visit(join)
-
-        # Now traverse over the dimensions that are not dependencies of any
-        # other dependencies in this particular graph.
-        for dim in dataId.dimensions().leaves:
-            visit(dim)
-
-        return dataId
-
-    @abstractmethod
-    def _queryMetadata(self, element, dataId, columns):
-        """Get metadata associated with a dataId.
-
-        This is conceptually a "protected" method that must be overridden by
-        subclasses but should not be called directly by users, who should use
-        ``expandDataId(dataId, dimension=element, metadata={...})`` instead.
-
-        Parameters
-        ----------
-        element : `DimensionElement`
-            The `Dimension` or `DimensionJoin` to query for column values.
-        dataId : `dict` or `DataId`
-            A `dict`-like object containing the `Dimension` links that include
-            the primary keys of the rows to query.  May include link fields
-            beyond those required to identify ``element``.
-        columns : iterable of `str`
-            String column names to query values for.
-
-        Returns
-        -------
-        metadata : `dict`
-            Dictionary that maps column name to value, or `None` if there is
-            no row for the given `DataId`.
-
-        Raises
-        ------
-        LookupError
-            Raised if no entry for the given data ID exists.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def makeDataIdPacker(self, name, dataId=None, **kwds):
-        """Create an object that can pack certain data IDs into integers.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the packer, as given in the `Registry` configuration.
-        dataId : `dict` or `DataId`, optional
-            Data ID that identifies at least the "given" dimensions of the
-            packer.
-        kwds
-            Addition keyword arguments used to augment or override the given
-            data ID.
-
-        Returns
-        -------
-        packer : `DataIdPacker`
-            Instance of a subclass of `DataIdPacker`.
-        """
-        factory = self._dataIdPackerFactories[name]
-        givenDataId = self.expandDataId(dataId, dimensions=factory.dimensions.given, **kwds)
-        return factory.makePacker(givenDataId)
-
-    def packDataId(self, name, dataId=None, *, returnMaxBits=False, **kwds):
-        """Pack the given `DataId` into an integer.
-
-        Parameters
-        ----------
-        name : `str`
-            Name of the packer, as given in the `Registry` configuration.
-        dataId : `dict` or `DataId`, optional
-            Data ID that identifies at least the "required" dimensions of the
-            packer.
-        returnMaxBits : `bool`
-            If `True`, return a tuple of ``(packed, self.maxBits)``.
-        kwds
-            Addition keyword arguments used to augment or override the given
-            data ID.
-
-        Returns
-        -------
-        packed : `int`
-            Packed integer ID.
-        maxBits : `int`, optional
-            Maximum number of nonzero bits in ``packed``.  Not returned unless
-            ``returnMaxBits`` is `True`.
-        """
-        packer = self.makeDataIdPacker(name, dataId, **kwds)
-        return packer.pack(dataId, returnMaxBits=returnMaxBits, **kwds)

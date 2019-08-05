@@ -1,70 +1,144 @@
 dimensions:
   version: 0
-  elements:
+  skypix:
+    common: htm7
+    htm7:
+      class: lsst.sphgeom.HtmPixelization
+      level: 7
+    htm9:
+      class: lsst.sphgeom.HtmPixelization
+      level: 9
 
+  elements:
     instrument:
       doc: >
         An entity that produces observations.  An instrument defines a set of
         physical_filters and detectors and a numbering system for the exposures
         and visits that represent observations with it.
-      link:
-      - instrument
+      keys:
+      -
+        name: name
+        type: string
+        length: 16
+      metadata:
+      -
+        name: visit_max
+        type: int
+        doc: >
+          Maximum value for the 'visit' field for visits associated with
+          this instrument (exclusive).
+      -
+        name: exposure_max
+        type: int
+        doc: >
+          Maximum value for the 'exposure' field for exposures associated with
+          this instrument (exclusive).
+      -
+        name: detector_max
+        type: int
+        doc: >
+          Maximum value for the 'detector' field for detectors associated with
+          this instrument (exclusive).
+      cached: true
 
     abstract_filter:
       doc: >
         A filter that is not associated with a particular instrument.  An
         abstract filter can be used to relate similar physical filters, and
         is typically the filter associated with coadds.
-      link:
-      - abstract_filter
+      keys:
+      -
+        name: name
+        type: string
+        length: 8
+      view_of: physical_filter
+      cached: true
 
     physical_filter:
-      dependencies:
-        required:
-        - instrument
-        implied:
-        - abstract_filter
       doc: >
         A filter associated with a particular instrument.  physical_filters are
         used to identify datasets that can only be associated with a single
         observation.
-      link:
-      - physical_filter
+      keys:
+      -
+        name: name
+        type: string
+        length: 8
+      requires:
+      - instrument
+      implies:
+      - abstract_filter
 
     detector:
-      dependencies:
-        required:
-        - instrument
       doc: >
         A detector associated with a particular instrument (not an observation
         of that detector; that requires specifying an exposure or visit as
         well).
-      link:
-      - detector
+      keys:
+      -
+        name: id
+        type: int
+      -
+        name: full_name
+        type: string
+        length: 32
+      requires: [instrument]
+      metadata:
+      -
+        name: name_in_raft
+        type: string
+        length: 32
+      -
+        name: raft
+        type: string
+        length: 32
+        doc: >
+          A string name for a group of detectors with an instrument-dependent
+          interpretation.
+      -
+        name: purpose
+        type: string
+        length: 32
+        doc: >
+          Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
+          or "GUIDE", though instruments may define additional values.
 
     visit:
-      dependencies:
-        required:
-        - instrument
-        implied:
-        - physical_filter
       doc: >
         A sequence of observations processed together, comprised of one or
         more exposures from the same instrument with the same pointing and
         physical_filter.
         The visit table contains metadata that is both meaningful only for
         science exposures and the same for all exposures in a visit.
-      link:
-      - visit
-      hasRegion: true
+      keys:
+      -
+        name: id
+        type: int
+      -
+        name: name
+        type: string
+        length: 64
+      requires: [instrument]
+      implies: [physical_filter]
+      spatial: true
+      temporal: true
+      metadata:
+      -
+        name: exposure_time
+        type: float
+        doc: >
+          The total exposure time of the visit in seconds.  This should
+          be equal to the sum of the exposure_time values for all
+          constituent exposures (i.e. it should not include time between
+          exposures).
+      -
+        name: seeing
+        type: float
+        doc: >
+          Average seeing, measured as the FWHM of the Gaussian with the same
+          effective area (arcsec).
 
     exposure:
-      dependencies:
-        required:
-        - instrument
-        implied:
-        - visit
-        - physical_filter
       doc: >
         An observation associated with a particular instrument.  All direct
         observations are identified with an exposure, but derived datasets
@@ -77,211 +151,124 @@ dimensions:
         The exposure table contains metadata entries that are relevant for
         calibration exposures, and does not duplicate entries in visit that
         would be the same for all exposures within a visit.
-      link:
-      - exposure
-
-    skypix:
-      doc: >
-        A pixel in a hierarchical decomposition of the sky (e.g. HTM, Q3C, or
-        HEALPix; we will select and support just one, but which is TBD). Has
-        no SQL representation; even a definition table is not necessary, given
-        that the allowable values and the associated hasRegion regions are best
-        computed on-the-fly.  skypix units are preferred to skymap (i.e.
-        tract-patch) units for Datasets without any overlap regions (e.g.
-        sharded reference catalogs).
-
-        There are also considerable advantages to standardizing on just one
-        level of the standard pixelization: if all skypix values are at a
-        single level, they can be indexed using standard B-Trees and compared
-        with simple equality comparison.  In contrast, comparing skypix values
-        at different levels requires pixelization-specific bit-shifting
-        operations and custom indexes, which are much harder to implement
-        across multiple RDMSs.  As a result, we will (at least initially) try
-        to define just a single level for all skypix values.  Our preliminary
-        guess is that this level should have pixels be approximately (within a
-        factor of ~4) of the size of a single detector on the sky.
-      hasRegion:
-        true
-      link:
-      - skypix
+      keys:
+      -
+        name: id
+        type: int
+      -
+        name: name
+        type: string
+        length: 64
+      requires: [instrument]
+      implies: [visit, physical_filter]
+      temporal: true
+      metadata:
+      -
+        name: exposure_time
+        type: float
+        doc: Duration of the exposure with shutter open (seconds).
+      -
+        name: dark_time
+        type: float
+        doc: Duration of the exposure with shutter closed (seconds).
 
     skymap:
       doc: >
         A set of tracts and patches that subdivide the sky into rectangular
         regions with simple projections and intentional overlaps.
-      link:
-      - skymap
+      keys:
+      -
+        name: name
+        type: string
+        length: 64
+      -
+        name: hash
+        type: hash
+        nbytes: 40
+        doc: >
+          A hash of the skymap's parameters.
+      metadata:
+      - name: tract_max
+        type: int
+        doc: >
+          Maximum ID for tracts in this skymap, exclusive.
+      - name: patch_nx_max
+        type: int
+        doc: >
+          Number of patches in the x direction in each tract.
+      - name: patch_ny_max
+        type: int
+        doc: >
+          Number of patches in the y direction in each tract.
+      cached: true
 
     tract:
-      dependencies:
-        required:
-        - skymap
       doc: >
         A large rectangular region mapped to the sky with a single map
         projection, associated with a particular skymap.
-      link:
-      - tract
-      hasRegion: true
+      keys:
+      -
+        name: id
+        type: int
+      requires: [skymap]
+      spatial: true
 
     patch:
-      dependencies:
-        required:
-        - skymap
-        - tract
       doc: >
         A rectangular region within a tract.
-      link:
-      - patch
-      hasRegion: true
-
-    label:
-      doc: >
-        An arbitrary string value.  There is no SQL representation or
-        constraint on the values a label can take.  Multiple labels are
-        represented (by convention) by a comma-separated string.
-      link:
-      - label
+      keys:
+      -
+        name: id
+        type: int
+      requires: [skymap, tract]
+      spatial: true
+      metadata:
+      -
+        name: cell_x
+        type: int
+        nullable: false
+        doc: >
+          Which column this patch occupies in the tract's grid of patches.
+      -
+        name: cell_y
+        type: int
+        nullable: false
+        doc: >
+          Which row this patch occupies in the tract's grid of patches.
 
     calibration_label:
-      dependencies:
-        required:
-        - instrument
       doc: >
         A string label that maps to a date validity range for master
         calibration products.
-      link:
-      - calibration_label
-
-    exposure_calibration_label_join:
-      doc: >
-        A many-to-many join table that relates exposure to calibration_label.
-
-        This can and probably should be implemented as a view.
-      lhs: [exposure]
-      rhs: [calibration_label]
-
-    visit_calibration_label_join:
-      doc: >
-        A many-to-many join table that relates visit to calibration_label.
-
-        This can and probably should be implemented as a view.
-      lhs: [visit]
-      rhs: [calibration_label]
-      summarizes: [exposure_calibration_label_join]
+      keys:
+      -
+        name: name
+        type: string
+        length: 128
+      requires: [instrument]
+      temporal: true
 
     visit_detector_region:
       doc: >
         A many-to-many join table that provides region information for
         visit-detector combinations.
-      lhs: [visit]
-      rhs: [detector]
-      hasRegion: true
-      asNeeded: true
+      requires: [visit, detector]
+      spatial: true
 
-    visit_detector_skypix_join:
-      doc: >
-        A spatial join table that relates visit+detector to skypix, also used
-        as an intermediate when relating visit+detector to skymap DataUnits.
-
-        Entries are expected to be calculated outside the database and
-        added/updated whenever visit_detector_region is.
-
-      lhs: [visit, detector]
-      rhs: [skypix]
-
-    visit_skypix_join:
-      doc: >
-        A spatial join table that relates visit to skypix, also used as an
-        intermediate when relating visit to skymap DataUnits.
-
-        This can and probably should be implemented as a trivial view on
-        visit_detector_skypix_join.
-
-      lhs: [visit]
-      rhs: [skypix]
-      summarizes: [visit_detector_skypix_join]
-
-    patch_skypix_join:
-      doc: >
-        A spatial join table that relates patch to skypix, also used as an
-        intermediate when relating patch to instrument DataUnits.
-
-        Entries are expected to be calculated outside the database and
-        added along with the patch itself.
-
-      lhs: [patch]
-      rhs: [skypix]
-
-    tract_skypix_join:
-      doc: >
-        A spatial join table that relates tract to skypix, also used as an
-        intermediate when relating tract to instrument DataUnits.
-
-        This can and probably should be implemented as a trivial view on
-        patch_skypix_join.
-
-      lhs: [tract]
-      rhs: [skypix]
-      summarizes: [patch_skypix_join]
-
-    visit_detector_patch_join:
-      doc: >
-        A spatial join table that relates visit+detector to patch via skypix.
-
-        Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new visits or skymaps are added.
-
-        If a database UDF is available to determine whether two regions
-        overlap, we could include that in this view to refine the results.
-        For now, we will assume that such a UDF is not available.
-
-      lhs: [visit, detector]
-      rhs: [patch]
-
-    visit_patch_join:
-      doc: >
-        A spatial join table that relates visit to patch via skypix.
-
-        Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new visits or skymaps are added.
-
-        If a database UDF is available to determine whether two regions
-        overlap, we could include that in this view to refine the results.
-        For now, we will assume that such a UDF is not available.
-
-      lhs: [visit]
-      rhs: [patch]
-      summarizes: [visit_detector_patch_join]
-
-    visit_detector_tract_join:
-      doc: >
-        A spatial join table that relates visit+detector to tract via skypix.
-
-        Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new visits or skymaps are added.
-
-        If a database UDF is available to determine whether two regions
-        overlap, we could include that in this view to refine the results.
-        For now, we will assume that such a UDF is not available.
-
-      lhs: [visit, detector]
-      rhs: [tract]
-      summarizes: [visit_detector_patch_join]
-
-    visit_tract_join:
-      doc: >
-        A spatial join table that relates visit to tract via skypix.
-
-        Should be implemented as a view; it may be materialized as long as it
-        can be kept up to date when new visits or skymaps are added.
-
-        If a database UDF is available to determine whether two regions
-        overlap, we could include that in this view to refine the results.
-        For now, we will assume that such a UDF is not available.
-
-      lhs: [visit]
-      rhs: [tract]
-      summarizes:
-        - visit_detector_patch_join
-        - visit_detector_tract_join
-        - visit_patch_join
+  packers:
+    visit_detector:
+      fixed: [instrument]
+      dimensions: [instrument, visit, detector]
+      cls: lsst.daf.butler.instrument.ObservationDimensionPacker
+    exposure_detector:
+      fixed: [instrument]
+      dimensions: [instrument, exposure, detector]
+      cls: lsst.daf.butler.instrument.ObservationDimensionPacker
+    tract_patch:
+      fixed: [skymap]
+      dimensions: [skymap, tract, patch]
+      cls: lsst.skymap.packers.SkyMapDimensionPacker
+    tract_patch_abstract_filter:
+      fixed: [skymap]
+      dimensions: [skymap, tract, patch, abstract_filter]
+      cls: lsst.skymap.packers.SkyMapDimensionPacker

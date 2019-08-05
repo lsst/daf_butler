@@ -21,11 +21,9 @@
 
 import os
 import unittest
+from datetime import datetime
 
-from lsst.daf.butler import (ButlerConfig, DatasetType, Registry, DataId,
-                             DatasetOriginInfoDef, StorageClass)
-from lsst.daf.butler.sql import DataIdQueryBuilder, SingleDatasetQueryBuilder
-from lsst.sphgeom import Angle, Box, LonLat, NormalizedAngle
+from lsst.daf.butler import ButlerConfig, DatasetType, Registry, DataCoordinate, StorageClass, DimensionGraph
 
 
 class QueryBuilderTestCase(unittest.TestCase):
@@ -38,54 +36,40 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.butlerConfig = ButlerConfig(self.configFile)
         self.registry = Registry.fromConfig(self.butlerConfig)
 
-    def testDatasetOriginInfoDef(self):
-        """Test for DatasetOriginInfoDef class"""
-
-        originInfo = DatasetOriginInfoDef(defaultInputs=["a", "b"], defaultOutput="out")
-        self.assertEqual(originInfo.getInputCollections("ds"), ["a", "b"])
-        self.assertEqual(originInfo.getInputCollections("ds2"), ["a", "b"])
-        self.assertEqual(originInfo.getOutputCollection("ds"), "out")
-        self.assertEqual(originInfo.getOutputCollection("ds2"), "out")
-
-        originInfo = DatasetOriginInfoDef(defaultInputs=["a", "b"], defaultOutput="out",
-                                          inputOverrides=dict(ds2=["c"]),
-                                          outputOverrides=dict(ds2="out2"))
-        self.assertEqual(originInfo.getInputCollections("ds"), ["a", "b"])
-        self.assertEqual(originInfo.getInputCollections("ds2"), ["c"])
-        self.assertEqual(originInfo.getOutputCollection("ds"), "out")
-        self.assertEqual(originInfo.getOutputCollection("ds2"), "out2")
-
     def testInstrumentDimensions(self):
-        """Test involving only instrument dimensions, no joins to skymap"""
+        """Test queries involving only instrument dimensions, with no joins to
+        skymap."""
         registry = self.registry
 
         # need a bunch of dimensions and datasets for test
-        registry.addDimensionEntry("instrument", dict(instrument="DummyCam", visit_max=25, exposure_max=300,
-                                                      detector_max=6))
-        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
-                                                           physical_filter="dummy_r",
-                                                           abstract_filter="r"))
-        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
-                                                           physical_filter="dummy_i",
-                                                           abstract_filter="i"))
-        for detector in (1, 2, 3, 4, 5):
-            registry.addDimensionEntry("detector", dict(instrument="DummyCam", detector=detector))
-        registry.addDimensionEntry("visit", dict(instrument="DummyCam", visit=10, physical_filter="dummy_i"))
-        registry.addDimensionEntry("visit", dict(instrument="DummyCam", visit=11, physical_filter="dummy_r"))
-        registry.addDimensionEntry("visit", dict(instrument="DummyCam", visit=20, physical_filter="dummy_r"))
-        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=100, visit=10,
-                                                    physical_filter="dummy_i"))
-        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=101, visit=10,
-                                                    physical_filter="dummy_i"))
-        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=110, visit=11,
-                                                    physical_filter="dummy_r"))
-        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=111, visit=11,
-                                                    physical_filter="dummy_r"))
-        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=200, visit=20,
-                                                    physical_filter="dummy_r"))
-        registry.addDimensionEntry("exposure", dict(instrument="DummyCam", exposure=201, visit=20,
-                                                    physical_filter="dummy_r"))
-
+        registry.insertDimensionData(
+            "instrument",
+            dict(name="DummyCam", visit_max=25, exposure_max=300, detector_max=6)
+        )
+        registry.insertDimensionData(
+            "physical_filter",
+            dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
+            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
+        )
+        registry.insertDimensionData(
+            "detector",
+            *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in range(1, 6)]
+        )
+        registry.insertDimensionData(
+            "visit",
+            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r"),
+        )
+        registry.insertDimensionData(
+            "exposure",
+            dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=101, name="101", visit=10, physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=110, name="110", visit=11, physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=111, name="111", visit=11, physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=200, name="200", visit=20, physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=201, name="201", visit=20, physical_filter="dummy_r"),
+        )
         # dataset types
         collection1 = "test"
         collection2 = "test2"
@@ -122,23 +106,22 @@ class QueryBuilderTestCase(unittest.TestCase):
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
                 registry.addDataset(rawType, dataId=dataId, run=run2)
 
-        dimensions = registry.dimensions.empty.union(rawType.dimensions, calexpType.dimensions,
-                                                     implied=True)
+        dimensions = DimensionGraph(
+            registry.dimensions,
+            dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
+        )
 
         # with empty expression
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection1])
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]}, expand=True))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit",
-                                                  "physical_filter", "abstract_filter"))
-            packer1 = registry.makeDataIdPacker("visit_detector", dataId)
-            packer2 = registry.makeDataIdPacker("exposure_detector", dataId)
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            packer1 = registry.dimensions.makePacker("visit_detector", dataId)
+            packer2 = registry.dimensions.makePacker("exposure_detector", dataId)
             self.assertEqual(packer1.unpack(packer1.pack(dataId)),
-                             DataId(dataId, dimensions=packer1.dimensions.required))
+                             DataCoordinate.standardize(dataId, graph=packer1.dimensions))
             self.assertEqual(packer2.unpack(packer2.pack(dataId)),
-                             DataId(dataId, dimensions=packer2.dimensions.required))
+                             DataCoordinate.standardize(dataId, graph=packer2.dimensions))
             self.assertNotEqual(packer1.pack(dataId), packer2.pack(dataId))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 110, 111))
@@ -146,90 +129,82 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection2])
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection2]}))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit",
-                                                  "physical_filter", "abstract_filter"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 20))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection1, collection2])
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1, collection2]}))
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit",
-                                                  "physical_filter", "abstract_filter"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 110, 111, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11, 20))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection1])
-        builder.whereParsedExpression("visit.visit = 10")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+                                             where="visit = 10"))
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection1])
-        builder.whereParsedExpression("visit = 10 and detector > 1")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+                                             where="visit = 10 and detector > 1"))
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
         # expression excludes everything
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection1])
-        builder.whereParsedExpression("visit.visit > 1000")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+                                             where="visit > 1000"))
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(rawType, collections=[collection1])
-        builder.whereParsedExpression("physical_filter = 'dummy_r'")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+                                             where="physical_filter = 'dummy_r'"))
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (11,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
     def testSkyMapDimensions(self):
-        """Test involving only skymap dimensions, no joins to instrument"""
+        """Tests involving only skymap dimensions, no joins to instrument."""
         registry = self.registry
 
         # need a bunch of dimensions and datasets for test, we want
         # "abstract_filter" in the test so also have to add physical_filter
         # dimensions
-        registry.addDimensionEntry("instrument", dict(instrument="DummyCam"))
-        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
-                                                           physical_filter="dummy_r",
-                                                           abstract_filter="r"))
-        registry.addDimensionEntry("physical_filter", dict(instrument="DummyCam",
-                                                           physical_filter="dummy_i",
-                                                           abstract_filter="i"))
-        registry.addDimensionEntry("skymap", dict(skymap="DummyMap", hash="sha!".encode("utf8")))
+        registry.insertDimensionData(
+            "instrument",
+            dict(instrument="DummyCam")
+        )
+        registry.insertDimensionData(
+            "physical_filter",
+            dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
+            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
+        )
+        registry.insertDimensionData(
+            "skymap",
+            dict(name="DummyMap", hash="sha!".encode("utf8"))
+        )
         for tract in range(10):
-            registry.addDimensionEntry("tract", dict(skymap="DummyMap", tract=tract))
-            for patch in range(10):
-                registry.addDimensionEntry("patch", dict(skymap="DummyMap", tract=tract, patch=patch,
-                                                         cell_x=0, cell_y=0,
-                                                         region=Box(LonLat(NormalizedAngle(0.), Angle(0.)))))
+            registry.insertDimensionData("tract", dict(skymap="DummyMap", id=tract))
+            registry.insertDimensionData(
+                "patch",
+                *[dict(skymap="DummyMap", tract=tract, id=patch, cell_x=0, cell_y=0)
+                  for patch in range(10)]
+            )
 
         # dataset types
         collection = "test"
@@ -251,8 +226,11 @@ class QueryBuilderTestCase(unittest.TestCase):
                                storageClass=storageClass)
         registry.registerDatasetType(measType)
 
-        dimensions = registry.dimensions.empty.union(calexpType.dimensions, mergeType.dimensions,
-                                                     measType.dimensions, implied=True)
+        dimensions = DimensionGraph(
+            registry.dimensions,
+            dimensions=(calexpType.dimensions.required | mergeType.dimensions.required |
+                        measType.dimensions.required)
+        )
 
         # add pre-existing datasets
         for tract in (1, 3, 5):
@@ -264,10 +242,8 @@ class QueryBuilderTestCase(unittest.TestCase):
                     registry.addDataset(calexpType, dataId=dataId, run=run)
 
         # with empty expression
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(calexpType, collections=[collection])
-        builder.requireDataset(mergeType, collections=[collection])
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions,
+                                             datasets={calexpType: [collection], mergeType: [collection]}))
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -276,22 +252,18 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(calexpType, collections=[collection])
-        builder.requireDataset(mergeType, collections=[collection])
-        builder.whereParsedExpression("tract IN (1, 5) AND patch.patch IN (2, 7)")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions,
+                                             datasets={calexpType: [collection], mergeType: [collection]},
+                                             where="tract IN (1, 5) AND patch IN (2, 7)"))
         self.assertEqual(len(rows), 2*2*2)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
         self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
 
         # limit to single filter
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(calexpType, collections=[collection])
-        builder.requireDataset(mergeType, collections=[collection])
-        builder.whereParsedExpression("abstract_filter = 'i'")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions,
+                                             datasets={calexpType: [collection], mergeType: [collection]},
+                                             where="abstract_filter = 'i'"))
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
@@ -299,17 +271,15 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(calexpType, collections=[collection])
-        builder.requireDataset(mergeType, collections=[collection])
-        builder.whereParsedExpression("skymap = 'Mars'")
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions,
+                                             datasets={calexpType: [collection], mergeType: [collection]},
+                                             where="skymap = 'Mars'"))
         self.assertEqual(len(rows), 0)
 
     def testSpatialMatch(self):
         """Test involving spatial match using join tables.
 
-        Note that realistic test needs a resonably-defined skypix and regions
+        Note that realistic test needs a reasonably-defined skypix and regions
         in registry tables which is hard to implement in this simple test.
         So we do not actually fill registry with any data and all queries will
         return empty result, but this is still useful for coverage of the code
@@ -334,20 +304,21 @@ class QueryBuilderTestCase(unittest.TestCase):
                                 storageClass=storageClass)
         registry.registerDatasetType(coaddType)
 
-        dimensions = registry.dimensions.empty.union(calexpType.dimensions, coaddType.dimensions)
+        dimensions = DimensionGraph(
+            registry.dimensions,
+            dimensions=(calexpType.dimensions.required | coaddType.dimensions.required)
+        )
 
         # without data this should run OK but return empty set
-        builder = DataIdQueryBuilder.fromDimensions(registry, dimensions)
-        builder.requireDataset(calexpType, collections=[collection])
-
-        rows = list(builder.execute())
+        rows = list(registry.queryDimensions(dimensions, datasets={calexpType: [collection]}))
         self.assertEqual(len(rows), 0)
 
     def testCalibrationLabelIndirection(self):
-        """Test that SingleDatasetQueryBuilder can look up datasets with
-        calibration_label dimensions from a data ID with exposure dimensions.
+        """Test that we can look up datasets with calibration_label dimensions
+        from a data ID with exposure dimensions.
         """
-        # exposure <-> calibration_label lookups for master calibrations
+        registry = self.registry
+
         flat = DatasetType(
             "flat",
             self.registry.dimensions.extract(
@@ -355,37 +326,87 @@ class QueryBuilderTestCase(unittest.TestCase):
             ),
             "ImageU"
         )
-        builder = SingleDatasetQueryBuilder.fromSingleCollection(self.registry, flat, collection="calib")
-        newLinks = builder.relateDimensions(
-            self.registry.dimensions.extract(["instrument", "exposure", "detector"], implied=True)
+        registry.registerDatasetType(flat)
+        registry.insertDimensionData("instrument", dict(name="DummyCam"))
+        registry.insertDimensionData(
+            "physical_filter",
+            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
         )
-        self.assertEqual(newLinks, set(["exposure"]))
-        self.assertIsNotNone(builder.findSelectableByName("exposure_calibration_label_join"))
-        usedLinks = builder.whereDataId(DataId(instrument="HSC", exposure=12, detector=34,
-                                               physical_filter="HSC-R2", abstract_filter="r",
-                                               universe=self.registry.dimensions))
-        self.assertEqual(usedLinks, set(["instrument", "exposure", "detector", "physical_filter"]))
-
-    def testSkyPixIndirection(self):
-        """Test that SingleDatasetQueryBuilder can look up datasets with
-        skypix dimensions from a data ID with visit+detector dimensions.
-        """
-        # exposure <-> calibration_label lookups for master calibrations
-        refcat = DatasetType(
-            "refcat",
-            self.registry.dimensions.extract(["skypix"]),
-            "ImageU"
+        registry.insertDimensionData(
+            "detector",
+            *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in (1, 2, 3, 4, 5)]
         )
-        builder = SingleDatasetQueryBuilder.fromSingleCollection(self.registry, refcat, collection="refcats")
-        newLinks = builder.relateDimensions(
-            self.registry.dimensions.extract(["instrument", "visit", "detector"], implied=True)
+        registry.insertDimensionData(
+            "visit",
+            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_i"),
         )
-        self.assertEqual(newLinks, set(["instrument", "visit", "detector"]))
-        self.assertIsNotNone(builder.findSelectableByName("visit_detector_skypix_join"))
-        usedLinks = builder.whereDataId(DataId(instrument="HSC", visit=12, detector=34,
-                                               physical_filter="HSC-R2", abstract_filter="r",
-                                               universe=self.registry.dimensions))
-        self.assertEqual(usedLinks, set(["instrument", "visit", "detector"]))
+        registry.insertDimensionData(
+            "exposure",
+            dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i",
+                 datetime_begin=datetime(2005, 12, 15, 2), datetime_end=datetime(2005, 12, 15, 3)),
+            dict(instrument="DummyCam", id=101, name="101", visit=11, physical_filter="dummy_i",
+                 datetime_begin=datetime(2005, 12, 16, 2), datetime_end=datetime(2005, 12, 16, 3)),
+        )
+        registry.insertDimensionData(
+            "calibration_label",
+            dict(instrument="DummyCam", name="first_night",
+                 datetime_begin=datetime(2005, 12, 15, 1), datetime_end=datetime(2005, 12, 15, 4)),
+            dict(instrument="DummyCam", name="second_night",
+                 datetime_begin=datetime(2005, 12, 16, 1), datetime_end=datetime(2005, 12, 16, 4)),
+            dict(instrument="DummyCam", name="both_nights",
+                 datetime_begin=datetime(2005, 12, 15, 1), datetime_end=datetime(2005, 12, 16, 4)),
+        )
+        # Different flats for different nights for detectors 1-3 in first
+        # collection.
+        collection1 = "calibs1"
+        run1 = registry.makeRun(collection=collection1)
+        for detector in (1, 2, 3):
+            registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="first_night",
+                                           physical_filter="dummy_i", detector=detector),
+                                run=run1)
+            registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="second_night",
+                                           physical_filter="dummy_i", detector=detector),
+                                run=run1)
+        # The same flat for both nights for detectors 3-5 (so detector 3 has
+        # multiple valid flats) in second collection.
+        collection2 = "calib2"
+        run2 = registry.makeRun(collection=collection2)
+        for detector in (3, 4, 5):
+            registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="both_nights",
+                                           physical_filter="dummy_i", detector=detector),
+                                run=run2)
+        # Perform queries for individual exposure+detector combinations, which
+        # should always return exactly one flat.
+        for exposure in (100, 101):
+            for detector in (1, 2, 3):
+                with self.subTest(exposure=exposure, detector=detector):
+                    rows = registry.queryDatasets("flat", collections=[collection1],
+                                                  instrument="DummyCam",
+                                                  exposure=exposure,
+                                                  detector=detector)
+                    self.assertEqual(len(list(rows)), 1)
+            for detector in (3, 4, 5):
+                with self.subTest(exposure=exposure, detector=detector):
+                    rows = registry.queryDatasets("flat", collections=[collection2],
+                                                  instrument="DummyCam",
+                                                  exposure=exposure,
+                                                  detector=detector)
+                    self.assertEqual(len(list(rows)), 1)
+            for detector in (1, 2, 4, 5):
+                with self.subTest(exposure=exposure, detector=detector):
+                    rows = registry.queryDatasets("flat", collections=[collection1, collection2],
+                                                  instrument="DummyCam",
+                                                  exposure=exposure,
+                                                  detector=detector)
+                    self.assertEqual(len(list(rows)), 1)
+            for detector in (3,):
+                with self.subTest(exposure=exposure, detector=detector):
+                    rows = registry.queryDatasets("flat", collections=[collection1, collection2],
+                                                  instrument="DummyCam",
+                                                  exposure=exposure,
+                                                  detector=detector)
+                    self.assertEqual(len(list(rows)), 2)
 
 
 if __name__ == "__main__":

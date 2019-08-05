@@ -53,27 +53,16 @@ class DummyCam(Instrument):
         `Registry`.
         """
         dataId = {"instrument": self.getName()}
-        registry.addDimensionEntry("instrument", dataId)
+        registry.insertDimensionData("instrument", dataId)
         for f in ("dummy_g", "dummy_u"):
-            registry.addDimensionEntry("physical_filter", dataId, physical_filter=f)
+            registry.insertDimensionData("physical_filter",
+                                         dict(dataId, physical_filter=f, abstract_filter=f[-1]))
         for d in (1, 2):
-            registry.addDimensionEntry("detector", dataId, detector=d)
+            registry.insertDimensionData("detector",
+                                         dict(dataId, id=d, full_name=str(d)))
 
     def getRawFormatter(self, dataId):
-        """Return the Formatter class that should be used to read a particular
-        raw file.
-
-        Parameters
-        ----------
-        dataId : `DataId`
-            Dimension-link identifier for the raw file or files being ingested.
-
-        Returns
-        -------
-        formatter : `Formatter`
-            Object that reads the file into an `lsst.afw.image.Exposure`
-            instance.
-        """
+        # Docstring inherited fromt Instrument.getRawFormatter.
         return None
 
     def writeCuratedCalibrations(self, butler):

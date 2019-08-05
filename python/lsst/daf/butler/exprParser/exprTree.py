@@ -56,7 +56,7 @@ class Node(ABC):
     The purpose of this class is to simplify visiting of the
     all nodes in a tree. It has a list of sub-nodes of this
     node so that visiting code can navigate whole tree without
-    knowing exct types of each node.
+    knowing exact types of each node.
 
     Attributes
     ----------

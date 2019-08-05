@@ -19,14 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .elements import *
-from .graph import *
-from .universe import *
-from .coordinate import *
-from .records import *
-from .packer import *
-from .config import *
+from .query import *
+from .builder import *
+from .structs import *
+from .datasets import *
 
-# The schema, storage, and sql module symbols are deliberately not lifted to
-# package scope, as they contain functionality that is mostly internal to
-# daf_butler.
+# Symbols from expressions module intentionally not lifted to package scope,
+# as they're all internal.

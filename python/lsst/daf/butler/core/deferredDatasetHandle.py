@@ -47,8 +47,8 @@ class DeferredDatasetHandle:
     datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
         When `DatasetRef` the `dataId` should be `None`.
         Otherwise the `DatasetType` or name thereof.
-    dataId : `dict` or `DataId`
-        A `dict` of `Dimension` link name, value pairs that label the
+    dataId : `dict` or `DataCoordinate`, optional
+        A dictionary of `Dimension` link name, value pairs that label the
         `DatasetRef` within a Collection. When `None`, a `DatasetRef`
         should be provided as the first argument.
     parameters : `dict`
@@ -61,7 +61,7 @@ class DeferredDatasetHandle:
     """
 
     datasetRefOrType: typing.Union[DatasetRef, DatasetType, str]
-    dataId: typing.Union[dict, DataId]
+    dataId: DataId
     parameters: typing.Union[dict, None]
     kwds: dict
 

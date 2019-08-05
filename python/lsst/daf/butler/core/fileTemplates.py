@@ -387,7 +387,13 @@ class FileTemplate:
             not part of the template.
         """
         # Extract defined non-None units from the dataId
-        fields = {k: v for k, v in ref.dataId.items() if v is not None}
+        # We attempt to get the "full" dict on the assumption that ref.dataId
+        # is a ExpandedDataCoordinate, as it should be when running
+        # PipelineTasks.  We should probably just require that when formatting
+        # templates (and possibly when constructing DatasetRefs), but doing so
+        # would break a ton of otherwise-useful tests that would need to be
+        # modified to provide a lot more metadata.
+        fields = {k: v for k, v in getattr(ref.dataId, "full", ref.dataId).items() if v is not None}
 
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()
@@ -518,22 +524,24 @@ class FileTemplate:
         # Fall back to dataId keys if we have them but no links.
         # dataId keys must still be present in the template
         try:
-            links = entity.dimensions.links()
+            minimal = set(entity.dimensions.required.names)
+            maximal = set(entity.dimensions.names)
         except AttributeError:
             try:
-                links = set(entity.dataId.keys())
+                minimal = set(entity.dataId.keys())
+                maximal = minimal
             except AttributeError:
                 return
 
         required = self.fields(optionals=False)
 
         # Calculate any field usage that does not match a dimension
-        if not required.issubset(links):
+        if not required.issubset(maximal):
             raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
-                                              f" {required} is not a subset of {links}.")
+                                              f" {required} is not a subset of {maximal}.")
 
-        if not allfields.issuperset(links):
+        if not allfields.issuperset(minimal):
             raise FileTemplateValidationError(f"Template '{self}' is inconsistent with {entity}:"
-                                              f" {allfields} is not a superset of {links}.")
+                                              f" {allfields} is not a superset of {minimal}.")
 
         return

@@ -19,15 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo",
-           "ObservationDataIdPacker", "addUnboundedCalibrationLabel")
+__all__ = ("Instrument", "makeExposureRecordFromObsInfo", "makeVisitRecordFromObsInfo",
+           "ObservationDimensionPacker", "addUnboundedCalibrationLabel")
 
 import os.path
 from datetime import datetime
 from inspect import isabstract
 from abc import ABCMeta, abstractmethod
-
-from lsst.daf.butler import DataId, DataIdPacker
+from lsst.daf.butler import DataCoordinate, DimensionPacker
 
 
 # TODO: all code in this module probably needs to be moved to a higher-level
@@ -104,11 +103,13 @@ class Instrument(metaclass=ABCMeta):
             The registry to add dimensions to.
         """
         for filter in self.filterDefinitions:
-            registry.addDimensionEntry(
+            registry.insertDimensionData(
                 "physical_filter",
-                instrument=self.getName(),
-                physical_filter=filter.physical_filter,
-                abstract_filter=filter.abstract_filter
+                dict(
+                    instrument=self.getName(),
+                    name=filter.physical_filter,
+                    abstract_filter=filter.abstract_filter,
+                )
             )
 
     @abstractmethod
@@ -118,8 +119,9 @@ class Instrument(metaclass=ABCMeta):
 
         Parameters
         ----------
-        dataId : `DataId`
-            Dimension-link identifier for the raw file or files being ingested.
+        dataId : `ExpandedDataCoordinate`
+            Dimension-based ID for the raw file or files being ingested,
+            expanded to contain all metadata known to the `Registry`.
 
         Returns
         -------
@@ -156,106 +158,103 @@ class Instrument(metaclass=ABCMeta):
                 config.load(path)
 
 
-class ObservationDataIdPacker(DataIdPacker):
-    """A `DataIdPacker` for visit+detector or exposure+detector, given an
+class ObservationDimensionPacker(DimensionPacker):
+    """A `DimensionPacker` for visit+detector or exposure+detector, given an
     instrument.
-
-    Parameters
-    ----------
-    dimensions : `DataIdPackerDimensions`
-        Struct defining the "given" (at contructoin) and "required" (for
-        packing) dimensions of this packer.
-    instrument : `str`
-        Name of the instrument for which this packer packs IDs.
-    obsMax : `int`
-        Maximum (exclusive) value for either visit or exposure IDs for this
-        instrument, depending on which of those is present in
-        ``dimensions.required``.
-    detectorMax : `int
-        Maximum (exclusive) value for detectors for this instrument.
     """
 
-    def __init__(self, dimensions, instrument, obsMax, detectorMax):
-        self._instrumentName = instrument
-        if dimensions.required == ("instrument", "visit", "detector"):
-            self._observationLink = "visit"
-        elif dimensions.required == ("instrument", "exposure", "detector"):
-            self._observationLink = "exposure"
+    def __init__(self, fixed, dimensions):
+        super().__init__(fixed, dimensions)
+        self._instrumentName = fixed["instrument"]
+        if self.dimensions.required.names == set(["instrument", "visit", "detector"]):
+            self._observationName = "visit"
+            obsMax = fixed.records["instrument"].visit_max
+        elif dimensions.required.names == set(["instrument", "exposure", "detector"]):
+            self._observationName = "exposure"
+            obsMax = fixed.records["instrument"].exposure_max
         else:
-            raise ValueError(f"Invalid dimensions for ObservationDataIdPacker: {dimensions.required}")
-        self._detectorMax = detectorMax
+            raise ValueError(f"Invalid dimensions for ObservationDimensionPacker: {dimensions.required}")
+        self._detectorMax = fixed.records["instrument"].detector_max
         self._maxBits = (obsMax*self._detectorMax).bit_length()
 
     @property
     def maxBits(self):
-        # Docstring inherited from DataIdPacker.maxBits
+        # Docstring inherited from DimensionPacker.maxBits
         return self._maxBits
 
     def _pack(self, dataId):
-        # Docstring inherited from DataIdPacker._pack
-        return dataId["detector"] + self._detectorMax*dataId[self._observationLink]
+        # Docstring inherited from DimensionPacker._pack
+        return dataId["detector"] + self._detectorMax*dataId[self._observationName]
 
     def unpack(self, packedId):
-        # Docstring inherited from DataIdPacker.unpack
-        return DataId({"instrument": self._instrumentName,
-                       "detector": packedId % self._detectorMax,
-                       self._observationLink: packedId // self._detectorMax},
-                      dimensions=self.dimensions.required)
+        # Docstring inherited from DimensionPacker.unpack
+        return DataCoordinate.standardize(
+            {
+                "instrument": self._instrumentName,
+                "detector": packedId % self._detectorMax,
+                self._observationName: packedId // self._detectorMax
+            },
+            graph=self.dimensions
+        )
 
 
-def updateExposureEntryFromObsInfo(dataId, obsInfo):
-    """Construct an exposure Dimension entry from
+def makeExposureRecordFromObsInfo(obsInfo, universe):
+    """Construct an exposure DimensionRecord from
     `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
-    dataId : `dict` or `DataId`
-        Dictionary of Dimension link fields for (at least) exposure. If a true
-        `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the exposure.
+    universe : `DimensionUniverse`
+        Set of all known dimensions.
 
     Returns
     -------
-    dataId : `DataId`
-        A data ID with the entry for the exposure dimension updated.
+    record : `DimensionRecord`
+        A record containing exposure metadata, suitable for insertion into
+        a `Registry`.
     """
-    dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions()["exposure"]].update(
-        datetime_begin=obsInfo.datetime_begin.to_datetime(),
-        datetime_end=obsInfo.datetime_end.to_datetime(),
-        exposure_time=obsInfo.exposure_time.to_value("s"),
-        dark_time=obsInfo.dark_time.to_value("s")
-    )
-    return dataId
+    dimension = universe["exposure"]
+    return dimension.RecordClass.fromDict({
+        "instrument": obsInfo.instrument,
+        "id": obsInfo.exposure_id,
+        "name": obsInfo.observation_id,
+        "timespan_begin": obsInfo.datetime_begin.to_datetime(),
+        "timespan_end": obsInfo.datetime_end.to_datetime(),
+        "exposure_time": obsInfo.exposure_time.to_value("s"),
+        "dark_time": obsInfo.dark_time.to_value("s")
+    })
 
 
-def updateVisitEntryFromObsInfo(dataId, obsInfo):
-    """Construct a visit Dimension entry from
+def makeVisitRecordFromObsInfo(obsInfo, universe):
+    """Construct a visit `DimensionRecord` from
     `astro_metadata_translator.ObservationInfo`.
 
     Parameters
     ----------
-    dataId : `dict` or `DataId`
-        Dictionary of Dimension link fields for (at least) visit. If a true
-        `DataId`, this object will be modified and returned.
     obsInfo : `astro_metadata_translator.ObservationInfo`
         A `~astro_metadata_translator.ObservationInfo` object corresponding to
         the exposure.
+    universe : `DimensionUniverse`
+        Set of all known dimensions.
 
     Returns
     -------
-    dataId : `DataId`
-        A data ID with the entry for the visit dimension updated.
+    record : `DimensionRecord`
+        A record containing exposure metadata, suitable for insertion into
+        a `Registry`.
     """
-    dataId = DataId(dataId)
-    dataId.entries[dataId.dimensions()["visit"]].update(
-        datetime_begin=obsInfo.datetime_begin.to_datetime(),
-        datetime_end=obsInfo.datetime_end.to_datetime(),
-        exposure_time=obsInfo.exposure_time.to_value("s"),
-    )
-    return dataId
+    dimension = universe["visit"]
+    return dimension.RecordClass.fromDict({
+        "instrument": obsInfo.instrument,
+        "id": obsInfo.visit_id,
+        "name": obsInfo.observation_id,
+        "timespan_begin": obsInfo.datetime_begin.to_datetime(),
+        "timespan_end": obsInfo.datetime_end.to_datetime(),
+        "exposure_time": obsInfo.exposure_time.to_value("s"),
+    })
 
 
 def addUnboundedCalibrationLabel(registry, instrumentName):
@@ -279,12 +278,11 @@ def addUnboundedCalibrationLabel(registry, instrumentName):
     """
     d = dict(instrument=instrumentName, calibration_label="unbounded")
     try:
-        return registry.expandDataId(dimension="calibration_label",
-                                     metadata=["valid_first", "valid_last"], **d)
+        return registry.expandDataId(d)
     except LookupError:
         pass
-    unboundedDataId = DataId(universe=registry.dimensions, **d)
-    unboundedDataId.entries["calibration_label"]["valid_first"] = datetime.min
-    unboundedDataId.entries["calibration_label"]["valid_last"] = datetime.max
-    registry.addDimensionEntry("calibration_label", unboundedDataId)
-    return unboundedDataId
+    entry = d.copy()
+    entry["valid_first"] = datetime.min
+    entry["valid_last"] = datetime.max
+    registry.insertDimensionData("calibration_label", entry)
+    return registry.expandDataId(d)

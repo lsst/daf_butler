@@ -27,6 +27,15 @@ Using the Butler
 
   configuring.rst
 
+.. _lsst.daf.butler-dimensions:
+
+The Dimensions System
+=====================
+
+.. toctree::
+  :maxdepth: 1
+
+  dimensions.rst
 
 .. _lsst.daf.butler-pyapi:
 

@@ -33,7 +33,7 @@ class DummyRegistry:
     def __init__(self):
         self._counter = 0
         self._entries = {}
-        self.dimensions = DimensionUniverse.fromConfig()
+        self.dimensions = DimensionUniverse()
 
     def addDatasetLocation(self, ref, datastoreName):
         # Only set ID if ID is 0 or None
