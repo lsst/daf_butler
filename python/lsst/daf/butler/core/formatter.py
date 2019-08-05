@@ -55,6 +55,9 @@ class Formatter(metaclass=ABCMeta):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
 
+    def __str__(self):
+        return f"{self.name()}@{self.fileDescriptor.location.path}"
+
     @property
     def fileDescriptor(self):
         """FileDescriptor associated with this formatter

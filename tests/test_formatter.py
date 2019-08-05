@@ -62,6 +62,9 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName, self.fileDescriptor)
         self.assertIsFormatter(f)
+        self.assertEqual(f.name(), formatterTypeName)
+        self.assertIn(formatterTypeName, str(f))
+        self.assertIn(self.fileDescriptor.location.path, str(f))
 
         fcls = self.factory.getFormatterClass(storageClassName)
         self.assertIsFormatter(fcls)
