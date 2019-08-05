@@ -23,13 +23,13 @@ from __future__ import annotations
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict", "NamedValueSet")
+           "NamedKeyDict", "NamedValueSet", "IndexedTupleDict")
 
 import builtins
 import sys
 import functools
 from typing import (TypeVar, MutableMapping, Iterator, KeysView, ValuesView, ItemsView, Dict, Union,
-                    MutableSet, Iterable, Mapping)
+                    MutableSet, Iterable, Mapping, Tuple)
 from types import MappingProxyType
 
 from lsst.utils import doImport
@@ -648,3 +648,55 @@ class NamedValueSet(MutableSet[T]):
         """
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)
+
+
+class IndexedTupleDict(Mapping[K, V]):
+    """An immutable mapping that combines a tuple of values with a (possibly
+    shared) mapping from key to tuple index.
+
+    Parameters
+    ----------
+    indices: `~collections.abc.Mapping`
+        Mapping from key to integer index in the values tuple.  This mapping
+        is used as-is, not copied or converted to a true `dict`, which means
+        that the caller must guarantee that it will not be modified by other
+        (shared) owners in the future.  If it is a `NamedKeyDict`, both names
+        and key instances will be usable as keys in the `IndexedTupleDict`.
+    values: `tuple`
+        Tuple of values for the dictionary.
+    """
+
+    __slots__ = ("_indices", "_values")
+
+    def __new__(cls, indices: Mapping[K, int], values: Tuple[V, ...]):
+        self = super().__new__(cls)
+        self._indices = indices
+        self._values = values
+        return self
+
+    def __getitem__(self, key: K) -> V:
+        return self._values[self._indices[key]]
+
+    def __iter__(self) -> Iterator[K]:
+        return iter(self._indices)
+
+    def __len__(self) -> int:
+        return len(self._indices)
+
+    def __str__(self) -> str:
+        return "{{{}}}".format(", ".join(f"{str(k)}: {str(v)}" for k, v in self.items()))
+
+    def __repr__(self) -> str:
+        return "IndexedTupleDict({{{}}})".format(", ".join(f"{repr(k)}: {repr(v)}" for k, v in self.items()))
+
+    def __contains__(self, key: K) -> bool:
+        return key in self._indices
+
+    def keys(self) -> KeysView[K]:
+        return self._indices.keys()
+
+    def values(self) -> Tuple[V, ...]:
+        return self._values
+
+    # Let Mapping base class provide items(); we can't do it any more
+    # efficiently ourselves.
