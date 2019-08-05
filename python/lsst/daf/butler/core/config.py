@@ -922,9 +922,8 @@ class ConfigSubset(Config):
             if pytype is not None:
                 try:
                     cls = doImport(pytype)
-                except ImportError:
-                    raise RuntimeError("Failed to import cls '{}' for config {}".format(pytype,
-                                                                                        type(self)))
+                except ImportError as e:
+                    raise RuntimeError(f"Failed to import cls '{pytype}' for config {type(self)}") from e
                 defaultsFile = cls.defaultConfigFile
                 if defaultsFile is not None:
                     self._updateWithConfigsFromPath(fullSearchPath, defaultsFile)

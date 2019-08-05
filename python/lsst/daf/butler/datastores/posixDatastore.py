@@ -271,8 +271,8 @@ class PosixDatastore(Datastore):
         # Get file metadata and internal metadata
         try:
             storedFileInfo = self.getStoredFileInfo(ref)
-        except KeyError:
-            raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
+        except KeyError as e:
+            raise FileNotFoundError("Could not retrieve Dataset {}".format(ref)) from e
 
         # Use the path to determine the location
         location = self.locationFactory.fromPath(storedFileInfo.path)
@@ -579,8 +579,8 @@ class PosixDatastore(Datastore):
 
         try:
             storedFileInfo = self.getStoredFileInfo(ref)
-        except KeyError:
-            raise FileNotFoundError("Requested dataset ({}) does not exist".format(ref))
+        except KeyError as e:
+            raise FileNotFoundError("Requested dataset ({}) does not exist".format(ref)) from e
         location = self.locationFactory.fromPath(storedFileInfo.path)
         if not os.path.exists(location.path):
             raise FileNotFoundError("No such file: {0}".format(location.uri))
