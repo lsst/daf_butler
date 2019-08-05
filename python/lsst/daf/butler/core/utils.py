@@ -23,12 +23,13 @@ from __future__ import annotations
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict")
+           "NamedKeyDict", "NamedValueSet")
 
 import builtins
 import sys
 import functools
-from typing import TypeVar, MutableMapping, Iterator, KeysView, ValuesView, ItemsView, Dict, Union
+from typing import (TypeVar, MutableMapping, Iterator, KeysView, ValuesView, ItemsView, Dict, Union,
+                    MutableSet, Iterable, Mapping)
 from types import MappingProxyType
 
 from lsst.utils import doImport
@@ -453,6 +454,197 @@ class NamedKeyDict(MutableMapping[K, V]):
     def freeze(self):
         """Disable all mutators, effectively transforming ``self`` into
         an immutable mapping.
+        """
+        if not isinstance(self._dict, MappingProxyType):
+            self._dict = MappingProxyType(self._dict)
+
+
+T = TypeVar("T")
+
+
+class NamedValueSet(MutableSet[T]):
+    """A custom mutable set class that requires elements to have a ``.name``
+    attribute, which can then be used as keys in `dict`-like lookup.
+
+    Names and elements can both be used with the ``in`` and ``del``
+    operators, `remove`, and `discard`.  Names (but not elements)
+    can be used with ``[]``-based element retrieval (not assignment)
+    and the `get` method.  `pop` can be used in either its `MutableSet`
+    form (no arguments; an arbitrary element is returned) or its
+    `MutableMapping` form (one or two arguments for the name and
+    optional default value, respectively).
+
+    Parameters
+    ----------
+    elements : `iterable`
+        Iterable over elements to include in the set.
+
+    Raises
+    ------
+    AttributeError
+        Raised if one or more elements do not have a ``.name`` attribute.
+
+    Notes
+    -----
+    Iteration order is guaranteed to be the same as insertion order (with
+    the same general behavior as `dict` ordering).
+    Like `dicts`, sets with the same elements will compare as equal even if
+    their iterator order is not the same.
+    """
+
+    __slots__ = ("_dict",)
+
+    def __init__(self, elements: Iterable[T] = ()):
+        self._dict = {element.name: element for element in elements}
+
+    @property
+    def names(self) -> KeysView[str]:
+        """The set of element names, in the same order
+        (`~collections.abc.KeysView`).
+        """
+        return self._dict.keys()
+
+    def asDict(self) -> Mapping[str, T]:
+        """Return a mapping view with names as keys.
+
+        Returns
+        -------
+        dict : `Mapping`
+            A dictionary-like view with ``values() == self``.
+        """
+        return self._dict
+
+    def __contains__(self, key: Union[str, T]) -> bool:
+        return getattr(key, "name", key) in self._dict
+
+    def __len__(self) -> int:
+        return len(self._dict)
+
+    def __iter__(self) -> Iterator[T]:
+        return iter(self._dict.values())
+
+    def __str__(self) -> str:
+        return "{{{}}}".format(", ".join(str(element) for element in self))
+
+    def __repr__(self) -> str:
+        return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
+
+    def __eq__(self, other):
+        try:
+            return self._dict.keys() == other._dict.keys()
+        except AttributeError:
+            return NotImplemented
+
+    def __hash__(self):
+        return hash(frozenset(self._dict.keys()))
+
+    # As per Set's docs, overriding just __le__ and __ge__ for performance will
+    # cover the other comparisons, too.
+
+    def __le__(self, other: NamedValueSet[T]) -> bool:
+        try:
+            return self._dict.keys() <= other._dict.keys()
+        except AttributeError:
+            return NotImplemented
+
+    def __ge__(self, other: NamedValueSet[T]) -> bool:
+        try:
+            return self._dict.keys() >= other._dict.keys()
+        except AttributeError:
+            return NotImplemented
+
+    def issubset(self, other):
+        return self <= other
+
+    def issuperset(self, other):
+        return self >= other
+
+    def __getitem__(self, name: str) -> T:
+        return self._dict[name]
+
+    def get(self, name: str, default=None):
+        """Return the element with the given name, or ``default`` if
+        no such element is present.
+        """
+        return self._dict.get(name, default)
+
+    def __delitem__(self, name: str):
+        del self._dict[name]
+
+    def add(self, element: T):
+        """Add an element to the set.
+
+        Raises
+        ------
+        AttributeError
+            Raised if the element does not have a ``.name`` attribute.
+        """
+        self._dict[element.name] = element
+
+    def remove(self, element: Union[str, T]):
+        """Remove an element from the set.
+
+        Parameters
+        ----------
+        element : `object` or `str`
+            Element to remove or the string name thereof.  Assumed to be an
+            element if it has a ``.name`` attribute.
+
+        Raises
+        ------
+        KeyError
+            Raised if an element with the given name does not exist.
+        """
+        del self._dict[getattr(element, "name", element)]
+
+    def discard(self, element: Union[str, T]):
+        """Remove an element from the set if it exists.
+
+        Does nothing if no matching element is present.
+
+        Parameters
+        ----------
+        element : `object` or `str`
+            Element to remove or the string name thereof.  Assumed to be an
+            element if it has a ``.name`` attribute.
+        """
+        try:
+            self.remove(element)
+        except KeyError:
+            pass
+
+    def pop(self, *args):
+        """Remove and return an element from the set.
+
+        Parameters
+        ----------
+        name : `str`, optional
+            Name of the element to remove and return.  Must be passed
+            positionally.  If not provided, an arbitrary element is
+            removed and returned.
+        default : `object`, optional
+            Value to return if ``name`` is provided but no such element
+            exists.
+
+        Raises
+        ------
+        KeyError
+            Raised if ``name`` is provided but ``default`` is not, and no
+            matching element exists.
+        """
+        if not args:
+            return super().pop()
+        else:
+            return self._dict.pop(*args)
+
+    def copy(self) -> NamedValueSet[T]:
+        result = NamedValueSet.__new__(NamedValueSet)
+        result._dict = dict(self._dict)
+        return result
+
+    def freeze(self):
+        """Disable all mutators, effectively transforming ``self`` into
+        an immutable set.
         """
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)
