@@ -53,12 +53,13 @@ class StoredFileInfo:
 
     def __init__(self, formatter, path, storageClass, checksum=None, size=None):
         if isinstance(formatter, str):
+            # We trust that this string refers to a Formatter
             pass
         elif isinstance(formatter, Formatter) or (inspect.isclass(formatter) and
                                                   issubclass(formatter, Formatter)):
             formatter = formatter.name()
         else:
-            raise ValueError(f"Supplied formatter '{formatter}' is not supported")
+            raise ValueError(f"Supplied formatter '{formatter}' is not a Formatter")
         self._formatter = formatter
         assert isinstance(path, str)
         self._path = path

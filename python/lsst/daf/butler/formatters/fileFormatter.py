@@ -35,7 +35,7 @@ class FileFormatter(Formatter):
 
     extension = None
     """Default file extension to use for writing files. None means that no
-    modifications will be made to the supplied file extension."""
+    modifications will be made to the supplied file extension. (`str`)"""
 
     @abstractmethod
     def _readFile(self, path, pytype=None):
@@ -162,7 +162,7 @@ class FileFormatter(Formatter):
         Returns
         -------
         path : `str`
-            The `URI` where the primary file is stored.
+            The path where the primary file is stored within the datastore.
         """
         fileDescriptor = self.fileDescriptor
         # Update the location with the formatter-preferred file extension
@@ -180,13 +180,12 @@ class FileFormatter(Formatter):
         Parameters
         ----------
         location : `Location`
-            Location of file for which path prediction is required.  If
-            `None` the location associated with the formatter will be used.
+            Location of file for which path prediction is required.
 
         Returns
         -------
         path : `str`
-            Path that would be returned by a call to `Formatter.write()`.
+            Path within datastore that would be associated with this location.
         """
         location = copy.deepcopy(location)
         location.updateExtension(cls.extension)

@@ -33,7 +33,7 @@ class JsonFormatter(FileFormatter):
     extension = ".json"
 
     unsupportedParameters = None
-    """This formatter does not support any parameters"""
+    """This formatter does not support any parameters (`frozenset`)"""
 
     def _readFile(self, path, pytype=None):
         """Read a file from the path in JSON format.

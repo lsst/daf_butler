@@ -36,7 +36,8 @@ class FitsExposureFormatter(Formatter):
     @property
     def metadata(self):
         """The metadata read from this file. It will be stripped as
-        components are extracted from it.
+        components are extracted from it
+        (`lsst.daf.base.PropertyList`).
         """
         if self._metadata is None:
             self._metadata = self.readMetadata()
@@ -209,7 +210,7 @@ class FitsExposureFormatter(Formatter):
         Returns
         -------
         path : `str`
-            Path that would be returned by a call to `Formatter.write()`.
+            Path within datastore that would be associated with this location.
         """
         location = copy.deepcopy(location)
         location.updateExtension(cls.extension)
