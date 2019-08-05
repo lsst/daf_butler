@@ -31,9 +31,8 @@ from lsst.daf.butler import DatasetType, DatasetRef, StorageClass, StorageClassF
 class DatasetTypeTestCase(unittest.TestCase):
     """Test for DatasetType.
     """
-
     def setUp(self):
-        self.universe = DimensionUniverse.fromConfig()
+        self.universe = DimensionUniverse()
 
     def testConstructor(self):
         """Test construction preserves values.
@@ -47,7 +46,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
-        self.assertEqual(datasetType.dimensions.names, dimensions)
+        self.assertEqual(datasetType.dimensions, dimensions)
 
     def testConstructor2(self):
         """Test construction from StorageClass name.
@@ -59,7 +58,7 @@ class DatasetTypeTestCase(unittest.TestCase):
         datasetType = DatasetType(datasetTypeName, dimensions, "test_constructor2")
         self.assertEqual(datasetType.name, datasetTypeName)
         self.assertEqual(datasetType.storageClass, storageClass)
-        self.assertEqual(datasetType.dimensions.names, dimensions)
+        self.assertEqual(datasetType.dimensions, dimensions)
 
     def testNameValidation(self):
         """Test that dataset type names only contain certain characters
@@ -196,7 +195,7 @@ class DatasetRefTestCase(unittest.TestCase):
     """
 
     def setUp(self):
-        self.universe = DimensionUniverse.fromConfig()
+        self.universe = DimensionUniverse()
 
     def testConstructor(self):
         """Test construction preserves values.
@@ -208,7 +207,7 @@ class DatasetRefTestCase(unittest.TestCase):
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         ref = DatasetRef(datasetType, dataId)
         self.assertEqual(ref.datasetType, datasetType)
-        self.assertEqual(ref.dataId, dataId)
+        self.assertEqual(ref.dataId, dataId, msg=ref.dataId)
         self.assertIsNone(ref.producer)
         self.assertEqual(ref.predictedConsumers, dict())
         self.assertEqual(ref.actualConsumers, dict())

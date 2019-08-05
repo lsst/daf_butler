@@ -26,9 +26,11 @@ from sqlalchemy.exc import SADeprecationWarning
 
 from sqlalchemy import create_engine, MetaData
 
+from lsst.daf.butler import SchemaConfig, Schema
 from lsst.daf.butler.core.utils import iterable
-from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column, VALID_COLUMN_TYPES
-from sqlalchemy.sql.expression import TableClause
+from lsst.daf.butler.core.schema import VALID_COLUMN_TYPES
+from sqlalchemy.sql import TableClause
+from sqlalchemy import Table, Column
 
 """Tests for Schema.
 """
@@ -119,13 +121,14 @@ class SchemaTestCase(unittest.TestCase):
         # Note that this is only a one-way check, the table may have more
         # constraints imposed by other means.
         for constraint in constraintsDescription:
-            table = constraint["table"]
-            source = tuple(sorted(iterable(constraint["source"])))
-            target = tuple(f"{table}.{column}" for column in sorted(iterable(constraint["target"])))
-            if table in self.schema.views:
-                continue
-            self.assertIn(source, tableConstraints)
-            self.assertEqual(tableConstraints[source], target)
+            with self.subTest(constraint=constraint):
+                table = constraint["table"]
+                source = tuple(sorted(iterable(constraint["source"])))
+                target = tuple(f"{table}.{column}" for column in sorted(iterable(constraint["target"])))
+                if table in self.schema.views:
+                    continue
+                self.assertIn(source, tableConstraints)
+                self.assertEqual(tableConstraints[source], target)
 
 
 if __name__ == "__main__":

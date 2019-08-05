@@ -108,11 +108,11 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
         self.registerDatasetTypes(datasetTypeName, dimensions, storageClass, butler.registry)
         dataId = {"visit": 42, "instrument": "DummyCam", "physical_filter": "d-r"}
         # Add needed Dimensions
-        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam",
-                                          "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 42,
-                                                    "physical_filter": "d-r"})
+        butler.registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCam", "name": "d-r",
+                                                                "abstract_filter": "R"})
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 42,
+                                                      "name": "fortytwo", "physical_filter": "d-r"})
         butler.put(exposure, datasetTypeName, dataId)
         # Get the full thing
         butler.get(datasetTypeName, dataId)

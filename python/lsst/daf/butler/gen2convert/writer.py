@@ -105,7 +105,7 @@ class ConversionWriter:
         # would require restructuring things in breaking ways, and I'm hoping
         # to just remove all of this code in favor of
         # obs.base.gen3.RepoConverter anyway.
-        universe = DimensionUniverse.fromConfig()
+        universe = DimensionUniverse()
         for gen2repo in gen2repos.values():
             self._addConvertedRepoSorted(gen2repo, universe)
 

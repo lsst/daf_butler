@@ -27,9 +27,8 @@ from itertools import combinations
 
 import lsst.sphgeom
 
-from sqlalchemy.exc import OperationalError
 from lsst.daf.butler import (Execution, Run, DatasetType, Registry,
-                             StorageClass, ButlerConfig, DataId,
+                             StorageClass, ButlerConfig,
                              ConflictingDefinitionError, OrphanedRecordError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
 
@@ -97,7 +96,7 @@ class RegistryTests(metaclass=ABCMeta):
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         dataId = {"instrument": "DummyCam"}
-        registry.addDimensionEntry("instrument", dataId)
+        registry.insertDimensionData("instrument", dataId)
         ref = registry.addDataset(datasetType, dataId=dataId, run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
@@ -128,7 +127,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(childDatasetType1)
         registry.registerDatasetType(childDatasetType2)
         dataId = {"instrument": "DummyCam"}
-        registry.addDimensionEntry("instrument", dataId)
+        registry.insertDimensionData("instrument", dataId)
         run = registry.makeRun(collection="test")
         parent = registry.addDataset(parentDatasetType, dataId=dataId, run=run)
         children = {"child1": registry.addDataset(childDatasetType1, dataId=dataId, run=run),
@@ -200,7 +199,7 @@ class RegistryTests(metaclass=ABCMeta):
                                    storageClass=storageClass)
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
-        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
+        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
         run = registry.makeRun(collection="test")
         ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
         ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
@@ -241,13 +240,23 @@ class RegistryTests(metaclass=ABCMeta):
                                   dimensions=registry.dimensions.extract(("instrument", "visit")),
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDimensionEntryList("instrument", [{"instrument": "DummyCam"}, {"instrument": "MyCam"}])
-        registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"})
-        registry.addDimensionEntry("physical_filter", {"instrument": "MyCam", "physical_filter": "m-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r"})
+        registry.insertDimensionData("instrument",
+                                     {"instrument": "DummyCam"},
+                                     {"instrument": "MyCam"})
+        registry.insertDimensionData("physical_filter",
+                                     {"instrument": "DummyCam", "physical_filter": "d-r",
+                                      "abstract_filter": "r"},
+                                     {"instrument": "MyCam", "physical_filter": "m-r",
+                                      "abstract_filter": "r"})
+        registry.insertDimensionData("visit",
+                                     {"instrument": "DummyCam", "id": 0, "name": "zero",
+                                      "physical_filter": "d-r"},
+                                     {"instrument": "DummyCam", "id": 1, "name": "one",
+                                      "physical_filter": "d-r"},
+                                     {"instrument": "DummyCam", "id": 2, "name": "two",
+                                      "physical_filter": "d-r"},
+                                     {"instrument": "MyCam", "id": 2, "name": "two",
+                                      "physical_filter": "m-r"})
         collection = "test"
         dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
         run = registry.makeRun(collection=collection)
@@ -283,10 +292,13 @@ class RegistryTests(metaclass=ABCMeta):
                                   dimensions=registry.dimensions.extract(("instrument", "visit")),
                                   storageClass=storageClass)
         registry.registerDatasetType(datasetType)
-        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-        registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
+        registry.insertDimensionData("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r",
+                                                         "abstract_filter": "R"})
+        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 0, "name": "zero",
+                                               "physical_filter": "d-r"})
+        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 1, "name": "one",
+                                               "physical_filter": "d-r"})
         collection = "ingest"
         run = registry.makeRun(collection=collection)
         # Dataset.physical_filter should be populated as well here from the
@@ -325,10 +337,13 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(datasetType1)
         datasetType2 = DatasetType(name="smartytype", dimensions=dimensions, storageClass=storageClass)
         registry.registerDatasetType(datasetType2)
-        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-        registry.addDimensionEntry("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r"})
-        registry.addDimensionEntry("visit", {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r"})
+        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
+        registry.insertDimensionData("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r",
+                                                         "abstract_filter": "R"})
+        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 0, "name": "zero",
+                                               "physical_filter": "d-r"})
+        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 1, "name": "one",
+                                               "physical_filter": "d-r"})
         run1 = registry.makeRun(collection="ingest1")
         run2 = registry.makeRun(collection="ingest2")
         run3 = registry.makeRun(collection="ingest3")
@@ -343,8 +358,8 @@ class RegistryTests(metaclass=ABCMeta):
         ref1_run3 = registry.addDataset(datasetType2, dataId=dataId1, run=run3)
         ref2_run3 = registry.addDataset(datasetType2, dataId=dataId2, run=run3)
         for ref in (ref1_run1, ref2_run1, ref1_run2, ref2_run2, ref1_run3, ref2_run3):
-            self.assertEqual(ref.dataId.entries[registry.dimensions["visit"]]["physical_filter"], "d-r")
-            self.assertIsNone(ref.dataId.entries[registry.dimensions["physical_filter"]]["abstract_filter"])
+            self.assertEqual(ref.dataId.records["visit"].physical_filter, "d-r")
+            self.assertEqual(ref.dataId.records["physical_filter"].abstract_filter, "R")
         # should have exactly 4 rows in Dataset
         self.assertRowCount(registry, "dataset", 6)
         self.assertRowCount(registry, "dataset_collection", 6)
@@ -373,45 +388,46 @@ class RegistryTests(metaclass=ABCMeta):
         with self.assertRaises(ConflictingDefinitionError):
             registry.associate(newCollection, [ref1_run3, ref2_run3])
 
-    def testDatasetUnit(self):
+    def testDatasetDimensions(self):
         registry = self.makeRegistry()
         dimensionName = "instrument"
-        dimensionValue = {"instrument": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
-        registry.addDimensionEntry(dimensionName, dimensionValue)
+        dimension = registry.dimensions[dimensionName]
+        dimensionValue = {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+        registry.insertDimensionData(dimensionName, dimensionValue)
         # Inserting the same value twice should fail
         with self.assertRaises(ConflictingDefinitionError):
-            registry.addDimensionEntry(dimensionName, dimensionValue)
-        # Find should return the entry
-        self.assertEqual(registry.findDimensionEntry(dimensionName, dimensionValue), dimensionValue)
-        # Find on a non-existant value should return None
-        self.assertIsNone(registry.findDimensionEntry(dimensionName, {"instrument": "Unknown"}))
-        # abstract_filter doesn't have a table; should fail.
-        with self.assertRaises(OperationalError):
-            registry.addDimensionEntry("abstract_filter", {"abstract_filter": "i"})
-        dimensionName2 = "physical_filter"
-        dimensionValue2 = {"physical_filter": "DummyCam_i", "abstract_filter": "i"}
-        # Missing required dependency ("instrument") should fail
+            registry.insertDimensionData(dimensionName, dimensionValue)
+        # expandDataId should retrieve the record we just inserted
+        self.assertEqual(
+            registry.expandDataId(
+                instrument="DummyCam",
+                graph=dimension.graph
+            ).records[dimensionName].toDict(),
+            dimensionValue
+        )
+        # expandDataId should raise if there is no record with the given ID.
         with self.assertRaises(LookupError):
-            registry.addDimensionEntry(dimensionName2, dimensionValue2)
+            registry.expandDataId({"instrument": "Unknown"}, graph=dimension.graph)
+        # abstract_filter doesn't have a table; insert should fail.
+        with self.assertRaises(TypeError):
+            registry.insertDimensionData("abstract_filter", {"abstract_filter": "i"})
+        dimensionName2 = "physical_filter"
+        dimension2 = registry.dimensions[dimensionName2]
+        dimensionValue2 = {"name": "DummyCam_i", "abstract_filter": "i"}
+        # Missing required dependency ("instrument") should fail
+        with self.assertRaises(Exception):
+            registry.insertDimensionData(dimensionName2, dimensionValue2)
         # Adding required dependency should fix the failure
         dimensionValue2["instrument"] = "DummyCam"
-        registry.addDimensionEntry(dimensionName2, dimensionValue2)
-        # Find should return the entry
-        self.assertEqual(registry.findDimensionEntry(dimensionName2, dimensionValue2), dimensionValue2)
-
-        # Get all the instrument values
-        instrumentEntries = registry.findDimensionEntries(dimensionName)
-        instruments = {e["instrument"] for e in instrumentEntries}
-        self.assertTrue(len(instruments), 1)
-        self.assertIn(dimensionValue["instrument"], instruments)
-
-        # Add a new instrument
-        dimensionValue3 = {"instrument": "DummyCam2", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
-        registry.addDimensionEntry(dimensionName, dimensionValue3)
-
-        instrumentEntries = registry.findDimensionEntries(dimensionName)
-        instruments = {e["instrument"] for e in instrumentEntries}
-        self.assertEqual(instruments, {"DummyCam", "DummyCam2"})
+        registry.insertDimensionData(dimensionName2, dimensionValue2)
+        # expandDataId should retrieve the record we just inserted.
+        self.assertEqual(
+            registry.expandDataId(
+                instrument="DummyCam", physical_filter="DummyCam_i",
+                graph=dimension2.graph
+            ).records[dimensionName2].toDict(),
+            dimensionValue2
+        )
 
     def testBasicTransaction(self):
         registry = self.makeRegistry()
@@ -436,7 +452,7 @@ class RegistryTests(metaclass=ABCMeta):
             with registry.transaction():
                 registry.registerDatasetType(datasetTypeB)
                 registry.registerDatasetType(datasetTypeC)
-                registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
+                registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
                 ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
                 refId = ref.id
                 raise ValueError("Oops, something went wrong")
@@ -451,7 +467,8 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertIsNotNone(refId)
         self.assertIsNone(registry.getDataset(refId))
         # Or the Dimension entries
-        self.assertIsNone(registry.findDimensionEntry("instrument", {"instrument": "DummyCam"}))
+        with self.assertRaises(LookupError):
+            registry.expandDataId({"instrument": "DummyCam"})
 
     def testRegions(self):
         registry = self.makeRegistry()
@@ -470,44 +487,33 @@ class RegistryTests(metaclass=ABCMeta):
         for a, b in combinations((regionTract, regionPatch, regionVisit, regionVisitDetector), 2):
             self.assertNotEqual(a, b)
 
-        # This depends on current schema.yaml definitions
-        rows = list(registry.query('select count(*) as "cnt" from "patch_skypix_join"'))
-        self.assertEqual(rows[0]["cnt"], 0)
+        # This depends on current schema.yaml and dimensions.yaml definitions
+        self.assertEqual(len(list(registry.queryDimensions(["patch", "htm7"]))), 0)
 
         # Add some dimension entries
-        registry.addDimensionEntry("instrument", {"instrument": "DummyCam"})
-        registry.addDimensionEntry("physical_filter",
-                                   {"instrument": "DummyCam", "physical_filter": "dummy_r",
-                                    "abstract_filter": "r"})
-        registry.addDimensionEntry("physical_filter",
-                                   {"instrument": "DummyCam", "physical_filter": "dummy_i",
-                                    "abstract_filter": "i"})
+        registry.insertDimensionData("instrument", {"name": "DummyCam"})
+        registry.insertDimensionData("physical_filter",
+                                     {"instrument": "DummyCam", "name": "dummy_r", "abstract_filter": "r"},
+                                     {"instrument": "DummyCam", "name": "dummy_i", "abstract_filter": "i"})
         for detector in (1, 2, 3, 4, 5):
-            registry.addDimensionEntry("detector", {"instrument": "DummyCam", "detector": detector})
-        registry.addDimensionEntry("visit",
-                                   {"instrument": "DummyCam", "visit": 0, "physical_filter": "dummy_r"})
-        registry.addDimensionEntry("visit",
-                                   {"instrument": "DummyCam", "visit": 1, "physical_filter": "dummy_i"})
-        registry.addDimensionEntry("skymap", {"skymap": "DummySkyMap", "hash": bytes()})
-        registry.addDimensionEntry("tract", {"skymap": "DummySkyMap", "tract": 0, "region": regionTract})
-        registry.addDimensionEntry("patch",
-                                   {"skymap": "DummySkyMap",
-                                    "tract": 0,
-                                    "patch": 0,
-                                    "cell_x": 0,
-                                    "cell_y": 0,
-                                    "region": regionPatch})
-        registry.setDimensionRegion({"instrument": "DummyCam", "visit": 0}, dimension="visit",
-                                    region=regionVisit, update=True)
-        registry.setDimensionRegion(
-            {"instrument": "DummyCam", "visit": 0, "detector": 2},
-            dimensions=["visit", "detector"],
-            region=regionVisitDetector,
-            update=False
-        )
+            registry.insertDimensionData("detector", {"instrument": "DummyCam", "id": detector,
+                                                      "full_name": str(detector)})
+        registry.insertDimensionData("visit",
+                                     {"instrument": "DummyCam", "id": 0, "name": "zero",
+                                      "physical_filter": "dummy_r", "region": regionVisit},
+                                     {"instrument": "DummyCam", "id": 1, "name": "one",
+                                      "physical_filter": "dummy_i"})
+        registry.insertDimensionData("skymap", {"skymap": "DummySkyMap", "hash": bytes()})
+        registry.insertDimensionData("tract", {"skymap": "DummySkyMap", "tract": 0, "region": regionTract})
+        registry.insertDimensionData("patch",
+                                     {"skymap": "DummySkyMap", "tract": 0, "patch": 0,
+                                      "cell_x": 0, "cell_y": 0, "region": regionPatch})
+        registry.insertDimensionData("visit_detector_region",
+                                     {"instrument": "DummyCam", "visit": 0, "detector": 2,
+                                      "region": regionVisitDetector})
 
         def getRegion(dataId):
-            return registry.expandDataId(dataId, region=True).region
+            return registry.expandDataId(dataId).region
 
         # Get region for a tract
         self.assertEqual(regionTract, getRegion({"skymap": "DummySkyMap", "tract": 0}))
@@ -528,53 +534,59 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(regionVisitDetector,
                          getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2}))
         # Attempt to get region for a non-existent (visit, detector)
-        # combination
-        with self.assertRaises(LookupError):
-            getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3})
+        # combination.  This returns None rather than raising because we don't
+        # want to require the region record to be present.
+        self.assertIsNone(getRegion({"instrument": "DummyCam", "visit": 0, "detector": 3}))
         # getRegion for a dataId containing no spatial dimensions should
         # return None
         self.assertIsNone(getRegion({"instrument": "DummyCam"}))
-        # getRegion for a mix of spatial dimensions should return None
-        self.assertIsNone(getRegion({"instrument": "DummyCam",
-                                     "visit": 0,
-                                     "detector": 2,
-                                     "skymap": "DummySkyMap",
-                                     "tract": 1}))
+        # getRegion for a mix of spatial dimensions should return
+        # NotImplemented, at least until we get it implemented.
+        self.assertIs(getRegion({"instrument": "DummyCam", "visit": 0, "detector": 2,
+                                 "skymap": "DummySkyMap", "tract": 0}),
+                      NotImplemented)
         # Check if we can get the region for a skypix
-        self.assertIsInstance(getRegion({"skypix": 1000}), lsst.sphgeom.ConvexPolygon)
-        # patch_skypix_join should not be empty
-        rows = list(registry.query('select count(*) as "cnt" from "patch_skypix_join"'))
-        self.assertNotEqual(rows[0]["cnt"], 0)
+        self.assertIsInstance(getRegion({"htm9": 1000}), lsst.sphgeom.ConvexPolygon)
+        # patch_htm7_overlap should not be empty
+        self.assertNotEqual(len(list(registry.queryDimensions(["patch", "htm7"]))), 0)
 
-    def testDataIdPacker(self):
+    def testDimensionPacker(self):
         registry = self.makeRegistry()
-        registry.addDimensionEntry(
+        registry.insertDimensionData(
             "instrument",
-            {"instrument": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+            {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
         )
-        registry.addDimensionEntry(
+        registry.insertDimensionData(
+            "detector",
+            {"instrument": "DummyCam", "id": 1, "full_name": "top"}
+        )
+        registry.insertDimensionData(
+            "detector",
+            {"instrument": "DummyCam", "id": 0, "full_name": "bottom"}
+        )
+        registry.insertDimensionData(
             "physical_filter",
-            {"instrument": "DummyCam", "physical_filter": "R", "abstract_filter": "r"}
+            {"instrument": "DummyCam", "name": "R", "abstract_filter": "r"}
         )
-        registry.addDimensionEntry(
+        registry.insertDimensionData(
             "visit",
-            {"instrument": "DummyCam", "visit": 5, "physical_filter": "R"}
+            {"instrument": "DummyCam", "id": 5, "name": "five", "physical_filter": "R"}
         )
-        registry.addDimensionEntry(
+        registry.insertDimensionData(
             "exposure",
-            {"instrument": "DummyCam", "exposure": 4, "visit": 5, "physical_filter": "R"}
+            {"instrument": "DummyCam", "id": 4, "name": "four", "visit": 5, "physical_filter": "R"}
         )
         dataId0 = registry.expandDataId(instrument="DummyCam")
         with self.assertRaises(LookupError):
-            registry.packDataId("visit_detector", dataId0)
-            registry.packDataId("exposure_detector", dataId0)
-        dataId1 = DataId(dataId0, visit=5, detector=1)
-        self.assertEqual(registry.packDataId("visit_detector", dataId1), 11)
-        packer = registry.makeDataIdPacker("exposure_detector", dataId0)
-        dataId2 = DataId(dataId0, exposure=4, detector=0)
+            dataId0.pack("visit_detector")
+            dataId0.pack("exposure_detector")
+        dataId1 = registry.expandDataId(dataId0, visit=5, detector=1)
+        self.assertEqual(dataId1.pack("visit_detector"), 11)
+        packer = registry.dimensions.makePacker("exposure_detector", dataId0)
+        dataId2 = registry.expandDataId(dataId0, exposure=4, detector=0)
         self.assertEqual(packer.pack(dataId0, exposure=4, detector=0), 8)
         self.assertEqual(packer.pack(dataId2), 8)
-        self.assertEqual(registry.packDataId("exposure_detector", dataId2), 8)
+        self.assertEqual(dataId2.pack("exposure_detector"), 8)
         dataId2a = packer.unpack(8)
         self.assertEqual(dataId2, dataId2a)
 
@@ -595,27 +607,28 @@ class SqlRegistryTestCase(unittest.TestCase, RegistryTests):
 
     def testNestedTransaction(self):
         registry = self.makeRegistry()
-        dimension = "instrument"
+        dimension = registry.dimensions["instrument"]
         dataId1 = {"instrument": "DummyCam"}
         dataId2 = {"instrument": "DummyCam2"}
         checkpointReached = False
         with registry.transaction():
             # This should be added and (ultimately) committed.
-            registry.addDimensionEntry(dimension, dataId1)
+            registry.insertDimensionData(dimension, dataId1)
             with self.assertRaises(ConflictingDefinitionError):
                 with registry.transaction():
                     # This does not conflict, and should succeed (but not
                     # be committed).
-                    registry.addDimensionEntry(dimension, dataId2)
+                    registry.insertDimensionData(dimension, dataId2)
                     checkpointReached = True
                     # This should conflict and raise, triggerring a rollback
                     # of the previous insertion within the same transaction
                     # context, but not the original insertion in the outer
                     # block.
-                    registry.addDimensionEntry(dimension, dataId1)
+                    registry.insertDimensionData(dimension, dataId1)
         self.assertTrue(checkpointReached)
-        self.assertIsNotNone(registry.findDimensionEntry(dimension, dataId1))
-        self.assertIsNone(registry.findDimensionEntry(dimension, dataId2))
+        self.assertIsNotNone(registry.expandDataId(dataId1, graph=dimension.graph))
+        with self.assertRaises(LookupError):
+            registry.expandDataId(dataId2, graph=dimension.graph)
 
 
 if __name__ == "__main__":

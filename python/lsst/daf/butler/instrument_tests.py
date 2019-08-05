@@ -82,14 +82,20 @@ class InstrumentTests(metaclass=abc.ABCMeta):
         registryConfigPath = os.path.join(getPackageDir("daf_butler"), "tests/config/basic/butler.yaml")
         registry = Registry.fromConfig(ButlerConfig(registryConfigPath))
         # check that the registry starts out empty
-        self.assertEqual(registry.findDimensionEntries('instrument'), [])
-        self.assertEqual(registry.findDimensionEntries('detector'), [])
-        self.assertEqual(registry.findDimensionEntries('physical_filter'), [])
+        self.assertEqual(list(registry.queryDimensions(["instrument"])), [])
+        self.assertEqual(list(registry.queryDimensions(["detector"])), [])
+        self.assertEqual(list(registry.queryDimensions(["physical_filter"])), [])
 
         # register the instrument and check that certain dimensions appear
         self.instrument.register(registry)
-        self.assertEqual(len(registry.findDimensionEntries('instrument')), 1)
-        self.assertEqual(registry.findDimensionEntries('instrument')[0]['instrument'], self.data.name)
-        self.assertEqual(len(registry.findDimensionEntries('detector')), self.data.nDetectors)
-        filterNames = {x['physical_filter'] for x in registry.findDimensionEntries('physical_filter')}
+        instrumentDataIds = list(registry.queryDimensions(["instrument"]))
+        self.assertEqual(len(instrumentDataIds), 1)
+        instrumentNames = {dataId["instrument"] for dataId in instrumentDataIds}
+        self.assertEqual(instrumentNames, {self.data.name})
+        detectorDataIds = list(registry.queryDimensions(["detector"]))
+        self.assertEqual(len(detectorDataIds), self.data.nDetectors)
+        detectorNames = {dataId.records["detector"].full_name for dataId in detectorDataIds}
+        self.assertIn(self.data.firstDetectorName, detectorNames)
+        physicalFilterDataIds = list(registry.queryDimensions(["physical_filter"]))
+        filterNames = {dataId['physical_filter'] for dataId in physicalFilterDataIds}
         self.assertGreaterEqual(filterNames, self.data.physical_filters)

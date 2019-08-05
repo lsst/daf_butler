@@ -62,7 +62,8 @@ class FitsCatalogDatasetsHelper:
 class DatasetTestHelper:
     """Helper methods for Datasets"""
 
-    def makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, id=None, run=None):
+    def makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None,
+                       conform=True):
         """Make a DatasetType and wrap it in a DatasetRef for a test"""
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         if id is None:
@@ -70,7 +71,7 @@ class DatasetTestHelper:
             id = self.id
         if run is None:
             run = Run(id=1, collection="dummy")
-        return DatasetRef(datasetType, dataId, id=id, run=run)
+        return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
 
 
 class DatastoreTestHelper:

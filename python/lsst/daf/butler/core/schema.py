@@ -35,6 +35,7 @@ from .utils import iterable, stripIfNotNone, NamedValueSet
 from sqlalchemy import Column, String, Integer, Boolean, LargeBinary, DateTime,\
     Float, ForeignKeyConstraint, Table, MetaData, TypeDecorator, UniqueConstraint,\
     Sequence
+from sqlalchemy.types import TypeEngine
 
 
 class SchemaValidationError(ValidationError):
@@ -201,9 +202,14 @@ class FieldSpec:
         self.doc = stripIfNotNone(config.get("doc", None))
         return self
 
-    def getSizedColumnType(self):
+    def getSizedColumnType(self) -> TypeEngine:
         """Return a sized version of the column type, utilizing either (or
         neither) of ``self.length`` and ``self.nbytes``.
+
+        Returns
+        -------
+        dtype : `sqlalchemy.types.TypeEngine`
+            A SQLAlchemy column type object.
         """
         if self.length is not None:
             return self.dtype(length=self.length)
@@ -220,6 +226,11 @@ class FieldSpec:
             Name of the logical table to which this column belongs.
         schema : `Schema`
             Object represening the full schema.  May be modified in-place.
+
+        Returns
+        -------
+        column : `sqlalchemy.Column`
+            SQLAlchemy column object.
         """
         args = [self.name, self.getSizedColumnType()]
         if self.autoincrement:
@@ -288,6 +299,11 @@ class ForeignKeySpec:
             (the table for source columns).
         schema : `Schema`
             Object represening the full schema.  May be modified in-place.
+
+        Returns
+        -------
+        constraint : `sqlalchemy.ForeignKeyConstraint`
+            SQLAlchemy version of the foreign key constraint.
         """
         return ForeignKeyConstraint(self.source,
                                     [f"{self.table}.{col}" for col in self.target],
@@ -347,7 +363,7 @@ class TableSpec:
             unique={tuple(u) for u in config.get("unique", ())},
             foreignKeys=[ForeignKeySpec.fromConfig(c) for c in config.get("foreignKeys", ())],
             sql=config.get("sql"),
-            doc=stripIfNotNone(config.get("doc", None)),
+            doc=stripIfNotNone(config.get("doc")),
         )
 
     def isView(self) -> bool:
@@ -360,12 +376,21 @@ class TableSpec:
         """Construct a SQLAlchemy `Table` or `View` corresponding to this
         specification.
 
+        This does not emit the actual DDL statements that would create the
+        table or view in the database; it merely creates a SQLAlchemy
+        representation of the table or view.
+
         Parameters
         ----------
         tableName : `str`
             Name of the logical table.
         schema : `Schema`
             Object represening the full schema.  Will be modified in-place.
+
+        Returns
+        -------
+        table : `sqlalchemy.Table` or `View`
+            A SQLAlchemy object representing the logical table.
 
         Notes
         -----
@@ -450,6 +475,10 @@ class Schema:
         self.metadata = MetaData()
         self.views = set()
         self.tables = dict()
+        # We ignore the return values of the `toSqlAlchemy` calls below because
+        # they also mutate `self`, and that's all we need.  When we refactor
+        # `SqlRegistry`'s dataset operations in the future, we'll probably
+        # replace `Schema` with a simple `dict` and clean this up.
         for tableName, tableSpec in spec.items():
             tableSpec.toSqlAlchemy(tableName, self)
         for tableName, tableSpec in spec.items():

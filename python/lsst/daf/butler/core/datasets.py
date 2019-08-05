@@ -28,7 +28,7 @@ import re
 from types import MappingProxyType
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass, StorageClassFactory
-from .dimensions import DimensionGraph, DataId
+from .dimensions import DimensionGraph, DataCoordinate
 from .configSupport import LookupKey
 
 
@@ -58,9 +58,8 @@ class DatasetType:
         and underscores.  Component dataset types should contain a single
         period separating the base dataset type name from the component name
         (and may be recursive).
-    dimensions : `DimensionGraph` or iterable of `str`
-        Dimensions used to label and relate instances of this `DatasetType`,
-        or names thereof.
+    dimensions : `DimensionGraph` or iterable of `Dimension`
+        Dimensions used to label and relate instances of this `DatasetType`.
         If not a `DimensionGraph`, ``universe`` must be provided as well.
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
@@ -316,9 +315,8 @@ class DatasetRef:
     ----------
     datasetType : `DatasetType`
         The `DatasetType` for this Dataset.
-    dataId : `dict` or `DataId`
-        A `dict` of `Dimension` link fields that labels the Dataset within a
-        Collection.
+    dataId : `DataCoordinate`
+        A mapping of dimensions that labels the Dataset within a Collection.
     id : `int`, optional
         A unique identifier.
         Normally set to `None` and assigned by `Registry`
@@ -327,17 +325,14 @@ class DatasetRef:
     __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run", "_hash",
                  "_predictedConsumers", "_actualConsumers", "_components")
 
-    def __init__(self, datasetType, dataId, id=None, run=None, hash=None, components=None):
+    def __init__(self, datasetType, dataId, *, id=None, run=None, hash=None, components=None, conform=True):
         assert isinstance(datasetType, DatasetType)
-
-        # Check the dimensions match if a DataId is provided
-        if isinstance(dataId, DataId) and isinstance(datasetType.dimensions, DimensionGraph):
-            if dataId.dimensions() != datasetType.dimensions:
-                raise ValueError(f"Dimensions mismatch for {dataId} and {datasetType}")
-
         self._id = id
         self._datasetType = datasetType
-        self._dataId = dataId
+        if conform:
+            self._dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+        else:
+            self._dataId = dataId
         self._producer = None
         self._predictedConsumers = dict()
         self._actualConsumers = dict()
@@ -367,7 +362,7 @@ class DatasetRef:
         if self._hash is None:
             message = hashlib.blake2b(digest_size=32)
             message.update(self.datasetType.name.encode("utf8"))
-            self.dataId.updateHash(message)
+            self.dataId.fingerprint(message.update)
             self._hash = message.digest()
         return self._hash
 
@@ -380,8 +375,8 @@ class DatasetRef:
 
     @property
     def dataId(self):
-        """A `dict` of `Dimension` link fields that labels the Dataset
-        within a Collection (`dict` or `DataId`).
+        """A mapping of `Dimension` primary key values that labels the Dataset
+        within a Collection (`DataCoordinate`).
         """
         return self._dataId
 
