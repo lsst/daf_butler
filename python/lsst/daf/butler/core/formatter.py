@@ -50,8 +50,8 @@ class Formatter(metaclass=ABCMeta):
     are supported (`frozenset`).
     """
 
-    def __init__(self, fileDescriptor=None):
-        if fileDescriptor is not None and not isinstance(fileDescriptor, FileDescriptor):
+    def __init__(self, fileDescriptor):
+        if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
 
