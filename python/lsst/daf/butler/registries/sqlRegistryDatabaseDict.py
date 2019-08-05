@@ -130,7 +130,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
                 if "CHECK constraint failed" in str(e):
                     raise ValueError(f"{e}") from e
             except StatementError as err:
-                raise TypeError("Bad data types in value: {}".format(err))
+                raise TypeError("Bad data types in value: {}".format(err)) from err
 
         # If we fail due to an IntegrityError (i.e. duplicate primary key
         # values), try to do an update instead.
@@ -143,7 +143,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
                 # to have caught this case, because we trap for IntegrityError
                 # first.  And we have to do that because IntegrityError is a
                 # StatementError.
-                raise TypeError("Bad data types in value: {}".format(err))
+                raise TypeError("Bad data types in value: {}".format(err)) from err
 
     def __delitem__(self, key):
         with self.registry._connection.begin():
