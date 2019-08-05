@@ -23,7 +23,8 @@ from __future__ import annotations
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict", "NamedValueSet", "IndexedTupleDict")
+           "NamedKeyDict", "NamedValueSet", "IndexedTupleDict",
+           "immutable")
 
 import builtins
 import sys
@@ -700,3 +701,35 @@ class IndexedTupleDict(Mapping[K, V]):
 
     # Let Mapping base class provide items(); we can't do it any more
     # efficiently ourselves.
+
+
+def immutable(cls):
+    """A class decorator that simulates a simple form of immutability for
+    the decorated class.
+
+    A class decorated as `immutable` may only set each of its attributes once
+    (by convention, in ``__new__``); any attempts to set an already-set
+    attribute will raise `AttributeError`.
+
+    Because this behavior interferes with the default implementation for
+    the ``pickle`` and ``copy`` modules, `immutable` provides implementations
+    of ``__getstate__`` and ``__setstate__`` that override this behavior.
+    Immutable classes can them implement pickle/copy via ``__getnewargs__``
+    only (other approaches such as ``__reduce__`` and ``__deepcopy__`` may
+    also be used).
+    """
+    def __setattr__(self, name, value):  # noqa N807
+        if hasattr(self, name):
+            raise AttributeError(f"{cls.__name__} instances are immutable.")
+        object.__setattr__(self, name, value)
+    cls.__setattr__ = __setattr__
+    def __getstate__(self) -> dict:  # noqa N807
+        # Disable default state-setting when unpickled.
+        return {}
+    cls.__getstate__ = __getstate__
+    def __setstate__(self, state):  # noqa N807
+        # Disable default state-setting when copied.
+        # Sadly what works for pickle doesn't work for copy.
+        assert not state
+    cls.__setstate__ = __setstate__
+    return cls
