@@ -35,7 +35,7 @@ class FileFormatter(Formatter):
 
     extension = None
     """Default file extension to use for writing files. None means that no
-    modifications will be made to the supplied file extension."""
+    modifications will be made to the supplied file extension. (`str`)"""
 
     @abstractmethod
     def _readFile(self, path, pytype=None):
@@ -62,15 +62,13 @@ class FileFormatter(Formatter):
         pass
 
     @abstractmethod
-    def _writeFile(self, inMemoryDataset, fileDescriptor):
+    def _writeFile(self, inMemoryDataset):
         """Write the in memory dataset to file on disk.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to serialize.
-        fileDescriptor : `FileDescriptor`
-            Details of the file to be written.
 
         Raises
         ------
@@ -100,14 +98,11 @@ class FileFormatter(Formatter):
         """
         return inMemoryDataset
 
-    def read(self, fileDescriptor, component=None):
+    def read(self, component=None):
         """Read data from a file.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -125,6 +120,7 @@ class FileFormatter(Formatter):
             Component requested but this file does not seem to be a concrete
             composite.
         """
+        fileDescriptor = self.fileDescriptor
 
         # Read the file naively
         path = fileDescriptor.location.path
@@ -155,36 +151,42 @@ class FileFormatter(Formatter):
 
         return data
 
-    def write(self, inMemoryDataset, fileDescriptor):
+    def write(self, inMemoryDataset):
         """Write a Python object to a file.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             The Python object to store.
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
 
         Returns
         -------
         path : `str`
-            The `URI` where the primary file is stored.
+            The path where the primary file is stored within the datastore.
         """
+        fileDescriptor = self.fileDescriptor
         # Update the location with the formatter-preferred file extension
         fileDescriptor.location.updateExtension(self.extension)
 
-        self._writeFile(inMemoryDataset, fileDescriptor)
+        self._writeFile(inMemoryDataset)
 
         return fileDescriptor.location.pathInStore
 
-    def predictPath(self, location):
+    @classmethod
+    def predictPathFromLocation(cls, location):
         """Return the path that would be returned by write, without actually
         writing.
 
+        Parameters
+        ----------
         location : `Location`
-            The location to simulate writing to.
+            Location of file for which path prediction is required.
+
+        Returns
+        -------
+        path : `str`
+            Path within datastore that would be associated with this location.
         """
         location = copy.deepcopy(location)
-        location.updateExtension(self.extension)
+        location.updateExtension(cls.extension)
         return location.pathInStore

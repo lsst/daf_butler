@@ -52,19 +52,17 @@ class FitsCatalogFormatter(FileFormatter):
 
         return pytype.readFits(path)
 
-    def _writeFile(self, inMemoryDataset, fileDescriptor):
+    def _writeFile(self, inMemoryDataset):
         """Write the in memory dataset to file on disk.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to serialize.
-        fileDescriptor : `FileDescriptor`
-            Details of the file to be written.
 
         Raises
         ------
         Exception
             The file could not be written.
         """
-        inMemoryDataset.writeFits(fileDescriptor.location.path)
+        inMemoryDataset.writeFits(self.fileDescriptor.location.path)

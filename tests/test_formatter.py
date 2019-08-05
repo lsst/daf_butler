@@ -47,6 +47,9 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName)
         self.assertIsInstance(f, Formatter)
+
+        fcls = self.factory.getFormatterClass(storageClassName)
+        self.assertEqual(fcls, type(f))
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
         from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
@@ -76,6 +79,10 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         f2 = self.factory.getFormatter(datasetType)
         self.assertIsInstance(f, Formatter)
         self.assertEqual(f.name(), f2.name())
+
+        # Class directly
+        f2cls = self.factory.getFormatterClass(datasetType)
+        self.assertEqual(f2cls.name(), f.name())
 
         # This might defer the import, pytest may have already loaded it
         from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter

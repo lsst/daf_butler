@@ -27,6 +27,7 @@ import logging
 from .configSupport import processLookupConfigs
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
+from .fileDescriptor import FileDescriptor
 
 log = logging.getLogger(__name__)
 
@@ -34,29 +35,49 @@ log = logging.getLogger(__name__)
 class Formatter(metaclass=ABCMeta):
     """Interface for reading and writing Datasets with a particular
     `StorageClass`.
+
+    Parameters
+    ----------
+    fileDescriptor : `FileDescriptor`, optional
+        Identifies the file to read or write, and the associated storage
+        classes and parameter information.  Its value can be `None` if the
+        caller will never call `Formatter.read` or `Formatter.write`.
     """
 
     unsupportedParameters = frozenset()
     """Set of parameters not understood by this `Formatter`. An empty set means
     all parameters are supported.  `None` indicates that no parameters
-    are supported.
+    are supported (`frozenset`).
     """
+
+    def __init__(self, fileDescriptor=None):
+        if fileDescriptor is not None and not isinstance(fileDescriptor, FileDescriptor):
+            raise TypeError("File descriptor must be a FileDescriptor")
+        self._fileDescriptor = fileDescriptor
+
+    @property
+    def fileDescriptor(self):
+        """FileDescriptor associated with this formatter
+        (`Formatter`, read-only)"""
+        return self._fileDescriptor
 
     @classmethod
     def name(cls):
         """Returns the fully qualified name of the formatter.
+
+        Returns
+        -------
+        name : `str`
+            Fully-qualified name of formatter class.
         """
         return getFullTypeName(cls)
 
     @abstractmethod
-    def read(self, fileDescriptor, component=None):
+    def read(self, component=None):
         """Read a Dataset.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -64,40 +85,60 @@ class Formatter(metaclass=ABCMeta):
 
         Returns
         -------
-        inMemoryDataset : `InMemoryDataset`
+        inMemoryDataset : `object`
             The requested Dataset.
         """
         raise NotImplementedError("Type does not support reading")
 
     @abstractmethod
-    def write(self, inMemoryDataset, fileDescriptor):
+    def write(self, inMemoryDataset):
         """Write a Dataset.
 
         Parameters
         ----------
-        inMemoryDataset : `InMemoryDataset`
+        inMemoryDataset : `object`
             The Dataset to store.
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to write.
 
         Returns
         -------
         path : `str`
-            The path to where the Dataset was stored.
+            The path to where the Dataset was stored within the datastore.
         """
         raise NotImplementedError("Type does not support writing")
 
+    @classmethod
     @abstractmethod
-    def predictPath(self, location):
+    def predictPathFromLocation(cls, location):
         """Return the path that would be returned by write, without actually
         writing.
 
+        Parameters
+        ----------
         location : `Location`
-            The location to simulate writing to.
+            Location of file for which path prediction is required.
+
+        Returns
+        -------
+        path : `str`
+            Path within datastore that would be associated with this location.
         """
         raise NotImplementedError("Type does not support writing")
 
-    def segregateParameters(self, parameters):
+    def predictPath(self):
+        """Return the path that would be returned by write, without actually
+        writing.
+
+        Uses the `FileDescriptor` associated with the instance.
+
+        Returns
+        -------
+        path : `str`
+            Path within datastore that would be associated with the location
+            stored in this `Formatter`.
+        """
+        return self.predictPathFromLocation(self.fileDescriptor.location)
+
+    def segregateParameters(self, parameters=None):
         """Segregate the supplied parameters into those understood by the
         formatter and those not understood by the formatter.
 
@@ -106,9 +147,10 @@ class Formatter(metaclass=ABCMeta):
 
         Parameters
         ----------
-        parameters : `dict`
+        parameters : `dict`, optional
             Parameters with values that have been supplied by the caller
-            and which might be relevant for the formatter.
+            and which might be relevant for the formatter.  If `None`
+            parameters will be read from the registered `FileDescriptor`.
 
         Returns
         -------
@@ -117,6 +159,9 @@ class Formatter(metaclass=ABCMeta):
         unsupported : `dict`
             Those parameters not supported by this formatter.
         """
+
+        if parameters is None:
+            parameters = self.fileDescriptor.parameters
 
         if parameters is None:
             return {}, {}
@@ -197,18 +242,72 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterWithMatch(self, entity):
-        """Get a new formatter instance along with the matching registry
+    def getFormatterClassWithMatch(self, entity):
+        """Get the matching formatter class along with the matching registry
         key.
 
         Parameters
         ----------
-        entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
+        entity : `DatasetRef`, `DatasetType`, `StorageClass`, or `str`
             Entity to use to determine the formatter to return.
             `StorageClass` will be used as a last resort if `DatasetRef`
             or `DatasetType` instance is provided.  Supports instrument
             override if a `DatasetRef` is provided configured with an
             ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        matchKey : `LookupKey`
+            The key that resulted in the successful match.
+        formatter : `type`
+            The class of the registered formatter.
+        """
+        if isinstance(entity, str):
+            names = (entity,)
+        else:
+            names = entity._lookupNames()
+        matchKey, formatter = self._mappingFactory.getClassFromRegistryWithMatch(names)
+        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
+                  matchKey, entity)
+
+        return matchKey, formatter
+
+    def getFormatterClass(self, entity):
+        """Get the matching formatter class.
+
+        Parameters
+        ----------
+        entity : `DatasetRef`, `DatasetType`, `StorageClass`, or `str`
+            Entity to use to determine the formatter to return.
+            `StorageClass` will be used as a last resort if `DatasetRef`
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+
+        Returns
+        -------
+        formatter : `type`
+            The class of the registered formatter.
+        """
+        _, formatter = self.getFormatterClassWithMatch(entity)
+        return formatter
+
+    def getFormatterWithMatch(self, entity, *args, **kwargs):
+        """Get a new formatter instance along with the matching registry
+        key.
+
+        Parameters
+        ----------
+        entity : `DatasetRef`, `DatasetType`, `StorageClass`, or `str`
+            Entity to use to determine the formatter to return.
+            `StorageClass` will be used as a last resort if `DatasetRef`
+            or `DatasetType` instance is provided.  Supports instrument
+            override if a `DatasetRef` is provided configured with an
+            ``instrument`` value for the data ID.
+        args : `tuple`
+            Positional arguments to use pass to the object constructor.
+        kwargs : `dict`
+            Keyword arguments to pass to object constructor.
 
         Returns
         -------
@@ -221,29 +320,34 @@ class FormatterFactory:
             names = (entity,)
         else:
             names = entity._lookupNames()
-        matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(*names)
-        log.debug("Retrieved formatter from key '%s' for entity '%s'", matchKey, entity)
+        matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
+        log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
+                  matchKey, entity)
 
         return matchKey, formatter
 
-    def getFormatter(self, entity):
+    def getFormatter(self, entity, *args, **kwargs):
         """Get a new formatter instance.
 
         Parameters
         ----------
-        entity : `DatasetRef`, `DatasetType` or `StorageClass`, or `str`
+        entity : `DatasetRef`, `DatasetType`, `StorageClass`, or `str`
             Entity to use to determine the formatter to return.
             `StorageClass` will be used as a last resort if `DatasetRef`
             or `DatasetType` instance is provided.  Supports instrument
             override if a `DatasetRef` is provided configured with an
             ``instrument`` value for the data ID.
+        args : `tuple`
+            Positional arguments to use pass to the object constructor.
+        kwargs : `dict`
+            Keyword arguments to pass to object constructor.
 
         Returns
         -------
         formatter : `Formatter`
             An instance of the registered formatter.
         """
-        _, formatter = self.getFormatterWithMatch(entity)
+        _, formatter = self.getFormatterWithMatch(entity, *args, **kwargs)
         return formatter
 
     def registerFormatter(self, type_, formatter):
@@ -251,7 +355,7 @@ class FormatterFactory:
 
         Parameters
         ----------
-        type_ : `LookupKey`, `str` or `StorageClass` or `DatasetType`
+        type_ : `LookupKey`, `str`, `StorageClass` or `DatasetType`
             Type for which this formatter is to be used.  If a `LookupKey`
             is not provided, one will be constructed from the supplied string
             or by using the ``name`` property of the supplied entity.

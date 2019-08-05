@@ -21,6 +21,8 @@
 
 __all__ = ("StoredFileInfo", )
 
+import inspect
+
 from .formatter import Formatter
 from .utils import slotValuesAreEqual
 from .storageClass import StorageClass
@@ -31,9 +33,9 @@ class StoredFileInfo:
 
     Parameters
     ----------
-    formatter : `str` or `Formatter`
+    formatter : `str` or `Formatter` or `Formatter` class.
         Full name of formatter to use to read this Dataset or a `Formatter`
-        instance.
+        instance or class.
     path : `str`
         Path to Dataset, relative to `Datastore` root.
     storageClass : `StorageClass`
@@ -50,9 +52,14 @@ class StoredFileInfo:
     __slots__ = ("_formatter", "_path", "_storageClass", "_checksum", "_size")
 
     def __init__(self, formatter, path, storageClass, checksum=None, size=None):
-        assert isinstance(formatter, str) or isinstance(formatter, Formatter)
-        if isinstance(formatter, Formatter):
+        if isinstance(formatter, str):
+            # We trust that this string refers to a Formatter
+            pass
+        elif isinstance(formatter, Formatter) or (inspect.isclass(formatter) and
+                                                  issubclass(formatter, Formatter)):
             formatter = formatter.name()
+        else:
+            raise ValueError(f"Supplied formatter '{formatter}' is not a Formatter")
         self._formatter = formatter
         assert isinstance(path, str)
         self._path = path

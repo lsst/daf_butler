@@ -22,7 +22,7 @@
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict")
+           "NamedKeyDict", "getClassOf")
 
 import sys
 import functools
@@ -135,7 +135,34 @@ def getFullTypeName(cls):
     return cls.__module__ + "." + cls.__qualname__
 
 
-def getInstanceOf(typeOrName):
+def getClassOf(typeOrName):
+    """Given the type name or a type, return the python type.
+
+    If a type name is given, an attempt will be made to import the type.
+
+    Parameters
+    ----------
+    typeOrName : `str` or Python class
+        A string describing the Python class to load or a Python type.
+
+    Returns
+    -------
+    type_ : `type`
+        Directly returns the Python type if a type was provided, else
+        tries to import the given string and returns the resulting type.
+
+    Notes
+    -----
+    This is a thin wrapper around `~lsst.utils.doImport`.
+    """
+    if isinstance(typeOrName, str):
+        cls = doImport(typeOrName)
+    else:
+        cls = typeOrName
+    return cls
+
+
+def getInstanceOf(typeOrName, *args, **kwargs):
     """Given the type name or a type, instantiate an object of that type.
 
     If a type name is given, an attempt will be made to import the type.
@@ -144,12 +171,19 @@ def getInstanceOf(typeOrName):
     ----------
     typeOrName : `str` or Python class
         A string describing the Python class to load or a Python type.
+    args : `tuple`
+        Positional arguments to use pass to the object constructor.
+    kwargs : `dict`
+        Keyword arguments to pass to object constructor.
+
+    Returns
+    -------
+    instance : `object`
+        Instance of the requested type, instantiated with the provided
+        parameters.
     """
-    if isinstance(typeOrName, str):
-        cls = doImport(typeOrName)
-    else:
-        cls = typeOrName
-    return cls()
+    cls = getClassOf(typeOrName)
+    return cls(*args, **kwargs)
 
 
 class Singleton(type):
