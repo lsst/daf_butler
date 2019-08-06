@@ -47,6 +47,22 @@ class FileDescriptor:
         self.storageClass = storageClass
         self.parameters = parameters
 
+    def __repr__(self):
+        optionals = {}
+        if self._readStorageClass is not None:
+            optionals["readStorageClass"] = self._readStorageClass
+        if self.parameters:
+            optionals["parameters"] = self.parameters
+
+        # order is preserved in the dict
+        options = ", ".join(f"{k}={v!r}" for k, v in optionals.items())
+
+        r = f"{self.__class__.__name__}({self.location!r}, {self.storageClass!r}"
+        if options:
+            r = r + ", " + options
+        r = r + ")"
+        return r
+
     @property
     def readStorageClass(self):
         """Storage class to use when reading. (`StorageClass`)

@@ -77,10 +77,18 @@ class StorageClass:
         if assembler is None:
             assembler = self._cls_assembler
         self.name = name
-        self._pytypeName = pytype
+
         if pytype is None:
-            self._pytypeName = "object"
-            self._pytype = object
+            pytype = object
+
+        if not isinstance(pytype, str):
+            # Already have a type so store it and get the name
+            self._pytypeName = getFullTypeName(pytype)
+            self._pytype = pytype
+        else:
+            # Store the type name and defer loading of type
+            self._pytypeName = pytype
+
         self._components = components if components is not None else {}
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the assembler is not None also set it and clear the default
@@ -117,11 +125,8 @@ class StorageClass:
         """Python type associated with this `StorageClass`."""
         if self._pytype is not None:
             return self._pytype
-        # Handle case where we did get a python type not string
-        if not isinstance(self._pytypeName, str):
-            pytype = self._pytypeName
-            self._pytypeName = self._pytypeName.__name__
-        elif hasattr(builtins, self._pytypeName):
+
+        if hasattr(builtins, self._pytypeName):
             pytype = getattr(builtins, self._pytypeName)
         else:
             pytype = doImport(self._pytypeName)
@@ -308,13 +313,28 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self):
-        return "{}({}, pytype={}, assembler={}, components={}," \
-            " parameters={})".format(type(self).__qualname__,
-                                     self.name,
-                                     self._pytypeName,
-                                     self._assemblerClassName,
-                                     list(self.components.keys()),
-                                     self._parameters)
+        optionals = {}
+        if self._pytypeName != "object":
+            optionals["pytype"] = self._pytypeName
+        if self._assemblerClassName is not None:
+            optionals["assembler"] = self._assemblerClassName
+        if self._parameters:
+            optionals["parameters"] = self._parameters
+        if self.components:
+            optionals["components"] = self.components
+
+        # order is preserved in the dict
+        options = ", ".join(f"{k}={v!r}" for k, v in optionals.items())
+
+        # Start with mandatory fields
+        r = f"{self.__class__.__name__}({self.name!r}"
+        if options:
+            r = r + ", " + options
+        r = r + ")"
+        return r
+
+    def __str__(self):
+        return self.name
 
 
 class StorageClassFactory(metaclass=Singleton):

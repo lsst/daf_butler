@@ -22,11 +22,13 @@
 """Tests related to the formatter infrastructure.
 """
 
+import inspect
 import os.path
 import unittest
 
 from datasetsHelper import DatasetTestHelper
 from lsst.daf.butler import Formatter, FormatterFactory, StorageClass, DatasetType, Config, DimensionUniverse
+from lsst.daf.butler import FileDescriptor, Location
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -39,24 +41,44 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.id = 0
         self.factory = FormatterFactory()
 
+        # Dummy FileDescriptor for testing getFormatter
+        self.fileDescriptor = FileDescriptor(Location("/a/b/c", "d"),
+                                             StorageClass("DummyStorageClass", dict, None))
+
+    def assertIsFormatter(self, formatter):
+        """Check that the supplied parameter is either a Formatter instance
+        or Formatter class."""
+
+        if inspect.isclass(formatter):
+            self.assertTrue(issubclass(formatter, Formatter), f"Is {formatter} a Formatter")
+        else:
+            self.assertIsInstance(formatter, Formatter)
+
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
         """
         formatterTypeName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
-        f = self.factory.getFormatter(storageClassName)
-        self.assertIsInstance(f, Formatter)
+        f = self.factory.getFormatter(storageClassName, self.fileDescriptor)
+        self.assertIsFormatter(f)
+        self.assertEqual(f.name(), formatterTypeName)
+        self.assertIn(formatterTypeName, str(f))
+        self.assertIn(self.fileDescriptor.location.path, str(f))
 
         fcls = self.factory.getFormatterClass(storageClassName)
-        self.assertEqual(fcls, type(f))
+        self.assertIsFormatter(fcls)
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
         from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
         self.assertEqual(type(f), FitsCatalogFormatter)
 
+        with self.assertRaises(TypeError):
+            # Requires a constructor parameter
+            self.factory.getFormatter(storageClassName)
+
         with self.assertRaises(KeyError):
-            f = self.factory.getFormatter("Missing")
+            self.factory.getFormatter("Missing", self.fileDescriptor)
 
     def testRegistryWithStorageClass(self):
         """Test that the registry can be given a StorageClass object.
@@ -72,17 +94,18 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.factory.registerFormatter(sc, formatterTypeName)
 
         # Retrieve using the class
-        f = self.factory.getFormatter(sc)
-        self.assertIsInstance(f, Formatter)
+        f = self.factory.getFormatter(sc, self.fileDescriptor)
+        self.assertIsFormatter(f)
+        self.assertEqual(f.fileDescriptor, self.fileDescriptor)
 
         # Retrieve using the DatasetType
-        f2 = self.factory.getFormatter(datasetType)
-        self.assertIsInstance(f, Formatter)
+        f2 = self.factory.getFormatter(datasetType, self.fileDescriptor)
+        self.assertIsFormatter(f2)
         self.assertEqual(f.name(), f2.name())
 
         # Class directly
         f2cls = self.factory.getFormatterClass(datasetType)
-        self.assertEqual(f2cls.name(), f.name())
+        self.assertIsFormatter(f2cls)
 
         # This might defer the import, pytest may have already loaded it
         from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
@@ -105,29 +128,29 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         sc = StorageClass("DummySC", dict, None)
         refPviHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyHSC",
                                                                 "physical_filter": "v"})
-        refPviHscFmt = self.factory.getFormatter(refPviHsc)
-        self.assertIsInstance(refPviHscFmt, Formatter)
+        refPviHscFmt = self.factory.getFormatterClass(refPviHsc)
+        self.assertIsFormatter(refPviHscFmt)
         self.assertIn("JsonFormatter", refPviHscFmt.name())
 
         refPviNotHsc = self.makeDatasetRef("pvi", dimensions, sc, {"instrument": "DummyNotHSC",
                                                                    "physical_filter": "v"})
-        refPviNotHscFmt = self.factory.getFormatter(refPviNotHsc)
-        self.assertIsInstance(refPviNotHscFmt, Formatter)
+        refPviNotHscFmt = self.factory.getFormatterClass(refPviNotHsc)
+        self.assertIsFormatter(refPviNotHscFmt)
         self.assertIn("PickleFormatter", refPviNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using Dimensions
         refPvixHsc = self.makeDatasetRef("pvix", dimensions, sc, {"instrument": "DummyHSC",
                                                                   "physical_filter": "v"})
-        refPvixNotHscFmt = self.factory.getFormatter(refPvixHsc)
-        self.assertIsInstance(refPvixNotHscFmt, Formatter)
+        refPvixNotHscFmt = self.factory.getFormatterClass(refPvixHsc)
+        self.assertIsFormatter(refPvixNotHscFmt)
         self.assertIn("PickleFormatter", refPvixNotHscFmt.name())
 
         # Create a DatasetRef that should fall back to using StorageClass
         dimensionsNoV = universe.extract(("physical_filter", "instrument"))
         refPvixNotHscDims = self.makeDatasetRef("pvix", dimensionsNoV, sc, {"instrument": "DummyHSC",
                                                                             "physical_filter": "v"})
-        refPvixNotHscDims_fmt = self.factory.getFormatter(refPvixNotHscDims)
-        self.assertIsInstance(refPvixNotHscDims_fmt, Formatter)
+        refPvixNotHscDims_fmt = self.factory.getFormatterClass(refPvixNotHscDims)
+        self.assertIsFormatter(refPvixNotHscDims_fmt)
         self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 
 

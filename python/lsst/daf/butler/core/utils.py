@@ -24,6 +24,7 @@ __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
            "NamedKeyDict", "getClassOf")
 
+import builtins
 import sys
 import functools
 from collections.abc import MutableMapping
@@ -128,10 +129,18 @@ def getFullTypeName(cls):
     -------
     name : `str`
         Full name of type.
+
+    Notes
+    -----
+    Builtins are returned without the ``builtins`` specifier included.  This
+    allows `str` to be returned as "str" rather than "builtins.str".
     """
     # If we have an instance we need to convert to a type
     if not hasattr(cls, "__qualname__"):
         cls = type(cls)
+    if hasattr(builtins, cls.__qualname__):
+        # Special case builtins such as str and dict
+        return cls.__qualname__
     return cls.__module__ + "." + cls.__qualname__
 
 

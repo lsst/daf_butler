@@ -155,7 +155,7 @@ class TestButlerUtils(unittest.TestCase):
     def testTypeNames(self):
         # Check types and also an object
         tests = [(Formatter, "lsst.daf.butler.core.formatter.Formatter"),
-                 (int, "builtins.int"),
+                 (int, "int"),
                  (StorageClass, "lsst.daf.butler.core.storageClass.StorageClass"),
                  (StorageClass(None), "lsst.daf.butler.core.storageClass.StorageClass")]
 
