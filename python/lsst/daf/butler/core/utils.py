@@ -25,7 +25,6 @@ __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "NamedKeyDict")
 
 import builtins
-import os
 import sys
 import functools
 from collections.abc import MutableMapping

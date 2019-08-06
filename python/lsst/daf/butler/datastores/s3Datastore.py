@@ -705,7 +705,7 @@ class S3Datastore(Datastore):
         formatterFailed = []
         for entity in entities:
             try:
-                self.formatterFactory.getFormatter(entity)
+                self.formatterFactory.getFormatterClass(entity)
             except KeyError as e:
                 formatterFailed.append(str(e))
                 if logFailures:
@@ -722,7 +722,8 @@ class S3Datastore(Datastore):
 
     def getLookupKeys(self):
         # Docstring is inherited from base class
-        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys()
+        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
+            self.constraints.getLookupKeys()
 
     def validateKey(self, lookupKey, entity):
         # Docstring is inherited from base class
