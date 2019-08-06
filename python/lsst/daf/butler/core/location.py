@@ -337,6 +337,11 @@ class Location:
     def __str__(self):
         return self.uri
 
+    def __repr__(self):
+        uri = self._datastoreRootUri.geturl()
+        path = self._path
+        return f"{self.__class__.__name__}({uri!r}, {path!r})"
+
     @property
     def uri(self):
         """URI string corresponding to fully-specified location in datastore.
