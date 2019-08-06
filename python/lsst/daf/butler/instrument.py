@@ -77,9 +77,9 @@ class Instrument(metaclass=ABCMeta):
 
         Returns
         -------
-        formatter : `Formatter`
-            Object that reads the file into an `lsst.afw.image.Exposure`
-            instance.
+        formatter : `Formatter` class
+            Class to be used that reads the file into an
+            `lsst.afw.image.Exposure` instance.
         """
         raise NotImplementedError()
 
