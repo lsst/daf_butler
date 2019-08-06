@@ -58,6 +58,9 @@ class Formatter(metaclass=ABCMeta):
     def __str__(self):
         return f"{self.name()}@{self.fileDescriptor.location.path}"
 
+    def __repr__(self):
+        return f"{self.name()}({self.fileDescriptor!r})"
+
     @property
     def fileDescriptor(self):
         """FileDescriptor associated with this formatter
