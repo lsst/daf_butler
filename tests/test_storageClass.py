@@ -48,9 +48,16 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         sc = StorageClass(className, pytype=dict)
         self.assertIsInstance(sc, StorageClass)
         self.assertEqual(sc.name, className)
+        self.assertEqual(str(sc), className)
         self.assertFalse(sc.components)
         self.assertTrue(sc.validateInstance({}))
         self.assertFalse(sc.validateInstance(""))
+
+        r = repr(sc)
+        self.assertIn("StorageClass", r)
+        self.assertIn(className, r)
+        self.assertNotIn("parameters", r)
+        self.assertIn("pytype='dict'", r)
 
         # Ensure we do not have an assembler
         with self.assertRaises(TypeError):
@@ -63,7 +70,9 @@ class StorageClassFactoryTestCase(unittest.TestCase):
         # Include some components
         scc = StorageClass(className, pytype=PythonType, components={"comp1": sc})
         self.assertIn("comp1", scc.components)
-        self.assertIn("comp1", repr(scc))
+        r = repr(scc)
+        self.assertIn("comp1", r)
+        self.assertIn("lsst.daf.butler.core.assembler.CompositeAssembler", r)
 
         # Ensure that we have an assembler
         self.assertIsInstance(scc.assembler(), CompositeAssembler)
