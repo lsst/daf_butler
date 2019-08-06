@@ -268,7 +268,7 @@ class Config(collections.abc.MutableMapping):
         try:
             response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
-            raise FileNotFoundError(f"No such file or directory: {path}") from err
+            raise FileNotFoundError(f"No such file or directory: {uri}") from err
 
         # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
         # Loader will raise an error that the stream has no name. A hackish

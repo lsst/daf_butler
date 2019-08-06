@@ -27,6 +27,7 @@ import os
 import logging
 from collections import namedtuple
 import tempfile
+import pathlib
 
 import boto3
 
@@ -286,28 +287,30 @@ class S3Datastore(Datastore):
                                               Key=location.relativeToPathRoot)
         except self.client.exceptions.ClientError as err:
             errorcode = err.response["ResponseMetadata"]["HTTPStatusCode"]
-            # the HTTPS code 403 should be reserved for authorization failures.
-            # For some reason it's 403 that is raised when paths, that begin
-            # with '/', are being asked for. So `path/file` raises a 404 but
-            # `/path/file` raises a 403. Unit tests right now demand a
-            # FileExistsError be raised, so I do, but this should be updated.
-            # This has been the way boto3 does errors since at least 2015
-            # https://github.com/boto/boto3/issues/167
-#            if errorcode == 403:
-#                errmsg = "Insufficient, or invalid, permissions."
-#                raise PermissionError(errmsg) from err
-            if errorcode == 404 or errorcode == 403:
-                errmsg = "Dataset with Id {} does not exists at expected location {}."
-                raise FileNotFoundError(errmsg.format(ref.id, location)) from err
+            # head_object returns 404 when object does not exist only when user
+            # has s3:ListBucket permission. If list permission does not exist a
+            # 403 is returned. In practical terms this usually means that the
+            # file does not exist, but it could also mean user lacks GetObject
+            # permission. It's hard to tell which case is it.
+            # docs.aws.amazon.com/AmazonS3/latest/API/RESTObjectHEAD.html
+            # Unit tests right now demand FileExistsError is raised, but this
+            # should be updated to PermissionError like in s3CheckFileExists.
+            if errorcode == 403:
+                raise FileNotFoundError(f"Dataset with Id {ref.id} not accessible at "
+                                        f"expected location {location}. Forbidden HEAD "
+                                        "operation error occured. Verify s3:ListBucket "
+                                        "and s3:GetObject permissions are granted for "
+                                        "your IAM user and that file exists. ") from err
+            if errorcode == 404:
+                errmsg = f"Dataset with Id {ref.id} does not exists at expected location {location}."
+                raise FileNotFoundError(errmsg) from err
             # other errors are reraised also, but less descriptively
             raise err
 
         if response["ContentLength"] != storedFileInfo.size:
-            errstr = ("Integrity failure in Datastore. Size of file {} ({}) "
-                      "does not match recorded size of {}")
-            raise RuntimeError(errstr.format(location.path,
-                                             response["ContentLength"],
-                                             storedFileInfo.size))
+            raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
+                               " match recorded size of {}".format(location.path, response["ContentLength"],
+                                                                   storedFileInfo.size))
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites.
@@ -319,37 +322,36 @@ class S3Datastore(Datastore):
 
         # Is this a component request?
         component = ref.datasetType.component()
-        formatter = getInstanceOf(storedFileInfo.formatter)
-        formatterParams, assemblerParams = formatter.segregateParameters(parameters)
+
+        formatter = getInstanceOf(storedFileInfo.formatter,
+                                  FileDescriptor(location, readStorageClass=readStorageClass,
+                                                 storageClass=writeStorageClass, parameters=parameters))
+        formatterParams, assemblerParams = formatter.segregateParameters()
 
         # download the data as bytes
         serializedDataset = response["Body"].read()
-        fileDescriptor = FileDescriptor(location,
-                                        readStorageClass=readStorageClass,
-                                        storageClass=writeStorageClass,
-                                        parameters=parameters)
 
         # format the downloaded bytes into appropriate object directly, or via
-        # tempfile (when formatter does not support to/from/Bytes)
+        # tempfile (when formatter does not support to/from/Bytes). This is S3
+        # equivalent of PosixDatastore formatter.read try-except block.
         try:
-            result = formatter.fromBytes(serializedDataset, fileDescriptor,
-                                         component=component)
+            result = formatter.fromBytes(serializedDataset, component=component)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
                 tmpFile.file.write(serializedDataset)
-                fileDescriptor.location = Location(*os.path.split(tmpFile.name))
-                result = formatter.read(fileDescriptor, component=component)
+                formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
+                result = formatter.read(component=component)
         except Exception as e:
             raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
 
         # Process any left over parameters
-        if parameters:
+        if assemblerParams:
             result = readStorageClass.assembler().handleParameters(result, assemblerParams)
 
         # Validate the returned data type matches the expected data type
         pytype = readStorageClass.pytype
         if pytype and not isinstance(result, pytype):
-            raise TypeError(f"Got type {type(result)} from formatter but expected {pytype}")
+            raise TypeError("Got type {} from formatter but expected {}".format(type(result), pytype))
 
         return result
 
@@ -404,33 +406,32 @@ class S3Datastore(Datastore):
 
         # Get the formatter based on the storage class
         try:
-            formatter = self.formatterFactory.getFormatter(ref)
+            formatter = self.formatterFactory.getFormatter(ref,
+                                                           FileDescriptor(location,
+                                                                          storageClass=storageClass))
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
-        # in PosixDatastore a directory can be created by `safeMakeDir` and
-        # then the file is written if checks against overwriting an existing
-        # file pass. But in S3 `Keys` instead only look like directories, but
-        # are not. We check if an exact full key already exists before writing
-        # instead, if it does not the insert key operation will be equivalent
-        # to creating a directory and the file together.
+        # in PosixDatastore a directory can be created by `safeMakeDir`. In S3
+        # `Keys` instead only look like directories, but are not. We check if
+        # an *exact* full key already exists before writing instead. The insert
+        # key operation is equivalent to creating the dir and the file.
         location.updateExtension(formatter.extension)
         if s3CheckFileExists(location, client=self.client,)[0]:
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {location.uri} exists.")
 
         # upload the file directly from bytes or by using a temporary file if
-        # _toBytes is not implemented for the formatter in question
-        fileDescriptor = FileDescriptor(location, storageClass=storageClass)
+        # _toBytes is not implemented
         try:
-            serializedDataset = formatter.toBytes(inMemoryDataset, fileDescriptor)
+            serializedDataset = formatter.toBytes(inMemoryDataset)
             self.client.put_object(Bucket=location.netloc, Key=location.relativeToPathRoot,
                                    Body=serializedDataset)
             log.debug("Wrote file directly to %s", location.uri)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
-                fileDescriptor.location = Location(*os.path.split(tmpFile.name))
-                formatter.write(inMemoryDataset, fileDescriptor)
+                formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
+                formatter.write(inMemoryDataset)
                 self.client.upload_file(Bucket=location.netloc, Key=location.relativeToPathRoot,
                                         Filename=tmpFile.name)
                 log.debug("Wrote file to %s via a temporary directory.", location.uri)
@@ -476,70 +477,88 @@ class S3Datastore(Datastore):
         FileExistsError
             Raised if ``transfer is not None`` but a file already exists at the
             location computed from the template.
+        PermissionError
+            Raised when check if file exists at target location in S3 can not
+            be made because IAM user used lacks s3:GetObject or s3:ListBucket
+            permissions.
         """
+        if not self.constraints.isAcceptable(ref):
+            # Raise rather than use boolean return value.
+            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
+                                               " configuration.")
+
         if formatter is None:
-            formatter = self.formatterFactory.getFormatter(ref)
+            formatter = self.formatterFactory.getFormatterClass(ref)
 
-        # we can not assume that root is the same as self.root when ingesting
-        uri = ButlerURI(path)
-        if (uri.scheme != "file") and (uri.scheme != "s3"):
-            raise NotImplementedError(f"Scheme type {uri.scheme} not supported.")
+        # ingest can occur from file->s3 and s3->s3 (source can be file or s3,
+        # target will always be s3). File has to exist at target location. Two
+        # Schemeless URIs are assumed to obey os.path rules. Equivalent to
+        # os.path.exists(fullPath) check in PosixDatastore.
+        srcUri = ButlerURI(path)
+        if srcUri.scheme == 'file' or not srcUri.scheme:
+            if not os.path.exists(srcUri.ospath):
+                raise FileNotFoundError(f"File at '{srcUri}' does not exist; note that paths to ingest are "
+                                        "assumed to be relative to self.root unless they are absolute.")
+        elif srcUri.scheme == 's3':
+            if not s3CheckFileExists(srcUri, client=self.client)[0]:
+                raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
+                                        "assumed to be relative to self.root unless they are absolute."
+                                        .format(srcUri))
+        else:
+            raise NotImplementedError(f"Scheme type {srcUri.scheme} not supported.")
 
+        # Transfer is generaly None when put calls ingest. In that case file is
+        # uploaded in put, or already in proper location, so source location
+        # must be inside repository. In other cases, created target location
+        # must be inside root and source file must be deleted when 'move'd.
         if transfer is None:
-            if uri.scheme == "file":
-                # ingest a local file, but not transfer it to object storage
-                errmsg = (f"'{uri}' is not inside repository root '{self.root}'. "
-                          "Ingesting local data to S3Datastore without upload "
-                          "to S3 is not allowed.")
-                raise RuntimeError(errmsg.format(uri, self.root))
-            elif uri.scheme == "s3":
-                # if transfer is None and scheme is s3, put already uploaded it
-                rooturi = ButlerURI(self.root)
-                if not uri.path.startswith(rooturi.path):
-                    raise RuntimeError(f"'{uri}' is not inside repository root '{rooturi}'.")
+            rootUri = ButlerURI(self.root)
+            if srcUri.scheme == "file":
+                raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'. "
+                                   "Ingesting local data to S3Datastore without upload "
+                                   "to S3 is not allowed.")
+            elif srcUri.scheme == "s3":
+                if not srcUri.path.startswith(rootUri.path):
+                    raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'.")
+            p = pathlib.PurePosixPath(srcUri.relativeToPathRoot)
+            pathInStore = str(p.relative_to(rootUri.relativeToPathRoot))
+            tgtLocation = self.locationFactory.fromPath(pathInStore)
         elif transfer == "move" or transfer == "copy":
-            if uri.scheme == "file":
-                # uploading file from local disk and potentially deleting it
-                if s3CheckFileExists(uri, client=self.client)[0]:
-                    raise FileExistsError(f"File '{path}' exists!")
-
+            if srcUri.scheme == "file":
+                # source is on local disk.
                 template = self.templates.getTemplate(ref)
                 location = self.locationFactory.fromPath(template.format(ref))
-                location.updateExtension(formatter.extension)
-                self.client.upload_file(Bucket=location.netloc, Key=location.relativeToPathRoot,
-                                        Filename=path)
+                tgtPathInStore = formatter.predictPathFromLocation(location)
+                tgtLocation = self.locationFactory.fromPath(tgtPathInStore)
+                self.client.upload_file(Bucket=tgtLocation.netloc, Key=tgtLocation.relativeToPathRoot,
+                                        Filename=srcUri.ospath)
                 if transfer == "move":
-                    os.remove(path)
-            elif uri.scheme == "s3":
-                # copying files between buckets, potentially deleting src files
-                if s3CheckFileExists(uri, client=self.client)[0]:
-                    raise FileExistsError(f"File '{uri}' exists.")
-
-                relpath = uri.relativeToPathRoot
-                copySrc = {"Bucket": uri.netloc, "Key": relpath}
-                self.client.copy(copySrc, self.locationFactory.netloc,
-                                 relpath)
+                    os.remove(srcUri.ospath)
+            elif srcUri.scheme == "s3":
+                # source is another S3 Bucket
+                relpath = srcUri.relativeToPathRoot
+                copySrc = {"Bucket": srcUri.netloc, "Key": relpath}
+                self.client.copy(copySrc, self.locationFactory.netloc, relpath)
                 if transfer == "move":
                     # https://github.com/boto/boto3/issues/507 - there is no
                     # way of knowing if the file was actually deleted except
-                    # for checking all the keys again, reponse just ends up
-                    # being HTTP 204 OK request all the time
-                    self.client.delete(Bucket=uri.netloc, Key=relpath)
+                    # for checking all the keys again, reponse is  HTTP 204 OK
+                    # response all the time
+                    self.client.delete(Bucket=srcUri.netloc, Key=relpath)
+                p = pathlib.PurePosixPath(srcUri.relativeToPathRoot)
+                relativeToDatastoreRoot = str(p.relative_to(rootUri.relativeToPathRoot))
+                tgtLocation = self.locationFactory.fromPath(relativeToDatastoreRoot)
         else:
             raise NotImplementedError(f"Transfer type '{transfer}' not supported.")
 
-        if path.startswith(self.root):
-            path = path[len(self.root):].lstrip("/")
-        location = self.locationFactory.fromPath(path)
-
         # the file should exist on the bucket by now
-        exists, size = s3CheckFileExists(path=uri.relativeToPathRoot,
-                                         bucket=location.netloc,
+        exists, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
+                                         bucket=tgtLocation.netloc,
                                          client=self.client)
         self.registry.addDatasetLocation(ref, self.name)
 
         # Associate this dataset with the formatter for later read.
-        fileInfo = StoredFileInfo(formatter, path,
+        fileInfo = StoredFileInfo(formatter, tgtLocation.pathInStore,
                                   ref.datasetType.storageClass, size=size)
         # TODO: this is only transactional if the DatabaseDict uses
         #       self.registry internally.  Probably need to add
@@ -586,15 +605,15 @@ class S3Datastore(Datastore):
                 raise FileNotFoundError(f"Dataset {ref} not in this datastore")
 
             template = self.templates.getTemplate(ref)
-            location = self.s3locationFactory.fromPath(template.format(ref) +
-                                                       "#predicted")
+            location = self.locationFactory.fromPath(template.format(ref) +
+                                                     "#predicted")
         else:
             # If this is a ref that we have written we can get the path.
             # Get file metadata and internal metadata
             storedFileInfo = self.getStoredFileInfo(ref)
 
             # Use the path to determine the location
-            location = self.s3locationFactory.fromPath(storedFileInfo.path)
+            location = self.locationFactory.fromPath(storedFileInfo.path)
 
         return location.uri
 

@@ -105,7 +105,7 @@ class YamlFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        with open(self.fileDescriptor.location.path, "w") as fd:
+        with open(self.fileDescriptor.location.path, "wb") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))

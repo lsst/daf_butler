@@ -26,7 +26,6 @@ datastore:
     ThingOne: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     datasetType.component: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     pvi: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-    visit+physical_filter+instrument: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     instrument<DummyHSC>:
       pvi: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
       StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter

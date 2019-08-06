@@ -112,7 +112,7 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
-    def fromBytes(self, serializedDataset, fileDescriptor, component=None):
+    def fromBytes(self, serializedDataset, component=None):
         """Reads serialized data into a Dataset or its component.
 
         Parameters
@@ -135,7 +135,7 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support reading from bytes.")
 
-    def toBytes(self, inMemoryDataset, fileDescriptor):
+    def toBytes(self, inMemoryDataset):
         """Serialize the Dataset to bytes based on formatter.
 
         Parameters

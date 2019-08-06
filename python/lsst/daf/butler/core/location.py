@@ -155,7 +155,10 @@ class ButlerURI:
         Effectively, this is the path property with posix separator stripped
         from the left hand side of the path.
         """
-        p = PurePosixPath(self._uri.path)
+        if not self.scheme:
+            p = PurePath(self.path)
+        else:
+            p = PurePosixPath(self.path)
         return str(p.relative_to(p.root))
 
     @property
@@ -292,7 +295,7 @@ class ButlerURI:
                     replacements["path"] += sep
 
             elif parsed.scheme == "file":
-                # file URI implies POSIX path separators so split as posix,
+                # file URI implies POSIX path separators so split as POSIX,
                 # then join as os, and convert to abspath. Do not handle
                 # home directories since "file" scheme is explicitly documented
                 # to not do tilde expansion.
@@ -400,10 +403,13 @@ class Location:
         """Returns the path component of the URI relative to the network
         location.
 
-        Effectively, this is the path property with posix separator stipped
+        Effectively, this is the path property with POSIX separator stripped
         from the left hand side of the path.
         """
-        p = PurePosixPath(os2posix(self.path))
+        if self._datastoreRootUri.scheme == 'file' or not self._datastoreRootUri.scheme:
+            p = PurePath(os2posix(self.path))
+        else:
+            p = PurePosixPath(self.path)
         stripped = p.relative_to(p.root)
         return str(posix2os(stripped))
 

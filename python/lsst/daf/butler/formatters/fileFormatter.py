@@ -77,21 +77,15 @@ class FileFormatter(Formatter):
         """
         pass
 
-    def _assembleDataset(self, data, fileDescriptor, component):
+    def _assembleDataset(self, data, component=None):
         """Assembles and coerces the dataset, or one of its components,
         into an appropriate python type and returns it.
 
         Parameters
         ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         data : `dict` or `object`
             Composite or a dict that, or which component, needs to be
             coerced to the python type specified in "fileDescriptor"
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read, type to read it into and parameters
-            to be used for reading.
         component : `str`, optional
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -104,10 +98,6 @@ class FileFormatter(Formatter):
             is controlled by the specific formatter.
         """
         fileDescriptor = self.fileDescriptor
-
-        # Read the file naively
-        path = fileDescriptor.location.path
-        data = self._readFile(path, fileDescriptor.storageClass.pytype)
 
         # if read and write storage classes differ, more work is required
         readStorageClass = fileDescriptor.readStorageClass
@@ -181,19 +171,19 @@ class FileFormatter(Formatter):
         """
 
         # Read the file naively
-        path = fileDescriptor.location.path
-        data = self._readFile(path, fileDescriptor.storageClass.pytype)
+        path = self.fileDescriptor.location.path
+        data = self._readFile(path, self.fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its
         # component coercing it to its appropriate pytype
-        data = self._assembleDataset(data, fileDescriptor, component)
+        data = self._assembleDataset(data, component)
 
         if data is None:
-            raise ValueError(f"Unable to read data with URI {fileDescriptor.location.uri}")
+            raise ValueError(f"Unable to read data with URI {self.fileDescriptor.location.uri}")
 
         return data
 
-    def fromBytes(self, serializedDataset, fileDescriptor, component=None):
+    def fromBytes(self, serializedDataset, component=None):
         """Reads serialized data into a Dataset or its component.
 
         Parameters
@@ -222,14 +212,14 @@ class FileFormatter(Formatter):
             raise NotImplementedError("Type does not support reading from bytes.")
 
         data = self._fromBytes(serializedDataset,
-                               fileDescriptor.storageClass.pytype)
+                               self.fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its
         # component coercing it to its appropriate ptype
-        data = self._assembleDataset(data, fileDescriptor, component)
+        data = self._assembleDataset(data, component)
 
         if data is None:
-            raise ValueError(f"Unable to read data with URI {fileDescriptor.location.uri}")
+            raise ValueError(f"Unable to read data with URI {self.fileDescriptor.location.uri}")
 
         return data
 
@@ -254,7 +244,7 @@ class FileFormatter(Formatter):
 
         return fileDescriptor.location.pathInStore
 
-    def toBytes(self, inMemoryDataset, fileDescriptor):
+    def toBytes(self, inMemoryDataset):
         """Serialize the Dataset to bytes based on formatter.
 
         Parameters
