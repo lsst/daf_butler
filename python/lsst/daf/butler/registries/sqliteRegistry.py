@@ -30,7 +30,8 @@ from sqlalchemy.pool import NullPool
 from sqlite3 import Connection as SQLite3Connection
 
 from lsst.daf.butler.core.config import Config
-from lsst.daf.butler.core.registry import RegistryConfig, ConnectionStringBuilder
+from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig

@@ -24,7 +24,8 @@ __all__ = ("PostgreSqlRegistry", )
 from sqlalchemy import create_engine
 
 from lsst.daf.butler.core.config import Config
-from lsst.daf.butler.core.registry import RegistryConfig, ConnectionStringBuilder
+from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 

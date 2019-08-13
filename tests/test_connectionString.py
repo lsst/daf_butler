@@ -29,7 +29,8 @@ import os.path
 
 from lsst.pex.policy import Policy
 from lsst.daf.persistence import DbAuth
-from lsst.daf.butler.core.registry import RegistryConfig, ConnectionStringBuilder
+from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
