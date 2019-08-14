@@ -56,6 +56,17 @@ class Instrument(metaclass=ABCMeta):
     each of the Tasks that requires special configuration.
     """
 
+    @property
+    @abstractmethod
+    def filterDefinitions(self):
+        """`~lsst.obs.base.FilterDefinitionCollection`, defining the filters
+        for this instrument.
+        """
+        return None
+
+    def __init__(self, *args, **kwargs):
+        self.filterDefinitions.defineFilters()
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not isabstract(cls):
@@ -82,6 +93,23 @@ class Instrument(metaclass=ABCMeta):
         `Registry`.
         """
         raise NotImplementedError()
+
+    def _registerFilters(self, registry):
+        """Register the physical and abstract filter Dimension relationships.
+        This should be called in the ``register`` implementation.
+
+        Parameters
+        ----------
+        registry : `lsst.daf.butler.core.Registry`
+            The registry to add dimensions to.
+        """
+        for filter in self.filterDefinitions:
+            registry.addDimensionEntry(
+                "physical_filter",
+                instrument=self.getName(),
+                physical_filter=filter.physical_filter,
+                abstract_filter=filter.abstract_filter
+            )
 
     @abstractmethod
     def getRawFormatter(self, dataId):
