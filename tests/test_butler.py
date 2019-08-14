@@ -23,10 +23,25 @@
 """
 
 import os
+import posixpath
 import unittest
 import tempfile
 import shutil
 import pickle
+import string
+import random
+
+try:
+    import boto3
+    import botocore
+    from moto import mock_s3
+except ImportError:
+    boto3 = None
+
+    def mock_s3(cls):
+        """A no-op decorator in case moto mock_s3 can not be imported.
+        """
+        return cls
 
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
@@ -35,6 +50,8 @@ from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
+from lsst.daf.butler.core.location import ButlerURI
+from lsst.daf.butler.core.s3utils import s3CheckFileExists
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -409,7 +426,16 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
     datastoreStr = ["/tmp"]
     datastoreName = [f"POSIXDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "/gen3.sqlite3'"
+    registryStr = "/gen3.sqlite3"
+
+    def checkFileExists(self, root, path):
+        """Checks if file exists at a given path (relative to root).
+
+        Test testPutTemplates verifies actual physical existance of the files
+        in the requested location. For POSIXDatastore this test is equivalent
+        to `os.path.exists` call.
+        """
+        return os.path.exists(os.path.join(root, path))
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -440,8 +466,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
-        self.assertTrue(os.path.exists(os.path.join(butler.datastore.root,
-                                                    "ingest/metric1/DummyCamComp_423.pickle")))
+        self.assertTrue(self.checkFileExists(butler.datastore.root,
+                                             "ingest/metric1/DummyCamComp_423.pickle"))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -451,8 +477,8 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         # defining them  to behave now; the important thing is that they
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
-        self.assertTrue(os.path.exists(os.path.join(butler.datastore.root,
-                                                    "ingest/metric2/DummyCamComp_423.pickle")))
+        self.assertTrue(self.checkFileExists(butler.datastore.root,
+                                             "ingest/metric2/DummyCamComp_423.pickle"))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -542,6 +568,97 @@ class ButlerConfigNoRunTestCase(unittest.TestCase):
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
+
+
+@unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
+@mock_s3
+class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
+    """S3Datastore specialization of a butler; an S3 storage Datastore +
+    a local in-memory SqlRegistry.
+    """
+    configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
+    fullConfigKey = None
+    validationCanFail = True
+
+    bucketName = "anybucketname"
+    """Name of the Bucket that will be used in the tests. The name is read from
+    the config file used with the tests during set-up.
+    """
+
+    root = "butlerRoot/"
+    """Root repository directory expected to be used in case useTempRoot=False.
+    Otherwise the root is set to a 20 characters long randomly generated string
+    during set-up.
+    """
+
+    datastoreStr = [f"datastore={root}"]
+    """Contains all expected root locations in a format expected to be
+    returned by Butler stringification.
+    """
+
+    datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
+    """The expected format of the S3Datastore string."""
+
+    registryStr = f"registry='sqlite:///:memory:'"
+    """Expected format of the Registry string."""
+
+    def genRoot(self):
+        """Returns a random string of len 20 to serve as a root
+        name for the temporary bucket repo.
+
+        This is equivalent to tempfile.mkdtemp as this is what self.root
+        becomes when useTempRoot is True.
+        """
+        rndstr = "".join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
+        )
+        return rndstr + "/"
+
+    def setUp(self):
+        config = Config(self.configFile)
+        uri = ButlerURI(config[".datastore.datastore.root"])
+        self.bucketName = uri.netloc
+
+        if self.useTempRoot:
+            self.root = self.genRoot()
+        rooturi = f"s3://{self.bucketName}/{self.root}"
+        config.update({"datastore": {"datastore": {"root": rooturi}}})
+
+        # MOTO needs to know that we expect Bucket bucketname to exist
+        # (this used to be the class attribute bucketName)
+        s3 = boto3.resource("s3")
+        s3.create_bucket(Bucket=self.bucketName)
+
+        self.datastoreStr = f"datastore={self.root}"
+        self.datastoreName = [f"S3Datastore@{rooturi}"]
+        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
+        self.tmpConfigFile = posixpath.join(rooturi, "butler.yaml")
+
+    def tearDown(self):
+        s3 = boto3.resource("s3")
+        bucket = s3.Bucket(self.bucketName)
+        try:
+            bucket.objects.all().delete()
+        except botocore.exceptions.ClientError as e:
+            if e.response["Error"]["Code"] == "404":
+                # the key was not reachable - pass
+                pass
+            else:
+                raise
+
+        bucket = s3.Bucket(self.bucketName)
+        bucket.delete()
+
+    def checkFileExists(self, root, relpath):
+        """Checks if file exists at a given path (relative to root).
+
+        Test testPutTemplates verifies actual physical existance of the files
+        in the requested location. For S3Datastore this test is equivalent to
+        `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
+        """
+        uri = ButlerURI(root)
+        client = boto3.client("s3")
+        return s3CheckFileExists(uri, client=client)[0]
 
 
 if __name__ == "__main__":

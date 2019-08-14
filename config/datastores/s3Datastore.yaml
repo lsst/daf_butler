@@ -1,8 +1,8 @@
 datastore:
-  cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
+  cls: lsst.daf.butler.datastores.s3Datastore.S3Datastore
   root: <butlerRoot>/datastore
   records:
-    table: posix_datastore_records
+    table: s3datastorerecords
   create: true
   templates:
     # valid_first and valid_last here are YYYYMMDD; we assume we'll switch to

@@ -42,6 +42,8 @@ class YamlFormatter(FileFormatter):
         ----------
         path : `str`
             Path to use to open YAML format file.
+        pytype : `class`, optional
+            Not used by this implementation.
 
         Returns
         -------
@@ -54,11 +56,37 @@ class YamlFormatter(FileFormatter):
         The `~yaml.UnsafeLoader` is used when parsing the YAML file.
         """
         try:
-            with open(path, "r") as fd:
-                data = yaml.load(fd, Loader=yaml.UnsafeLoader)
+            with open(path, "rb") as fd:
+                data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
 
+        return data
+
+    def _fromBytes(self, serializedDataset, pytype=None):
+        """Read the bytes object as a python object.
+
+        Parameters
+        ----------
+        serializedDataset : `bytes`
+            Bytes object to unserialize.
+        pytype : `class`, optional
+            Not used by this implementation.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            The requested data as an object, or None if the string could
+            not be read.
+        """
+        try:
+            data = yaml.load(serializedDataset, Loader=yaml.UnsafeLoader)
+        except yaml.YAMLError:
+            data = None
+        try:
+            data = data.exportAsDict()
+        except AttributeError:
+            pass
         return data
 
     def _writeFile(self, inMemoryDataset):
@@ -77,10 +105,30 @@ class YamlFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        with open(self.fileDescriptor.location.path, "w") as fd:
+        with open(self.fileDescriptor.location.path, "wb") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            yaml.dump(inMemoryDataset, stream=fd)
+            fd.write(self._toBytes(inMemoryDataset))
+
+    def _toBytes(self, inMemoryDataset):
+        """Write the in memory dataset to a bytestring.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to serialize
+
+        Returns
+        -------
+        serializedDataset : `bytes`
+            YAML string encoded to bytes.
+
+        Raises
+        ------
+        Exception
+            The object could not be serialized.
+        """
+        return yaml.dump(inMemoryDataset).encode()
 
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.

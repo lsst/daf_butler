@@ -50,8 +50,8 @@ class JsonFormatter(FileFormatter):
             if the file could not be opened.
         """
         try:
-            with open(path, "r") as fd:
-                data = json.load(fd)
+            with open(path, "rb") as fd:
+                data = self._fromBytes(fd.read())
         except FileNotFoundError:
             data = None
 
@@ -73,10 +73,53 @@ class JsonFormatter(FileFormatter):
         Exception
             The file could not be written.
         """
-        with open(self.fileDescriptor.location.path, "w") as fd:
+        with open(self.fileDescriptor.location.path, "wb") as fd:
             if hasattr(inMemoryDataset, "_asdict"):
                 inMemoryDataset = inMemoryDataset._asdict()
-            json.dump(inMemoryDataset, fd)
+            fd.write(self._toBytes(inMemoryDataset))
+
+    def _fromBytes(self, serializedDataset, pytype=None):
+        """Read the bytes object as a python object.
+
+        Parameters
+        ----------
+        serializedDataset : `bytes`
+            Bytes object to unserialize.
+        pytype : `class`, optional
+            Not used by this implementation.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            The requested data as a Python object or None if the string could
+            not be read.
+        """
+        try:
+            data = json.loads(serializedDataset)
+        except json.JSONDecodeError:
+            data = None
+
+        return data
+
+    def _toBytes(self, inMemoryDataset):
+        """Write the in memory dataset to a bytestring.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Object to serialize
+
+        Returns
+        -------
+        serializedDataset : `bytes`
+            bytes representing the serialized dataset.
+
+        Raises
+        ------
+        Exception
+            The object could not be serialized.
+        """
+        return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
     def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
         """Coerce the supplied inMemoryDataset to type `pytype`.

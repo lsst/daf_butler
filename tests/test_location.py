@@ -68,6 +68,7 @@ class LocationTestCase(unittest.TestCase):
         uriStrings = (
             ("relative/file.ext", "newfile.fits", "relative/newfile.fits"),
             ("relative/", "newfile.fits", "relative/newfile.fits"),
+            ("isThisADirOrFile", "aFile.fits", "aFile.fits"),
             ("https://www.lsst.org/butler/", "butler.yaml", "/butler/butler.yaml"),
             ("s3://amazon/datastore/", "butler.yaml", "/datastore/butler.yaml"),
             ("s3://amazon/datastore/mybutler.yaml", "butler.yaml", "/datastore/butler.yaml"),

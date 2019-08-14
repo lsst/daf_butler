@@ -23,12 +23,27 @@ import os
 import unittest
 import tempfile
 import shutil
+import string
+import random
+
+try:
+    import boto3
+    import botocore
+    from moto import mock_s3
+except ImportError:
+    boto3 = None
+
+    def mock_s3(cls):
+        """A no-op decorator in case moto mock_s3 can not be imported.
+        """
+        return cls
 
 import lsst.utils.tests
 
 from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType
+from lsst.daf.butler.core.location import ButlerURI
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 
 try:
@@ -139,6 +154,74 @@ class InMemoryDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase
 class ChainedDatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler-chained.yaml")
+
+
+@unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
+@mock_s3
+class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
+    """S3Datastore specialization of a butler; an S3 storage Datastore +
+    a local in-memory SqlRegistry.
+    """
+    configFile = os.path.join(TESTDIR, "config/basic/butler-s3store.yaml")
+
+    bucketName = "anybucketname"
+    """Name of the Bucket that will be used in the tests. The name is read from
+    the config file used with the tests during set-up.
+    """
+
+    root = "butlerRoot/"
+    """Root repository directory expected to be used in case useTempRoot=False.
+    Otherwise the root is set to a 20 characters long randomly generated string
+    during set-up.
+    """
+
+    def genRoot(self):
+        """Returns a random string of len 20 to serve as a root
+        name for the temporary bucket repo.
+
+        This is equivalent to tempfile.mkdtemp as this is what self.root
+        becomes when useTempRoot is True.
+        """
+        rndstr = "".join(
+            random.choice(string.ascii_uppercase + string.digits) for _ in range(20)
+        )
+        return rndstr + "/"
+
+    def setUp(self):
+        config = Config(self.configFile)
+        uri = ButlerURI(config[".datastore.datastore.root"])
+        self.bucketName = uri.netloc
+
+        if self.useTempRoot:
+            self.root = self.genRoot()
+        rooturi = f"s3://{self.bucketName}/{self.root}"
+        config.update({"datastore": {"datastore": {"root": rooturi}}})
+
+        # MOTO needs to know that we expect Bucket bucketname to exist
+        # (this used to be the class attribute bucketName)
+        s3 = boto3.resource("s3")
+        s3.create_bucket(Bucket=self.bucketName)
+
+        self.datastoreStr = f"datastore={self.root}"
+        self.datastoreName = [f"S3Datastore@{rooturi}"]
+        Butler.makeRepo(rooturi, config=config, forceConfigRoot=False)
+        self.tmpConfigFile = os.path.join(rooturi, "butler.yaml")
+
+    def tearDown(self):
+        s3 = boto3.resource("s3")
+        bucket = s3.Bucket(self.bucketName)
+        try:
+            bucket.objects.all().delete()
+        except botocore.exceptions.ClientError as err:
+            errorcode = err.response["ResponseMetadata"]["HTTPStatusCode"]
+            if errorcode == 404:
+                # the key was not reachable - pass
+                pass
+            else:
+                raise
+
+        bucket = s3.Bucket(self.bucketName)
+        bucket.delete()
 
 
 if __name__ == "__main__":

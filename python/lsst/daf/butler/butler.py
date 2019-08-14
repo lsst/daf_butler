@@ -30,6 +30,11 @@ import contextlib
 import logging
 import itertools
 
+try:
+    import boto3
+except ImportError:
+    boto3 = None
+
 from lsst.utils import doImport
 from .core.utils import transactional
 from .core.datasets import DatasetRef, DatasetType
@@ -44,6 +49,7 @@ from .core.dimensions import DataId
 from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
+from .core.location import ButlerURI
 
 log = logging.getLogger(__name__)
 
@@ -173,9 +179,20 @@ class Butler:
         """
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
-        root = os.path.abspath(root)
-        if not os.path.isdir(root):
-            safeMakeDir(root)
+
+        # for "file" schemes we are assuming POSIX semantics for paths, for
+        # schemeless URIs we are assuming os.path semantics.
+        uri = ButlerURI(root)
+        if uri.scheme == "file" or not uri.scheme:
+            if not os.path.isdir(uri.ospath):
+                safeMakeDir(uri.ospath)
+        elif uri.scheme == "s3":
+            s3 = boto3.resource("s3")
+            # implies bucket exists, if not another level of checks
+            bucket = s3.Bucket(uri.netloc)
+            bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
+        else:
+            raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)
 
         # If we are creating a new repo from scratch with relative roots,
@@ -190,14 +207,7 @@ class Butler:
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
         if standalone:
             config.merge(full)
-
-        # Write out the config
-        if outfile is not None:
-            # Force root so that we can find everything else
-            config["root"] = root
-        else:
-            outfile = os.path.join(root, "butler.yaml")
-        config.dumpToFile(outfile)
+        config.dumpToUri(uri)
 
         # Create Registry and populate tables
         registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)

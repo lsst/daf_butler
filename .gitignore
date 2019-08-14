@@ -1,3 +1,6 @@
+#*
+*~
+*.bck
 *.pyc
 version.py
 _build.*

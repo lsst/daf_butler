@@ -22,7 +22,7 @@
 __all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
            "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
            "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict", "getClassOf")
+           "NamedKeyDict")
 
 import builtins
 import sys

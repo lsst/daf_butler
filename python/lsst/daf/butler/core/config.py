@@ -31,10 +31,17 @@ import os
 import yaml
 import sys
 from yaml.representer import Representer
+import io
+import posixpath
+
+try:
+    import boto3
+except ImportError:
+    boto3 = None
 
 import lsst.utils
-
 from lsst.utils import doImport
+from lsst.daf.butler.core.location import ButlerURI
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
@@ -67,7 +74,7 @@ class Loader(yaml.CSafeLoader):
 
     def __init__(self, stream):
         super().__init__(stream)
-        self._root = os.path.split(stream.name)[0]
+        self._root = ButlerURI(stream.name)
         Loader.add_constructor("!include", Loader.include)
 
     def include(self, node):
@@ -91,10 +98,28 @@ class Loader(yaml.CSafeLoader):
             raise yaml.constructor.ConstructorError
 
     def extractFile(self, filename):
-        filepath = os.path.join(self._root, filename)
-        log.debug("Opening YAML file via !include: %s", filepath)
-        with open(filepath, "r") as f:
-            return yaml.load(f, Loader)
+        fileuri = copy.copy(self._root)
+        fileuri.updateFile(filename)
+        log.debug("Opening YAML file via !include: %s", fileuri)
+
+        if fileuri.scheme == "file":
+            with open(fileuri.ospath, "r") as f:
+                return yaml.load(f, Loader)
+        elif fileuri.scheme == "s3":
+            if boto3 is None:
+                raise ModuleNotFoundError("Could not find boto3. Are you sure it is installed?")
+            s3 = boto3.client("s3")
+            try:
+                response = s3.get_object(Bucket=fileuri.netloc, Key=fileuri.relativeToPathRoot)
+            except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
+                raise FileNotFoundError(f'No such file or directory: {fileuri}') from err
+
+            # boto3 response is a `StreamingBody`, but not a valid Python
+            # IOStream. Loader will raise an error that the stream has no name.
+            # The name is used to resolve the "!include" filename location to
+            # download. A hackish solution is to name it explicitly.
+            response["Body"].name = fileuri.geturl()
+        return yaml.load(response["Body"], Loader)
 
 
 class Config(collections.abc.MutableMapping):
@@ -209,17 +234,48 @@ class Config(collections.abc.MutableMapping):
         return type(self)(self)
 
     def __initFromFile(self, path):
-        """Load a file from path.
+        """Load a file from a path or an URI.
+
+        Parameters
+        ----------
+        path : `str`
+            Path or an URI to a persisted config file.
+        """
+        uri = ButlerURI(path)
+        if uri.path.endswith("yaml"):
+            if uri.scheme == "s3":
+                self.__initFromS3YamlFile(uri.geturl())
+            else:
+                self.__initFromYamlFile(uri.ospath)
+        else:
+            raise RuntimeError("Unhandled config file type:%s" % uri)
+
+    def __initFromS3YamlFile(self, url):
+        """Load a file at a given S3 Bucket uri and attempts to load it from
+        yaml.
 
         Parameters
         ----------
         path : `str`
             To a persisted config file.
         """
-        if path.endswith("yaml"):
-            self.__initFromYamlFile(path)
-        else:
-            raise RuntimeError("Unhandled config file type:%s" % path)
+        if boto3 is None:
+            raise ModuleNotFoundError("boto3 not found."
+                                      "Are you sure it is installed?")
+
+        uri = ButlerURI(url)
+        s3 = boto3.client("s3")
+        try:
+            response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
+        except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
+            raise FileNotFoundError(f"No such file or directory: {uri}") from err
+
+        # boto3 response is a `StreamingBody`, but not a valid Python IOStream.
+        # Loader will raise an error that the stream has no name. A hackish
+        # solution is to name it explicitly.
+        response["Body"].name = url
+        self.__initFromYaml(response["Body"])
+        response["Body"].close()
 
     def __initFromYamlFile(self, path):
         """Opens a file at a given path and attempts to load it in from yaml.
@@ -719,6 +775,37 @@ class Config(collections.abc.MutableMapping):
         if data:
             yaml.safe_dump(data, output, default_flow_style=False)
 
+    def dumpToUri(self, uri, updateFile=True, defaultFileName="butler.yaml"):
+        """Writes the config to location pointed to by given URI.
+
+        Currently supports 's3' and 'file' URI schemes.
+
+        Parameters
+        ----------
+        uri: `str` or `ButlerURI`
+            URI of location where the Config will be written.
+        updateFile : bool, optional
+            If True and uri does not end on a filename with extension, will
+            append `defaultFileName` to the target uri. True by default.
+        defaultFileName : bool, optional
+            The file name that will be appended to target uri if updateFile is
+            True and uri does not end on a file with an extension.
+        """
+        if isinstance(uri, str):
+            uri = ButlerURI(uri)
+
+        if uri.scheme == "file":
+            if os.path.isdir(uri.path) and updateFile:
+                uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
+            self.dumpToFile(uri.ospath)
+        elif uri.scheme == "s3":
+            head, filename = posixpath.split(uri.path)
+            if "." not in filename:
+                uri.updateFile(defaultFileName)
+            self.dumpToS3File(uri.netloc, uri.relativeToPathRoot)
+        else:
+            raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
+
     def dumpToFile(self, path):
         """Writes the config to a file.
 
@@ -729,6 +816,26 @@ class Config(collections.abc.MutableMapping):
         """
         with open(path, "w") as f:
             self.dump(f)
+
+    def dumpToS3File(self, bucket, key):
+        """Writes the config to a file in S3 Bucket.
+
+        Parameters
+        ----------
+        bucketname: `str`
+            Name of the Bucket into which config will be written.
+        key : `str`
+            Path to the file to use for output, relative to the bucket.
+        """
+        if boto3 is None:
+            raise ModuleNotFoundError("Could not find boto3. "
+                                      "Are you sure it is installed?")
+
+        s3 = boto3.client("s3")
+        with io.StringIO() as stream:
+            self.dump(stream)
+            stream.seek(0)
+            s3.put_object(Bucket=bucket, Key=key, Body=stream.read())
 
     @staticmethod
     def updateParameters(configType, config, full, toUpdate=None, toCopy=None, overwrite=True):
@@ -805,7 +912,7 @@ class Config(collections.abc.MutableMapping):
             for key in toCopy:
                 if key in localConfig and not overwrite:
                     log.debug("Not overriding key '%s' from defaults in config %s",
-                              key, value, localConfig.__class__.__name__)
+                              key, localConfig.__class__.__name__)
                 else:
                     localConfig[key] = localFullConfig[key]
 

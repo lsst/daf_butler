@@ -112,6 +112,47 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
+    def fromBytes(self, serializedDataset, component=None):
+        """Reads serialized data into a Dataset or its component.
+
+        Parameters
+        ----------
+        serializedDataset : `bytes`
+            Bytes object to unserialize.
+        fileDescriptor : `FileDescriptor`
+            Identifies type to read it as and parameters to be used for
+            reading.
+        component : `str`, optional
+            Component to read from the Dataset. Only used if the `StorageClass`
+            for reading differed from the `StorageClass` used to write the
+            file.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            The requested data as a Python object. The type of object
+            is controlled by the specific formatter.
+        """
+        raise NotImplementedError("Type does not support reading from bytes.")
+
+    def toBytes(self, inMemoryDataset):
+        """Serialize the Dataset to bytes based on formatter.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The Python object to serialize.
+        fileDescriptor : `FileDescriptor`
+            Identifies type to read the dataset as and parameters to be used
+            for reading.
+
+        Returns
+        -------
+        serializedDataset : `bytes`
+            Bytes representing the serialized dataset.
+        """
+        raise NotImplementedError("Type does not support writing to bytes.")
+
     @classmethod
     @abstractmethod
     def predictPathFromLocation(cls, location):

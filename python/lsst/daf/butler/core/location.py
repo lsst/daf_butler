@@ -142,6 +142,26 @@ class ButlerURI:
         return self._uri.path
 
     @property
+    def ospath(self):
+        """Path component of the URI localized to current OS."""
+        if self.scheme == 's3':
+            raise AttributeError('S3 URIs have no OS path.')
+        return posix2os(self._uri.path)
+
+    @property
+    def relativeToPathRoot(self):
+        """Returns path relative to network location.
+
+        Effectively, this is the path property with posix separator stripped
+        from the left hand side of the path.
+        """
+        if not self.scheme:
+            p = PurePath(self.path)
+        else:
+            p = PurePosixPath(self.path)
+        return str(p.relative_to(p.root))
+
+    @property
     def fragment(self):
         """The fragment component of the URI."""
         return self._uri.fragment
@@ -275,7 +295,7 @@ class ButlerURI:
                     replacements["path"] += sep
 
             elif parsed.scheme == "file":
-                # file URI implies POSIX path separators so split as posix,
+                # file URI implies POSIX path separators so split as POSIX,
                 # then join as os, and convert to abspath. Do not handle
                 # home directories since "file" scheme is explicitly documented
                 # to not do tilde expansion.
@@ -373,6 +393,26 @@ class Location:
         """
         return self._path
 
+    @property
+    def netloc(self):
+        """The URI network location."""
+        return self._datastoreRootUri.netloc
+
+    @property
+    def relativeToPathRoot(self):
+        """Returns the path component of the URI relative to the network
+        location.
+
+        Effectively, this is the path property with POSIX separator stripped
+        from the left hand side of the path.
+        """
+        if self._datastoreRootUri.scheme == 'file' or not self._datastoreRootUri.scheme:
+            p = PurePath(os2posix(self.path))
+        else:
+            p = PurePosixPath(self.path)
+        stripped = p.relative_to(p.root)
+        return str(posix2os(stripped))
+
     def updateExtension(self, ext):
         """Update the file extension associated with this `Location`.
 
@@ -418,6 +458,11 @@ class LocationFactory:
 
     def __str__(self):
         return f"{self.__class__.__name__}@{self._datastoreRootUri}"
+
+    @property
+    def netloc(self):
+        """Returns the network location of root location of the `Datastore`."""
+        return self._datastoreRootUri.netloc
 
     def fromPath(self, path):
         """Factory function to create a `Location` from a POSIX path.

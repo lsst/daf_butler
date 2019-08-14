@@ -26,7 +26,9 @@ Configuration classes specific to the Butler
 __all__ = ("ButlerConfig",)
 
 import os.path
+import posixpath
 
+from .location import ButlerURI
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
@@ -75,8 +77,18 @@ class ButlerConfig(Config):
             self.configDir = other.configDir
             return
 
-        if isinstance(other, str) and os.path.isdir(other):
-            other = os.path.join(other, "butler.yaml")
+        if isinstance(other, str):
+            uri = ButlerURI(other)
+            if uri.scheme == "file" or not uri.scheme:
+                if os.path.isdir(uri.ospath):
+                    other = os.path.join(uri.ospath, "butler.yaml")
+            elif uri.scheme == "s3":
+                head, filename = posixpath.split(uri.path)
+                if "." not in filename:
+                    uri.updateFile("butler.yaml")
+                other = uri.geturl()
+            else:
+                raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
 
         # Create an empty config for us to populate
         super().__init__()
