@@ -38,6 +38,11 @@ from .ply import lex
 #  Local non-exported definitions --
 # ----------------------------------
 
+_RE_RANGE = re.compile(r"(-?\d+)\s*\.\.\s*(-?\d+)(\s*:\s*(\d+))?")
+"""Regular expression to match range literal in the form NUM..NUM[:NUM],
+this must match t_RANGE_LITERAL docstring.
+"""
+
 # ------------------------
 #  Exported definitions --
 # ------------------------
@@ -108,6 +113,7 @@ class ParserLex:
     tokens = (
         'NUMERIC_LITERAL',
         'STRING_LITERAL',
+        'RANGE_LITERAL',
         # 'TIME_LITERAL',
         # 'DURATION_LITERAL',
         'IDENTIFIER',
@@ -146,6 +152,20 @@ class ParserLex:
         r"'.*?'"
         # strip quotes
         t.value = t.value[1:-1]
+        return t
+
+    # range literal in format N..M[:S], spaces allowed
+    # docstring must match _RE_RANGE regexp
+    def t_RANGE_LITERAL(self, t):
+        r"""(-?\d+)\s*\.\.\s*(-?\d+)(\s*:\s*(\d+))?
+        """
+        match = _RE_RANGE.match(t.value)
+        start = int(match.group(1))
+        stop = int(match.group(2))
+        stride = match.group(4)
+        if stride is not None:
+            stride = int(stride)
+        t.value = (start, stop, stride)
         return t
 
     # numbers are used as strings by parser, do not convert
