@@ -1,0 +1,7 @@
+# test correct registry class is infered solely from connection string
+registry:
+  db: 'postgresql://lsst-db.ncsa.illinois.edu'
+  port: 3307
+  database: 'conf2'
+  expected: 'postgresql://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf2'
+  expectedRegistry: 'lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry'

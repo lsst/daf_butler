@@ -52,6 +52,7 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
+from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
 
 log = logging.getLogger(__name__)
 
@@ -205,8 +206,23 @@ class Butler:
         full = ButlerConfig(config, searchPaths=searchPaths)  # this applies defaults
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
-        registryClass = doImport(full["registry", "cls"])
+
+        # Use the explicitly set "cls" key in given config, or determine the
+        # correct registry class from connection url or use the default cls
+        if config.get(".registry.cls") is not None:
+            registryClass = doImport(config["registry", "cls"])
+        elif config.get(".registry.cls") is None and config.get(".registry.db") is not None:
+            registryMap = ConfigSubset()
+            registryMap._updateWithConfigsFromPath(ConfigSubset.defaultSearchPaths(),
+                                                   "registryMap.yaml")
+            conurl = ConnectionStringBuilder.fromConfig(config)
+            dialect = conurl.drivername.split("+")[0]
+            registryClass = doImport(registryMap["registryMap"][dialect])
+            config[".registry.cls"] = registryMap["registryMap"][dialect]
+        else:
+            registryClass = doImport(full["registry", "cls"])
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
+
         if standalone:
             config.merge(full)
         config.dumpToUri(uri)

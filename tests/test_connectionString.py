@@ -26,7 +26,6 @@ import unittest
 import os
 import os.path
 
-
 from lsst.pex.policy import Policy
 from lsst.daf.persistence import DbAuth
 from lsst.daf.butler.core.registry import RegistryConfig

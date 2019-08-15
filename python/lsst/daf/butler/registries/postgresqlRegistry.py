@@ -38,6 +38,7 @@ class PostgreSqlRegistry(SqlRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
+    dialect = 'postgresql'
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):

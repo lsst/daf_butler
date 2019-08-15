@@ -38,6 +38,7 @@ class OracleRegistry(SqlRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
+    dialect = 'oracle'
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
