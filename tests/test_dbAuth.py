@@ -53,7 +53,7 @@ class DbAuthTestCase(unittest.TestCase):
             dict(url="postgresql://host.example.com/my_database",
                  username="foo", password="bar")])
         for connComponents in [
-                ("postgresql", "user", "host.example.com", "5432",
+                ("postgresql", "user", "host.example.com", 5432,
                     "my_database"),
                 ("postgresql", "user", "host.example.com", None,
                     "my_database")]:
@@ -95,7 +95,7 @@ class DbAuthTestCase(unittest.TestCase):
             ("user", "test5"))
         self.assertEqual(
             auth.getAuth("postgresql", None, "host3.example.com",
-                         "3360", "some_database"),
+                         3360, "some_database"),
             ("user", "test6"))
         self.assertEqual(
             auth.getAuth("postgresql", "user", "host4.other.com",

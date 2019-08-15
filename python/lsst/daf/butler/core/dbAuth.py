@@ -97,7 +97,7 @@ class DbAuth:
             Username from connection URL if present.
         host : `str`
             Host name from connection URL if present.
-        port : `str` or None
+        port : `str` or `int` or None
             Port from connection URL if present.
         database : `str`
             Database name from connection URL.
@@ -206,7 +206,8 @@ class DbAuth:
                 matchHost = re.sub(r"^\[", "[[]", matchHost)
             elif ":" in matchHost:
                 matchHost, matchPort = matchHost.split(":")
-            if matchPort is not None and (port is None or port != matchPort):
+            if matchPort is not None and \
+                (port is None or str(port) != matchPort):
                 continue
             if not fnmatch.fnmatch(host, matchHost):
                 continue
