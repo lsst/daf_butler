@@ -21,7 +21,6 @@
 
 import fnmatch
 import os
-import re
 import stat
 import urllib.parse
 import yaml
@@ -183,33 +182,22 @@ class DbAuth:
                 if not fnmatch.fnmatch(database, components.path.lstrip("/")):
                     continue
 
-            # Parse out user if present and check
-            if components.netloc == "":
-                raise DbAuthError("Missing host in URL: " + authDict["url"])
-            if "@" in components.netloc:
-                matchUser, matchHost = components.netloc.split("@")
-                if (username is None or username == "") and matchUser != "":
+            # Check username
+            if components.username is not None:
+                if username is None or username == "":
                     continue
-                if username is not None and username != matchUser:
+                if username != components.username:
                     continue
-            else:
-                matchHost = components.netloc
 
-            # Parse out host and port and check
-            matchPort = None
-            # Check for IP v6
-            if matchHost.startswith("["):
-                match = re.search(r"^(\[[0-9a-f:]+\]):(\d+)$", matchHost)
-                if match:
-                    matchHost, matchPort = match.groups()
-                # Prep for fnmatch
-                matchHost = re.sub(r"^\[", "[[]", matchHost)
-            elif ":" in matchHost:
-                matchHost, matchPort = matchHost.split(":")
-            if matchPort is not None and \
-                (port is None or str(port) != matchPort):
+            # Check hostname
+            if components.hostname is None:
+                raise DbAuthError("Missing host in URL: " + authDict["url"])
+            if not fnmatch.fnmatch(host, components.hostname):
                 continue
-            if not fnmatch.fnmatch(host, matchHost):
+
+            # Check port
+            if components.port is not None and \
+                    (port is None or str(port) != str(components.port)):
                 continue
 
             # Don't override username from connection string

@@ -114,19 +114,19 @@ class DbAuthTestCase(unittest.TestCase):
                  password="pwd4")])
         self.assertEqual(
             auth.getAuth("postgresql", "user",
-                         "[fe80::1ff:fe23:4567:890a]", "5432", "db"),
+                         "fe80::1ff:fe23:4567:890a", "5432", "db"),
             ("user", "pwd"))
         self.assertEqual(
             auth.getAuth("postgresql", "user2",
-                         "[fe80::1ff:fe23:4567:890a]", "5432", "db"),
+                         "fe80::1ff:fe23:4567:890a", "5432", "db"),
             ("user2", "pwd2"))
         self.assertEqual(
             auth.getAuth("postgresql", "user3",
-                         "[fe80::1ff:fe23:4567:890a]", "3360", "db"),
+                         "fe80::1ff:fe23:4567:890a", "3360", "db"),
             ("user3", "pwd3"))
         self.assertEqual(
             auth.getAuth("postgresql", "user4",
-                         "[fe80::1ff:fe23:4567:890a]", "3360", "db"),
+                         "fe80::1ff:fe23:4567:890a", "3360", "db"),
             ("user4", "pwd4"))
 
     def test_search(self):
