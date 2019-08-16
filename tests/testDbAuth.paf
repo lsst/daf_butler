@@ -1,26 +1,17 @@
-database: {
-    authInfo: {
-        host: lsst-db.ncsa.illinois.edu
-        port: 3307
-        user: boris
-        password: natasha
-    }
-    authInfo: {
-        host: lsst-db.ncsa.illinois.edu
-        port: 3306
-        user: test
-        password: globular.test
-    }
-    authInfo: {
-        host: lsst-db.ncsa.illinois.edu
-        port: 3306
-        user: nottest
-        password: notglobular.test
-    }
-    authInfo: {
-        host: lsst9.ncsa.illinois.edu
-        port: 3306
-        user: rocky
-        password: squirrel
-    }
-}
+[
+  {
+    url: 'postgresql://lsst-db.ncsa.illinois.edu:3307/*',
+    username: boris,
+    password: natasha,
+  },
+  {
+    url: 'sqlite://lsst-db.ncsa.illinois.edu:3306/*',
+    username: boris,
+    password: natasha,
+  },
+  {
+    url: 'oracle://lsst-db.ncsa.illinois.edu:3306/*',
+    username: nottest,
+    password: notglobular.test,
+  }
+]

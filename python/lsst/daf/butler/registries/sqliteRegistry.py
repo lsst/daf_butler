@@ -31,7 +31,7 @@ from sqlite3 import Connection as SQLite3Connection
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registry import RegistryConfig
-from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
+from ..core.connectionString import ConnectionStringFactory
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
@@ -65,7 +65,6 @@ class SqliteRegistry(SqlRegistry):
     config : `SqlRegistryConfig` or `str`
         Load configuration
     """
-    dialect = 'sqlite'
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -98,7 +97,7 @@ class SqliteRegistry(SqlRegistry):
         super().setConfigRoot(root, config, full, overwrite=overwrite)
         Config.updateParameters(RegistryConfig, config, full,
                                 toUpdate={"db": f"sqlite:///{root}/gen3.sqlite3"},
-                                toCopy=("cls",), overwrite=overwrite)
+                                overwrite=overwrite)
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False, butlerRoot=None):
         registryConfig = SqlRegistryConfig(registryConfig)
@@ -109,8 +108,10 @@ class SqliteRegistry(SqlRegistry):
         super().__init__(registryConfig, schemaConfig, dimensionConfig, create, butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        engine = create_engine(ConnectionStringBuilder.fromConfig(self.config),
-                               poolclass=NullPool, connect_args={"check_same_thread": False})
+        conStrFactory = ConnectionStringFactory()
+        conStr = conStrFactory.fromConfig(self.config)
+        engine = create_engine(conStr, poolclass=NullPool,
+                               connect_args={"check_same_thread": False})
         event.listen(engine, "connect", _onSqlite3Connect)
         event.listen(engine, "begin", _onSqlite3Begin)
         return engine

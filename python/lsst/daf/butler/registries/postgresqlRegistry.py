@@ -25,7 +25,7 @@ from sqlalchemy import create_engine
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registry import RegistryConfig
-from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
+from lsst.daf.butler.core.connectionString import ConnectionStringFactory
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
@@ -70,7 +70,7 @@ class PostgreSqlRegistry(SqlRegistry):
         """
         super().setConfigRoot(root, config, full, overwrite=overwrite)
         Config.updateParameters(RegistryConfig, config, full,
-                                toCopy=("cls",), overwrite=overwrite)
+                                overwrite=overwrite)
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
                  butlerRoot=None):
@@ -80,5 +80,6 @@ class PostgreSqlRegistry(SqlRegistry):
                          butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        return create_engine(ConnectionStringBuilder.fromConfig(self.config),
-                             pool_size=1)
+        conStrFactory = ConnectionStringFactory()
+        conStr = conStrFactory.fromConfig(self.config)
+        return create_engine(conStr, pool_size=1)

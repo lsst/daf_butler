@@ -1,3 +1,2 @@
 registry:
-  cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
   db: 'sqlite:///:memory:'

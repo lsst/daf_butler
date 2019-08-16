@@ -35,13 +35,6 @@ from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
 
-registryMap = dict(
-    sql="lsst.daf.butler.registries.sqlRegistry.SqlRegistry",
-    sqlite="lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry",
-    postgresql="lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry",
-    oracle="lsst.daf.butler.registries.oracleRegistry.OracleRegistry"
-)
-
 
 class AmbiguousDatasetError(Exception):
     """Exception raised when a `DatasetRef` has no ID and a `Registry`
@@ -80,7 +73,7 @@ def disableWhenLimited(func):
 
 class RegistryConfig(ConfigSubset):
     component = "registry"
-    requiredKeys = ("cls",)
+    requiredKeys = ("db",)
     defaultConfigFile = "registry.yaml"
 
 
@@ -191,15 +184,16 @@ class Registry(metaclass=ABCMeta):
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
         # this import can not live at the top due to circular import issue
-        from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
+        from .connectionString import ConnectionStringFactory
 
-        cls = doImport(registryConfig["cls"])
-        conurl = ConnectionStringBuilder.fromConfig(registryConfig)
-        # split on '+' just in case if 'dialect+driver' is given
-        dialect = conurl.drivername.split('+')[0]
-        if cls.dialect != registryMap[dialect]:
-            cls = doImport(registryMap[dialect])
-        return cls(registryConfig, schemaConfig, dimensionConfig, create=create, butlerRoot=butlerRoot)
+        conStrFactory = ConnectionStringFactory()
+        conStr = conStrFactory.fromConfig(registryConfig)
+        if conStr.dialect not in registryConfig["clsMap"]:
+            raise ValueError(f"Unrecognized dialect in the connection string: {conStr.dialect}")
+        cls = doImport(registryConfig['clsMap'][conStr.dialect])
+
+        return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
+                   butlerRoot=butlerRoot)
 
     def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False,
                  butlerRoot=None):

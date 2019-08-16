@@ -52,7 +52,7 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
-from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
+from lsst.daf.butler.core.connectionString import ConnectionStringFactory
 
 log = logging.getLogger(__name__)
 
@@ -180,6 +180,7 @@ class Butler:
         construct the repository should also be used to construct any Butlers
         to avoid configuration inconsistencies.
         """
+
         if isinstance(config, (ButlerConfig, ConfigSubset)):
             raise ValueError("makeRepo must be passed a regular Config without defaults applied.")
 
@@ -207,20 +208,19 @@ class Butler:
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
-        # Use the explicitly set "cls" key in given config, or determine the
+        # Use the explicitly set "cls" key in given config, determine the
         # correct registry class from connection url or use the default cls
+        conStrFactory = ConnectionStringFactory()
         if config.get(".registry.cls") is not None:
             registryClass = doImport(config["registry", "cls"])
         elif config.get(".registry.cls") is None and config.get(".registry.db") is not None:
-            registryMap = ConfigSubset()
-            registryMap._updateWithConfigsFromPath(ConfigSubset.defaultSearchPaths(),
-                                                   "registryMap.yaml")
-            conurl = ConnectionStringBuilder.fromConfig(config)
-            dialect = conurl.drivername.split("+")[0]
-            registryClass = doImport(registryMap["registryMap"][dialect])
-            config[".registry.cls"] = registryMap["registryMap"][dialect]
+            conStr = conStrFactory.fromConfig(config)
+            if conStr.dialect not in full[".registry.clsMap"]:
+                raise ValueError(f"Unrecognized dialect in the connection string: {conStr.dialect}")
+            registryClass = doImport(full[".registry.clsMap"][conStr.dialect])
         else:
-            registryClass = doImport(full["registry", "cls"])
+            conStr = conStrFactory.fromConfig(full)
+            registryClass = doImport(full[".registry.clsMap"][conStr.dialect])
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         if standalone:

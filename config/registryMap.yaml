@@ -1,5 +1,0 @@
-registryMap:
-  sql: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
-  sqlite: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
-  postgresql: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-  oracle: lsst.daf.butler.registries.oracleRegistry.OracleRegistry

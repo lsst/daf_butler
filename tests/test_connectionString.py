@@ -25,11 +25,10 @@
 import unittest
 import os
 import os.path
+import stat
 
-from lsst.pex.policy import Policy
-from lsst.daf.persistence import DbAuth
 from lsst.daf.butler.core.registry import RegistryConfig
-from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
+from lsst.daf.butler.core.connectionString import ConnectionStringFactory
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -38,21 +37,19 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
     """Tests for ConnectionStringBuilder."""
     configDir = os.path.join(TESTDIR, "config/basic/connectionStringConfs/")
     configFiles = os.listdir(configDir)
+    credentialsFile = os.path.join(TESTDIR, "testDbAuth.paf")
 
     def setUp(self):
-        pol = Policy(os.path.join(TESTDIR, "testDbAuth.paf"))
-        DbAuth.setPolicy(pol)
-
-    def tearDown(self):
-        DbAuth.resetPolicy()
+        os.chmod(self.credentialsFile, ~stat.S_IRWXG & ~stat.S_IRWXO)
 
     def testBuilder(self):
         """Tests ConnectionStringBuilder builds correct connection strings.
         """
         regConfigs = [RegistryConfig(os.path.join(self.configDir, name)) for name in self.configFiles]
 
+        conStrFactory = ConnectionStringFactory(self.credentialsFile)
         for regConf, fileName in zip(regConfigs, self.configFiles):
-            conStr = ConnectionStringBuilder.fromConfig(regConf)
+            conStr = conStrFactory.fromConfig(regConf)
             with self.subTest(confFile=fileName):
                 self.assertEqual(str(conStr), regConf['expected'],
                                  "test connection string built from config")
@@ -60,7 +57,8 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
     def testRelVsAbsPath(self):
         """Tests that relative and absolute paths are preserved."""
         regConf = RegistryConfig(os.path.join(self.configDir, 'conf1.yaml'))
-
         regConf['db'] = 'sqlite:///relative/path/conf1.sqlite3'
-        conStr = ConnectionStringBuilder.fromConfig(regConf)
+
+        conStrFactory = ConnectionStringFactory(self.credentialsFile)
+        conStr = conStrFactory.fromConfig(regConf)
         self.assertEqual(str(conStr), 'sqlite:///relative/path/conf1.sqlite3')

@@ -41,7 +41,7 @@ from ..core.run import Run
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
 from ..core.dimensions import DataId, Dimension
-from lsst.daf.butler.core.connectionStringBuilder import ConnectionStringBuilder
+from ..core.connectionString import ConnectionStringFactory
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 
 
@@ -146,7 +146,9 @@ class SqlRegistry(Registry):
         have a very good reason not to, subclasses that override this method
         should do the same.
         """
-        return create_engine(ConnectionStringBuilder.fromConfig(self.config), poolclass=NullPool)
+        conStrFactory = ConnectionStringFactory()
+        conStr = conStrFactory.fromConfig(self.config)
+        return create_engine(conStr, poolclass=NullPool)
 
     def _createConnection(self, engine):
         """Create and return a `sqlalchemy.Connection` for this `Registry`.
