@@ -619,6 +619,13 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         uri = ButlerURI(config[".datastore.datastore.root"])
         self.bucketName = uri.netloc
 
+        # set up some fake credentials if they do not exist
+        if not os.path.exists("~/.aws/credentials"):
+            if "AWS_ACCESS_KEY_ID" not in os.environ:
+                os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
+            if "AWS_SECRET_ACCESS_KEY" not in os.environ:
+                os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
+
         if self.useTempRoot:
             self.root = self.genRoot()
         rooturi = f"s3://{self.bucketName}/{self.root}"
@@ -648,6 +655,12 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # unset any potentially set dummy credentials
+        keys = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+        for key in keys:
+            if key in os.environ and "dummy" in os.environ[key]:
+                del os.environ[key]
 
     def checkFileExists(self, root, relpath):
         """Checks if file exists at a given path (relative to root).

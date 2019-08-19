@@ -197,6 +197,13 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
         rooturi = f"s3://{self.bucketName}/{self.root}"
         config.update({"datastore": {"datastore": {"root": rooturi}}})
 
+        # set up some fake credentials if they do not exist
+        if not os.path.exists("~/.aws/credentials"):
+            if "AWS_ACCESS_KEY_ID" not in os.environ:
+                os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
+            if "AWS_SECRET_ACCESS_KEY" not in os.environ:
+                os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
+
         # MOTO needs to know that we expect Bucket bucketname to exist
         # (this used to be the class attribute bucketName)
         s3 = boto3.resource("s3")
@@ -222,6 +229,12 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # unset any potentially set dummy credentials
+        keys = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+        for key in keys:
+            if key in os.environ and "dummy" in os.environ[key]:
+                del os.environ[key]
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import unittest
 
 try:
@@ -46,6 +47,13 @@ class S3UtilsTestCase(unittest.TestCase):
     fileName = "testFileName"
 
     def setUp(self):
+        # set up some fake credentials if they do not exist
+        if not os.path.exists("~/.aws/credentials"):
+            if "AWS_ACCESS_KEY_ID" not in os.environ:
+                os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
+            if "AWS_SECRET_ACCESS_KEY" not in os.environ:
+                os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
+
         s3 = boto3.client("s3")
         try:
             s3.create_bucket(Bucket=self.bucketName)
@@ -69,6 +77,12 @@ class S3UtilsTestCase(unittest.TestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # unset any potentially set dummy credentials
+        keys = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
+        for key in keys:
+            if key in os.environ and "dummy" in os.environ[key]:
+                del os.environ[key]
 
     def testBucketExists(self):
         self.assertTrue(bucketExists(f"{self.bucketName}"))
