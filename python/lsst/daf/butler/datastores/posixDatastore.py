@@ -23,20 +23,33 @@
 
 __all__ = ("PosixDatastore", )
 
-import os
-import shutil
 import hashlib
 import logging
+import os
+import shutil
+
 from collections import namedtuple
 
-from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory,
-                             FileDescriptor, FormatterFactory, FileTemplates, StoredFileInfo,
-                             StorageClassFactory, DatasetTypeNotSupportedError, DatabaseDict,
-                             DatastoreValidationError, FileTemplateValidationError,
-                             Constraints)
-from lsst.daf.butler.core.utils import transactional, getInstanceOf
-from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler import (
+    Config,
+    Constraints,
+    DatabaseDict,
+    DatasetTypeNotSupportedError,
+    Datastore,
+    DatastoreConfig,
+    DatastoreValidationError,
+    FileDescriptor,
+    FileTemplates,
+    FileTemplateValidationError,
+    FormatterFactory,
+    LocationFactory,
+    StorageClassFactory,
+    StoredFileInfo,
+)
+
 from lsst.daf.butler.core.repoRelocation import replaceRoot
+from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler.core.utils import transactional, getInstanceOf
 
 log = logging.getLogger(__name__)
 
@@ -80,8 +93,9 @@ class PosixDatastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path", "storage_class",
-                                                      "checksum", "file_size"])
+    RecordTuple = namedtuple("PosixDatastoreRecord", ["formatter", "path",
+                                                      "storage_class", "checksum",
+                                                      "file_size"])
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):

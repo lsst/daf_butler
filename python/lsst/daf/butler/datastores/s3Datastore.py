@@ -23,22 +23,36 @@
 
 __all__ = ("S3Datastore", )
 
-import os
-import logging
-from collections import namedtuple
-import tempfile
-import pathlib
-
 import boto3
+import logging
+import os
+import pathlib
+import tempfile
 
-from lsst.daf.butler import (Config, Datastore, DatastoreConfig, LocationFactory, ButlerURI,
-                             Location, FileDescriptor, FormatterFactory, FileTemplates,
-                             StoredFileInfo, StorageClassFactory, DatasetTypeNotSupportedError,
-                             DatabaseDict, DatastoreValidationError, FileTemplateValidationError,
-                             Constraints)
-from lsst.daf.butler.core.utils import transactional, getInstanceOf
-from lsst.daf.butler.core.s3utils import s3CheckFileExists, bucketExists
+from collections import namedtuple
+
+from lsst.daf.butler import (
+    ButlerURI,
+    Config,
+    Constraints,
+    DatabaseDict,
+    DatasetTypeNotSupportedError,
+    Datastore,
+    DatastoreConfig,
+    DatastoreValidationError,
+    FileDescriptor,
+    FileTemplates,
+    FileTemplateValidationError,
+    FormatterFactory,
+    Location,
+    LocationFactory,
+    StorageClassFactory,
+    StoredFileInfo,
+)
+
 from lsst.daf.butler.core.repoRelocation import replaceRoot
+from lsst.daf.butler.core.s3utils import s3CheckFileExists, bucketExists
+from lsst.daf.butler.core.utils import transactional, getInstanceOf
 
 log = logging.getLogger(__name__)
 
@@ -112,6 +126,7 @@ class S3Datastore(Datastore):
             If `False`, do not modify a value in ``config`` if the value
             already exists.  Default is always to overwrite with the provided
             ``root``.
+
         Notes
         -----
         If a keyword is explicitly defined in the supplied ``config`` it
