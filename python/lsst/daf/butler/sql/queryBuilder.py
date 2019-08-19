@@ -68,15 +68,23 @@ class _ClauseVisitor(TreeVisitor):
     def visitNumericLiteral(self, value, node):
         # Docstring inherited from TreeVisitor.visitNumericLiteral
         # Convert string value into float or int
-        if value.isdigit():
+        try:
             value = int(value)
-        else:
+        except ValueError:
             value = float(value)
         return literal(value)
 
     def visitStringLiteral(self, value, node):
         # Docstring inherited from TreeVisitor.visitStringLiteral
         return literal(value)
+
+    def visitRangeLiteral(self, start, stop, stride, node):
+        # Docstring inherited from TreeVisitor.visitRangeLiteral
+
+        # just return a triple and let parent clauses handle it
+        if stride is None:
+            stride = 1
+        return (start, stop, stride)
 
     def visitIdentifier(self, name, node):
         # Docstring inherited from TreeVisitor.visitIdentifier
@@ -113,10 +121,57 @@ class _ClauseVisitor(TreeVisitor):
 
     def visitIsIn(self, lhs, values, not_in, node):
         # Docstring inherited from TreeVisitor.visitIsIn
+
+        # `values` is a list of literals and ranges, range is represented
+        # by a tuple (start, stop, stride). We need to transform range into
+        # some SQL construct, simplest would be to generate a set of literals
+        # and add it to the same list but it could become too long. What we
+        # do here is to introduce some large limit on the total number of
+        # items in IN() and if range exceeds that limit then we do something
+        # like:
+        #
+        #    X IN (1, 2, 3)
+        #    OR
+        #    (X BETWEEN START AND STOP AND MOD(X, STRIDE) = MOD(START, STRIDE))
+        #
+        # or for NOT IN case
+        #
+        #    X NOT IN (1, 2, 3)
+        #    AND NOT
+        #    (X BETWEEN START AND STOP AND MOD(X, STRIDE) = MOD(START, STRIDE))
+
+        max_in_items = 1000
+
+        # split the list into literals and ranges
+        literals, ranges = [], []
+        for item in values:
+            if isinstance(item, tuple):
+                ranges.append(item)
+            else:
+                literals.append(item)
+
+        ranges_remain = []
+        for start, stop, stride in ranges:
+            count = (stop - start + 1) // stride
+            if len(literals) + count > max_in_items:
+                ranges_remain.append((start, stop, stride))
+            else:
+                # add all values to literal list, stop is inclusive
+                literals += [literal(value) for value in range(start, stop+1, stride)]
+
+        clauses = [lhs.in_(literals)]
+        for start, stop, stride in ranges_remain:
+            # X BETWEEN START AND STOP AND MOD(X, STRIDE) = MOD(START, STRIDE)
+            expr = lhs.between(start, stop)
+            if stride != 1:
+                expr = and_(expr, (lhs % stride) == (start % stride))
+            clauses.append(expr)
+
         if not_in:
-            return lhs.notin_(values)
+            clauses = [not_(expr) for expr in clauses]
+            return and_(*clauses)
         else:
-            return lhs.in_(values)
+            return or_(*clauses)
 
     def visitParens(self, expression, node):
         # Docstring inherited from TreeVisitor.visitParens

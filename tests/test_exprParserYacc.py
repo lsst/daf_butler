@@ -36,6 +36,12 @@ class _Visitor(TreeVisitor):
     def visitStringLiteral(self, value, node):
         return f"S({value})"
 
+    def visitRangeLiteral(self, start, stop, stride, node):
+        if stride is None:
+            return f"R({start}..{stop})"
+        else:
+            return f"R({start}..{stop}:{stride})"
+
     def visitIdentifier(self, name, node):
         return f"ID({name})"
 
@@ -96,6 +102,18 @@ class ParserLexTestCase(unittest.TestCase):
         tree = parser.parse("'string'")
         self.assertIsInstance(tree, exprTree.StringLiteral)
         self.assertEqual(tree.value, 'string')
+
+        tree = parser.parse("10..20")
+        self.assertIsInstance(tree, exprTree.RangeLiteral)
+        self.assertEqual(tree.start, 10)
+        self.assertEqual(tree.stop, 20)
+        self.assertEqual(tree.stride, None)
+
+        tree = parser.parse("-10 .. 10:5")
+        self.assertIsInstance(tree, exprTree.RangeLiteral)
+        self.assertEqual(tree.start, -10)
+        self.assertEqual(tree.stop, 10)
+        self.assertEqual(tree.stride, 5)
 
     def testParseIdentifiers(self):
         """Tests for identifiers
@@ -201,15 +219,31 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertIsInstance(tree.values[2], exprTree.StringLiteral)
         self.assertEqual(tree.values[2].value, 'X')
 
-        tree = parser.parse("10 not in (1000)")
+        tree = parser.parse("10 not in (1000, 2000..3000:100)")
         self.assertIsInstance(tree, exprTree.IsIn)
         self.assertTrue(tree.not_in)
         self.assertIsInstance(tree.lhs, exprTree.NumericLiteral)
         self.assertEqual(tree.lhs.value, '10')
         self.assertIsInstance(tree.values, list)
-        self.assertEqual(len(tree.values), 1)
+        self.assertEqual(len(tree.values), 2)
         self.assertIsInstance(tree.values[0], exprTree.NumericLiteral)
         self.assertEqual(tree.values[0].value, '1000')
+        self.assertIsInstance(tree.values[1], exprTree.RangeLiteral)
+        self.assertEqual(tree.values[1].start, 2000)
+        self.assertEqual(tree.values[1].stop, 3000)
+        self.assertEqual(tree.values[1].stride, 100)
+
+        tree = parser.parse("10 in (-1000, -2000)")
+        self.assertIsInstance(tree, exprTree.IsIn)
+        self.assertFalse(tree.not_in)
+        self.assertIsInstance(tree.lhs, exprTree.NumericLiteral)
+        self.assertEqual(tree.lhs.value, '10')
+        self.assertIsInstance(tree.values, list)
+        self.assertEqual(len(tree.values), 2)
+        self.assertIsInstance(tree.values[0], exprTree.NumericLiteral)
+        self.assertEqual(tree.values[0].value, '-1000')
+        self.assertIsInstance(tree.values[1], exprTree.NumericLiteral)
+        self.assertEqual(tree.values[1].value, '-2000')
 
     def testCompareOps(self):
         """Tests for comparison operators
@@ -305,6 +339,9 @@ class ParserLexTestCase(unittest.TestCase):
         tree = parser.parse("(A or B) And NoT (x+3 > y)")
         self.assertEqual(str(tree), "(A OR B) AND NOT (x + 3 > y)")
 
+        tree = parser.parse("A in (100, 200..300:50)")
+        self.assertEqual(str(tree), "A IN (100, 200..300:50)")
+
     def testVisit(self):
         """Test for visitor methods"""
 
@@ -324,6 +361,10 @@ class ParserLexTestCase(unittest.TestCase):
         result = tree.visit(visitor)
         self.assertEqual(result, "B(B(IN(ID(x) (N(1), N(2))) AND !IN(ID(y) (N(1.1), N(.25), N(1e2))))"
                          " OR IN(ID(z) (S(a), S(b))))")
+
+        tree = parser.parse("x in (1,2,5..15) AND y NOT IN (-100..100:10)")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "B(IN(ID(x) (N(1), N(2), R(5..15))) AND !IN(ID(y) (R(-100..100:10))))")
 
 
 if __name__ == "__main__":

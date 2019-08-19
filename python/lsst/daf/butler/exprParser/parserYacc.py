@@ -32,7 +32,7 @@ __all__ = ["ParserYacc", "ParserYaccError", "ParseError", "ParserEOFError"]
 #  Imports for other modules --
 # -----------------------------
 from .exprTree import (BinaryOp, Identifier, IsIn, NumericLiteral,
-                       Parens, StringLiteral, UnaryOp)
+                       Parens, StringLiteral, RangeLiteral, UnaryOp)
 from .ply import yacc
 from .parserLex import ParserLex
 
@@ -245,10 +245,21 @@ class ParserYacc:
         """
         p[0] = NumericLiteral(p[1])
 
+    def p_literal_num_signed(self, p):
+        """ literal : ADD NUMERIC_LITERAL %prec UPLUS
+                    | SUB NUMERIC_LITERAL %prec UMINUS
+        """
+        p[0] = NumericLiteral(p[1] + p[2])
+
     def p_literal_str(self, p):
         """ literal : STRING_LITERAL
         """
         p[0] = StringLiteral(p[1])
+
+    def p_literal_range(self, p):
+        """ literal : RANGE_LITERAL
+        """
+        p[0] = RangeLiteral(*p[1])
 
     # ---------- end of all grammar rules ----------
 
