@@ -28,8 +28,8 @@ from lsst.daf.butler.core.dbAuth import DbAuth
 from lsst.daf.butler.core.registry import RegistryConfig
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
-"""Default name of the environmental variable that will be used to locate DB credentials
-configuration file. """
+"""Default name of the environmental variable that will be used to locate DB
+credentials configuration file. """
 
 DB_AUTH_PATH = "~/.lsst/db-auth.yaml"
 """Default path at which it is expected that DB credentials are found."""

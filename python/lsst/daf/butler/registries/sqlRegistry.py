@@ -63,7 +63,6 @@ class SqlRegistry(Registry):
     create : `bool`
         Assume registry is empty and create a new one.
     """
-    dialect = 'sql'
 
     defaultConfigFile = None
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or

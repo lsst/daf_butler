@@ -19,8 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("RegistryConfig", "Registry", "disableWhenLimited", "AmbiguousDatasetError",
-           "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
+           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
@@ -183,14 +183,19 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
-        # this import can not live at the top due to circular import issue
-        from .connectionString import ConnectionStringFactory
+        # If `cls` has been explicitly given in the config, use targeted class,
+        # otherwise infer from the `db` string
+        if registryConfig.get("cls") is not None:
+            cls = doImport(registryConfig["cls"])
+        else:
+            # this import can not live at the top due to circular import issue
+            from .connectionString import ConnectionStringFactory
+            conStrFactory = ConnectionStringFactory()
+            conStr = conStrFactory.fromConfig(registryConfig)
 
-        conStrFactory = ConnectionStringFactory()
-        conStr = conStrFactory.fromConfig(registryConfig)
-        if conStr.dialect not in registryConfig["clsMap"]:
-            raise ValueError(f"Unrecognized dialect in the connection string: {conStr.dialect}")
-        cls = doImport(registryConfig['clsMap'][conStr.dialect])
+            if conStr.dialect not in registryConfig["clsMap"]:
+                raise ValueError(f"Unrecognized dialect in the connection string: {conStr.dialect}")
+            cls = doImport(registryConfig['clsMap'][conStr.dialect])
 
         return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
                    butlerRoot=butlerRoot)
