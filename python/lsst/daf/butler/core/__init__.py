@@ -13,6 +13,7 @@ from .composites import *
 from .constraints import *
 from .datasets import *
 from .datastore import *
+from .dbAuth import *
 from .exceptions import *
 from .fileDescriptor import *
 from .fileTemplates import *
