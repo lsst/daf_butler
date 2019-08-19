@@ -212,5 +212,47 @@ class DbAuth:
 
         raise DbAuthError(
             "No matching DbAuth configuration for: "
-            "({}, {}, {}, {}, {})".format(
-                drivername, username, host, port, database))
+            f"({drivername}, {username}, {host}, {port}, {database})")
+
+    def getUrl(self, url):
+        """Fill in a username and password in a database connection URL.
+
+        This function parses the URL and calls `getAuth`.
+
+        Parameters
+        ----------
+        url : `str`
+            Database connection URL.
+
+        Returns
+        -------
+        url : `str`
+            Database connection URL with username and password.
+
+        Raises
+        ------
+        DbAuthError
+            Raised if the input is missing elements, an authorization
+            dictionary is missing elements, the authorization file is
+            misconfigured, or no matching authorization is found.
+
+        See also
+        --------
+        `getAuth`
+        """
+        components = urllib.parse.urlparse(url)
+        username, password = self.getAuth(
+            components.scheme,
+            components.username, components.hostname, components.port,
+            components.path.lstrip("/"))
+        hostname = components.hostname
+        if ":" in hostname:     # ipv6
+            hostname = f"[{hostname}]"
+        netloc = "{}:{}@{}".format(
+            urllib.parse.quote(username, safe=""),
+            urllib.parse.quote(password, safe=""), hostname)
+        if components.port is not None:
+            netloc += ":" + str(components.port)
+        return urllib.parse.urlunparse((
+            components.scheme, netloc, components.path, components.params,
+            components.query, components.fragment))
