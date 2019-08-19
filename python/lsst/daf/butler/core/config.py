@@ -102,7 +102,7 @@ class Loader(yaml.CSafeLoader):
         fileuri.updateFile(filename)
         log.debug("Opening YAML file via !include: %s", fileuri)
 
-        if fileuri.scheme == "file":
+        if not fileuri.scheme or fileuri.scheme == "file":
             with open(fileuri.ospath, "r") as f:
                 return yaml.load(f, Loader)
         elif fileuri.scheme == "s3":
@@ -794,7 +794,7 @@ class Config(collections.abc.MutableMapping):
         if isinstance(uri, str):
             uri = ButlerURI(uri)
 
-        if uri.scheme == "file":
+        if not uri.scheme or uri.scheme == "file":
             if os.path.isdir(uri.path) and updateFile:
                 uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
             self.dumpToFile(uri.ospath)
