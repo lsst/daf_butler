@@ -148,6 +148,11 @@ def setAwsEnvCredentials(accessKeyId='dummyAccessKeyId', secretAccessKey="dummyS
     -------
     setEnvCredentials : `bool`
         True when environmental variables were set, False otherwise.
+
+    Notes
+    -----
+    If either AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY are not set, both
+    values are overwritten.
     """
     if "AWS_ACCESS_KEY_ID" not in os.environ or "AWS_SECRET_ACCESS_KEY" not in os.environ:
         os.environ["AWS_ACCESS_KEY_ID"] = accessKeyId

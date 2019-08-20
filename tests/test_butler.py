@@ -655,7 +655,8 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         bucket.delete()
 
         # unset any potentially set dummy credentials
-        unsetAwsEnvCredentials()
+        if self.usingDummyCredentials:
+            unsetAwsEnvCredentials()
 
     def checkFileExists(self, root, relpath):
         """Checks if file exists at a given path (relative to root).
