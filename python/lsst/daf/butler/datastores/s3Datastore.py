@@ -29,35 +29,20 @@ import os
 import pathlib
 import tempfile
 
-from collections import namedtuple
-
 from lsst.daf.butler import (
     ButlerURI,
-    Config,
-    Constraints,
-    DatabaseDict,
     DatasetTypeNotSupportedError,
-    Datastore,
-    DatastoreConfig,
-    DatastoreValidationError,
-    FileDescriptor,
-    FileTemplates,
-    FileTemplateValidationError,
-    FormatterFactory,
     Location,
-    LocationFactory,
-    StorageClassFactory,
-    StoredFileInfo,
 )
 
-from lsst.daf.butler.core.repoRelocation import replaceRoot
+from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.s3utils import s3CheckFileExists, bucketExists
-from lsst.daf.butler.core.utils import transactional, getInstanceOf
+from lsst.daf.butler.core.utils import transactional
 
 log = logging.getLogger(__name__)
 
 
-class S3Datastore(Datastore):
+class S3Datastore(FileLikeDatastore):
     """Basic S3 Object Storage backed Datastore.
 
     Attributes
@@ -69,10 +54,7 @@ class S3Datastore(Datastore):
     root : `str`
         Root directory of this `Datastore`.
     locationFactory : `LocationFactory`
-        Factory for creating locations relative to S3 bucket.
-    locationFactory : `LocationFactory`
-        Factory for creating locations relative to datastore root
-        as if it was file:// .
+        Factory for creating locations relative to the datastore root.
     formatterFactory : `FormatterFactory`
         Factory for creating instances of formatters.
     storageClassFactory : `StorageClassFactory`
@@ -99,59 +81,8 @@ class S3Datastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    RecordTuple = namedtuple("s3datastorerecord", ["formatter", "path",
-                                                   "storage_class", "checksum",
-                                                   "file_size"])
-
-    @classmethod
-    def setConfigRoot(cls, root, config, full, overwrite=True):
-        """Set any filesystem-dependent config options for this Datastore to
-        be appropriate for a new empty repository with the given root.
-        Parameters
-        ----------
-        root : `str`
-            URI to the root of the data repository.
-        config : `Config`
-            A `Config` to update. Only the subset understood by
-            this component will be updated. Will not expand
-            defaults.
-        full : `Config`
-            A complete config with all defaults expanded that can be
-            converted to a `DatastoreConfig`. Read-only and will not be
-            modified by this method.
-            Repository-specific options that should not be obtained
-            from defaults when Butler instances are constructed
-            should be copied from ``full`` to ``config``.
-        overwrite : `bool`, optional
-            If `False`, do not modify a value in ``config`` if the value
-            already exists.  Default is always to overwrite with the provided
-            ``root``.
-
-        Notes
-        -----
-        If a keyword is explicitly defined in the supplied ``config`` it
-        will not be overridden by this method if ``overwrite`` is `False`.
-        This allows explicit values set in external configs to be retained.
-        """
-        Config.updateParameters(DatastoreConfig, config, full,
-                                toUpdate={"root": root},
-                                toCopy=("cls", ("records", "table")), overwrite=overwrite)
-
     def __init__(self, config, registry, butlerRoot=None):
-        super().__init__(config, registry)
-        if "root" not in self.config:
-            raise ValueError("No root directory specified in configuration")
-
-        # Name ourselves either using an explicit name or a name
-        # derived from the (unexpanded) root
-        if "name" in self.config:
-            self.name = self.config["name"]
-        else:
-            self.name = "S3Datastore@{}".format(self.config["root"])
-
-        # Support repository relocation in config
-        self.root = replaceRoot(self.config["root"], butlerRoot)
-        self.locationFactory = LocationFactory(self.root)
+        super().__init__(config, registry, butlerRoot)
 
         self.client = boto3.client("s3")
         if not bucketExists(self.locationFactory.netloc):
@@ -160,81 +91,7 @@ class S3Datastore(Datastore):
             # ACL LocationConstraints, Permissions and other configuration
             # parameters, so for now we do not create a bucket if one is
             # missing. Further discussion can make this happen though.
-            raise IOError(f"Bucket {self.locationFactory.netloc} does not exists!")
-
-        self.formatterFactory = FormatterFactory()
-        self.storageClassFactory = StorageClassFactory()
-
-        # Now associate formatters with storage classes
-        self.formatterFactory.registerFormatters(self.config["formatters"],
-                                                 universe=self.registry.dimensions)
-
-        # Read the file naming templates
-        self.templates = FileTemplates(self.config["templates"],
-                                       universe=self.registry.dimensions)
-
-        # And read the constraints list
-        constraintsConfig = self.config.get("constraints")
-        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
-
-        # Storage of paths and formatters, keyed by dataset_id
-        types = {"path": str, "formatter": str, "storage_class": str,
-                 "file_size": int, "checksum": str, "dataset_id": int}
-        lengths = {"path": 256, "formatter": 128, "storage_class": 64,
-                   "checksum": 128}
-        self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
-                                               value=self.RecordTuple, key="dataset_id",
-                                               lengths=lengths, registry=registry)
-
-    def __str__(self):
-        return self.root
-
-    def addStoredFileInfo(self, ref, info):
-        """Record internal storage information associated with this
-        `DatasetRef`
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The Dataset that has been stored.
-        info : `StoredFileInfo`
-            Metadata associated with the stored Dataset.
-        """
-        self.records[ref.id] = self.RecordTuple(formatter=info.formatter, path=info.path,
-                                                storage_class=info.storageClass.name,
-                                                checksum=info.checksum, file_size=info.size)
-
-    def removeStoredFileInfo(self, ref):
-        """Remove information about the file associated with this dataset.
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The Dataset that has been removed.
-        """
-        del self.records[ref.id]
-
-    def getStoredFileInfo(self, ref):
-        """Retrieve information associated with file stored in this
-        `Datastore`.
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The Dataset that is to be queried.
-        Returns
-        -------
-        info : `StoredFileInfo`
-            Stored information about this file and its formatter.
-        Raises
-        ------
-        KeyError
-            Dataset with that id can not be found.
-        """
-        record = self.records.get(ref.id, None)
-        if record is None:
-            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
-        # Convert name of StorageClass to instance
-        storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
-        return StoredFileInfo(record.formatter, record.path, storageClass,
-                              checksum=record.checksum, size=record.file_size)
+            raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")
 
     def exists(self, ref):
         """Check if the dataset exists in the datastore.
@@ -249,14 +106,10 @@ class S3Datastore(Datastore):
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
         """
-        # Get the file information (this will fail if no file)
-        try:
-            storedFileInfo = self.getStoredFileInfo(ref)
-        except KeyError:
+        location, _ = self._get_dataset_location_info(ref)
+        if location is None:
             return False
-
-        loc = self.locationFactory.fromPath(storedFileInfo.path)
-        return s3CheckFileExists(loc, client=self.client)[0]
+        return s3CheckFileExists(location, client=self.client)[0]
 
     def get(self, ref, parameters=None):
         """Load an InMemoryDataset from the store.
@@ -283,16 +136,9 @@ class S3Datastore(Datastore):
         ValueError
             Formatter failed to process the dataset.
         """
-        log.debug("Retrieve %s from %s with parameters %s", ref, self.name,
-                  parameters)
-
-        # Get file metadata and internal metadata
-        try:
-            storedFileInfo = self.getStoredFileInfo(ref)
-        except KeyError:
-            raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
-
-        location = self.locationFactory.fromPath(storedFileInfo.path)
+        location, formatter, storedFileInfo, assemblerParams, \
+            component, readStorageClass = self._prepare_for_get(ref,
+                                                                parameters)
 
         # since we have to make a GET request to S3 anyhow (for download) we
         # might as well use the HEADER metadata for size comparison instead.
@@ -327,22 +173,6 @@ class S3Datastore(Datastore):
                                " match recorded size of {}".format(location.path, response["ContentLength"],
                                                                    storedFileInfo.size))
 
-        # We have a write storage class and a read storage class and they
-        # can be different for concrete composites.
-        readStorageClass = ref.datasetType.storageClass
-        writeStorageClass = storedFileInfo.storageClass
-
-        # Check that the supplied parameters are suitable for the type read
-        readStorageClass.validateParameters(parameters)
-
-        # Is this a component request?
-        component = ref.datasetType.component()
-
-        formatter = getInstanceOf(storedFileInfo.formatter,
-                                  FileDescriptor(location, readStorageClass=readStorageClass,
-                                                 storageClass=writeStorageClass, parameters=parameters))
-        formatterParams, assemblerParams = formatter.segregateParameters()
-
         # download the data as bytes
         serializedDataset = response["Body"].read()
 
@@ -359,16 +189,7 @@ class S3Datastore(Datastore):
         except Exception as e:
             raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
 
-        # Process any left over parameters
-        if assemblerParams:
-            result = readStorageClass.assembler().handleParameters(result, assemblerParams)
-
-        # Validate the returned data type matches the expected data type
-        pytype = readStorageClass.pytype
-        if pytype and not isinstance(result, pytype):
-            raise TypeError("Got type {} from formatter but expected {}".format(type(result), pytype))
-
-        return result
+        return self._post_process_get(result, readStorageClass, assemblerParams)
 
     @transactional
     def put(self, inMemoryDataset, ref):
@@ -396,36 +217,7 @@ class S3Datastore(Datastore):
         allow `ChainedDatastore` to put to multiple datastores without
         requiring that every datastore accepts the dataset.
         """
-        datasetType = ref.datasetType
-        storageClass = datasetType.storageClass
-
-        # Sanity check
-        if not isinstance(inMemoryDataset, storageClass.pytype):
-            raise TypeError("Inconsistency between supplied object ({}) "
-                            "and storage class type ({})".format(type(inMemoryDataset),
-                                                                 storageClass.pytype))
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
-
-        # Work out output file name
-        try:
-            template = self.templates.getTemplate(ref)
-        except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find template for {ref}") from e
-
-        location = self.locationFactory.fromPath(template.format(ref))
-
-        # Get the formatter based on the storage class
-        try:
-            formatter = self.formatterFactory.getFormatter(ref,
-                                                           FileDescriptor(location,
-                                                                          storageClass=storageClass))
-        except KeyError as e:
-            raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
+        location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
         # in PosixDatastore a directory can be created by `safeMakeDir`. In S3
         # `Keys` instead only look like directories, but are not. We check if
@@ -570,67 +362,11 @@ class S3Datastore(Datastore):
         exists, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
                                          bucket=tgtLocation.netloc,
                                          client=self.client)
-        self.registry.addDatasetLocation(ref, self.name)
 
-        # Associate this dataset with the formatter for later read.
-        fileInfo = StoredFileInfo(formatter, tgtLocation.pathInStore,
-                                  ref.datasetType.storageClass, size=size)
-        # TODO: this is only transactional if the DatabaseDict uses
-        #       self.registry internally.  Probably need to add
-        #       transactions to DatabaseDict to do better than that.
-        self.addStoredFileInfo(ref, fileInfo)
-
-        # Register all components with same information
-        for compRef in ref.components.values():
-            self.registry.addDatasetLocation(compRef, self.name)
-            self.addStoredFileInfo(compRef, fileInfo)
-
-    def getUri(self, ref, predict=False):
-        """URI to the Dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
-        predict : `bool`
-            If `True`, allow URIs to be returned of datasets that have not
-            been written.
-
-        Returns
-        -------
-        uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
-            Dataset does not exist in the datastore, and if ``predict`` is
-            `True`, the URI will be a prediction and will include a URI
-            fragment "#predicted".
-            If the datastore does not have entities that relate well
-            to the concept of a URI the returned URI string will be
-            descriptive. The returned URI is not guaranteed to be obtainable.
-
-        Raises
-        ------
-        FileNotFoundError
-            A URI has been requested for a dataset that does not exist and
-            guessing is not allowed.
-
-        """
-        # if this has never been written then we have to guess
-        if not self.exists(ref):
-            if not predict:
-                raise FileNotFoundError(f"Dataset {ref} not in this datastore")
-
-            template = self.templates.getTemplate(ref)
-            location = self.locationFactory.fromPath(template.format(ref) +
-                                                     "#predicted")
-        else:
-            # If this is a ref that we have written we can get the path.
-            # Get file metadata and internal metadata
-            storedFileInfo = self.getStoredFileInfo(ref)
-
-            # Use the path to determine the location
-            location = self.locationFactory.fromPath(storedFileInfo.path)
-
-        return location.uri
+        # Update the registry
+        self._register_dataset(ref, formatter,
+                               tgtLocation.pathInStore,
+                               size, None)
 
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.
@@ -652,100 +388,16 @@ class S3Datastore(Datastore):
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
         """
-        try:
-            storedFileInfo = self.getStoredFileInfo(ref)
-        except KeyError:
+        location, storefFileInfo = self._get_dataset_location_info(ref)
+        if location is None:
             raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
-        location = self.locationFactory.fromPath(storedFileInfo.path)
+
         if not s3CheckFileExists(location, client=self.client):
-            raise FileNotFoundError("No such file: {0}".format(location.uri))
+            raise FileNotFoundError(f"No such file: {location.uri}")
 
         # https://github.com/boto/boto3/issues/507 - there is no way of knowing
         # if the file was actually deleted
         self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
 
         # Remove rows from registries
-        self.removeStoredFileInfo(ref)
-        self.registry.removeDatasetLocation(self.name, ref)
-        for compRef in ref.components.values():
-            self.registry.removeDatasetLocation(self.name, compRef)
-            self.removeStoredFileInfo(compRef)
-
-    def transfer(self, inputDatastore, ref):
-        """Retrieve a Dataset from an input `Datastore`,
-        and store the result in this `Datastore`.
-
-        Parameters
-        ----------
-        inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the Dataset.
-        ref : `DatasetRef`
-            Reference to the required Dataset in the input data store.
-
-        """
-        assert inputDatastore is not self  # unless we want it for renames?
-        inMemoryDataset = inputDatastore.get(ref)
-        return self.put(inMemoryDataset, ref)
-
-    def validateConfiguration(self, entities, logFailures=False):
-        """Validate some of the configuration for this datastore.
-
-        Parameters
-        ----------
-        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
-            Entities to test against this configuration.  Can be differing
-            types.
-        logFailures : `bool`, optional
-            If `True`, output a log message for every validation error
-            detected.
-
-        Raises
-        ------
-        DatastoreValidationError
-            Raised if there is a validation problem with a configuration.
-            All the problems are reported in a single exception.
-
-        Notes
-        -----
-        This method checks that all the supplied entities have valid file
-        templates and also have formatters defined.
-        """
-
-        templateFailed = None
-        try:
-            self.templates.validateTemplates(entities, logFailures=logFailures)
-        except FileTemplateValidationError as e:
-            templateFailed = str(e)
-
-        formatterFailed = []
-        for entity in entities:
-            try:
-                self.formatterFactory.getFormatterClass(entity)
-            except KeyError as e:
-                formatterFailed.append(str(e))
-                if logFailures:
-                    log.fatal("Formatter failure: %s", e)
-
-        if templateFailed or formatterFailed:
-            messages = []
-            if templateFailed:
-                messages.append(templateFailed)
-            if formatterFailed:
-                messages.append(",".join(formatterFailed))
-            msg = ";\n".join(messages)
-            raise DatastoreValidationError(msg)
-
-    def getLookupKeys(self):
-        # Docstring is inherited from base class
-        return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
-            self.constraints.getLookupKeys()
-
-    def validateKey(self, lookupKey, entity):
-        # Docstring is inherited from base class
-        # The key can be valid in either formatters or templates so we can
-        # only check the template if it exists
-        if lookupKey in self.templates:
-            try:
-                self.templates[lookupKey].validateTemplate(entity)
-            except FileTemplateValidationError as e:
-                raise DatastoreValidationError(e) from e
+        self._remove_from_registry(ref)
