@@ -61,12 +61,12 @@ class ParseError(ParserYaccError):
     token : str
         Current token at parsing position
     pos : int
-        Current parsing posistion, offset from beginning of expression in
+        Current parsing position, offset from beginning of expression in
         characters
     lineno : int
         Current line number in the expression
     posInLine : int
-        Parsing posistion in current line, 0-based
+        Parsing position in current line, 0-based
     """
 
     def __init__(self, expression, token, pos, lineno):
