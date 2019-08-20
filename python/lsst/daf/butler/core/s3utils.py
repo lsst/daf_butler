@@ -19,7 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("s3CheckFileExists", "bucketExists")
+__all__ = ("s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
+           "unsetAwsEnvCredentials")
+
+import os
 
 try:
     import boto3
@@ -126,3 +129,38 @@ def bucketExists(bucketName, client=None):
         return True
     except s3.exceptions.NoSuchBucket:
         return False
+
+
+def setAwsEnvCredentials(accessKeyId='dummyAccessKeyId', secretAccessKey="dummySecretAccessKey"):
+    """Set AWS credentials environmental variables AWS_ACCESS_KEY_ID and
+    AWS_SECRET_ACCESS_KEY.
+
+    Parameters
+    ----------
+    accessKeyId : `str`
+        Value given to AWS_ACCESS_KEY_ID environmental variable. Defaults to
+        'dummyAccessKeyId'
+    secretAccessKey : `str`
+        Value given to AWS_SECRET_ACCESS_KEY environmental variable. Defaults
+        to 'dummySecretAccessKey'
+
+    Returns
+    -------
+    setEnvCredentials : `bool`
+        True when environmental variables were set, False otherwise.
+    """
+    if "AWS_ACCESS_KEY_ID" not in os.environ or "AWS_SECRET_ACCESS_KEY" not in os.environ:
+        os.environ["AWS_ACCESS_KEY_ID"] = accessKeyId
+        os.environ["AWS_SECRET_ACCESS_KEY"] = secretAccessKey
+        return True
+    return False
+
+
+def unsetAwsEnvCredentials():
+    """Unsets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental
+    variables.
+    """
+    if "AWS_ACCESS_KEY_ID" in os.environ:
+        del os.environ["AWS_ACCESS_KEY_ID"]
+    if "AWS_SECRET_ACCESS_KEY" in os.environ:
+        del os.environ["AWS_SECRET_ACCESS_KEY"]

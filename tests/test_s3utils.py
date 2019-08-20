@@ -19,7 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import os
 import unittest
 
 try:
@@ -34,7 +33,8 @@ except ImportError:
         """
         return cls
 
-from lsst.daf.butler.core.s3utils import bucketExists, s3CheckFileExists
+from lsst.daf.butler.core.s3utils import (bucketExists, s3CheckFileExists,
+                                          setAwsEnvCredentials, unsetAwsEnvCredentials)
 from lsst.daf.butler.core.location import Location, ButlerURI
 
 
@@ -48,12 +48,7 @@ class S3UtilsTestCase(unittest.TestCase):
 
     def setUp(self):
         # set up some fake credentials if they do not exist
-        # set up some fake credentials if they do not exist
-        self.usedDummyCredentials = False
-        if "AWS_ACCESS_KEY_ID" not in os.environ and "AWS_SECRET_ACCESS_KEY" not in os.environ:
-            os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
-            os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
-            self.usedDummyCredentials = True
+        self.usingDummyCredentials = setAwsEnvCredentials()
 
         s3 = boto3.client("s3")
         try:
@@ -80,10 +75,8 @@ class S3UtilsTestCase(unittest.TestCase):
         bucket.delete()
 
         # unset any potentially set dummy credentials
-        if self.usedDummyCredentials:
-            keys = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
-            for key in keys:
-                del os.environ[key]
+        if self.usingDummyCredentials:
+            unsetAwsEnvCredentials()
 
     def testBucketExists(self):
         self.assertTrue(bucketExists(f"{self.bucketName}"))

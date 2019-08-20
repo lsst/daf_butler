@@ -51,7 +51,9 @@ from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
-from lsst.daf.butler.core.s3utils import s3CheckFileExists
+from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
+                                          unsetAwsEnvCredentials)
+
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -620,11 +622,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         self.bucketName = uri.netloc
 
         # set up some fake credentials if they do not exist
-        self.usedDummyCredentials = False
-        if "AWS_ACCESS_KEY_ID" not in os.environ and "AWS_SECRET_ACCESS_KEY" not in os.environ:
-            os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
-            os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
-            self.usedDummyCredentials = True
+        self.usingDummyCredentials = setAwsEnvCredentials()
 
         if self.useTempRoot:
             self.root = self.genRoot()
@@ -657,10 +655,7 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         bucket.delete()
 
         # unset any potentially set dummy credentials
-        if self.usedDummyCredentials:
-            keys = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
-            for key in keys:
-                del os.environ[key]
+        unsetAwsEnvCredentials()
 
     def checkFileExists(self, root, relpath):
         """Checks if file exists at a given path (relative to root).

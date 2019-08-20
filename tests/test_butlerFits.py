@@ -45,6 +45,7 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType
 from lsst.daf.butler.core.location import ButlerURI
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
+from lsst.daf.butler.core.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 
 try:
     import lsst.afw.image
@@ -198,11 +199,7 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
         config.update({"datastore": {"datastore": {"root": rooturi}}})
 
         # set up some fake credentials if they do not exist
-        self.usedDummyCredentials = False
-        if "AWS_ACCESS_KEY_ID" not in os.environ and "AWS_SECRET_ACCESS_KEY" not in os.environ:
-            os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
-            os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
-            self.usedDummyCredentials = True
+        self.usingDummyCredentials = setAwsEnvCredentials()
 
         # MOTO needs to know that we expect Bucket bucketname to exist
         # (this used to be the class attribute bucketName)
@@ -231,10 +228,8 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
         bucket.delete()
 
         # unset any potentially set dummy credentials
-        if self.usedDummyCredentials:
-            keys = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
-            for key in keys:
-                del os.environ[key]
+        if self.usingDummyCredentials:
+            unsetAwsEnvCredentials()
 
 
 if __name__ == "__main__":
