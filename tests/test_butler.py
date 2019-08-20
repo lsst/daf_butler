@@ -620,11 +620,11 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         self.bucketName = uri.netloc
 
         # set up some fake credentials if they do not exist
-        if not os.path.exists("~/.aws/credentials"):
-            if "AWS_ACCESS_KEY_ID" not in os.environ:
-                os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
-            if "AWS_SECRET_ACCESS_KEY" not in os.environ:
-                os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
+        self.usedDummyCredentials = False
+        if "AWS_ACCESS_KEY_ID" not in os.environ and "AWS_SECRET_ACCESS_KEY" not in os.environ:
+            os.environ["AWS_ACCESS_KEY_ID"] = "dummyAccessKeyId"
+            os.environ["AWS_SECRET_ACCESS_KEY"] = "dummySecreyAccessKey"
+            self.usedDummyCredentials = True
 
         if self.useTempRoot:
             self.root = self.genRoot()
@@ -657,9 +657,9 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         bucket.delete()
 
         # unset any potentially set dummy credentials
-        keys = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
-        for key in keys:
-            if key in os.environ and "dummy" in os.environ[key]:
+        if self.usedDummyCredentials:
+            keys = ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY")
+            for key in keys:
                 del os.environ[key]
 
     def checkFileExists(self, root, relpath):
