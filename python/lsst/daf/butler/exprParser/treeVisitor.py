@@ -72,7 +72,7 @@ class TreeVisitor(ABC):
             Range starting value.
         stop : `int`
             Range final value.
-        stride : `int`
+        stride : `int` or `None`
             Stride, can be `None` if not specified (should be treated same
             as 1).
         node : `Node`

@@ -259,7 +259,9 @@ class ParserYacc:
     def p_literal_range(self, p):
         """ literal : RANGE_LITERAL
         """
-        p[0] = RangeLiteral(*p[1])
+        # RANGE_LITERAL value is tuple of three numbers
+        start, stop, stride = p[1]
+        p[0] = RangeLiteral(start, stop, stride)
 
     # ---------- end of all grammar rules ----------
 

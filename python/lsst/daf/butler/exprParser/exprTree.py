@@ -214,10 +214,13 @@ class RangeLiteral(Node):
         Start value of a range.
     stop : `int`
         End value of a range, inclusive, same or higher than ``start``.
-    stride : `int` or `None`
-        Stride value, must be positive, can be `None`.
+    stride : `int` or `None`, optional
+        Stride value, must be positive, can be `None` which means that stride
+        was not specified. Consumers are supposed to treat `None` the same way
+        as stride=1 but for some consumers it may be useful to know that
+        stride was missing from literal.
     """
-    def __init__(self, start, stop, stride=1):
+    def __init__(self, start, stop, stride=None):
         self.start = start
         self.stop = stop
         self.stride = stride
@@ -227,9 +230,7 @@ class RangeLiteral(Node):
         return visitor.visitRangeLiteral(self.start, self.stop, self.stride, self)
 
     def __str__(self):
-        res = f"{self.start}..{self.stop}"
-        if self.stride is not None:
-            res += f":{self.stride}"
+        res = f"{self.start}..{self.stop}" + (f":{self.stride}" if self.stride else "")
         return res
 
 

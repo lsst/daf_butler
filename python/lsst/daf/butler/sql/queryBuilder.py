@@ -81,10 +81,9 @@ class _ClauseVisitor(TreeVisitor):
     def visitRangeLiteral(self, start, stop, stride, node):
         # Docstring inherited from TreeVisitor.visitRangeLiteral
 
-        # just return a triple and let parent clauses handle it
-        if stride is None:
-            stride = 1
-        return (start, stop, stride)
+        # Just return a triple and let parent clauses handle it,
+        # stride can be None which means the same as 1
+        return (start, stop, stride or 1)
 
     def visitIdentifier(self, name, node):
         # Docstring inherited from TreeVisitor.visitIdentifier
@@ -136,9 +135,10 @@ class _ClauseVisitor(TreeVisitor):
         #
         # or for NOT IN case
         #
-        #    X NOT IN (1, 2, 3)
-        #    AND NOT
-        #    (X BETWEEN START AND STOP AND MOD(X, STRIDE) = MOD(START, STRIDE))
+        #    NOT (X IN (1, 2, 3)
+        #         OR
+        #         (X BETWEEN START AND STOP
+        #          AND MOD(X, STRIDE) = MOD(START, STRIDE)))
 
         max_in_items = 1000
 
@@ -150,28 +150,29 @@ class _ClauseVisitor(TreeVisitor):
             else:
                 literals.append(item)
 
-        ranges_remain = []
+        clauses = []
         for start, stop, stride in ranges:
             count = (stop - start + 1) // stride
             if len(literals) + count > max_in_items:
-                ranges_remain.append((start, stop, stride))
+                # X BETWEEN START AND STOP
+                #    AND MOD(X, STRIDE) = MOD(START, STRIDE)
+                expr = lhs.between(start, stop)
+                if stride != 1:
+                    expr = and_(expr, (lhs % stride) == (start % stride))
+                clauses.append(expr)
             else:
                 # add all values to literal list, stop is inclusive
                 literals += [literal(value) for value in range(start, stop+1, stride)]
 
-        clauses = [lhs.in_(literals)]
-        for start, stop, stride in ranges_remain:
-            # X BETWEEN START AND STOP AND MOD(X, STRIDE) = MOD(START, STRIDE)
-            expr = lhs.between(start, stop)
-            if stride != 1:
-                expr = and_(expr, (lhs % stride) == (start % stride))
-            clauses.append(expr)
+        if literals:
+            # add IN() in front of BETWEENs
+            clauses.insert(0, lhs.in_(literals))
 
+        expr = or_(*clauses)
         if not_in:
-            clauses = [not_(expr) for expr in clauses]
-            return and_(*clauses)
-        else:
-            return or_(*clauses)
+            expr = not_(expr)
+
+        return expr
 
     def visitParens(self, expression, node):
         # Docstring inherited from TreeVisitor.visitParens

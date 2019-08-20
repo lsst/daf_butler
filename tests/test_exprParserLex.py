@@ -272,6 +272,24 @@ class ParserLexTestCase(unittest.TestCase):
             lexer.token()
         _assertExc(catcher.exception, expr, ".e2", 7, 3)
 
+        # zero stride in range literal
+        lexer = ParserLex.make_lexer()
+        expr = "1..2:0"
+        lexer.input(expr)
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (1, 2, None))
+        with self.assertRaises(ParserLexError) as catcher:
+            lexer.token()
+        _assertExc(catcher.exception, expr, ":0", 4, 1)
+
+        # negative stride in range literal
+        lexer = ParserLex.make_lexer()
+        expr = "1..2:-10"
+        lexer.input(expr)
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (1, 2, None))
+        with self.assertRaises(ParserLexError) as catcher:
+            lexer.token()
+        _assertExc(catcher.exception, expr, ":-10", 4, 1)
+
 
 if __name__ == "__main__":
     unittest.main()
