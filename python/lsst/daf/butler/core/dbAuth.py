@@ -125,29 +125,29 @@ class DbAuth:
         the database connection URL, the dictionary must also contain a
         ``username`` item.
 
-        Glob-style patterns (using "*" and "?" as wildcards) can be used to
-        match the host and database name portions of the connection URL.  For
-        the username, port, and database name portions, omitting them from the
-        pattern matches against any value in the connection URL.
+        Glob-style patterns (using "``*``" and "``?``" as wildcards) can be
+        used to match the host and database name portions of the connection
+        URL.  For the username, port, and database name portions, omitting them
+        from the pattern matches against any value in the connection URL.
 
         Examples
         --------
 
         The connection URL
-        "postgresql://user@host.example.com:5432/my_database" matches against
+        ``postgresql://user@host.example.com:5432/my_database`` matches against
         the identical string as a pattern.  Other patterns that would match
         include:
 
-        * "postgresql://*"
-        * "postgresql://*.example.com"
-        * "postgresql://*.example.com/my_*"
-        * "postgresql://host.example.com/my_database"
-        * "postgresql://host.example.com:5432/my_database"
-        * "postgresql://user@host.example.com/my_database"
+        * ``postgresql://*``
+        * ``postgresql://*.example.com``
+        * ``postgresql://*.example.com/my_*``
+        * ``postgresql://host.example.com/my_database``
+        * ``postgresql://host.example.com:5432/my_database``
+        * ``postgresql://user@host.example.com/my_database``
 
         Note that the connection URL
-        "postgresql://host.example.com/my_database" would not match against
-        the pattern "postgresql://host.example.com:5432", even if the default
+        ``postgresql://host.example.com/my_database`` would not match against
+        the pattern ``postgresql://host.example.com:5432``, even if the default
         port for the connection is 5432.
         """
         if drivername is None or drivername == "":
@@ -238,7 +238,7 @@ class DbAuth:
 
         See also
         --------
-        `getAuth`
+        getAuth
         """
         components = urllib.parse.urlparse(url)
         username, password = self.getAuth(
