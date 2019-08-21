@@ -143,6 +143,18 @@ class ParserLexTestCase(unittest.TestCase):
         self._assertToken(lexer.token(), "NUMERIC_LITERAL", ".2E5")
         self.assertIsNone(lexer.token())
 
+    def testRangeLiteral(self):
+        """Test for range literals"""
+        lexer = ParserLex.make_lexer()
+
+        lexer.input("0..10 -10..-1 -10..10:2 0 .. 10 0 .. 10 : 2 ")
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (0, 10, None))
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (-10, -1, None))
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (-10, 10, 2))
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (0, 10, None))
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (0, 10, 2))
+        self.assertIsNone(lexer.token())
+
     def testIdentifier(self):
         """Test for numeric literals"""
         lexer = ParserLex.make_lexer()
@@ -179,7 +191,8 @@ class ParserLexTestCase(unittest.TestCase):
 
         expr = ("((instrument='HSC' AND detector != 9) OR instrument='CFHT') "
                 "AND tract=8766 AND patch.cell_x > 5 AND "
-                "patch.cell_y < 4 AND abstract_filter='i'")
+                "patch.cell_y < 4 AND abstract_filter='i' "
+                "or visit IN (1..50:2)")
         tokens = (("LPAREN", "("),
                   ("LPAREN", "("),
                   ("IDENTIFIER", "instrument"),
@@ -210,7 +223,14 @@ class ParserLexTestCase(unittest.TestCase):
                   ("AND", "AND"),
                   ("IDENTIFIER", "abstract_filter"),
                   ("EQ", "="),
-                  ("STRING_LITERAL", "i"))
+                  ("STRING_LITERAL", "i"),
+                  ("OR", "or"),
+                  ("IDENTIFIER", "visit"),
+                  ("IN", "IN"),
+                  ("LPAREN", "("),
+                  ("RANGE_LITERAL", (1, 50, 2)),
+                  ("RPAREN", ")"),
+                  )
         lexer.input(expr)
         for type, value in tokens:
             self._assertToken(lexer.token(), type, value)
@@ -251,6 +271,24 @@ class ParserLexTestCase(unittest.TestCase):
         with self.assertRaises(ParserLexError) as catcher:
             lexer.token()
         _assertExc(catcher.exception, expr, ".e2", 7, 3)
+
+        # zero stride in range literal
+        lexer = ParserLex.make_lexer()
+        expr = "1..2:0"
+        lexer.input(expr)
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (1, 2, None))
+        with self.assertRaises(ParserLexError) as catcher:
+            lexer.token()
+        _assertExc(catcher.exception, expr, ":0", 4, 1)
+
+        # negative stride in range literal
+        lexer = ParserLex.make_lexer()
+        expr = "1..2:-10"
+        lexer.input(expr)
+        self._assertToken(lexer.token(), "RANGE_LITERAL", (1, 2, None))
+        with self.assertRaises(ParserLexError) as catcher:
+            lexer.token()
+        _assertExc(catcher.exception, expr, ":-10", 4, 1)
 
 
 if __name__ == "__main__":

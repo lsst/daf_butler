@@ -201,6 +201,39 @@ class Identifier(Node):
         return "{name}".format(**vars(self))
 
 
+class RangeLiteral(Node):
+    """Node representing range literal appearing in `IN` list.
+
+    Range literal defines a range of integer numbers with start and
+    end of the range (with inclusive end) and optional stride value
+    (default is 1).
+
+    Attributes
+    ----------
+    start : `int`
+        Start value of a range.
+    stop : `int`
+        End value of a range, inclusive, same or higher than ``start``.
+    stride : `int` or `None`, optional
+        Stride value, must be positive, can be `None` which means that stride
+        was not specified. Consumers are supposed to treat `None` the same way
+        as stride=1 but for some consumers it may be useful to know that
+        stride was missing from literal.
+    """
+    def __init__(self, start, stop, stride=None):
+        self.start = start
+        self.stop = stop
+        self.stride = stride
+
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        return visitor.visitRangeLiteral(self.start, self.stop, self.stride, self)
+
+    def __str__(self):
+        res = f"{self.start}..{self.stop}" + (f":{self.stride}" if self.stride else "")
+        return res
+
+
 class IsIn(Node):
     """Node representing IN or NOT IN expression.
 

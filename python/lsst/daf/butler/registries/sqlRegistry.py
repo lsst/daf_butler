@@ -570,7 +570,7 @@ class SqlRegistry(Registry):
             try:
                 self._connection.execute(insertQuery, {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
                                                        "collection": collection})
-            except IntegrityError:
+            except IntegrityError as exc:
                 # Did we clash with a completely duplicate entry (because this
                 # dataset is already in this collection)?  Or is there already
                 # a different dataset with the same DatasetType and data ID in
@@ -581,7 +581,7 @@ class SqlRegistry(Registry):
                         "A dataset of type {} with id: {} already exists in collection {}".format(
                             ref.datasetType, ref.dataId, collection
                         )
-                    )
+                    ) from exc
             self.associate(collection, ref.components.values())
 
     @transactional
@@ -760,9 +760,10 @@ class SqlRegistry(Registry):
             raise TypeError(f"Dimension '{dimension.name}' has no table.")
         try:
             self._connection.execute(table.insert().values(**dataId.fields(dimension, region=False)))
-        except IntegrityError:
+        except IntegrityError as exc:
             # TODO check for conflict, not just existence.
-            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry with {dataId}.")
+            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} "
+                                             f"entry with {dataId}.") from exc
         if dataId.region is not None:
             self.setDimensionRegion(dataId)
         return dataId
@@ -803,9 +804,9 @@ class SqlRegistry(Registry):
             self._connection.execute(table.insert(), *[dataId.fields(dimension, region=True) for dataId in
                                                        dataIdList])
 
-        except IntegrityError:
+        except IntegrityError as exc:
             # TODO check for conflict, not just existence.
-            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry.")
+            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry.") from exc
         if skypixJoin is not None:
             self._connection.execute(self._schema.tables[skypixJoin.name].insert(), *skypixParams)
         return dataIdList

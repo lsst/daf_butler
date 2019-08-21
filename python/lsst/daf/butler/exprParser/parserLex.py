@@ -38,6 +38,11 @@ from .ply import lex
 #  Local non-exported definitions --
 # ----------------------------------
 
+_RE_RANGE = r"(?P<start>-?\d+)\s*\.\.\s*(?P<stop>-?\d+)(\s*:\s*(?P<stride>[1-9]\d*))?"
+"""Regular expression to match range literal in the form NUM..NUM[:NUM],
+this must match t_RANGE_LITERAL docstring.
+"""
+
 # ------------------------
 #  Exported definitions --
 # ------------------------
@@ -53,7 +58,7 @@ class ParserLexError(Exception):
     remain : str
         Remaining non-parsed part of the expression
     pos : int
-        Current parsing posistion, offset from beginning of expression in
+        Current parsing position, offset from beginning of expression in
         characters
     lineno : int
         Current line number in the expression
@@ -108,6 +113,7 @@ class ParserLex:
     tokens = (
         'NUMERIC_LITERAL',
         'STRING_LITERAL',
+        'RANGE_LITERAL',
         # 'TIME_LITERAL',
         # 'DURATION_LITERAL',
         'IDENTIFIER',
@@ -146,6 +152,18 @@ class ParserLex:
         r"'.*?'"
         # strip quotes
         t.value = t.value[1:-1]
+        return t
+
+    # range literal in format N..M[:S], spaces allowed, see _RE_RANGE
+    @lex.TOKEN(_RE_RANGE)
+    def t_RANGE_LITERAL(self, t):
+        match = re.match(_RE_RANGE, t.value)
+        start = int(match.group("start"))
+        stop = int(match.group("stop"))
+        stride = match.group("stride")
+        if stride is not None:
+            stride = int(stride)
+        t.value = (start, stop, stride)
         return t
 
     # numbers are used as strings by parser, do not convert
