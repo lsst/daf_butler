@@ -452,7 +452,6 @@ class Butler:
     def getDeferred(self, datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
                     dataId: typing.Union[dict, DataId] = None, parameters: typing.Union[dict, None] = None,
                     **kwds) -> dDH.DeferredDatasetHandle:
-
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset
 
         Parameters

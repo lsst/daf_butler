@@ -38,7 +38,7 @@ if typing.TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class DeferredDatasetHandle:
-    """Class to support deferred loading of a dataset from a butler
+    """This is a class to support deferred loading of a dataset from a butler.
 
     Parameters
     ----------
@@ -56,7 +56,7 @@ class DeferredDatasetHandle:
         typically used to efficiently read only a subset of the dataset.
     kwds : `dict`
         Additional keyword arguments used to augment or construct a
-        `DataId`.  See `DataId` parameters.
+        `DataId`.  See `DataId` construction parameters.
 
     """
 
@@ -88,13 +88,14 @@ class DeferredDatasetHandle:
         Parameters
         ----------
         parameters : `dict` or None
-            parameters passed to the butler get method. Defaults to None.
-            If not None,  this dict will be merged with the parameters dict
-            used to construct the `DeferredDatasetHandle` class
+            The parameters argument will be passed to the butler get method.
+            It defaults to None. If the value is not None,  this dict will
+            be merged with the parameters dict used to construct the
+            `DeferredDatasetHandle` class.
         kwargs : `dict`
             This argument is deprecated and only exists to support legacy
             gen2 butler code during migration. It is completely ignored
-            and will be removed in the future
+            and will be removed in the future.
 
         Returns
         -------
@@ -110,4 +111,4 @@ class DeferredDatasetHandle:
         else:
             mergedParameters = {}
 
-        return self._get(parameters)
+        return self._get(mergedParameters)
