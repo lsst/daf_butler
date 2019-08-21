@@ -25,12 +25,13 @@ __all__ = ("FileLikeDatastore", )
 
 import logging
 
-from collections import namedtuple
+from dataclasses import dataclass
 
 from lsst.daf.butler import (
     Config,
     Constraints,
     DatabaseDict,
+    DatabaseDictRecordBase,
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreConfig,
@@ -48,6 +49,23 @@ from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf
 
 log = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DatastoreRecord(DatabaseDictRecordBase):
+    """Describes the contents of a datastore record of a dataset in the
+    registry.
+
+    The record is usually populated by a `StoredFileInfo` object.
+    """
+    formatter: str
+    path: str
+    storage_class: str
+    checksum: str
+    file_size: int
+
+    lengths = {"path": 256, "formatter": 128, "storage_class": 64, "checksum": 128}
+    """Lengths of string fields."""
 
 
 class FileLikeDatastore(Datastore):
@@ -92,9 +110,8 @@ class FileLikeDatastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    RecordTuple = namedtuple("DatastoreRecord", ["formatter", "path",
-                                                 "storage_class", "checksum",
-                                                 "file_size"])
+    Record = DatastoreRecord
+    """Class to use to represent datastore records."""
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -165,13 +182,9 @@ class FileLikeDatastore(Datastore):
         self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
-        types = {"path": str, "formatter": str, "storage_class": str,
-                 "file_size": int, "checksum": str, "dataset_id": int}
-        lengths = {"path": 256, "formatter": 128, "storage_class": 64,
-                   "checksum": 128}
-        self.records = DatabaseDict.fromConfig(self.config["records"], types=types,
-                                               value=self.RecordTuple, key="dataset_id",
-                                               lengths=lengths, registry=registry)
+        self.records = DatabaseDict.fromConfig(self.config["records"],
+                                               value=self.Record, key="dataset_id",
+                                               registry=registry)
 
     def __str__(self):
         return self.root
@@ -187,9 +200,9 @@ class FileLikeDatastore(Datastore):
         info : `StoredFileInfo`
             Metadata associated with the stored Dataset.
         """
-        self.records[ref.id] = self.RecordTuple(formatter=info.formatter, path=info.path,
-                                                storage_class=info.storageClass.name,
-                                                checksum=info.checksum, file_size=info.size)
+        self.records[ref.id] = self.Record(formatter=info.formatter, path=info.path,
+                                           storage_class=info.storageClass.name,
+                                           checksum=info.checksum, file_size=info.size)
 
     def removeStoredFileInfo(self, ref):
         """Remove information about the file associated with this dataset.

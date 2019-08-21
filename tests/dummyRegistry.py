@@ -53,7 +53,7 @@ class DummyRegistry:
     def removeDatasetLocation(self, datastoreName, ref):
         self._entries[ref.id].remove(datastoreName)
 
-    def makeDatabaseDict(self, table, types, key, value, lengths=None):
+    def makeDatabaseDict(self, table, key, value):
         return dict()
 
     @contextmanager
