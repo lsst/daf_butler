@@ -27,7 +27,8 @@ __all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 import contextlib
 import logging
-from collections import namedtuple
+import typing
+from dataclasses import dataclass
 from abc import ABCMeta, abstractmethod
 
 from lsst.utils import doImport
@@ -47,6 +48,14 @@ class DatastoreValidationError(ValidationError):
     pass
 
 
+@dataclass(frozen=True)
+class Event:
+    name: str
+    undoFunc: typing.Callable
+    args: tuple
+    kwargs: dict
+
+
 class DatastoreTransaction:
     """Keeps a log of `Datastore` activity and allow rollback.
 
@@ -60,7 +69,7 @@ class DatastoreTransaction:
     parent : `DatastoreTransaction`
         The parent transaction.
     """
-    Event = namedtuple("Event", ["name", "undoFunc", "args", "kwargs"])
+    Event = Event
 
     def __init__(self, parent=None):
         self.parent = parent
@@ -104,13 +113,13 @@ class DatastoreTransaction:
         """Roll back all events in this transaction.
         """
         while self._log:
-            name, undoFunc, args, kwargs = self._log.pop()
+            ev = self._log.pop()
             try:
-                undoFunc(*args, **kwargs)
+                ev.undoFunc(*ev.args, **ev.kwargs)
             except BaseException as e:
                 # Deliberately swallow error that may occur in unrolling
                 log = logging.getLogger(__name__)
-                log.warn("Exception: %s caught while unrolling: %s", e, name)
+                log.warn("Exception: %s caught while unrolling: %s", e, ev.name)
                 pass
 
     def commit(self):
