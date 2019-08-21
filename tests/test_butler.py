@@ -51,7 +51,9 @@ from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
-from lsst.daf.butler.core.s3utils import s3CheckFileExists
+from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
+                                          unsetAwsEnvCredentials)
+
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -619,6 +621,9 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
         uri = ButlerURI(config[".datastore.datastore.root"])
         self.bucketName = uri.netloc
 
+        # set up some fake credentials if they do not exist
+        self.usingDummyCredentials = setAwsEnvCredentials()
+
         if self.useTempRoot:
             self.root = self.genRoot()
         rooturi = f"s3://{self.bucketName}/{self.root}"
@@ -648,6 +653,10 @@ class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # unset any potentially set dummy credentials
+        if self.usingDummyCredentials:
+            unsetAwsEnvCredentials()
 
     def checkFileExists(self, root, relpath):
         """Checks if file exists at a given path (relative to root).

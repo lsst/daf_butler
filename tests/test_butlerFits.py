@@ -45,6 +45,7 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType
 from lsst.daf.butler.core.location import ButlerURI
 from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
+from lsst.daf.butler.core.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
 
 try:
     import lsst.afw.image
@@ -197,6 +198,9 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
         rooturi = f"s3://{self.bucketName}/{self.root}"
         config.update({"datastore": {"datastore": {"root": rooturi}}})
 
+        # set up some fake credentials if they do not exist
+        self.usingDummyCredentials = setAwsEnvCredentials()
+
         # MOTO needs to know that we expect Bucket bucketname to exist
         # (this used to be the class attribute bucketName)
         s3 = boto3.resource("s3")
@@ -222,6 +226,10 @@ class S3DatastoreButlerTestCase(ButlerFitsTests, lsst.utils.tests.TestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # unset any potentially set dummy credentials
+        if self.usingDummyCredentials:
+            unsetAwsEnvCredentials()
 
 
 if __name__ == "__main__":

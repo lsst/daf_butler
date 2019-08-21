@@ -33,7 +33,8 @@ except ImportError:
         """
         return cls
 
-from lsst.daf.butler.core.s3utils import bucketExists, s3CheckFileExists
+from lsst.daf.butler.core.s3utils import (bucketExists, s3CheckFileExists,
+                                          setAwsEnvCredentials, unsetAwsEnvCredentials)
 from lsst.daf.butler.core.location import Location, ButlerURI
 
 
@@ -46,6 +47,9 @@ class S3UtilsTestCase(unittest.TestCase):
     fileName = "testFileName"
 
     def setUp(self):
+        # set up some fake credentials if they do not exist
+        self.usingDummyCredentials = setAwsEnvCredentials()
+
         s3 = boto3.client("s3")
         try:
             s3.create_bucket(Bucket=self.bucketName)
@@ -69,6 +73,10 @@ class S3UtilsTestCase(unittest.TestCase):
 
         bucket = s3.Bucket(self.bucketName)
         bucket.delete()
+
+        # unset any potentially set dummy credentials
+        if self.usingDummyCredentials:
+            unsetAwsEnvCredentials()
 
     def testBucketExists(self):
         self.assertTrue(bucketExists(f"{self.bucketName}"))
