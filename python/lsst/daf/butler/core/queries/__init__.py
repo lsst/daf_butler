@@ -24,5 +24,5 @@ from .builder import *
 from .structs import *
 from .datasets import *
 
-# Symbols from expressions module intentionally not lifted to package scope,
+# Symbols from other modules intentionally not lifted to package scope,
 # as they're all internal.

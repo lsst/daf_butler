@@ -33,7 +33,7 @@ from ..datasets import DatasetType
 from ..utils import NamedValueSet, NamedKeyDict
 from ..dimensions import (Dimension, DimensionElement, SkyPixDimension, DimensionGraph, DimensionUniverse,
                           ExpandedDataCoordinate)
-from ...exprParser import Node, ParserYacc
+from .exprParser import Node, ParserYacc
 
 
 class GivenTime(enum.Enum):
