@@ -41,7 +41,7 @@ except ImportError:
 
 import lsst.utils
 from lsst.utils import doImport
-from lsst.daf.butler.core.location import ButlerURI
+from .location import ButlerURI
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
