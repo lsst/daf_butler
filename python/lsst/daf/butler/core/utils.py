@@ -20,11 +20,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("iterable", "allSlots", "slotValuesAreEqual", "slotValuesToHash",
-           "getFullTypeName", "getInstanceOf", "Singleton", "transactional",
-           "getObjectSize", "stripIfNotNone", "PrivateConstructorMeta",
-           "NamedKeyDict", "NamedValueSet", "IndexedTupleDict",
-           "immutable")
+__all__ = (
+    "allSlots",
+    "getClassOf",
+    "getFullTypeName",
+    "getInstanceOf",
+    "getObjectSize",
+    "immutable",
+    "IndexedTupleDict",
+    "iterable",
+    "NamedKeyDict",
+    "NamedValueSet",
+    "PrivateConstructorMeta",
+    "Singleton",
+    "slotValuesAreEqual",
+    "slotValuesToHash",
+    "stripIfNotNone",
+    "transactional",
+)
 
 import builtins
 import sys
