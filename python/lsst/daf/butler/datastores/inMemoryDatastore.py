@@ -25,6 +25,7 @@ __all__ = ("StoredItemInfo", "InMemoryDatastore")
 
 import time
 import logging
+from typing import Dict
 
 from lsst.daf.butler import Datastore, StorageClassFactory, Constraints, DatasetTypeNotSupportedError
 
@@ -67,19 +68,14 @@ class InMemoryDatastore(Datastore):
     disappear when the Python process completes.  This also means that
     other processes can not access this datastore.
 
-    Attributes
-    ----------
-    config : `DatastoreConfig`
-        Configuration used to create Datastore.
-    storageClassFactory : `StorageClassFactory`
-        Factory for creating storage class instances from name.
-    name : `str`
-        Label associated with this Datastore.
-
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
         Configuration.
+    registry : `Registry`, optional
+        Unused parameter.
+    butlerRoot : `str`, optional
+        Unused parameter.
     """
 
     defaultConfigFile = "datastores/inMemoryDatastore.yaml"
@@ -90,6 +86,15 @@ class InMemoryDatastore(Datastore):
     isEphemeral = True
     """A new datastore is created every time and datasets disappear when
     the process shuts down."""
+
+    storageClassFactory: StorageClassFactory
+    """Factory for creating storage class instances from name."""
+
+    datasets: Dict[int, object]
+    """Internal storage of datasets indexed by dataset ID."""
+
+    records: Dict[int, StoredItemInfo]
+    """Internal records about stored datasets."""
 
     def __init__(self, config, registry=None, butlerRoot=None):
         super().__init__(config, registry)

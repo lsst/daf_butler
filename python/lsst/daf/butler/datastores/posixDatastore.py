@@ -40,29 +40,14 @@ log = logging.getLogger(__name__)
 class PosixDatastore(FileLikeDatastore):
     """Basic POSIX filesystem backed Datastore.
 
-    Attributes
-    ----------
-    config : `DatastoreConfig`
-        Configuration used to create Datastore.
-    registry : `Registry`
-        `Registry` to use when recording the writing of Datasets.
-    root : `str`
-        Root directory of this `Datastore`.
-    locationFactory : `LocationFactory`
-        Factory for creating locations relative to this root.
-    formatterFactory : `FormatterFactory`
-        Factory for creating instances of formatters.
-    storageClassFactory : `StorageClassFactory`
-        Factory for creating storage class instances from name.
-    templates : `FileTemplates`
-        File templates that can be used by this `Datastore`.
-    name : `str`
-        Label associated with this Datastore.
-
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
-        Configuration.
+        Configuration. A string should refer to the name of the config file.
+    registry : `Registry`
+        Registry to use for storing internal information about the datasets.
+    butlerRoot : `str`, optional
+        New datastore root to use to override the configuration value.
 
     Raises
     ------

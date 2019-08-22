@@ -26,6 +26,7 @@ __all__ = ("FileLikeDatastore", )
 import logging
 
 from dataclasses import dataclass
+from typing import ClassVar, Type
 
 from lsst.daf.butler import (
     Config,
@@ -41,6 +42,7 @@ from lsst.daf.butler import (
     FileTemplateValidationError,
     FormatterFactory,
     LocationFactory,
+    Registry,
     StorageClassFactory,
     StoredFileInfo,
 )
@@ -73,26 +75,6 @@ class FileLikeDatastore(Datastore):
 
     Should be sub-classed.
 
-    Attributes
-    ----------
-    config : `DatastoreConfig`
-        Configuration used to create Datastore.
-    registry : `Registry`
-        `Registry` to use when recording the writing of Datasets.
-    root : `str`
-        Root directory of this `Datastore`.
-    locationFactory : `LocationFactory`
-        Factory for creating locations relative to the datastore
-        root.
-    formatterFactory : `FormatterFactory`
-        Factory for creating instances of formatters.
-    storageClassFactory : `StorageClassFactory`
-        Factory for creating storage class instances from name.
-    templates : `FileTemplates`
-        File templates that can be used by this `Datastore`.
-    name : `str`
-        Label associated with this Datastore.
-
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
@@ -110,8 +92,32 @@ class FileLikeDatastore(Datastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    Record = DatastoreRecord
+    Record: ClassVar[Type] = DatastoreRecord
     """Class to use to represent datastore records."""
+
+    config: DatastoreConfig
+    """Configuration used to create Datastore."""
+
+    registry: Registry
+    """`Registry` to use when recording the writing of Datasets."""
+
+    root: str
+    """Root directory of this `Datastore`."""
+
+    locationFactory: LocationFactory
+    """Factory for creating locations relative to the datastore root."""
+
+    formatterFactory: FormatterFactory
+    """Factory for creating instances of formatters."""
+
+    storageClassFactory: StorageClassFactory
+    """Factory for creating storage class instances from name."""
+
+    templates: FileTemplates
+    """File templates that can be used by this `Datastore`."""
+
+    records: DatabaseDict
+    """Place to store internal records about datasets."""
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):

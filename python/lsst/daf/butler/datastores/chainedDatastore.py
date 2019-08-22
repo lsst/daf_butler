@@ -27,6 +27,7 @@ import time
 import logging
 import os
 import warnings
+from typing import List, Sequence, Optional
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
@@ -43,21 +44,17 @@ class ChainedDatastore(Datastore):
     operation is sent to each datastore in turn and the first datastore
     to return a valid dataset is used.
 
-    Attributes
-    ----------
-    config : `DatastoreConfig`
-        Configuration used to create Datastore.
-    storageClassFactory : `StorageClassFactory`
-        Factory for creating storage class instances from name.
-    name : `str`
-        Label associated with this Datastore.
-
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
         Configuration.  This configuration must include a ``datastores`` field
         as a sequence of datastore configurations.  The order in this sequence
         indicates the order to use for read operations.
+    registry : `Registry`
+        Registry to use for storing internal information about the datasets.
+    butlerRoot : `str`, optional
+        New datastore root to use to override the configuration value. This
+        root is sent to each child datastore.
     """
 
     defaultConfigFile = "datastores/chainedDatastore.yaml"
@@ -67,6 +64,15 @@ class ChainedDatastore(Datastore):
 
     containerKey = "datastores"
     """Key to specify where child datastores are configured."""
+
+    storageClassFactory: StorageClassFactory
+    """Factory for creating storage class instances from name."""
+
+    datastores: List[Datastore]
+    """All the child datastores known to this datastore."""
+
+    datastoreConstraints: Sequence[Optional[Constraints]]
+    """Constraints to be applied to each of the child datastores."""
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
