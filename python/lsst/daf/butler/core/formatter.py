@@ -23,11 +23,15 @@ __all__ = ("Formatter", "FormatterFactory")
 
 from abc import ABCMeta, abstractmethod
 import logging
+from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type
 
-from .configSupport import processLookupConfigs
+from .configSupport import processLookupConfigs, LookupKey
 from .mappingFactory import MappingFactory
 from .utils import getFullTypeName
 from .fileDescriptor import FileDescriptor
+from .location import Location
+from .config import Config
+from .dimensions import DimensionUniverse
 
 log = logging.getLogger(__name__)
 
@@ -44,13 +48,13 @@ class Formatter(metaclass=ABCMeta):
         caller will never call `Formatter.read` or `Formatter.write`.
     """
 
-    unsupportedParameters = frozenset()
+    unsupportedParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = frozenset()
     """Set of parameters not understood by this `Formatter`. An empty set means
     all parameters are supported.  `None` indicates that no parameters
     are supported (`frozenset`).
     """
 
-    def __init__(self, fileDescriptor):
+    def __init__(self, fileDescriptor: FileDescriptor):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
@@ -62,13 +66,13 @@ class Formatter(metaclass=ABCMeta):
         return f"{self.name()}({self.fileDescriptor!r})"
 
     @property
-    def fileDescriptor(self):
+    def fileDescriptor(self) -> FileDescriptor:
         """FileDescriptor associated with this formatter
-        (`Formatter`, read-only)"""
+        (`FileDescriptor`, read-only)"""
         return self._fileDescriptor
 
     @classmethod
-    def name(cls):
+    def name(cls) -> str:
         """Returns the fully qualified name of the formatter.
 
         Returns
@@ -79,7 +83,7 @@ class Formatter(metaclass=ABCMeta):
         return getFullTypeName(cls)
 
     @abstractmethod
-    def read(self, component=None):
+    def read(self, component: Optional[str] = None) -> object:
         """Read a Dataset.
 
         Parameters
@@ -97,7 +101,7 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support reading")
 
     @abstractmethod
-    def write(self, inMemoryDataset):
+    def write(self, inMemoryDataset: object) -> str:
         """Write a Dataset.
 
         Parameters
@@ -112,16 +116,14 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
-    def fromBytes(self, serializedDataset, component=None):
+    def fromBytes(self, serializedDataset: bytes,
+                  component: Optional[str] = None) -> object:
         """Reads serialized data into a Dataset or its component.
 
         Parameters
         ----------
         serializedDataset : `bytes`
             Bytes object to unserialize.
-        fileDescriptor : `FileDescriptor`
-            Identifies type to read it as and parameters to be used for
-            reading.
         component : `str`, optional
             Component to read from the Dataset. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -135,16 +137,13 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support reading from bytes.")
 
-    def toBytes(self, inMemoryDataset):
+    def toBytes(self, inMemoryDataset: object) -> bytes:
         """Serialize the Dataset to bytes based on formatter.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             The Python object to serialize.
-        fileDescriptor : `FileDescriptor`
-            Identifies type to read the dataset as and parameters to be used
-            for reading.
 
         Returns
         -------
@@ -155,7 +154,7 @@ class Formatter(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def predictPathFromLocation(cls, location):
+    def predictPathFromLocation(cls, location: Location) -> str:
         """Return the path that would be returned by write, without actually
         writing.
 
@@ -171,7 +170,7 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing")
 
-    def predictPath(self):
+    def predictPath(self) -> str:
         """Return the path that would be returned by write, without actually
         writing.
 
@@ -185,7 +184,7 @@ class Formatter(metaclass=ABCMeta):
         """
         return self.predictPathFromLocation(self.fileDescriptor.location)
 
-    def segregateParameters(self, parameters=None):
+    def segregateParameters(self, parameters: Optional[Dict[str, Any]] = None) -> Tuple[Dict, Dict]:
         """Segregate the supplied parameters into those understood by the
         formatter and those not understood by the formatter.
 
@@ -252,7 +251,7 @@ class FormatterFactory:
         """
         return key in self._mappingFactory
 
-    def registerFormatters(self, config, *, universe):
+    def registerFormatters(self, config: Config, *, universe: DimensionUniverse) -> None:
         """Bulk register formatters from a config.
 
         Parameters
@@ -279,7 +278,7 @@ class FormatterFactory:
         for key, f in contents.items():
             self.registerFormatter(key, f)
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         """Retrieve the look up keys for all the registry entries.
 
         Returns
@@ -289,7 +288,7 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity):
+    def getFormatterClassWithMatch(self, entity) -> Tuple[LookupKey, Type]:
         """Get the matching formatter class along with the matching registry
         key.
 
@@ -319,7 +318,7 @@ class FormatterFactory:
 
         return matchKey, formatter
 
-    def getFormatterClass(self, entity):
+    def getFormatterClass(self, entity) -> Type:
         """Get the matching formatter class.
 
         Parameters
@@ -339,7 +338,7 @@ class FormatterFactory:
         _, formatter = self.getFormatterClassWithMatch(entity)
         return formatter
 
-    def getFormatterWithMatch(self, entity, *args, **kwargs):
+    def getFormatterWithMatch(self, entity, *args, **kwargs) -> Tuple[LookupKey, Formatter]:
         """Get a new formatter instance along with the matching registry
         key.
 
@@ -373,7 +372,7 @@ class FormatterFactory:
 
         return matchKey, formatter
 
-    def getFormatter(self, entity, *args, **kwargs):
+    def getFormatter(self, entity, *args, **kwargs) -> Formatter:
         """Get a new formatter instance.
 
         Parameters
@@ -397,7 +396,7 @@ class FormatterFactory:
         _, formatter = self.getFormatterWithMatch(entity, *args, **kwargs)
         return formatter
 
-    def registerFormatter(self, type_, formatter):
+    def registerFormatter(self, type_, formatter) -> None:
         """Register a `Formatter`.
 
         Parameters

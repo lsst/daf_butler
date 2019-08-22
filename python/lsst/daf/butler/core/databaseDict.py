@@ -21,10 +21,14 @@
 
 __all__ = ("DatabaseDict", "DatabaseDictRecordBase")
 
+import typing
 from dataclasses import fields, asdict
 from collections.abc import MutableMapping, Sequence
+from typing import Dict, Type, Any, ClassVar, Optional
 
 from lsst.utils import doImport
+from .config import Config
+from .registry import Registry
 
 
 class DatabaseDictRecordBase(Sequence):
@@ -42,24 +46,24 @@ class DatabaseDictRecordBase(Sequence):
     def __len__(self):
         return len(fields(self))
 
-    lengths = {}
+    lengths: ClassVar[Dict[str, int]] = {}
     """Lengths of string fields (optional)."""
 
-    key_type = int
+    key_type: ClassVar[Type] = int
     """Type to use for key field."""
 
     @classmethod
-    def fields(cls):
+    def fields(cls) -> typing.Sequence[str]:
         """Emulate the namedtuple._fields class attribute"""
         return tuple(f.name for f in fields(cls))
 
     @classmethod
-    def types(cls):
+    def types(cls) -> Dict[str, Type]:
         """Return a dict indexed by name and with the python type as the
         value."""
         return {f.name: f.type for f in fields(cls)}
 
-    def _asdict(self):
+    def _asdict(self) -> Dict[str, Any]:
         return asdict(self)
 
 
@@ -93,8 +97,12 @@ class DatabaseDict(MutableMapping):
         property.
     """
 
+    registry: Registry
+    """Registry to be used to hold the contents of the DatabaseDict."""
+
     @staticmethod
-    def fromConfig(config, key, value, registry=None):
+    def fromConfig(config: Config, key: str, value: DatabaseDictRecordBase,
+                   registry: Optional[Registry] = None):
         """Create a `DatabaseDict` subclass instance from `config`.
 
         If ``config`` contains a class ``cls`` key, this will be assumed to
@@ -137,7 +145,7 @@ class DatabaseDict(MutableMapping):
                 raise ValueError("Either config['cls'] or registry must be provided.")
             return registry.makeDatabaseDict(table, key=key, value=value)
 
-    def __init__(self, config, key, value):
+    def __init__(self, config: Config, key: str, value: DatabaseDictRecordBase):
         # This constructor is currently defined just to clearly document the
         # interface subclasses should conform to.
         pass
