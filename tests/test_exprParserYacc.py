@@ -19,12 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""Simple unit test for expr_parser/parserYacc module.
+"""Simple unit test for exprParser subpackage module.
 """
 
 import unittest
 
-from lsst.daf.butler.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
+from lsst.daf.butler.core.queries.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
 
 
 class _Visitor(TreeVisitor):
