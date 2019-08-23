@@ -135,50 +135,39 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         return
 
-    def addStoredItemInfo(self, ref, info):
-        """Record internal storage information associated with this
-        `DatasetRef`.
+    def _info_to_record(self, info):
+        """Convert a `StoredItemInfo` to a suitable database record.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The Dataset that has been stored.
         info : `StoredItemInfo`
             Metadata associated with the stored Dataset.
 
-        Raises
-        ------
-        KeyError
-            An entry with this DatasetRef already exists.
+        Returns
+        -------
+        record : `StoredItemInfo`
+            Record to be stored.
         """
-        if ref.id in self.records:
-            raise KeyError("Attempt to store item info with ID {}"
-                           " when that ID exists as '{}'".format(ref.id, self.records[ref.id]))
-        self.records[ref.id] = info
+        return info
 
-    def getStoredItemInfo(self, ref):
-        """Retrieve information associated with object stored in this
-        `Datastore`.
+    def _record_to_info(self, record):
+        """Convert a record associated with this dataset to a `StoredItemInfo`
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The Dataset that is to be queried.
+        record : `StoredItemInfo`
+            Object stored in the record table.
 
         Returns
         -------
         info : `StoredItemInfo`
-            Stored information about the internal location of this file
-            and its formatter.
+            The information associated with this dataset record as a Python
+            class.
 
-        Raises
-        ------
-        KeyError
-            Dataset with that id can not be found.
+        Notes
+        -----
+        Returns the record directly.
         """
-        record = self.records.get(ref.id, None)
-        if record is None:
-            raise KeyError("Unable to retrieve information associated with Dataset {}".format(ref.id))
         return record
 
     def exists(self, ref):

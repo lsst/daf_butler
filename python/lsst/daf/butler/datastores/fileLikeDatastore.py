@@ -178,43 +178,37 @@ class FileLikeDatastore(GenericBaseDatastore):
     def __str__(self):
         return self.root
 
-    def addStoredItemInfo(self, ref, info):
-        """Record internal storage information associated with this
-        `DatasetRef`
+    def _info_to_record(self, info):
+        """Convert a `StoredFileInfo` to a suitable database record.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The Dataset that has been stored.
         info : `StoredFileInfo`
             Metadata associated with the stored Dataset.
-        """
-        self.records[ref.id] = self.Record(formatter=info.formatter, path=info.path,
-                                           storage_class=info.storageClass.name,
-                                           checksum=info.checksum, file_size=info.file_size)
-
-    def getStoredItemInfo(self, ref):
-        """Retrieve information associated with file stored in this
-        `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The Dataset that is to be queried.
 
         Returns
         -------
-        info : `StoredFilenfo`
-            Stored information about this file and its formatter.
-
-        Raises
-        ------
-        KeyError
-            Dataset with that id can not be found.
+        record : `DatastoreRecord`
+            Record to be stored.
         """
-        record = self.records.get(ref.id, None)
-        if record is None:
-            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
+        return self.Record(formatter=info.formatter, path=info.path,
+                           storage_class=info.storageClass.name,
+                           checksum=info.checksum, file_size=info.file_size)
+
+    def _record_to_info(self, record):
+        """Convert a record associated with this dataset to a `StoredItemInfo`
+
+        Parameters
+        ----------
+        record : `DatastoreRecord`
+            Object stored in the record table.
+
+        Returns
+        -------
+        info : `StoredFileInfo`
+            The information associated with this dataset record as a Python
+            class.
+        """
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
         return StoredFileInfo(record.formatter, record.path, storageClass,
