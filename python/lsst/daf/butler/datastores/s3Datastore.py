@@ -121,9 +121,8 @@ class S3Datastore(FileLikeDatastore):
         ValueError
             Formatter failed to process the dataset.
         """
-        location, formatter, storedFileInfo, assemblerParams, \
-            component, readStorageClass = self._prepare_for_get(ref,
-                                                                parameters)
+        getInfo = self._prepare_for_get(ref, parameters)
+        location = getInfo.location
 
         # since we have to make a GET request to S3 anyhow (for download) we
         # might as well use the HEADER metadata for size comparison instead.
@@ -153,6 +152,7 @@ class S3Datastore(FileLikeDatastore):
             # other errors are reraised also, but less descriptively
             raise err
 
+        storedFileInfo = getInfo.info
         if response["ContentLength"] != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
                                " match recorded size of {}".format(location.path, response["ContentLength"],
@@ -164,17 +164,18 @@ class S3Datastore(FileLikeDatastore):
         # format the downloaded bytes into appropriate object directly, or via
         # tempfile (when formatter does not support to/from/Bytes). This is S3
         # equivalent of PosixDatastore formatter.read try-except block.
+        formatter = getInfo.formatter
         try:
-            result = formatter.fromBytes(serializedDataset, component=component)
+            result = formatter.fromBytes(serializedDataset, component=getInfo.component)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
                 tmpFile.file.write(serializedDataset)
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
-                result = formatter.read(component=component)
+                result = formatter.read(component=getInfo.component)
         except Exception as e:
             raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
 
-        return self._post_process_get(result, readStorageClass, assemblerParams)
+        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
 
     @transactional
     def put(self, inMemoryDataset, ref):

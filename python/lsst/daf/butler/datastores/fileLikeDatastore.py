@@ -26,7 +26,7 @@ __all__ = ("FileLikeDatastore", )
 import logging
 
 from dataclasses import dataclass
-from typing import ClassVar, Type
+from typing import ClassVar, Type, Optional
 
 from lsst.daf.butler import (
     Config,
@@ -38,8 +38,11 @@ from lsst.daf.butler import (
     FileDescriptor,
     FileTemplates,
     FileTemplateValidationError,
+    Formatter,
     FormatterFactory,
+    Location,
     LocationFactory,
+    StorageClass,
     StoredFileInfo,
 )
 
@@ -65,6 +68,31 @@ class DatastoreRecord(DatabaseDictRecordBase):
 
     lengths = {"path": 256, "formatter": 128, "storage_class": 64, "checksum": 128}
     """Lengths of string fields."""
+
+
+@dataclass(frozen=True)
+class DatastoreFileGetInformation:
+    """Collection of useful parameters needed to retrieve a file from
+    a Datastore.
+    """
+
+    location: Location
+    """The location from which to read the dataset."""
+
+    formatter: Formatter
+    """The `Formatter` to use to deserialize the dataset."""
+
+    info: StoredFileInfo
+    """Stored information about this file and its formatter."""
+
+    assemblerParams: dict
+    """Parameters to use for post-processing the retrieved dataset."""
+
+    component: Optional[str]
+    """The component to be retrieved (can be `None`)."""
+
+    readStorageClass: StorageClass
+    """The `StorageClass` of the dataset being read."""
 
 
 class FileLikeDatastore(GenericBaseDatastore):
@@ -256,19 +284,8 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        location : `Location`
-            The location from which to read the dataset.
-        formatter : `Formatter`
-            The `Formatter` to use to deserialize the dataset.
-        info : `StoredFileInfo`
-            Stored information about this file and its formatter.
-        assemblerParams : `dict`
-            Parameters to use for post-processing the retrieved
-            dataset.
-        component : `str`
-            The component to be retrieved (can be `None`).
-        readStorageClass : `StorageClass`
-            The `StorageClass` of the dataset being read.
+        getInfo : `DatastoreFileGetInformation`
+            Parameters needed to retrieve the file.
         """
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
@@ -293,7 +310,8 @@ class FileLikeDatastore(GenericBaseDatastore):
                                                  storageClass=writeStorageClass, parameters=parameters))
         formatterParams, assemblerParams = formatter.segregateParameters()
 
-        return location, formatter, storedFileInfo, assemblerParams, component, readStorageClass
+        return DatastoreFileGetInformation(location, formatter, storedFileInfo,
+                                           assemblerParams, component, readStorageClass)
 
     def _prepare_for_put(self, inMemoryDataset, ref):
         """Check the arguments for ``put`` and obtain formatter and

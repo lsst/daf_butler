@@ -112,9 +112,8 @@ class PosixDatastore(FileLikeDatastore):
         ValueError
             Formatter failed to process the dataset.
         """
-        location, formatter, storedFileInfo, assemblerParams, \
-            component, readStorageClass = self._prepare_for_get(ref,
-                                                                parameters)
+        getInfo = self._prepare_for_get(ref, parameters)
+        location = getInfo.location
 
         # Too expensive to recalculate the checksum on fetch
         # but we can check size and existence
@@ -123,17 +122,19 @@ class PosixDatastore(FileLikeDatastore):
                                     " expected location of {}".format(ref.id, location.path))
         stat = os.stat(location.path)
         size = stat.st_size
+        storedFileInfo = getInfo.info
         if size != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
                                " match recorded size of {}".format(location.path, size,
                                                                    storedFileInfo.file_size))
 
+        formatter = getInfo.formatter
         try:
-            result = formatter.read(component=component)
+            result = formatter.read(component=getInfo.component)
         except Exception as e:
             raise ValueError(f"Failure from formatter '{formatter.name()}' for Dataset {ref.id}") from e
 
-        return self._post_process_get(result, readStorageClass, assemblerParams)
+        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
 
     @transactional
     def put(self, inMemoryDataset, ref):
