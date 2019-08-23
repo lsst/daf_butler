@@ -75,7 +75,7 @@ class FileLikeDatastore(GenericBaseDatastore):
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
-        Configuration.
+        Configuration as either a `Config` object or URI to file.
 
     Raises
     ------
