@@ -19,87 +19,51 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("StoredFileInfo", )
+__all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
 
 import inspect
+from dataclasses import dataclass
+from typing import Optional
 
 from .formatter import Formatter
-from .utils import slotValuesAreEqual
 from .storageClass import StorageClass
 
 
-class StoredFileInfo:
-    """Information associated with a stored file in a Datastore.
+class StoredDatastoreItemInfo:
+    """Internal information associated with a stored dataset in a `Datastore`.
 
-    Parameters
-    ----------
-    formatter : `str` or `Formatter` or `Formatter` class.
-        Full name of formatter to use to read this Dataset or a `Formatter`
-        instance or class.
-    path : `str`
-        Path to Dataset, relative to `Datastore` root.
-    storageClass : `StorageClass`
-        `StorageClass` used when writing the file. This can differ from that
-        used to read the file if a component is being requested from
-        a concrete composite.
-
-    See Also
-    --------
-    StorageInfo
+    This is an empty base class.  Datastore implementations are expected to
+    write their own subclasses.
     """
+    pass
 
-    __eq__ = slotValuesAreEqual
-    __slots__ = ("_formatter", "_path", "_storageClass", "_checksum", "_size")
 
-    def __init__(self, formatter, path, storageClass, checksum=None, size=None):
-        if isinstance(formatter, str):
+@dataclass
+class StoredFileInfo(StoredDatastoreItemInfo):
+    """Datastore-private metadata associated with a file stored in a Datastore.
+    """
+    formatter: str
+    """Fully-qualified name of Formatter."""
+
+    path: str
+    """Path to dataset within Datastore."""
+
+    storageClass: StorageClass
+    """StorageClass associated with Dataset."""
+
+    checksum: Optional[str]
+    """Checksum of the serialized dataset."""
+
+    file_size: int
+    """Size of the serialized dataset in bytes."""
+
+    def __post_init__(self):
+        # This modification prevents the data class from being frozen.
+        if isinstance(self.formatter, str):
             # We trust that this string refers to a Formatter
             pass
-        elif isinstance(formatter, Formatter) or (inspect.isclass(formatter) and
-                                                  issubclass(formatter, Formatter)):
-            formatter = formatter.name()
+        elif isinstance(self.formatter, Formatter) or \
+                (inspect.isclass(self.formatter) and issubclass(self.formatter, Formatter)):
+            self.formatter = self.formatter.name()
         else:
-            raise ValueError(f"Supplied formatter '{formatter}' is not a Formatter")
-        self._formatter = formatter
-        assert isinstance(path, str)
-        self._path = path
-        assert isinstance(storageClass, StorageClass)
-        self._storageClass = storageClass
-        assert checksum is None or isinstance(checksum, str)
-        self._checksum = checksum
-        assert size is None or isinstance(size, int)
-        self._size = size
-
-    @property
-    def formatter(self):
-        """Full name of formatter (`str`).
-        """
-        return self._formatter
-
-    @property
-    def path(self):
-        """Path to Dataset (`str`).
-        """
-        return self._path
-
-    @property
-    def storageClass(self):
-        """StorageClass used (`StorageClass`).
-        """
-        return self._storageClass
-
-    @property
-    def checksum(self):
-        """Checksum (`str`).
-        """
-        return self._checksum
-
-    @property
-    def size(self):
-        """Size of stored object in bytes (`int`).
-        """
-        return self._size
-
-    def __repr__(self):
-        return f'{type(self).__qualname__}(path="{self.path}", formatter="{self.formatter}"' \
-            f' size={self.size}, checksum="{self.checksum}", storageClass="{self.storageClass.name}")'
+            raise ValueError(f"Supplied formatter '{self.formatter}' is not a Formatter")

@@ -30,7 +30,7 @@ import warnings
 from typing import List, Sequence, Optional
 
 from lsst.utils import doImport
-from lsst.daf.butler import Datastore, DatastoreConfig, StorageClassFactory, DatasetTypeNotSupportedError, \
+from lsst.daf.butler import Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
     DatastoreValidationError, Constraints
 
 log = logging.getLogger(__name__)
@@ -64,9 +64,6 @@ class ChainedDatastore(Datastore):
 
     containerKey = "datastores"
     """Key to specify where child datastores are configured."""
-
-    storageClassFactory: StorageClassFactory
-    """Factory for creating storage class instances from name."""
 
     datastores: List[Datastore]
     """All the child datastores known to this datastore."""
@@ -142,8 +139,6 @@ class ChainedDatastore(Datastore):
     def __init__(self, config, registry=None, butlerRoot=None):
         super().__init__(config, registry)
 
-        self.storageClassFactory = StorageClassFactory()
-
         # Scan for child datastores and instantiate them with the same registry
         self.datastores = []
         for c in self.config["datastores"]:
@@ -168,10 +163,6 @@ class ChainedDatastore(Datastore):
                 isEphemeral = False
                 break
         self.isEphemeral = isEphemeral
-
-        # And read the constraints list
-        constraintsConfig = self.config.get("constraints")
-        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
         # per-datastore override constraints
         if "datastore_constraints" in self.config:

@@ -123,9 +123,10 @@ class PosixDatastore(FileLikeDatastore):
                                     " expected location of {}".format(ref.id, location.path))
         stat = os.stat(location.path)
         size = stat.st_size
-        if size != storedFileInfo.size:
+        if size != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
-                               " match recorded size of {}".format(location.path, size, storedFileInfo.size))
+                               " match recorded size of {}".format(location.path, size,
+                                                                   storedFileInfo.file_size))
 
         try:
             result = formatter.read(component=component)
@@ -282,7 +283,7 @@ class PosixDatastore(FileLikeDatastore):
         size = stat.st_size
 
         # Update the registry
-        self._register_dataset(ref, formatter, path, size, checksum)
+        self._register_dataset_file(ref, formatter, path, size, checksum)
 
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.

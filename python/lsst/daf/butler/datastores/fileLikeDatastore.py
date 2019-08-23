@@ -30,11 +30,9 @@ from typing import ClassVar, Type
 
 from lsst.daf.butler import (
     Config,
-    Constraints,
     DatabaseDict,
     DatabaseDictRecordBase,
     DatasetTypeNotSupportedError,
-    Datastore,
     DatastoreConfig,
     DatastoreValidationError,
     FileDescriptor,
@@ -42,13 +40,12 @@ from lsst.daf.butler import (
     FileTemplateValidationError,
     FormatterFactory,
     LocationFactory,
-    Registry,
-    StorageClassFactory,
     StoredFileInfo,
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf
+from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)
 
@@ -70,10 +67,10 @@ class DatastoreRecord(DatabaseDictRecordBase):
     """Lengths of string fields."""
 
 
-class FileLikeDatastore(Datastore):
+class FileLikeDatastore(GenericBaseDatastore):
     """Generic Datastore for file-based implementations.
 
-    Should be sub-classed.
+    Should always be sub-classed since key abstract methods are missing.
 
     Parameters
     ----------
@@ -95,23 +92,14 @@ class FileLikeDatastore(Datastore):
     Record: ClassVar[Type] = DatastoreRecord
     """Class to use to represent datastore records."""
 
-    config: DatastoreConfig
-    """Configuration used to create Datastore."""
-
-    registry: Registry
-    """`Registry` to use when recording the writing of Datasets."""
-
     root: str
-    """Root directory of this `Datastore`."""
+    """Root directory or URI of this `Datastore`."""
 
     locationFactory: LocationFactory
     """Factory for creating locations relative to the datastore root."""
 
     formatterFactory: FormatterFactory
     """Factory for creating instances of formatters."""
-
-    storageClassFactory: StorageClassFactory
-    """Factory for creating storage class instances from name."""
 
     templates: FileTemplates
     """File templates that can be used by this `Datastore`."""
@@ -173,7 +161,6 @@ class FileLikeDatastore(Datastore):
 
         self.locationFactory = LocationFactory(self.root)
         self.formatterFactory = FormatterFactory()
-        self.storageClassFactory = StorageClassFactory()
 
         # Now associate formatters with storage classes
         self.formatterFactory.registerFormatters(self.config["formatters"],
@@ -183,10 +170,6 @@ class FileLikeDatastore(Datastore):
         self.templates = FileTemplates(self.config["templates"],
                                        universe=self.registry.dimensions)
 
-        # And read the constraints list
-        constraintsConfig = self.config.get("constraints")
-        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
-
         # Storage of paths and formatters, keyed by dataset_id
         self.records = DatabaseDict.fromConfig(self.config["records"],
                                                value=self.Record, key="dataset_id",
@@ -195,7 +178,7 @@ class FileLikeDatastore(Datastore):
     def __str__(self):
         return self.root
 
-    def addStoredFileInfo(self, ref, info):
+    def addStoredItemInfo(self, ref, info):
         """Record internal storage information associated with this
         `DatasetRef`
 
@@ -208,19 +191,9 @@ class FileLikeDatastore(Datastore):
         """
         self.records[ref.id] = self.Record(formatter=info.formatter, path=info.path,
                                            storage_class=info.storageClass.name,
-                                           checksum=info.checksum, file_size=info.size)
+                                           checksum=info.checksum, file_size=info.file_size)
 
-    def removeStoredFileInfo(self, ref):
-        """Remove information about the file associated with this dataset.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The Dataset that has been removed.
-        """
-        del self.records[ref.id]
-
-    def getStoredFileInfo(self, ref):
+    def getStoredItemInfo(self, ref):
         """Retrieve information associated with file stored in this
         `Datastore`.
 
@@ -231,7 +204,7 @@ class FileLikeDatastore(Datastore):
 
         Returns
         -------
-        info : `StoredFileInfo`
+        info : `StoredFilenfo`
             Stored information about this file and its formatter.
 
         Raises
@@ -245,7 +218,7 @@ class FileLikeDatastore(Datastore):
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
         return StoredFileInfo(record.formatter, record.path, storageClass,
-                              checksum=record.checksum, size=record.file_size)
+                              checksum=record.checksum, file_size=record.file_size)
 
     def _get_dataset_location_info(self, ref):
         """Find the `Location` of the requested dataset in the
@@ -266,7 +239,7 @@ class FileLikeDatastore(Datastore):
         """
         # Get the file information (this will fail if no file)
         try:
-            storedFileInfo = self.getStoredFileInfo(ref)
+            storedFileInfo = self.getStoredItemInfo(ref)
         except KeyError:
             return None, None
 
@@ -328,33 +301,6 @@ class FileLikeDatastore(Datastore):
 
         return location, formatter, storedFileInfo, assemblerParams, component, readStorageClass
 
-    def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None):
-        """Given the Python object read from the datastore, manipulate
-        it based on the supplied parameters and ensure the Python
-        type is correct.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            Dataset to check.
-        readStorageClass: `StorageClass`
-            The `StorageClass` used to obtain the assembler and to
-            check the python type.
-        assemblerParams : `dict`
-            Parameters to pass to the assembler.  Can be `None`.
-        """
-        # Process any left over parameters
-        if assemblerParams:
-            inMemoryDataset = readStorageClass.assembler().handleParameters(inMemoryDataset, assemblerParams)
-
-        # Validate the returned data type matches the expected data type
-        pytype = readStorageClass.pytype
-        if pytype and not isinstance(inMemoryDataset, pytype):
-            raise TypeError("Got type {} from formatter but expected {}".format(type(inMemoryDataset),
-                                                                                pytype))
-
-        return inMemoryDataset
-
     def _prepare_for_put(self, inMemoryDataset, ref):
         """Check the arguments for ``put`` and obtain formatter and
         location.
@@ -380,20 +326,7 @@ class FileLikeDatastore(Datastore):
         DatasetTypeNotSupportedError
             The associated `DatasetType` is not handled by this datastore.
         """
-        datasetType = ref.datasetType
-        storageClass = datasetType.storageClass
-
-        # Sanity check
-        if not isinstance(inMemoryDataset, storageClass.pytype):
-            raise TypeError("Inconsistency between supplied object ({}) "
-                            "and storage class type ({})".format(type(inMemoryDataset),
-                                                                 storageClass.pytype))
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
+        self._validate_put_parameters(inMemoryDataset, ref)
 
         # Work out output file name
         try:
@@ -404,6 +337,7 @@ class FileLikeDatastore(Datastore):
         location = self.locationFactory.fromPath(template.format(ref))
 
         # Get the formatter based on the storage class
+        storageClass = ref.datasetType.storageClass
         try:
             formatter = self.formatterFactory.getFormatter(ref,
                                                            FileDescriptor(location,
@@ -413,8 +347,9 @@ class FileLikeDatastore(Datastore):
 
         return location, formatter
 
-    def _register_dataset(self, ref, formatter, path, size, checksum=None):
-        """Update registry to indicate that this dataset has been stored.
+    def _register_dataset_file(self, ref, formatter, path, size, checksum=None):
+        """Update registry to indicate that this dataset has been stored,
+        specifying file metadata.
 
         Parameters
         ----------
@@ -429,34 +364,10 @@ class FileLikeDatastore(Datastore):
         checksum : `str`, optional
             Checksum of the serialized dataset. Can be `None`.
         """
-        self.registry.addDatasetLocation(ref, self.name)
-
         # Associate this dataset with the formatter for later read.
         fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass,
-                                  size=size, checksum=checksum)
-        # TODO: this is only transactional if the DatabaseDict uses
-        #       self.registry internally.  Probably need to add
-        #       transactions to DatabaseDict to do better than that.
-        self.addStoredFileInfo(ref, fileInfo)
-
-        # Register all components with same information
-        for compRef in ref.components.values():
-            self.registry.addDatasetLocation(compRef, self.name)
-            self.addStoredFileInfo(compRef, fileInfo)
-
-    def _remove_from_registry(self, ref):
-        """Remove rows from registry.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Dataset to remove from registry.
-        """
-        self.removeStoredFileInfo(ref)
-        self.registry.removeDatasetLocation(self.name, ref)
-        for compRef in ref.components.values():
-            self.registry.removeDatasetLocation(self.name, compRef)
-            self.removeStoredFileInfo(compRef)
+                                  file_size=size, checksum=checksum)
+        self._register_dataset(ref, fileInfo)
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.
@@ -497,28 +408,12 @@ class FileLikeDatastore(Datastore):
         else:
             # If this is a ref that we have written we can get the path.
             # Get file metadata and internal metadata
-            storedFileInfo = self.getStoredFileInfo(ref)
+            storedFileInfo = self.getStoredItemInfo(ref)
 
             # Use the path to determine the location
             location = self.locationFactory.fromPath(storedFileInfo.path)
 
         return location.uri
-
-    def transfer(self, inputDatastore, ref):
-        """Retrieve a Dataset from an input `Datastore`,
-        and store the result in this `Datastore`.
-
-        Parameters
-        ----------
-        inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the Dataset.
-        ref : `DatasetRef`
-            Reference to the required Dataset in the input data store.
-
-        """
-        assert inputDatastore is not self  # unless we want it for renames?
-        inMemoryDataset = inputDatastore.get(ref)
-        return self.put(inMemoryDataset, ref)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

@@ -502,7 +502,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = None
     useTempRoot = False
     validationCanFail = False
-    datastoreStr = ["datastore='InMemory'"]
+    datastoreStr = ["datastore='InMemory"]
     datastoreName = ["InMemoryDatastore@"]
     registryStr = "registry='sqlite:///:memory:'"
 

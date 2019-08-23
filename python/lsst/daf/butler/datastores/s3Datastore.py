@@ -153,10 +153,10 @@ class S3Datastore(FileLikeDatastore):
             # other errors are reraised also, but less descriptively
             raise err
 
-        if response["ContentLength"] != storedFileInfo.size:
+        if response["ContentLength"] != storedFileInfo.file_size:
             raise RuntimeError("Integrity failure in Datastore. Size of file {} ({}) does not"
                                " match recorded size of {}".format(location.path, response["ContentLength"],
-                                                                   storedFileInfo.size))
+                                                                   storedFileInfo.file_size))
 
         # download the data as bytes
         serializedDataset = response["Body"].read()
@@ -349,9 +349,9 @@ class S3Datastore(FileLikeDatastore):
                                          client=self.client)
 
         # Update the registry
-        self._register_dataset(ref, formatter,
-                               tgtLocation.pathInStore,
-                               size, None)
+        self._register_dataset_file(ref, formatter,
+                                    tgtLocation.pathInStore,
+                                    size, None)
 
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.

@@ -36,6 +36,7 @@ from .config import ConfigSubset, Config
 from .exceptions import ValidationError
 from .registry import Registry
 from .constraints import Constraints
+from .storageClass import StorageClassFactory
 
 
 class DatastoreConfig(ConfigSubset):
@@ -175,6 +176,9 @@ class Datastore(metaclass=ABCMeta):
     name: str
     """Label associated with this Datastore."""
 
+    storageClassFactory: StorageClassFactory
+    """Factory for creating storage class instances from name."""
+
     constraints: Constraints
     """Constraints to apply when putting datasets into the datastore."""
 
@@ -233,6 +237,13 @@ class Datastore(metaclass=ABCMeta):
         self.registry = registry
         self.name = "ABCDataStore"
         self._transaction = None
+
+        # All Datastores need storage classes and constraints
+        self.storageClassFactory = StorageClassFactory()
+
+        # And read the constraints list
+        constraintsConfig = self.config.get("constraints")
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
     def __str__(self):
         return self.name
