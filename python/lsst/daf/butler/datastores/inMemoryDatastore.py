@@ -39,6 +39,7 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     """Internal InMemoryDatastore Metadata associated with a stored
     DatasetRef.
     """
+    __slots__ = {"timestamp", "storageClass", "parentID"}
 
     timestamp: float
     """Unix timestamp indicating the time the dataset was stored."""

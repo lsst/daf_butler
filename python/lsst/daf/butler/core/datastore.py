@@ -53,6 +53,7 @@ class DatastoreValidationError(ValidationError):
 
 @dataclass(frozen=True)
 class Event:
+    __slots__ = {"name", "undoFunc", "args", "kwargs"}
     name: str
     undoFunc: Callable
     args: tuple
