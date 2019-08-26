@@ -32,8 +32,13 @@ from .fileDescriptor import FileDescriptor
 from .location import Location
 from .config import Config
 from .dimensions import DimensionUniverse
+from .storageClass import StorageClass
+from .datasets import DatasetType, DatasetRef
 
 log = logging.getLogger(__name__)
+
+# Define a new special type for functions that take "entity"
+Entity = Union[DatasetType, DatasetRef, StorageClass, str]
 
 
 class Formatter(metaclass=ABCMeta):
@@ -101,7 +106,7 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support reading")
 
     @abstractmethod
-    def write(self, inMemoryDataset: object) -> str:
+    def write(self, inMemoryDataset: Any) -> str:
         """Write a Dataset.
 
         Parameters
@@ -137,7 +142,7 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support reading from bytes.")
 
-    def toBytes(self, inMemoryDataset: object) -> bytes:
+    def toBytes(self, inMemoryDataset: Any) -> bytes:
         """Serialize the Dataset to bytes based on formatter.
 
         Parameters
@@ -288,7 +293,7 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity) -> Tuple[LookupKey, Type]:
+    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type]:
         """Get the matching formatter class along with the matching registry
         key.
 
@@ -318,7 +323,7 @@ class FormatterFactory:
 
         return matchKey, formatter
 
-    def getFormatterClass(self, entity) -> Type:
+    def getFormatterClass(self, entity: Entity) -> Type:
         """Get the matching formatter class.
 
         Parameters
@@ -338,7 +343,7 @@ class FormatterFactory:
         _, formatter = self.getFormatterClassWithMatch(entity)
         return formatter
 
-    def getFormatterWithMatch(self, entity, *args, **kwargs) -> Tuple[LookupKey, Formatter]:
+    def getFormatterWithMatch(self, entity: Entity, *args, **kwargs) -> Tuple[LookupKey, Formatter]:
         """Get a new formatter instance along with the matching registry
         key.
 
@@ -372,7 +377,7 @@ class FormatterFactory:
 
         return matchKey, formatter
 
-    def getFormatter(self, entity, *args, **kwargs) -> Formatter:
+    def getFormatter(self, entity: Entity, *args, **kwargs) -> Formatter:
         """Get a new formatter instance.
 
         Parameters
@@ -396,7 +401,8 @@ class FormatterFactory:
         _, formatter = self.getFormatterWithMatch(entity, *args, **kwargs)
         return formatter
 
-    def registerFormatter(self, type_, formatter) -> None:
+    def registerFormatter(self, type_: Union[LookupKey, str, StorageClass, DatasetType],
+                          formatter: str) -> None:
         """Register a `Formatter`.
 
         Parameters
