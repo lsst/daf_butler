@@ -68,4 +68,4 @@ class StoredFileInfo(StoredDatastoreItemInfo):
                 (inspect.isclass(self.formatter) and issubclass(self.formatter, Formatter)):
             self.formatter = self.formatter.name()
         else:
-            raise ValueError(f"Supplied formatter '{self.formatter}' is not a Formatter")
+            raise TypeError(f"Supplied formatter '{self.formatter}' is not a Formatter")
