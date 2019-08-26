@@ -26,7 +26,7 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 import time
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass
 from .genericDatastore import GenericBaseDatastore
@@ -80,7 +80,7 @@ class InMemoryDatastore(GenericBaseDatastore):
     """A new datastore is created every time and datasets disappear when
     the process shuts down."""
 
-    datasets: Dict[int, object]
+    datasets: Dict[int, Any]
     """Internal storage of datasets indexed by dataset ID."""
 
     records: Dict[int, StoredMemoryItemInfo]
