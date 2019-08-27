@@ -73,6 +73,9 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         # Add the primary key type
         if key not in types:
             types[key] = value.key_type
+        # The order of columns in the table depends on the order returned
+        # from the types. This will match the fields() order with the
+        # primary key at the end if it was added explicitly.
         for name, type_ in types.items():
             column_type = self.COLUMN_TYPES.get(type_, type_)
             if issubclass(column_type, String) and name in lengths:

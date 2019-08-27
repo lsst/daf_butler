@@ -60,12 +60,12 @@ class DatastoreRecord(DatabaseDictRecordBase):
 
     The record is usually populated by a `StoredFileInfo` object.
     """
-    __slots__ = {"formatter", "path", "storage_class", "checksum", "file_size"}
-    formatter: str
+    __slots__ = {"path", "formatter", "storage_class", "file_size", "checksum"}
     path: str
+    formatter: str
     storage_class: str
-    checksum: str
     file_size: int
+    checksum: str
 
     lengths = {"path": 256, "formatter": 128, "storage_class": 64, "checksum": 128}
     """Lengths of string fields."""
