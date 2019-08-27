@@ -181,6 +181,8 @@ class FileLikeDatastore(GenericBaseDatastore):
         if "name" in self.config:
             self.name = self.config["name"]
         else:
+            # We use the unexpanded root in the name to indicate that this
+            # datastore can be moved without having to update registry.
             self.name = "{}@{}".format(type(self).__name__,
                                        self.config["root"])
 
