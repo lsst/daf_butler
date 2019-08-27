@@ -33,9 +33,20 @@ from lsst.daf.butler.instrument import Instrument
 
 class DummyCam(Instrument):
 
+    class FilterDefinitions:
+        """Stopgap until Instrument is moved into obs_base and we can use the
+        real FilterDefinitions there.
+        """
+        def defineFilters(self):
+            pass
+    filterDefinitions = FilterDefinitions()
+
     @classmethod
     def getName(cls):
         return "DummyCam"
+
+    def getCamera(self):
+        return None
 
     def register(self, registry):
         """Insert Instrument, physical_filter, and detector entries into a

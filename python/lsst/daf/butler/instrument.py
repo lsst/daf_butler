@@ -22,9 +22,11 @@
 __all__ = ("Instrument", "updateExposureEntryFromObsInfo", "updateVisitEntryFromObsInfo",
            "ObservationDataIdPacker", "addUnboundedCalibrationLabel")
 
+import os.path
 from datetime import datetime
 from inspect import isabstract
 from abc import ABCMeta, abstractmethod
+
 from lsst.daf.butler import DataId, DataIdPacker
 
 
@@ -47,6 +49,24 @@ class Instrument(metaclass=ABCMeta):
     a no-argument callable that can be used to construct a Python instance.
     """
 
+    configPaths = []
+    """Paths to config files to read for specific Tasks.
+
+    The paths in this list should contain files of the form `task.py`, for
+    each of the Tasks that requires special configuration.
+    """
+
+    @property
+    @abstractmethod
+    def filterDefinitions(self):
+        """`~lsst.obs.base.FilterDefinitionCollection`, defining the filters
+        for this instrument.
+        """
+        return None
+
+    def __init__(self, *args, **kwargs):
+        self.filterDefinitions.defineFilters()
+
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
         if not isabstract(cls):
@@ -59,11 +79,37 @@ class Instrument(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
+    def getCamera(self):
+        """Retrieve the cameraGeom representation of this instrument.
+
+        This is a temporary API that should go away once obs_ packages have
+        a standardized approach to writing versioned cameras to a Gen3 repo.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def register(self, registry):
         """Insert instrument, physical_filter, and detector entries into a
         `Registry`.
         """
         raise NotImplementedError()
+
+    def _registerFilters(self, registry):
+        """Register the physical and abstract filter Dimension relationships.
+        This should be called in the ``register`` implementation.
+
+        Parameters
+        ----------
+        registry : `lsst.daf.butler.core.Registry`
+            The registry to add dimensions to.
+        """
+        for filter in self.filterDefinitions:
+            registry.addDimensionEntry(
+                "physical_filter",
+                instrument=self.getName(),
+                physical_filter=filter.physical_filter,
+                abstract_filter=filter.abstract_filter
+            )
 
     @abstractmethod
     def getRawFormatter(self, dataId):
@@ -93,7 +139,6 @@ class Instrument(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def applyConfigOverrides(self, name, config):
         """Apply instrument-specific overrides for a task config.
 
@@ -105,7 +150,10 @@ class Instrument(metaclass=ABCMeta):
         config : `lsst.pex.config.Config`
             Config instance to which overrides should be applied.
         """
-        raise NotImplementedError()
+        for root in self.configPaths:
+            path = os.path.join(root, f"{name}.py")
+            if os.path.exists(path):
+                config.load(path)
 
 
 class ObservationDataIdPacker(DataIdPacker):
