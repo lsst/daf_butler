@@ -21,10 +21,9 @@
 
 __all__ = ("DatabaseDict", "DatabaseDictRecordBase")
 
-import typing
 from dataclasses import fields, asdict
-from collections.abc import MutableMapping, Sequence
-from typing import Dict, Type, Any, ClassVar, Optional
+from collections.abc import MutableMapping
+from typing import Dict, Type, Any, ClassVar, Optional, Sequence
 
 from lsst.utils import doImport
 from .config import Config
@@ -38,7 +37,12 @@ class DatabaseDictRecordBase(Sequence):
     Expected to be subclassed with a dataclass defining the fields and
     types to be stored in the registry, along with a specification of
     lengths of string fields.
+
+    The fields themselves can be retrieved by index and the number
+    of fields defined in the class can be queried.
     """
+    __slots__ = ()
+
     # make a dataclass named tuple-like by accessing fields by index
     def __getitem__(self, i):
         return getattr(self, fields(self)[i].name)
@@ -53,7 +57,7 @@ class DatabaseDictRecordBase(Sequence):
     """Type to use for key field."""
 
     @classmethod
-    def fields(cls) -> typing.Sequence[str]:
+    def fields(cls) -> Sequence[str]:
         """Emulate the namedtuple._fields class attribute"""
         return tuple(f.name for f in fields(cls))
 
