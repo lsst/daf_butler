@@ -240,8 +240,11 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
-        return StoredFileInfo(record.formatter, record.path, storageClass,
-                              checksum=record.checksum, file_size=record.file_size)
+        return StoredFileInfo(formatter=record.formatter,
+                              path=record.path,
+                              storageClass=storageClass,
+                              checksum=record.checksum,
+                              file_size=record.file_size)
 
     def _get_dataset_location_info(self, ref):
         """Find the `Location` of the requested dataset in the
