@@ -713,7 +713,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def expandDataId(self, dataId: Optional[DataId] = None, *, graph: DimensionGraph = None, **kwds):
+    def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
+                     records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):
         """Expand a dimension-based data ID to include additional
         information.
         """
@@ -793,6 +794,7 @@ class Registry(metaclass=ABCMeta):
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,
                       deduplicate: bool = False,
+                      expand: bool = True,
                       **kwds) -> Iterator[DatasetRef]:
         """Query for and iterate over dataset references matching user-provided
         criteria.
@@ -828,6 +830,9 @@ class Registry(metaclass=ABCMeta):
             collection in which a dataset of that dataset type appears
             (according to the order of ``collections`` passed in).  Cannot be
             used if ``collections``.
+        expand : `bool`, optional
+            If `True` (default) attach `ExpandedDataCoordinate` instead of
+            minimal `DataCoordinate` base-class instances.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``

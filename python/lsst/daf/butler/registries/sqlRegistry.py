@@ -771,21 +771,24 @@ class SqlRegistry(Registry):
             self._cachedRuns[run.collection] = run
         return run
 
-    def expandDataId(self, dataId=None, *, graph=None, **kwds):
+    def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
+                     records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):
         # Docstring inherited from Registry.expandDataId.
         standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwds)
         if isinstance(standardized, ExpandedDataCoordinate):
             return standardized
-        records = {}
+        records = dict(records) if records is not None else {}
         keys = dict(standardized)
         for element in standardized.graph._primaryKeyTraversalOrder:
-            storage = self._dimensionStorage[element]
-            record = storage.fetch(keys)
-            if record is None and element in standardized.graph.required:
-                raise LookupError(
-                    f"Could not fetch record for required dimension {element.name} via keys {keys}."
-                )
-            records[element] = record
+            record = records.get(element)
+            if record is None:
+                storage = self._dimensionStorage[element]
+                record = storage.fetch(keys)
+                if record is None and element in standardized.graph.required:
+                    raise LookupError(
+                        f"Could not fetch record for required dimension {element.name} via keys {keys}."
+                    )
+                records[element] = record
             keys.update((d, getattr(record, d.name)) for d in element.implied)
         return ExpandedDataCoordinate(standardized.graph, standardized.values(), records=records)
 
@@ -864,7 +867,7 @@ class SqlRegistry(Registry):
             if predicate(row):
                 result = query.extractDataId(row)
                 if expand:
-                    yield self.expandDataId(result)
+                    yield self.expandDataId(result, records=standardizedDataId.records)
                 else:
                     yield result
 
@@ -874,6 +877,7 @@ class SqlRegistry(Registry):
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,
                       deduplicate: bool = False,
+                      expand: bool = True,
                       **kwds) -> Iterator[DatasetRef]:
         # Docstring inherited from Registry.queryDatasets.
         # Standardize and expand the data ID provided as a constraint.
@@ -913,7 +917,10 @@ class SqlRegistry(Registry):
             # No need to de-duplicate across collections.
             for row in query.execute():
                 if predicate(row):
-                    yield query.extractDatasetRef(row, datasetType)[0]
+                    dataId = query.extractDataId(row, graph=datasetType.dimensions)
+                    if expand:
+                        dataId = self.expandDataId(dataId, records=standardizedDataId.records)
+                    yield query.extractDatasetRef(row, datasetType, dataId)[0]
         else:
             # For each data ID, yield only the DatasetRef with the lowest
             # collection rank.
@@ -926,4 +933,12 @@ class SqlRegistry(Registry):
                     if rank < bestRank:
                         bestRefs[ref.dataId] = ref
                         bestRanks[ref.dataId] = rank
-            yield from bestRefs.values()
+            # If caller requested expanded data IDs, we defer that until here
+            # so we do as little expansion as possible.
+            if expand:
+                for ref in bestRefs.values():
+                    dataId = self.expandDataId(ref.dataId, records=standardizedDataId.records)
+                    ref._dataId = dataId  # TODO: add semi-public API for this?
+                    yield ref
+            else:
+                yield from bestRefs.values()

@@ -171,7 +171,8 @@ class Query:
         values = tuple(row[self._columns.getKeyColumn(dimension)] for dimension in graph.required)
         return DataCoordinate(graph, values)
 
-    def extractDatasetRef(self, row: RowProxy, datasetType: DatasetType) -> Tuple[DatasetRef, Optional[int]]:
+    def extractDatasetRef(self, row: RowProxy, datasetType: DatasetType,
+                          dataId: Optional[DataCoordinate] = None) -> Tuple[DatasetRef, Optional[int]]:
         """Extract a `DatasetRef` from a result row.
 
         Parameters
@@ -183,6 +184,9 @@ class Query:
             `Query` via a call to `QueryBuilder.joinDataset` with
             ``isResult=True``, or otherwise included in
             `QueryColumns.datasets`.
+        dataId : `DataCoordinate`
+            Data ID to attach to the `DatasetRef`.  A minimal (i.e. base class)
+            `DataCoordinate` is constructed from ``row`` if `None`.
 
         Returns
         -------
@@ -195,7 +199,8 @@ class Query:
             query.  `None` if `QueryBuilder.joinDataset` was called with
             ``addRank=False``.
         """
-        dataId = self.extractDataId(row, graph=datasetType.dimensions)
+        if dataId is None:
+            dataId = self.extractDataId(row, graph=datasetType.dimensions)
         datasetIdColumn, datasetRankColumn = self._columns.datasets[datasetType]
         return (DatasetRef(datasetType, dataId, id=row[datasetIdColumn]),
                 row[datasetRankColumn] if datasetRankColumn is not None else None)
