@@ -19,16 +19,61 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DatabaseDict",)
+__all__ = ("DatabaseDict", "DatabaseDictRecordBase")
 
+from dataclasses import fields, asdict
 from collections.abc import MutableMapping
+from typing import Dict, Type, Any, ClassVar, Optional, Sequence
 
 from lsst.utils import doImport
+from .config import Config
+from .registry import Registry
+
+
+class DatabaseDictRecordBase(Sequence):
+    """A base class to be used to define a record to be stored in a
+    `DatabaseDict`.
+
+    Expected to be subclassed with a dataclass defining the fields and
+    types to be stored in the registry, along with a specification of
+    lengths of string fields.
+
+    The fields themselves can be retrieved by index and the number
+    of fields defined in the class can be queried.
+    """
+    __slots__ = ()
+
+    # make a dataclass named tuple-like by accessing fields by index
+    def __getitem__(self, i):
+        return getattr(self, fields(self)[i].name)
+
+    def __len__(self):
+        return len(fields(self))
+
+    lengths: ClassVar[Dict[str, int]] = {}
+    """Lengths of string fields (optional)."""
+
+    key_type: ClassVar[Type] = int
+    """Type to use for key field."""
+
+    @classmethod
+    def fields(cls) -> Sequence[str]:
+        """Emulate the namedtuple._fields class attribute"""
+        return tuple(f.name for f in fields(cls))
+
+    @classmethod
+    def types(cls) -> Dict[str, Type]:
+        """Return a dict indexed by name and with the python type as the
+        value."""
+        return {f.name: f.type for f in fields(cls)}
+
+    def _asdict(self) -> Dict[str, Any]:
+        return asdict(self)
 
 
 class DatabaseDict(MutableMapping):
     """An abstract base class for dict-like objects with a specific key type
-    and namedtuple values, backed by a database.
+    and data class values, backed by a database.
 
     DatabaseDict subclasses must implement the abstract ``__getitem__``,
     ``__setitem__``, ``__delitem__`, ``__iter__``, and ``__len__`` abstract
@@ -43,27 +88,25 @@ class DatabaseDict(MutableMapping):
     ----------
     config : `Config`
         Configuration used to identify and construct a subclass.
-    types : `dict`
-        A dictionary mapping `str` field names to type objects, containing
-        all fields to be held in the database.
     key : `str`
         The name of the field to be used as the dictionary key.  Must not be
         present in ``value._fields``.
     value : `type`
         The type used for the dictionary's values, typically a
-        `namedtuple`. Must have a ``_fields`` class attribute that is a
-        tuple of field names (i.e., as defined by
-        `~collections.namedtuple`); these field names must also appear
-        in the ``types`` arg, and a ``_make`` attribute to construct it
-        from a sequence of values (again, as defined by
-        `~collections.namedtuple`).
-    lengths : `dict`, optional
-        Specific lengths of string fields.  Defaults will be used if not
-        specified.
+        `DatabaseDictRecordBase`.  Must have a ``fields`` class method
+        that is a tuple of field names; these field names must also appear
+        in the return value of the ``types()`` class method, and it must be
+        possible to construct it from a sequence of values. Lengths of string
+        fields must be obtainable as a `dict` from using the ``lengths``
+        property.
     """
 
+    registry: Registry
+    """Registry to be used to hold the contents of the DatabaseDict."""
+
     @staticmethod
-    def fromConfig(config, types, key, value, lengths=None, registry=None):
+    def fromConfig(config: Config, key: str, value: DatabaseDictRecordBase,
+                   registry: Optional[Registry] = None):
         """Create a `DatabaseDict` subclass instance from `config`.
 
         If ``config`` contains a class ``cls`` key, this will be assumed to
@@ -76,23 +119,17 @@ class DatabaseDict(MutableMapping):
         ----------
         config : `Config`
             Configuration used to identify and construct a subclass.
-        types : `dict`
-            A dictionary mapping `str` field names to Python type objects,
-            containing all fields to be held in the database.
         key : `str`
             The name of the field to be used as the dictionary key.  Must not
-            be present in ``value._fields``.
+            be present in ``value.fields()``.
         value : `type`
             The type used for the dictionary's values, typically a
-            `namedtuple`. Must have a ``_fields`` class attribute that is a
-            tuple of field names (i.e., as defined by
-            `~collections.namedtuple`); these field names must also appear
-            in the ``types`` arg, and a ``_make`` attribute to construct it
-            from a sequence of values (again, as defined by
-            `~collections.namedtuple`).
-        lengths : `dict`, optional
-            Specific lengths of string fields.  Defaults will be used if not
-            specified.
+            `DatabaseDictRecordBase`.  Must have a ``fields`` class method
+            that is a tuple of field names; these field names must also appear
+            in the return value of the ``types()`` class method, and it must be
+            possible to construct it from a sequence of values. Lengths of
+            string fields must be obtainable as a `dict` from using the
+            ``lengths`` property.
         registry : `Registry`, optional
             A registry instance from which a `DatabaseDict` subclass can be
             obtained.  Ignored if ``config["cls"]`` exists; may be None if
@@ -105,14 +142,14 @@ class DatabaseDict(MutableMapping):
         """
         if "cls" in config:
             cls = doImport(config["cls"])
-            return cls(config=config, types=types, key=key, value=value, lengths=lengths)
+            return cls(config=config, key=key, value=value)
         else:
             table = config["table"]
             if registry is None:
                 raise ValueError("Either config['cls'] or registry must be provided.")
-            return registry.makeDatabaseDict(table, types=types, key=key, value=value, lengths=lengths)
+            return registry.makeDatabaseDict(table, key=key, value=value)
 
-    def __init__(self, config, types, key, value, lengths=None):
+    def __init__(self, config: Config, key: str, value: DatabaseDictRecordBase):
         # This constructor is currently defined just to clearly document the
         # interface subclasses should conform to.
         pass

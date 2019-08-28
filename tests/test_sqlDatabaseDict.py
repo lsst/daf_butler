@@ -20,9 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-from collections import namedtuple
+from dataclasses import make_dataclass
 
-from lsst.daf.butler.core import RegistryConfig, Registry
+from lsst.daf.butler.core import RegistryConfig, Registry, DatabaseDictRecordBase
 
 """Tests for SqlDatabaseDict.
 """
@@ -36,8 +36,15 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         registryConfig = RegistryConfig()
         registryConfig["db"] = "sqlite:///:memory:"
         self.registry = Registry.fromConfig(registryConfig, create=True)
-        self.types = {"x": int, "y": str, "z": float}
+        self.types = {"x": int, "y": str, "z": float, "a": None}
         self.key = "x"
+
+    def makeRecord(self, name, fields, lengths=None):
+        data = [tuple([f, self.types[f]]) for f in fields]
+        record = make_dataclass(name, data, bases=(DatabaseDictRecordBase,))
+        if lengths is not None:
+            record.lengths = lengths
+        return record
 
     def checkDatabaseDict(self, d, data):
         self.assertEqual(len(d), 0)
@@ -71,29 +78,28 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
 
     def testKeyInValue(self):
         """Test that the key is not permitted to be part of the value."""
-        value = namedtuple("TestValue", ["x", "y", "z"])
+        value = self.makeRecord("TestValue", ["x", "y", "z"])
         with self.assertRaises(ValueError):
-            self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
+            self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
 
     def testKeyNotInValue(self):
         """Test when the value does not include the key."""
-        value = namedtuple("TestValue", ["y", "z"])
+        value = self.makeRecord("TestValue", ["y", "z"])
         data = {
             0: value(y="zero", z=0.0),
             1: value(y="one", z=0.1),
         }
-        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
         self.checkDatabaseDict(d, data)
 
     def testLengths(self):
         """Test that when a length is specified that it is actually used."""
-        value = namedtuple("TestValue", ["y", "z"])
+        value = self.makeRecord("TestValue", ["y", "z"], lengths={"y": 6})
         data = {
             0: value(y="passes", z=0.0),
             1: value(y="fails too long", z=0.1),
         }
-        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value,
-                                           lengths={"y": 6})
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
 
         # This insert meets the constraint
         d[0] = data[0]
@@ -105,21 +111,21 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
 
     def testBadValueTypes(self):
         """Test that we cannot insert value tuples with the wrong types."""
-        value = namedtuple("TestValue", ["y", "z"])
+        value = self.makeRecord("TestValue", ["y", "z"])
         data = {
             0: value(y=0, z="zero"),
         }
-        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
         with self.assertRaises(TypeError):
             d[0] = data[0]
 
     def testBadKeyTypes(self):
         """Test that we cannot insert with the wrong key type."""
-        value = namedtuple("TestValue", ["y", "z"])
+        value = self.makeRecord("TestValue", ["y", "z"])
         data = {
             0: value(y="zero", z=0.0),
         }
-        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
         d["zero"] = data[0]
 
     def testExtraFieldsInTable(self):
@@ -129,22 +135,21 @@ class SqlDatabaseDictTestCase(unittest.TestCase):
         These should be completely ignored by the DatabaseDict after the table
         is created (which implies that they must be nullable if
         ``__setitem__`` is expected to work."""
-        value = namedtuple("TestValue", ["y"])
+        value = self.makeRecord("TestValue", ["y"])
         data = {
             0: value(y="zero"),
             1: value(y="one"),
         }
-        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
+        d = self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
         self.checkDatabaseDict(d, data)
 
     def testExtraFieldsInValue(self):
         """Test that we don't permit the value tuple to have ._fields entries
-        that are not in the types argument itself (since we need to know
-        their types).
+        that are not classes (all the data class definitions have types).
         """
-        value = namedtuple("TestValue", ["y", "a"])
+        value = self.makeRecord("TestValue", ["y", "a"])
         with self.assertRaises(TypeError):
-            self.registry.makeDatabaseDict(table="test_table", key=self.key, types=self.types, value=value)
+            self.registry.makeDatabaseDict(table="test_table", key=self.key, value=value)
 
 
 if __name__ == "__main__":

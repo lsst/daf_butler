@@ -33,6 +33,7 @@ import sys
 from yaml.representer import Representer
 import io
 import posixpath
+from typing import Sequence, Optional, ClassVar
 
 try:
     import boto3
@@ -41,7 +42,7 @@ except ImportError:
 
 import lsst.utils
 from lsst.utils import doImport
-from lsst.daf.butler.core.location import ButlerURI
+from .location import ButlerURI
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
@@ -177,11 +178,11 @@ class Config(collections.abc.MutableMapping):
         If `None` is provided an empty `Config` will be created.
     """
 
-    _D = "→"
+    _D: ClassVar[str] = "→"
     """Default internal delimiter to use for components in the hierarchy when
     constructing keys for external use (see `Config.names()`)."""
 
-    includeKey = "includeConfigs"
+    includeKey: ClassVar[str] = "includeConfigs"
     """Key used to indicate that another config should be included at this
     part of the hierarchy."""
 
@@ -960,16 +961,16 @@ class ConfigSubset(Config):
         `ConfigSubset.defaultSearchPaths()`.
     """
 
-    component = None
+    component: ClassVar[Optional[str]] = None
     """Component to use from supplied config. Can be None. If specified the
     key is not required. Can be a full dot-separated path to a component.
     """
 
-    requiredKeys = ()
+    requiredKeys: ClassVar[Sequence[str]] = ()
     """Keys that are required to be specified in the configuration.
     """
 
-    defaultConfigFile = None
+    defaultConfigFile: ClassVar[Optional[str]] = None
     """Name of the file containing defaults for this config class.
     """
 

@@ -27,12 +27,16 @@ __all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 import contextlib
 import logging
-from collections import namedtuple
+from typing import Optional, Type, Callable, ClassVar, Any, Generator
+from dataclasses import dataclass
 from abc import ABCMeta, abstractmethod
 
 from lsst.utils import doImport
-from .config import ConfigSubset
+from .config import ConfigSubset, Config
 from .exceptions import ValidationError
+from .registry import Registry
+from .constraints import Constraints
+from .storageClass import StorageClassFactory
 
 
 class DatastoreConfig(ConfigSubset):
@@ -47,6 +51,15 @@ class DatastoreValidationError(ValidationError):
     pass
 
 
+@dataclass(frozen=True)
+class Event:
+    __slots__ = {"name", "undoFunc", "args", "kwargs"}
+    name: str
+    undoFunc: Callable
+    args: tuple
+    kwargs: dict
+
+
 class DatastoreTransaction:
     """Keeps a log of `Datastore` activity and allow rollback.
 
@@ -54,19 +67,17 @@ class DatastoreTransaction:
     ----------
     parent : `DatastoreTransaction`, optional
         The parent transaction (if any)
-
-    Attributes
-    ----------
-    parent : `DatastoreTransaction`
-        The parent transaction.
     """
-    Event = namedtuple("Event", ["name", "undoFunc", "args", "kwargs"])
+    Event: ClassVar[Type] = Event
+
+    parent: Optional['DatastoreTransaction']
+    """The parent transaction. (`DatastoreTransaction`, optional)"""
 
     def __init__(self, parent=None):
         self.parent = parent
         self._log = []
 
-    def registerUndo(self, name, undoFunc, *args, **kwargs):
+    def registerUndo(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> None:
         """Register event with undo function.
 
         Parameters
@@ -83,7 +94,7 @@ class DatastoreTransaction:
         self._log.append(self.Event(name, undoFunc, args, kwargs))
 
     @contextlib.contextmanager
-    def undoWith(self, name, undoFunc, *args, **kwargs):
+    def undoWith(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> Generator:
         """A context manager that calls `registerUndo` if the nested operation
         does not raise an exception.
 
@@ -100,20 +111,20 @@ class DatastoreTransaction:
         else:
             self.registerUndo(name, undoFunc, *args, **kwargs)
 
-    def rollback(self):
+    def rollback(self) -> None:
         """Roll back all events in this transaction.
         """
         while self._log:
-            name, undoFunc, args, kwargs = self._log.pop()
+            ev = self._log.pop()
             try:
-                undoFunc(*args, **kwargs)
+                ev.undoFunc(*ev.args, **ev.kwargs)
             except BaseException as e:
                 # Deliberately swallow error that may occur in unrolling
                 log = logging.getLogger(__name__)
-                log.warn("Exception: %s caught while unrolling: %s", e, name)
+                log.warn("Exception: %s caught while unrolling: %s", e, ev.name)
                 pass
 
-    def commit(self):
+    def commit(self) -> None:
         """Commit this transaction.
         """
         if self.parent is None:
@@ -128,27 +139,23 @@ class DatastoreTransaction:
 class Datastore(metaclass=ABCMeta):
     """Datastore interface.
 
-    Attributes
-    ----------
-    config : `DatastoreConfig`
-        Configuration used to create Datastore.
-    registry : `Registry`
-        `Registry` to use when recording the writing of Datasets.
-    name : `str`
-        Label associated with this Datastore.
-
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
-        Load configuration
+        Load configuration either from an existing config instance or by
+        referring to a configuration file.
+    registry : `Registry`
+        Registry to use for storing internal information about the datasets.
+    butlerRoot : `str`, optional
+        New datastore root to use to override the configuration value.
     """
 
-    defaultConfigFile = None
+    defaultConfigFile: ClassVar[Optional[str]] = None
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
 
-    containerKey = None
+    containerKey: ClassVar[Optional[str]] = None
     """Name of the key containing a list of subconfigurations that also
     need to be merged with defaults and will likely use different Python
     datastore classes (but all using DatastoreConfig).  Assumed to be a
@@ -156,14 +163,29 @@ class Datastore(metaclass=ABCMeta):
     and containing a "cls" definition. None indicates that no containers
     are expected in this Datastore."""
 
-    isEphemeral = False
+    isEphemeral: ClassVar[bool] = False
     """Indicate whether this Datastore is ephemeral or not.  An ephemeral
     datastore is one where the contents of the datastore will not exist
     across process restarts."""
 
+    config: DatastoreConfig
+    """Configuration used to create Datastore."""
+
+    registry: Registry
+    """`Registry` to use when recording the writing of Datasets."""
+
+    name: str
+    """Label associated with this Datastore."""
+
+    storageClassFactory: StorageClassFactory
+    """Factory for creating storage class instances from name."""
+
+    constraints: Constraints
+    """Constraints to apply when putting datasets into the datastore."""
+
     @classmethod
     @abstractmethod
-    def setConfigRoot(cls, root, config, full, overwrite=True):
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True):
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
 
@@ -196,13 +218,17 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @staticmethod
-    def fromConfig(config, registry, butlerRoot=None):
+    def fromConfig(config: Config, registry: Registry, butlerRoot: Optional[str] = None) -> 'Datastore':
         """Create datastore from type specified in config file.
 
         Parameters
         ----------
         config : `Config`
             Configuration instance.
+        registry : `Registry`
+            Registry to be used by the Datastore for internal data.
+        butlerRoot : `str`, optional
+            Butler root directory.
         """
         cls = doImport(config["datastore", "cls"])
         return cls(config=config, registry=registry, butlerRoot=butlerRoot)
@@ -212,6 +238,13 @@ class Datastore(metaclass=ABCMeta):
         self.registry = registry
         self.name = "ABCDataStore"
         self._transaction = None
+
+        # All Datastores need storage classes and constraints
+        self.storageClassFactory = StorageClassFactory()
+
+        # And read the constraints list
+        constraintsConfig = self.config.get("constraints")
+        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
 
     def __str__(self):
         return self.name

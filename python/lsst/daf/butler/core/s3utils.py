@@ -29,7 +29,7 @@ try:
 except ImportError:
     boto3 = None
 
-from lsst.daf.butler.core.location import ButlerURI, Location
+from .location import ButlerURI, Location
 
 
 def s3CheckFileExists(path, bucket=None, client=None):

@@ -46,38 +46,36 @@ class SqlRegistryDatabaseDict(DatabaseDict):
     config : `Config`
         Configuration used to identify this subclass and connect to a
         database.
-    types : `dict`
-        A dictionary mapping `str` field names to type objects, containing all
-        fields to be held in the database.  The supported type objects are the
-        keys of the `COLUMN_TYPES` attribute.  SQLAlchemy column type objects
-        may also be passed directly, though of course this not portable to
-        other `DatabaseDict` subclasses.
     key : `str`
         The name of the field to be used as the dictionary key.  Must not be
-        present in ``value._fields``.
-    value : `type` (`collections.namedtuple`)
+        present in ``value.fields()``.
+    value : `type` (`DatabaseDictRecordBase`)
         The type used for the dictionary's values, typically a
-        `~collections.namedtuple`.  Must have a ``_fields`` class attribute
-        that is a tuple of field names (i.e., as defined by
-        `~collections.namedtuple`); these field names must also appear
-        in the ``types`` arg, and a ``_make`` attribute to construct it from a
-        sequence of values (again, as defined by `~collections.namedtuple`).
+        `DatabaseDictRecordBase`.  Must have a ``fields`` class method
+        that is a tuple of field names; these field names must also appear
+        in the return value of the ``types()`` class method, and it must be
+        possible to construct it from a sequence of values. Lengths of string
+        fields must be obtainable as a `dict` from using the ``lengths``
+        property.
     registry : `SqlRegistry`
         A registry object with an open connection and a schema.
-    lengths : `dict`, optional
-        Specific lengths of string fields.  Defaults will be used if not
-        specified.
     """
 
     COLUMN_TYPES = {str: String, int: Integer, float: Float,
                     bool: Boolean, bytes: LargeBinary, datetime: DateTime}
 
-    def __init__(self, config, types, key, value, registry, lengths=None):
+    def __init__(self, config, key, value, registry):
         self.registry = registry
         allColumns = []
         allConstraints = []
-        if lengths is None:
-            lengths = {}
+        lengths = value.lengths
+        types = value.types().copy()
+        # Add the primary key type
+        if key not in types:
+            types[key] = value.key_type
+        # The order of columns in the table depends on the order returned
+        # from the types. This will match the fields() order with the
+        # primary key at the end if it was added explicitly.
         for name, type_ in types.items():
             column_type = self.COLUMN_TYPES.get(type_, type_)
             if issubclass(column_type, String) and name in lengths:
@@ -86,19 +84,19 @@ class SqlRegistryDatabaseDict(DatabaseDict):
                                                       name=f"ck_{config['table']}_{name}_len"))
             column = Column(name, column_type, primary_key=(name == key))
             allColumns.append(column)
-        if key in value._fields:
+        if key in value.fields():
             raise ValueError("DatabaseDict's key field may not be a part of the value tuple")
         if key not in types.keys():
-            raise TypeError("No type provided for key {}".format(key))
-        if not types.keys() >= frozenset(value._fields):
-            raise TypeError("No type(s) provided for field(s) {}".format(set(value._fields) - types.keys()))
+            raise TypeError("No type provided for key '{}'".format(key))
+        if not types.keys() >= frozenset(value.fields()):
+            raise TypeError("No type(s) provided for field(s) {}".format(set(value.fields()) - types.keys()))
         if not config["table"].islower():
             raise ValueError(f"DatabaseDict tablename {config['table']} is not lowercase.")
         self._key = key
         self._value = value
         self._table = Table(config["table"], self.registry._schema.metadata, *allColumns, *allConstraints)
         self._table.create(self.registry._connection, checkfirst=True)
-        valueColumns = [getattr(self._table.columns, name) for name in self._value._fields]
+        valueColumns = [getattr(self._table.columns, name) for name in self._value.fields()]
         keyColumn = getattr(self._table.columns, key)
         self._getSql = select(valueColumns).where(keyColumn == bindparam("key"))
         self._updateSql = self._table.update().where(keyColumn == bindparam("key"))
@@ -110,7 +108,7 @@ class SqlRegistryDatabaseDict(DatabaseDict):
         row = self.registry._connection.execute(self._getSql, key=key).fetchone()
         if row is None:
             raise KeyError("{} not found".format(key))
-        return self._value._make(row)
+        return self._value(*row)
 
     def __setitem__(self, key, value):
         assert isinstance(value, self._value)

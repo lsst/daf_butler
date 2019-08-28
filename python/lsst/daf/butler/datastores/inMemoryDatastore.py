@@ -21,65 +21,54 @@
 
 """In-memory datastore."""
 
-__all__ = ("StoredItemInfo", "InMemoryDatastore")
+__all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 
 import time
 import logging
+from dataclasses import dataclass
+from typing import Dict, Optional, Any
 
-from lsst.daf.butler import Datastore, StorageClassFactory, Constraints, DatasetTypeNotSupportedError
+from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass
+from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)
 
 
-class StoredItemInfo:
-    """Internal Metadata associated with a DatasetRef.
+@dataclass(frozen=True)
+class StoredMemoryItemInfo(StoredDatastoreItemInfo):
+    """Internal InMemoryDatastore Metadata associated with a stored
+    DatasetRef.
+    """
+    __slots__ = {"timestamp", "storageClass", "parentID"}
 
-    Parameters
-    ----------
-    timestamp : `float`
-        Unix timestamp indicating the time the dataset was stored.
-    storageClass : `StorageClass`
-        StorageClass associated with the dataset.
-    parentID : `int`, optional
-        ID of the parent `DatasetRef` if this entry is a concrete
-        composite. Not used if the dataset being stored is not a
-        virtual component of a composite
+    timestamp: float
+    """Unix timestamp indicating the time the dataset was stored."""
+
+    storageClass: StorageClass
+    """StorageClass associated with the dataset."""
+
+    parentID: Optional[int]
+    """ID of the parent `DatasetRef` if this entry is a concrete
+    composite. Not used if the dataset being stored is not a
+    virtual component of a composite
     """
 
-    def __init__(self, timestamp, storageClass, parentID=None):
-        self.timestamp = timestamp
-        self.storageClass = storageClass
-        self.parentID = parentID
 
-    def __str__(self):
-        return "StoredItemInfo({}, {}, parent={})".format(self.timestamp, self.storageClass.name,
-                                                          self.parentID)
-
-    def __repr__(self):
-        return "StoredItemInfo({!r}, {!r}, parent={})".format(self.timestamp, self.storageClass,
-                                                              self.parentID)
-
-
-class InMemoryDatastore(Datastore):
+class InMemoryDatastore(GenericBaseDatastore):
     """Basic Datastore for writing to an in memory cache.
 
     This datastore is ephemeral in that the contents of the datastore
     disappear when the Python process completes.  This also means that
     other processes can not access this datastore.
 
-    Attributes
-    ----------
-    config : `DatastoreConfig`
-        Configuration used to create Datastore.
-    storageClassFactory : `StorageClassFactory`
-        Factory for creating storage class instances from name.
-    name : `str`
-        Label associated with this Datastore.
-
     Parameters
     ----------
     config : `DatastoreConfig` or `str`
         Configuration.
+    registry : `Registry`, optional
+        Unused parameter.
+    butlerRoot : `str`, optional
+        Unused parameter.
     """
 
     defaultConfigFile = "datastores/inMemoryDatastore.yaml"
@@ -91,14 +80,18 @@ class InMemoryDatastore(Datastore):
     """A new datastore is created every time and datasets disappear when
     the process shuts down."""
 
+    datasets: Dict[int, Any]
+    """Internal storage of datasets indexed by dataset ID."""
+
+    records: Dict[int, StoredMemoryItemInfo]
+    """Internal records about stored datasets."""
+
     def __init__(self, config, registry=None, butlerRoot=None):
         super().__init__(config, registry)
 
-        self.storageClassFactory = StorageClassFactory()
-
         # Name ourselves with the timestamp the datastore
         # was created.
-        self.name = "InMemoryDatastore@{}".format(time.time())
+        self.name = "{}@{}".format(type(self).__name__, time.time())
         log.debug("Creating datastore %s", self.name)
 
         # Storage of datasets, keyed by dataset_id
@@ -107,13 +100,6 @@ class InMemoryDatastore(Datastore):
         # Records is distinct in order to track concrete composite components
         # where we register multiple components for a single dataset.
         self.records = {}
-
-        # And read the constraints list
-        constraintsConfig = self.config.get("constraints")
-        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
-
-    def __str__(self):
-        return "InMemory"
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -150,60 +136,39 @@ class InMemoryDatastore(Datastore):
         """
         return
 
-    def addStoredItemInfo(self, ref, info):
-        """Record internal storage information associated with this
-        `DatasetRef`.
+    def _info_to_record(self, info):
+        """Convert a `StoredItemInfo` to a suitable database record.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The Dataset that has been stored.
         info : `StoredItemInfo`
             Metadata associated with the stored Dataset.
 
-        Raises
-        ------
-        KeyError
-            An entry with this DatasetRef already exists.
+        Returns
+        -------
+        record : `StoredItemInfo`
+            Record to be stored.
         """
-        if ref.id in self.records:
-            raise KeyError("Attempt to store item info with ID {}"
-                           " when that ID exists as '{}'".format(ref.id, self.records[ref.id]))
-        self.records[ref.id] = info
+        return info
 
-    def removeStoredItemInfo(self, ref):
-        """Remove information about the object associated with this dataset.
+    def _record_to_info(self, record):
+        """Convert a record associated with this dataset to a `StoredItemInfo`
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The Dataset that has been removed.
-        """
-        del self.records[ref.id]
-
-    def getStoredItemInfo(self, ref):
-        """Retrieve information associated with object stored in this
-        `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The Dataset that is to be queried.
+        record : `StoredItemInfo`
+            Object stored in the record table.
 
         Returns
         -------
         info : `StoredItemInfo`
-            Stored information about the internal location of this file
-            and its formatter.
+            The information associated with this dataset record as a Python
+            class.
 
-        Raises
-        ------
-        KeyError
-            Dataset with that id can not be found.
+        Notes
+        -----
+        Returns the record directly.
         """
-        record = self.records.get(ref.id, None)
-        if record is None:
-            raise KeyError("Unable to retrieve information associated with Dataset {}".format(ref.id))
         return record
 
     def exists(self, ref):
@@ -261,7 +226,7 @@ class InMemoryDatastore(Datastore):
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
         if not self.exists(ref):
-            raise FileNotFoundError("Could not retrieve Dataset {}".format(ref))
+            raise FileNotFoundError(f"Could not retrieve Dataset {ref}")
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites.
@@ -292,18 +257,9 @@ class InMemoryDatastore(Datastore):
             # Concrete composite written as a single object (we hope)
             inMemoryDataset = writeStorageClass.assembler().getComponent(inMemoryDataset, component)
 
-        # Handle parameters
-        if parameters:
-            inMemoryDataset = readStorageClass.assembler().handleParameters(inMemoryDataset, parameters)
-
-        # Validate the returned data type matches the expected data type
-        pytype = readStorageClass.pytype
-        if pytype and not isinstance(inMemoryDataset, pytype):
-            raise TypeError("Got Python type {} (datasetType '{}')"
-                            " but expected {}".format(type(inMemoryDataset),
-                                                      ref.datasetType.name, pytype))
-
-        return inMemoryDataset
+        # Since there is no formatter to process parameters, they all must be
+        # passed to the assembler.
+        return self._post_process_get(inMemoryDataset, readStorageClass, parameters)
 
     def put(self, inMemoryDataset, ref):
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
@@ -331,38 +287,21 @@ class InMemoryDatastore(Datastore):
         requiring that every datastore accepts the dataset.
         """
 
-        datasetType = ref.datasetType
-        storageClass = datasetType.storageClass
-
-        # Sanity check
-        if not isinstance(inMemoryDataset, storageClass.pytype):
-            raise TypeError("Inconsistency between supplied object ({}) "
-                            "and storage class type ({})".format(type(inMemoryDataset), storageClass.pytype))
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
+        self._validate_put_parameters(inMemoryDataset, ref)
 
         self.datasets[ref.id] = inMemoryDataset
         log.debug("Store %s in %s", ref, self.name)
 
-        # We have to register this content with registry.
-        # Currently this assumes we have a file so we need to use stub entries
-        # TODO: Add to ephemeral part of registry
-        self.registry.addDatasetLocation(ref, self.name)
-
         # Store time we received this content, to allow us to optionally
         # expire it. Instead of storing a filename here, we include the
         # ID of this datasetRef so we can find it from components.
-        itemInfo = StoredItemInfo(time.time(), ref.datasetType.storageClass, parentID=ref.id)
-        self.addStoredItemInfo(ref, itemInfo)
+        itemInfo = StoredMemoryItemInfo(time.time(), ref.datasetType.storageClass,
+                                        parentID=ref.id)
 
-        # Register all components with same information
-        for compRef in ref.components.values():
-            self.registry.addDatasetLocation(compRef, self.name)
-            self.addStoredItemInfo(compRef, itemInfo)
+        # We have to register this content with registry.
+        # Currently this assumes we have a file so we need to use stub entries
+        # TODO: Add to ephemeral part of registry
+        self._register_dataset(ref, itemInfo)
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
@@ -428,27 +367,7 @@ class InMemoryDatastore(Datastore):
         del self.datasets[ref.id]
 
         # Remove rows from registries
-        self.removeStoredItemInfo(ref)
-        self.registry.removeDatasetLocation(self.name, ref)
-        for compRef in ref.components.values():
-            self.registry.removeDatasetLocation(self.name, compRef)
-            self.removeStoredItemInfo(compRef)
-
-    def transfer(self, inputDatastore, ref):
-        """Retrieve a Dataset from an input `Datastore`,
-        and store the result in this `Datastore`.
-
-        Parameters
-        ----------
-        inputDatastore : `Datastore`
-            The external `Datastore` from which to retreive the Dataset.
-        ref : `DatasetRef`
-            Reference to the required Dataset in the input data store.
-
-        """
-        assert inputDatastore is not self  # unless we want it for renames?
-        inMemoryDataset = inputDatastore.get(ref)
-        return self.put(inMemoryDataset, ref)
+        self._remove_from_registry(ref)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

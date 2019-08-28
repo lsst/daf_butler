@@ -427,7 +427,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     validationCanFail = True
 
     datastoreStr = ["/tmp"]
-    datastoreName = [f"POSIXDatastore@{BUTLER_ROOT_TAG}"]
+    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
     registryStr = "/gen3.sqlite3"
 
     def checkFileExists(self, root, path):
@@ -502,7 +502,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = None
     useTempRoot = False
     validationCanFail = False
-    datastoreStr = ["datastore='InMemory'"]
+    datastoreStr = ["datastore='InMemory"]
     datastoreName = ["InMemoryDatastore@"]
     registryStr = "registry='sqlite:///:memory:'"
 
@@ -513,7 +513,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     fullConfigKey = ".datastore.datastores.1.formatters"
     validationCanFail = True
     datastoreStr = ["datastore='InMemory", "/PosixDatastore_1,", "/PosixDatastore_2'"]
-    datastoreName = ["InMemoryDatastore@", f"POSIXDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
+    datastoreName = ["InMemoryDatastore@", f"PosixDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
                      "SecondDatastore"]
     registryStr = "/gen3.sqlite3'"
 

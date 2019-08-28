@@ -246,7 +246,7 @@ class Registry(metaclass=ABCMeta):
         return self._pixelization
 
     @abstractmethod
-    def makeDatabaseDict(self, table, types, key, value, lengths=None):
+    def makeDatabaseDict(self, table, key, value):
         """Construct a `DatabaseDict` backed by a table in the same database as
         this Registry.
 
@@ -255,24 +255,18 @@ class Registry(metaclass=ABCMeta):
         table : `table`
             Name of the table that backs the returned `DatabaseDict`.  If this
             table already exists, its schema must include at least everything
-            in `types`.
-        types : `dict`
-            A dictionary mapping `str` field names to type objects, containing
-            all fields to be held in the database.
+            in ``valuetypes``.
         key : `str`
             The name of the field to be used as the dictionary key.  Must not
             be present in ``value._fields``.
         value : `type`
             The type used for the dictionary's values, typically a
-            `~collections.namedtuple`.  Must have a ``_fields`` class
-            attribute that is a tuple of field names (i.e. as defined by
-            `~collections.namedtuple`); these field names must also appear
-            in the ``types`` arg, and a ``_make`` attribute to construct it
-            from a sequence of values (again, as defined by
-            `~collections.namedtuple`).
-        lengths : `dict`, optional
-            Specific lengths of string fields.  Defaults will be used if not
-            specified.
+            `DatabaseDictRecordBase`.  Must have a ``fields`` class method
+            that is a tuple of field names; these field names must also appear
+            in the return value of the ``types()`` class method, and it must be
+            possible to construct it from a sequence of values. Lengths of
+            string fields must be obtainable as a `dict` from using the
+            ``lengths`` property.
 
         Returns
         -------

@@ -444,8 +444,7 @@ class Butler:
                                                                              parameters=unusedParams)
         else:
             # single entity in datastore
-            raise FileNotFoundError("Unable to locate ref {} in datastore {}".format(ref.id,
-                                                                                     self.datastore.name))
+            raise FileNotFoundError(f"Unable to locate dataset '{ref}' in datastore {self.datastore.name}")
 
     def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
         """Retrieve a stored dataset.
