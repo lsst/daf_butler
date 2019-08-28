@@ -32,7 +32,7 @@ from lsst.sphgeom import ConvexPolygon
 from lsst.log import Log
 
 from ..core import Config, Run, DatasetType, StorageClassFactory, DataId, DimensionUniverse
-from ..instrument import (Instrument, updateExposureEntryFromObsInfo, updateVisitEntryFromObsInfo,
+from ..instrument import (Instrument, makeExposureRecordFromObsInfo, makeVisitRecordFromObsInfo,
                           addUnboundedCalibrationLabel)
 from .structures import ConvertedRepo
 from .translators import Translator, makeCalibrationLabel
@@ -292,19 +292,12 @@ class ConversionWriter:
         for mapperName, nested in self.obsInfo.items():
             instrument = self.config["mappers", mapperName, "instrument"]
             log.info("Inserting exposure and visit Dimensions for instrument '%s'", instrument)
-            for obsInfoId, (obsInfo, filt) in nested.items():
-                # TODO: generalize this to instruments with snaps and/or
-                # compound gen2 visit/exposure IDs
-                visitId, = obsInfoId
-                exposureId, = obsInfoId
-                # TODO: skip insertion if Dimensions already exist.
-                dataId = DataId(instrument=instrument, visit=visitId, physical_filter=filt,
-                                exposure=exposureId, universe=registry.dimensions)
-                updateVisitEntryFromObsInfo(dataId, obsInfo)
-                updateExposureEntryFromObsInfo(dataId, obsInfo)
-                log.debug("Inserting exposure %d and visit %d.", exposureId, visitId)
-                registry.addDimensionEntry("visit", dataId)
-                registry.addDimensionEntry("exposure", dataId)
+            for obsInfo, _ in nested.values():
+                visitRecord = makeVisitRecordFromObsInfo(obsInfo, registry.dimensions)
+                exposureRecord = makeExposureRecordFromObsInfo(obsInfo, registry.dimensions)
+                log.debug("Inserting exposure %d and visit %d.", exposureRecord.id, visitRecord.id)
+                registry.insertDimensionData("visit", visitRecord)
+                registry.insertDimensionData("exposure", exposureRecord)
 
     def insertCalibrationLabels(self, registry):
         """Add all necessary calibration_label Dimension entries to the
