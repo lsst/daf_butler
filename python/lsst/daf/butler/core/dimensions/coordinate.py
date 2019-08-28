@@ -71,7 +71,7 @@ class DataCoordinate(IndexedTupleDict[Dimension, Any]):
         return self
 
     @staticmethod
-    def standardize(mapping: Optional[Mapping[str, Any]], *,
+    def standardize(mapping: Optional[Mapping[str, Any]] = None, *,
                     graph: Optional[DimensionGraph] = None,
                     universe: Optional[DimensionUniverse] = None,
                     **kwds) -> DataCoordinate:
