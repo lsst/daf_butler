@@ -6,8 +6,6 @@ setupRequired(sconsUtils)
 setupRequired(utils)
 setupRequired(astro_metadata_translator)
 setupRequired(geom)
-
-setupRequired(daf_persistence)
 setupRequired(afw)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
