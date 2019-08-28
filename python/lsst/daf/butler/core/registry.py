@@ -131,6 +131,22 @@ class Registry(metaclass=ABCMeta):
                                 toCopy=(("skypix", "cls"), ("skypix", "level")), overwrite=overwrite)
 
     @staticmethod
+    def getDialect(config):
+        # this import can not live at the top due to circular import issue
+        from .connectionString import ConnectionStringFactory
+        conStrFactory = ConnectionStringFactory()
+        conStr = conStrFactory.fromConfig(config)
+        return conStr.get_backend_name()
+
+    @classmethod
+    def getRegistryClass(cls, config):
+        regConfig = RegistryConfig(config)
+        dialect = cls.getDialect(config)
+        if dialect not in regConfig["clsMap"]:
+            raise ValueError(f"Unrecognized dialect in the connection string: {dialect}")
+        return doImport(regConfig.get(("clsMap", dialect)))
+
+    @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):
         """Create `Registry` subclass instance from `config`.
 
@@ -183,19 +199,12 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
-        # If `cls` has been explicitly given in the config, use targeted class,
-        # otherwise infer from the `db` string
+        # If `cls` has been explicitly given in the config - use it, otherwise
+        # resolve from 'db' string
         if registryConfig.get("cls") is not None:
             cls = doImport(registryConfig["cls"])
         else:
-            # this import can not live at the top due to circular import issue
-            from .connectionString import ConnectionStringFactory
-            conStrFactory = ConnectionStringFactory()
-            conStr = conStrFactory.fromConfig(registryConfig)
-
-            if conStr.dialect not in registryConfig["clsMap"]:
-                raise ValueError(f"Unrecognized dialect in the connection string: {conStr.dialect}")
-            cls = doImport(registryConfig['clsMap'][conStr.dialect])
+            cls = Registry.getRegistryClass(registryConfig)
 
         return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
                    butlerRoot=butlerRoot)

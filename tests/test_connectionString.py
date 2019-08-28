@@ -28,6 +28,7 @@ import os.path
 import stat
 
 from lsst.daf.butler.core.registry import RegistryConfig
+import lsst.daf.butler.core.connectionString as ConnectionStringModule
 from lsst.daf.butler.core.connectionString import ConnectionStringFactory
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -40,14 +41,19 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
     credentialsFile = os.path.join(TESTDIR, "testDbAuth.paf")
 
     def setUp(self):
+        self.resetDbAuthPathValue = ConnectionStringModule.DB_AUTH_PATH
+        ConnectionStringModule.DB_AUTH_PATH = self.credentialsFile
         os.chmod(self.credentialsFile, ~stat.S_IRWXG & ~stat.S_IRWXO)
+
+    def tearDown(self):
+        ConnectionStringModule.DB_AUTH_PATH = self.resetDbAuthPathValue
 
     def testBuilder(self):
         """Tests ConnectionStringBuilder builds correct connection strings.
         """
         regConfigs = [RegistryConfig(os.path.join(self.configDir, name)) for name in self.configFiles]
 
-        conStrFactory = ConnectionStringFactory(self.credentialsFile)
+        conStrFactory = ConnectionStringFactory()
         for regConf, fileName in zip(regConfigs, self.configFiles):
             conStr = conStrFactory.fromConfig(regConf)
             with self.subTest(confFile=fileName):
@@ -59,6 +65,6 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         regConf = RegistryConfig(os.path.join(self.configDir, 'conf1.yaml'))
         regConf['db'] = 'sqlite:///relative/path/conf1.sqlite3'
 
-        conStrFactory = ConnectionStringFactory(self.credentialsFile)
+        conStrFactory = ConnectionStringFactory()
         conStr = conStrFactory.fromConfig(regConf)
         self.assertEqual(str(conStr), 'sqlite:///relative/path/conf1.sqlite3')

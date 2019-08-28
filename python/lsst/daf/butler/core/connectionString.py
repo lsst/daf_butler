@@ -19,9 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("ConnectionString", "ConnectionStringFactory")
-
-from sqlalchemy.exc import NoSuchModuleError
+__all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
 from lsst.daf.butler.core.dbAuth import DbAuth
@@ -33,66 +31,6 @@ credentials configuration file. """
 
 DB_AUTH_PATH = "~/.lsst/db-auth.yaml"
 """Default path at which it is expected that DB credentials are found."""
-
-
-class ConnectionString(url.URL):
-    """Builds a connection string of the format:
-
-        dialect+driver://user:password@host:port/database
-
-    by parsing (in order of precedence):
-
-    1. 'db' key in RegistryConfig,
-    2. RegistryConfig for explicitly defined keys
-    3. and DbAuth instance with which it was created.
-
-    The 'db' string must be a connection URL, i.e. must start with a database
-    dialect and contain, at least, the `database` component or the host name.
-
-    Components `username`, `password`, `host`, `port` or `database` can also be
-    specified explicitly as keys in the config when not part of the `db` string
-    in Config.
-    When `username` and `password` are not part of the `db` string or stated
-    explicitly in Config they will be read from `~/.lsst/db-auth.paf` file by
-    matching matching `host` and `port` components of provided URL.
-
-    Parameters
-    ----------
-    dbAuth : `DbAuth`
-        DbAuth instance to use in order to resolve username and passwords.
-    conUrl : `sqlalchemy.engine.URL`
-        URL instance from which connection string will be created
-    """
-    def __init__(self, dbAuth, conUrl):
-        super().__init__(conUrl.drivername, **conUrl.translate_connect_args())
-        self._dbAuth = dbAuth
-
-    @property
-    def dialect(self):
-        """Returns the dialect part of the connection string."""
-        return self.get_backend_name()
-
-    @property
-    def driver(self):
-        """Returns the driver part of the connection string."""
-        return self.get_driver_name()
-
-    def checkDialectDriverExist(self):
-        """Verifies that the targeted dialect and driver exist and are
-        installed.
-
-        Attempts to load the correct dialect and driver from SQLAlchemy. If
-        load is successfull, returns True, otherwise returns False.
-        """
-        try:
-            self._conStr.get_dialect()
-        except NoSuchModuleError:
-            return False
-        return True
-
-    def asDict(self):
-        """Returns connection string arguments as a dictionary."""
-        return self._conStr.translate_connect_args()
 
 
 class ConnectionStringFactory:
@@ -115,13 +53,6 @@ class ConnectionStringFactory:
     """
 
     keys = ('username', 'password', 'host', 'port', 'database')
-
-    def __init__(self, path=None, envVar=None, authList=None):
-        if path is None:
-            path = DB_AUTH_PATH
-        if envVar is None:
-            envVar = DB_AUTH_ENVVAR
-        self._dbAuth = DbAuth(path, envVar, authList)
 
     def __str__(self):
         return f"{self.__class__.__name__}@{self._dbAuth.authList}"
@@ -160,9 +91,10 @@ class ConnectionStringFactory:
             host = str(conStr.database)
 
         if "sqlite" not in conStr.drivername:
-            auth = self._dbAuth.getAuth(conStr.drivername, conStr.username, host,
-                                        conStr.port, conStr.database)
+            dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
+            auth = dbAuth.getAuth(conStr.drivername, conStr.username, host,
+                                  conStr.port, conStr.database)
             conStr.username = auth[0]
             conStr.password = auth[1]
 
-        return ConnectionString(self._dbAuth, conStr)
+        return conStr

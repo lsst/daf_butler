@@ -52,7 +52,6 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
-from lsst.daf.butler.core.connectionString import ConnectionStringFactory
 
 log = logging.getLogger(__name__)
 
@@ -207,21 +206,15 @@ class Butler:
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
-        # Use the explicitly set "cls" key in given config, determine the
-        # correct registry class from connection url or use the default cls
-        # This needs to be done explicitly here because Registry.setConfigRoot
-        # could differ for different Registries.
-        conStrFactory = ConnectionStringFactory()
-        if config.get(".registry.cls") is not None:
-            registryClass = doImport(config["registry", "cls"])
-        elif config.get(".registry.cls") is None and config.get(".registry.db") is not None:
-            conStr = conStrFactory.fromConfig(config)
-            if conStr.dialect not in full[".registry.clsMap"]:
-                raise ValueError(f"Unrecognized dialect in the connection string: {conStr.dialect}")
-            registryClass = doImport(full[".registry.clsMap"][conStr.dialect])
+        # if "cls" key exists import the target class directly, otherwise
+        # resolve correct registry from the 'db' connection string
+        cls = config.get(("registry", "cls"))
+        if cls is not None:
+            registryClass = doImport(cls)
+        elif cls is None and config.get("registry", "db") is not None:
+            registryClass = Registry.getRegistryClass(config)
         else:
-            conStr = conStrFactory.fromConfig(full)
-            registryClass = doImport(full[".registry.clsMap"][conStr.dialect])
+            registryClass = Registry.getRegistryClass(full)
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         if standalone:
