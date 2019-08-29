@@ -146,8 +146,7 @@ class Registry(metaclass=ABCMeta):
         """
         # this import can not live at the top due to circular import issue
         from .connectionString import ConnectionStringFactory
-        conStrFactory = ConnectionStringFactory()
-        conStr = conStrFactory.fromConfig(registryConfig)
+        conStr = ConnectionStringFactory.fromConfig(registryConfig)
         return conStr.get_backend_name()
 
     @staticmethod
@@ -223,8 +222,9 @@ class Registry(metaclass=ABCMeta):
 
         Returns
         -------
-        registry : `Registry` (subclass)
-           Subclass targeted by the registry configuration.
+        registry : `type`
+           Type object of the registry subclass targeted by the registry
+           configuration.
         """
         regConfig = RegistryConfig(registryConfig)
         if regConfig.get("cls") is not None:
@@ -259,9 +259,9 @@ class Registry(metaclass=ABCMeta):
         """Return the connection string to the underlying database
         (`sqlalchemy.engine.url.URL`).
         """
+        # this import can not live at the top due to circular import issue
         from .connectionString import ConnectionStringFactory
-        conStrFac = ConnectionStringFactory()
-        return conStrFac.fromConfig(self.config)
+        return ConnectionStringFactory.fromConfig(self.config)
 
     @property
     def limited(self):

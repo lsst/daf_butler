@@ -46,7 +46,8 @@ class ConnectionStringFactory:
 
     keys = ('username', 'password', 'host', 'port', 'database')
 
-    def fromConfig(self, registryConfig):
+    @classmethod
+    def fromConfig(cls, registryConfig):
         """Parses the 'db' key in the config, and if they exist username,
         password, host, port and database keys, and returns an connection
         string object.
@@ -75,7 +76,7 @@ class ConnectionStringFactory:
         regConf = RegistryConfig(registryConfig)
         conStr = url.make_url(regConf['db'])
 
-        for key in self.keys:
+        for key in cls.keys:
             if getattr(conStr, key) is None:
                 setattr(conStr, key, regConf.get(key))
 
