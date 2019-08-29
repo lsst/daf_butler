@@ -223,8 +223,7 @@ class Registry(metaclass=ABCMeta):
         Returns
         -------
         registry : `type`
-           Type object of the registry subclass targeted by the registry
-           configuration.
+           Class of type `Registry` targeted by the registry configuration.
         """
         regConfig = RegistryConfig(registryConfig)
         if regConfig.get("cls") is not None:
