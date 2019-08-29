@@ -206,12 +206,9 @@ class Butler:
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
-        # if "cls" key exists import the target class directly, otherwise
-        # resolve correct registry from the 'db' connection string
-        cls = config.get(("registry", "cls"))
-        if cls is not None:
-            registryClass = doImport(cls)
-        elif cls is None and config.get("registry", "db") is not None:
+        # if "cls" or "db" keys exist in given config, parse them, otherwise
+        # parse the defaults in the expanded config
+        if any((config.get(("registry", "cls")), config.get(("registry", "db")))):
             registryClass = Registry.getRegistryClass(config)
         else:
             registryClass = Registry.getRegistryClass(full)

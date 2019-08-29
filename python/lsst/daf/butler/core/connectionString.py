@@ -34,50 +34,45 @@ DB_AUTH_PATH = "~/.lsst/db-auth.yaml"
 
 
 class ConnectionStringFactory:
-    """Factory for `ConnectionString` instances.
+    """Factory for `sqlalchemy.engine.url.URL` instances.
 
-    Parameters
-    ----------
-    path : `str` or None, optional
-        Path to configuration file. Defaults to '~/.lsst/daf-auth.yaml'.
-    envVar : `str` or None, optional
-        Name of environment variable pointing to configuration file. Defaults
-        to "LSST_DB_AUTH"
-    authList : `list` [`dict`] or None, optional
-        Authentication configuration.
-
-    Notes
-    -----
-    At least one of ``path``, ``envVar``, or ``authList`` must be provided;
-    generally ``path`` should be provided as a default location.
+    The factory constructs a connection string URL object by parsing the
+    connection string, the 'db' key in the registry configuration.
+    Username, password, host, port or database can be specified as keys in the
+    config explicitly. If username or password are missing a matching DB is
+    found in the credentials file pointed to by `DB_AUTH_ENVVAR` or
+    `DB_AUTH_PATH` values.
     """
 
     keys = ('username', 'password', 'host', 'port', 'database')
 
-    def __str__(self):
-        return f"{self.__class__.__name__}@{self._dbAuth.authList}"
+    def fromConfig(self, registryConfig):
+        """Parses the 'db' key in the config, and if they exist username,
+        password, host, port and database keys, and returns an connection
+        string object.
 
-    def fromConfig(self, config):
-        """Parses a Config 'db' string and other keywords and returns an
-        `sqlalchemy.engine.url.URL` object containing the components of a URL
-        used to connect to a database.
+        If no  username and password are found in the connection string, or in
+        the config, they are retrieved from a file at `DB_AUTH_PATH` or
+        `DB_AUTH_ENVVAR`. Sqlite dialect does not require a password.
 
         Parameters
         ----------
-        config : `Config` or `RegistryConfig`
-            Config to parse for connection string components.
-        dbAuth : `DbAuth` or None
-            DbAuth instance pointing to the correct credentials file. If None
-            the default "~/.lsst/db-auth.yaml" or "LSST_DB_AUTH" env var will
-            be used.
+        config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
+            Registry configuration
 
         Returns
         -------
-        conStr : `sqlalchemy.engine.url.URL`
-            URL object suitable to be passed into `sqlalchemy.create_engine`
-            function.
+        connectionString : `sqlalchemy.engine.url.URL`
+            URL object representing the connection string.
+
+
+        Raises
+        ------
+        DBAuthError
+            If the credentials file has incorrect permissions, doesn't exist at
+            the given location or is formatted incorrectly.
         """
-        regConf = RegistryConfig(config)
+        regConf = RegistryConfig(registryConfig)
         conStr = url.make_url(regConf['db'])
 
         for key in self.keys:
@@ -90,7 +85,8 @@ class ConnectionStringFactory:
         if conStr.host is None:
             host = str(conStr.database)
 
-        if "sqlite" not in conStr.drivername:
+        # sqlite with users and passwords not supported
+        if None in (conStr.username, conStr.password) and "sqlite" not in conStr.drivername:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
             auth = dbAuth.getAuth(conStr.drivername, conStr.username, host,
                                   conStr.port, conStr.database)

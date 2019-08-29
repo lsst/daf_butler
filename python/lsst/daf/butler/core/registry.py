@@ -131,20 +131,24 @@ class Registry(metaclass=ABCMeta):
                                 toCopy=(("skypix", "cls"), ("skypix", "level")), overwrite=overwrite)
 
     @staticmethod
-    def getDialect(config):
+    def getDialect(registryConfig):
+        """Parses the `db` key of the config and returns the database dialect.
+
+        Parameters
+        ----------
+        registryConfig : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
+            Registry configuration
+
+        Returns
+        -------
+        dialect : `str`
+            Dialect found in the connection string.
+        """
         # this import can not live at the top due to circular import issue
         from .connectionString import ConnectionStringFactory
         conStrFactory = ConnectionStringFactory()
-        conStr = conStrFactory.fromConfig(config)
+        conStr = conStrFactory.fromConfig(registryConfig)
         return conStr.get_backend_name()
-
-    @classmethod
-    def getRegistryClass(cls, config):
-        regConfig = RegistryConfig(config)
-        dialect = cls.getDialect(config)
-        if dialect not in regConfig["clsMap"]:
-            raise ValueError(f"Unrecognized dialect in the connection string: {dialect}")
-        return doImport(regConfig.get(("clsMap", dialect)))
 
     @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):
@@ -199,15 +203,39 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
-        # If `cls` has been explicitly given in the config - use it, otherwise
-        # resolve from 'db' string
-        if registryConfig.get("cls") is not None:
-            cls = doImport(registryConfig["cls"])
-        else:
-            cls = Registry.getRegistryClass(registryConfig)
+        cls = Registry.getRegistryClass(registryConfig)
 
         return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
                    butlerRoot=butlerRoot)
+
+    @classmethod
+    def getRegistryClass(cls, registryConfig):
+        """Returns registry class targeted by configuration values.
+
+        The appropriate class is determined from the `cls` key, if it exists.
+        Otherwise the `db` key is parsed and the correct class is determined
+        from a list of aliases found under `clsMap` key of the registry config.
+
+        Parameters
+        ----------
+        registryConfig : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
+            Registry configuration
+
+        Returns
+        -------
+        registry : `Registry` (subclass)
+           Subclass targeted by the registry configuration.
+        """
+        regConfig = RegistryConfig(registryConfig)
+        if regConfig.get("cls") is not None:
+            registryClass = regConfig.get("cls")
+        else:
+            dialect = cls.getDialect(regConfig)
+            if dialect not in regConfig["clsMap"]:
+                raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
+            registryClass = regConfig.get(("clsMap", dialect))
+
+        return doImport(registryClass)
 
     def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False,
                  butlerRoot=None):
@@ -225,6 +253,15 @@ class Registry(metaclass=ABCMeta):
 
     def __str__(self):
         return "None"
+
+    @property
+    def connectionString(self):
+        """Return the connection string to the underlying database
+        (`sqlalchemy.engine.url.URL`).
+        """
+        from .connectionString import ConnectionStringFactory
+        conStrFac = ConnectionStringFactory()
+        return conStrFac.fromConfig(self.config)
 
     @property
     def limited(self):
