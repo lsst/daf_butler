@@ -32,7 +32,7 @@ from .location import ButlerURI
 from .config import Config
 from .datastore import DatastoreConfig
 from .schema import SchemaConfig
-from .registry import RegistryConfig
+from .registryConfig import RegistryConfig
 from .storageClass import StorageClassConfig
 from .dimensions import DimensionConfig
 from .composites import CompositesConfig

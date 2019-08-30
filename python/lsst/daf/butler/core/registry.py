@@ -19,21 +19,21 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
-           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = ("Registry", "disableWhenLimited", "AmbiguousDatasetError",
+           "ConflictingDefinitionError", "OrphanedRecordError")
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import contextlib
 import functools
 
-
 from lsst.utils import doImport
-from .config import Config, ConfigSubset
+from .config import Config
 from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
+from .registryConfig import RegistryConfig
 
 
 class AmbiguousDatasetError(Exception):
@@ -69,12 +69,6 @@ def disableWhenLimited(func):
             )
         return func(self, *args, **kwargs)
     return inner
-
-
-class RegistryConfig(ConfigSubset):
-    component = "registry"
-    requiredKeys = ("db",)
-    defaultConfigFile = "registry.yaml"
 
 
 class Registry(metaclass=ABCMeta):
@@ -131,25 +125,6 @@ class Registry(metaclass=ABCMeta):
                                 toCopy=(("skypix", "cls"), ("skypix", "level")), overwrite=overwrite)
 
     @staticmethod
-    def getDialect(registryConfig):
-        """Parses the `db` key of the config and returns the database dialect.
-
-        Parameters
-        ----------
-        registryConfig : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
-            Registry configuration
-
-        Returns
-        -------
-        dialect : `str`
-            Dialect found in the connection string.
-        """
-        # this import can not live at the top due to circular import issue
-        from .connectionString import ConnectionStringFactory
-        conStr = ConnectionStringFactory.fromConfig(registryConfig)
-        return conStr.get_backend_name()
-
-    @staticmethod
     def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):
         """Create `Registry` subclass instance from `config`.
 
@@ -202,39 +177,10 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
-        cls = Registry.getRegistryClass(registryConfig)
+        cls = registryConfig.getRegistryClass()
 
         return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
                    butlerRoot=butlerRoot)
-
-    @classmethod
-    def getRegistryClass(cls, registryConfig):
-        """Returns registry class targeted by configuration values.
-
-        The appropriate class is determined from the `cls` key, if it exists.
-        Otherwise the `db` key is parsed and the correct class is determined
-        from a list of aliases found under `clsMap` key of the registry config.
-
-        Parameters
-        ----------
-        registryConfig : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
-            Registry configuration
-
-        Returns
-        -------
-        registry : `type`
-           Class of type `Registry` targeted by the registry configuration.
-        """
-        regConfig = RegistryConfig(registryConfig)
-        if regConfig.get("cls") is not None:
-            registryClass = regConfig.get("cls")
-        else:
-            dialect = cls.getDialect(regConfig)
-            if dialect not in regConfig["clsMap"]:
-                raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
-            registryClass = regConfig.get(("clsMap", dialect))
-
-        return doImport(registryClass)
 
     def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False,
                  butlerRoot=None):
@@ -252,15 +198,6 @@ class Registry(metaclass=ABCMeta):
 
     def __str__(self):
         return "None"
-
-    @property
-    def connectionString(self):
-        """Return the connection string to the underlying database
-        (`sqlalchemy.engine.url.URL`).
-        """
-        # this import can not live at the top due to circular import issue
-        from .connectionString import ConnectionStringFactory
-        return ConnectionStringFactory.fromConfig(self.config)
 
     @property
     def limited(self):

@@ -25,7 +25,7 @@ from sqlalchemy import create_engine
 
 
 from lsst.daf.butler.core.config import Config
-from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.registryConfig import RegistryConfig
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
@@ -79,4 +79,4 @@ class OracleRegistry(SqlRegistry):
                          butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        return create_engine(self.connectionString, pool_size=1)
+        return create_engine(self.config.connectionString, pool_size=1)

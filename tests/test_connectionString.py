@@ -25,9 +25,8 @@
 import unittest
 import os
 import os.path
-import stat
 
-from lsst.daf.butler.core.registry import RegistryConfig
+from lsst.daf.butler.core.registryConfig import RegistryConfig
 import lsst.daf.butler.core.connectionString as ConnectionStringModule
 from lsst.daf.butler.core.connectionString import ConnectionStringFactory
 
@@ -38,12 +37,12 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
     """Tests for ConnectionStringBuilder."""
     configDir = os.path.join(TESTDIR, "config/basic/connectionStringConfs/")
     configFiles = os.listdir(configDir)
-    credentialsFile = os.path.join(TESTDIR, "testDbAuth.paf")
+    credentialsFile = os.path.join(TESTDIR, "testDbAuth.yaml")
 
     def setUp(self):
         self.resetDbAuthPathValue = ConnectionStringModule.DB_AUTH_PATH
         ConnectionStringModule.DB_AUTH_PATH = self.credentialsFile
-        os.chmod(self.credentialsFile, ~stat.S_IRWXG & ~stat.S_IRWXO)
+        os.chmod(self.credentialsFile, 0o600)
 
     def tearDown(self):
         ConnectionStringModule.DB_AUTH_PATH = self.resetDbAuthPathValue

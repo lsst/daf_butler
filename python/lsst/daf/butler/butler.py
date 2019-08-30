@@ -42,6 +42,7 @@ from .core.datasets import DatasetRef, DatasetType
 from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
 from .core.registry import Registry
+from .core.registryConfig import RegistryConfig
 from .core.run import Run
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
@@ -209,9 +210,11 @@ class Butler:
         # if "cls" or "db" keys exist in given config, parse them, otherwise
         # parse the defaults in the expanded config
         if any((config.get(("registry", "cls")), config.get(("registry", "db")))):
-            registryClass = Registry.getRegistryClass(config)
+            registryConfig = RegistryConfig(config)
+            registryClass = registryConfig.getRegistryClass()
         else:
-            registryClass = Registry.getRegistryClass(full)
+            registryConfig = RegistryConfig(full)
+            registryClass = registryConfig.getRegistryClass()
         registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
         if standalone:

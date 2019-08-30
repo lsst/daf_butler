@@ -23,7 +23,6 @@ __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
 from lsst.daf.butler.core.dbAuth import DbAuth
-from lsst.daf.butler.core.registry import RegistryConfig
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
@@ -66,13 +65,14 @@ class ConnectionStringFactory:
         connectionString : `sqlalchemy.engine.url.URL`
             URL object representing the connection string.
 
-
         Raises
         ------
         DBAuthError
             If the credentials file has incorrect permissions, doesn't exist at
             the given location or is formatted incorrectly.
         """
+        # this import can not live on the top because of circular import issue
+        from lsst.daf.butler.core.registryConfig import RegistryConfig
         regConf = RegistryConfig(registryConfig)
         conStr = url.make_url(regConf['db'])
 
@@ -80,16 +80,10 @@ class ConnectionStringFactory:
             if getattr(conStr, key) is None:
                 setattr(conStr, key, regConf.get(key))
 
-        # when the databsase is a file, host will be None and the path
-        # becomes the database, but we are not treating 'localhost' explicitly
-        host = conStr.host
-        if conStr.host is None:
-            host = str(conStr.database)
-
         # sqlite with users and passwords not supported
         if None in (conStr.username, conStr.password) and "sqlite" not in conStr.drivername:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
-            auth = dbAuth.getAuth(conStr.drivername, conStr.username, host,
+            auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
                                   conStr.port, conStr.database)
             conStr.username = auth[0]
             conStr.password = auth[1]
