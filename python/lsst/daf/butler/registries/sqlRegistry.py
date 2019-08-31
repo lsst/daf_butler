@@ -32,9 +32,9 @@ from sqlalchemy.exc import IntegrityError, SADeprecationWarning
 from ..core.utils import transactional
 
 from ..core.datasets import DatasetType, DatasetRef
-from ..core.registry import (RegistryConfig, Registry, disableWhenLimited,
-                             ConflictingDefinitionError, AmbiguousDatasetError,
-                             OrphanedRecordError)
+from ..core.registryConfig import RegistryConfig
+from ..core.registry import (Registry, disableWhenLimited, ConflictingDefinitionError,
+                             AmbiguousDatasetError, OrphanedRecordError)
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
@@ -144,7 +144,7 @@ class SqlRegistry(Registry):
         have a very good reason not to, subclasses that override this method
         should do the same.
         """
-        return create_engine(self.config["db"], poolclass=NullPool)
+        return create_engine(self.config.connectionString, poolclass=NullPool)
 
     def _createConnection(self, engine):
         """Create and return a `sqlalchemy.Connection` for this `Registry`.

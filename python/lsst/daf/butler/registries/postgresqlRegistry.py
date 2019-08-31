@@ -19,10 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("OracleRegistry", )
+__all__ = ("PostgreSqlRegistry", )
 
 from sqlalchemy import create_engine
-
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registryConfig import RegistryConfig
@@ -30,8 +29,8 @@ from lsst.daf.butler.core.registryConfig import RegistryConfig
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
 
-class OracleRegistry(SqlRegistry):
-    """Registry backed by a Oracle database.
+class PostgreSqlRegistry(SqlRegistry):
+    """Registry backed by an PostgreSQL Amazon RDS service.
 
     Parameters
     ----------
@@ -69,7 +68,7 @@ class OracleRegistry(SqlRegistry):
         """
         super().setConfigRoot(root, config, full, overwrite=overwrite)
         Config.updateParameters(RegistryConfig, config, full,
-                                toCopy=("db",), overwrite=overwrite)
+                                overwrite=overwrite)
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
                  butlerRoot=None):

@@ -68,6 +68,14 @@ END;
            compiler.sql_compiler.process(element.selectable).replace(";\n FROM DUAL", ""))
 
 
+# Ignoring PEP8 redefinition of function, as this is the sqlalchemy
+# recommended procedure for dealing with multiple dialects
+@compiler.compiles(CreateView, 'postgresql')  # noqa: F811
+def compileCreateView(element, compiler, **kw):
+    return "CREATE OR REPLACE VIEW %s AS %s" % (element.name,
+                                                compiler.sql_compiler.process(element.selectable))
+
+
 @compiler.compiles(DropView)
 def compileDropView(element, compiler, **kw):
     return "DROP VIEW %s" % (element.name)

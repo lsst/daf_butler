@@ -1,0 +1,17 @@
+[
+  {
+    url: 'postgresql://lsst-db.ncsa.illinois.edu:3307/*',
+    username: boris,
+    password: natasha,
+  },
+  {
+    url: 'sqlite://lsst-db.ncsa.illinois.edu:3306/*',
+    username: boris,
+    password: natasha,
+  },
+  {
+    url: 'oracle://lsst-db.ncsa.illinois.edu:3306/*',
+    username: nottest,
+    password: notglobular.test,
+  }
+]

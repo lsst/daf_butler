@@ -1,0 +1,8 @@
+# minimal configuration required when using explicit 'host-port',
+# also tests '/' are placed correctly when not epxlicit in dbname
+registry:
+  cls: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
+  db: 'postgresql://lsst-db.ncsa.illinois.edu'
+  port: 3307
+  database: 'conf2'
+  expected: 'postgresql://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf2'

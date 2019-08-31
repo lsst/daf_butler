@@ -22,7 +22,8 @@
 import unittest
 from dataclasses import make_dataclass
 
-from lsst.daf.butler.core import RegistryConfig, Registry, DatabaseDictRecordBase
+from lsst.daf.butler.core import Registry, DatabaseDictRecordBase
+from lsst.daf.butler.core.registryConfig import RegistryConfig
 
 """Tests for SqlDatabaseDict.
 """

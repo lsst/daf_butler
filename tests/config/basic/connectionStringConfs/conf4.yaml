@@ -1,0 +1,6 @@
+# test that db without port, database etc. keys can work too
+# test local filesystem paths are acceptable and that no-username-no-password works
+registry:
+  cls: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
+  db: 'sqlite:///path/to/db.sqlite3'
+  expected: 'sqlite:///path/to/db.sqlite3'

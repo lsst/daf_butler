@@ -19,8 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("RegistryConfig", "Registry", "disableWhenLimited",
-           "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = ("Registry", "disableWhenLimited", "AmbiguousDatasetError",
+           "ConflictingDefinitionError", "OrphanedRecordError")
 
 from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
@@ -28,11 +28,12 @@ import contextlib
 import functools
 
 from lsst.utils import doImport
-from .config import Config, ConfigSubset
+from .config import Config
 from .dimensions import DimensionConfig, DimensionUniverse, DataId, DimensionKeyDict
 from .schema import SchemaConfig
 from .utils import transactional
 from .dataIdPacker import DataIdPackerFactory
+from .registryConfig import RegistryConfig
 
 
 class AmbiguousDatasetError(Exception):
@@ -68,12 +69,6 @@ def disableWhenLimited(func):
             )
         return func(self, *args, **kwargs)
     return inner
-
-
-class RegistryConfig(ConfigSubset):
-    component = "registry"
-    requiredKeys = ("cls",)
-    defaultConfigFile = "registry.yaml"
 
 
 class Registry(metaclass=ABCMeta):
@@ -182,8 +177,10 @@ class Registry(metaclass=ABCMeta):
             else:
                 raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
 
-        cls = doImport(registryConfig["cls"])
-        return cls(registryConfig, schemaConfig, dimensionConfig, create=create, butlerRoot=butlerRoot)
+        cls = registryConfig.getRegistryClass()
+
+        return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
+                   butlerRoot=butlerRoot)
 
     def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False,
                  butlerRoot=None):
