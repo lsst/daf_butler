@@ -151,7 +151,7 @@ def makeElementTableSpec(element: DimensionElement) -> TableSpec:
     # We use element.implied instead of element.graph.implied because we don't
     # want *recursive* implied dependencies.
     for dimension in element.implied:
-        addDimensionForeignKey(tableSpec, dimension, primaryKey=False)
+        addDimensionForeignKey(tableSpec, dimension, primaryKey=False, nullable=True)
     # Add non-primary unique keys and unique constraints for them.
     for fieldSpec in getattr(element, "alternateKeys", ()):
         tableSpec.fields.add(fieldSpec)
