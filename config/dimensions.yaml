@@ -68,6 +68,7 @@ dimensions:
       - instrument
       implies:
       - abstract_filter
+      cached: true
 
     detector:
       doc: >
@@ -102,6 +103,7 @@ dimensions:
         doc: >
           Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
           or "GUIDE", though instruments may define additional values.
+      cached: true
 
     visit:
       doc: >
