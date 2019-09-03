@@ -777,7 +777,11 @@ class SqlRegistry(Registry):
         standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwds)
         if isinstance(standardized, ExpandedDataCoordinate):
             return standardized
-        records = dict(records) if records is not None else {}
+        elif isinstance(dataId, ExpandedDataCoordinate):
+            records = dict(records) if records is not None else {}
+            records.update(dataId.records)
+        else:
+            records = dict(records) if records is not None else {}
         keys = dict(standardized)
         for element in standardized.graph._primaryKeyTraversalOrder:
             record = records.get(element)
