@@ -26,6 +26,7 @@ Using the Butler
   :maxdepth: 1
 
   configuring.rst
+  exprParser.rst
 
 
 .. _lsst.daf.butler-pyapi:
