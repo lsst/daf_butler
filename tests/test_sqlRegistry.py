@@ -25,6 +25,8 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
 from itertools import combinations
 
+from sqlalchemy.exc import IntegrityError
+
 import lsst.sphgeom
 
 from lsst.daf.butler import (Execution, Run, DatasetType, Registry,
@@ -395,7 +397,7 @@ class RegistryTests(metaclass=ABCMeta):
         dimensionValue = {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
         registry.insertDimensionData(dimensionName, dimensionValue)
         # Inserting the same value twice should fail
-        with self.assertRaises(ConflictingDefinitionError):
+        with self.assertRaises(IntegrityError):
             registry.insertDimensionData(dimensionName, dimensionValue)
         # expandDataId should retrieve the record we just inserted
         self.assertEqual(
@@ -415,7 +417,7 @@ class RegistryTests(metaclass=ABCMeta):
         dimension2 = registry.dimensions[dimensionName2]
         dimensionValue2 = {"name": "DummyCam_i", "abstract_filter": "i"}
         # Missing required dependency ("instrument") should fail
-        with self.assertRaises(Exception):
+        with self.assertRaises(IntegrityError):
             registry.insertDimensionData(dimensionName2, dimensionValue2)
         # Adding required dependency should fix the failure
         dimensionValue2["instrument"] = "DummyCam"
@@ -614,7 +616,7 @@ class SqlRegistryTestCase(unittest.TestCase, RegistryTests):
         with registry.transaction():
             # This should be added and (ultimately) committed.
             registry.insertDimensionData(dimension, dataId1)
-            with self.assertRaises(ConflictingDefinitionError):
+            with self.assertRaises(IntegrityError):
                 with registry.transaction():
                     # This does not conflict, and should succeed (but not
                     # be committed).

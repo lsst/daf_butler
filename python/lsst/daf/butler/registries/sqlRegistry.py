@@ -813,13 +813,7 @@ class SqlRegistry(Registry):
         else:
             records = data
         storage = self._dimensionStorage[element]
-        try:
-            storage.insert(*records)
-        except IntegrityError as err:
-            # TODO: this maintains previous behavior, but we're not actually
-            # checking that this is a UNIQUE violation rather than, say, NOT
-            # NULL or FOREIGN KEY.
-            raise ConflictingDefinitionError(f"Existing definition for {element.name} record.") from err
+        storage.insert(*records)
 
     def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
