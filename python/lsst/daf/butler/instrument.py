@@ -24,7 +24,6 @@ __all__ = ("Instrument", "makeExposureRecordFromObsInfo", "makeVisitRecordFromOb
 
 import os.path
 from datetime import datetime
-from inspect import isabstract
 from abc import ABCMeta, abstractmethod
 from lsst.daf.butler import DataCoordinate, DimensionPacker
 
@@ -37,15 +36,8 @@ from lsst.daf.butler import DataCoordinate, DimensionPacker
 class Instrument(metaclass=ABCMeta):
     """Base class for instrument-specific logic for the Gen3 Butler.
 
-    Concrete instrument subclasses should either be directly constructable
-    with no arguments or provide a 'factory' `staticmethod`, `classmethod`, or
-    other callable class attribute that takes no arguments and returns a new
-    `Instrument` instance.
-    """
-
-    factories = {}
-    """Global dictionary that maps instrument name used in the registry to
-    a no-argument callable that can be used to construct a Python instance.
+    Concrete instrument subclasses should be directly constructable with no
+    arguments.
     """
 
     configPaths = []
@@ -65,12 +57,6 @@ class Instrument(metaclass=ABCMeta):
 
     def __init__(self, *args, **kwargs):
         self.filterDefinitions.defineFilters()
-
-    def __init_subclass__(cls, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if not isabstract(cls):
-            factory = getattr(cls, "factory", cls)
-            Instrument.factories[cls.getName()] = factory
 
     @classmethod
     @abstractmethod
