@@ -562,8 +562,9 @@ class SqlRegistry(Registry):
                 raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
 
             try:
-                self._connection.execute(insertQuery, {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
-                                                       "collection": collection})
+                with self.transaction():
+                    self._connection.execute(insertQuery, {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
+                                                           "collection": collection})
             except IntegrityError as exc:
                 # Did we clash with a completely duplicate entry (because this
                 # dataset is already in this collection)?  Or is there already
