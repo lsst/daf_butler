@@ -68,7 +68,7 @@ class PostgreSqlRegistry(SqlRegistry):
         """
         super().setConfigRoot(root, config, full, overwrite=overwrite)
         Config.updateParameters(RegistryConfig, config, full,
-                                overwrite=overwrite)
+                                toCopy=("db",), overwrite=overwrite)
 
     def __init__(self, registryConfig, schemaConfig, dimensionConfig, create=False,
                  butlerRoot=None):
