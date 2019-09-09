@@ -25,13 +25,17 @@ import stat
 import urllib.parse
 import yaml
 
-__all__ = ["DbAuth", "DbAuthError"]
+__all__ = ["DbAuth", "DbAuthError", "DbAuthPermissionsError"]
 
 
 class DbAuthError(RuntimeError):
     """A problem has occurred retrieving database authentication information.
     """
     pass
+
+
+class DbAuthPermissionsError(DbAuthError):
+    """Credentials file has incorrect permissions."""
 
 
 class DbAuth:
@@ -70,7 +74,7 @@ class DbAuth:
             raise DbAuthError("No DbAuth configuration file: " + secretPath)
         mode = os.stat(secretPath).st_mode
         if mode & (stat.S_IRWXG | stat.S_IRWXO) != 0:
-            raise DbAuthError(
+            raise DbAuthPermissionsError(
                 "DbAuth configuration file {} has incorrect permissions: "
                 "{:o}".format(secretPath, mode))
 
@@ -81,34 +85,6 @@ class DbAuth:
             raise DbAuthError(
                 "Unable to load DbAuth configuration file: " +
                 secretPath) from exc
-
-    def exists(self, drivername, username, host, port, database):
-        """Checks whether an glob-like URL entry that matches given parameters
-        exists in the credentials file.
-
-        Parameters
-        ----------
-        drivername : `str`
-            Name of database backend driver from connection URL.
-        username : `str` or None
-            Username from connection URL if present.
-        host : `str`
-            Host name from connection URL if present.
-        port : `str` or `int` or None
-            Port from connection URL if present.
-        database : `str`
-            Database name from connection URL.
-
-        Returns
-        -------
-        exists : `bool`
-            True when an entry is found, False otherwise.
-        """
-        try:
-            self.getAuth(drivername, username, host, port, database)
-        except DbAuthError:
-            return False
-        return True
 
     def getAuth(self, drivername, username, host, port, database):
         """Retrieve a username and password for a database connection.
@@ -190,10 +166,6 @@ class DbAuth:
             # Check for mandatory entries
             if "url" not in authDict:
                 raise DbAuthError("Missing URL in DbAuth configuration")
-            if "password" not in authDict:
-                raise DbAuthError(
-                    "Missing password in DbAuth configuration "
-                    "for URL: " + authDict["url"])
 
             # Parse pseudo-URL from db-auth.yaml
             components = urllib.parse.urlparse(authDict["url"])
@@ -233,9 +205,7 @@ class DbAuth:
                 return (username, authDict["password"])
             else:
                 if "username" not in authDict:
-                    raise DbAuthError(
-                        "Missing username in DbAuth configuration for "
-                        "URL: " + authDict["url"])
+                    return (None, authDict["password"])
                 return (authDict["username"], authDict["password"])
 
         raise DbAuthError(

@@ -22,7 +22,7 @@
 __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
-from lsst.daf.butler.core.dbAuth import DbAuth, DbAuthError
+from lsst.daf.butler.core.dbAuth import DbAuth, DbAuthError, DbAuthPermissionsError
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
@@ -68,8 +68,7 @@ class ConnectionStringFactory:
         Raises
         ------
         DBAuthError
-            If the credentials file has incorrect permissions, doesn't exist at
-            the given location or is formatted incorrectly.
+            If the credentials file has incorrect permissions.
         """
         # this import can not live on the top because of circular import issue
         from lsst.daf.butler.core.registryConfig import RegistryConfig
@@ -80,20 +79,26 @@ class ConnectionStringFactory:
             if getattr(conStr, key) is None:
                 setattr(conStr, key, regConf.get(key))
 
+        # when host is None we cross our fingers and return
+        if conStr.host is None:
+            return conStr
+
         # allow other mechanisms to insert username and password by not forcing
-        # the credentials to exist, always re-raise only the case where
-        # credentials# file exists but is incorrect permissions, for safety
+        # the credentials to exist. If other mechanisms are used it's possible
+        # that credentials were never set-up, or that there would be no match
+        # in the credentials file. Both need to be ignored.
         try:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
-        except DbAuthError as e:
-            if 'permissions' in e.args[0]:
-                raise
+            auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
+                                  conStr.port, conStr.database)
+        except DbAuthPermissionsError:
+            # re-raise permission error for safety
+            raise
+        except DbAuthError:
+            # credentials file doesn't exist or no match was found
+            pass
         else:
-            if dbAuth.exists(conStr.drivername, conStr.username, conStr.host,
-                             conStr.port, conStr.database):
-                auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
-                                      conStr.port, conStr.database)
-                conStr.username = auth[0]
-                conStr.password = auth[1]
+            conStr.username = auth[0]
+            conStr.password = auth[1]
 
         return conStr

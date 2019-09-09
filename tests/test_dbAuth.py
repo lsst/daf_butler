@@ -246,13 +246,6 @@ class DbAuthTestCase(unittest.TestCase):
                 r"\(postgresql, None, example\.com, None, foo\)$"):
             auth.getAuth("postgresql", None, "example.com", None, "foo")
 
-        auth = DbAuth(authList=[dict(url="postgresql://*.example.com")])
-        with self.assertRaisesRegex(
-                DbAuthError,
-                r"^Missing password in DbAuth configuration for URL: "
-                r"postgresql://\*\.example\.com$"):
-            auth.getAuth("postgresql", None, "example.com", None, "foo")
-
         auth = DbAuth(authList=[dict(password="testing")])
         with self.assertRaisesRegex(
                 DbAuthError,
@@ -270,14 +263,6 @@ class DbAuthTestCase(unittest.TestCase):
         with self.assertRaisesRegex(
                 DbAuthError,
                 r"^Missing host in URL: postgresql:///foo$"):
-            auth.getAuth("postgresql", None, "example.com", None, "foo")
-
-        auth = DbAuth(authList=[
-            dict(url="postgresql://example.com/foo", password="testing")])
-        with self.assertRaisesRegex(
-                DbAuthError,
-                r"^Missing username in DbAuth configuration for URL: "
-                r"postgresql://example.com/foo$"):
             auth.getAuth("postgresql", None, "example.com", None, "foo")
 
     def test_getUrl(self):
@@ -422,14 +407,6 @@ class DbAuthTestCase(unittest.TestCase):
                 DbAuthError,
                 r"^No matching DbAuth configuration for: "
                 r"\(postgresql, None, example\.com, None, foo\)$"):
-            auth.getUrl("postgresql://example.com/foo")
-
-        auth = DbAuth(authList=[
-            dict(url="postgresql://example.com/foo", password="testing")])
-        with self.assertRaisesRegex(
-                DbAuthError,
-                r"^Missing username in DbAuth configuration for URL: "
-                r"postgresql://example.com/foo$"):
             auth.getUrl("postgresql://example.com/foo")
 
     def test_urlEncoding(self):
