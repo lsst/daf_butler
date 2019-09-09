@@ -22,7 +22,7 @@
 __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
-from lsst.daf.butler.core.dbAuth import DbAuth
+from lsst.daf.butler.core.dbAuth import DbAuth, DbAuthError
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
@@ -80,12 +80,20 @@ class ConnectionStringFactory:
             if getattr(conStr, key) is None:
                 setattr(conStr, key, regConf.get(key))
 
-        # sqlite with users and passwords not supported
-        if None in (conStr.username, conStr.password) and "sqlite" not in conStr.drivername:
+        # allow other mechanisms to insert username and password by not forcing
+        # the credentials to exist, always re-raise only the case where
+        # credentials# file exists but is incorrect permissions, for safety
+        try:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
-            auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
-                                  conStr.port, conStr.database)
-            conStr.username = auth[0]
-            conStr.password = auth[1]
+        except DbAuthError as e:
+            if 'permissions' in e.args[0]:
+                raise
+        else:
+            if dbAuth.exists(conStr.drivername, conStr.username, conStr.host,
+                             conStr.port, conStr.database):
+                auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
+                                      conStr.port, conStr.database)
+                conStr.username = auth[0]
+                conStr.password = auth[1]
 
         return conStr

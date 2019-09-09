@@ -82,6 +82,34 @@ class DbAuth:
                 "Unable to load DbAuth configuration file: " +
                 secretPath) from exc
 
+    def exists(self, drivername, username, host, port, database):
+        """Checks whether an glob-like URL entry that matches given parameters
+        exists in the credentials file.
+
+        Parameters
+        ----------
+        drivername : `str`
+            Name of database backend driver from connection URL.
+        username : `str` or None
+            Username from connection URL if present.
+        host : `str`
+            Host name from connection URL if present.
+        port : `str` or `int` or None
+            Port from connection URL if present.
+        database : `str`
+            Database name from connection URL.
+
+        Returns
+        -------
+        exists : `bool`
+            True when an entry is found, False otherwise.
+        """
+        try:
+            self.getAuth(drivername, username, host, port, database)
+        except DbAuthError:
+            return False
+        return True
+
     def getAuth(self, drivername, username, host, port, database):
         """Retrieve a username and password for a database connection.
 
