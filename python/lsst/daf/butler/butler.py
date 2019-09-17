@@ -37,7 +37,7 @@ except ImportError:
     boto3 = None
 
 from lsst.utils import doImport
-from .core.utils import transactional
+from .core.utils import transactional, getClassOf
 from .core.datasets import DatasetRef, DatasetType
 from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
@@ -53,6 +53,7 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
+from .core.repoTransfers import RepoExport
 
 log = logging.getLogger(__name__)
 
@@ -716,6 +717,122 @@ class Butler:
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, recursive=True, **kwds)
         self.datastore.ingest(path, ref, transfer=transfer, formatter=formatter)
         return ref
+
+    @contextlib.contextmanager
+    def export(self, *, directory: typing.Optional[str] = None,
+               filename: typing.Optional[str] = None,
+               format: typing.Optional[str] = None,
+               transfer: typing.Optional[str] = None) -> typing.ContextManager[RepoExport]:
+        """Export datasets from the repository represented by this `Butler`.
+
+        This method is a context manager that returns a helper object
+        (`RepoExport`) that is used to indicate what information from the
+        repository should be exported.
+
+        Parameters
+        ----------
+        directory : `str`, optional
+            Directory dataset files should be written to if ``transfer`` is not
+            `None`.
+        filename : `str`, optional
+            Name for the file that will include database information associated
+            with the exported datasets.  If this is not an absolute path and
+            ``directory`` is not `None`, it will be written to ``directory``
+            instead of the current working directory.  Defaults to
+            "export.{format}".
+        format : `str`, optional
+            File format for the database information file.  If `None`, the
+            extension of ``filename`` will be used.
+        transfer : `str`, optional
+            Transfer mode passed to `Datastore.export`.
+
+        Raises
+        ------
+        TypeError
+            Raised if the set of arguments passed is inconsistent.
+
+        Example
+        -------
+        Typically the `Registry.queryDimensions` and `Registry.queryDatasets`
+        methods are used to provide the iterables over data IDs and/or datasets
+        to be exported::
+
+            with butler.export("exports.yaml") as export:
+                # Export all flats, and the calibration_label dimensions
+                # associated with them.
+                export.saveDatasets(butler.registry.queryDatasets("flat"),
+                                    elements=[butler.registry.dimensions["calibration_label"]])
+                # Export all datasets that start with "deepCoadd_" and all of
+                # their associated data ID information.
+                export.saveDatasets(butler.registry.queryDatasets("deepCoadd_*"))
+        """
+        if directory is None and transfer is not None:
+            raise TypeError("Cannot transfer without providing a directory.")
+        if format is None:
+            if filename is None:
+                raise TypeError("At least one of 'filename' or 'format' must be provided.")
+            else:
+                _, format = os.path.splitext(filename)
+        elif filename is None:
+            filename = f"export.{format}"
+        if directory is not None:
+            filename = os.path.join(directory, filename)
+        BackendClass = getClassOf(self.config["repo_transfer_formats"][format]["export"])
+        with open(filename, 'w') as stream:
+            backend = BackendClass(stream)
+            with self.transaction():
+                try:
+                    helper = RepoExport(self.registry, self.datastore, backend=backend,
+                                        directory=directory, transfer=transfer)
+                    yield helper
+                except BaseException:
+                    raise
+                else:
+                    helper._finish()
+
+    def import_(self, *, directory: typing.Optional[str] = None,
+                filename: typing.Optional[str] = None,
+                format: typing.Optional[str] = None,
+                transfer: typing.Optional[str] = None):
+        """Import datasets exported from a different butler repository.
+
+        Parameters
+        ----------
+        directory : `str`, optional
+            Directory containing dataset files.  If `None`, all file paths
+            must be absolute.
+        filename : `str`, optional
+            Name for the file that containing database information associated
+            with the exported datasets.  If this is not an absolute path, does
+            not exist in the current working directory, and ``directory`` is
+            not `None`, it is assumed to be in ``directory``.  Defaults to
+            "export.{format}".
+        format : `str`, optional
+            File format for the database information file.  If `None`, the
+            extension of ``filename`` will be used.
+        transfer : `str`, optional
+            Transfer mode passed to `Datastore.export`.
+
+        Raises
+        ------
+        TypeError
+            Raised if the set of arguments passed is inconsistent.
+        """
+        if format is None:
+            if filename is None:
+                raise TypeError("At least one of 'filename' or 'format' must be provided.")
+            else:
+                _, format = os.path.splitext(filename)
+        elif filename is None:
+            filename = f"export.{format}"
+        if directory is not None and not os.path.exists(filename):
+            filename = os.path.join(directory, filename)
+        BackendClass = getClassOf(self.config["repo_transfer_formats"][format]["import"])
+        with open(filename, 'r') as stream:
+            backend = BackendClass(stream)
+            with self.transaction():
+                backend.load(self.registry, self.datastore,
+                             directory=directory, transfer=transfer)
 
     def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
         """Validate butler configuration.

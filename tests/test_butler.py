@@ -270,6 +270,8 @@ class ButlerTests:
         collections = butler.registry.getAllCollections()
         self.assertEqual(collections, {"ingest", })
 
+        return butler
+
     def testPickle(self):
         """Test pickle support.
         """
@@ -499,6 +501,34 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
+
+    def testImportExport(self):
+        # Run put/get tests just to create and populate a repo.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        exportButler = self.runPutGetTest(storageClass, "test_metric")
+        # Test that the repo actually has at least one dataset.
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
+        self.assertGreater(len(datasets), 0)
+        # Export those datasets.  We used TemporaryDirectory because there
+        # doesn't seem to be a way to get the filename (as opposed to the file
+        # object) from any of tempfile's temporary-file context managers.
+        with tempfile.TemporaryDirectory() as exportDir:
+            # TODO: When PosixDatastore supports transfer-on-exist, add tests
+            # for that.
+            exportFile = os.path.join(exportDir, "exports.yaml")
+            with exportButler.export(filename=exportFile) as export:
+                export.saveDatasets(datasets)
+            self.assertTrue(os.path.exists(exportFile))
+            with tempfile.TemporaryDirectory() as importDir:
+                Butler.makeRepo(importDir, config=Config(self.configFile))
+                importButler = Butler(importDir)
+                importButler.import_(filename=exportFile, directory=exportButler.datastore.root,
+                                     transfer="symlink")
+                for ref in datasets:
+                    with self.subTest(ref=ref):
+                        # Test for existence by passing in the DatasetType and
+                        # data ID separately, to avoid lookup by dataset_id.
+                        self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):

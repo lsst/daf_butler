@@ -21,18 +21,25 @@
 
 """POSIX datastore."""
 
+from __future__ import annotations
+
 __all__ = ("PosixDatastore", )
 
 import hashlib
 import logging
 import os
 import shutil
+from typing import TYPE_CHECKING, Iterable, Optional
 
 from lsst.daf.butler import DatasetTypeNotSupportedError
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.utils import transactional
+from lsst.daf.butler import DatasetExport
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetRef
 
 log = logging.getLogger(__name__)
 
@@ -347,3 +354,18 @@ class PosixDatastore(FileLikeDatastore):
                 hasher.update(chunk)
 
         return hasher.hexdigest()
+
+    def export(self, refs: Iterable[DatasetRef], *,
+               directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[DatasetExport]:
+        # Docstring inherited from Datastore.export.
+        for ref in refs:
+            location, storedFileInfo = self._get_dataset_location_info(ref)
+            if location is None:
+                raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
+            if transfer is None:
+                # TODO: do we also need to return the readStorageClass somehow?
+                yield DatasetExport(ref=ref, path=location.pathInStore, formatter=storedFileInfo.formatter)
+            else:
+                # TODO: add support for other transfer modes.  If we support
+                # moving, this method should become transactional.
+                raise NotImplementedError(f"Transfer mode '{transfer}' not yet supported.")
