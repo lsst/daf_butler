@@ -641,9 +641,10 @@ class Registry(metaclass=ABCMeta):
     def ensureRun(self, run):
         """Conditionally add a new `Run` to the `Registry`.
 
-        If the ``run.id`` is `None` or a `Run` with this `id` doesn't exist
-        in the `Registry` yet, add it.  Otherwise, ensure the provided run is
-        identical to the one already in the registry.
+        If the ``run.id`` is `None` or a `Run` with this ``id`` or
+        ``collection`` doesn't exist in the `Registry` yet, add it.  Otherwise,
+        ensure the provided run is identical to the one already in the
+        registry.
 
         Parameters
         ----------

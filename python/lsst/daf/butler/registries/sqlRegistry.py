@@ -701,6 +701,15 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.ensureRun
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
+        elif run.collection is not None:
+            existingRun = self.getRun(collection=run.collection)
+        else:
+            existingRun = None
+        if existingRun is not None:
+            # Handle the case where the caller just doesn't know the ID yet;
+            # don't want that to be the reason we consider them unequal.
+            if run.id is None:
+                run._id = existingRun.id
             if run != existingRun:
                 raise ConflictingDefinitionError(f"{run} != existing: {existingRun}")
             return
@@ -724,7 +733,7 @@ class SqlRegistry(Registry):
                                                           collection=run.collection,
                                                           environment_id=None,  # TODO add environment
                                                           pipeline_id=None))    # TODO add pipeline
-        # TODO: set given Run's "id" attribute, add to self,_cachedRuns.
+        # TODO: set given Run's "id" attribute, add to self._cachedRuns.
 
     def getRun(self, id=None, collection=None):
         # Docstring inherited from Registry.getRun
