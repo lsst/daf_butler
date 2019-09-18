@@ -350,12 +350,13 @@ class SqlRegistry(Registry):
         # If it's not in the cache, try to insert it.
         if existingDatasetType is None:
             try:
-                self._connection.execute(
-                    self._schema.tables["dataset_type"].insert().values(
-                        dataset_type_name=datasetType.name,
-                        storage_class=datasetType.storageClass.name
+                with self.transaction():
+                    self._connection.execute(
+                        self._schema.tables["dataset_type"].insert().values(
+                            dataset_type_name=datasetType.name,
+                            storage_class=datasetType.storageClass.name
+                        )
                     )
-                )
             except IntegrityError:
                 # Insert failed on the only unique constraint on this table:
                 # dataset_type_name.  So now the question is whether the one in
