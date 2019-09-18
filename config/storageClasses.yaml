@@ -21,6 +21,8 @@ storageClasses:
     pytype: lsst.afw.image.TransmissionCurve
   Camera:
     pytype: lsst.afw.cameraGeom.Camera
+  Detector:
+    pytype: lsst.afw.cameraGeom.Detector
   Image: &Image
     pytype: lsst.afw.image.Image
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
