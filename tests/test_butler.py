@@ -167,11 +167,12 @@ class ButlerTests:
         datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
         # Add needed Dimensions
-        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCamComp"})
-        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCamComp",
-                                                              "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 423,
-                                                    "physical_filter": "d-r"})
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "abstract_filter": "R"})
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
+                                                      "name": "fourtwentythree", "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -269,6 +270,8 @@ class ButlerTests:
         collections = butler.registry.getAllCollections()
         self.assertEqual(collections, {"ingest", })
 
+        return butler
+
     def testPickle(self):
         """Test pickle support.
         """
@@ -282,15 +285,16 @@ class ButlerTests:
     def testGetDatasetTypes(self):
         butler = Butler(self.tmpConfigFile)
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
-        dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
-                            ("instrument", {"instrument": "DummyHSC"}),
-                            ("instrument", {"instrument": "DummyCamComp"}),
-                            ("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
-                            ("visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+        dimensionEntries = [
+            ("instrument", {"instrument": "DummyCam"}, {"instrument": "DummyHSC"},
+             {"instrument": "DummyCamComp"}),
+            ("physical_filter", {"instrument": "DummyCam", "name": "d-r", "abstract_filter": "R"}),
+            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo", "physical_filter": "d-r"})
+        ]
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         # Add needed Dimensions
-        for name, value in dimensionEntries:
-            butler.registry.addDimensionEntry(name, value)
+        for args in dimensionEntries:
+            butler.registry.insertDimensionData(*args)
 
         # When a DatasetType is added to the registry entries are created
         # for each component. Need entries for each component in the test
@@ -330,8 +334,10 @@ class ButlerTests:
         datasetTypeName = "test_metric"
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
-                            ("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r"}),
-                            ("visit", {"instrument": "DummyCam", "visit": 42, "physical_filter": "d-r"}))
+                            ("physical_filter", {"instrument": "DummyCam", "name": "d-r",
+                                                 "abstract_filter": "R"}),
+                            ("visit", {"instrument": "DummyCam", "id": 42, "name": "fortytwo",
+                                       "physical_filter": "d-r"}))
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
         dataId = {"instrument": "DummyCam", "visit": 42}
@@ -340,8 +346,8 @@ class ButlerTests:
                 # Create and register a DatasetType
                 datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
                 # Add needed Dimensions
-                for name, value in dimensionEntries:
-                    butler.registry.addDimensionEntry(name, value)
+                for args in dimensionEntries:
+                    butler.registry.insertDimensionData(*args)
                 # Store a dataset
                 ref = butler.put(metric, datasetTypeName, dataId)
                 self.assertIsInstance(ref, DatasetRef)
@@ -358,8 +364,8 @@ class ButlerTests:
 
         with self.assertRaises(KeyError):
             butler.registry.getDatasetType(datasetTypeName)
-        for name, value in dimensionEntries:
-            self.assertIsNone(butler.registry.findDimensionEntry(name, value))
+        with self.assertRaises(LookupError):
+            butler.registry.expandDataId(dataId)
         # Should raise KeyError for missing DatasetType
         with self.assertRaises(KeyError):
             butler.get(datasetTypeName, dataId)
@@ -444,13 +450,14 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         butler = Butler(self.tmpConfigFile)
 
         # Add needed Dimensions
-        butler.registry.addDimensionEntry("instrument", {"instrument": "DummyCamComp"})
-        butler.registry.addDimensionEntry("physical_filter", {"instrument": "DummyCamComp",
-                                                              "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 423,
-                                                    "physical_filter": "d-r"})
-        butler.registry.addDimensionEntry("visit", {"instrument": "DummyCamComp", "visit": 425,
-                                                    "physical_filter": "d-r"})
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "abstract_filter": "R"})
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "423",
+                                                      "physical_filter": "d-r"})
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "425",
+                                                      "physical_filter": "d-r"})
 
         # Create and store a dataset
         metric = makeExampleMetrics()
@@ -469,7 +476,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         # Put with exactly the data ID keys needed
         ref = butler.put(metric, "metric1", dataId1)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric1/DummyCamComp_423.pickle"))
+                                             "ingest/metric1/d-r/DummyCamComp_423.pickle"))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -480,7 +487,7 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric2/DummyCamComp_423.pickle"))
+                                             "ingest/metric2/d-r/DummyCamComp_423.pickle"))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
@@ -494,6 +501,34 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
+
+    def testImportExport(self):
+        # Run put/get tests just to create and populate a repo.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        exportButler = self.runPutGetTest(storageClass, "test_metric")
+        # Test that the repo actually has at least one dataset.
+        datasets = list(exportButler.registry.queryDatasets(..., collections=...))
+        self.assertGreater(len(datasets), 0)
+        # Export those datasets.  We used TemporaryDirectory because there
+        # doesn't seem to be a way to get the filename (as opposed to the file
+        # object) from any of tempfile's temporary-file context managers.
+        with tempfile.TemporaryDirectory() as exportDir:
+            # TODO: When PosixDatastore supports transfer-on-exist, add tests
+            # for that.
+            exportFile = os.path.join(exportDir, "exports.yaml")
+            with exportButler.export(filename=exportFile) as export:
+                export.saveDatasets(datasets)
+            self.assertTrue(os.path.exists(exportFile))
+            with tempfile.TemporaryDirectory() as importDir:
+                Butler.makeRepo(importDir, config=Config(self.configFile))
+                importButler = Butler(importDir)
+                importButler.import_(filename=exportFile, directory=exportButler.datastore.root,
+                                     transfer="symlink")
+                for ref in datasets:
+                    with self.subTest(ref=ref):
+                        # Test for existence by passing in the DatasetType and
+                        # data ID separately, to avoid lookup by dataset_id.
+                        self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):

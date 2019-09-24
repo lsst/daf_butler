@@ -21,26 +21,33 @@
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
+import sys
 import contextlib
 import warnings
+from typing import Union, Iterable, Optional, Mapping, Iterator
 
 from sqlalchemy import create_engine, text, func
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import select, and_, bindparam, union
 from sqlalchemy.exc import IntegrityError, SADeprecationWarning
 
-from ..core.utils import transactional
+from ..core.utils import transactional, NamedKeyDict
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registryConfig import RegistryConfig
-from ..core.registry import (Registry, disableWhenLimited, ConflictingDefinitionError,
+from ..core.registry import (Registry, ConflictingDefinitionError,
                              AmbiguousDatasetError, OrphanedRecordError)
 from ..core.schema import Schema
 from ..core.execution import Execution
 from ..core.run import Run
 from ..core.storageClass import StorageClassFactory
 from ..core.config import Config
-from ..core.dimensions import DataId, Dimension
+from ..core.dimensions import (DataCoordinate, DimensionGraph, ExpandedDataCoordinate, DimensionElement,
+                               DataId, DimensionRecord, Dimension)
+from ..core.dimensions.storage import setupDimensionStorage
+from ..core.dimensions.schema import addDimensionForeignKey
+from ..core.queries import (DatasetRegistryStorage, QuerySummary, QueryBuilder,
+                            DatasetTypeExpression, CollectionsExpression)
 from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 
 
@@ -72,15 +79,27 @@ class SqlRegistry(Registry):
         registryConfig = SqlRegistryConfig(registryConfig)
         super().__init__(registryConfig, dimensionConfig=dimensionConfig)
         self.storageClasses = StorageClassFactory()
-        self._schema = self._createSchema(schemaConfig)
+        # Build schema for dimensions.
+        schemaSpec = self.dimensions.makeSchemaSpec()
+        # Update with schema directly loaded from config.
+        schemaSpec.update(schemaConfig.toSpec())
+        # Add dimension columns and foreign keys to the dataset table.
+        datasetTableSpec = schemaSpec["dataset"]
+        for dimension in self.dimensions.dimensions:
+            addDimensionForeignKey(datasetTableSpec, dimension, primaryKey=False, nullable=True)
+        # Translate the schema specification to SQLALchemy, allowing subclasses
+        # to specialize.
+        self._schema = self._createSchema(schemaSpec)
         self._datasetTypes = {}
         self._engine = self._createEngine()
         self._connection = self._createConnection(self._engine)
         self._cachedRuns = {}   # Run objects, keyed by id or collection
-        # TODO: Hard-coding of instrument and skymap as the dimensions to cache
-        # here is a bit ugly; should be fixed on DM-17023.
-        self._cachedInstrumentEntries = {}
-        self._cachedSkyMapEntries = {}
+        self._dimensionStorage = setupDimensionStorage(connection=self._connection,
+                                                       universe=self.dimensions,
+                                                       tables=self._schema.tables)
+        self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
+                                                      universe=self.dimensions,
+                                                      tables=self._schema.tables)
         if create:
             # In our tables we have columns that make use of sqlalchemy
             # Sequence objects. There is currently a bug in sqlalchmey
@@ -110,9 +129,11 @@ class SqlRegistry(Registry):
             trans.commit()
         except BaseException:
             trans.rollback()
+            for storage in self._dimensionStorage.values():
+                storage.clearCaches()
             raise
 
-    def _createSchema(self, schemaConfig):
+    def _createSchema(self, spec):
         """Create and return an `lsst.daf.butler.Schema` object containing
         SQLAlchemy table definitions.
 
@@ -124,8 +145,19 @@ class SqlRegistry(Registry):
         in the database - it is called even when an existing database is used
         in order to construct the SQLAlchemy representation of the expected
         schema.
+
+        Parameters
+        ----------
+        spec : `dict` mapping `str` to `TableSpec`
+            Specification of the logical tables to be created.
+
+        Returns
+        -------
+        schema : `Schema`
+            Structure containing SQLAlchemy objects representing the tables
+            and views in the registry schema.
         """
-        return Schema(config=schemaConfig, limited=self.limited)
+        return Schema(spec=spec)
 
     def _createEngine(self):
         """Create and return a `sqlalchemy.Engine` for this `Registry`.
@@ -222,8 +254,8 @@ class SqlRegistry(Registry):
             if not provided.  If provided, the caller guarantees that it is
             already consistent with what would have been retrieved from the
             database.
-        dataId : `DataId`, optional
-            `DataId` associated with this datasets.  Will be retrieved if not
+        dataId : `DataCoordinate`, optional
+            Dimensions associated with this dataset.  Will be retrieved if not
             provided.  If provided, the caller guarantees that it is already
             consistent with what would have been retrieved from the database.
 
@@ -237,10 +269,12 @@ class SqlRegistry(Registry):
         run = self.getRun(id=row.run_id)
         datasetRefHash = row["dataset_ref_hash"]
         if dataId is None:
-            dataId = DataId({link: row[self._schema.tables["dataset"].c[link]]
-                             for link in datasetType.dimensions.links()},
-                            dimensions=datasetType.dimensions,
-                            universe=self.dimensions)
+            # TODO: should we expand here?
+            dataId = DataCoordinate.standardize(
+                row,
+                graph=datasetType.dimensions,
+                universe=self.dimensions
+            )
         # Get components (if present)
         components = {}
         if datasetType.storageClass.isComposite():
@@ -291,11 +325,12 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.find
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
-        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
+        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
+                                            universe=self.dimensions, **kwds)
         datasetTable = self._schema.tables["dataset"]
         datasetCollectionTable = self._schema.tables["dataset_collection"]
         dataIdExpression = and_(self._schema.tables["dataset"].c[name] == dataId[name]
-                                for name in dataId.dimensions().links())
+                                for name in dataId.keys())
         result = self._connection.execute(
             datasetTable.select().select_from(
                 datasetTable.join(datasetCollectionTable)
@@ -415,7 +450,7 @@ class SqlRegistry(Registry):
         # Get Dimensions (if any) from DatasetTypeDimensions table
         result = self._connection.execute(select([datasetTypeDimensionsTable.c.dimension_name]).where(
             datasetTypeDimensionsTable.c.dataset_type_name == name)).fetchall()
-        dimensions = self.dimensions.extract((r[0] for r in result) if result else ())
+        dimensions = DimensionGraph(self.dimensions, names=(r[0] for r in result) if result else ())
         datasetType = DatasetType(name=name,
                                   storageClass=storageClass,
                                   dimensions=dimensions)
@@ -428,16 +463,10 @@ class SqlRegistry(Registry):
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
 
-        # Make a full DataId up front, so we don't do multiple times
-        # in calls below.  Note that calling DataId with a full DataId
-        # is basically a no-op.
-        dataId = DataId(dataId, dimensions=datasetType.dimensions, universe=self.dimensions, **kwds)
-
-        # Expand Dimension links to insert into the table to include implied
-        # dependencies.
-        if not self.limited:
-            self.expandDataId(dataId)
-        links = dataId.implied()
+        # Make an expanded, standardized data ID up front, so we don't do that
+        # multiple times in calls below.  Note that calling expandDataId with a
+        # full ExpandedDataCoordinate is basically a no-op.
+        dataId = self.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
 
         # Add the Dataset table entry itself.  Note that this will get rolled
         # back if the subsequent call to associate raises, which is what we
@@ -445,11 +474,14 @@ class SqlRegistry(Registry):
         datasetTable = self._schema.tables["dataset"]
         datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
         # TODO add producer
-        result = self._connection.execute(datasetTable.insert().values(dataset_type_name=datasetType.name,
-                                                                       run_id=run.id,
-                                                                       dataset_ref_hash=datasetRef.hash,
-                                                                       quantum_id=None,
-                                                                       **links))
+        row = {k.name: v for k, v in dataId.full.items()}
+        row.update(
+            dataset_type_name=datasetType.name,
+            run_id=run.id,
+            dataset_ref_hash=datasetRef.hash,
+            quantum_id=None
+        )
+        result = self._connection.execute(datasetTable.insert(), row)
         datasetRef._id = result.inserted_primary_key[0]
         # If the result is reported as a list of a number, unpack the list
         if isinstance(datasetRef._id, list):
@@ -669,6 +701,15 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.ensureRun
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
+        elif run.collection is not None:
+            existingRun = self.getRun(collection=run.collection)
+        else:
+            existingRun = None
+        if existingRun is not None:
+            # Handle the case where the caller just doesn't know the ID yet;
+            # don't want that to be the reason we consider them unequal.
+            if run.id is None:
+                run._id = existingRun.id
             if run != existingRun:
                 raise ConflictingDefinitionError(f"{run} != existing: {existingRun}")
             return
@@ -692,7 +733,7 @@ class SqlRegistry(Registry):
                                                           collection=run.collection,
                                                           environment_id=None,  # TODO add environment
                                                           pipeline_id=None))    # TODO add pipeline
-        # TODO: set given Run's "id" attribute, add to self,_cachedRuns.
+        # TODO: set given Run's "id" attribute, add to self._cachedRuns.
 
     def getRun(self, id=None, collection=None):
         # Docstring inherited from Registry.getRun
@@ -741,181 +782,175 @@ class SqlRegistry(Registry):
             self._cachedRuns[run.collection] = run
         return run
 
-    @disableWhenLimited
-    @transactional
-    def addDimensionEntry(self, dimension, dataId=None, entry=None, **kwds):
-        # Docstring inherited from Registry.addDimensionEntry.
-        dataId = DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds)
-        # The given dimension should be the only leaf dimension of the graph,
-        # and this should ensure it's a true `Dimension`, not a `str` name.
-        dimension, = dataId.dimensions().leaves
-        if entry is not None:
-            dataId.entries[dimension].update(entry)
-        table = self._schema.tables[dimension.name]
-        if table is None:
-            raise TypeError(f"Dimension '{dimension.name}' has no table.")
-        try:
-            self._connection.execute(table.insert().values(**dataId.fields(dimension, region=False)))
-        except IntegrityError as exc:
-            # TODO check for conflict, not just existence.
-            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} "
-                                             f"entry with {dataId}.") from exc
-        if dataId.region is not None:
-            self.setDimensionRegion(dataId)
-        return dataId
-
-    @disableWhenLimited
-    @transactional
-    def addDimensionEntryList(self, dimension, dataIdList, entry=None, **kwds):
-        # Docstring inherited from Registry.addDimensionEntryList.
-        dataIdList = [DataId(dataId, dimension=dimension, universe=self.dimensions, **kwds) for dataId in
-                      dataIdList]
-        # The given dimension should be the only leaf dimension of the graph,
-        # and this should ensure it's a true `Dimension`, not a `str` name.
-        # all of dataIds should share a common dimension, so use the first
-        dimension, = dataIdList[0].dimensions().leaves
-        if entry is not None:
-            for dataId in dataIdList:
-                dataId.entries[dimension].update(entry)
-        table = self._schema.tables[dimension.name]
-        if table is None:
-            raise TypeError(f"Dimension '{dimension.name}' has no table.")
-        holder = dataIdList[0].dimensions().getRegionHolder()
-        if holder is not None:
-            # Update the join table between this Dimension and SkyPix, if it
-            # isn't itself a view.
-            skypixJoin = dataIdList[0].dimensions().union(["skypix"]).joins().findIf(
-                lambda join: join != holder and join.name not in self._schema.views
-            )
+    def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
+                     records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):
+        # Docstring inherited from Registry.expandDataId.
+        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwds)
+        if isinstance(standardized, ExpandedDataCoordinate):
+            return standardized
+        elif isinstance(dataId, ExpandedDataCoordinate):
+            records = dict(records) if records is not None else {}
+            records.update(dataId.records)
         else:
-            skypixJoin = None
-        skypixParams = []
-        if skypixJoin is not None:
-            for dataId in dataIdList:
-                if dataId.region is not None:
-                    for begin, end in self.pixelization.envelope(dataId.region).ranges():
-                        for skypix in range(begin, end):
-                            skypixParams.append(dict(dataId, skypix=skypix))
-        try:
-            self._connection.execute(table.insert(), *[dataId.fields(dimension, region=True) for dataId in
-                                                       dataIdList])
+            records = dict(records) if records is not None else {}
+        keys = dict(standardized)
+        for element in standardized.graph._primaryKeyTraversalOrder:
+            record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
+            if record is ...:
+                storage = self._dimensionStorage[element]
+                record = storage.fetch(keys)
+                records[element] = record
+            if record is not None:
+                keys.update((d, getattr(record, d.name)) for d in element.implied)
+            else:
+                if element in standardized.graph.required:
+                    raise LookupError(
+                        f"Could not fetch record for required dimension {element.name} via keys {keys}."
+                    )
+                records.update((d, None) for d in element.implied)
+        return ExpandedDataCoordinate(standardized.graph, standardized.values(), records=records)
 
-        except IntegrityError as exc:
-            # TODO check for conflict, not just existence.
-            raise ConflictingDefinitionError(f"Existing definition for {dimension.name} entry.") from exc
-        if skypixJoin is not None:
-            self._connection.execute(self._schema.tables[skypixJoin.name].insert(), *skypixParams)
-        return dataIdList
-
-    @disableWhenLimited
-    def findDimensionEntries(self, dimension):
-        # Docstring inherited from Registry.findDimensionEntries
-        if not isinstance(dimension, Dimension):
-            dimension = self.dimensions[dimension]
-        table = self._schema.tables[dimension.name]
-        result = self._connection.execute(select([table])).fetchall()
-
-        if result is None:
-            return []
-
-        entries = [dict(r.items()) for r in result]
-        return entries
-
-    @disableWhenLimited
-    def findDimensionEntry(self, dimension, dataId=None, **kwds):
-        # Docstring inherited from Registry.findDimensionEntry
-        dataId = DataId(dataId, dimension=dimension, universe=self.dimensions)
-        # The given dimension should be the only leaf dimension of the graph,
-        # and this should ensure it's a true `Dimension`, not a `str` name.
-        dimension, = dataId.dimensions().leaves
-        table = self._schema.tables[dimension.name]
-        result = self._connection.execute(select([table]).where(
-            and_(table.c[name] == value for name, value in dataId.items()))).fetchone()
-        if result is not None:
-            return dict(result.items())
-        else:
-            return None
-
-    @disableWhenLimited
     @transactional
-    def setDimensionRegion(self, dataId=None, *, update=True, region=None, **kwds):
-        # Docstring inherited from Registry.setDimensionRegion
-        dataId = DataId(dataId, universe=self.dimensions, region=region, **kwds)
-        if dataId.region is None:
-            raise ValueError("No region provided.")
-        holder = dataId.dimensions().getRegionHolder()
-        if holder.links() != dataId.dimensions().links():
-            raise ValueError(
-                f"Data ID contains superfluous keys: {dataId.dimensions().links() - holder.links()}"
-            )
-        table = self._schema.tables[holder.name]
-        # Update the region for an existing entry
-        if update:
-            result = self._connection.execute(
-                table.update().where(
-                    and_((table.columns[name] == dataId[name] for name in holder.links()))
-                ).values(
-                    region=dataId.region
-                )
-            )
-            if result.rowcount == 0:
-                raise ValueError("No records were updated when setting region, did you forget update=False?")
-        else:  # Insert rather than update.
-            self._connection.execute(
-                table.insert().values(
-                    region=dataId.region,
-                    **dataId
-                )
-            )
-        # Update the join table between this Dimension and skypix, if it isn't
-        # itself a view.
-        join = dataId.dimensions().union(["skypix"]).joins().findIf(
-            lambda join: join != holder and join.name not in self._schema.views
+    def insertDimensionData(self, element: Union[DimensionElement, str],
+                            *data: Union[dict, DimensionRecord],
+                            conform: bool = True):
+        # Docstring inherited from Registry.insertDimensionData.
+        if conform:
+            element = self.dimensions[element]  # if this is a name, convert it to a true DimensionElement.
+            records = [element.RecordClass.fromDict(row) if not type(row) is element.RecordClass else row
+                       for row in data]
+        else:
+            records = data
+        storage = self._dimensionStorage[element]
+        storage.insert(*records)
+
+    def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
+        """Return a `QueryBuilder` instance capable of constructing and
+        managing more complex queries than those obtainable via `Registry`
+        interfaces.
+
+        This is an advanced `SqlRegistry`-only interface; downstream code
+        should prefer `Registry.queryDimensions` and `Registry.queryDatasets`
+        whenever those are sufficient.
+
+        Parameters
+        ----------
+        summary: `QuerySummary`
+            Object describing and categorizing the full set of dimensions that
+            will be included in the query.
+
+        Returns
+        -------
+        builder : `QueryBuilder`
+            Object that can be used to construct and perform advanced queries.
+        """
+        return QueryBuilder(connection=self._connection, summary=summary,
+                            dimensionStorage=self._dimensionStorage,
+                            datasetStorage=self._datasetStorage)
+
+    def queryDimensions(self, dimensions: Iterable[Union[Dimension, str]], *,
+                        dataId: Optional[DataId] = None,
+                        datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
+                        where: Optional[str] = None,
+                        expand: bool = True,
+                        **kwds) -> Iterator[DataCoordinate]:
+        # Docstring inherited from Registry.queryDimensions.
+        standardizedDataId = self.expandDataId(dataId, **kwds)
+        standardizedDatasets = NamedKeyDict()
+        requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
+        if datasets is not None:
+            for datasetTypeExpr, collectionsExpr in datasets.items():
+                for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetTypeExpr,
+                                                                              collections=collectionsExpr,
+                                                                              dataId=standardizedDataId):
+                    requestedDimensionNames.update(trueDatasetType.dimensions.names)
+                    standardizedDatasets[trueDatasetType] = collectionsExpr
+        summary = QuerySummary(
+            requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
+            dataId=standardizedDataId,
+            expression=where,
         )
-        if join is None:
-            return
-        if update:
-            # Delete any old skypix join entries for this Dimension
-            self._connection.execute(
-                self._schema.tables[join.name].delete().where(
-                    and_((self._schema.tables[join.name].c[name] == dataId[name]
-                          for name in holder.links()))
-                )
-            )
-        parameters = []
-        for begin, end in self.pixelization.envelope(dataId.region).ranges():
-            for skypix in range(begin, end):
-                parameters.append(dict(dataId, skypix=skypix))
-        self._connection.execute(self._schema.tables[join.name].insert(), parameters)
-        return dataId
+        builder = self.makeQueryBuilder(summary)
+        for datasetType, collections in standardizedDatasets.items():
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish()
+        predicate = query.predicate()
+        for row in query.execute():
+            if predicate(row):
+                result = query.extractDataId(row)
+                if expand:
+                    yield self.expandDataId(result, records=standardizedDataId.records)
+                else:
+                    yield result
 
-    @disableWhenLimited
-    def _queryMetadata(self, element, dataId, columns):
-        # Docstring inherited from Registry._queryMetadata.
-        # TODO: Hard-coding of instrument and skymap as the dimensions to cache
-        # here is a bit ugly; should be fixed on DM-17023.
-        if element.name == "instrument":
-            result = self._cachedInstrumentEntries.get(dataId["instrument"])
-            if result is not None and frozenset(columns).issubset(result.keys()):
-                return result
-        elif element.name == "skymap":
-            result = self._cachedSkyMapEntries.get(dataId["skymap"])
-            if result is not None and frozenset(columns).issubset(result.keys()):
-                return result
-        table = self._schema.tables[element.name]
-        cols = [table.c[col] for col in columns]
-        row = self._connection.execute(
-            select(cols)
-            .where(
-                and_(table.c[name] == value for name, value in dataId.items()
-                     if name in element.links())
-            )
-        ).fetchone()
-        if row is None:
-            raise LookupError(f"{element.name} entry for {dataId} not found.")
-        result = {c.name: row[c.name] for c in cols}
-        if element.name == "instrument":
-            self._cachedInstrumentEntries.setdefault(dataId["instrument"], {}).update(result)
-        elif element.name == "skymap":
-            self._cachedSkyMapEntries.setdefault(dataId["skymap"], {}).update(result)
-        return result
+    def queryDatasets(self, datasetType: DatasetTypeExpression, *,
+                      collections: CollectionsExpression,
+                      dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
+                      dataId: Optional[DataId] = None,
+                      where: Optional[str] = None,
+                      deduplicate: bool = False,
+                      expand: bool = True,
+                      **kwds) -> Iterator[DatasetRef]:
+        # Docstring inherited from Registry.queryDatasets.
+        # Standardize and expand the data ID provided as a constraint.
+        standardizedDataId = self.expandDataId(dataId, **kwds)
+        # If the datasetType passed isn't actually a DatasetType, expand it
+        # (it could be an expression that yields multiple DatasetTypes) and
+        # recurse.
+        if not isinstance(datasetType, DatasetType):
+            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType,
+                                                                          collections=collections,
+                                                                          dataId=standardizedDataId):
+                yield from self.queryDatasets(trueDatasetType, collections=collections,
+                                              dimensions=dimensions, dataId=standardizedDataId,
+                                              where=where, deduplicate=deduplicate)
+            return
+        # The full set of dimensions in the query is the combination of those
+        # needed for the DatasetType and those explicitly requested, if any.
+        requestedDimensionNames = set(datasetType.dimensions.names)
+        if dimensions is not None:
+            requestedDimensionNames.update(self.dimensions.extract(dimensions).names)
+        # Construct the summary structure needed to construct a QueryBuilder.
+        summary = QuerySummary(
+            requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
+            dataId=standardizedDataId,
+            expression=where,
+        )
+        builder = self.makeQueryBuilder(summary)
+        # Add the dataset subquery to the query, telling the QueryBuilder to
+        # include the rank of the selected collection in the results only if we
+        # need to deduplicate.  Note that if any of the collections are
+        # actually wildcard expressions, and we've asked for deduplication,
+        # this will raise TypeError for us.
+        builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate)
+        query = builder.finish()
+        predicate = query.predicate()
+        if not deduplicate or len(collections) == 1:
+            # No need to de-duplicate across collections.
+            for row in query.execute():
+                if predicate(row):
+                    dataId = query.extractDataId(row, graph=datasetType.dimensions)
+                    if expand:
+                        dataId = self.expandDataId(dataId, records=standardizedDataId.records)
+                    yield query.extractDatasetRef(row, datasetType, dataId)[0]
+        else:
+            # For each data ID, yield only the DatasetRef with the lowest
+            # collection rank.
+            bestRefs = {}
+            bestRanks = {}
+            for row in query.execute():
+                if predicate(row):
+                    ref, rank = query.extractDatasetRef(row, datasetType)
+                    bestRank = bestRanks.get(ref.dataId, sys.maxsize)
+                    if rank < bestRank:
+                        bestRefs[ref.dataId] = ref
+                        bestRanks[ref.dataId] = rank
+            # If caller requested expanded data IDs, we defer that until here
+            # so we do as little expansion as possible.
+            if expand:
+                for ref in bestRefs.values():
+                    dataId = self.expandDataId(ref.dataId, records=standardizedDataId.records)
+                    ref._dataId = dataId  # TODO: add semi-public API for this?
+                    yield ref
+            else:
+                yield from bestRefs.values()

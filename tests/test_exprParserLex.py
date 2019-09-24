@@ -25,7 +25,7 @@
 import re
 import unittest
 
-from lsst.daf.butler.exprParser import ParserLex, ParserLexError
+from lsst.daf.butler.core.queries.exprParser import ParserLex, ParserLexError
 
 
 class ParserLexTestCase(unittest.TestCase):

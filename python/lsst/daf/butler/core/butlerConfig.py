@@ -36,9 +36,11 @@ from .registryConfig import RegistryConfig
 from .storageClass import StorageClassConfig
 from .dimensions import DimensionConfig
 from .composites import CompositesConfig
+from .repoTransfers import RepoTransferFormatConfig
 
 CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig,
-                            DatastoreConfig, CompositesConfig, DimensionConfig)
+                            DatastoreConfig, CompositesConfig, DimensionConfig,
+                            RepoTransferFormatConfig)
 
 
 class ButlerConfig(Config):

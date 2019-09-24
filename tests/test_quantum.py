@@ -61,7 +61,7 @@ class QuantumTestCase(unittest.TestCase):
 
         # start with empty
         self.assertEqual(quantum.predictedInputs, dict())
-        universe = DimensionUniverse.fromConfig()
+        universe = DimensionUniverse()
         instrument = "DummyCam"
         datasetTypeName = "test_ds"
         storageClass = StorageClass("testref_StructuredData")

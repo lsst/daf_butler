@@ -19,283 +19,356 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("DimensionElement", "Dimension", "DimensionJoin")
+from __future__ import annotations
 
-from ..utils import PrivateConstructorMeta
+__all__ = ["DimensionElement", "Dimension", "SkyPixDimension"]
+
+from typing import Optional, Iterable, AbstractSet, TYPE_CHECKING
+
+from sqlalchemy import Integer
+
+from lsst.sphgeom import Pixelization
+from ..utils import NamedValueSet, immutable
+from ..schema import FieldSpec, TableSpec
+from .records import _subclassDimensionRecord
+from .schema import makeElementTableSpec
+from .graph import DimensionGraph
+
+if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from .universe import DimensionUniverse
 
 
-class DimensionElement(metaclass=PrivateConstructorMeta):
-    """Base class for elements in the dimension schema.
+@immutable
+class DimensionElement:
+    """A named data-organization concept that defines a label and/or metadata
+    in the dimensions system.
 
-    `DimensionElement` has exactly two subclasses: `Dimension` and
-    `DimensionJoin`.
+    A `DimensionElement` instance typically corresponds to a table in the
+    `Registry`; the rows in that table are represented by instances of a
+    `DimensionRecord` subclass.  Most `DimensionElement` instances are
+    instances of its `Dimension` subclass, which is used for elements that can
+    be used as data ID keys.  The base class itself can be used for other
+    dimension tables that provide metadata keyed by true dimensions.
 
-    `DimensionElement` objects are not directly constructable; they can only
-    be obtained (possibly indirectly) from a special "universe"
-    `DimensionGraph` loaded from configuration.
+    Parameters
+    ----------
+    name : `str`
+        Name of the element.  Used as at least part of the table name, if
+        the dimension in associated with a database table.
+    directDependencyNames : iterable of `str`
+        The names of all dimensions this elements depends on directly,
+        including both required dimensions (those needed to identify a
+        record of this element) an implied dimensions.
+    impliedDependencyNames : iterable of `str`
+        The names of all dimensions that are identified by records of this
+        element, but are not needed to identify it.
+    spatial : `bool`
+        Whether records of this element are associated with a region on the
+        sky.
+    temporal : `bool`
+        Whether records of this element are associated with a timespan.
+    metadata : iterable of `FieldSpec`
+        Additional metadata fields included in this element's table.
+    cached : `bool`
+        Whether `Registry` should cache records of this element in-memory.
+    viewOf : `str`, optional
+        Name of another table this element's records should be drawn from.  The
+        fields of this table must be a superset of the fields of the element.
+
+    Notes
+    -----
+    `DimensionElement` instances should always be constructed by and retreived
+    from a `DimensionUniverse`.  They are immutable after they are fully
+    constructed, and should never be copied.
+
+    Pickling a `DimensionElement` just records its name and universe;
+    unpickling one actually just looks up the element via the singleton
+    dictionary of all universes.  This allows pickle to be used to transfer
+    elements between processes, but only when each process initializes its own
+    instance of the same `DimensionUniverse`.
     """
 
-    #
-    # Constructor is private, so its docs are just comments.
-    #
-    # Parameters
-    # ----------
-    # universe : `DimensionGraph`
-    #     Ultimate-parent `DimensionGraph` that constructed this element.
-    # name : `str`
-    #     Name of the element.  Also the name of any SQL table or view
-    #     associated with it.
-    # hasRegion : `bool`
-    #     Whether entries for this dimension are associated with a region
-    #     on the sky.
-    # links : iterable of `str`
-    #     The names of primary key fields used by this element but not any of
-    #     its dependencies.
-    # required : iterable of `str`
-    #     The names of the `Dimension`\ s whose primary keys are a subset of
-    #     this element's primary key.
-    # implied : iterable of `str`
-    #     The names of the `Dimension`\ s whose primary keys are specified by
-    #     foreign keys in this element.
-    # doc : `str`
-    #     Documentation string for this element.
-    #
-    def __init__(self, universe, name, hasRegion, links, required, implied, doc):
-        from .sets import DimensionSet
-        self._universe = universe
-        self._name = name
-        self._hasRegion = hasRegion
-        self._localLinks = frozenset(links)
-        self._doc = doc
-        self._requiredDependencies = DimensionSet(universe, required, expand=True, implied=False)
-        self._impliedDependencies = DimensionSet(universe, implied, expand=False)
-        self._allDependencies = self._requiredDependencies | self._impliedDependencies
-        expandedLinks = set(self._localLinks)
-        for dimension in self.dependencies(implied=False):
-            expandedLinks |= dimension.links(expand=True)
-        self._expandedLinks = frozenset(expandedLinks)
-        expandedImpliedLinks = set(self._localLinks)
-        for dimension in self.dependencies(implied=True):
-            expandedImpliedLinks |= dimension.links(expand=True)
-        self._expandedImpliedLinks = frozenset(expandedImpliedLinks)
+    def __init__(self, name: str, *,
+                 directDependencyNames: Iterable[str] = (),
+                 impliedDependencyNames: Iterable[str] = (),
+                 spatial: bool = False,
+                 temporal: bool = False,
+                 metadata: Iterable[FieldSpec] = (),
+                 cached: bool = False,
+                 viewOf: Optional[str] = None):
+        self.name = name
+        self._directDependencyNames = frozenset(directDependencyNames)
+        self._impliedDependencyNames = frozenset(impliedDependencyNames)
+        self.spatial = spatial
+        self.temporal = temporal
+        self.metadata = NamedValueSet(metadata)
+        self.metadata.freeze()
+        self.cached = cached
+        self.viewOf = viewOf
 
-    def __eq__(self, other):
+    def _finish(self, universe: DimensionUniverse):
+        """Finish construction of the element and add it to the given universe.
+
+        For internal use by `DimensionUniverse` only.
+        """
+        # Attach set self.universe and add self to universe attributes;
+        # let subclasses override which attributes by calling a separate
+        # method.
+        self._attachToUniverse(universe)
+        # Expand direct dependencies into recursive dependencies.
+        expanded = set(self._directDependencyNames)
+        for name in self._directDependencyNames:
+            expanded.update(universe[name]._recursiveDependencyNames)
+        self._recursiveDependencyNames = frozenset(expanded)
+        # Define self.implied, a public, sorted version of
+        # self._impliedDependencyNames.
+        self.implied = NamedValueSet(universe.sorted(self._impliedDependencyNames))
+        self.implied.freeze()
+        # Attach a DimensionGraph that provides the public API for getting
+        # at requirements.  Again delegate to subclasses.
+        self._attachGraph()
+        # Create and attach a DimensionRecord subclass to hold values of this
+        # dimension type.
+        self.RecordClass = _subclassDimensionRecord(self)
+
+    def _attachToUniverse(self, universe: DimensionUniverse):
+        """Add the element to the given universe.
+
+        Called only by `_finish`, but may be overridden by subclasses.
+        """
+        self.universe = universe
+        self.universe.elements.add(self)
+
+    def _attachGraph(self):
+        """Initialize the `graph` attribute for this element.
+
+        Called only by `_finish`, but may be overridden by subclasses.
+        """
+        from .graph import DimensionGraph
+        self.graph = DimensionGraph(self.universe, names=self._recursiveDependencyNames, conform=False)
+
+    def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]):
+        """Return `True` if this element should be included in `DimensionGraph`
+        that includes the named dimensions.
+
+        For internal use by `DimensionGraph` only.
+        """
+        return self._directDependencyNames.issubset(dimensionNames)
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.name})"
+
+    def __eq__(self, other) -> bool:
         try:
-            return self.universe is other.universe and self.name == other.name
+            return self.name == other.name
         except AttributeError:
-            return NotImplemented
+            return self.name == other
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
-    @property
-    def universe(self):
-        """The graph of all dimensions compatible with self (`DimensionGraph`).
+    def hasTable(self) -> bool:
+        """Return `True` if this element is associated with a table
+        (even if that table "belongs" to another element).
+
+        Instances of the `DimensionElement` base class itself are always
+        associated with tables.
         """
-        return self._universe
+        return True
 
-    @property
-    def name(self):
-        """Name of this dimension (`str`, read-only).
+    def makeTableSpec(self) -> Optional[TableSpec]:
+        """Return a specification of the schema for the table corresponding
+        to this element.
 
-        Also assumed to be the name of any associated table or view.
-        """
-        return self._name
-
-    @property
-    def hasRegion(self):
-        """Whether this dimension is associated with a region on the sky
-        (`bool`).
-        """
-        return self._hasRegion
-
-    @property
-    def doc(self):
-        """Documentation for this dimension (`str`).
-        """
-        return self._doc
-
-    def links(self, expand=True, implied=False):
-        """Return the names of fields that uniquely identify this dimension in
-        a data ID dict.
-
-        Parameters
-        ----------
-        expand: `bool`
-            If `True` (default) include links associated with required
-            dependencies.
-        implied: `bool`
-            If `True`, expand to include the links of implied dpendencies
-            as well.  Ignored if ``expand`` is `False`.
+        This programmatically generates the primary and foreign key fields from
+        the element's dependencies and then appends any metadata fields.
 
         Returns
         -------
-        links : `frozenset` of `str`
-            Set of field names.
+        spec : `TableSpec` or `None`
+            Database-agnostic specification of the fields in this table.
         """
-        if expand:
-            if implied:
-                return self._expandedImpliedLinks
-            else:
-                return self._expandedLinks
-        else:
-            return self._localLinks
+        if not self.hasTable():
+            return None
+        return makeElementTableSpec(self)
 
-    def dependencies(self, required=True, implied=False):
-        """Return the set of dimensions this dimension depends on.
+    @classmethod
+    def _unpickle(cls, universe: DimensionUniverse, name: str) -> DimensionElement:
+        """Callable used for unpickling.
 
-        Parameters
-        ----------
-        required : `bool`
-            If `True` (default), include required dependencies.  Required
-            dependences are always expanded recursively.
-        implied : `bool`
-            If `True`, return implied dependencies.
-
-        Returns
-        -------
-        dependencies : `DimensionSet`
+        For internal use only.
         """
-        if required:
-            if implied:
-                return self._allDependencies
-            else:
-                return self._requiredDependencies
-        elif implied:
-            return self._impliedDependencies
-        raise ValueError("At least one of 'required' and 'implied' must be True.")
+        return universe.elements[name]
 
-    def graph(self, implied=False):
-        """Return the minimal `DimensionGraph` that contains ``self``.
+    def __reduce__(self) -> tuple:
+        return (self._unpickle, (self.universe, self.name))
 
-        Parameters
-        ----------
-        implied : `bool`
-            If `True`, include implied as well as required dependencies.
+    # Class attributes below are shadowed by instance attributes, and are
+    # present just to hold the docstrings for those instance attributes.
 
-        Returns
-        -------
-        graph : `DimensionGraph`
-        """
-        return self.universe.extract([self], implied=implied)
+    universe: DimensionUniverse
+    """The universe of all compatible dimensions with which this element is
+    associated (`DimensionUniverse`).
+    """
+
+    name: str
+    """Unique name for this dimension element (`str`).
+    """
+
+    graph: DimensionGraph
+    """Minimal graph that includes this element (`DimensionGraph`).
+
+    ``self.graph.required`` includes all dimensions whose primary key values
+    must be provided in order to uniquely identify ``self`` (including ``self``
+    if ``isinstance(self, Dimension)`.  ``self.graph.implied`` includes all
+    dimensions also identified (possibly recursively) by this set.
+    """
+
+    implied: NamedValueSet[Dimension]
+    """Other dimensions that are uniquely identified directly by a record of
+    this dimension.
+
+    Unlike ``self.graph.implied``, this set is not expanded recursively.
+    """
+
+    spatial: bool
+    """Whether records of this element are associated with a region on the sky
+    (`bool`).
+    """
+
+    temporal: bool
+    """Whether records of this element are associated with a timespan (`bool`).
+    """
+
+    metadata: NamedValueSet[FieldSpec]
+    """Additional metadata fields included in this element's table
+    (`NamedValueSet` of `FieldSpec`).
+    """
+
+    RecordClass: type
+    """The `DimensionRecord` subclass used to hold records for this element
+    (`type`).
+
+    Because `DimensionRecord` subclasses are generated dynamically, this type
+    cannot be imported directly and hence canonly be obtained from this
+    attribute.
+    """
+
+    cached: bool
+    """Whether `Registry` should cache records of this element in-memory
+    (`bool`).
+    """
+
+    viewOf: Optional[str]
+    """Name of another table this elements records are drawn from (`str` or
+    `None`).
+    """
 
 
+@immutable
 class Dimension(DimensionElement):
-    r"""A discrete dimension of data used to organize Datasets and associate
-    them with metadata.
+    """A named data-organization concept that can be used as a key in a data
+    ID.
 
-    `Dimension` instances represent concepts such as "instrument",
-    "detector", "visit" and "skymap", which are usually associated with
-    database tables.  A `DatasetType` is associated with a fixed combination
-    of `Dimension`\s.
-
-    `Dimension` objects are not directly constructable; they can only be
-    obtained from a `DimensionGraph`.
+    Parameters
+    ----------
+    name : `str`
+        Name of the dimension.  Used as at least part of the table name, if
+        the dimension in associated with a database table, and as an alternate
+        key (instead of the instance itself) in data IDs.
+    uniqueKeys : iterable of `FieldSpec`
+        Fields that can *each* be used to uniquely identify this dimension
+        (once all required dependencies are also identified).  The first entry
+        will be used as the table's primary key and as a foriegn key field in
+        the fields of dependent tables.
+    kwds
+        Additional keyword arguments are forwarded to the `DimensionElement`
+        constructor.
     """
 
-    #
-    # Constructor is private, so its docs are just comments.
-    #
-    # Parameters
-    # ----------
-    # universe : `DimensionGraph`
-    #     Ultimate-parent DimensionGraph that constructed this element.
-    # name : `str`
-    #     Name of the element.  Also the name of any SQL table or view
-    #     associated with it.
-    # config : `Config`
-    #     Sub-config corresponding to this `Dimension`.
-    #
-    def __init__(self, universe, name, config):
-        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), links=config["link"],
-                         required=config.get(".dependencies.required", ()),
-                         implied=config.get(".dependencies.implied", ()),
-                         doc=config["doc"])
+    def __init__(self, name: str, *, uniqueKeys: Iterable[FieldSpec], **kwds):
+        super().__init__(name, **kwds)
+        self.uniqueKeys = NamedValueSet(uniqueKeys)
+        self.uniqueKeys.freeze()
+        self.primaryKey, *alternateKeys = uniqueKeys
+        self.alternateKeys = NamedValueSet(alternateKeys)
+        self.alternateKeys.freeze()
 
-    def __repr__(self):
-        return "Dimension({})".format(self.name)
+    def _attachToUniverse(self, universe: DimensionUniverse):
+        # Docstring inherited from DimensionElement._attachToUniverse.
+        super()._attachToUniverse(universe)
+        universe.dimensions.add(self)
 
+    def _attachGraph(self):
+        # Docstring inherited from DimensionElement._attachGraph.
+        self.graph = DimensionGraph(self.universe,
+                                    names=self._recursiveDependencyNames.union([self.name]),
+                                    conform=False)
 
-class DimensionJoin(DimensionElement):
-    r"""A join that relates two or more `Dimension`\s.
+    def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]):
+        # Docstring inherited from DimensionElement._shouldBeInGraph.
+        return self.name in dimensionNames
 
-    `DimensionJoin`\s usually map to many-to-many join tables or views that
-    relate `Dimension` tables.
+    # Class attributes below are shadowed by instance attributes, and are
+    # present just to hold the docstrings for those instance attributes.
 
-    `DimensionJoin` objects are not directly constructable; they can only be
-    obtained from a `DimensionGraph`.
+    uniqueKeys: NamedValueSet[FieldSpec]
+    """All fields that can individually be used to identify records of this
+    element, given the primary keys of all required dependencies
+    (`NamedValueSet` of `FieldSpec`).
     """
 
-    #
-    # Constructor is private, so its docs are just comments.
-    #
-    # Parameters
-    # ----------
-    # universe : `DimensionGraph`
-    #     Ultimate-parent DimensionGraph that constructed this element.
-    # name : `str`
-    #     Name of the element.  Also the name of any SQL table or view
-    #     associated with it.
-    # config : `Config`
-    #     Sub-config corresponding to this `DimensionJoin`.
-    #
-    def __init__(self, universe, name, config):
-        from .sets import DimensionSet
+    primaryKey: FieldSpec
+    """The primary key field for this dimension (`FieldSpec`).
 
-        lhs = list(config["lhs"])
-        rhs = list(config["rhs"])
-        super().__init__(universe, name, hasRegion=config.get("hasRegion", False), links=(),
-                         required=lhs + rhs, implied=(), doc=config["doc"])
-        self._lhs = DimensionSet(universe, lhs, implied=False)
-        self._rhs = DimensionSet(universe, rhs, implied=False)
-        self._asNeeded = config.get("asNeeded", False)
-        # self._summarizes initialized later in DimensionGraph.fromConfig.
+    Note that the database primary keys for dimension tables are in general
+    compound; this field is the only field in the database primary key that is
+    not also a foreign key (to a required dependency dimension table).
+    """
 
-    @property
-    def lhs(self):
-        r"""The `Dimension`\s on the left hand side of the join
-        (`DimensionSet`).
+    alternateKeys: NamedValueSet[FieldSpec]
+    """Additional unique key fields for this dimension that are not the the
+    primary key (`NamedValueSet` of `FieldSpec`).
+    """
 
-        Left vs. right is completely arbitrary; the terminology simply provides
-        an easy way to distinguish between the two sides.
-        """
-        return self._lhs
 
-    @property
-    def rhs(self):
-        r"""The `Dimension`\s on the right hand side of the join
-        (`DimensionSet`).
+@immutable
+class SkyPixDimension(Dimension):
+    """A special `Dimension` subclass for hierarchical pixelizations of the
+    sky.
 
-        Left vs. right is completely arbitrary; the terminology simply provides
-        an easy way to distinguish between the two sides.
-        """
-        return self._rhs
+    Unlike most other dimensions, skypix dimension records are not stored in
+    the database, as these records only contain an integer pixel ID and a
+    region on the sky, and each of these can be computed directly from the
+    other.
 
-    @property
-    def asNeeded(self):
-        """Whether this join only be included in a query when required,
-        as opposed to whenever its dependencies are included (`bool`).
-        """
-        return self._asNeeded
+    Parameters
+    ----------
+    name : `str`
+        Name of the dimension.  By convention, this is a lowercase string
+        abbreviation for the pixelization followed by its integer level,
+        such as "htm7".
+    pixelization : `sphgeom.Pixelization`
+        Pixelization instance that can compute regions from IDs and IDs from
+        points.
+    """
 
-    @property
-    def summarizes(self):
-        r"""A set of other `DimensionJoin`\s that provide more fine-grained
-        relationships than this one (`DimensionJoinSet`).
+    def __init__(self, name: str, pixelization: Pixelization):
+        uniqueKeys = [FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
+        super().__init__(name, uniqueKeys=uniqueKeys, spatial=True)
+        self.pixelization = pixelization
 
-        When a join "summarizes" another, it means the table for that join
-        could (at least conceptually) be defined as an aggregate view on the
-        summarized join table. For example, "tract_skypix_join" summarizes
-        "patch_skypix_join", because the set of skypix rows associated with a
-        tract row is just the set of skypix rows associated with all patches
-        associated with that tract.  Or, in SQL:
+    def hasTable(self) -> bool:
+        # Docstring inherited from DimensionElement.hasTable.
+        return False
 
-        .. code-block:: sql
+    # Class attributes below are shadowed by instance attributes, and are
+    # present just to hold the docstrings for those instance attributes.
 
-            CREATE VIEW tract_skypix_join AS
-            SELECT DISTINCT skymap, tract, skypix FROM patch_skypix_join;
-        """
-        return self._summarizes
-
-    def __repr__(self):
-        return "DimensionJoin({})".format(self.name)
+    pixelization: Pixelization
+    """Pixelization instance that can compute regions from IDs and IDs from
+    points (`sphgeom.Pixelization`).
+    """

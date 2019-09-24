@@ -23,11 +23,13 @@
 Support for generic data stores.
 """
 
+from __future__ import annotations
+
 __all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 import contextlib
 import logging
-from typing import Optional, Type, Callable, ClassVar, Any, Generator
+from typing import TYPE_CHECKING, Optional, Type, Callable, ClassVar, Any, Generator, Iterable
 from dataclasses import dataclass
 from abc import ABCMeta, abstractmethod
 
@@ -37,6 +39,10 @@ from .exceptions import ValidationError
 from .registry import Registry
 from .constraints import Constraints
 from .storageClass import StorageClassFactory
+
+if TYPE_CHECKING:
+    from .datasets import DatasetRef
+    from .repoTransfer import DatasetExport
 
 
 class DatastoreConfig(ConfigSubset):
@@ -417,6 +423,36 @@ class Datastore(metaclass=ABCMeta):
             Reference to the required Dataset.
         """
         raise NotImplementedError("Must be implemented by subclass")
+
+    def export(self, refs: Iterable[DatasetRef], *,
+               directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[DatasetExport]:
+        """Export datasets for transfer to another data repository.
+
+        Parameters
+        ----------
+        refs : iterable of `DatasetRef`
+            Dataset references to be exported.
+        directory : `str`, optional
+            Path to a directory that should contain files corresponding to
+            output datasets.  Ignored if ``transfer`` is `None`.
+        transfer : `str`, optional
+            Mode that should be used to move datasets out of the repository.
+            Valid options are the same as those of the ``transfer`` argument
+            to ``ingest``, and datastores may similarly signal that a transfer
+            mode is not supported by raising `NotImplementedError`.
+
+        Returns
+        -------
+        dataset : iterable of `DatasetTransfer`
+            Structs containing information about the exported datasets, in the
+            same order as ``refs``.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if the given transfer mode is not supported.
+        """
+        raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
     @abstractmethod
     def validateConfiguration(self, entities, logFailures=False):

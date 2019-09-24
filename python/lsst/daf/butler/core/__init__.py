@@ -2,7 +2,7 @@
 Core code for butler.
 """
 
-# Do not export the utility routines from safeFileIo and utils
+# Do not export the utility routines from safeFileIo, utils, and queries.
 # Do not export SqlDatabaseDict (should be constructed by other classes).
 
 from .assembler import *
@@ -20,7 +20,6 @@ from .fileTemplates import *
 from .formatter import *
 from .location import *
 from .mappingFactory import *
-from .preFlight import *
 from .quantum import *
 from .regions import *
 from .registry import *
@@ -31,5 +30,5 @@ from .storageClass import *
 from .storedFileInfo import *
 from .dimensions import *
 from .databaseDict import *
-from .dataIdPacker import *
 from .deferredDatasetHandle import *
+from .repoTransfers import *

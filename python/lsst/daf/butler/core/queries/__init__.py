@@ -19,8 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .walker import ConversionWalker
-from .writer import ConversionWriter
-from .translators import *
-from .extractor import *
-from .structures import *
+from .query import *
+from .builder import *
+from .structs import *
+from .datasets import *
+
+# Symbols from other modules intentionally not lifted to package scope,
+# as they're all internal.

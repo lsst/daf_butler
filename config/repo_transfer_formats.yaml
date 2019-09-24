@@ -1,0 +1,4 @@
+repo_transfer_formats:
+  yaml:
+    import: lsst.daf.butler.YamlRepoImportBackend
+    export: lsst.daf.butler.YamlRepoExportBackend

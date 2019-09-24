@@ -26,9 +26,11 @@ from sqlalchemy.exc import SADeprecationWarning
 
 from sqlalchemy import create_engine, MetaData
 
+from lsst.daf.butler import SchemaConfig, Schema
 from lsst.daf.butler.core.utils import iterable
-from lsst.daf.butler.core.schema import SchemaConfig, Schema, Table, Column, SchemaBuilder
-from sqlalchemy.sql.expression import TableClause
+from lsst.daf.butler.core.schema import VALID_COLUMN_TYPES
+from sqlalchemy.sql import TableClause
+from sqlalchemy import Table, Column
 
 """Tests for Schema.
 """
@@ -45,7 +47,7 @@ class SchemaTestCase(unittest.TestCase):
     def setUp(self):
         self.testDir = os.path.dirname(__file__)
         self.config = SchemaConfig()
-        self.schema = Schema(self.config)
+        self.schema = Schema(self.config.toSpec())
         self.engine = create_engine("sqlite:///:memory:")
         # In our tables we have columns that make use of sqlalchemy
         # Sequence objects. There is currently a bug in sqlalchmey
@@ -81,8 +83,9 @@ class SchemaTestCase(unittest.TestCase):
         table = self.schema.tables[tableName]
         self.assertIsInstance(table, TableClause)
         for columnDescription in tableDescription["columns"]:
-            column = getattr(table.c, columnDescription["name"])
-            self.assertIsInstance(column, Column)
+            with self.subTest(column=columnDescription["name"]):
+                column = getattr(table.c, columnDescription["name"])
+                self.assertIsInstance(column, Column)
 
     def assertTable(self, tableName, tableDescription):
         """Check that a generated table matches its `tableDescription`.
@@ -90,7 +93,8 @@ class SchemaTestCase(unittest.TestCase):
         table = self.schema.tables[tableName]
         self.assertIsInstance(table, Table)
         for columnDescription in tableDescription["columns"]:
-            self.assertColumn(table, columnDescription["name"], columnDescription)
+            with self.subTest(column=columnDescription["name"]):
+                self.assertColumn(table, columnDescription["name"], columnDescription)
         if "foreignKeys" in tableDescription:
             self.assertForeignKeyConstraints(table, tableDescription["foreignKeys"])
 
@@ -99,9 +103,9 @@ class SchemaTestCase(unittest.TestCase):
         """
         column = getattr(table.c, columnName)
         self.assertIsInstance(column, Column)
-        self.assertEqual(column.primary_key, columnDescription.get("primary_key", False))
+        self.assertEqual(column.primary_key, columnDescription.get("primaryKey", False))
         self.assertEqual(column.nullable, columnDescription.get("nullable", True) and not column.primary_key)
-        self.assertIsInstance(column.type, SchemaBuilder.VALID_COLUMN_TYPES[columnDescription["type"]])
+        self.assertIsInstance(column.type, VALID_COLUMN_TYPES[columnDescription["type"]])
 
     def assertForeignKeyConstraints(self, table, constraintsDescription):
         """Check that foreign-key constraints match the
@@ -110,20 +114,21 @@ class SchemaTestCase(unittest.TestCase):
         # Gather all actual constraints on the current table.
         tableConstraints = {}
         for constraint in table.foreign_key_constraints:
-            src = tuple(sorted(constraint.column_keys))
-            tgt = tuple(sorted((e.target_fullname for e in constraint.elements)))
-            tableConstraints[src] = tgt
+            source = tuple(sorted(constraint.column_keys))
+            target = tuple(sorted((e.target_fullname for e in constraint.elements)))
+            tableConstraints[source] = target
         # Check that all constraints in the description are indeed applied.
         # Note that this is only a one-way check, the table may have more
         # constraints imposed by other means.
         for constraint in constraintsDescription:
-            src = tuple(sorted(iterable(constraint["src"])))
-            tgt = tuple(sorted(iterable(constraint["tgt"])))
-            tgtTable, _ = tgt[0].split(".")
-            if tgtTable in self.schema.views:
-                continue
-            self.assertIn(src, tableConstraints)
-            self.assertEqual(tableConstraints[src], tgt)
+            with self.subTest(constraint=constraint):
+                table = constraint["table"]
+                source = tuple(sorted(iterable(constraint["source"])))
+                target = tuple(f"{table}.{column}" for column in sorted(iterable(constraint["target"])))
+                if table in self.schema.views:
+                    continue
+                self.assertIn(source, tableConstraints)
+                self.assertEqual(tableConstraints[source], target)
 
 
 if __name__ == "__main__":

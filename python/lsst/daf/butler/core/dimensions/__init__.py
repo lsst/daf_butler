@@ -19,7 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .elements import *
-from .sets import *
 from .graph import *
-from .dataId import *
+from .coordinate import *
+from .records import *
+from .elements import *
+from .config import *
+from .universe import *
+from .packer import *
+
+# Symbols from other modules are deliberately not lifted to package scope, as
+# they contain functionality that is mostly internal to the dimensions
+# subpackage, and definitely internal to lsst.daf.butler.
