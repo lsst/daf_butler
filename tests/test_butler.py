@@ -497,16 +497,6 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
 
-
-class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
-    """PosixDatastore specialization of a butler"""
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    fullConfigKey = ".datastore.formatters"
-    validationCanFail = True
-    datastoreStr = ["/tmp"]
-    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "/gen3.sqlite3"
-
     def testImportExport(self):
         # Run put/get tests just to create and populate a repo.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -534,6 +524,16 @@ class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCa
                         # Test for existence by passing in the DatasetType and
                         # data ID separately, to avoid lookup by dataset_id.
                         self.assertTrue(importButler.datasetExists(ref.datasetType, ref.dataId))
+
+
+class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
+    """PosixDatastore specialization of a butler"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    fullConfigKey = ".datastore.formatters"
+    validationCanFail = True
+    datastoreStr = ["/tmp"]
+    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
+    registryStr = "/gen3.sqlite3"
 
 
 class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -708,6 +708,10 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         uri = ButlerURI(root)
         client = boto3.client("s3")
         return s3CheckFileExists(uri, client=client)[0]
+
+    @unittest.expectedFailure
+    def testImportExport(self):
+        super().testImportExport()
 
 
 if __name__ == "__main__":
