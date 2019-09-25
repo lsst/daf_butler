@@ -426,15 +426,10 @@ class ButlerTests:
                 self.assertIn(testStr, datastoreName)
 
 
-class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
-    """PosixDatastore specialization of a butler"""
-    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    fullConfigKey = ".datastore.formatters"
-    validationCanFail = True
-
-    datastoreStr = ["/tmp"]
-    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
-    registryStr = "/gen3.sqlite3"
+class FileLikeDatastoreButlerTests(ButlerTests):
+    """Common tests and specialization of ButlerTests for butlers backed
+    by datastores that inherit from FileLikeDatastore.
+    """
 
     def checkFileExists(self, root, path):
         """Checks if file exists at a given path (relative to root).
@@ -501,6 +496,16 @@ class PosixDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
 
         with self.assertRaises(FileExistsError):
             butler.put(metric, "metric3", dataId3)
+
+
+class PosixDatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
+    """PosixDatastore specialization of a butler"""
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+    fullConfigKey = ".datastore.formatters"
+    validationCanFail = True
+    datastoreStr = ["/tmp"]
+    datastoreName = [f"PosixDatastore@{BUTLER_ROOT_TAG}"]
+    registryStr = "/gen3.sqlite3"
 
     def testImportExport(self):
         # Run put/get tests just to create and populate a repo.
@@ -609,7 +614,7 @@ class ButlerConfigNoRunTestCase(unittest.TestCase):
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
-class S3DatastoreButlerTestCase(PosixDatastoreButlerTestCase):
+class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):
     """S3Datastore specialization of a butler; an S3 storage Datastore +
     a local in-memory SqlRegistry.
     """
