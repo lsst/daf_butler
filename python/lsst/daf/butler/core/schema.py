@@ -197,7 +197,7 @@ class FieldSpec:
         if self.length is not None and self.nbytes is not None:
             raise SchemaValidationError(f"Both length and nbytes provided for field '{self.name}'.")
         self.primaryKey = config.get("primaryKey", self.primaryKey)
-        self.autoincrement = config.get("autoinc", self.autoincrement)
+        self.autoincrement = config.get("autoincrement", self.autoincrement)
         self.nullable = config.get("nullable", False if self.primaryKey else self.nullable)
         self.doc = stripIfNotNone(config.get("doc", None))
         return self
@@ -411,7 +411,7 @@ class TableSpec:
             table = Table(tableName, schema.metadata, comment=self.doc, info=self)
         schema.tables[tableName] = table
         for fieldSpec in self.fields:
-            table.append_column(fieldSpec.toSqlAlchemy(tableName, schema.metadata))
+            table.append_column(fieldSpec.toSqlAlchemy(tableName, schema))
         for columns in self.unique:
             table.append_constraint(UniqueConstraint(*columns))
         return table
