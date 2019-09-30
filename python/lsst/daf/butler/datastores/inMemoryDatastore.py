@@ -136,40 +136,17 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         return
 
-    def _info_to_record(self, info):
-        """Convert a `StoredItemInfo` to a suitable database record.
+    def addStoredItemInfo(self, ref, info):
+        # Docstring inherited from GenericBaseDatastore.
+        self.records[ref.id] = info
 
-        Parameters
-        ----------
-        info : `StoredItemInfo`
-            Metadata associated with the stored Dataset.
+    def getStoredItemInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore.
+        return self.records[ref.id]
 
-        Returns
-        -------
-        record : `StoredItemInfo`
-            Record to be stored.
-        """
-        return info
-
-    def _record_to_info(self, record):
-        """Convert a record associated with this dataset to a `StoredItemInfo`
-
-        Parameters
-        ----------
-        record : `StoredItemInfo`
-            Object stored in the record table.
-
-        Returns
-        -------
-        info : `StoredItemInfo`
-            The information associated with this dataset record as a Python
-            class.
-
-        Notes
-        -----
-        Returns the record directly.
-        """
-        return record
+    def removeStoredItemInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore.
+        del self.records[ref.id]
 
     def exists(self, ref):
         """Check if the dataset exists in the datastore.

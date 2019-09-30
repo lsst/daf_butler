@@ -24,7 +24,7 @@
 __all__ = ("GenericBaseDatastore", )
 
 import logging
-from typing import MutableMapping
+from abc import abstractmethod
 
 from lsst.daf.butler import Datastore, DatasetTypeNotSupportedError
 
@@ -37,41 +37,7 @@ class GenericBaseDatastore(Datastore):
     Should always be sub-classed since key abstract methods are missing.
     """
 
-    records: MutableMapping
-    """Place to store internal records about datasets."""
-
-    def _info_to_record(self, info):
-        """Convert a `StoredDatastoreItemInfo` to a suitable database record.
-
-        Parameters
-        ----------
-        info : `StoredDatastoreItemInfo`
-            Metadata associated with the stored Dataset.
-
-        Returns
-        -------
-        record : `MutableMapping`
-            Record to be stored.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def _record_to_info(self, record):
-        """Convert a record associated with this dataset to a
-        `StoredDatastoreItemInfo`
-
-        Parameters
-        ----------
-        record : `MutableMapping`
-            Object stored in the record table.
-
-        Returns
-        -------
-        info : `StoredDatastoreItemInfo`
-            The information associated with this dataset record as a Python
-            class.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
+    @abstractmethod
     def addStoredItemInfo(self, ref, info):
         """Record internal storage information associated with this
         `DatasetRef`
@@ -83,11 +49,9 @@ class GenericBaseDatastore(Datastore):
         info : `StoredDatastoreItemInfo`
             Metadata associated with the stored Dataset.
         """
-        if ref.id in self.records:
-            raise KeyError("Attempt to store item info with ID {}"
-                           " when that ID exists as '{}'".format(ref.id, self.records[ref.id]))
-        self.records[ref.id] = self._info_to_record(info)
+        raise NotImplementedError()
 
+    @abstractmethod
     def getStoredItemInfo(self, ref):
         """Retrieve information associated with file stored in this
         `Datastore`.
@@ -107,12 +71,9 @@ class GenericBaseDatastore(Datastore):
         KeyError
             Dataset with that id can not be found.
         """
-        record = self.records.get(ref.id, None)
-        if record is None:
-            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
+        raise NotImplementedError()
 
-        return self._record_to_info(record)
-
+    @abstractmethod
     def removeStoredItemInfo(self, ref):
         """Remove information about the file associated with this dataset.
 
@@ -121,7 +82,7 @@ class GenericBaseDatastore(Datastore):
         ref : `DatasetRef`
             The Dataset that has been removed.
         """
-        del self.records[ref.id]
+        raise NotImplementedError()
 
     def _register_dataset(self, ref, itemInfo):
         """Update registry to indicate that this dataset has been stored.
@@ -134,10 +95,6 @@ class GenericBaseDatastore(Datastore):
             Internal datastore metadata associated with this dataset.
         """
         self.registry.addDatasetLocation(ref, self.name)
-
-        # TODO: this is only transactional if the DatabaseDict uses
-        #       self.registry internally.  Probably need to add
-        #       transactions to DatabaseDict to do better than that.
         self.addStoredItemInfo(ref, itemInfo)
 
         # Register all components with same information

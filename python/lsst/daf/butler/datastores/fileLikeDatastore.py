@@ -25,13 +25,13 @@ __all__ = ("FileLikeDatastore", )
 
 import logging
 
+from sqlalchemy import Integer, String
+
 from dataclasses import dataclass
-from typing import ClassVar, Type, Optional
+from typing import Optional
 
 from lsst.daf.butler import (
     Config,
-    DatabaseDict,
-    DatabaseDictRecordBase,
     DatasetTypeNotSupportedError,
     DatastoreConfig,
     DatastoreValidationError,
@@ -44,31 +44,16 @@ from lsst.daf.butler import (
     LocationFactory,
     StorageClass,
     StoredFileInfo,
+    TableSpec,
+    FieldSpec,
+    ForeignKeySpec,
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf
+from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet
 from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)
-
-
-@dataclass(frozen=True)
-class DatastoreRecord(DatabaseDictRecordBase):
-    """Describes the contents of a datastore record of a dataset in the
-    registry.
-
-    The record is usually populated by a `StoredFileInfo` object.
-    """
-    __slots__ = {"path", "formatter", "storage_class", "file_size", "checksum"}
-    path: str
-    formatter: str
-    storage_class: str
-    file_size: int
-    checksum: str
-
-    lengths = {"path": 256, "formatter": 128, "storage_class": 64, "checksum": 128}
-    """Lengths of string fields."""
 
 
 @dataclass(frozen=True)
@@ -118,9 +103,6 @@ class FileLikeDatastore(GenericBaseDatastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    Record: ClassVar[Type] = DatastoreRecord
-    """Class to use to represent datastore records."""
-
     root: str
     """Root directory or URI of this `Datastore`."""
 
@@ -132,9 +114,6 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     templates: FileTemplates
     """File templates that can be used by this `Datastore`."""
-
-    records: DatabaseDict
-    """Place to store internal records about datasets."""
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -171,6 +150,23 @@ class FileLikeDatastore(GenericBaseDatastore):
                                 toUpdate={"root": root},
                                 toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
+    @classmethod
+    def makeTableSpec(cls):
+        return TableSpec(
+            fields=NamedValueSet([
+                FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
+                FieldSpec(name="path", dtype=String, length=256, nullable=False),
+                FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
+                FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
+                # TODO: should checksum be Base64Bytes instead?
+                FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
+                FieldSpec(name="file_size", dtype=Integer, nullable=True),
+            ]),
+            unique=frozenset(),
+            foreignKeys=[ForeignKeySpec(table="dataset", source=("dataset_id",), target=("dataset_id",),
+                                        onDelete="CASCADE")]
+        )
+
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
         if "root" not in self.config:
@@ -202,51 +198,37 @@ class FileLikeDatastore(GenericBaseDatastore):
                                        universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
-        self.records = DatabaseDict.fromConfig(self.config["records"],
-                                               value=self.Record, key="dataset_id",
-                                               registry=registry)
+        self._tableName = self.config["records", "table"]
+        registry.registerOpaqueTable(self._tableName, self.makeTableSpec())
 
     def __str__(self):
         return self.root
 
-    def _info_to_record(self, info):
-        """Convert a `StoredFileInfo` to a suitable database record.
+    def addStoredItemInfo(self, ref, info):
+        # Docstring inherited from GenericBaseDatastore
+        record = dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
+                      storage_class=info.storageClass.name,
+                      checksum=info.checksum, file_size=info.file_size)
+        self.registry.insertOpaqueData(self._tableName, record)
 
-        Parameters
-        ----------
-        info : `StoredFileInfo`
-            Metadata associated with the stored Dataset.
-
-        Returns
-        -------
-        record : `DatastoreRecord`
-            Record to be stored.
-        """
-        return self.Record(formatter=info.formatter, path=info.path,
-                           storage_class=info.storageClass.name,
-                           checksum=info.checksum, file_size=info.file_size)
-
-    def _record_to_info(self, record):
-        """Convert a record associated with this dataset to a `StoredItemInfo`
-
-        Parameters
-        ----------
-        record : `DatastoreRecord`
-            Object stored in the record table.
-
-        Returns
-        -------
-        info : `StoredFileInfo`
-            The information associated with this dataset record as a Python
-            class.
-        """
+    def getStoredItemInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore
+        records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
+        if len(records) == 0:
+            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
+        assert len(records) == 1, "Primary key constraint should make more than one result impossible."
+        record = records[0]
         # Convert name of StorageClass to instance
-        storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
-        return StoredFileInfo(formatter=record.formatter,
-                              path=record.path,
+        storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
+        return StoredFileInfo(formatter=record["formatter"],
+                              path=record["path"],
                               storageClass=storageClass,
-                              checksum=record.checksum,
-                              file_size=record.file_size)
+                              checksum=record["checksum"],
+                              file_size=record["file_size"])
+
+    def removeStoredItemInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore
+        self.registry.deleteOpaqueData(self._tableName, dataset_id=ref.id)
 
     def _get_dataset_location_info(self, ref):
         """Find the `Location` of the requested dataset in the
