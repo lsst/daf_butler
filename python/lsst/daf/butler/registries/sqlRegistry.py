@@ -25,7 +25,7 @@ from abc import abstractmethod
 import sys
 import contextlib
 import warnings
-from typing import Union, Iterable, Optional, Mapping, Iterator
+from typing import Union, Iterable, Optional, Mapping, Iterator, Any
 
 from sqlalchemy import create_engine, text, func
 from sqlalchemy.pool import NullPool
@@ -38,7 +38,7 @@ from ..core.datasets import DatasetType, DatasetRef
 from ..core.registryConfig import RegistryConfig
 from ..core.registry import (Registry, ConflictingDefinitionError,
                              AmbiguousDatasetError, OrphanedRecordError)
-from ..core.schema import Schema
+from ..core.schema import Schema, TableSpec
 from ..core.execution import Execution
 from ..core.run import Run
 from ..core.storageClass import StorageClassFactory
@@ -240,6 +240,36 @@ class SqlRegistry(Registry):
         config["table"] = table
         return SqlRegistryDatabaseDict(config, key=key, value=value,
                                        registry=self)
+
+    def registerOpaqueTable(self, name: str, spec: TableSpec):
+        # Docstring inherited from Registry.registerOpaqueTable.
+        table = spec.toSqlAlchemy(name, self._schema)
+        table.create(self._connection, checkfirst=True)
+
+    @transactional
+    def insertOpaqueData(self, name: str, *data: dict):
+        # Docstring inherited from Registry.insertOpaqueData.
+        table = self._schema.tables[name]
+        self._connection.execute(table.insert(), *data)
+
+    def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
+        # Docstring inherited from Registry.insertExernalData.
+        table = self._schema.tables[name]
+        query = table.select()
+        whereTerms = [table.columns[k] == v for k, v in where.items()]
+        if whereTerms:
+            query = query.where(and_(*whereTerms))
+        yield from self._connection.execute(query)
+
+    @transactional
+    def deleteOpaqueData(self, name: str, **where: Any):
+        # Docstring inherited from Registry.deleteOpaqueData.
+        table = self._schema.tables[name]
+        query = table.delete()
+        whereTerms = [table.columns[k] == v for k, v in where.items()]
+        if whereTerms:
+            query = query.where(and_(*whereTerms))
+        self._connection.execute(query)
 
     def _makeDatasetRefFromRow(self, row, datasetType=None, dataId=None):
         """Construct a DatasetRef from the result of a query on the Dataset

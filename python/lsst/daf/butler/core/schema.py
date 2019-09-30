@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("SchemaConfig", "Schema")
+__all__ = ("SchemaConfig", "Schema", "TableSpec", "FieldSpec", "ForeignKeySpec")
 
 from base64 import b64encode, b64decode
 from math import ceil

@@ -23,13 +23,13 @@ __all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "O
 
 from abc import ABCMeta, abstractmethod
 import contextlib
-from typing import Optional, Mapping, Union, Iterable, Iterator
+from typing import Optional, Mapping, Union, Iterable, Iterator, Any
 
 from .config import Config
 from .dimensions import (DimensionConfig, DimensionUniverse, DimensionGraph, DataId, DimensionElement,
                          DimensionRecord)
 from .datasets import DatasetRef
-from .schema import SchemaConfig
+from .schema import SchemaConfig, TableSpec
 from .utils import transactional
 from .dimensions import Dimension, DataCoordinate
 from .queries import DatasetTypeExpression, CollectionsExpression
@@ -223,6 +223,80 @@ class Registry(metaclass=ABCMeta):
         -------
         databaseDict : `DatabaseDict`
             `DatabaseDict` backed by this registry.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def registerOpaqueTable(self, name: str, spec: TableSpec):
+        """Add an opaque (to the `Registry`) table for use by a `Datastore` or
+        other data repository client.
+
+        Opaque table records can be added via `insertOpaqueData`, retrieved via
+        `fetchOpaqueData`, and removed via `deleteOpaqueData`.
+
+        Parameters
+        ----------
+        name : `str`
+            Logical name of the opaque table.  This may differ from the
+            actual name used in the database by a prefix and/or suffix.
+        spec : `TableSpec`
+            Specification for the table to be added.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def insertOpaqueData(self, name: str, *data: dict):
+        """Insert records into an opaque table.
+
+        Parameters
+        ----------
+        name : `str`
+            Logical name of the opaque table.  Must match the name used in a
+            previous call to `registerOpaqueTable`.
+        data
+            Each additional positional argument is a dictionary that represents
+            a single row to be added.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
+        """Retrieve records from an opaque table.
+
+        Parameters
+        ----------
+        name : `str`
+            Logical name of the opaque table.  Must match the name used in a
+            previous call to `registerOpaqueTable`.
+        where
+            Additional keyword arguments are interpreted as equality
+            constraints that restrict the returned rows (combined with AND);
+            keyword arguments are column names and values are the values they
+            must have.
+
+        Yields
+        ------
+        row : `dict`
+            A dictionary representing a single result row.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    @transactional
+    def deleteOpaqueData(self, name: str, **where: Any):
+        """Remove records from an opaque table.
+
+        Parameters
+        ----------
+        name : `str`
+            Logical name of the opaque table.  Must match the name used in a
+            previous call to `registerOpaqueTable`.
+        where
+            Additional keyword arguments are interpreted as equality
+            constraints that restrict the deketed rows (combined with AND);
+            keyword arguments are column names and values are the values they
+            must have.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
