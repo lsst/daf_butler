@@ -305,9 +305,10 @@ class ForeignKeySpec:
         constraint : `sqlalchemy.ForeignKeyConstraint`
             SQLAlchemy version of the foreign key constraint.
         """
+        name = "_".join(["fkey", tableName, self.table] + list(self.target) + list(self.source))
         return ForeignKeyConstraint(self.source,
                                     [f"{self.table}.{col}" for col in self.target],
-                                    name=f"{tableName}_{self.table}_fkey",
+                                    name=name,
                                     ondelete=self.onDelete)
 
 
