@@ -197,36 +197,6 @@ class Registry(metaclass=ABCMeta):
         yield
 
     @abstractmethod
-    def makeDatabaseDict(self, table, key, value):
-        """Construct a `DatabaseDict` backed by a table in the same database as
-        this Registry.
-
-        Parameters
-        ----------
-        table : `table`
-            Name of the table that backs the returned `DatabaseDict`.  If this
-            table already exists, its schema must include at least everything
-            in ``valuetypes``.
-        key : `str`
-            The name of the field to be used as the dictionary key.  Must not
-            be present in ``value._fields``.
-        value : `type`
-            The type used for the dictionary's values, typically a
-            `DatabaseDictRecordBase`.  Must have a ``fields`` class method
-            that is a tuple of field names; these field names must also appear
-            in the return value of the ``types()`` class method, and it must be
-            possible to construct it from a sequence of values. Lengths of
-            string fields must be obtainable as a `dict` from using the
-            ``lengths`` property.
-
-        Returns
-        -------
-        databaseDict : `DatabaseDict`
-            `DatabaseDict` backed by this registry.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
     def registerOpaqueTable(self, name: str, spec: TableSpec):
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
         other data repository client.

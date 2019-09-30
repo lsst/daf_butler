@@ -42,14 +42,12 @@ from ..core.schema import Schema, TableSpec
 from ..core.execution import Execution
 from ..core.run import Run
 from ..core.storageClass import StorageClassFactory
-from ..core.config import Config
 from ..core.dimensions import (DataCoordinate, DimensionGraph, ExpandedDataCoordinate, DimensionElement,
                                DataId, DimensionRecord, Dimension)
 from ..core.dimensions.storage import setupDimensionStorage
 from ..core.dimensions.schema import addDimensionForeignKey
 from ..core.queries import (DatasetRegistryStorage, QuerySummary, QueryBuilder,
                             DatasetTypeExpression, CollectionsExpression)
-from .sqlRegistryDatabaseDict import SqlRegistryDatabaseDict
 
 
 class SqlRegistryConfig(RegistryConfig):
@@ -201,45 +199,6 @@ class SqlRegistry(Registry):
             Insert checks for `storageClass`, `dimensions` and `template`.
         """
         return isinstance(datasetType, DatasetType)
-
-    def makeDatabaseDict(self, table, key, value):
-        """Construct a DatabaseDict backed by a table in the same database as
-        this Registry.
-
-        Parameters
-        ----------
-        table : `table`
-            Name of the table that backs the returned DatabaseDict.  If this
-            table already exists, its schema must include at least everything
-            in `types`.
-        key : `str`
-            The name of the field to be used as the dictionary key.  Must not
-            be present in ``value._fields``.
-        value : `type`
-            The type used for the dictionary's values, typically a
-            `DatabaseDictRecordBase`.  Must have a ``fields`` class method
-            that is a tuple of field names; these field names must also appear
-            in the return value of the ``types()`` class method, and it must be
-            possible to construct it from a sequence of values. Lengths of
-            string fields must be obtainable as a `dict` from using the
-            ``lengths`` property.
-
-        Returns
-        -------
-        databaseDict : `DatabaseDict`
-            `DatabaseDict` backed by this registry.
-        """
-        # We need to construct a temporary config for the table value because
-        # SqlRegistryDatabaseDict.__init__ is required to take a config so it
-        # can be called by DatabaseDict.fromConfig as well.
-        # I suppose we could have Registry.makeDatabaseDict take a config as
-        # well, since it"ll also usually be called by DatabaseDict.fromConfig,
-        # but I strongly believe in having signatures that only take what they
-        # really need.
-        config = Config()
-        config["table"] = table
-        return SqlRegistryDatabaseDict(config, key=key, value=value,
-                                       registry=self)
 
     def registerOpaqueTable(self, name: str, spec: TableSpec):
         # Docstring inherited from Registry.registerOpaqueTable.
