@@ -79,4 +79,11 @@ class OracleRegistry(SqlRegistry):
                          butlerRoot=butlerRoot)
 
     def _createEngine(self):
-        return create_engine(self.config.connectionString, pool_size=1)
+        engine = create_engine(self.config.connectionString, pool_size=1)
+        conn = engine.connect()
+        # Work around SQLAlchemy assuming that the Oracle limit on identifier
+        # names is even short than it is after 12.2.
+        oracle_ver = engine.dialect._get_server_version_info(conn)
+        engine.dialect.max_identifier_length = 128 if oracle_ver >= (12, 2) else 30
+        conn.close()
+        return engine
