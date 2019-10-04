@@ -29,7 +29,7 @@ from typing import Union, Iterable, Optional, Mapping, Iterator
 
 from sqlalchemy import create_engine, text, func
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import select, and_, bindparam, union
+from sqlalchemy.sql import select, and_, union
 from sqlalchemy.exc import IntegrityError, SADeprecationWarning
 
 from ..core.utils import transactional, NamedKeyDict
@@ -576,42 +576,29 @@ class SqlRegistry(Registry):
         self._connection.execute(datasetCompositionTable.insert().values(**values))
         parent._components[name] = component
 
-    @transactional
     def associate(self, collection, refs):
         # Docstring inherited from Registry.associate.
 
-        # Most SqlRegistry subclass implementations should replace this
-        # implementation with special "UPSERT" or "MERGE" syntax.  This
-        # implementation is only concurrency-safe for databases that implement
-        # transactions with database- or table-wide locks (e.g. SQLite).
+        def records(refs):
+            """Generate records to insert into database.
+
+            Parameters
+            ----------
+            refs : iterable of `DatasetRef`
+                An iterable of `DatasetRef` instances.
+            """
+            for ref in refs:
+                if ref.id is None:
+                    raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
+                yield {"dataset_id": ref.id, "dataset_ref_hash": ref.hash, "collection": collection}
+                yield from records(ref.components.values())
 
         datasetCollectionTable = self._schema.tables["dataset_collection"]
-        insertQuery = datasetCollectionTable.insert()
-        checkQuery = select([datasetCollectionTable.c.dataset_id], whereclause=and_(
-            datasetCollectionTable.c.collection == collection,
-            datasetCollectionTable.c.dataset_ref_hash == bindparam("hash")))
-
-        for ref in refs:
-            if ref.id is None:
-                raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
-
-            try:
-                with self.transaction():
-                    self._connection.execute(insertQuery, {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
-                                                           "collection": collection})
-            except IntegrityError as exc:
-                # Did we clash with a completely duplicate entry (because this
-                # dataset is already in this collection)?  Or is there already
-                # a different dataset with the same DatasetType and data ID in
-                # this collection?  Only the latter is an error.
-                row = self._connection.execute(checkQuery, hash=ref.hash).fetchone()
-                if row.dataset_id != ref.id:
-                    raise ConflictingDefinitionError(
-                        "A dataset of type {} with id: {} already exists in collection {}".format(
-                            ref.datasetType, ref.dataId, collection
-                        )
-                    ) from exc
-            self.associate(collection, ref.components.values())
+        values = list(records(refs))
+        try:
+            self._insert(datasetCollectionTable, values, onConflict="ignore")
+        except IntegrityError as exc:
+            raise ConflictingDefinitionError(f"A dataset already exists in collection {collection}") from exc
 
     @transactional
     def disassociate(self, collection, refs):
