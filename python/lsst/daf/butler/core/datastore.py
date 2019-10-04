@@ -42,7 +42,7 @@ from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
     from .datasets import DatasetRef
-    from .repoTransfer import DatasetExport
+    from .repoTransfer import FileDataset
 
 
 class DatastoreConfig(ConfigSubset):
@@ -425,7 +425,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     def export(self, refs: Iterable[DatasetRef], *,
-               directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[DatasetExport]:
+               directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[FileDataset]:
         """Export datasets for transfer to another data repository.
 
         Parameters

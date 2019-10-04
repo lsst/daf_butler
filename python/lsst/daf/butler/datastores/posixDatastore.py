@@ -36,7 +36,7 @@ from lsst.daf.butler import DatasetTypeNotSupportedError
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.utils import transactional
-from lsst.daf.butler import DatasetExport
+from lsst.daf.butler import FileDataset
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -356,7 +356,7 @@ class PosixDatastore(FileLikeDatastore):
         return hasher.hexdigest()
 
     def export(self, refs: Iterable[DatasetRef], *,
-               directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[DatasetExport]:
+               directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         for ref in refs:
             location, storedFileInfo = self._get_dataset_location_info(ref)
@@ -364,7 +364,7 @@ class PosixDatastore(FileLikeDatastore):
                 raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
-                yield DatasetExport(ref=ref, path=location.pathInStore, formatter=storedFileInfo.formatter)
+                yield FileDataset(ref=ref, path=location.pathInStore, formatter=storedFileInfo.formatter)
             else:
                 # TODO: add support for other transfer modes.  If we support
                 # moving, this method should become transactional.
