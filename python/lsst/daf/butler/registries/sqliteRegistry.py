@@ -25,6 +25,8 @@ from contextlib import closing
 
 from sqlalchemy import event
 from sqlalchemy import create_engine
+from sqlalchemy.ext import compiler
+from sqlalchemy.sql import Insert
 from sqlalchemy.pool import NullPool
 
 from sqlite3 import Connection as SQLite3Connection
@@ -54,6 +56,38 @@ def _onSqlite3Begin(connection):
     # deadlocks).
     connection.execute("BEGIN IMMEDIATE")
     return connection
+
+
+class _InsertOnConflict(Insert):
+    def __init__(self, *args, **kwargs):
+        kw = kwargs.copy()
+        self.onConflict = kw.pop("onConflict", None)
+        Insert.__init__(self, *args, **kw)
+
+
+@compiler.compiles(_InsertOnConflict, "sqlite")
+def _insertOnConflict(insert, compiler, **kw):
+    """Generate INSERT ... ON CONFLICT query.
+
+    Unlike Postgres case sqlalchemy does not provide special support for
+    ON CONFLICT clause, so everything has to be generated manually.
+    """
+    result = compiler.visit_insert(insert, **kw)
+    table = insert.table
+    preparer = compiler.preparer
+    pk_columns = ", ".join([preparer.format_column(col) for col in table.primary_key])
+    result += f" ON CONFLICT ({pk_columns})"
+    onConflict = insert.onConflict
+    if onConflict == "ignore":
+        result += f" DO NOTHING"
+    elif onConflict == "replace":
+        columns = [preparer.format_column(col) for col in table.columns
+                   if col.name not in table.primary_key]
+        updates = ", ".join([f"{col} = excluded.{col}" for col in columns])
+        result += f" DO UPDATE SET {updates}"
+    else:
+        raise ValueError(f"Unexpected `onConflict` value: {onConflict}")
+    return result
 
 
 class SqliteRegistry(SqlRegistry):
@@ -112,3 +146,7 @@ class SqliteRegistry(SqlRegistry):
         event.listen(engine, "connect", _onSqlite3Connect)
         event.listen(engine, "begin", _onSqlite3Begin)
         return engine
+
+    def _makeInsertWithConflict(self, table, onConflict):
+        # Docstring inherited from SqlRegistry._makeInsertWithConflict.
+        return _InsertOnConflict(table, onConflict=onConflict)

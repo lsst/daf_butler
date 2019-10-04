@@ -22,6 +22,7 @@
 __all__ = ("PostgreSqlRegistry", )
 
 from sqlalchemy import create_engine
+import sqlalchemy.dialects.postgresql.dml
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registryConfig import RegistryConfig
@@ -79,3 +80,31 @@ class PostgreSqlRegistry(SqlRegistry):
 
     def _createEngine(self):
         return create_engine(self.config.connectionString, pool_size=1)
+
+    def _makeInsertWithConflict(self, table, onConflict):
+        # Docstring inherited from SqlRegistry._makeInsertWithConflict.
+        return self._makeInsertWithConflictImpl(table, onConflict)
+
+    @staticmethod
+    def _makeInsertWithConflictImpl(table, onConflict):
+        """Implementation for `_makeInsertWithConflict`.
+
+        This is done as a separate static method to facilitate testing.
+        """
+        # This uses special support for UPSERT in PostgreSQL backend:
+        # https://docs.sqlalchemy.org/en/13/dialects/postgresql.html#insert-on-conflict-upsert
+        query = sqlalchemy.dialects.postgresql.dml.insert(table)
+        if onConflict == "ignore":
+            query = query.on_conflict_do_nothing(constraint=table.primary_key)
+        elif onConflict == "replace":
+            # in SET clause assign all columns using special `excluded`
+            # pseudo-table, if some column in a table does not appear in
+            # INSERT list this will set it to NULL.
+            excluded = query.excluded
+            data = {column.name: getattr(excluded, column.name)
+                    for column in table.columns
+                    if column.name not in table.primary_key}
+            query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
+        else:
+            raise ValueError(f"Unexpected `onConflict` value: {onConflict}")
+        return query

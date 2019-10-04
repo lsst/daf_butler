@@ -21,6 +21,7 @@
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
+from abc import abstractmethod
 import sys
 import contextlib
 import warnings
@@ -954,3 +955,84 @@ class SqlRegistry(Registry):
                     yield ref
             else:
                 yield from bestRefs.values()
+
+    def _insert(self, table, values, onConflict=None, retryLimit=3):
+        """Insert new records into a table, with conflict resolution options.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.Table`
+            Table to insert new records into.
+        values : `list` [`dict`]
+            Sequence of dictionaries with values for new records.
+        onConflict: `str`, optional
+            Option for conflict resolution, can be one of "ignore" or
+            "replace". By default no conflict resolition is performed
+            and conflicts will cause immediate exceptions.
+        retryLimit : `int`, optional
+            Number of retries for insertion.
+
+        Note
+        ----
+        Conflict resolution is based on table primary key only, if there are
+        other unique constraints defined for a table they are not checked and
+        can result in `IntegrityError` exceptions.
+
+        Even with conflict resolution options it is possible that inserts
+        will generate conflicts due to concurrency and implementation details
+        of transaction isolation. When it happens the only reasonable course
+        of action is to restart transaction and repeat the whole operation.
+        Conflicts can also appear due to violation of other non-PK constraints
+        and it is not possible to distinguish those. To avoid infinite looping
+        on non-PK constraint violations this method only performs few retries.
+
+        This method needs to handle transactions itself, do not call it if you
+        are already in a transaction.
+
+        Raises
+        ------
+        IntegrityError
+            Raised for all unique constaraint violations.
+        """
+
+        # With abort on conflict we don't need anything special, if it fails
+        # then it fails.
+        if onConflict is None:
+            with self._connection.begin():
+                query = table.insert()
+                self._connection.execute(query, values)
+            return
+
+        # When doing non-aborting conflict resolution the COMMIT could
+        # potentially fail, in that case we want to restart transaction and
+        # re-run the whole thing again, but not forever.
+        retries = 0
+        query = self._makeInsertWithConflict(table, onConflict=onConflict)
+        while True:
+            try:
+                with self._connection.begin():
+                    self._connection.execute(query, values)
+                # stop on success
+                break
+            except IntegrityError:
+                # There error could be due to PK conflict or other unique key
+                # conflict, there is no way to identify exact reason, so we
+                # re-try several times.
+                if retries > retryLimit:
+                    # stop trying, looks like we can't win
+                    raise
+                retries += 1
+
+    @abstractmethod
+    def _makeInsertWithConflict(self, table, onConflict):
+        """Build an query which inserts/replaces record in a table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.Table`
+            Table to insert into.
+        onConflict: `str`
+            Option for conflict resolution, can be one of "ignore" or
+            "replace".
+        """
+        raise NotImplementedError()
