@@ -204,12 +204,16 @@ class FileLikeDatastore(GenericBaseDatastore):
     def __str__(self):
         return self.root
 
-    def addStoredItemInfo(self, ref, info):
+    def addStoredItemInfo(self, refs, infos):
         # Docstring inherited from GenericBaseDatastore
-        record = dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
-                      storage_class=info.storageClass.name,
-                      checksum=info.checksum, file_size=info.file_size)
-        self.registry.insertOpaqueData(self._tableName, record)
+        records = []
+        for ref, info in zip(refs, infos):
+            records.append(
+                dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
+                     storage_class=info.storageClass.name,
+                     checksum=info.checksum, file_size=info.file_size)
+            )
+        self.registry.insertOpaqueData(self._tableName, *records)
 
     def getStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
@@ -367,7 +371,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Associate this dataset with the formatter for later read.
         fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass,
                                   file_size=size, checksum=checksum)
-        self._register_dataset(ref, fileInfo)
+        self._register_datasets([ref], [fileInfo])
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.

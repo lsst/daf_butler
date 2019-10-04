@@ -136,9 +136,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         return
 
-    def addStoredItemInfo(self, ref, info):
+    def addStoredItemInfo(self, refs, infos):
         # Docstring inherited from GenericBaseDatastore.
-        self.records[ref.id] = info
+        for ref, info in zip(refs, infos):
+            self.records[ref.id] = info
 
     def getStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore.
@@ -278,7 +279,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
         # TODO: Add to ephemeral part of registry
-        self._register_dataset(ref, itemInfo)
+        self._register_datasets([ref], [itemInfo])
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)

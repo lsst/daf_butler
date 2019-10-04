@@ -38,16 +38,16 @@ class GenericBaseDatastore(Datastore):
     """
 
     @abstractmethod
-    def addStoredItemInfo(self, ref, info):
-        """Record internal storage information associated with this
-        `DatasetRef`
+    def addStoredItemInfo(self, refs, infos):
+        """Record internal storage information associated with one or more
+        datasets.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            The Dataset that has been stored.
-        info : `StoredDatastoreItemInfo`
-            Metadata associated with the stored Dataset.
+        refs : sequence of `DatasetRef`
+            The datasets that have been stored.
+        infos : sequence of `StoredDatastoreItemInfo`
+            Metadata associated with the stored datasets.
         """
         raise NotImplementedError()
 
@@ -84,23 +84,31 @@ class GenericBaseDatastore(Datastore):
         """
         raise NotImplementedError()
 
-    def _register_dataset(self, ref, itemInfo):
-        """Update registry to indicate that this dataset has been stored.
+    def _register_datasets(self, refs, itemInfos):
+        """Update registry to indicate that one or more datasets have been
+        stored.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Dataset to register.
-        itemInfo : `StoredDatastoreItemInfo`
-            Internal datastore metadata associated with this dataset.
+        refs : sequence of `DatasetRef`
+            Datasets to register.
+        itemInfos : sequence of `StoredDatastoreItemInfo`
+            Internal datastore metadata associated with these datasets.
         """
-        self.registry.addDatasetLocation(ref, self.name)
-        self.addStoredItemInfo(ref, itemInfo)
+        expandedRefs = list(refs)
+        expandedItemInfos = list(itemInfos)
 
-        # Register all components with same information
-        for compRef in ref.components.values():
-            self.registry.addDatasetLocation(compRef, self.name)
-            self.addStoredItemInfo(compRef, itemInfo)
+        for ref, itemInfo in zip(refs, itemInfos):
+            expandedRefs.extend(ref.components.values())
+            # Use the same information for all components.
+            expandedItemInfos.extend([itemInfo] * len(ref.components))
+
+        for ref in expandedRefs:
+            # TODO: when a vectorized API for addDatasetLocation is available,
+            # use it.
+            self.registry.addDatasetLocation(ref, self.name)
+
+        self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
     def _remove_from_registry(self, ref):
         """Remove rows from registry.
