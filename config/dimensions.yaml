@@ -50,7 +50,7 @@ dimensions:
       -
         name: name
         type: string
-        length: 8
+        length: 16
       view_of: physical_filter
       cached: true
 
