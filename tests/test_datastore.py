@@ -26,7 +26,7 @@ import yaml
 import tempfile
 import lsst.utils
 
-from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse
+from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse, FileDataset
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 
 from lsst.utils import doImport
@@ -383,24 +383,24 @@ class DatastoreTests(DatastoreTestsBase):
             # first move it into the root, and adjust the path accordingly
             path = shutil.copy(path, datastore.root)
             path = os.path.relpath(path, start=datastore.root)
-            datastore.ingest(path, ref, transfer=None)
+            datastore.ingest(FileDataset(path=path, ref=ref), transfer=None)
             self.assertEqual(obj, datastore.get(ref))
 
         def failInputDoesNotExist(obj, path, ref):
             """Can't ingest files if we're given a bad path."""
             with self.assertRaises(FileNotFoundError):
-                datastore.ingest("this-file-does-not-exist.yaml", ref, transfer=None)
+                datastore.ingest(FileDataset(path="this-file-does-not-exist.yaml", ref=ref), transfer=None)
             self.assertFalse(datastore.exists(ref))
 
         def failOutsideRoot(obj, path, ref):
             """Can't ingest files outside of datastore root."""
             with self.assertRaises(RuntimeError):
-                datastore.ingest(os.path.abspath(path), ref, transfer=None)
+                datastore.ingest(FileDataset(path=os.path.abspath(path), ref=ref), transfer=None)
             self.assertFalse(datastore.exists(ref))
 
         def failNotImplemented(obj, path, ref):
             with self.assertRaises(NotImplementedError):
-                datastore.ingest(path, ref, transfer=None)
+                datastore.ingest(FileDataset(path=path, ref=ref), transfer=None)
 
         if None in self.ingestTransferModes:
             self.runIngestTest(failOutsideRoot)
@@ -412,7 +412,6 @@ class DatastoreTests(DatastoreTestsBase):
     def testIngestTransfer(self):
         """Test ingesting existing files after transferring them.
         """
-
         for mode in ("copy", "move", "hardlink", "symlink"):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
@@ -420,25 +419,26 @@ class DatastoreTests(DatastoreTestsBase):
                 def succeed(obj, path, ref):
                     """Ingest a file by transferring it to the template
                     location."""
-                    datastore.ingest(os.path.abspath(path), ref, transfer=mode)
+                    datastore.ingest(FileDataset(path=os.path.abspath(path), ref=ref), transfer=mode)
                     self.assertEqual(obj, datastore.get(ref))
 
                 def failInputDoesNotExist(obj, path, ref):
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
-                        datastore.ingest("this-file-does-not-exist.yaml", ref, transfer=mode)
+                        datastore.ingest(FileDataset(path="this-file-does-not-exist.yaml", ref=ref),
+                                         transfer=mode)
                     self.assertFalse(datastore.exists(ref))
 
                 def failOutputExists(obj, path, ref):
                     """Can't ingest files if transfer destination already
                     exists."""
                     with self.assertRaises(FileExistsError):
-                        datastore.ingest(os.path.abspath(path), ref, transfer=mode)
+                        datastore.ingest(FileDataset(path=os.path.abspath(path), ref=ref), transfer=mode)
                     self.assertFalse(datastore.exists(ref))
 
                 def failNotImplemented(obj, path, ref):
                     with self.assertRaises(NotImplementedError):
-                        datastore.ingest(os.path.abspath(path), ref, transfer=mode)
+                        datastore.ingest(FileDataset(path=os.path.abspath(path), ref=ref), transfer=mode)
 
                 if mode in self.ingestTransferModes:
                     self.runIngestTest(failInputDoesNotExist)
@@ -478,7 +478,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     """ChainedDatastore specialization using a POSIXDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
-    ingestTransferModes = ("copy", "move", "hardlink", "symlink")
+    ingestTransferModes = ("copy", "hardlink", "symlink")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
     validationCanFail = True
@@ -506,7 +506,6 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 
         # Write empty file suitable for ingest check
         testfile = tempfile.NamedTemporaryFile()
-
         for datasetTypeName, sc, accepted in (("metric", sc1, True), ("metric2", sc1, False),
                                               ("metric33", sc1, True), ("metric2", sc2, True)):
             with self.subTest(datasetTypeName=datasetTypeName):
@@ -518,7 +517,7 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 
                     # Try ingest
                     if self.canIngest:
-                        datastore.ingest(testfile.name, ref, transfer="symlink")
+                        datastore.ingest(FileDataset(testfile.name, ref), transfer="symlink")
                         self.assertTrue(datastore.exists(ref))
                         datastore.remove(ref)
                 else:
@@ -529,7 +528,7 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
                     # Again with ingest
                     if self.canIngest:
                         with self.assertRaises(DatasetTypeNotSupportedError):
-                            datastore.ingest(testfile.name, ref, transfer="symlink")
+                            datastore.ingest(FileDataset(testfile.name, ref), transfer="symlink")
                         self.assertFalse(datastore.exists(ref))
 
 
@@ -613,7 +612,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
                     # Check that ingest works
                     if ingest:
-                        datastore.ingest(testfile.name, ref, transfer="symlink")
+                        datastore.ingest(FileDataset(testfile.name, ref), transfer="symlink")
                         self.assertTrue(datastore.exists(ref))
 
                         # Check each datastore inside the chained datastore
@@ -629,7 +628,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                         datastore.remove(ref)
                     else:
                         with self.assertRaises(DatasetTypeNotSupportedError):
-                            datastore.ingest(testfile.name, ref, transfer="symlink")
+                            datastore.ingest(FileDataset(testfile.name, ref), transfer="symlink")
 
                 else:
                     with self.assertRaises(DatasetTypeNotSupportedError):
@@ -638,7 +637,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
                     # Again with ingest
                     with self.assertRaises(DatasetTypeNotSupportedError):
-                        datastore.ingest(testfile.name, ref, transfer="symlink")
+                        datastore.ingest(FileDataset(testfile.name, ref), transfer="symlink")
                     self.assertFalse(datastore.exists(ref))
 
 

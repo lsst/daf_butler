@@ -28,7 +28,7 @@ __all__ = ["FileDataset", "RepoExport",
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Optional, IO, List, Mapping, Tuple, Callable
+from typing import TYPE_CHECKING, Iterable, Optional, IO, List, Mapping, Tuple, Callable, Union, Type
 from collections import defaultdict
 
 import yaml
@@ -43,6 +43,7 @@ if TYPE_CHECKING:
     from .datasets import DatasetRef
     from .registry import Registry
     from .datastore import Datastore
+    from .formatters import Formatter
 
 
 class RepoTransferFormatConfig(ConfigSubset):
@@ -73,10 +74,14 @@ class FileDataset:
     to `Datastore.export`.
     """
 
-    formatter: str
-    """The fully-qualified name of the formatter class that should be used to
-    read this dataset (`str`).
+    formatter: Union[None, str, Type[Formatter]]
+    """A `Formatter` class or fully-qualified name.
     """
+
+    def __init__(self, path: str, ref: DatasetRef, *, formatter: Union[None, str, Type[Formatter]] = None):
+        self.path = path
+        self.ref = ref
+        self.formatter = formatter
 
 
 class RepoExport:
@@ -233,7 +238,8 @@ class RepoExportBackend(ABC):
         run : `Run`
             Run associated with all datasets being exported with this call.
         datasets : `FileDataset`, variadic
-            Per-dataset information to be exported.
+            Per-dataset information to be exported.  `FileDataset.formatter`
+            attributes should be strings, not `Formatter` instances or classes.
         collections : iterable of `str`
             Extra collections (in addition to `Run.collection`) the dataset
             should be associated with.
@@ -366,6 +372,8 @@ class YamlRepoImportBackend(RepoImportBackend):
         runs = {}
         # Mapping from collection name to list of DatasetRefs to associate.
         collections = {}
+        # FileDatasets to ingest into the datastore (in bulk):
+        datasets = []
         for data in wrapper["data"]:
             if data["type"] == "dimension":
                 registry.insertDimensionData(data["element"], *data["records"])
@@ -390,10 +398,11 @@ class YamlRepoImportBackend(RepoImportBackend):
                         path = os.path.join(directory, dataset["path"])
                     else:
                         path = dataset["path"]
-                    datastore.ingest(path, ref, transfer=transfer, formatter=formatter)
+                    datasets.append(FileDataset(path, ref, formatter=formatter))
                     for collection in dataset.get("collections", []):
                         collections[collection].append(ref)
             else:
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
+        datastore.ingest(*datasets, transfer=transfer)
         for collection, refs in collections.items():
             registry.associate(collection, refs)

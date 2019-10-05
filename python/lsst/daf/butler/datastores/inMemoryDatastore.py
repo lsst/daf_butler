@@ -69,6 +69,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         Unused parameter.
     butlerRoot : `str`, optional
         Unused parameter.
+
+    Notes
+    -----
+    InMemoryDatastore does not support any file-based ingest.
     """
 
     defaultConfigFile = "datastores/inMemoryDatastore.yaml"

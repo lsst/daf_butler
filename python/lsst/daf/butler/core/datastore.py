@@ -29,13 +29,14 @@ __all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 
 import contextlib
 import logging
+from collections import defaultdict
 from typing import TYPE_CHECKING, Optional, Type, Callable, ClassVar, Any, Generator, Iterable
 from dataclasses import dataclass
 from abc import ABCMeta, abstractmethod
 
 from lsst.utils import doImport
 from .config import ConfigSubset, Config
-from .exceptions import ValidationError
+from .exceptions import ValidationError, DatasetTypeNotSupportedError
 from .registry import Registry
 from .constraints import Constraints
 from .storageClass import StorageClassFactory
@@ -64,6 +65,24 @@ class Event:
     undoFunc: Callable
     args: tuple
     kwargs: dict
+
+
+class IngestPrepData:
+    """A helper base class for `Datastore` ingest implementations.
+
+    Datastore implementations will generally need a custom implementation of
+    this class.
+
+    Should be accessed as ``Datastore.IngestPrepData`` instead of via direct
+    import.
+
+    Parameters
+    ----------
+    refs : iterable of `DatasetRef`
+        References for the datasets that can be ingested by this datastore.
+    """
+    def __init__(self, refs: Iterable[DatasetRef]):
+        self.refs = {ref.id: ref for ref in refs}
 
 
 class DatastoreTransaction:
@@ -188,6 +207,10 @@ class Datastore(metaclass=ABCMeta):
 
     constraints: Constraints
     """Constraints to apply when putting datasets into the datastore."""
+
+    IngestPrepData: ClassVar[Type] = IngestPrepData
+    """Helper base class for ingest implementations.
+    """
 
     @classmethod
     @abstractmethod
@@ -323,51 +346,162 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def ingest(self, path, ref, formatter=None, transfer=None):
-        """Add an on-disk file with the given `DatasetRef` to the store,
-        possibly transferring it.
-
-        The caller is responsible for ensuring that the given (or predicted)
-        Formatter is consistent with how the file was written; `ingest` will
-        in general silently ignore incorrect formatters (as it cannot
-        efficiently verify their correctness), deferring errors until ``get``
-        is first called on the ingested dataset.
-
-        Datastores are not required to implement this method, but must do so
-        in order to support direct raw data ingest.
+    def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> IngestPrepData:
+        """Process datasets to identify which ones can be ingested into this
+        Datastore.
 
         Parameters
         ----------
-        path : `str`
-            File path, relative to the repository root.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-        formatter : `Formatter` (optional)
-            Formatter that should be used to retreive the Dataset.  If not
-            provided, the formatter will be constructed according to
-            Datastore configuration.
-        transfer : str (optional)
-            If not None, must be one of 'move', 'copy', 'hardlink', or
-            'symlink' indicating how to transfer the file.
-            Datastores need not support all options, but must raise
-            NotImplementedError if the passed option is not supported.
-            That includes None, which indicates that the file should be
-            ingested at its current location with no transfer.  If a
-            Datastore does support ingest-without-transfer in general,
-            but the given path is not appropriate, an exception other
-            than NotImplementedError that better describes the problem
-            should be raised.
+        datasets : `FileDataset`
+            Each positional argument is a struct containing information about
+            a file to be ingested, including its path (either absolute or
+            relative to the datastore root, if applicable), a complete
+            `DatasetRef` (with ``dataset_id not None``), and optionally a
+            formatter class or its fully-qualified string name.  If a formatter
+            is not provided, this method should populate that attribute with
+            the formatter the datastore would use for `put`.  Subclasses are
+            also permitted to modify the path attribute (typically to put it
+            in what the datastore considers its standard form).
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            If `None` (default), the file must already be in a location
+            appropriate for the datastore (e.g. within its root directory),
+            and will not be modified.  Other choices include "move", "copy",
+            "symlink", and "hardlink".  Most datastores do not support all
+            transfer modes.
+
+        Returns
+        -------
+        data : `IngestPrepData`
+            An instance of a subclass of `IngestPrepData`, used to pass
+            arbitrary data from `_prepIngest` to `_finishIngest`.  This should
+            include only the datasets this datastore can actually ingest;
+            others should be silently ignored (`Datastore.ingest` will inspect
+            `IngestPrepData.refs` and raise `DatasetTypeNotSupportedError` if
+            necessary).
 
         Raises
         ------
         NotImplementedError
-            Raised if the given transfer mode is not supported.
-        DatasetTypeNotSupportedError
-            The associated `DatasetType` is not handled by this datastore.
+            Raised if the datastore does not support the given transfer mode
+            (including the case where ingest is not supported at all).
+        FileNotFoundError
+            Raised if one of the given files does not exist.
+        FileExistsError
+            Raised if transfer is not `None` but the (internal) location the
+            file would be moved to is already occupied.
+
+        Notes
+        -----
+        This method (along with `_finishIngest`) should be implemented by
+        subclasses to provide ingest support instead of implementing `ingest`
+        directly.
+
+        `_prepIngest` should not modify the data repository or given files in
+        any way; all changes should be deferred to `_finishIngest`.
+
+        When possible, exceptions should be raised in `_prepIngest` instead of
+        `_finishIngest`.  `NotImplementedError` exceptions that indicate that
+        the transfer mode is not supported must be raised by `_prepIngest`
+        instead of `_finishIngest`.
         """
         raise NotImplementedError(
             "Datastore does not support direct file-based ingest."
         )
+
+    def _finishIngest(self, prepData: IngestPrepData, *, transfer: Optional[str] = None):
+        """Complete an ingest operation.
+
+        Parameters
+        ----------
+        data : `IngestPrepData`
+            An instance of a subclass of `IngestPrepData`.  Guaranteed to be
+            the direct result of a call to `_prepIngest` on this datastore.
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            If `None` (default), the file must already be in a location
+            appropriate for the datastore (e.g. within its root directory),
+            and will not be modified.  Other choices include "move", "copy",
+            "symlink", and "hardlink".  Most datastores do not support all
+            transfer modes.
+
+        Raises
+        ------
+        FileNotFoundError
+            Raised if one of the given files does not exist.
+        FileExistsError
+            Raised if transfer is not `None` but the (internal) location the
+            file would be moved to is already occupied.
+
+        Notes
+        -----
+        This method (along with `_prepIngest`) should be implemented by
+        subclasses to provide ingest support instead of implementing `ingest`
+        directly.
+        """
+        raise NotImplementedError(
+            "Datastore does not support direct file-based ingest."
+        )
+
+    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None):
+        """Ingest one or more files into the datastore.
+
+        Parameters
+        ----------
+        datasets : `FileDataset`
+            Each positional argument is a struct containing information about
+            a file to be ingested, including its path (either absolute or
+            relative to the datastore root, if applicable), a complete
+            `DatasetRef` (with ``dataset_id not None``), and optionally a
+            formatter class or its fully-qualified string name.  If a formatter
+            is not provided, the one the datastore would use for ``put`` on
+            that dataset is assumed.
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            If `None` (default), the file must already be in a location
+            appropriate for the datastore (e.g. within its root directory),
+            and will not be modified.  Other choices include "move", "copy",
+            "symlink", and "hardlink".  Most datastores do not support all
+            transfer modes.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if the datastore does not support the given transfer mode
+            (including the case where ingest is not supported at all).
+        DatasetTypeNotSupportedError
+            Raised if one or more files to be ingested have a dataset type that
+            is not supported by the datastore.
+        FileNotFoundError
+            Raised if one of the given files does not exist.
+        FileExistsError
+            Raised if transfer is not `None` but the (internal) location the
+            file would be moved to is already occupied.
+
+        Notes
+        -----
+        Subclasses should implement `_prepIngest` and `_finishIngest` instead
+        of implementing `ingest` directly.  Datastores that hold and
+        delegate to child datastores may want to call those methods as well.
+
+        Subclasses are encouraged to document their supported transfer modes
+        in their class documentation.
+        """
+        prepData = self._prepIngest(*datasets, transfer=transfer)
+        refs = {dataset.ref.id: dataset.ref for dataset in datasets}
+        if refs.keys() != prepData.refs.keys():
+            unsupported = refs.keys() - prepData.refs.keys()
+            # Group unsupported refs by DatasetType for an informative
+            # but still concise error message.
+            byDatasetType = defaultdict(list)
+            for datasetId in unsupported:
+                ref = refs[datasetId]
+                byDatasetType[ref.datasetType].append(ref)
+            raise DatasetTypeNotSupportedError(
+                "DatasetType(s) not supported in ingest: " +
+                ", ".join(f"{k.name} ({len(v)} dataset(s))" for k, v in byDatasetType.items())
+            )
+        self._finishIngest(prepData, transfer=transfer)
 
     @abstractmethod
     def getUri(self, datasetRef):

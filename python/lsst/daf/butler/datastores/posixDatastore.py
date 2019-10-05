@@ -29,14 +29,12 @@ import hashlib
 import logging
 import os
 import shutil
-from typing import TYPE_CHECKING, Iterable, Optional
-
-from lsst.daf.butler import DatasetTypeNotSupportedError
+from typing import TYPE_CHECKING, Iterable, Optional, Type
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.utils import transactional
-from lsst.daf.butler import FileDataset
+from lsst.daf.butler import FileDataset, StoredFileInfo, Formatter
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -61,6 +59,11 @@ class PosixDatastore(FileLikeDatastore):
     ValueError
         If root location does not exist and ``create`` is `False` in the
         configuration.
+
+    Notes
+    -----
+    PosixDatastore supports all transfer modes for file-based ingest:
+    `"move"`, `"copy"`, `"symlink"`, `"hardlink"`, and `None` (no transfer).
     """
 
     defaultConfigFile = "datastores/posixDatastore.yaml"
@@ -188,82 +191,36 @@ class PosixDatastore(FileLikeDatastore):
             assert predictedFullPath == os.path.join(self.root, path)
             log.debug("Wrote file to %s", path)
 
-        self.ingest(path, ref, formatter=formatter)
+        info = self._extractIngestInfo(path, ref, formatter=formatter)
+        self._register_datasets([ref], [info])
 
-    @transactional
-    def ingest(self, path, ref, formatter=None, transfer=None):
-        """Add an on-disk file with the given `DatasetRef` to the store,
-        possibly transferring it.
-
-        The caller is responsible for ensuring that the given (or predicted)
-        Formatter is consistent with how the file was written; `ingest` will
-        in general silently ignore incorrect formatters (as it cannot
-        efficiently verify their correctness), deferring errors until ``get``
-        is first called on the ingested dataset.
-
-        Parameters
-        ----------
-        path : `str`
-            File path.  Treated as relative to the repository root if not
-            absolute.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-        formatter : `Formatter`, optional
-            Formatter that should be used to retreive the Dataset.  If not
-            provided, the formatter will be constructed according to
-            Datastore configuration.  Can be a the Formatter class or an
-            instance.
-        transfer : str (optional)
-            If not None, must be one of 'move', 'copy', 'hardlink', or
-            'symlink' indicating how to transfer the file.  The new
-            filename and location will be determined via template substitution,
-            as with ``put``.  If the file is outside the datastore root, it
-            must be transferred somehow.
-
-        Raises
-        ------
-        RuntimeError
-            Raised if ``transfer is None`` and path is outside the repository
-            root.
-        FileNotFoundError
-            Raised if the file at ``path`` does not exist.
-        FileExistsError
-            Raised if ``transfer is not None`` but a file already exists at the
-            location computed from the template.
-        DatasetTypeNotSupportedError
-            The associated `DatasetType` is not handled by this datastore.
-        """
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
-
-        if formatter is None:
-            formatter = self.formatterFactory.getFormatterClass(ref)
-
+    def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
+        # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
         fullPath = os.path.normpath(os.path.join(self.root, path))
         if not os.path.exists(fullPath):
-            raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
-                                    "assumed to be relative to self.root unless they are absolute."
-                                    .format(fullPath))
-
+            raise FileNotFoundError(f"File at '{fullPath}' does not exist; note that paths to ingest "
+                                    f"are assumed to be relative to self.root unless they are absolute.")
         if transfer is None:
             if os.path.isabs(path):
                 absRoot = os.path.abspath(self.root)
                 if os.path.commonpath([absRoot, path]) != absRoot:
-                    raise RuntimeError("'{}' is not inside repository root '{}'".format(path, self.root))
-                path = os.path.relpath(path, absRoot)
+                    raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
+                return os.path.relpath(path, absRoot)
             elif path.startswith(os.path.pardir):
-                raise RuntimeError(f"'{path}' is outside repository root '{self.root}'")
-        else:
+                raise RuntimeError(f"'{path}' is outside repository root '{self.root}.'")
+        return path
+
+    def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
+                           transfer: Optional[str] = None) -> StoredFileInfo:
+        # Docstring inherited from FileLikeDatastore._extractIngestInfo.
+        fullPath = os.path.normpath(os.path.join(self.root, path))
+        if transfer is not None:
             template = self.templates.getTemplate(ref)
             location = self.locationFactory.fromPath(template.format(ref))
             newPath = formatter.predictPathFromLocation(location)
             newFullPath = os.path.join(self.root, newPath)
             if os.path.exists(newFullPath):
-                raise FileExistsError("File '{}' already exists".format(newFullPath))
+                raise FileExistsError(f"File '{newFullPath}' already exists.")
             storageDir = os.path.dirname(newFullPath)
             if not os.path.isdir(storageDir):
                 with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
@@ -284,14 +241,11 @@ class PosixDatastore(FileLikeDatastore):
                 raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
             path = newPath
             fullPath = newFullPath
-
-        # Create Storage information in the registry
         checksum = self.computeChecksum(fullPath)
         stat = os.stat(fullPath)
         size = stat.st_size
-
-        # Update the registry
-        self._register_dataset_file(ref, formatter, path, size, checksum)
+        return StoredFileInfo(formatter=formatter, path=path, storageClass=ref.datasetType.storageClass,
+                              file_size=size, checksum=checksum)
 
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.

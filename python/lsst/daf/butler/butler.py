@@ -53,7 +53,7 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
-from .core.repoTransfers import RepoExport
+from .core.repoTransfers import RepoExport, FileDataset
 
 log = logging.getLogger(__name__)
 
@@ -715,7 +715,7 @@ class Butler:
             raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
         ref = self.registry.addDataset(datasetType, dataId, run=self.run, recursive=True, **kwds)
-        self.datastore.ingest(path, ref, transfer=transfer, formatter=formatter)
+        self.datastore.ingest(FileDataset(path, ref, formatter=formatter), transfer=transfer)
         return ref
 
     @contextlib.contextmanager
