@@ -22,12 +22,64 @@
 __all__ = ("OracleRegistry", )
 
 from sqlalchemy import create_engine
-
+from sqlalchemy.ext import compiler
+from sqlalchemy.sql import ClauseElement, and_, bindparam, select
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registryConfig import RegistryConfig
 
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
+
+
+class _Merge(ClauseElement):
+    def __init__(self, table, onConflict):
+        self.table = table
+        self.onConflict = onConflict
+
+
+@compiler.compiles(_Merge, "oracle")
+def _merge(merge, compiler, **kw):
+    """Generate MERGE query for inserting or updating records.
+    """
+    table = merge.table
+    preparer = compiler.preparer
+
+    allColumns = [col.name for col in table.columns]
+    pkColumns = [col.name for col in table.primary_key]
+    nonPkColumns = [col for col in allColumns if col not in pkColumns]
+
+    selectColumns = [bindparam(col).label(col) for col in allColumns]
+    selectClause = select(selectColumns)
+
+    tableAlias = table.alias("t")
+    tableAliasText = compiler.process(tableAlias, asfrom=True, **kw)
+    selectAlias = selectClause.alias("d")
+    selectAliasText = compiler.process(selectAlias, asfrom=True, **kw)
+
+    condition = and_(
+        *[tableAlias.columns[col] == selectAlias.columns[col] for col in pkColumns]
+    )
+    conditionText = compiler.process(condition, **kw)
+
+    query = f"MERGE INTO {tableAliasText}" \
+            f"\nUSING {selectAliasText}" \
+            f"\nON ({conditionText})"
+    if merge.onConflict == "replace":
+        updates = []
+        for col in nonPkColumns:
+            src = compiler.process(selectAlias.columns[col], **kw)
+            dst = compiler.process(tableAlias.columns[col], **kw)
+            updates.append(f"{dst} = {src}")
+        updates = ", ".join(updates)
+        query += f"\nWHEN MATCHED THEN UPDATE SET {updates}"
+    elif merge.onConflict != "ignore":
+        raise ValueError(f"Unexpected `onConflict` value: {merge.onConflict}")
+
+    insertColumns = ", ".join([preparer.format_column(col) for col in table.columns])
+    insertValues = ", ".join([compiler.process(selectAlias.columns[col], **kw) for col in allColumns])
+
+    query += f"\nWHEN NOT MATCHED THEN INSERT ({insertColumns}) VALUES ({insertValues})"
+    return query
 
 
 class OracleRegistry(SqlRegistry):
@@ -87,3 +139,7 @@ class OracleRegistry(SqlRegistry):
         engine.dialect.max_identifier_length = 128 if oracle_ver >= (12, 2) else 30
         conn.close()
         return engine
+
+    def _makeInsertWithConflict(self, table, onConflict):
+        # Docstring inherited from SqlRegistry._makeInsertWithConflict.
+        return _Merge(table, onConflict)

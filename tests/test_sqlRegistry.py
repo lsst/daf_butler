@@ -25,6 +25,8 @@ from abc import ABCMeta, abstractmethod
 from datetime import datetime, timedelta
 from itertools import combinations
 
+from sqlalchemy import Table, Column, Integer
+from sqlalchemy.schema import MetaData
 from sqlalchemy.exc import IntegrityError
 
 import lsst.sphgeom
@@ -631,6 +633,161 @@ class SqlRegistryTestCase(unittest.TestCase, RegistryTests):
         self.assertIsNotNone(registry.expandDataId(dataId1, graph=dimension.graph))
         with self.assertRaises(LookupError):
             registry.expandDataId(dataId2, graph=dimension.graph)
+
+    def testInsertConflict(self):
+        """Test for _insert method with different conflict options.
+        """
+        registry = self.makeRegistry()
+        conn = registry._connection
+        metadata = registry._schema.metadata
+
+        table = Table("insert_conflict_test",
+                      metadata,
+                      Column('pk', Integer, primary_key=True),
+                      Column('value', Integer),
+                      Column('uniqval', Integer, unique=True))
+        metadata.create_all(conn)
+
+        # add initial data
+        values = [
+            dict(pk=0, value=0, uniqval=0),
+            dict(pk=1, value=10, uniqval=100),
+        ]
+        conn.execute(table.insert(), values)
+        rows = list(conn.execute(table.select()))
+        self.assertCountEqual(rows, [(0, 0, 0), (1, 10, 100)])
+
+        # try to insert with standard method, this fails
+        with self.assertRaises(IntegrityError):
+            conn.execute(table.insert(), values)
+
+        # try to insert with ABORT option, this fails too
+        with self.assertRaises(IntegrityError):
+            registry._insert(table, values, onConflict=None)
+
+        # IGNORE option only adds records with new PK
+        values = [
+            dict(pk=0, value=100, uniqval=1000),
+            dict(pk=1, value=110, uniqval=2000),
+            dict(pk=2, value=20, uniqval=200),
+        ]
+        registry._insert(table, values, onConflict="ignore")
+        rows = list(conn.execute(table.select()))
+        self.assertCountEqual(rows, [(0, 0, 0), (1, 10, 100), (2, 20, 200)])
+
+        # REPLACE option replaces existing records and adds new
+        values = [
+            dict(pk=1, value=100, uniqval=10),
+            dict(pk=2, value=200, uniqval=20),
+            dict(pk=3, value=300, uniqval=30),
+        ]
+        registry._insert(table, values, onConflict="replace")
+        rows = list(conn.execute(table.select()))
+        self.assertCountEqual(rows, [(0, 0, 0), (1, 100, 10), (2, 200, 20), (3, 300, 30)])
+
+        # Non-PK columns will still cause conflict
+        values = [
+            dict(pk=10, value=100, uniqval=10),
+        ]
+        for onConflict in [None, "ignore", "replace"]:
+            with self.assertRaises(IntegrityError):
+                registry._insert(table, values, onConflict=onConflict)
+
+
+class TestOnConflictQueries(unittest.TestCase):
+    """Test for onConflict support.
+
+    This class tests dialect-specific query generators and does not require
+    any pre-existing database or registry.
+    """
+
+    def makeTestTable(self):
+        """Make a Table for tests below.
+
+        No actual table is created, only metadata for table is instanciated.
+        """
+        metadata = MetaData()
+        table = Table("insert_conflict_test",
+                      metadata,
+                      Column('pk', Integer, primary_key=True),
+                      Column('value', Integer),
+                      Column('uniqVal', Integer, unique=True))
+        return table
+
+    def testInsertConflictSqlite(self):
+        """Test for SQLite implementation.
+        """
+        try:
+            from lsst.daf.butler.registries.sqliteRegistry import InsertOnConflict
+            from sqlalchemy.dialects import sqlite
+        except ImportError:
+            self.skipTest("Test skiped, cannot find imports")
+
+        table = self.makeTestTable()
+
+        expect = 'INSERT INTO insert_conflict_test (pk, value, "uniqVal") VALUES (?, ?, ?)' \
+                 ' ON CONFLICT (pk) DO NOTHING'
+        clause = InsertOnConflict(table, onConflict="ignore")
+        query = clause.compile(dialect=sqlite.dialect())
+        self.assertEqual(str(query), expect)
+
+        expect = 'INSERT INTO insert_conflict_test (pk, value, "uniqVal") VALUES (?, ?, ?)' \
+                 ' ON CONFLICT (pk) DO UPDATE SET value = excluded.value, "uniqVal" = excluded."uniqVal"'
+        clause = InsertOnConflict(table, onConflict="replace")
+        query = clause.compile(dialect=sqlite.dialect())
+        self.assertEqual(str(query), expect)
+
+    def testInsertConflictPG(self):
+        """Test for PostgreSQL implementation.
+        """
+        try:
+            from lsst.daf.butler.registries.postgresqlRegistry import PostgreSqlRegistry
+            from sqlalchemy.dialects import postgresql
+        except ImportError:
+            self.skipTest("Test skiped, cannot find imports")
+
+        table = self.makeTestTable()
+
+        expect = 'INSERT INTO insert_conflict_test (pk, value, \"uniqVal\")' \
+                 ' VALUES (%(pk)s, %(value)s, %(uniqVal)s) ON CONFLICT (pk) DO NOTHING'
+        clause = PostgreSqlRegistry._makeInsertWithConflictImpl(table, onConflict="ignore")
+        query = clause.compile(dialect=postgresql.dialect())
+        self.assertEqual(str(query), expect)
+
+        expect = 'INSERT INTO insert_conflict_test (pk, value, "uniqVal")' \
+                 ' VALUES (%(pk)s, %(value)s, %(uniqVal)s)' \
+                 ' ON CONFLICT (pk) DO UPDATE SET value = excluded.value, "uniqVal" = excluded."uniqVal"'
+        clause = PostgreSqlRegistry._makeInsertWithConflictImpl(table, onConflict="replace")
+        query = clause.compile(dialect=postgresql.dialect())
+        self.assertEqual(str(query), expect)
+
+    def testInsertConflictOracle(self):
+        """Test for Oracle implementation.
+        """
+        from lsst.daf.butler.registries.oracleRegistry import _Merge
+        try:
+            from sqlalchemy.dialects import oracle
+        except ImportError:
+            self.skipTest("Test skiped, cannot find imports")
+
+        table = self.makeTestTable()
+
+        expect = 'MERGE INTO insert_conflict_test t\n' \
+                 'USING (SELECT :pk AS pk, :value AS value, :uniqVal AS "uniqVal" FROM DUAL) d\n' \
+                 'ON (t.pk = d.pk)\n' \
+                 'WHEN NOT MATCHED THEN INSERT (pk, value, "uniqVal") VALUES (d.pk, d.value, d."uniqVal")'
+        clause = _Merge(table, onConflict="ignore")
+        query = clause.compile(dialect=oracle.dialect())
+        self.assertEqual(str(query), expect)
+
+        expect = 'MERGE INTO insert_conflict_test t\n' \
+                 'USING (SELECT :pk AS pk, :value AS value, :uniqVal AS "uniqVal" FROM DUAL) d\n' \
+                 'ON (t.pk = d.pk)\n' \
+                 'WHEN MATCHED THEN UPDATE SET t.value = d.value, t."uniqVal" = d."uniqVal"\n' \
+                 'WHEN NOT MATCHED THEN INSERT (pk, value, "uniqVal") VALUES (d.pk, d.value, d."uniqVal")'
+        clause = _Merge(table, onConflict="replace")
+        query = clause.compile(dialect=oracle.dialect())
+        self.assertEqual(str(query), expect)
 
 
 if __name__ == "__main__":

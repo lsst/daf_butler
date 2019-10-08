@@ -21,6 +21,7 @@
 
 __all__ = ("SqlRegistryConfig", "SqlRegistry")
 
+from abc import abstractmethod
 import sys
 import contextlib
 import warnings
@@ -28,7 +29,7 @@ from typing import Union, Iterable, Optional, Mapping, Iterator
 
 from sqlalchemy import create_engine, text, func
 from sqlalchemy.pool import NullPool
-from sqlalchemy.sql import select, and_, bindparam, union
+from sqlalchemy.sql import select, and_, union
 from sqlalchemy.exc import IntegrityError, SADeprecationWarning
 
 from ..core.utils import transactional, NamedKeyDict
@@ -575,42 +576,29 @@ class SqlRegistry(Registry):
         self._connection.execute(datasetCompositionTable.insert().values(**values))
         parent._components[name] = component
 
-    @transactional
     def associate(self, collection, refs):
         # Docstring inherited from Registry.associate.
 
-        # Most SqlRegistry subclass implementations should replace this
-        # implementation with special "UPSERT" or "MERGE" syntax.  This
-        # implementation is only concurrency-safe for databases that implement
-        # transactions with database- or table-wide locks (e.g. SQLite).
+        def records(refs):
+            """Generate records to insert into database.
+
+            Parameters
+            ----------
+            refs : iterable of `DatasetRef`
+                An iterable of `DatasetRef` instances.
+            """
+            for ref in refs:
+                if ref.id is None:
+                    raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
+                yield {"dataset_id": ref.id, "dataset_ref_hash": ref.hash, "collection": collection}
+                yield from records(ref.components.values())
 
         datasetCollectionTable = self._schema.tables["dataset_collection"]
-        insertQuery = datasetCollectionTable.insert()
-        checkQuery = select([datasetCollectionTable.c.dataset_id], whereclause=and_(
-            datasetCollectionTable.c.collection == collection,
-            datasetCollectionTable.c.dataset_ref_hash == bindparam("hash")))
-
-        for ref in refs:
-            if ref.id is None:
-                raise AmbiguousDatasetError(f"Cannot associate dataset {ref} without ID.")
-
-            try:
-                with self.transaction():
-                    self._connection.execute(insertQuery, {"dataset_id": ref.id, "dataset_ref_hash": ref.hash,
-                                                           "collection": collection})
-            except IntegrityError as exc:
-                # Did we clash with a completely duplicate entry (because this
-                # dataset is already in this collection)?  Or is there already
-                # a different dataset with the same DatasetType and data ID in
-                # this collection?  Only the latter is an error.
-                row = self._connection.execute(checkQuery, hash=ref.hash).fetchone()
-                if row.dataset_id != ref.id:
-                    raise ConflictingDefinitionError(
-                        "A dataset of type {} with id: {} already exists in collection {}".format(
-                            ref.datasetType, ref.dataId, collection
-                        )
-                    ) from exc
-            self.associate(collection, ref.components.values())
+        values = list(records(refs))
+        try:
+            self._insert(datasetCollectionTable, values, onConflict="ignore")
+        except IntegrityError as exc:
+            raise ConflictingDefinitionError(f"A dataset already exists in collection {collection}") from exc
 
     @transactional
     def disassociate(self, collection, refs):
@@ -954,3 +942,84 @@ class SqlRegistry(Registry):
                     yield ref
             else:
                 yield from bestRefs.values()
+
+    def _insert(self, table, values, onConflict=None, retryLimit=3):
+        """Insert new records into a table, with conflict resolution options.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.Table`
+            Table to insert new records into.
+        values : `list` [`dict`]
+            Sequence of dictionaries with values for new records.
+        onConflict: `str`, optional
+            Option for conflict resolution, can be one of "ignore" or
+            "replace". By default no conflict resolition is performed
+            and conflicts will cause immediate exceptions.
+        retryLimit : `int`, optional
+            Number of retries for insertion.
+
+        Note
+        ----
+        Conflict resolution is based on table primary key only, if there are
+        other unique constraints defined for a table they are not checked and
+        can result in `IntegrityError` exceptions.
+
+        Even with conflict resolution options it is possible that inserts
+        will generate conflicts due to concurrency and implementation details
+        of transaction isolation. When it happens the only reasonable course
+        of action is to restart transaction and repeat the whole operation.
+        Conflicts can also appear due to violation of other non-PK constraints
+        and it is not possible to distinguish those. To avoid infinite looping
+        on non-PK constraint violations this method only performs few retries.
+
+        This method needs to handle transactions itself, do not call it if you
+        are already in a transaction.
+
+        Raises
+        ------
+        IntegrityError
+            Raised for all unique constaraint violations.
+        """
+
+        # With abort on conflict we don't need anything special, if it fails
+        # then it fails.
+        if onConflict is None:
+            with self._connection.begin():
+                query = table.insert()
+                self._connection.execute(query, values)
+            return
+
+        # When doing non-aborting conflict resolution the COMMIT could
+        # potentially fail, in that case we want to restart transaction and
+        # re-run the whole thing again, but not forever.
+        retries = 0
+        query = self._makeInsertWithConflict(table, onConflict=onConflict)
+        while True:
+            try:
+                with self._connection.begin():
+                    self._connection.execute(query, values)
+                # stop on success
+                break
+            except IntegrityError:
+                # There error could be due to PK conflict or other unique key
+                # conflict, there is no way to identify exact reason, so we
+                # re-try several times.
+                if retries > retryLimit:
+                    # stop trying, looks like we can't win
+                    raise
+                retries += 1
+
+    @abstractmethod
+    def _makeInsertWithConflict(self, table, onConflict):
+        """Build an query which inserts/replaces record in a table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.Table`
+            Table to insert into.
+        onConflict: `str`
+            Option for conflict resolution, can be one of "ignore" or
+            "replace".
+        """
+        raise NotImplementedError()
