@@ -24,6 +24,7 @@ __all__ = ("OracleRegistry", )
 from sqlalchemy import create_engine
 from sqlalchemy.ext import compiler
 from sqlalchemy.sql import ClauseElement, and_, bindparam, select
+from sqlalchemy.sql.expression import Executable
 
 from lsst.daf.butler.core.config import Config
 from lsst.daf.butler.core.registryConfig import RegistryConfig
@@ -31,7 +32,7 @@ from lsst.daf.butler.core.registryConfig import RegistryConfig
 from .sqlRegistry import SqlRegistry, SqlRegistryConfig
 
 
-class _Merge(ClauseElement):
+class _Merge(Executable, ClauseElement):
     def __init__(self, table, onConflict):
         self.table = table
         self.onConflict = onConflict
@@ -48,7 +49,9 @@ def _merge(merge, compiler, **kw):
     pkColumns = [col.name for col in table.primary_key]
     nonPkColumns = [col for col in allColumns if col not in pkColumns]
 
-    selectColumns = [bindparam(col).label(col) for col in allColumns]
+    # To properly support type decorators defined in core/schema.py we need
+    # to pass column type to `bindparam`.
+    selectColumns = [bindparam(col.name, type_=col.type).label(col.name) for col in table.columns]
     selectClause = select(selectColumns)
 
     tableAlias = table.alias("t")

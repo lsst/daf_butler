@@ -28,6 +28,7 @@ from itertools import combinations
 from sqlalchemy import Table, Column, Integer
 from sqlalchemy.schema import MetaData
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.sql.expression import Executable
 
 import lsst.sphgeom
 
@@ -728,6 +729,8 @@ class TestOnConflictQueries(unittest.TestCase):
         expect = 'INSERT INTO insert_conflict_test (pk, value, "uniqVal") VALUES (?, ?, ?)' \
                  ' ON CONFLICT (pk) DO NOTHING'
         clause = InsertOnConflict(table, onConflict="ignore")
+        self.assertIsInstance(clause, Executable)
+        self.assertTrue(clause.supports_execution)
         query = clause.compile(dialect=sqlite.dialect())
         self.assertEqual(str(query), expect)
 
@@ -751,6 +754,8 @@ class TestOnConflictQueries(unittest.TestCase):
         expect = 'INSERT INTO insert_conflict_test (pk, value, \"uniqVal\")' \
                  ' VALUES (%(pk)s, %(value)s, %(uniqVal)s) ON CONFLICT (pk) DO NOTHING'
         clause = PostgreSqlRegistry._makeInsertWithConflictImpl(table, onConflict="ignore")
+        self.assertIsInstance(clause, Executable)
+        self.assertTrue(clause.supports_execution)
         query = clause.compile(dialect=postgresql.dialect())
         self.assertEqual(str(query), expect)
 
@@ -777,6 +782,8 @@ class TestOnConflictQueries(unittest.TestCase):
                  'ON (t.pk = d.pk)\n' \
                  'WHEN NOT MATCHED THEN INSERT (pk, value, "uniqVal") VALUES (d.pk, d.value, d."uniqVal")'
         clause = _Merge(table, onConflict="ignore")
+        self.assertIsInstance(clause, Executable)
+        self.assertTrue(clause.supports_execution)
         query = clause.compile(dialect=oracle.dialect())
         self.assertEqual(str(query), expect)
 
@@ -786,6 +793,8 @@ class TestOnConflictQueries(unittest.TestCase):
                  'WHEN MATCHED THEN UPDATE SET t.value = d.value, t."uniqVal" = d."uniqVal"\n' \
                  'WHEN NOT MATCHED THEN INSERT (pk, value, "uniqVal") VALUES (d.pk, d.value, d."uniqVal")'
         clause = _Merge(table, onConflict="replace")
+        self.assertIsInstance(clause, Executable)
+        self.assertTrue(clause.supports_execution)
         query = clause.compile(dialect=oracle.dialect())
         self.assertEqual(str(query), expect)
 
