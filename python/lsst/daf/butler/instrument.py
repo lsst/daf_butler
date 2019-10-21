@@ -213,6 +213,7 @@ def makeExposureRecordFromObsInfo(obsInfo, universe):
         "datetime_end": obsInfo.datetime_end.to_datetime(),
         "exposure_time": obsInfo.exposure_time.to_value("s"),
         "dark_time": obsInfo.dark_time.to_value("s"),
+        "observation_type": obsInfo.observation_type,
         "physical_filter": obsInfo.physical_filter,
         "visit": obsInfo.visit_id,
     })

@@ -173,6 +173,10 @@ dimensions:
         name: dark_time
         type: float
         doc: Duration of the exposure with shutter closed (seconds).
+      -
+        name: observation_type
+        type: string
+        length: 64
 
     skymap:
       doc: >
