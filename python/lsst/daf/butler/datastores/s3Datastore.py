@@ -240,7 +240,7 @@ class S3Datastore(FileLikeDatastore):
 
         # URI is needed to resolve what ingest case are we dealing with
         info = self._extractIngestInfo(location.uri, ref, formatter=formatter)
-        self._register_datasets([ref], [info])
+        self._register_datasets([(ref, info)])
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.

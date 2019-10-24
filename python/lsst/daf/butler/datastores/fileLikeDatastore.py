@@ -462,13 +462,12 @@ class FileLikeDatastore(GenericBaseDatastore):
     @transactional
     def _finishIngest(self, prepData: Datastore.IngestPrepData, *, transfer: Optional[str] = None):
         # Docstring inherited from Datastore._finishIngest.
-        refs = []
-        infos = []
+        refsAndInfos = []
         for dataset in prepData.datasets:
-            refs.append(dataset.ref)
-            infos.append(self._extractIngestInfo(dataset.path, dataset.ref, formatter=dataset.formatter,
-                                                 transfer=transfer))
-        self._register_datasets(refs, infos)
+            info = self._extractIngestInfo(dataset.path, dataset.ref, formatter=dataset.formatter,
+                                           transfer=transfer)
+            refsAndInfos.append((dataset.ref, info))
+        self._register_datasets(refsAndInfos)
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.

@@ -84,23 +84,25 @@ class GenericBaseDatastore(Datastore):
         """
         raise NotImplementedError()
 
-    def _register_datasets(self, refs, itemInfos):
+    def _register_datasets(self, refsAndInfos):
         """Update registry to indicate that one or more datasets have been
         stored.
 
         Parameters
         ----------
-        refs : sequence of `DatasetRef`
-            Datasets to register.
-        itemInfos : sequence of `StoredDatastoreItemInfo`
-            Internal datastore metadata associated with these datasets.
+        refsAndInfos : sequence `tuple` [`DatasetRef`, `StoredDatasetItemInfo`]
+            Datasets to register and the internal datastore metadata associated
+            with them.
         """
-        expandedRefs = list(refs)
-        expandedItemInfos = list(itemInfos)
+        expandedRefs = []
+        expandedItemInfos = []
 
-        for ref, itemInfo in zip(refs, itemInfos):
+        for ref, itemInfo in refsAndInfos:
+            # Main dataset.
+            expandedRefs.append(ref)
+            expandedItemInfos.append(itemInfo)
+            # Conmponents (using the same item info).
             expandedRefs.extend(ref.components.values())
-            # Use the same information for all components.
             expandedItemInfos.extend([itemInfo] * len(ref.components))
 
         for ref in expandedRefs:

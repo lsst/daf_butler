@@ -283,7 +283,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # We have to register this content with registry.
         # Currently this assumes we have a file so we need to use stub entries
         # TODO: Add to ephemeral part of registry
-        self._register_datasets([ref], [itemInfo])
+        self._register_datasets([(ref, itemInfo)])
 
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)

@@ -192,7 +192,7 @@ class PosixDatastore(FileLikeDatastore):
             log.debug("Wrote file to %s", path)
 
         info = self._extractIngestInfo(path, ref, formatter=formatter)
-        self._register_datasets([ref], [info])
+        self._register_datasets([(ref, info)])
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
