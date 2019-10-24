@@ -208,9 +208,6 @@ class DatasetRefTestCase(unittest.TestCase):
         ref = DatasetRef(datasetType, dataId)
         self.assertEqual(ref.datasetType, datasetType)
         self.assertEqual(ref.dataId, dataId, msg=ref.dataId)
-        self.assertIsNone(ref.producer)
-        self.assertEqual(ref.predictedConsumers, dict())
-        self.assertEqual(ref.actualConsumers, dict())
         self.assertEqual(ref.components, dict())
 
     def testDetach(self):
@@ -225,8 +222,6 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIsNone(detachedRef.id)
         self.assertEqual(ref.datasetType, detachedRef.datasetType)
         self.assertEqual(ref.dataId, detachedRef.dataId)
-        self.assertEqual(ref.predictedConsumers, detachedRef.predictedConsumers)
-        self.assertEqual(ref.actualConsumers, detachedRef.actualConsumers)
         self.assertEqual(ref.components, detachedRef.components)
 
 
