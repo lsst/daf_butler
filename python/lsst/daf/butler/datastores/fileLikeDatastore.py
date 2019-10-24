@@ -236,7 +236,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore
         records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
         if len(records) == 0:
-            raise KeyError("Unable to retrieve formatter associated with Dataset {}".format(ref.id))
+            raise KeyError(f"Unable to retrieve location associated with Dataset {ref}.")
         assert len(records) == 1, "Primary key constraint should make more than one result impossible."
         record = records[0]
         # Convert name of StorageClass to instance
