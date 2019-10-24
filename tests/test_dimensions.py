@@ -41,8 +41,19 @@ class DimensionTestCase(unittest.TestCase):
         self.universe = DimensionUniverse()
 
     def checkGraphInvariants(self, graph):
-        for element in graph.elements:
+        elements = list(graph.elements)
+        for n, element in enumerate(elements):
+            # Ordered comparisons on graphs behave like sets.
             self.assertLessEqual(element.graph, graph)
+            # Ordered comparisons on elements correspond to the ordering within
+            # a DimensionUniverse (topological, with deterministic
+            # tiebreakers).
+            for other in elements[:n]:
+                self.assertLess(other, element)
+                self.assertLessEqual(other, element)
+            for other in elements[n + 1:]:
+                self.assertGreater(other, element)
+                self.assertGreaterEqual(other, element)
         self.assertEqual(DimensionGraph(self.universe, graph.required), graph)
         self.assertCountEqual(graph.required,
                               [dimension for dimension in graph.dimensions

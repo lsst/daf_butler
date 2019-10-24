@@ -170,6 +170,30 @@ class DimensionElement:
     def __hash__(self) -> int:
         return hash(self.name)
 
+    def __lt__(self, other) -> bool:
+        try:
+            return self.universe._elementIndices[self] < self.universe._elementIndices[other]
+        except KeyError:
+            return NotImplemented
+
+    def __le__(self, other) -> bool:
+        try:
+            return self.universe._elementIndices[self] <= self.universe._elementIndices[other]
+        except KeyError:
+            return NotImplemented
+
+    def __gt__(self, other) -> bool:
+        try:
+            return self.universe._elementIndices[self] > self.universe._elementIndices[other]
+        except KeyError:
+            return NotImplemented
+
+    def __ge__(self, other) -> bool:
+        try:
+            return self.universe._elementIndices[self] >= self.universe._elementIndices[other]
+        except KeyError:
+            return NotImplemented
+
     def hasTable(self) -> bool:
         """Return `True` if this element is associated with a table
         (even if that table "belongs" to another element).
