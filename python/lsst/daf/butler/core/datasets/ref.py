@@ -53,8 +53,7 @@ class DatasetRef:
         Normally set to `None` and assigned by `Registry`
     """
 
-    __slots__ = ("_id", "_datasetType", "_dataId", "_producer", "_run", "_hash",
-                 "_predictedConsumers", "_actualConsumers", "_components")
+    __slots__ = ("_id", "_datasetType", "_dataId", "_run", "_hash", "_components")
 
     def __init__(self, datasetType, dataId, *, id=None, run=None, hash=None, components=None, conform=True):
         assert isinstance(datasetType, DatasetType)
@@ -64,9 +63,6 @@ class DatasetRef:
             self._dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
             self._dataId = dataId
-        self._producer = None
-        self._predictedConsumers = dict()
-        self._actualConsumers = dict()
         self._components = dict()
         if components is not None:
             self._components.update(components)
@@ -112,18 +108,6 @@ class DatasetRef:
         return self._dataId
 
     @property
-    def producer(self):
-        """The `~lsst.daf.butler.Quantum` instance that produced (or will
-        produce) the Dataset.
-
-        Read-only; update via `~lsst.daf.butler.Registry.addDataset()`,
-        `~lsst.daf.butler.Quantum.addOutput()`, or
-        `~lsst.daf.butler.Butler.put()`.
-        May be `None` if no provenance information is available.
-        """
-        return self._producer
-
-    @property
     def run(self):
         """The `~lsst.daf.butler.Run` instance that produced (or will produce)
         the Dataset.
@@ -132,26 +116,6 @@ class DatasetRef:
         `~lsst.daf.butler.Butler.put()`.
         """
         return self._run
-
-    @property
-    def predictedConsumers(self):
-        """A sequence of `Quantum` instances that list this Dataset in their
-        `predictedInputs` attributes.
-
-        Read-only; update via `Quantum.addPredictedInput()`.
-        May be an empty list if no provenance information is available.
-        """
-        return _safeMakeMappingProxyType(self._predictedConsumers)
-
-    @property
-    def actualConsumers(self):
-        """A sequence of `Quantum` instances that list this Dataset in their
-        `actualInputs` attributes.
-
-        Read-only; update via `Registry.markInputUsed()`.
-        May be an empty list if no provenance information is available.
-        """
-        return _safeMakeMappingProxyType(self._actualConsumers)
 
     @property
     def components(self):
