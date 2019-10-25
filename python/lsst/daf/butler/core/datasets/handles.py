@@ -21,63 +21,45 @@
 
 from __future__ import annotations
 
-__all__ = ["PartialDatasetHandle"]
+__all__ = ["DatasetHandle", "CheckedDatasetHandle", "ResolvedDatasetHandle"]
 
 import hashlib
-from dataclasses import dataclass
-from typing import Optional, Mapping, Any
+from typing import Dict
 from types import MappingProxyType
 
 from .type import DatasetType
-from ..dimensions import DataId, DataCoordinate
+from ..dimensions import DataId, DataCoordinate, ExpandedDataCoordinate
 from ..run import Run
 from ..utils import immutable
-
-
-@dataclass(eq=False, frozen=True)
-class PartialDatasetHandle:
-
-    __slots__ = ("datasetType", "dataId")
-
-    datasetType: DatasetType
-
-    dataId: DataId
-
-    def completed(self, other: Optional[DataId] = None, **kwds: Any):
-        raise NotImplementedError("TODO")
-
-    def __eq__(self, other):
-        raise TypeError("Comparisons for PartialDatasetHandle are explicitly disabled to avoid confusion.")
 
 
 @immutable
 class DatasetHandle:
 
-    __slots__ = ("datasetType", "dataId", "_hash")
+    __slots__ = ("datasetType", "dataId")
 
     def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate):
         self = super().__new__(cls)
         self.datasetType = datasetType
-        self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+        if not isinstance(dataId, DataCoordinate):
+            dataId = MappingProxyType(dict(dataId))
+        self.dataId = dataId
         return self
 
-    @property
-    def hash(self):
-        """Secure hash of the `DatasetType` name and Data ID (`bytes`).
-        """
-        if not hasattr(self, "_hash"):
-            message = hashlib.blake2b(digest_size=32)
-            message.update(self.datasetType.name.encode("utf8"))
-            self.dataId.fingerprint(message.update)
-            self._hash = message.digest()
-        return self._hash
+    def __repr__(self):
+        return f"DatasetHandle({self.datasetType!r}, {self.dataId!r})"
 
-    @property
-    def dimensions(self):
-        """The dimensions associated with the underlying `DatasetType` and
-        Data ID (`DimensionGraph`).
-        """
-        return self.datasetType.dimensions
+    def __str__(self):
+        return f"({self.datasetType}, {self.dataId})"
+
+    def __eq__(self, other):
+        return self.datasetType == other.datasetType and self.dataId == other.dataId
+
+    def __get_newargs__(self):
+        return (self.datasetType, self.dataId)
+
+    def checked(self):
+        return CheckedDatasetHandle(self.datasetType, self.dataId)
 
     def isComponent(self):
         """Boolean indicating whether this `DatasetHandle` refers to a
@@ -125,38 +107,52 @@ class DatasetHandle:
 
         return names
 
-    def __repr__(self):
-        return f"DatasetHandle({self.datasetType!r}, {self.dataId!r})"
-
-    def __str__(self):
-        return f"({self.datasetType}, {self.dataId})"
-
-    def __eq__(self, other):
-        return self.datasetType == other.datasetType and self.dataId == other.dataId
-
-    def __get_newargs__(self):
-        return (self.datasetType, self.dataId)
-
     datasetType: DatasetType
 
-    dataId: DataCoordinate
+    dataId: DataId
 
 
-class ResolvedDatasetHandle(DatasetHandle):
+class CheckedDatasetHandle(DatasetHandle):
+
+    __slots__ = ("_hash",)
+
+    def __new__(cls, datasetType: DatasetType, dataId: DataId):
+        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+        return super().__new__(cls, datasetType, dataId)
+
+    @property
+    def hash(self):
+        """Secure hash of the `DatasetType` name and Data ID (`bytes`).
+        """
+        if not hasattr(self, "_hash"):
+            message = hashlib.blake2b(digest_size=32)
+            message.update(self.datasetType.name.encode("utf8"))
+            self.dataId.fingerprint(message.update)
+            self._hash = message.digest()
+        return self._hash
+
+    @property
+    def dimensions(self):
+        """The dimensions associated with the underlying `DatasetType` and
+        Data ID (`DimensionGraph`).
+        """
+        return self.datasetType.dimensions
+
+
+class ResolvedDatasetHandle(CheckedDatasetHandle):
 
     __slots__ = ("id", "run", "components")
 
-    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, run: Run,
-                components: Optional[Mapping[str, ResolvedDatasetHandle]]):
+    def __new__(cls, datasetType: DatasetType, dataId: ExpandedDataCoordinate, run: Run,
+                components: Dict[str, ResolvedDatasetHandle]):
         self = super().__new__(cls, datasetType, dataId)
+        assert isinstance(self.dataId, ExpandedDataCoordinate)
         self.run = run
-        if components is not None and not isinstance(components, MappingProxyType):
-            components = MappingProxyType(dict(components))
-        self.components = components
+        self.components = dict(components)
         return self
 
     def unresolved(self):
-        return DatasetHandle(self.datasetType, self.dataId)
+        return CheckedDatasetHandle(self.datasetType, self.dataId)
 
     def __repr__(self):
         # We keep repr concise by not trying to include components.
@@ -177,4 +173,4 @@ class ResolvedDatasetHandle(DatasetHandle):
 
     run: Run
 
-    components: Optional[Mapping[str, ResolvedDatasetHandle]]
+    components: Dict[str, ResolvedDatasetHandle]
