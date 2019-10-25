@@ -25,15 +25,28 @@ __all__ = ("ChainedDatastore",)
 
 import time
 import logging
-import os
 import warnings
-from typing import List, Sequence, Optional
+import itertools
+from typing import List, Sequence, Optional, Tuple
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
-    DatastoreValidationError, Constraints
+    DatastoreValidationError, Constraints, FileDataset
 
 log = logging.getLogger(__name__)
+
+
+class _IngestPrepData(Datastore.IngestPrepData):
+    """Helper class for ChainedDatastore ingest implementation.
+
+    Parameters
+    ----------
+    children : `list` of `tuple`
+        Pairs of `Datastore`, `IngestPrepData` for all child datastores.
+    """
+    def __init__(self, children: List[Tuple[Datastore, Datastore.IngestPrepData]]):
+        super().__init__(itertools.chain.from_iterable(data.refs.values() for _, data in children))
+        self.children = children
 
 
 class ChainedDatastore(Datastore):
@@ -55,6 +68,12 @@ class ChainedDatastore(Datastore):
     butlerRoot : `str`, optional
         New datastore root to use to override the configuration value. This
         root is sent to each child datastore.
+
+    Notes
+    -----
+    ChainedDatastore never supports `None` or `"move"` as an `ingest` transfer
+    mode.  It supports `"copy"`, `"symlink"`, and `"hardlink"` if and only if
+    its child datastores do.
     """
 
     defaultConfigFile = "datastores/chainedDatastore.yaml"
@@ -305,97 +324,53 @@ class ChainedDatastore(Datastore):
         if self._transaction is not None:
             self._transaction.registerUndo('put', self.remove, ref)
 
-    def ingest(self, path, ref, formatter=None, transfer=None):
-        """Add an on-disk file with the given `DatasetRef` to the store,
-        possibly transferring it.
+    def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
+        # Docstring inherited from Datastore._prepIngest.
+        if transfer is None or transfer == "move":
+            raise NotImplementedError("ChainedDatastore does not support transfer=None or transfer='move'.")
 
-        This method is forwarded to each of the chained datastores, trapping
-        cases where a datastore has not implemented file ingest and ignoring
-        them.
-
-        Notes
-        -----
-        If an absolute path is given and "move" mode is specified, then
-        we tell the child datastore to use "copy" mode and unlink it
-        at the end.  If a relative path is given then it is assumed the file
-        is already inside the child datastore.
-
-        A transfer mode of None implies that the file is already within
-        each of the (relevant) child datastores.
-
-        Parameters
-        ----------
-        path : `str`
-            File path.  Treated as relative to the repository root of each
-            child datastore if not absolute.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-        formatter : `Formatter` (optional)
-            Formatter that should be used to retreive the Dataset.  If not
-            provided, the formatter will be constructed according to
-            Datastore configuration.
-        transfer : str (optional)
-            If not None, must be one of 'move', 'copy', 'hardlink', or
-            'symlink' indicating how to transfer the file.  The new
-            filename and location will be determined via template substitution,
-            as with ``put``.  If the file is outside the datastore root, it
-            must be transferred somehow.
-
-        Raises
-        ------
-        NotImplementedError
-            If all chained datastores have no ingest implemented or if
-            a transfer mode of `None` is specified.
-        DatasetTypeNotSupportedError
-            The associated `DatasetType` is not handled by this datastore.
-        """
-        log.debug("Ingesting %s (transfer=%s)", ref, transfer)
-
-        # Confirm that we can accept this dataset
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
-
-        if transfer is None:
-            raise NotImplementedError("ChainedDatastore does not support transfer=None")
-
-        # A "move" is sometimes a "copy"
-        moveIsCopy = False
-        if transfer == "move" and os.path.isabs(path):
-            moveIsCopy = True
-
-        notImplementedCounter = 0
-        notAcceptedCounter = 0
-        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
-            if constraints is not None and not constraints.isAcceptable(ref):
-                log.debug("Datastore %s skipping ingest via configuration for ref %s",
-                          datastore.name, ref)
-                notAcceptedCounter += 1
-                continue
-
-            dstransfer = transfer
-            # Each child datastore must copy the file for a move operation
-            if moveIsCopy:
-                dstransfer = "copy"
-            try:
-                datastore.ingest(path, ref, transfer=dstransfer, formatter=formatter)
-            except NotImplementedError:
-                notImplementedCounter += 1
-            except DatasetTypeNotSupportedError:
-                notAcceptedCounter += 1
-
-        if (notAcceptedCounter + notImplementedCounter) == len(self.datastores):
-            log.warning("Datastore %s: Not accepted counter: %d; Not implemented counter: %d for ref %s",
-                        self.name, notAcceptedCounter, notImplementedCounter, ref)
-            if notAcceptedCounter > 0:
-                raise DatasetTypeNotSupportedError(f"Ingest of {ref} not supported by the chained datastores")
+        def isDatasetAcceptable(dataset, *, name, constraints):
+            if not constraints.isAcceptable(dataset.ref):
+                log.debug("Datastore %s skipping ingest via configuration for ref %s", name, dataset.ref)
+                return False
             else:
-                raise NotImplementedError("Ingest not implemented by any of the chained datastores")
+                return True
 
-        # if the file was meant to be moved then we have to delete it
-        if moveIsCopy:
-            os.unlink(path)
+        # Filter down to just datasets the chained datastore's own
+        # configuration accepts.
+        okForParent: List[FileDataset] = [dataset for dataset in datasets
+                                          if isDatasetAcceptable(dataset, name=self.name,
+                                                                 constraints=self.constraints)]
+
+        # Iterate over nested datastores and call _prepIngest on each.
+        # Save the results to a list:
+        children: List[Tuple[Datastore, Datastore.IngestPrepData]] = []
+        # ...and remember whether all of the failures are due to
+        # NotImplementedError being raised.
+        allFailuresAreNotImplementedError = True
+        for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            if constraints is not None:
+                okForChild: List[FileDataset] = [dataset for dataset in okForParent
+                                                 if isDatasetAcceptable(dataset, name=datastore.name,
+                                                                        constraints=constraints)]
+            else:
+                okForChild: List[FileDataset] = okForParent
+            try:
+                prepDataForChild = datastore._prepIngest(*okForChild, transfer=transfer)
+            except NotImplementedError:
+                log.debug("Skipping ingest for datastore %s because transfer "
+                          "mode %s is not supported.", datastore.name, transfer)
+                continue
+            allFailuresAreNotImplementedError = False
+            children.append((datastore, prepDataForChild))
+        if allFailuresAreNotImplementedError:
+            raise NotImplementedError(f"No child datastore supports transfer mode {transfer}.")
+        return _IngestPrepData(children=children)
+
+    def _finishIngest(self, prepData: _IngestPrepData, *, transfer: Optional[str] = None):
+        # Docstring inherited from Datastore._finishIngest.
+        for datastore, prepDataForChild in prepData.children:
+            datastore._finishIngest(prepDataForChild, transfer=transfer)
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.

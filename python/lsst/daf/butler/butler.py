@@ -53,7 +53,7 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
-from .core.repoTransfers import RepoExport
+from .core.repoTransfers import RepoExport, FileDataset
 
 log = logging.getLogger(__name__)
 
@@ -672,36 +672,25 @@ class Butler:
             self.registry.removeDataset(ref)
 
     @transactional
-    def ingest(self, path, datasetRefOrType, dataId=None, *, formatter=None, transfer=None, **kwds):
-        """Store and register a dataset that already exists on disk.
+    def ingest(self, *datasets: FileDataset, transfer: typing.Optional[str] = None):
+        """Store and register one or more datasets that already exist on disk.
 
         Parameters
         ----------
-        path : `str`
-            Path to the file containing the dataset.
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` is provided, ``dataId`` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the second argument.
-        formatter : `Formatter` (optional)
-            Formatter that should be used to retreive the Dataset.  If not
-            provided, the formatter will be constructed according to
-            Datastore configuration.
-        transfer : str (optional)
-            If not None, must be one of 'move', 'copy', 'hardlink', or
-            'symlink' indicating how to transfer the file.
-        kwds
-            Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            A reference to the stored dataset, updated with the correct id if
-            given.
+        datasets : `FileDataset`
+            Each positional argument is a struct containing information about
+            a file to be ingested, including its path (either absolute or
+            relative to the datastore root, if applicable), a `DatasetRef`,
+            and optionally a formatter class or its fully-qualified string
+            name.  If a formatter is not provided, the formatter that would be
+            used for `put` is assumed.  On return, all `FileDataset.ref`
+            attributes will have their `DatasetRef.id` attribute populated and
+            all `FileDataset.formatter` attributes will be set to the formatter
+            class used.  `FileDataset.path` attributes may be modified to put
+            paths in whatever the datastore considers a standardized form.
+        transfer : `str`, optional
+            If not `None`, must be one of 'move', 'copy', 'hardlink', or
+            'symlink', indicating how to transfer the file.
 
         Raises
         ------
@@ -710,13 +699,22 @@ class Butler:
             read-only.
         NotImplementedError
             Raised if the `Datastore` does not support the given transfer mode.
+        DatasetTypeNotSupportedError
+            Raised if one or more files to be ingested have a dataset type that
+            is not supported by the `Datastore`..
+        FileNotFoundError
+            Raised if one of the given files does not exist.
+        FileExistsError
+            Raised if transfer is not `None` but the (internal) location the
+            file would be moved to is already occupied.
         """
         if self.run is None:
             raise TypeError("Butler is read-only.")
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        ref = self.registry.addDataset(datasetType, dataId, run=self.run, recursive=True, **kwds)
-        self.datastore.ingest(path, ref, transfer=transfer, formatter=formatter)
-        return ref
+        # TODO: once Registry has vectorized API for addDataset, use it here.
+        for dataset in datasets:
+            dataset.ref = self.registry.addDataset(dataset.ref.datasetType, dataset.ref.dataId,
+                                                   run=self.run, recursive=True)
+        self.datastore.ingest(*datasets, transfer=transfer)
 
     @contextlib.contextmanager
     def export(self, *, directory: typing.Optional[str] = None,

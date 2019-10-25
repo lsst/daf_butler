@@ -111,4 +111,10 @@ class DatastoreTestHelper:
         config = self.config.copy()
         if sub is not None and self.root is not None:
             self.datastoreType.setConfigRoot(os.path.join(self.root, sub), config, self.config)
-        return self.datastoreType(config=config, registry=self.registry)
+        if sub is not None:
+            # Ensure that each datastore gets its own registry
+            registryClass = type(self.registry)
+            registry = registryClass()
+        else:
+            registry = self.registry
+        return self.datastoreType(config=config, registry=registry)

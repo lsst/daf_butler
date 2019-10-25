@@ -29,10 +29,14 @@ import os
 import pathlib
 import tempfile
 
+from typing import Optional, Type
+
 from lsst.daf.butler import (
     ButlerURI,
-    DatasetTypeNotSupportedError,
+    DatasetRef,
+    Formatter,
     Location,
+    StoredFileInfo,
 )
 
 from .fileLikeDatastore import FileLikeDatastore
@@ -59,6 +63,11 @@ class S3Datastore(FileLikeDatastore):
     ValueError
         If root location does not exist and ``create`` is `False` in the
         configuration.
+
+    Notes
+    -----
+    S3Datastore supports non-link transfer modes for file-based ingest:
+    `"move"`, `"copy"`, and `None` (no transfer).
     """
 
     defaultConfigFile = "datastores/s3Datastore.yaml"
@@ -230,59 +239,13 @@ class S3Datastore(FileLikeDatastore):
                 log.debug("Wrote file to %s via a temporary directory.", location.uri)
 
         # URI is needed to resolve what ingest case are we dealing with
-        self.ingest(location.uri, ref, formatter=formatter)
+        info = self._extractIngestInfo(location.uri, ref, formatter=formatter)
+        self._register_datasets([(ref, info)])
 
-    @transactional
-    def ingest(self, path, ref, formatter=None, transfer=None):
-        """Add an on-disk file with the given `DatasetRef` to the store,
-        possibly transferring it.
-
-        The caller is responsible for ensuring that the given (or predicted)
-        Formatter is consistent with how the file was written; `ingest` will
-        in general silently ignore incorrect formatters (as it cannot
-        efficiently verify their correctness), deferring errors until ``get``
-        is first called on the ingested dataset.
-
-        Parameters
-        ----------
-        path : `str`
-            File path.  Treated as relative to the repository root if not
-            absolute.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-        formatter : `Formatter` (optional)
-            Formatter that should be used to retreive the Dataset.  If not
-            provided, the formatter will be constructed according to
-            Datastore configuration.
-        transfer : str (optional)
-            If not None, must be one of 'move' or 'copy' indicating how to
-            transfer the file.  The new filename and location will be
-            determined via template substitution, as with ``put``.  If the file
-            is outside the datastore root, it must be transferred somehow.
-
-        Raises
-        ------
-        RuntimeError
-            Raised if ``transfer is None`` and path is outside the repository
-            root.
-        FileNotFoundError
-            Raised if the file at ``path`` does not exist.
-        FileExistsError
-            Raised if ``transfer is not None`` but a file already exists at the
-            location computed from the template.
-        PermissionError
-            Raised when check if file exists at target location in S3 can not
-            be made because IAM user used lacks s3:GetObject or s3:ListBucket
-            permissions.
-        """
-        if not self.constraints.isAcceptable(ref):
-            # Raise rather than use boolean return value.
-            raise DatasetTypeNotSupportedError(f"Dataset {ref} has been rejected by this datastore via"
-                                               " configuration.")
-
-        if formatter is None:
-            formatter = self.formatterFactory.getFormatterClass(ref)
-
+    def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
+        # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
+        if transfer not in (None, "move", "copy"):
+            raise NotImplementedError(f"Transfer mode {transfer} not supported.")
         # ingest can occur from file->s3 and s3->s3 (source can be file or s3,
         # target will always be s3). File has to exist at target location. Two
         # Schemeless URIs are assumed to obey os.path rules. Equivalent to
@@ -290,20 +253,13 @@ class S3Datastore(FileLikeDatastore):
         srcUri = ButlerURI(path)
         if srcUri.scheme == 'file' or not srcUri.scheme:
             if not os.path.exists(srcUri.ospath):
-                raise FileNotFoundError(f"File at '{srcUri}' does not exist; note that paths to ingest are "
-                                        "assumed to be relative to self.root unless they are absolute.")
+                raise FileNotFoundError(f"File at '{srcUri}' does not exist.")
         elif srcUri.scheme == 's3':
             if not s3CheckFileExists(srcUri, client=self.client)[0]:
-                raise FileNotFoundError("File at '{}' does not exist; note that paths to ingest are "
-                                        "assumed to be relative to self.root unless they are absolute."
-                                        .format(srcUri))
+                raise FileNotFoundError(f"File at '{srcUri}' does not exist.")
         else:
             raise NotImplementedError(f"Scheme type {srcUri.scheme} not supported.")
 
-        # Transfer is generaly None when put calls ingest. In that case file is
-        # uploaded in put, or already in proper location, so source location
-        # must be inside repository. In other cases, created target location
-        # must be inside root and source file must be deleted when 'move'd.
         if transfer is None:
             rootUri = ButlerURI(self.root)
             if srcUri.scheme == "file":
@@ -313,10 +269,19 @@ class S3Datastore(FileLikeDatastore):
             elif srcUri.scheme == "s3":
                 if not srcUri.path.startswith(rootUri.path):
                     raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'.")
+        return path
+
+    def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
+                           transfer: Optional[str] = None) -> StoredFileInfo:
+        # Docstring inherited from FileLikeDatastore._extractIngestInfo.
+        srcUri = ButlerURI(path)
+        if transfer is None:
+            rootUri = ButlerURI(self.root)
             p = pathlib.PurePosixPath(srcUri.relativeToPathRoot)
             pathInStore = str(p.relative_to(rootUri.relativeToPathRoot))
             tgtLocation = self.locationFactory.fromPath(pathInStore)
-        elif transfer == "move" or transfer == "copy":
+        else:
+            assert transfer == "move" or transfer == "copy", "Should be guaranteed by _standardizeIngestPath"
             if srcUri.scheme == "file":
                 # source is on local disk.
                 template = self.templates.getTemplate(ref)
@@ -341,18 +306,15 @@ class S3Datastore(FileLikeDatastore):
                 p = pathlib.PurePosixPath(srcUri.relativeToPathRoot)
                 relativeToDatastoreRoot = str(p.relative_to(rootUri.relativeToPathRoot))
                 tgtLocation = self.locationFactory.fromPath(relativeToDatastoreRoot)
-        else:
-            raise NotImplementedError(f"Transfer type '{transfer}' not supported.")
 
         # the file should exist on the bucket by now
         exists, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,
                                          bucket=tgtLocation.netloc,
                                          client=self.client)
 
-        # Update the registry
-        self._register_dataset_file(ref, formatter,
-                                    tgtLocation.pathInStore,
-                                    size, None)
+        return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
+                              storageClass=ref.datasetType.storageClass,
+                              file_size=size, checksum=None)
 
     def remove(self, ref):
         """Indicate to the Datastore that a Dataset can be removed.

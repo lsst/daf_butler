@@ -24,15 +24,19 @@
 __all__ = ("FileLikeDatastore", )
 
 import logging
+from abc import abstractmethod
+
+from sqlalchemy import Integer, String
 
 from dataclasses import dataclass
-from typing import ClassVar, Type, Optional
+from typing import Optional, List, Type
 
 from lsst.daf.butler import (
     Config,
-    DatabaseDict,
-    DatabaseDictRecordBase,
+    FileDataset,
+    DatasetRef,
     DatasetTypeNotSupportedError,
+    Datastore,
     DatastoreConfig,
     DatastoreValidationError,
     FileDescriptor,
@@ -44,31 +48,29 @@ from lsst.daf.butler import (
     LocationFactory,
     StorageClass,
     StoredFileInfo,
+    TableSpec,
+    FieldSpec,
+    ForeignKeySpec,
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf
+from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
 from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class DatastoreRecord(DatabaseDictRecordBase):
-    """Describes the contents of a datastore record of a dataset in the
-    registry.
+class _IngestPrepData(Datastore.IngestPrepData):
+    """Helper class for FileLikeDatastore ingest implementation.
 
-    The record is usually populated by a `StoredFileInfo` object.
+    Parameters
+    ----------
+    datasets : `list` of `FileDataset`
+        Files to be ingested by this datastore.
     """
-    __slots__ = {"path", "formatter", "storage_class", "file_size", "checksum"}
-    path: str
-    formatter: str
-    storage_class: str
-    file_size: int
-    checksum: str
-
-    lengths = {"path": 256, "formatter": 128, "storage_class": 64, "checksum": 128}
-    """Lengths of string fields."""
+    def __init__(self, datasets: List[FileDataset]):
+        super().__init__(dataset.ref for dataset in datasets)
+        self.datasets = datasets
 
 
 @dataclass(frozen=True)
@@ -118,9 +120,6 @@ class FileLikeDatastore(GenericBaseDatastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    Record: ClassVar[Type] = DatastoreRecord
-    """Class to use to represent datastore records."""
-
     root: str
     """Root directory or URI of this `Datastore`."""
 
@@ -132,9 +131,6 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     templates: FileTemplates
     """File templates that can be used by this `Datastore`."""
-
-    records: DatabaseDict
-    """Place to store internal records about datasets."""
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -171,6 +167,23 @@ class FileLikeDatastore(GenericBaseDatastore):
                                 toUpdate={"root": root},
                                 toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
+    @classmethod
+    def makeTableSpec(cls):
+        return TableSpec(
+            fields=NamedValueSet([
+                FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
+                FieldSpec(name="path", dtype=String, length=256, nullable=False),
+                FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
+                FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
+                # TODO: should checksum be Base64Bytes instead?
+                FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
+                FieldSpec(name="file_size", dtype=Integer, nullable=True),
+            ]),
+            unique=frozenset(),
+            foreignKeys=[ForeignKeySpec(table="dataset", source=("dataset_id",), target=("dataset_id",),
+                                        onDelete="CASCADE")]
+        )
+
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry)
         if "root" not in self.config:
@@ -202,51 +215,41 @@ class FileLikeDatastore(GenericBaseDatastore):
                                        universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
-        self.records = DatabaseDict.fromConfig(self.config["records"],
-                                               value=self.Record, key="dataset_id",
-                                               registry=registry)
+        self._tableName = self.config["records", "table"]
+        registry.registerOpaqueTable(self._tableName, self.makeTableSpec())
 
     def __str__(self):
         return self.root
 
-    def _info_to_record(self, info):
-        """Convert a `StoredFileInfo` to a suitable database record.
+    def addStoredItemInfo(self, refs, infos):
+        # Docstring inherited from GenericBaseDatastore
+        records = []
+        for ref, info in zip(refs, infos):
+            records.append(
+                dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
+                     storage_class=info.storageClass.name,
+                     checksum=info.checksum, file_size=info.file_size)
+            )
+        self.registry.insertOpaqueData(self._tableName, *records)
 
-        Parameters
-        ----------
-        info : `StoredFileInfo`
-            Metadata associated with the stored Dataset.
-
-        Returns
-        -------
-        record : `DatastoreRecord`
-            Record to be stored.
-        """
-        return self.Record(formatter=info.formatter, path=info.path,
-                           storage_class=info.storageClass.name,
-                           checksum=info.checksum, file_size=info.file_size)
-
-    def _record_to_info(self, record):
-        """Convert a record associated with this dataset to a `StoredItemInfo`
-
-        Parameters
-        ----------
-        record : `DatastoreRecord`
-            Object stored in the record table.
-
-        Returns
-        -------
-        info : `StoredFileInfo`
-            The information associated with this dataset record as a Python
-            class.
-        """
+    def getStoredItemInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore
+        records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
+        if len(records) == 0:
+            raise KeyError(f"Unable to retrieve location associated with Dataset {ref}.")
+        assert len(records) == 1, "Primary key constraint should make more than one result impossible."
+        record = records[0]
         # Convert name of StorageClass to instance
-        storageClass = self.storageClassFactory.getStorageClass(record.storage_class)
-        return StoredFileInfo(formatter=record.formatter,
-                              path=record.path,
+        storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
+        return StoredFileInfo(formatter=record["formatter"],
+                              path=record["path"],
                               storageClass=storageClass,
-                              checksum=record.checksum,
-                              file_size=record.file_size)
+                              checksum=record["checksum"],
+                              file_size=record["file_size"])
+
+    def removeStoredItemInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore
+        self.registry.deleteOpaqueData(self._tableName, dataset_id=ref.id)
 
     def _get_dataset_location_info(self, ref):
         """Find the `Location` of the requested dataset in the
@@ -365,27 +368,106 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, formatter
 
-    def _register_dataset_file(self, ref, formatter, path, size, checksum=None):
-        """Update registry to indicate that this dataset has been stored,
-        specifying file metadata.
+    @abstractmethod
+    def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
+        """Standardize the path of a to-be-ingested file.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Dataset to register.
-        formatter : `Formatter`
-            Formatter to use to read this dataset.
         path : `str`
-            Path to dataset relative to datastore root.
-        size : `int`
-            Size of the serialized dataset.
-        checksum : `str`, optional
-            Checksum of the serialized dataset. Can be `None`.
+            Path of a file to be ingested.
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            If `None` (default), the file must already be in a location
+            appropriate for the datastore (e.g. within its root directory),
+            and will not be moved.  Other choices include "move", "copy",
+            "symlink", and "hardlink".  This is provided only so
+            `NotImplementedError` can be raised if the mode is not supported;
+            actual transfers are deferred to `_extractIngestInfo`.
+
+        Returns
+        -------
+        path : `str`
+            New path in what the datastore considers standard form.
+
+        Notes
+        -----
+        Subclasses of `FileLikeDatastore` should implement this method instead
+        of `_prepIngest`.  It should not modify the data repository or given
+        file in any way.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if the datastore does not support the given transfer mode
+            (including the case where ingest is not supported at all).
+        FileNotFoundError
+            Raised if one of the given files does not exist.
         """
-        # Associate this dataset with the formatter for later read.
-        fileInfo = StoredFileInfo(formatter, path, ref.datasetType.storageClass,
-                                  file_size=size, checksum=checksum)
-        self._register_dataset(ref, fileInfo)
+        raise NotImplementedError("Must be implemented by subclasses.")
+
+    @abstractmethod
+    def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
+                           transfer: Optional[str] = None) -> StoredFileInfo:
+        """Relocate (if necessary) and extract `StoredFileInfo` from a
+        to-be-ingested file.
+
+        Parameters
+        ----------
+        path : `str`
+            Path of a file to be ingested.
+        ref : `DatasetRef`
+            Reference for the dataset being ingested.  Guaranteed to have
+            ``dataset_id not None`.
+        formatter : `type`
+            `Formatter` subclass to use for this dataset.
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            If `None` (default), the file must already be in a location
+            appropriate for the datastore (e.g. within its root directory),
+            and will not be modified.  Other choices include "move", "copy",
+            "symlink", and "hardlink".
+
+        Returns
+        -------
+        info : `StoredFileInfo`
+            Internal datastore record for this file.  This will be inserted by
+            the caller; the `_extractIngestInfo` is only resposible for
+            creating and populating the struct.
+
+        Raises
+        ------
+        FileNotFoundError
+            Raised if one of the given files does not exist.
+        FileExistsError
+            Raised if transfer is not `None` but the (internal) location the
+            file would be moved to is already occupied.
+        """
+        raise NotImplementedError("Must be implemented by subclasses.")
+
+    def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
+        # Docstring inherited from Datastore._prepIngest.
+        filtered = []
+        for dataset in datasets:
+            if not self.constraints.isAcceptable(dataset.ref):
+                continue
+            if dataset.formatter is None:
+                dataset.formatter = self.formatterFactory.getFormatterClass(dataset.ref)
+            else:
+                dataset.formatter = getClassOf(dataset.formatter)
+            dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
+            filtered.append(dataset)
+        return _IngestPrepData(filtered)
+
+    @transactional
+    def _finishIngest(self, prepData: Datastore.IngestPrepData, *, transfer: Optional[str] = None):
+        # Docstring inherited from Datastore._finishIngest.
+        refsAndInfos = []
+        for dataset in prepData.datasets:
+            info = self._extractIngestInfo(dataset.path, dataset.ref, formatter=dataset.formatter,
+                                           transfer=transfer)
+            refsAndInfos.append((dataset.ref, info))
+        self._register_datasets(refsAndInfos)
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.

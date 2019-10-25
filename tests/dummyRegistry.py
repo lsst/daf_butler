@@ -20,20 +20,47 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from contextlib import contextmanager
+from typing import Any, Iterator
 
-from lsst.daf.butler import DimensionUniverse
+from lsst.daf.butler import DimensionUniverse, TableSpec
 
 
 class DummyRegistry:
     """Dummy Registry, for Datastore test purposes.
-
-    TODO refactor StorageInfo out of registry into a separate object,
-    that can more easily be dummyfied.
     """
     def __init__(self):
         self._counter = 0
         self._entries = {}
+        self._externalTableRows = {}
+        self._externalTableSpecs = {}
         self.dimensions = DimensionUniverse()
+
+    def registerOpaqueTable(self, name: str, spec: TableSpec):
+        self._externalTableSpecs[name] = spec
+        self._externalTableRows[name] = []
+
+    def insertOpaqueData(self, name: str, *data: dict):
+        spec = self._externalTableSpecs[name]
+        uniqueConstraints = list(spec.unique)
+        uniqueConstraints.append(tuple(field.name for field in spec.fields if field.primaryKey))
+        for d in data:
+            for constraint in uniqueConstraints:
+                matching = list(self.fetchOpaqueData(name, **{k: d[k] for k in constraint}))
+                if len(matching) != 0:
+                    raise RuntimeError(f"Unique constraint {constraint} violation in external table {name}.")
+            self._externalTableRows[name].append(d)
+
+    def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
+        for d in self._externalTableRows[name]:
+            if all(d[k] == v for k, v in where.items()):
+                yield d
+
+    def deleteOpaqueData(self, name: str, **where: Any):
+        kept = []
+        for d in self._externalTableRows[name]:
+            if not all(d[k] == v for k, v in where.items()):
+                kept.append(d)
+        self._externalTableRows[name] = kept
 
     def addDatasetLocation(self, ref, datastoreName):
         # Only set ID if ID is 0 or None
