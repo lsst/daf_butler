@@ -23,7 +23,15 @@ import os
 import unittest
 from datetime import datetime
 
-from lsst.daf.butler import ButlerConfig, DatasetType, Registry, DataCoordinate, StorageClass, DimensionGraph
+from lsst.daf.butler import (
+    ButlerConfig,
+    DataCoordinate,
+    DatasetRef,
+    DatasetType,
+    DimensionGraph,
+    Registry,
+    StorageClass,
+)
 
 
 class QueryBuilderTestCase(unittest.TestCase):
@@ -313,6 +321,15 @@ class QueryBuilderTestCase(unittest.TestCase):
         rows = list(registry.queryDimensions(dimensions, datasets={calexpType: [collection]}))
         self.assertEqual(len(rows), 0)
 
+    def checkQueriedDatasets(self, rows, count):
+        rows = list(rows)
+        self.assertEqual(len(rows), count)
+        for row in rows:
+            self.assertIsInstance(row, DatasetRef)
+            self.assertIsInstance
+            self.assertIsNotNone(row.id)
+            self.assertEqual(row.datasetType.dimensions, row.dataId.graph)
+
     def testCalibrationLabelIndirection(self):
         """Test that we can look up datasets with calibration_label dimensions
         from a data ID with exposure dimensions.
@@ -385,28 +402,28 @@ class QueryBuilderTestCase(unittest.TestCase):
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
+                    self.checkQueriedDatasets(rows, 1)
             for detector in (3, 4, 5):
                 with self.subTest(exposure=exposure, detector=detector):
                     rows = registry.queryDatasets("flat", collections=[collection2],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
+                    self.checkQueriedDatasets(rows, 1)
             for detector in (1, 2, 4, 5):
                 with self.subTest(exposure=exposure, detector=detector):
                     rows = registry.queryDatasets("flat", collections=[collection1, collection2],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
+                    self.checkQueriedDatasets(rows, 1)
             for detector in (3,):
                 with self.subTest(exposure=exposure, detector=detector):
                     rows = registry.queryDatasets("flat", collections=[collection1, collection2],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
-                    self.assertEqual(len(list(rows)), 2)
+                    self.checkQueriedDatasets(rows, 2)
 
 
 if __name__ == "__main__":

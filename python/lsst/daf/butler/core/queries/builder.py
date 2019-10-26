@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import List, Iterable
+from typing import List, Iterable, TYPE_CHECKING
 
 from sqlalchemy.sql import ColumnElement, and_, literal, bindparam, select, FromClause
 import sqlalchemy.sql
@@ -40,6 +40,9 @@ from .datasets import DatasetRegistryStorage, CollectionsExpression
 from .expressions import ClauseVisitor
 from .query import Query
 
+if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from ..registry import Registry
+
 
 class QueryBuilder:
     """A builder for potentially complex queries that join tables based
@@ -47,6 +50,8 @@ class QueryBuilder:
 
     Parameters
     ----------
+    registry: `Registry`
+        Registry client being queried.
     connection : `sqlalchemy.engine.Connection`
         SQLAlchemy connection object.  This is only used to pass through
         to the `Query` object returned by `finish`.
@@ -60,10 +65,11 @@ class QueryBuilder:
         Storage backend object that abstracts access to dataset tables.
     """
 
-    def __init__(self, connection: Connection, summary: QuerySummary,
+    def __init__(self, registry: Registry, connection: Connection, summary: QuerySummary,
                  dimensionStorage: NamedKeyDict[DimensionElement, DimensionRecordStorage],
                  datasetStorage: DatasetRegistryStorage):
         self.summary = summary
+        self._registry = registry
         self._connection = connection
         self._dimensionStorage = dimensionStorage
         self._datasetStorage = datasetStorage
@@ -172,6 +178,7 @@ class QueryBuilder:
         self.joinTable(table, datasetType.dimensions)
         if isResult:
             self._columns.datasets[datasetType] = (table.columns["dataset_id"],
+                                                   table.columns["run_id"],
                                                    table.columns["rank"] if addRank else None)
 
     def joinTable(self, table: FromClause, dimensions: Iterable[Dimension]):
@@ -396,5 +403,5 @@ class QueryBuilder:
         self._joinMissingDimensionElements()
         self._addSelectClause()
         parameters = self._addWhereClause()
-        return Query(summary=self.summary, connection=self._connection,
+        return Query(registry=self._registry, summary=self.summary, connection=self._connection,
                      sql=self._sql, columns=self._columns, parameters=parameters)

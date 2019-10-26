@@ -346,10 +346,10 @@ class QueryColumns:
     in `QuerySummary.spatial`.
     """
 
-    datasets: NamedKeyDict[DatasetType, Tuple[ColumnElement, Optional[ColumnElement]]]
-    """Columns that correspond to the ``dataset_id`` and optionally collection
-    rank for a dataset in the query (`NamedKeyDict` mapping `DatasetType` to
-    `tuple` of `ColumnElement`).
+    datasets: NamedKeyDict[DatasetType, Tuple[ColumnElement, ColumnElement, Optional[ColumnElement]]]
+    """Columns that correspond to the ``dataset_id``, ``run_id``, and
+    optionally collection rank for a dataset in the query (`NamedKeyDict`
+    mapping `DatasetType` to `tuple` of `ColumnElement`).
 
     "Collection rank" here is the index of the collection in which this dataset
     was found in the list of collections to search; a lower rank corresponds

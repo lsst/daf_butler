@@ -259,6 +259,7 @@ class DatasetRegistryStorage:
         # selecting columns from this subquery in the larger query.
         if isResult:
             columns.append(self._datasetTable.columns.dataset_id)
+            columns.append(self._datasetTable.columns.run_id)
             if addRank:
                 if collections is ...:
                     raise TypeError("Cannot rank collections when no collections are provided.")

@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 import itertools
-from typing import Optional, Dict, Any, Tuple, Callable
+from typing import Optional, Dict, Any, Tuple, Callable, TYPE_CHECKING
 
 from sqlalchemy.sql import FromClause
 from sqlalchemy.engine import RowProxy, ResultProxy, Connection
@@ -34,6 +34,9 @@ from ..datasets import DatasetType, DatasetRef
 from ..dimensions import DimensionGraph, DataCoordinate, ExpandedDataCoordinate
 
 from .structs import QuerySummary, QueryColumns, QueryParameters
+
+if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    from ..registry import Registry
 
 
 class Query:
@@ -47,6 +50,8 @@ class Query:
 
     Parameters
     ----------
+    registry: `Registry`
+        Registry client being queried.
     connection: `sqlalchemy.engine.Connection`
         Connection used to execute the query.
     sql : `sqlalchemy.sql.FromClause`
@@ -70,13 +75,14 @@ class Query:
     SQLAlchemy here in the future would be to reduce computational overheads.
     """
 
-    def __init__(self, *, connection: Connection, sql: FromClause,
+    def __init__(self, *, registry: Registry, connection: Connection, sql: FromClause,
                  summary: QuerySummary, columns: QueryColumns, parameters: QueryParameters):
         self.summary = summary
         self.sql = sql
         self._columns = columns
         self._parameters = parameters
         self._connection = connection
+        self._registry = registry
 
     def predicate(self, region: Optional[Region] = None) -> Callable[[RowProxy], bool]:
         """Return a callable that can perform extra Python-side filtering of
@@ -201,8 +207,9 @@ class Query:
         """
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetType.dimensions)
-        datasetIdColumn, datasetRankColumn = self._columns.datasets[datasetType]
-        return (DatasetRef(datasetType, dataId, id=row[datasetIdColumn]),
+        datasetIdColumn, datasetRunIdColumn, datasetRankColumn = self._columns.datasets[datasetType]
+        return (DatasetRef(datasetType, dataId, id=row[datasetIdColumn],
+                           run=self._registry.getRun(row[datasetRunIdColumn])),
                 row[datasetRankColumn] if datasetRankColumn is not None else None)
 
     def execute(self, dataId: Optional[ExpandedDataCoordinate] = None) -> ResultProxy:

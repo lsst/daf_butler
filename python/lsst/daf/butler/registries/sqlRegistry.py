@@ -821,7 +821,7 @@ class SqlRegistry(Registry):
         builder : `QueryBuilder`
             Object that can be used to construct and perform advanced queries.
         """
-        return QueryBuilder(connection=self._connection, summary=summary,
+        return QueryBuilder(registry=self, connection=self._connection, summary=summary,
                             dimensionStorage=self._dimensionStorage,
                             datasetStorage=self._datasetStorage)
 
