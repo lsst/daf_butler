@@ -19,7 +19,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .type import *
-from .ref import *
-from .handles import *
-from .description import *
+from __future__ import annotations
+
+__all__ = ["DatasetDescription"]
+
+from typing import Dict, Set, List, Optional
+from dataclasses import dataclass
+
+from .handles import ResolvedDatasetHandle
+from ..quantum import Quantum
+
+
+@dataclass(eq=False)
+class DatasetDescription:
+    handle: ResolvedDatasetHandle
+    components: Optional[Dict[str, ResolvedDatasetHandle]] = None
+    collections: Optional[Set[str]] = None
+    producer: Optional[Quantum] = None
+    actualConsumers: Optional[List[Quantum]] = None
+    predictedConsumers: Optional[List[Quantum]] = None

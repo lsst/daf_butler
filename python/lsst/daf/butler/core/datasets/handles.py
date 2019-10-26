@@ -21,11 +21,9 @@
 
 from __future__ import annotations
 
-__all__ = ["DatasetHandle", "CheckedDatasetHandle", "ResolvedDatasetHandle"]
+__all__ = ["PartialDatasetHandle", "CheckedDatasetHandle", "ResolvedDatasetHandle"]
 
 import hashlib
-from typing import Dict
-from types import MappingProxyType
 
 from .type import DatasetType
 from ..dimensions import DataId, DataCoordinate, ExpandedDataCoordinate
@@ -33,59 +31,10 @@ from ..run import Run
 from ..utils import immutable
 
 
-@immutable
-class DatasetHandle:
-
-    __slots__ = ("datasetType", "dataId")
-
-    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate):
-        self = super().__new__(cls)
-        self.datasetType = datasetType
-        if not isinstance(dataId, DataCoordinate):
-            dataId = MappingProxyType(dict(dataId))
-        self.dataId = dataId
-        return self
-
-    def __repr__(self):
-        return f"DatasetHandle({self.datasetType!r}, {self.dataId!r})"
-
-    def __str__(self):
-        return f"({self.datasetType}, {self.dataId})"
-
-    def __eq__(self, other):
-        return self.datasetType == other.datasetType and self.dataId == other.dataId
-
-    def __get_newargs__(self):
-        return (self.datasetType, self.dataId)
-
-    def checked(self):
-        return CheckedDatasetHandle(self.datasetType, self.dataId)
-
-    def isComponent(self):
-        """Boolean indicating whether this `DatasetHandle` refers to a
-        component of a composite.
-
-        Returns
-        -------
-        isComponent : `bool`
-            `True` if this `DatasetHandle` is a component, `False` otherwise.
-        """
-        return self.datasetType.isComponent()
-
-    def isComposite(self):
-        """Boolean indicating whether this `DatasetHandle` is a composite type.
-
-        Returns
-        -------
-        isComposite : `bool`
-            `True` if this `DatasetHandle` is a composite type, `False`
-            otherwise.
-        """
-        return self.datasetType.isComposite()
+class _LookupNamesForDatasetHandleBase:
 
     def _lookupNames(self):
-        """Name keys to use when looking up this DatasetHandle in a
-        configuration.
+        """Name keys to use when looking up this dataset in a configuration.
 
         The names are returned in order of priority.
 
@@ -99,26 +48,68 @@ class DatasetHandle:
         """
         # Special case the instrument Dimension since we allow configs
         # to include the instrument name in the hierarchy.
-        names = self.datasetType._lookupNames()
-
+        names = tuple(self.datasetType._lookupNames())
         if "instrument" in self.dataId:
-            names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]})
-                          for n in names) + names
-
+            names += tuple(n.clone(dataId={"instrument": self.dataId["instrument"]}) for n in names)
         return names
+
+
+class PartialDatasetHandle(_LookupNamesForDatasetHandleBase):
+
+    __slots__ = ("datasetType", "dataId")
+
+    def __init__(self, datasetType: DatasetType, dataId: DataCoordinate):
+        self.datasetType = datasetType
+        self.dataId = dataId
+
+    def __repr__(self):
+        return f"PartialDatasetHandle({self.datasetType!r}, {self.dataId!r})"
+
+    def __str__(self):
+        return f"({self.datasetType}, {self.dataId})"
+
+    def __eq__(self, other):
+        return self.datasetType == other.datasetType and self.dataId == other.dataId
+
+    def checked(self):
+        return CheckedDatasetHandle(self.datasetType, self.dataId)
+
+    def isComponent(self):
+        """Boolean indicating whether this dataset refers to a component of a
+        composite.
+
+        Returns
+        -------
+        isComponent : `bool`
+            `True` if this dataset is a component, `False` otherwise.
+        """
+        return self.datasetType.isComponent()
+
+    def isComposite(self):
+        """Boolean indicating whether this dataset is a composite type.
+
+        Returns
+        -------
+        isComposite : `bool`
+            `True` if this dataset is a composite type, `False` otherwise.
+        """
+        return self.datasetType.isComposite()
 
     datasetType: DatasetType
 
     dataId: DataId
 
 
-class CheckedDatasetHandle(DatasetHandle):
+@immutable
+class CheckedDatasetHandle(_LookupNamesForDatasetHandleBase):
 
-    __slots__ = ("_hash",)
+    __slots__ = ("datasetType", "dataId", "_hash",)
 
     def __new__(cls, datasetType: DatasetType, dataId: DataId):
-        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
-        return super().__new__(cls, datasetType, dataId)
+        self = super().__new__(cls)
+        self.datasetType = datasetType
+        self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+        return self
 
     @property
     def hash(self):
@@ -138,17 +129,54 @@ class CheckedDatasetHandle(DatasetHandle):
         """
         return self.datasetType.dimensions
 
+    def isComponent(self):
+        """Boolean indicating whether this dataset is a
+        component of a composite.
+
+        Returns
+        -------
+        isComponent : `bool`
+            `True` if this dataset is a component, `False` otherwise.
+        """
+        return self.datasetType.isComponent()
+
+    def isComposite(self):
+        """Boolean indicating whether this dataset is a composite type.
+
+        Returns
+        -------
+        isComposite : `bool`
+            `True` if this dataset is a composite type, `False`
+            otherwise.
+        """
+        return self.datasetType.isComposite()
+
+    def __repr__(self):
+        return f"CheckedDatasetHandle({self.datasetType!r}, {self.dataId!r})"
+
+    def __str__(self):
+        return f"({self.datasetType}, {self.dataId})"
+
+    def __eq__(self, other):
+        return self.datasetType == other.datasetType and self.dataId == other.dataId
+
+    def __get_newargs__(self):
+        return (self.datasetType, self.dataId)
+
+    datasetType: DatasetType
+
+    dataId: DataCoordinate
+
 
 class ResolvedDatasetHandle(CheckedDatasetHandle):
 
-    __slots__ = ("id", "run", "components")
+    __slots__ = ("id", "run")
 
-    def __new__(cls, datasetType: DatasetType, dataId: ExpandedDataCoordinate, run: Run,
-                components: Dict[str, ResolvedDatasetHandle]):
+    def __new__(cls, datasetType: DatasetType, dataId: ExpandedDataCoordinate, id: int, run: Run):
         self = super().__new__(cls, datasetType, dataId)
         assert isinstance(self.dataId, ExpandedDataCoordinate)
+        self.id = id
         self.run = run
-        self.components = dict(components)
         return self
 
     def unresolved(self):
@@ -156,21 +184,15 @@ class ResolvedDatasetHandle(CheckedDatasetHandle):
 
     def __repr__(self):
         # We keep repr concise by not trying to include components.
-        return (f"ResolvedDatasetHandle({self.datasetType!r}, {self.dataId!r}, "
+        return (f"ResolvedDatasetHandle({self.datasetType.name!r}, {self.dataId!r}, "
                 f"id={self.id}, run={self.run!r}, ...)")
 
     def __str__(self):
-        front = f"({self.datasetType}, {self.dataId}, id={self.id}, run={self.run}"
-        if self.components is not None:
-            return front + f", components={set(self.components.keys())})"
-        else:
-            return front + ")"
+        return f"({self.datasetType.name}, {self.dataId}, id={self.id}, run={self.run})"
 
     def __get_newargs__(self):
-        return (self.datasetType, self.dataId, self.run, self.components)
+        return (self.datasetType, self.dataId, self.id, self.run)
 
     id: int
 
     run: Run
-
-    components: Dict[str, ResolvedDatasetHandle]
