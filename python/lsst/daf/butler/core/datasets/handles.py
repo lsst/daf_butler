@@ -24,9 +24,10 @@ from __future__ import annotations
 __all__ = ["PartialDatasetHandle", "CheckedDatasetHandle", "ResolvedDatasetHandle"]
 
 import hashlib
+from typing import Dict, Optional
 
 from .type import DatasetType
-from ..dimensions import DataId, DataCoordinate, ExpandedDataCoordinate
+from ..dimensions import DataId, DataCoordinate
 from ..run import Run
 from ..utils import immutable
 
@@ -170,22 +171,22 @@ class CheckedDatasetHandle(_LookupNamesForDatasetHandleBase):
 
 class ResolvedDatasetHandle(CheckedDatasetHandle):
 
-    __slots__ = ("id", "run")
+    __slots__ = ("id", "run", "components")
 
-    def __new__(cls, datasetType: DatasetType, dataId: ExpandedDataCoordinate, id: int, run: Run):
+    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, id: int, run: Run,
+                components: Optional[Dict[str, ResolvedDatasetHandle]] = None):
         self = super().__new__(cls, datasetType, dataId)
-        assert isinstance(self.dataId, ExpandedDataCoordinate)
         self.id = id
         self.run = run
+        self.components = components
         return self
 
     def unresolved(self):
         return CheckedDatasetHandle(self.datasetType, self.dataId)
 
     def __repr__(self):
-        # We keep repr concise by not trying to include components.
         return (f"ResolvedDatasetHandle({self.datasetType.name!r}, {self.dataId!r}, "
-                f"id={self.id}, run={self.run!r}, ...)")
+                f"id={self.id}, run={self.run!r})")
 
     def __str__(self):
         return f"({self.datasetType.name}, {self.dataId}, id={self.id}, run={self.run})"
@@ -196,3 +197,5 @@ class ResolvedDatasetHandle(CheckedDatasetHandle):
     id: int
 
     run: Run
+
+    components: Dict[str, ResolvedDatasetHandle]
