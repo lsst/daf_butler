@@ -10,7 +10,6 @@ from typing import (
     Union,
 )
 from datetime import datetime
-from abc import abstractmethod, ABC
 
 if TYPE_CHECKING:
     from .core.dimensions import (
@@ -34,9 +33,8 @@ def interrupting(func):
     return func
 
 
-class Registry(ABC):
+class Registry:
 
-    @abstractmethod
     @interrupting
     def registerOpaqueTable(self, name: str, spec: TableSpec, *, write: bool = True):
         """Ensure that a table for use by a `Datastore` or other data
@@ -57,7 +55,6 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def insertOpaqueData(self, name: str, *data: dict):
         """Insert records into an opaque table.
@@ -73,7 +70,6 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
         """Retrieve records from an opaque table.
 
@@ -95,7 +91,6 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def deleteOpaqueData(self, name: str, **where: Any):
         """Remove records from an opaque table.
@@ -113,36 +108,29 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @interrupting
     def registerRun(self, name: str) -> Run:
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def updateRun(self, run: Run):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def registerCollection(self, name: str, *, calibration: bool = False):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @interrupting
     def registerQuanta(self, dimensions: DimensionGraph, *, write: bool = True):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def insertQuantum(self, quantum: Quantum) -> Quantum:
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def updateQuantum(self, quantum: Quantum):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @interrupting
     def registerDimensionElement(self, element: DimensionElement, *, write: bool = True):
         """Ensure that the `Registry` supports insertions of the given
@@ -168,7 +156,6 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[dict, DimensionRecord],
@@ -190,13 +177,11 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def fetchDimensionData(self, element: Union[DimensionElement, str], *dataIds: DataId,
                            iterable: Optional[DataIdIterable]
                            ) -> Iterator[DimensionRecord]:
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @interrupting
     def registerDatasetType(self, datasetType: DatasetType, *, write: bool = True):
         """Ensure a `DatasetType` is recognized by the `Registry`.
@@ -221,11 +206,9 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def fetchDatasetType(self, name: str) -> DatasetType:
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def insertDatasets(self, datasetType: DatasetType, run: Run, dataIds: DataIdIterable, *,
                        recursive: bool = True, producer: Optional[Quantum] = None
@@ -234,7 +217,6 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def findDatasets(self, datasetType: DatasetType, collections: List[str], dataIds: DataIdIterable = None,
                      *, recursive: bool = True) -> SingleDatasetTypeIterable:
         """Search one or more collections (in order) for datasets.
@@ -244,43 +226,35 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def deleteDatasets(self, datasets: DatasetIterable, *, recursive: bool = True):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def associate(self, collection: str, datasets: DatasetIterable, *,
                   begin: Optional[datetime] = None, end: Optional[datetime] = None,
                   recursive: bool = True):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def disassociate(self, collection: str, datasets: DatasetIterable, *, recursive: bool = True):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @interrupting
     def registerDatasetLocation(self, datastoreName: str):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def insertDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def fetchDatasetLocations(self, datasets: DatasetIterable):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def queryDimensions(self, dimensions: Iterable[Union[Dimension, str]], *,
                         dataId: Optional[DataId] = None,
                         datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
@@ -308,9 +282,6 @@ class Registry(ABC):
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
             key column of a dimension table) dimension name.
-        expand : `bool`, optional
-            If `True` (default) yield `ExpandedDataCoordinate` instead of
-            minimal `DataCoordinate` base-class instances.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -325,7 +296,6 @@ class Registry(ABC):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def queryDatasets(self, datasetType: DatasetTypeExpression, *,
                       collections: CollectionsExpression,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
@@ -360,12 +330,6 @@ class Registry(ABC):
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
             key column of a dimension table) dimension name.
-        deduplicate : `bool`, optional
-            If `True` (`False` is default), for each result data ID, only
-            yield one `DatasetHandle` of each `DatasetType`, from the first
-            collection in which a dataset of that dataset type appears
-            (according to the order of ``collections`` passed in).  Cannot be
-            used if any element in ``collections`` is an expression.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
