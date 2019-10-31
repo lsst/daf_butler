@@ -20,21 +20,26 @@ from .core.dimensions import (
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
-    DimensionUniverse,
 )
-from .core.datasets import DatasetType, ResolvedDatasetHandle
+from .core.datasets import DatasetType
 from .core.run import Run
 from .core.quantum import Quantum
 from .core.utils import NamedKeyDict
-from .core.queries import DatasetTypeExpression, CollectionsExpression
+from .core.queries import CollectionsExpression, Like
 
-from .iterables import DataIdIterable, SingleDatasetTypeIterable
+from .iterables import DataIdIterable, SingleDatasetTypeIterable, DatasetIterable
+
+DatasetTypesExpression = Union[DatasetType, str, Like, List[Union[DatasetType, str, Like]], ...]
 
 
 class DimensionRecordStorage(ABC):
 
     @abstractmethod
-    def matches(self, dataId: Optional[ExpandedDataCoordinate] = None):
+    def isWriteable(self) -> bool:
+        pass
+
+    @abstractmethod
+    def matches(self, dataId: Optional[ExpandedDataCoordinate] = None) -> bool:
         pass
 
     @abstractmethod
@@ -42,16 +47,16 @@ class DimensionRecordStorage(ABC):
         pass
 
     @abstractmethod
-    def fetch(self, dataIds: DataIdIterable) -> Iterator[DimensionRecord]:
+    def fetch(self, dataIds: DataIdIterable) -> Dict[DataCoordinate, DimensionRecord]:
         pass
 
     @abstractmethod
-    def select(self, dataId: Optional[ExpandedDataCoordinate] = None) -> sqlalchemy.sql.FromClause:
+    def select(self, dataId: Optional[ExpandedDataCoordinate] = None) -> Optional[sqlalchemy.sql.FromClause]:
         pass
 
     @abstractmethod
     def selectSkyPixOverlap(self, dataId: Optional[ExpandedDataCoordinate] = None
-                            ) -> sqlalchemy.sql.FromClause:
+                            ) -> Optional[sqlalchemy.sql.FromClause]:
         pass
 
     element: DimensionElement
@@ -63,8 +68,12 @@ DimensionRecordCache = NamedKeyDict[DimensionElement, Dict[DataCoordinate, Dimen
 class DatasetRecordStorage(ABC):
 
     @abstractmethod
+    def isWriteable(self) -> bool:
+        pass
+
+    @abstractmethod
     def matches(self, collections: CollectionsExpression = ...,
-                dataId: Optional[ExpandedDataCoordinate] = None):
+                dataId: Optional[ExpandedDataCoordinate] = None) -> bool:
         pass
 
     @abstractmethod
@@ -99,55 +108,121 @@ class DatasetRecordStorage(ABC):
     @abstractmethod
     def select(self, collections: CollectionsExpression = ...,
                dataId: Optional[ExpandedDataCoordinate] = None,
-               isResult: bool = True, addRank: bool = False) -> sqlalchemy.sql.FromClause:
+               isResult: bool = True, addRank: bool = False) -> Optional[sqlalchemy.sql.FromClause]:
         pass
 
     datasetType: DatasetType
 
 
-class DatastoreRecordStorage(ABC):
+class OpaqueRecordStorage(ABC):
 
     @abstractmethod
-    def insertOpaqueData(self, *data: dict):
+    def isWriteable(self) -> bool:
         pass
 
     @abstractmethod
-    def fetchOpaqueData(self, **where: Any) -> Iterator[dict]:
+    def insert(self, *data: dict):
         pass
 
     @abstractmethod
-    def deleteOpaqueData(self, **where: Any):
+    def fetch(self, **where: Any) -> Iterator[dict]:
         pass
 
     @abstractmethod
-    def insertLocations(self, *datasets: ResolvedDatasetHandle):
-        pass
-
-    @abstractmethod
-    def fetchLocations(self, *datasets: ResolvedDatasetHandle):
-        pass
-
-    @abstractmethod
-    def deleteLocations(self, *datasets: ResolvedDatasetHandle):
+    def delete(self, **where: Any):
         pass
 
     name: str
 
 
+class GeneralRecordStorage(ABC):
+
+    @abstractmethod
+    def isWriteable(self) -> bool:
+        pass
+
+    @abstractmethod
+    def matches(self, collections: CollectionsExpression = ...,
+                datasetType: DatasetTypesExpression = None) -> bool:
+        pass
+
+    @abstractmethod
+    def ensureRun(self, name: str) -> Run:
+        pass
+
+    @abstractmethod
+    def findRun(self, name: str) -> Optional[Run]:
+        pass
+
+    @abstractmethod
+    def updateRun(self, run: Run):
+        pass
+
+    @abstractmethod
+    def ensureCollection(self, name: str, *, calibration: bool = False):
+        pass
+
+    @abstractmethod
+    def ensureDatasetType(self, datasetType: DatasetType):
+        pass
+
+    @abstractmethod
+    def insertDatasetLocations(self, datastoreName: str, datasets: DatasetIterable, *,
+                               ephemeral: bool = False):
+        pass
+
+    @abstractmethod
+    def fetchDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
+        pass
+
+    @abstractmethod
+    def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
+        pass
+
+    @abstractmethod
+    def selectDatasetTypes(self, datasetTypes: DatasetTypesExpression = ..., *,
+                           collections: CollectionsExpression = ...) -> Optional[sqlalchemy.sql.FromClause]:
+        pass
+
+    @abstractmethod
+    def selectCollections(self, collections: CollectionsExpression = ..., *,
+                          datasetTypes: DatasetTypesExpression = ...) -> Optional[sqlalchemy.sql.FromClause]:
+        pass
+
+
+class QuantumRecordStorage(ABC):
+
+    @abstractmethod
+    def insertQuantum(self, quantum: Quantum) -> Quantum:
+        pass
+
+    @abstractmethod
+    def updateQuantum(self, quantum: Quantum):
+        pass
+
+    # TODO: we need methods for fetching and querying (but don't yet have the
+    # high-level Registry API).
+
+    dimensions: DimensionGraph
+
+
 class RegistryBackend(ABC):
 
     @abstractmethod
-    @classmethod
-    def construct(cls, universe: DimensionUniverse, *, write: bool = True):
+    def ensureWriteableGeneralRecordStorage(self):
         pass
 
     @abstractmethod
-    def registerDatastore(self, name: str, spec: TableSpec, *, write: bool = True, ephemeral: bool = False
-                          ) -> DatastoreRecordStorage:
+    def getGeneralRecordStorage(self) -> GeneralRecordStorage:
         pass
 
     @abstractmethod
-    def fetchDatastore(self, name: str) -> DatastoreRecordStorage:
+    def registerOpaqueData(self, name: str, spec: TableSpec, *, write: bool = True, ephemeral: bool = False
+                           ) -> OpaqueRecordStorage:
+        pass
+
+    @abstractmethod
+    def fetchOpaqueData(self, name: str) -> OpaqueRecordStorage:
         pass
 
     @abstractmethod
@@ -164,27 +239,7 @@ class RegistryBackend(ABC):
         pass
 
     @abstractmethod
-    def ensureRun(self, name: str) -> Run:
-        pass
-
-    @abstractmethod
-    def updateRun(self, run: Run):
-        pass
-
-    @abstractmethod
-    def ensureCollection(self, name: str, *, calibration: bool = False):
-        pass
-
-    @abstractmethod
-    def registerQuanta(self, dimensions: DimensionGraph, *, write: bool = True):
-        pass
-
-    @abstractmethod
-    def insertQuantum(self, quantum: Quantum) -> Quantum:
-        pass
-
-    @abstractmethod
-    def updateQuantum(self, quantum: Quantum):
+    def registerQuanta(self, dimensions: DimensionGraph, *, write: bool = True) -> QuantumRecordStorage:
         pass
 
     @abstractmethod
@@ -193,16 +248,4 @@ class RegistryBackend(ABC):
 
     @abstractmethod
     def fetchDatasetType(self, name: str) -> DatasetRecordStorage:
-        pass
-
-    @abstractmethod
-    def selectDatasetTypes(self, datasetType: DatasetTypeExpression = ..., *,
-                           collections: CollectionsExpression = ...,
-                           dataId: Optional[ExpandedDataCoordinate] = None) -> sqlalchemy.sql.FromClause:
-        pass
-
-    @abstractmethod
-    def selectCollections(self, collection: CollectionsExpression = ..., *,
-                          datasetTypes: Union[DatasetTypeExpression, List[DatasetTypeExpression]] = ...,
-                          dataId: Optional[ExpandedDataCoordinate] = None) -> sqlalchemy.sql.FromCLause:
         pass
