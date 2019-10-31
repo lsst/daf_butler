@@ -9,7 +9,6 @@ from typing import (
 )
 from collections import defaultdict
 import dataclasses
-import itertools
 
 import sqlalchemy.sql
 
@@ -32,36 +31,50 @@ class DatasetExpansionFlags:
 
 @dataclasses.dataclass(frozen=True)
 class DatasetIterableFlags:
-    materialized: bool = False
+    reentrant: bool = False
     expanded: DatasetExpansionFlags
 
 
 @dataclasses.dataclass(frozen=True)
 class DataIdIterableFlags:
-    materialized: bool = False
+    reentrant: bool = False
     expanded: bool = False
 
 
 class DatasetIterable(Iterable[ResolvedDatasetHandle]):
 
-    def __init__(self, *, flags: DatasetIterableFlags):
+    def __init__(self, iterable: Iterable[ResolvedDatasetHandle], *,
+                 selectable: Optional[sqlalchemy.sql.FromClause] = None,
+                 flags: Optional[DatasetIterableFlags] = None, **kwds: bool):
+        self._iterable = iterable
+        self._selectable = selectable
+        if flags is not None:
+            flags = DatasetIterableFlags()
+        if kwds:
+            flags = dataclasses.replace(flags, **kwds)
         self.flags = flags
+
+    def __iter__(self) -> Iterator[ResolvedDatasetHandle]:
+        yield from self._iterable
 
     def one(self) -> ResolvedDatasetHandle:
         handle, = iter(self)
         return handle
 
-    def selectable(self) -> Optional[sqlalchemy.sql.Selectable]:
-        return None
+    def select(self) -> Optional[sqlalchemy.sql.FromClause]:
+        return self._selectable
 
-    def materialized(self) -> DatasetIterable:
-        if self.flags.materialized:
+    def reentrant(self) -> DatasetIterable:
+        if self.flags.reentrant:
             return self
         else:
-            return _DatasetIterableAdapter(list(self), dataclasses.replace(self.flags, materialized=True))
+            return DatasetIterable(list(self), flags=self.flags, selectable=self.select(), reentrant=True)
 
     def expanded(self, registry: RegistryBackend, *, composites: Optional[bool] = None,
                  collections: Optional[bool] = None, dataIds: Optional[bool] = None):
+        if dataIds:
+            registry.fetchDimensionData()
+        # TODO:
         raise NotImplementedError("TODO: add base class implementation.")
 
     def deduplicated(self, collections: Sequence[str]) -> DatasetIterable:
@@ -72,7 +85,7 @@ class DatasetIterable(Iterable[ResolvedDatasetHandle]):
         for handle in self:
             groups[handle.datasetType].append(handle)
         for datasetType, handles in groups.items():
-            yield _SingleDatasetTypeIterableAdapter(datasetType, handles)
+            yield SingleDatasetTypeIterable(datasetType, handles, flags=self.flags, reentrant=True)
 
     def collections(self) -> Set[str]:
         collections = set()
@@ -91,25 +104,28 @@ class DatasetIterable(Iterable[ResolvedDatasetHandle]):
 
 class SingleDatasetTypeIterable(DatasetIterable):
 
-    def __init__(self, datasetType: DatasetType, *, flags: DatasetIterableFlags):
-        super().__init__(flags=flags)
+    def __init__(self, datasetType: DatasetType, iterable: Iterable[ResolvedDatasetHandle], *,
+                 selectable: Optional[sqlalchemy.sql.FromClause] = None,
+                 flags: Optional[DatasetIterableFlags] = None, **kwds: bool):
+        super().__init__(iterable, selectable=selectable, flags=flags, **kwds)
         self.datasetType = datasetType
 
-    def materialized(self) -> SingleDatasetTypeIterable:
-        if self.flags.materialized:
+    def reentrant(self) -> SingleDatasetTypeIterable:
+        if self.flags.reentrant:
             return self
         else:
-            return _SingleDatasetTypeIterableAdapter(self.datasetType, list(self),
-                                                     dataclasses.replace(self.flags, materialized=True))
+            return SingleDatasetTypeIterable(self.datasetType, list(self), flags=self.flags,
+                                             selectable=self.select(), reentrant=True)
 
-    def deduplicated(self, collections: Sequence[str]) -> DatasetIterable:
+    def deduplicated(self, collections: Sequence[str]) -> SingleDatasetTypeIterable:
         raise NotImplementedError("TODO: add base class implementation.")
 
     def groupByDatasetType(self) -> Iterable[SingleDatasetTypeIterable]:
         yield self
 
     def extractDataIds(self) -> DataIdIterable:
-        return _DataIdFromDatasetIterator(self)
+        return DataIdIterable(self.datasetType.dimensions, (handle.dataId for handle in self),
+                              selectable=self.selectable, flags=self.flags)
 
     def datasetTypes(self) -> NamedValueSet[DatasetType]:
         return NamedValueSet([self.datasetType])
@@ -119,98 +135,41 @@ class SingleDatasetTypeIterable(DatasetIterable):
 
 class DataIdIterable(Iterable):
 
-    def __init__(self, dimensions: DimensionGraph, *, flags: DataIdIterableFlags):
-        self.flags = flags
+    def __init__(self, dimensions: DimensionGraph, iterable: Iterable[DataCoordinate], *,
+                 selectable: Optional[sqlalchemy.sql.FromClause] = None,
+                 flags: Optional[DatasetIterableFlags] = None, **kwds: bool):
         self.dimensions = dimensions
+        self._iterable = iterable
+        self._selectable = selectable
+        if flags is not None:
+            flags = DatasetIterableFlags()
+        if kwds:
+            flags = dataclasses.replace(flags, **kwds)
+        self.flags = flags
+
+    def __iter__(self) -> Iterator[DataCoordinate]:
+        yield from self._iterable
 
     def one(self) -> DataCoordinate:
         handle, = iter(self)
         return handle
 
-    def selectable(self) -> Optional[sqlalchemy.sql.Selectable]:
-        return None
+    def select(self) -> Optional[sqlalchemy.sql.Selectable]:
+        return self._selectable
 
-    def materialized(self) -> DataIdIterable:
-        if self.flags.materialized:
+    def reentrant(self) -> DataIdIterable:
+        if self.flags.reentrant:
             return self
         else:
-            return _DataIdIterableAdapter(self.dimensions, list(self),
-                                          dataclasses.replace(self.flags, materialized=True))
+            return DataIdIterable(self.dimensions, list(self), flags=self.flags,
+                                  selectable=self.selectable, reentrant=True)
 
     def expanded(self, registry: RegistryBackend) -> DataIdIterable:
         raise NotImplementedError("TODO: add base class implementation.")
 
     def subset(self, dimensions: DimensionGraph) -> DataIdIterable:
-        raise NotImplementedError("TODO: provide base class implementation")
+        return DataIdIterable(dimensions, (dataId.subset(dimensions) for dataId in self),
+                              selectable=self.selectable, flags=self.flags)
 
     flags: DatasetIterableFlags
     dimensions: DimensionGraph
-
-
-class _DatasetIterableAdapter(DatasetIterable):
-
-    def __init__(self, handles: Iterable[ResolvedDatasetHandle], *, flags: DatasetIterableFlags):
-        super().__init__(flags=flags)
-        self._handles = handles
-
-    def __iter__(self) -> Iterator[ResolvedDatasetHandle]:
-        yield from self._handles
-
-
-class _GroupedDatasetIterable(DatasetIterable):
-
-    def __init__(self, groups: Sequence[SingleDatasetTypeIterable], *, flags: DatasetIterableFlags):
-        super().__init__(flags=flags)
-        self._groups = groups
-
-    def __iter__(self) -> Iterator[ResolvedDatasetHandle]:
-        return itertools.chain.from_iterable(self._groups)
-
-    def groupByDatasetType(self) -> Iterable[SingleDatasetTypeIterable]:
-        yield from self._groups
-
-
-class _SingleDatasetTypeIterableAdapter(SingleDatasetTypeIterable):
-
-    def __init__(self, datasetType: DatasetType, handles: Iterable[ResolvedDatasetHandle], *,
-                 flags: DatasetIterableFlags):
-        super().__init__(datasetType, flags=flags)
-        self._handles = handles
-
-    def __iter__(self) -> Iterator[ResolvedDatasetHandle]:
-        yield from self._handles
-
-
-class _DataIdIterableAdapter(DataIdIterable):
-
-    def __init__(self, dimensions: DimensionGraph, dataIds: Iterable[DataCoordinate], *,
-                 flags: DataIdIterableFlags):
-        super().__init__(dimensions, flags=flags)
-        self._dataIds = dataIds
-
-    def __iter__(self) -> Iterator[DataCoordinate]:
-        yield from self._dataIds
-
-
-class _DataIdFromDatasetIterator(DataIdIterable):
-
-    def __init__(self, datasets: SingleDatasetTypeIterable):
-        super().__init__(datasets.datasetType.dimensions,
-                         flags=DataIdIterableFlags(materialized=datasets.flags.materialized,
-                                                   expandedDataIds=datasets.flags.expandedDataIds))
-        self._datasets = datasets
-
-    def __iter__(self) -> Iterator[DataCoordinate]:
-        for handle in self._datasets:
-            yield handle.dataId
-
-
-class _DataIdSubsetIterator(DataIdIterable):
-
-    def __init__(self, parent: DataIdIterable, dimensions: DimensionGraph, *, flags: DataIdIterableFlags):
-        super().__init__(dimensions, flags=flags)
-        self._parent = parent
-
-    def __iter__(self) -> Iterator[DataCoordinate]:
-        for coordinate in self._parent:
-            yield coordinate.subset(self.dimensions)
