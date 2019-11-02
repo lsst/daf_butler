@@ -209,11 +209,7 @@ class QuantumRecordStorage(ABC):
 class RegistryBackend(ABC):
 
     @abstractmethod
-    def ensureWriteableGeneralRecordStorage(self):
-        pass
-
-    @abstractmethod
-    def getGeneralRecordStorage(self) -> GeneralRecordStorage:
+    def getGeneral(self) -> GeneralRecordStorage:
         pass
 
     @abstractmethod
