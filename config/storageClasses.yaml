@@ -130,5 +130,7 @@ storageClasses:
     pytype: lsst.base.Packages
   NumpyArray:
     pytype: numpy.ndarray
+  StrayLightData:
+    pytype: lsst.ip.isr.StrayLightData
   Thumbnail:
     pytype: numpy.ndarray
