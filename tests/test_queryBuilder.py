@@ -110,7 +110,10 @@ class QueryBuilderTestCase(unittest.TestCase):
             registry.dimensions,
             dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
         )
-
+        # Test that single dim string works as well as list of str
+        rows = list(registry.queryDimensions("visit", datasets={rawType: [collection1]}, expand=True))
+        rowsI = list(registry.queryDimensions(["visit"], datasets={rawType: [collection1]}, expand=True))
+        self.assertEqual(rows, rowsI)
         # with empty expression
         rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]}, expand=True))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors

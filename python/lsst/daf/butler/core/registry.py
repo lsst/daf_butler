@@ -776,7 +776,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def queryDimensions(self, dimensions: Iterable[Union[Dimension, str]], *,
+    def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
                         datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
                         where: Optional[str] = None,
@@ -786,7 +786,7 @@ class Registry(metaclass=ABCMeta):
 
         Parameters
         ----------
-        dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
+        dimensions : `Dimension` or `str`, or iterable thereof
             The dimensions of the data IDs to yield, as either `Dimension`
             instances or `str`.  Will be automatically expanded to a complete
             `DimensionGraph`.
