@@ -25,7 +25,8 @@ __all__ = ("SchemaConfig", "Schema", "TableSpec", "FieldSpec", "ForeignKeySpec")
 from base64 import b64encode, b64decode
 from math import ceil
 from dataclasses import dataclass
-from typing import Dict, Optional, Tuple, Set, List, Union
+from typing import Dict, Optional, Tuple, Set, Union
+import typing
 
 from lsst.sphgeom import ConvexPolygon
 from .views import View
@@ -321,10 +322,10 @@ class TableSpec:
     fields: NamedValueSet[FieldSpec]
     """Specifications for the columns in this table."""
 
-    unique: Set[Tuple[str, ...]]
+    unique: Set[Tuple[str, ...]] = frozenset()
     """Non-primary-key unique constraints for the table."""
 
-    foreignKeys: List[ForeignKeySpec]
+    foreignKeys: typing.Sequence[ForeignKeySpec] = tuple()
     """Foreign key constraints for the table."""
 
     sql: Optional[str] = None
