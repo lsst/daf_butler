@@ -52,9 +52,89 @@ def _maybeUnion(tables: Iterable[sqlalchemy.sql.FromClause]) -> Optional[sqlalch
         return sqlalchemy.sql.union_all(*tables)
 
 
+class ChainedGeneralRecordStorage(GeneralRecordStorage):
+
+    def __init__(self, chain: Iterable[GeneralRecordStorage]):
+        self._chain = list(chain)
+
+    def push(self, link: GeneralRecordStorage):
+        self._chain.append(link)
+
+    def isWriteable(self) -> bool:
+        return self._chain[-1].isWriteable()
+
+    def matches(self, collections: CollectionsExpression = ...,
+                datasetTypes: DatasetTypesExpression = None) -> bool:
+        return any(link.matches(collections, datasetTypes) for link in self._chain)
+
+    def syncRun(self, name: str) -> Run:
+        return self._chain[-1].syncRun(name)
+
+    def findRun(self, name: str) -> Optional[Run]:
+        for link in self._chain:
+            run = link.findRun(name)
+            if run is not None:
+                return run
+        return None
+
+    def updateRun(self, run: Run):
+        self._chain[-1].updateRun(run)
+
+    def syncCollection(self, name: str, *, calibration: bool = False):
+        self._chain[-1].syncCollection(name, calibration=calibration)
+
+    def insertDatasetLocations(self, datastoreName: str, datasets: DatasetIterable, *,
+                               ephemeral: bool = False):
+        self._chain[-1].insertDatasetLocations(datastoreName, datasets, ephemeral=ephemeral)
+
+    def fetchDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
+        if len(self._chain) > 1:
+            datasets = datasets.reentrant()
+        for link in self._chain:
+            yield from link.fetchDatasetLocations(datasets)
+
+    def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
+        self._chain[-1].deleteDatasetLocations(datastoreName, datasets)
+
+    def selectDatasetTypes(self, datasetTypes: DatasetTypesExpression = ..., *,
+                           collections: CollectionsExpression = ...) -> sqlalchemy.sql.FromClause:
+        return _maybeUnion(link.selectDatasetTypes(datasetTypes, collections) for link in self._chain
+                           if link.matches(collections, datasetTypes))
+
+    def selectCollections(self, collections: CollectionsExpression = ..., *,
+                          datasetTypes: DatasetTypesExpression = ...) -> sqlalchemy.sql.FromCLause:
+        return _maybeUnion(link.selectCollections(collections, datasetTypes) for link in self._chain
+                           if link.matches(collections, datasetTypes))
+
+
+class ChainedOpaqueRecordStorage(OpaqueRecordStorage):
+
+    def __init__(self, chain: Iterable[OpaqueRecordStorage]):
+        self._chain = list(chain)
+
+    def push(self, link: DimensionRecordStorage):
+        self._chain.append(link)
+
+    def isWriteable(self) -> bool:
+        return self._chain[-1].isWriteable()
+
+    def insert(self, *data: dict):
+        self._chain[-1].insert(*data)
+
+    def fetch(self, **where: Any) -> Iterator[dict]:
+        for link in self._chain:
+            yield from link.fetch(**where)
+
+    def delete(self, **where: Any):
+        self._chain[-1].delete(**where)
+
+    name: str
+
+
 class ChainedDimensionRecordStorage(DimensionRecordStorage):
 
-    def __init__(self, chain: Iterable[DimensionRecordStorage]):
+    def __init__(self, element: DimensionElement, chain: Iterable[DimensionRecordStorage]):
+        super().__init__(element=element)
         self._chain = list(chain)
 
     def push(self, link: DimensionRecordStorage):
@@ -100,7 +180,8 @@ DimensionRecordCache = NamedKeyDict[DimensionElement, Dict[DataCoordinate, Dimen
 
 class ChainedDatasetRecordStorage(DatasetRecordStorage):
 
-    def __init__(self, chain: Iterable[DatasetRecordStorage]):
+    def __init__(self, datasetType: DatasetType, chain: Iterable[DatasetRecordStorage]):
+        super().__init__(datasetType=datasetType)
         self._chain = list(chain)
 
     def push(self, link: DimensionRecordStorage):
@@ -173,85 +254,6 @@ class ChainedDatasetRecordStorage(DatasetRecordStorage):
     datasetType: DatasetType
 
 
-class ChainedOpaqueRecordStorage(OpaqueRecordStorage):
-
-    def __init__(self, chain: Iterable[OpaqueRecordStorage]):
-        self._chain = list(chain)
-
-    def push(self, link: DimensionRecordStorage):
-        self._chain.append(link)
-
-    def isWriteable(self) -> bool:
-        return self._chain[-1].isWriteable()
-
-    def insert(self, *data: dict):
-        self._chain[-1].insert(*data)
-
-    def fetch(self, **where: Any) -> Iterator[dict]:
-        for link in self._chain:
-            yield from link.fetch(**where)
-
-    def delete(self, **where: Any):
-        self._chain[-1].delete(**where)
-
-    name: str
-
-
-class ChainedGeneralRecordStorage(GeneralRecordStorage):
-
-    def __init__(self, chain: Iterable[GeneralRecordStorage]):
-        self._chain = list(chain)
-
-    def push(self, link: GeneralRecordStorage):
-        self._chain.append(link)
-
-    def isWriteable(self) -> bool:
-        return self._chain[-1].isWriteable()
-
-    def matches(self, collections: CollectionsExpression = ...,
-                datasetTypes: DatasetTypesExpression = None) -> bool:
-        return any(link.matches(collections, datasetTypes) for link in self._chain)
-
-    def ensureRun(self, name: str) -> Run:
-        return self._chain[-1].ensureRun(name)
-
-    def findRun(self, name: str) -> Optional[Run]:
-        for link in self._chain:
-            run = link.findRun(name)
-            if run is not None:
-                return run
-        return None
-
-    def updateRun(self, run: Run):
-        self._chain[-1].updateRun(run)
-
-    def ensureCollection(self, name: str, *, calibration: bool = False):
-        self._chain[-1].ensureCollection(name, calibration=calibration)
-
-    def insertDatasetLocations(self, datastoreName: str, datasets: DatasetIterable, *,
-                               ephemeral: bool = False):
-        self._chain[-1].insertDatasetLocations(datastoreName, datasets, ephemeral=ephemeral)
-
-    def fetchDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
-        if len(self._chain) > 1:
-            datasets = datasets.reentrant()
-        for link in self._chain:
-            yield from link.fetchDatasetLocations(datasets)
-
-    def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
-        self._chain[-1].deleteDatasetLocations(datastoreName, datasets)
-
-    def selectDatasetTypes(self, datasetTypes: DatasetTypesExpression = ..., *,
-                           collections: CollectionsExpression = ...) -> sqlalchemy.sql.FromClause:
-        return _maybeUnion(link.selectDatasetTypes(datasetTypes, collections) for link in self._chain
-                           if link.matches(collections, datasetTypes))
-
-    def selectCollections(self, collections: CollectionsExpression = ..., *,
-                          datasetTypes: DatasetTypesExpression = ...) -> sqlalchemy.sql.FromCLause:
-        return _maybeUnion(link.selectCollections(collections, datasetTypes) for link in self._chain
-                           if link.matches(collections, datasetTypes))
-
-
 class ChainedQuantumRecordStorage(QuantumRecordStorage):
 
     def insert(self, quantum: Quantum) -> Quantum:
@@ -284,7 +286,7 @@ class ChainedRegistryBackend(RegistryBackend):
     def __init__(self, chain: Sequence[RegistryBackendRecordStorage], *, write: bool = True):
         if not chain:
             chain = RegistryBackendRecordStorage([self.makeGeneralRecordStorage(write=write)])
-        self._general = ChainedGeneralRecordStorage(general)
+        self._general = chain
         self._opaque: Dict[str, ChainedOpaqueRecordStorage] = {}
         self._dimensions: Dict[str, ChainedDimensionRecordStorage] = {}
         self._quanta: Dict[DimensionGraph, ChainedQuantumRecordStorage] = {}
@@ -334,7 +336,7 @@ class ChainedRegistryBackend(RegistryBackend):
             storage.push(link)
         return storage
 
-    def fetchOpaqueData(self, name: str) -> OpaqueRecordStorage:
+    def getOpaqueData(self, name: str) -> OpaqueRecordStorage:
         return self._opaque[name]
 
     def registerDimensionElement(self, element: DimensionElement, *, write: bool = True
@@ -342,12 +344,15 @@ class ChainedRegistryBackend(RegistryBackend):
         storage = self._dimensions.get(element.name)
         if storage is None:
             link = self.makeDimensionRecordStorage(element, write=write)
-            storage = ChainedDimensionRecordStorage([link])
+            storage = ChainedDimensionRecordStorage(element, [link])
             self._dimensions[element] = storage
         elif write and not storage.isWriteable():
             link = self.makeDimensionRecordStorage(element, write=write)
             storage.push(link)
         return storage
+
+    def getDimensionElement(self, element: DimensionElement) -> DimensionRecordStorage:
+        return self._dimensions.get(element.name)
 
     def registerQuanta(self, dimensions: DimensionGraph, *, write: bool = True) -> QuantumRecordStorage:
         storage = self._quanta.get(dimensions)
@@ -364,12 +369,12 @@ class ChainedRegistryBackend(RegistryBackend):
         storage = self._datasets.get(datasetType.name)
         if storage is None:
             link = self.makeQuantumRecordStorage(datasetType, write=write)
-            storage = ChainedQuantumRecordStorage([link])
+            storage = ChainedQuantumRecordStorage(datasetType, [link])
             self._datasets[datasetType.name] = storage
         elif write and not storage.isWriteable():
             link = self.makeQuantumRecordStorage(datasetType, write=write)
             storage.push(link)
         return storage
 
-    def fetchDatasetType(self, name: str) -> DatasetRecordStorage:
+    def getDatasetType(self, name: str) -> DatasetRecordStorage:
         return self._datasets[name]

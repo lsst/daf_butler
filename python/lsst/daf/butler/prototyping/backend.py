@@ -13,7 +13,6 @@ from typing import (
 
 import sqlalchemy
 
-from .core.schema import TableSpec
 from .core.dimensions import (
     DataCoordinate,
     ExpandedDataCoordinate,
@@ -22,8 +21,8 @@ from .core.dimensions import (
     DimensionRecord,
 )
 from .core.datasets import DatasetType
-from .core.run import Run
 from .core.quantum import Quantum
+from .core.timespan import Timespan
 from .core.utils import NamedKeyDict
 from .core.queries import CollectionsExpression, Like
 
@@ -32,7 +31,94 @@ from .iterables import DataIdIterable, SingleDatasetTypeIterable, DatasetIterabl
 DatasetTypesExpression = Union[DatasetType, str, Like, List[Union[DatasetType, str, Like]], ...]
 
 
+class Run:
+    name: str
+    collection_id: int
+    origin: int
+    timespan: Timespan
+    host: str
+    environment_id: int
+
+
+class GeneralRecordStorage(ABC):
+
+    @abstractmethod
+    def isWriteable(self) -> bool:
+        pass
+
+    @abstractmethod
+    def matches(self, collections: CollectionsExpression = ...,
+                datasetType: DatasetTypesExpression = None) -> bool:
+        pass
+
+    @abstractmethod
+    def syncRun(self, name: str) -> Run:
+        pass
+
+    @abstractmethod
+    def findRun(self, name: str) -> Optional[Run]:
+        pass
+
+    @abstractmethod
+    def updateRun(self, run: Run):
+        pass
+
+    @abstractmethod
+    def syncCollection(self, name: str, *, calibration: bool = False):
+        pass
+
+    @abstractmethod
+    def insertDatasetLocations(self, datastoreName: str, datasets: DatasetIterable, *,
+                               ephemeral: bool = False):
+        pass
+
+    @abstractmethod
+    def getDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
+        pass
+
+    @abstractmethod
+    def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
+        pass
+
+    @abstractmethod
+    def selectDatasetTypes(self, datasetTypes: DatasetTypesExpression = ..., *,
+                           collections: CollectionsExpression = ...) -> Optional[sqlalchemy.sql.FromClause]:
+        pass
+
+    @abstractmethod
+    def selectCollections(self, collections: CollectionsExpression = ..., *,
+                          datasetTypes: DatasetTypesExpression = ...) -> Optional[sqlalchemy.sql.FromClause]:
+        pass
+
+
+class OpaqueRecordStorage(ABC):
+
+    def __init__(self, name: str):
+        self.name = name
+
+    @abstractmethod
+    def isWriteable(self) -> bool:
+        pass
+
+    @abstractmethod
+    def insert(self, *data: dict):
+        pass
+
+    @abstractmethod
+    def fetch(self, **where: Any) -> Iterator[dict]:
+        pass
+
+    @abstractmethod
+    def delete(self, **where: Any):
+        pass
+
+    name: str
+
+
 class DimensionRecordStorage(ABC):
+
+    def __init__(self, element: DimensionElement):
+        self.element = element
 
     @abstractmethod
     def isWriteable(self) -> bool:
@@ -65,7 +151,29 @@ class DimensionRecordStorage(ABC):
 DimensionRecordCache = NamedKeyDict[DimensionElement, Dict[DataCoordinate, DimensionRecord]]
 
 
+class QuantumRecordStorage(ABC):
+
+    def __init__(self, dimensions: DimensionGraph):
+        self.dimensions = dimensions
+
+    @abstractmethod
+    def insertQuantum(self, quantum: Quantum) -> Quantum:
+        pass
+
+    @abstractmethod
+    def updateQuantum(self, quantum: Quantum):
+        pass
+
+    # TODO: we need methods for fetching and querying (but don't yet have the
+    # high-level Registry API).
+
+    dimensions: DimensionGraph
+
+
 class DatasetRecordStorage(ABC):
+
+    def __init__(self, datasetType: DatasetType):
+        self.datasetType = datasetType
 
     @abstractmethod
     def isWriteable(self) -> bool:
@@ -112,136 +220,3 @@ class DatasetRecordStorage(ABC):
         pass
 
     datasetType: DatasetType
-
-
-class OpaqueRecordStorage(ABC):
-
-    @abstractmethod
-    def isWriteable(self) -> bool:
-        pass
-
-    @abstractmethod
-    def insert(self, *data: dict):
-        pass
-
-    @abstractmethod
-    def fetch(self, **where: Any) -> Iterator[dict]:
-        pass
-
-    @abstractmethod
-    def delete(self, **where: Any):
-        pass
-
-    name: str
-
-
-class GeneralRecordStorage(ABC):
-
-    @abstractmethod
-    def isWriteable(self) -> bool:
-        pass
-
-    @abstractmethod
-    def matches(self, collections: CollectionsExpression = ...,
-                datasetType: DatasetTypesExpression = None) -> bool:
-        pass
-
-    @abstractmethod
-    def ensureRun(self, name: str) -> Run:
-        pass
-
-    @abstractmethod
-    def findRun(self, name: str) -> Optional[Run]:
-        pass
-
-    @abstractmethod
-    def updateRun(self, run: Run):
-        pass
-
-    @abstractmethod
-    def ensureCollection(self, name: str, *, calibration: bool = False):
-        pass
-
-    @abstractmethod
-    def ensureDatasetType(self, datasetType: DatasetType):
-        pass
-
-    @abstractmethod
-    def insertDatasetLocations(self, datastoreName: str, datasets: DatasetIterable, *,
-                               ephemeral: bool = False):
-        pass
-
-    @abstractmethod
-    def fetchDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
-        pass
-
-    @abstractmethod
-    def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
-        pass
-
-    @abstractmethod
-    def selectDatasetTypes(self, datasetTypes: DatasetTypesExpression = ..., *,
-                           collections: CollectionsExpression = ...) -> Optional[sqlalchemy.sql.FromClause]:
-        pass
-
-    @abstractmethod
-    def selectCollections(self, collections: CollectionsExpression = ..., *,
-                          datasetTypes: DatasetTypesExpression = ...) -> Optional[sqlalchemy.sql.FromClause]:
-        pass
-
-
-class QuantumRecordStorage(ABC):
-
-    @abstractmethod
-    def insertQuantum(self, quantum: Quantum) -> Quantum:
-        pass
-
-    @abstractmethod
-    def updateQuantum(self, quantum: Quantum):
-        pass
-
-    # TODO: we need methods for fetching and querying (but don't yet have the
-    # high-level Registry API).
-
-    dimensions: DimensionGraph
-
-
-class RegistryBackend(ABC):
-
-    @abstractmethod
-    def getGeneral(self) -> GeneralRecordStorage:
-        pass
-
-    @abstractmethod
-    def registerOpaqueData(self, name: str, spec: TableSpec, *, write: bool = True, ephemeral: bool = False
-                           ) -> OpaqueRecordStorage:
-        pass
-
-    @abstractmethod
-    def fetchOpaqueData(self, name: str) -> OpaqueRecordStorage:
-        pass
-
-    @abstractmethod
-    def registerDimensionElement(self, element: DimensionElement, *, write: bool = True
-                                 ) -> DimensionRecordStorage:
-        pass
-
-    @abstractmethod
-    def fetchDimensionElement(self, element: DimensionElement) -> DimensionRecordStorage:
-        pass
-
-    @abstractmethod
-    def getDimensionRecordCache(self, dimensions: DimensionGraph) -> DimensionRecordCache:
-        pass
-
-    @abstractmethod
-    def registerQuanta(self, dimensions: DimensionGraph, *, write: bool = True) -> QuantumRecordStorage:
-        pass
-
-    @abstractmethod
-    def registerDatasetType(self, datasetType: DatasetType, *, write: bool = True) -> DatasetRecordStorage:
-        pass
-
-    @abstractmethod
-    def fetchDatasetType(self, name: str) -> DatasetRecordStorage:
-        pass
