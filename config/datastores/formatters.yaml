@@ -18,6 +18,7 @@ PeakCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatte
 SimpleCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
 SourceCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
 ObjectMaskCatalog: lsst.pipe.tasks.objectMasks.RegionFileFormatter
+DataFrame: lsst.daf.butler.formatters.parquetFormatter.ParquetFormatter
 DefectsList: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
 ImageF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
 ImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
