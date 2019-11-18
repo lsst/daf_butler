@@ -73,6 +73,14 @@ storageClasses:
     pytype: lsst.afw.table.SourceCatalog
   ObjectMaskCatalog:
     pytype: lsst.pipe.tasks.objectMasks.ObjectMaskCatalog
+  DataFrame:
+    pytype: pandas.DataFrame
+    components:
+      columns: DataFrameIndex
+    parameters:
+      - columns
+  DataFrameIndex:
+    pytype: pandas.Index
   SkyMap:
     pytype: lsst.skymap.BaseSkyMap
   PropertySet:
