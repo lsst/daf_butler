@@ -134,3 +134,5 @@ storageClasses:
     pytype: lsst.ip.isr.StrayLightData
   Thumbnail:
     pytype: numpy.ndarray
+  Plot:
+    pytype: matplotlib.figure.Figure
