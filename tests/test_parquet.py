@@ -65,21 +65,21 @@ class ParquetFormatterTestCase(unittest.TestCase):
     def testSingleIndexDataFrame(self):
         columns1 = pd.Index(["a", "b", "c"])
         df1 = pd.DataFrame(np.random.randn(5, 3), index=np.arange(5, dtype=int), columns=columns1)
-        self.butler.put(df1, self.datasetType)
+        self.butler.put(df1, self.datasetType, dataId={})
         # Read the whole DataFrame.
-        df2 = self.butler.get(self.datasetType)
+        df2 = self.butler.get(self.datasetType, dataId={})
         self.assertTrue(df1.equals(df2))
         # Read just the column descriptions.
-        columns2 = self.butler.get(f"{self.datasetType.name}.columns")
+        columns2 = self.butler.get(f"{self.datasetType.name}.columns", dataId={})
         self.assertTrue(df1.columns.equals(columns2))
         # Read just some columns a few different ways.
-        df3 = self.butler.get(self.datasetType, parameters={"columns": ["a", "c"]})
+        df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
         self.assertTrue(df1.loc[:, ["a", "c"]].equals(df3))
-        df4 = self.butler.get(self.datasetType, parameters={"columns": "a"})
+        df4 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": "a"})
         self.assertTrue(df1.loc[:, ["a"]].equals(df4))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
-            self.butler.get(self.datasetType, parameters={"columns": ["d"]})
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
 
     def testMultiIndexDataFrame(self):
         columns1 = pd.MultiIndex.from_tuples(
@@ -94,22 +94,22 @@ class ParquetFormatterTestCase(unittest.TestCase):
             names=["filter", "column"],
         )
         df1 = pd.DataFrame(np.random.randn(5, 6), index=np.arange(5, dtype=int), columns=columns1)
-        self.butler.put(df1, self.datasetType)
+        self.butler.put(df1, self.datasetType, dataId={})
         # Read the whole DataFrame.
-        df2 = self.butler.get(self.datasetType)
+        df2 = self.butler.get(self.datasetType, dataId={})
         self.assertTrue(df1.equals(df2))
         # Read just the column descriptions.
-        columns2 = self.butler.get(f"{self.datasetType.name}.columns")
+        columns2 = self.butler.get(f"{self.datasetType.name}.columns", dataId={})
         self.assertTrue(df1.columns.equals(columns2))
         # Read just some columns a few different ways.
-        df3 = self.butler.get(self.datasetType, parameters={"columns": {"filter": "g"}})
+        df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": {"filter": "g"}})
         self.assertTrue(df1.loc[:, ["g"]].equals(df3))
-        df4 = self.butler.get(self.datasetType,
+        df4 = self.butler.get(self.datasetType, dataId={},
                               parameters={"columns": {"filter": ["r"], "column": "a"}})
         self.assertTrue(df1.loc[:, [("r", "a")]].equals(df4))
         # Passing an unrecognized column should be a ValueError.
         with self.assertRaises(ValueError):
-            self.butler.get(self.datasetType, parameters={"columns": ["d"]})
+            self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["d"]})
 
 
 if __name__ == "__main__":
