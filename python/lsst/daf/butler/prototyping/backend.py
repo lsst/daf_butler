@@ -15,12 +15,12 @@ import sqlalchemy
 
 from .core.dimensions import (
     DataCoordinate,
-    ExpandedDataCoordinate,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
+    ExpandedDataCoordinate,
 )
-from .core.datasets import DatasetType
+from .core.datasets import DatasetType, ResolvedDatasetHandle
 from .core.quantum import Quantum
 from .core.timespan import Timespan
 from .core.utils import NamedKeyDict
@@ -60,6 +60,10 @@ class GeneralRecordStorage(ABC):
         pass
 
     @abstractmethod
+    def getRun(self, collection_id: int, origin: int) -> Optional[Run]:
+        pass
+
+    @abstractmethod
     def updateRun(self, run: Run):
         pass
 
@@ -73,7 +77,7 @@ class GeneralRecordStorage(ABC):
         pass
 
     @abstractmethod
-    def getDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
+    def fetchDatasetLocations(self, dataset: ResolvedDatasetHandle) -> Iterator[str]:
         pass
 
     @abstractmethod
@@ -133,8 +137,8 @@ class DimensionRecordStorage(ABC):
         pass
 
     @abstractmethod
-    def fetch(self, dataIds: DataIdIterable) -> Dict[DataCoordinate, DimensionRecord]:
-        pass
+    def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
+        raise NotImplementedError()
 
     @abstractmethod
     def select(self, dataId: Optional[ExpandedDataCoordinate] = None) -> Optional[sqlalchemy.sql.FromClause]:

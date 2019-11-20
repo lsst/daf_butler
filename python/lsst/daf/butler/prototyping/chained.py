@@ -18,12 +18,12 @@ import sqlalchemy
 from .core.schema import TableSpec
 from .core.dimensions import (
     DataCoordinate,
-    ExpandedDataCoordinate,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
+    ExpandedDataCoordinate,
 )
-from .core.datasets import DatasetType
+from .core.datasets import DatasetType, ResolvedDatasetHandle
 from .core.run import Run
 from .core.quantum import Quantum
 from .core.utils import NamedKeyDict
@@ -77,6 +77,13 @@ class ChainedGeneralRecordStorage(GeneralRecordStorage):
                 return run
         return None
 
+    def getRun(self, collection_id: int, origin: int) -> Optional[Run]:
+        for link in self._chain:
+            run = link.getRun(collection_id, origin)
+            if run is not None:
+                return run
+        return None
+
     def updateRun(self, run: Run):
         self._chain[-1].updateRun(run)
 
@@ -87,11 +94,9 @@ class ChainedGeneralRecordStorage(GeneralRecordStorage):
                                ephemeral: bool = False):
         self._chain[-1].insertDatasetLocations(datastoreName, datasets, ephemeral=ephemeral)
 
-    def fetchDatasetLocations(self, datasets: DatasetIterable) -> Iterator[str]:
-        if len(self._chain) > 1:
-            datasets = datasets.reentrant()
+    def fetchDatasetLocations(self, dataset: ResolvedDatasetHandle) -> Iterator[str]:
         for link in self._chain:
-            yield from link.fetchDatasetLocations(datasets)
+            yield from link.fetchDatasetLocations(dataset)
 
     def deleteDatasetLocations(self, datastoreName: str, datasets: DatasetIterable):
         self._chain[-1].deleteDatasetLocations(datastoreName, datasets)
@@ -149,21 +154,13 @@ class ChainedDimensionRecordStorage(DimensionRecordStorage):
     def insert(self, *records: DimensionRecord):
         return self._chain[-1].insert(*records)
 
-    def fetch(self, dataIds: DataIdIterable) -> Dict[DataCoordinate, DimensionRecord]:
-        selectable = dataIds.select()
-        missing = set(dataIds)
-        fetched = {}
+    def fetch(self, dataId: DataCoordinate) -> DimensionRecord:
         for link in self._chain:
-            recent = link.fetch(DataIdIterable(missing, flags=dataIds.flags, materialized=True,
-                                               selectable=selectable))
-            if recent:
-                # After we've obtained (some) results from one link in the
-                # chain, we stop passing in a SQLAlchemy object (if we ever
-                # did).
-                selectable = None
-            missing -= recent.keys()
-            fetched.update(recent)
-        return fetched
+            if link.matches(dataId):
+                result = link.fetch(dataId)
+                if result is not None:
+                    return result
+        return None
 
     def select(self, dataId: Optional[ExpandedDataCoordinate] = None) -> Optional[sqlalchemy.sql.FromClause]:
         return _maybeUnion(link.select(dataId) for link in self._chain if link.matches(dataId))
