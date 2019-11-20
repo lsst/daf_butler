@@ -42,7 +42,7 @@ from lsst.daf.butler import Butler, DatasetType
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
 
-@unittest.skipUnless(pyarrow is not None, "Cannot tests ParquetFormatter without pyarrow.")
+@unittest.skipUnless(pyarrow is not None, "Cannot test ParquetFormatter without pyarrow.")
 class ParquetFormatterTestCase(unittest.TestCase):
     """Tests for ParquetFormatter, using PosixDatastore.
     """
