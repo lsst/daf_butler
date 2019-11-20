@@ -9,91 +9,32 @@ Registry Refactoring To-Do
 - Move to per-Collection `dataset_collection` tables?
 - Add label to `quantum` table.
 
-Construction Patterns
----------------------
+Architecture
+------------
 
-Constructing clients to an existing repo:
+RegistryLayer
 
-- Identify Registry class.
-- Identify Datastore class (maybe recursive, if Chained).
-- Assemble complete configuration.
+- ABC; specialized per RDBMS
+- ABC declares table specifications
+- abstracts a namespace in a particular RDBMS
+- has a connection
+- manages all static tables
+- manages creation of all dynamic tables
 
+OpaqueRecordStorage
 
-Types of Collection and DatasetType
------------------------------------
+- concrete
+- abstracts a named opaque table (usually) needed by a Datastore
+- cannot be chained; a Datastore's internals must not depend on which Registry layers the client is initialized with.
 
-Global DatasetTypes
-"""""""""""""""""""
+DimensionRecordStorage
 
-- always ingested
-- uids are calculated from files (via data IDs?), using reserved site ID
-- data IDs are globally unique, not just unique within a given collection
+- ABC; specialized for SQL vs SkyPix vs ...
+- abstracts a table for a particular dimension element + its common skypix overlap table
+- can be chained
 
-Standard DatasetTypes
-"""""""""""""""""""""
+QuantumRecordStorage
 
- - all we have now
- - uids are autoincrement + site
- - DatasetType + data ID is unique within any collection
+- ABC; specialized for SQL
 
-Nonsingular DatasetTypes
-""""""""""""""""""""""""
-
-- uids are autoincrement + site
-- use case: configs and environments for pipeline runs
-- probably use case: master calibrations
-- can have multiple nonsingular datasets with the same data ID in a collection;
-frequently have minimal or nonexistent data IDs
-- cannot be retrieved with just a data ID (unless iterating); need uids
-
-Tagged Collections
-""""""""""""""""""
-
-- all we have now
-- most flexible type of collection: datasets can be added and removed at will
-
-Run Collections
-"""""""""""""""
-
-- special implied collection for any dataset
-- datasets can never be removed from this collection
-
-Calibration Collections
-"""""""""""""""""""""""
-
-- associate each dataset with a validity range
-- validity ranges for all instances of a dataset type are non-overlapping
-
-Virtual Collection
-""""""""""""""""""
-
-- ordered list of collections to be searched
-
-Dataset Table Partitioning
---------------------------
-
-dataset_common
-""""""""""""""
-incr_id: int NOT NULL (autoincrement)
-site_id: int NOT NULL
-dataset_type_name: str NOT NULL
-run_id: int NOT NULL
-quantum_id: int
-
-PRIMARY KEY (incr_id, site_id)
-
-dataset_<name>
-""""""""""""""
-incr_id: int NOT NULL
-site_id: int NOT NULL
-<dimensions>
-
-PRIMARY KEY (incr_id, site_id)
-
-
-dataset_collection
-""""""""""""""""""
-incr_id: int NOT NULL
-site_id: int NOT NULL
-<collection>
-<hash-of-dimensions>
+DatasetRecordStorage
