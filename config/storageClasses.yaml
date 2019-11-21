@@ -144,3 +144,5 @@ storageClasses:
     pytype: numpy.ndarray
   Plot:
     pytype: matplotlib.figure.Figure
+  MetricValue:
+    pytype: lsst.verify.Measurement
