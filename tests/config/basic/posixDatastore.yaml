@@ -6,6 +6,7 @@ datastore:
     calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
     metric: "{collection}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
     test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
+    metric2: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit.name:?}"
     metric3: "{collection}/{datasetType}/{instrument}"
     metric4: "{collection}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
     physical_filter+: "{collection}/{instrument}_{physical_filter}"

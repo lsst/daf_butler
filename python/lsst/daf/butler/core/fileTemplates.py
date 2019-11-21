@@ -294,6 +294,11 @@ class FileTemplate:
     At least one or both of `run` or `collection` must be provided to ensure
     unique filenames.
 
+    More detailed information can be requested from dimensions by using a dot
+    notation, so ``visit.name`` would use the name of the visit and
+    ``detector.name_in_raft`` would use the name of the detector within the
+    raft.
+
     The mini-language is extended to understand a "?" in the format
     specification. This indicates that a field is optional. If that
     Dimension is missing the field, along with the text before the field,
@@ -331,7 +336,7 @@ class FileTemplate:
     def __repr__(self):
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def fields(self, optionals=False, specials=False):
+    def fields(self, optionals=False, specials=False, subfields=False):
         """Return the field names used in this template.
 
         Parameters
@@ -340,6 +345,9 @@ class FileTemplate:
             If `True`, optional fields are included in the returned set.
         specials : `bool`
             If `True`, non-dimension fields are included.
+        subfields : `bool`, optional
+            If `True`, fields with syntax ``a.b`` are included. If `False`,
+            the default, only ``a`` would be returned.
 
         Returns
         -------
@@ -362,6 +370,9 @@ class FileTemplate:
 
                 if not specials and field_name in self.specialFields:
                     continue
+
+                if "." in field_name and not subfields:
+                    field_name, _ = field_name.split(".")
 
                 names.add(field_name)
 
@@ -409,6 +420,9 @@ class FileTemplate:
             if len(skypix) == 1:
                 fields["skypix"] = fields[skypix[0]]
 
+        # Extra information that can be included using . syntax
+        extras = getattr(ref.dataId, "records", {})
+
         datasetType = ref.datasetType
         fields["datasetType"], component = datasetType.nameAndComponent()
 
@@ -442,6 +456,16 @@ class FileTemplate:
 
             if field_name in ("run", "collection"):
                 usedRunOrCollection = True
+
+            # Check for request for additional information from the dataId
+            if "." in field_name:
+                primary, secondary = field_name.split(".")
+                if primary in extras:
+                    record = extras[primary]
+                    # Only fill in the fields if we have a value, the
+                    # KeyError will trigger below if the attribute is missing.
+                    if hasattr(record, secondary):
+                        fields[field_name] = getattr(record, secondary)
 
             if field_name in fields:
                 value = fields[field_name]
