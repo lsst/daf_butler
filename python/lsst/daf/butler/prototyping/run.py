@@ -9,4 +9,3 @@ class Run:
     origin: int
     timespan: Timespan
     host: str
-    environment_id: int

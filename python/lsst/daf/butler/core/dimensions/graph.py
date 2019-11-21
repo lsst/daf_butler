@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ["DimensionGraph"]
 
-from typing import Optional, Iterable, Iterator, KeysView, Union, Any, TYPE_CHECKING
+from typing import Optional, Iterable, Iterator, KeysView, Union, Any, TYPE_CHECKING, Callable
 
 from ..utils import NamedValueSet, NamedKeyDict, immutable
 
@@ -414,6 +414,22 @@ class DimensionGraph:
         else:
             return _filterDependentElements(self._allTemporal,
                                             prefer=NamedValueSet(self.elements[p] for p in prefer))
+
+    def fingerprint(self, update: Callable[[bytes], None]):
+        """Update a secure hash function with a hash of dimension names.
+
+        This only produces hashes that are unique within a particular
+        `DimensionUniverse`.
+
+        Parameters
+        ----------
+        update : `~collections.abc.Callable`
+            Callable that accepts a single `bytes` argument to update
+            the hash; usually the ``update`` method of an instance from
+            the ``hashlib`` module.
+        """
+        for dimension in self.required:
+            update(dimension.name.encode("utf8"))
 
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.

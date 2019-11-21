@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["DimensionRecordStorage", "SqlDimensionRecordStorage", "SkyPixDimensionRecordStorage"]
+__all__ = ["DimensionRecordStorage", "DatabaseDimensionRecordStorage", "SkyPixDimensionRecordStorage"]
 
 from abc import ABC, abstractmethod
 from typing import (
@@ -42,7 +42,7 @@ class DimensionRecordStorage(ABC):
     element: DimensionElement
 
 
-class SqlDimensionRecordStorage(DimensionRecordStorage):
+class DatabaseDimensionRecordStorage(DimensionRecordStorage):
 
     def __init__(self, *, db: DatabaseLayer, element: DimensionElement,
                  table: sqlalchemy.schema.Table,
