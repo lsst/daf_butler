@@ -40,6 +40,14 @@ The Dimensions System
 
 .. _lsst.daf.butler-pyapi:
 
+Concrete Storage Classes
+========================
+
+.. toctree::
+  :maxdepth: 1
+
+  concreteStorageClasses.rst
+
 Python API reference
 ====================
 
