@@ -449,9 +449,9 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
                                                                 "abstract_filter": "R"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "423",
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "v423",
                                                       "physical_filter": "d-r"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "425",
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "v425",
                                                       "physical_filter": "d-r"})
 
         # Create and store a dataset
@@ -482,7 +482,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric2/d-r/DummyCamComp_423.pickle"))
+                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
