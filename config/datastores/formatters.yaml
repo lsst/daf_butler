@@ -36,3 +36,4 @@ PropertyList: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 PropertySet: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 NumpyArray: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 Plot: lsst.daf.butler.formatters.matplotlibFormatter.MatplotlibFormatter
+MetricValue: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
