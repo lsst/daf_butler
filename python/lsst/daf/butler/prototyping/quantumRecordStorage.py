@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["QuantumRecordStorage", "DatabaseQuantumRecordStorage"]
+__all__ = ["QuantumRecordStorage", "QuantumRecordStorageManager"]
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -16,12 +16,12 @@ from ..core.dimensions import DimensionGraph, DimensionUniverse
 from ..core.dimensions.schema import TIMESPAN_FIELD_SPECS, addDimensionForeignKey
 from ..core.schema import TableSpec, FieldSpec, Base64Bytes, ForeignKeySpec
 
-from .databaseLayer import makeTableStruct
+from .database import makeTableStruct
 from .quantum import Quantum
 
 if TYPE_CHECKING:
     from .registryLayer import RegistryLayer
-    from .databaseLayer import DatabaseLayer
+    from .database import Database
 
 
 class QuantumRecordStorage(ABC):
@@ -47,7 +47,7 @@ class QuantumRecordStorageManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, parent: RegistryLayer, *, universe: DimensionUniverse) -> QuantumRecordStorageManager:
+    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumRecordStorageManager:
         pass
 
     @abstractmethod
@@ -104,10 +104,10 @@ class StaticQuantumTablesTuple:
 
 class DatabaseQuantumRecordStorage(QuantumRecordStorage):
 
-    def __init__(self, *, dimensions: DimensionGraph, parent: RegistryLayer,
+    def __init__(self, *, dimensions: DimensionGraph, layer: RegistryLayer,
                  static: StaticQuantumTablesTuple, dynamic: sqlalchemy.schema.Table):
         super().__init__(dimensions=dimensions)
-        self._parent = parent
+        self._layer = layer
         self._static = static
         self._dynamic = dynamic
 
@@ -121,8 +121,8 @@ class DatabaseQuantumRecordStorage(QuantumRecordStorage):
     # high-level Registry API).
 
     @property
-    def db(self) -> DatabaseLayer:
-        return self._parent.db
+    def db(self) -> Database:
+        return self._layer.db
 
     dimensions: DimensionGraph
 
@@ -154,15 +154,15 @@ def _makeDynamicQuantumTableSpec(dimensions: DimensionGraph) -> TableSpec:
 
 class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
 
-    def __init__(self, parent: RegistryLayer, *, universe: DimensionUniverse):
-        self._parent = parent
-        self._static = StaticQuantumTablesTuple(parent.db)
+    def __init__(self, layer: RegistryLayer, *, universe: DimensionUniverse):
+        self._layer = layer
+        self._static = StaticQuantumTablesTuple(layer.db)
         self._managed = {}
         self.refresh(universe=universe)
 
     @classmethod
-    def load(cls, parent: RegistryLayer, *, universe: DimensionUniverse) -> QuantumRecordStorageManager:
-        return cls(parent=parent, universe=universe)
+    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumRecordStorageManager:
+        return cls(layer=layer, universe=universe)
 
     def refresh(self, *, universe: DimensionUniverse):
         # Meta table stores the hashes used to identify a table along with the
@@ -185,7 +185,7 @@ class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
         return result
 
     def get(self, dimensions: DimensionGraph) -> Optional[QuantumRecordStorage]:
-        return _managed.get(dimensions)
+        return self._managed.get(dimensions)
 
     def register(self, dimensions: DimensionGraph) -> QuantumRecordStorage:
         result = self._managed.get(dimensions)
@@ -204,9 +204,9 @@ class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
                                    "dimension_name": dimension.name})
             result = DatabaseQuantumRecordStorage(dimensions=dimensions, db=self.db,
                                                   static=self._static, dynamic=table)
-            self.managed[dimensions] = result
-        return return result
+            self._managed[dimensions] = result
+        return result
 
     @property
-    def db(self) -> DatabaseLayer:
-        return self._parent.db
+    def db(self) -> Database:
+        return self._layer.db

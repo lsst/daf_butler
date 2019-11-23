@@ -12,7 +12,7 @@ from typing import (
 import sqlalchemy
 
 from ..core.schema import TableSpec, FieldSpec
-from .databaseLayer import DatabaseLayer
+from .database import Database
 
 
 class OpaqueRecordStorage(ABC):
@@ -39,7 +39,7 @@ class OpaqueRecordStorageManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: DatabaseLayer) -> OpaqueRecordStorageManager:
+    def load(cls, db: Database) -> OpaqueRecordStorageManager:
         pass
 
     @abstractmethod
@@ -57,7 +57,7 @@ class OpaqueRecordStorageManager(ABC):
 
 class DatabaseOpaqueRecordStorage(OpaqueRecordStorage):
 
-    def __init__(self, *, db: DatabaseLayer, name: str, table: sqlalchemy.schema.Table):
+    def __init__(self, *, db: Database, name: str, table: sqlalchemy.schema.Table):
         super().__init__(name=name)
         self._db = db
         self._table = table
@@ -88,14 +88,14 @@ class DatabaseOpaqueRecordStorageManager(OpaqueRecordStorageManager):
         ],
     )
 
-    def __init__(self, db: DatabaseLayer):
+    def __init__(self, db: Database):
         self._db = db
         self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
         self._managed = {}
         self.refresh()
 
     @classmethod
-    def load(cls, db: DatabaseLayer) -> OpaqueRecordStorageManager:
+    def load(cls, db: Database) -> OpaqueRecordStorageManager:
         return cls(db=db)
 
     def refresh(self):

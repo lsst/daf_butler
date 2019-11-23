@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["DatabaseLayer"]
+__all__ = ["Database"]
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
@@ -15,7 +15,7 @@ import sqlalchemy
 from ..core.schema import TableSpec
 
 
-class DatabaseLayer(ABC):
+class Database(ABC):
 
     def __init__(self, origin: int, connection: sqlalchemy.engine.Connection):
         self.origin = origin
@@ -55,7 +55,7 @@ def makeTableStruct(cls) -> Type[Tuple]:
     of type `TableSpec`.
 
     Constructing an instance of the returned class with a single
-    `DatabaseLayer` argument will call `DatabaseLayer.ensureTableExists` on all
+    `Database` argument will call `Database.ensureTableExists` on all
     tables with those schema specifications, yielding a
     `collections.namedtuple` subclass instance whose attributes are
     `sqlalchemy.schema.Table` instances.
@@ -77,7 +77,7 @@ def makeTableStruct(cls) -> Type[Tuple]:
                 ]
             )
 
-        db: DatabaseLayer = ...  # connect to some database
+        db: Database = ...  # connect to some database
 
         # Create declared tables if they don't already exist, and get
         # SQLAlchemy objects representing them regardless.
@@ -94,7 +94,7 @@ def makeTableStruct(cls) -> Type[Tuple]:
             specs[name] = attr
     TupleBase = namedtuple("_" + cls.__name__, specs.keys())
 
-    def __new__(cls, db: DatabaseLayer):  # noqa:807
+    def __new__(cls, db: Database):  # noqa:807
         return cls._make(db.ensureTableExists(name, spec) for name, spec in specs.items())
 
     return type(cls.__name__, (TupleBase,), {"__new__": __new__})

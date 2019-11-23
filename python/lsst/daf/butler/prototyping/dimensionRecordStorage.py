@@ -19,7 +19,7 @@ from ..core.dimensions import (
 from ..core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN, makeOverlapTableSpec
 from ..core.schema import TableSpec, FieldSpec
 from ..core.utils import NamedKeyDict
-from .databaseLayer import DatabaseLayer
+from .database import Database
 
 
 class DimensionRecordStorage(ABC):
@@ -53,7 +53,7 @@ class DimensionRecordStorageManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: DatabaseLayer, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
+    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
         pass
 
     @abstractmethod
@@ -73,7 +73,7 @@ class DimensionRecordStorageManager(ABC):
 
 class DatabaseDimensionRecordStorage(DimensionRecordStorage):
 
-    def __init__(self, *, db: DatabaseLayer, element: DimensionElement,
+    def __init__(self, *, db: Database, element: DimensionElement,
                  table: sqlalchemy.schema.Table,
                  commonSkyPixOverlapTable: Optional[sqlalchemy.schema.Table] = None):
         super().__init__(element=element)
@@ -178,7 +178,7 @@ class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
         ],
     )
 
-    def __init__(self, db: DatabaseLayer, *, universe: DimensionUniverse):
+    def __init__(self, db: Database, *, universe: DimensionUniverse):
         super().__init__(universe=universe)
         self._db = db
         self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
@@ -186,7 +186,7 @@ class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
         self.refresh()
 
     @classmethod
-    def load(cls, db: DatabaseLayer, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
+    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
         return cls(db=db)
 
     def refresh(self):

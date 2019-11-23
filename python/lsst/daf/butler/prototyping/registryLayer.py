@@ -1,51 +1,136 @@
 from __future__ import annotations
 
+import enum
 from typing import (
-    Dict,
     Iterator,
     Optional,
     Type,
 )
-from collections import defaultdict
 
 import sqlalchemy
 
 from ..core.datasets import (
-    DatasetType,
     ResolvedDatasetHandle,
 )
 from ..core.dimensions import (
-    DimensionGraph,
     DimensionUniverse,
 )
+from ..core.schema import TableSpec, FieldSpec, ForeignKeySpec, Base64Bytes
 from ..core.timespan import TIMESPAN_FIELD_SPECS
-from .databaseLayer import DatabaseLayer
+from .database import Database, makeTableStruct
 from .iterables import DatasetIterable
 from .run import Run
-from .ddl import (
-    StaticTablesTuple,
-    STATIC_TABLES_SPEC,
-    CollectionType,
-    hashQuantumDimensions,
-    makeQuantumTableSpec,
-    QUANTUM_TABLE_NAME_FORMAT
-)
 from .opaqueRecordStorage import OpaqueRecordStorageManager
 from .dimensionRecordStorage import DimensionRecordStorageManager
 from .quantumRecordStorage import QuantumRecordStorageManager
-from .datasetRecordStorage import DatasetRecordStorageManager
+
+
+class CollectionType(enum.IntEnum):
+    RUN = 1
+    TAGGED = 2
+    CALIBRATION = 3
+
+
+class DatasetUniqueness(enum.IntEnum):
+    STANDARD = 1
+    NONSINGULAR = 2
+    GLOBAL = 3
+
+
+@makeTableStruct
+class StaticLayerTablesTuple:
+    collection = TableSpec(
+        fields=[
+            FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
+            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
+            FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
+        ],
+        unique={("name",)},
+    )
+    dataset_composition = TableSpec(
+        fields=[
+            FieldSpec("parent_dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("parent_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("component_dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("component_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("component_name", dtype=sqlalchemy.String, length=32),
+        ],
+        foreignKeys=[
+            ForeignKeySpec("dataset", source=("parent_dataset_id", "parent_origin"),
+                           target=("id", "origin"), onDelete="CASCADE"),
+            ForeignKeySpec("dataset", source=("component_dataset_id", "component_origin"),
+                           target=("id", "origin"), onDelete="CASCADE"),
+        ]
+    )
+    dataset_location = TableSpec(
+        fields=[
+            FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("datastore_name", dtype=sqlalchemy.String, length=256, primaryKey=True),
+        ],
+        foreignKeys=[
+            ForeignKeySpec("dataset", source=("dataset_id", "origin"), target=("id", "origin"),
+                           onDelete="CASCADE"),
+        ]
+    )
+    dataset_type_dimension = TableSpec(
+        fields=[
+            FieldSpec("dataset_type_name", dtype=sqlalchemy.String, length=128, primaryKey=True),
+            FieldSpec("dimension_name", dtype=sqlalchemy.String, length=32, primaryKey=True),
+        ],
+        foreignKeys=[
+            ForeignKeySpec("dataset_type", source=("dataset_type_name",), target=("name"),
+                           onDelete="CASCADE"),
+        ]
+    )
+    dataset_type = TableSpec(
+        fields=[
+            FieldSpec("name", dtype=sqlalchemy.String, length=128, primaryKey=True),
+            FieldSpec("storage_class", dtype=sqlalchemy.String, length=64, nullable=False),
+            FieldSpec("uniqueness", dtype=sqlalchemy.SmallInteger, nullable=False),
+        ],
+    )
+    dataset = TableSpec(
+        fields=[
+            FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
+            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("dataset_type_name", dtype=sqlalchemy.String, length=128),
+            FieldSpec("dataset_ref_hash", dtype=Base64Bytes, nbytes=32),
+            FieldSpec("run_collection_id", dtype=sqlalchemy.BigInteger, nullable=False),
+            FieldSpec("quantum_id", dtype=sqlalchemy.BigInteger),
+        ],
+        foreignKeys=[
+            ForeignKeySpec("dataset_type", source=("dataset_type_name",), target=("name")),
+            ForeignKeySpec("run", source=("run_collection_id", "origin"), target=("collection_id", "origin"),
+                           onDelete="CASCADE"),
+        ]
+    )
+    run = TableSpec(
+        fields=[
+            FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
+            TIMESPAN_FIELD_SPECS.begin,
+            TIMESPAN_FIELD_SPECS.end,
+            FieldSpec("host", dtype=sqlalchemy.String, length=128),
+        ],
+        unique={("name",)},
+        foreignKeys=[
+            ForeignKeySpec("collection", source=("collection_id", "origin"), target=("id", "origin"),
+                           onDelete="CASCADE"),
+        ],
+    )
 
 
 class RegistryLayer:
 
-    def __init__(self, db: DatabaseLayer, *, universe: DimensionUniverse,
+    def __init__(self, db: Database, *, universe: DimensionUniverse,
                  opaque: Type[OpaqueRecordStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
                  quanta: Type[QuantumRecordStorageManager]):
         self.db = db
-        self._tables = StaticTablesTuple._make(
-            db.ensureTableExists(name, spec) for name, spec in STATIC_TABLES_SPEC._asdict().items()
-        )
+        self._tables = StaticLayerTablesTuple(db)
         self.opaque = OpaqueRecordStorageManager.load(self.db)
         self.dimensions = DimensionRecordStorageManager.load(self.db, universe=universe)
         self.quanta = QuantumRecordStorageManager.load(self, universe=universe)
@@ -146,12 +231,6 @@ class RegistryLayer:
 
     def selectCollections(self) -> sqlalchemy.sql.FromClause:
         return self._tables.collections
-
-    def registerDatasetType(self, datasetType: DatasetType) -> DatasetRecordStorage:
-        pass
-
-    def getDatasetType(self, name: str) -> Optional[DatasetRecordStorage]:
-        pass
 
     opaque: OpaqueRecordStorageManager
     dimensions: DimensionRecordStorageManager
