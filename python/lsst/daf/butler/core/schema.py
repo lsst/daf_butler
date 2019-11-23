@@ -339,6 +339,11 @@ class TableSpec:
     doc: Optional[str] = None
     """Documentation for the table."""
 
+    def __post_init__(self):
+        self.fields = NamedValueSet(self.fields)
+        self.unique = set(self.unique)
+        self.foreignKeys = list(self.foreignKeys)
+
     @classmethod
     @SchemaValidationError.translate(KeyError, "Missing key {err} in table config '{config}'.")
     def fromConfig(cls, config: Config) -> TableSpec:
