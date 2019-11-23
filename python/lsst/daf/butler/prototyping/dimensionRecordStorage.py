@@ -13,8 +13,12 @@ from ..core.dimensions import (
     DataCoordinate,
     DimensionElement,
     DimensionRecord,
+    DimensionUniverse,
     SkyPixDimension,
 )
+from ..core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN, makeOverlapTableSpec
+from ..core.schema import TableSpec, FieldSpec
+from ..core.utils import NamedKeyDict
 from .databaseLayer import DatabaseLayer
 
 
@@ -40,6 +44,31 @@ class DimensionRecordStorage(ABC):
         pass
 
     element: DimensionElement
+
+
+class DimensionRecordStorageManager(ABC):
+
+    def __init__(self, *, universe: DimensionUniverse):
+        self.universe = universe
+
+    @classmethod
+    @abstractmethod
+    def load(cls, db: DatabaseLayer, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
+        pass
+
+    @abstractmethod
+    def refresh(self):
+        pass
+
+    @abstractmethod
+    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+        pass
+
+    @abstractmethod
+    def register(self, element: DimensionElement) -> DimensionRecordStorage:
+        pass
+
+    universe: DimensionUniverse
 
 
 class DatabaseDimensionRecordStorage(DimensionRecordStorage):
@@ -137,3 +166,79 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.fetch.
         return self.element.RecordClass(dataId[self.element.name],
                                         self.element.pixelization.pixel(dataId[self.element.name]))
+
+
+class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
+
+    _META_TABLE_NAME = "layer_meta_dimension"
+
+    _META_TABLE_SPEC = TableSpec(
+        fields=[
+            FieldSpec("element_name", dtype=sqlalchemy.String, length=64, primaryKey=True),
+        ],
+    )
+
+    def __init__(self, db: DatabaseLayer, *, universe: DimensionUniverse):
+        super().__init__(universe=universe)
+        self._db = db
+        self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
+        self._managed = NamedKeyDict({})
+        self.refresh()
+
+    @classmethod
+    def load(cls, db: DatabaseLayer, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
+        return cls(db=db)
+
+    def refresh(self):
+        managed = NamedKeyDict({})
+        for row in self._db.connection.execute(self._metaTable.select()).fetchall():
+            element = self.universe[row[self._metaTable.columns.element_name]]
+            table = self._db.getExistingTable(element.name)
+            if element.spatial:
+                commonSkyPixOverlapTable = self._db.getExistingTable(
+                    OVERLAP_TABLE_NAME_PATTERN.format(element.name, self.universe.commonSkyPix.name)
+                )
+            else:
+                commonSkyPixOverlapTable = None
+            managed[element] = DatabaseDimensionRecordStorage(
+                db=self._db, element=element, table=table,
+                commonSkyPixOverlapTable=commonSkyPixOverlapTable
+            )
+        self._managed = managed
+
+    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+        return self._managed.get(element)
+
+    def register(self, element: DimensionElement) -> DimensionRecordStorage:
+        result = self._managed.get(element)
+        if result is None:
+            if isinstance(element, SkyPixDimension):
+                result = SkyPixDimensionRecordStorage(element)
+            elif not element.hasTable():
+                raise RuntimeError(f"Dimension element subclass {element.__class__} is not supported.")
+            else:
+                # Create the table itself.  If it already exists but wasn't in
+                # the dict because it was added by another client since this
+                # one was initialized, that's fine.
+                table = self._db.ensureTableExists(element.name, element.makeTableSpec())
+                if element.spatial:
+                    # Also create a corresponding overlap table with the common
+                    # skypix dimension, if this is a spatial element.
+                    commonSkyPixOverlapTable = self._db.ensureTableExists(
+                        OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
+                        makeOverlapTableSpec(element, element.universe.commonSkyPix)
+                    )
+                else:
+                    commonSkyPixOverlapTable = None
+                # Add a row to the layer_meta table so we can find this table
+                # in the future.  Also okay if that already exists, so we use
+                # sync.
+                self._db.sync(self._metaTable, keys={"element_name": element.name})
+                result = DatabaseDimensionRecordStorage(
+                    db=self._db,
+                    element=element,
+                    table=table,
+                    commonSkyPixOverlapTable=commonSkyPixOverlapTable
+                )
+            self._managed[element] = result
+        return result

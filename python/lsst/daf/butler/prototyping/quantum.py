@@ -25,10 +25,9 @@ __all__ = ["Quantum"]
 
 from typing import (
     List,
-    Optional,
 )
 
-from ..core.datasets import CheckedDatasetHandle, DatasetType, ResolvedDatasetHandle
+from ..core.datasets import CheckedDatasetHandle, DatasetType
 from ..core.dimensions import ExpandedDataCoordinate
 from ..core.timespan import Timespan
 from ..core.utils import NamedKeyDict
@@ -41,8 +40,6 @@ class Quantum:
     run: Run
     host: str
     timespan: Timespan
-    config: Optional[ResolvedDatasetHandle]
-    environment: Optional[ResolvedDatasetHandle]
     dataId: ExpandedDataCoordinate
     initInputs: NamedKeyDict[DatasetType, CheckedDatasetHandle]
     predictedInputs: NamedKeyDict[DatasetType, List[CheckedDatasetHandle]]
