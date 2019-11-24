@@ -1,77 +1,29 @@
 from __future__ import annotations
 
-__all__ = ["DimensionRecordStorage", "DatabaseDimensionRecordStorage", "SkyPixDimensionRecordStorage"]
+__all__ = ["DatabaseRegistryLayerDimensionRecords",
+           "SkyPixRegistryLayerDimensionRecords",
+           "DatabaseRegistryLayerDimensionStorage"]
 
-from abc import ABC, abstractmethod
 from typing import (
     Optional,
 )
 
 import sqlalchemy
 
-from ..core.dimensions import (
+from ...core.dimensions import (
     DataCoordinate,
     DimensionElement,
     DimensionRecord,
     DimensionUniverse,
     SkyPixDimension,
 )
-from ..core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN, makeOverlapTableSpec
-from ..core.schema import TableSpec, FieldSpec
-from ..core.utils import NamedKeyDict
-from .database import Database
+from ...core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN, makeOverlapTableSpec
+from ...core.schema import TableSpec, FieldSpec
+from ...core.utils import NamedKeyDict
+from ..interfaces import Database, RegistryLayerDimensionRecords, RegistryLayerDimensionStorage
 
 
-class DimensionRecordStorage(ABC):
-
-    def __init__(self, element: DimensionElement):
-        self.element = element
-
-    @abstractmethod
-    def insert(self, *records: DimensionRecord):
-        pass
-
-    @abstractmethod
-    def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
-        raise NotImplementedError()
-
-    @abstractmethod
-    def select(self) -> Optional[sqlalchemy.sql.FromClause]:
-        pass
-
-    @abstractmethod
-    def selectCommonSkyPixOverlap(self) -> Optional[sqlalchemy.sql.FromClause]:
-        pass
-
-    element: DimensionElement
-
-
-class DimensionRecordStorageManager(ABC):
-
-    def __init__(self, *, universe: DimensionUniverse):
-        self.universe = universe
-
-    @classmethod
-    @abstractmethod
-    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
-        pass
-
-    @abstractmethod
-    def refresh(self):
-        pass
-
-    @abstractmethod
-    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
-        pass
-
-    @abstractmethod
-    def register(self, element: DimensionElement) -> DimensionRecordStorage:
-        pass
-
-    universe: DimensionUniverse
-
-
-class DatabaseDimensionRecordStorage(DimensionRecordStorage):
+class DatabaseRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
 
     def __init__(self, *, db: Database, element: DimensionElement,
                  table: sqlalchemy.schema.Table,
@@ -137,7 +89,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         return self._commonSkyPixOverlapTable
 
 
-class SkyPixDimensionRecordStorage(DimensionRecordStorage):
+class SkyPixRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
     """A storage implementation specialized for `SkyPixDimension` records.
 
     `SkyPixDimension` records are never stored in a database, but are instead
@@ -159,16 +111,16 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         return None
 
     def insert(self, *records: DimensionRecord):
-        # Docstring inherited from DimensionRecordStorage.insert.
+        # Docstring inherited from RegistryLayerDimensions.insert.
         raise TypeError(f"Cannot insert into SkyPix dimension {self.element.name}.")
 
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
-        # Docstring inherited from DimensionRecordStorage.fetch.
+        # Docstring inherited from RegistryLayerDimensions.fetch.
         return self.element.RecordClass(dataId[self.element.name],
                                         self.element.pixelization.pixel(dataId[self.element.name]))
 
 
-class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
+class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
 
     _META_TABLE_NAME = "layer_meta_dimension"
 
@@ -186,7 +138,7 @@ class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionRecordStorageManager:
+    def load(cls, db: Database, *, universe: DimensionUniverse) -> RegistryLayerDimensionStorage:
         return cls(db=db)
 
     def refresh(self):
@@ -200,21 +152,21 @@ class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
                 )
             else:
                 commonSkyPixOverlapTable = None
-            managed[element] = DatabaseDimensionRecordStorage(
+            managed[element] = DatabaseRegistryLayerDimensionRecords(
                 db=self._db, element=element, table=table,
                 commonSkyPixOverlapTable=commonSkyPixOverlapTable
             )
         self._managed = managed
 
-    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+    def get(self, element: DimensionElement) -> Optional[RegistryLayerDimensionRecords]:
         return self._managed.get(element)
 
-    def register(self, element: DimensionElement) -> DimensionRecordStorage:
+    def register(self, element: DimensionElement) -> RegistryLayerDimensionRecords:
         result = self._managed.get(element)
         if result is None:
             if isinstance(element, SkyPixDimension):
-                result = SkyPixDimensionRecordStorage(element)
-            elif not element.hasTable():
+                result = SkyPixRegistryLayerDimensionRecords(element)
+            elif not element.haElement():
                 raise RuntimeError(f"Dimension element subclass {element.__class__} is not supported.")
             else:
                 # Create the table itself.  If it already exists but wasn't in
@@ -234,7 +186,7 @@ class DatabaseDimensionRecordStorageManager(DimensionRecordStorageManager):
                 # in the future.  Also okay if that already exists, so we use
                 # sync.
                 self._db.sync(self._metaTable, keys={"element_name": element.name})
-                result = DatabaseDimensionRecordStorage(
+                result = DatabaseRegistryLayerDimensionRecords(
                     db=self._db,
                     element=element,
                     table=table,

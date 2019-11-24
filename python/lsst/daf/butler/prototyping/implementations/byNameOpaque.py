@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-__all__ = ["OpaqueRecordStorage", "DatabaseOpaqueRecordStorage"]
+__all__ = ["ByNameRegistryLayerOpaqueRecords", "ByNameRegistryLayerOpaqueStorage"]
 
-from abc import ABC, abstractmethod
 from typing import (
     Any,
     Iterator,
@@ -11,51 +10,11 @@ from typing import (
 
 import sqlalchemy
 
-from ..core.schema import TableSpec, FieldSpec
-from .database import Database
+from ...core.schema import TableSpec, FieldSpec
+from ..interfaces import Database, RegistryLayerOpaqueStorage, RegistryLayerOpaqueRecords, RegistryLayer
 
 
-class OpaqueRecordStorage(ABC):
-
-    def __init__(self, name: str):
-        self.name = name
-
-    @abstractmethod
-    def insert(self, *data: dict):
-        pass
-
-    @abstractmethod
-    def fetch(self, **where: Any) -> Iterator[dict]:
-        pass
-
-    @abstractmethod
-    def delete(self, **where: Any):
-        pass
-
-    name: str
-
-
-class OpaqueRecordStorageManager(ABC):
-
-    @classmethod
-    @abstractmethod
-    def load(cls, db: Database) -> OpaqueRecordStorageManager:
-        pass
-
-    @abstractmethod
-    def refresh(self):
-        pass
-
-    @abstractmethod
-    def get(self, name: str) -> Optional[OpaqueRecordStorage]:
-        pass
-
-    @abstractmethod
-    def register(self, name: str, spec: TableSpec) -> OpaqueRecordStorage:
-        pass
-
-
-class DatabaseOpaqueRecordStorage(OpaqueRecordStorage):
+class ByNameRegistryLayerOpaqueRecords(RegistryLayerOpaqueRecords):
 
     def __init__(self, *, db: Database, name: str, table: sqlalchemy.schema.Table):
         super().__init__(name=name)
@@ -67,18 +26,18 @@ class DatabaseOpaqueRecordStorage(OpaqueRecordStorage):
 
     def fetch(self, **where: Any) -> Iterator[dict]:
         sql = self._table.select().where(
-            sqlalchemy.sql.and_(*[self.table.columns[k] == v for k, v in where.items()])
+            sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
         )
         yield from self._db.connection.execute(sql)
 
     def delete(self, **where: Any):
         sql = self._table.delete().where(
-            sqlalchemy.sql.and_(*[self.table.columns[k] == v for k, v in where.items()])
+            sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
         )
         self._db.connection.execute(sql)
 
 
-class DatabaseOpaqueRecordStorageManager(OpaqueRecordStorageManager):
+class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
 
     _META_TABLE_NAME = "layer_meta_opaque"
 
@@ -95,21 +54,21 @@ class DatabaseOpaqueRecordStorageManager(OpaqueRecordStorageManager):
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database) -> OpaqueRecordStorageManager:
-        return cls(db=db)
+    def load(cls, layer: RegistryLayer) -> RegistryLayerOpaqueStorage:
+        return cls(db=layer.db)
 
     def refresh(self):
         storage = {}
         for row in self._db.connection.execute(self._metaTable.select()).fetchall():
             name = row[self._metaTable.columns.table_name]
             table = self._db.getExistingTable(name)
-            storage[name] = DatabaseOpaqueRecordStorage(name=name, table=table, db=self._db)
+            storage[name] = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
         self._managed = storage
 
-    def get(self, name: str) -> Optional[OpaqueRecordStorage]:
+    def get(self, name: str) -> Optional[RegistryLayerOpaqueRecords]:
         return self._managed.get(name)
 
-    def register(self, name: str, spec: TableSpec) -> OpaqueRecordStorage:
+    def register(self, name: str, spec: TableSpec) -> RegistryLayerOpaqueRecords:
         result = self._managed.get(name)
         if result is None:
             # Create the table itself.  If it already exists but wasn't in
@@ -119,6 +78,6 @@ class DatabaseOpaqueRecordStorageManager(OpaqueRecordStorageManager):
             # Add a row to the meta table so we can find this table in the
             # future.  Also okay if that already exists, so we use sync.
             self._db.sync(self._metaTable, keys={"table_name": name})
-            result = DatabaseOpaqueRecordStorage(name=name, table=table, db=self._db)
+            result = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
             self._managed[name] = result
         return result

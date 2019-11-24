@@ -23,9 +23,7 @@ from __future__ import annotations
 
 __all__ = ["Quantum"]
 
-from typing import (
-    List,
-)
+from typing import List
 
 from ..core.datasets import CheckedDatasetHandle, DatasetType
 from ..core.dimensions import ExpandedDataCoordinate

@@ -5,6 +5,7 @@ __all__ = ["Database"]
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from typing import (
+    Iterator,
     Optional,
     Tuple,
     Type,
@@ -12,7 +13,7 @@ from typing import (
 
 import sqlalchemy
 
-from ..core.schema import TableSpec
+from ...core.schema import TableSpec
 
 
 class Database(ABC):
@@ -39,6 +40,11 @@ class Database(ABC):
              compared: Optional[dict] = None,  # these values must be the same on return
              extra: Optional[dict] = None,  # these values should be used only when inserting
              ) -> sqlalchemy.engine.RowProxy:
+        pass
+
+    @abstractmethod
+    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returning: Optional[str] = None
+               ) -> Optional[Iterator[int]]:
         pass
 
     origin: int

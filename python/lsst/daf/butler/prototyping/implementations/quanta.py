@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-__all__ = ["QuantumRecordStorage", "QuantumRecordStorageManager"]
+__all__ = ["ByDimensionHashRegistryLayerQuantumRecords", "ByDimensionHashRegistryLayerQuantumStorage"]
 
-from abc import ABC, abstractmethod
 from collections import defaultdict
+import enum
 import hashlib
+import itertools
 from typing import (
     Optional,
     TYPE_CHECKING
@@ -16,51 +17,17 @@ from ..core.dimensions import DimensionGraph, DimensionUniverse
 from ..core.dimensions.schema import TIMESPAN_FIELD_SPECS, addDimensionForeignKey
 from ..core.schema import TableSpec, FieldSpec, Base64Bytes, ForeignKeySpec
 
-from .database import makeTableStruct
-from .quantum import Quantum
+from ..interfaces import makeTableStruct, RegistryLayerQuantumRecords, RegistryLayerQuantumStorage
+from ..quantum import Quantum
 
 if TYPE_CHECKING:
     from .registryLayer import RegistryLayer
-    from .database import Database
 
 
-class QuantumRecordStorage(ABC):
-
-    def __init__(self, dimensions: DimensionGraph):
-        self.dimensions = dimensions
-
-    @abstractmethod
-    def insertQuantum(self, quantum: Quantum) -> Quantum:
-        pass
-
-    @abstractmethod
-    def updateQuantum(self, quantum: Quantum):
-        pass
-
-    # TODO: we need methods for fetching and querying (but don't yet have the
-    # high-level Registry API).
-
-    dimensions: DimensionGraph
-
-
-class QuantumRecordStorageManager(ABC):
-
-    @classmethod
-    @abstractmethod
-    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumRecordStorageManager:
-        pass
-
-    @abstractmethod
-    def refresh(self, *, universe: DimensionUniverse):
-        pass
-
-    @abstractmethod
-    def get(self, dimensions: DimensionGraph) -> Optional[QuantumRecordStorage]:
-        pass
-
-    @abstractmethod
-    def register(self, dimensions: DimensionGraph) -> QuantumRecordStorage:
-        pass
+class QuantumInputType(enum.IntEnum):
+    INIT = 1
+    NORMAL = 2
+    UNUSED = 3
 
 
 @makeTableStruct
@@ -91,7 +58,7 @@ class StaticQuantumTablesTuple:
             FieldSpec("quantum_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
-            FieldSpec("actual", dtype=sqlalchemy.Boolean, nullable=False),
+            FieldSpec("input_type", dtype=sqlalchemy.SmallInteger, nullable=False),
         ],
         foreignKeys=[
             ForeignKeySpec("quantum", source=("quantum_id", "origin"), target=("id", "origin"),
@@ -102,7 +69,7 @@ class StaticQuantumTablesTuple:
     )
 
 
-class DatabaseQuantumRecordStorage(QuantumRecordStorage):
+class ByDimensionHashRegistryLayerQuantumRecords(RegistryLayerQuantumRecords):
 
     def __init__(self, *, dimensions: DimensionGraph, layer: RegistryLayer,
                  static: StaticQuantumTablesTuple, dynamic: sqlalchemy.schema.Table):
@@ -111,18 +78,81 @@ class DatabaseQuantumRecordStorage(QuantumRecordStorage):
         self._static = static
         self._dynamic = dynamic
 
-    def insertQuantum(self, quantum: Quantum) -> Quantum:
-        pass
+    def start(self, quantum: Quantum) -> Quantum:
+        assert quantum.id is None and quantum.origin is None
+        c = self._static.quantum.columns
+        quantum_id, = self._layer.db.insert(
+            self._static.quantum,
+            {
+                c.origin: self._layer.db.origin,
+                c.run_collection_id: quantum.run.collection_id,
+                c.task: quantum.taskName,
+            },
+            returning="id"
+        )
+        values = {
+            self._dynamic.columns.quantum_id: quantum_id,
+            self._dynamic.columns.quantum_id: self._layer.db.origin,
+        }
+        for k, v in quantum.dataId.items():
+            values[self._dynamic.columns[k.name]] = v
+        self._layer.db.insert(
+            self._dynamic,
+            values
+        )
 
-    def updateQuantum(self, quantum: Quantum):
-        pass
+        def categorizedInputs():
+            # TODO: should we check that the datasets are resolved, and attempt
+            # to resolve them ourselves if they aren't?  Depends on what the
+            # usage pattern looks like in PipelineTask execution.
+            # For now we just assume they are resolved.
+            for dataset in quantum.initInputs.values():
+                assert dataset.origin == self._layer.db.origin
+                yield dataset, QuantumInputType.INIT
+            for dataset in itertools.chain.from_iterable(quantum.predictedInputs.values()):
+                assert dataset.origin == self._layer.db.origin
+                yield dataset, QuantumInputType.NORMAL
+
+        c = self._static.quantum_input.columns
+        values = [{c.quantum_id: quantum.id,
+                   c.origin: quantum.origin,
+                   c.dataset_id: dataset.id,
+                   c.input_type: inputType}
+                  for dataset, inputType in categorizedInputs()]
+        self._layer.db.insert(
+            self._static.quantum_input,
+            *values
+        )
+
+        quantum.id = quantum_id
+        quantum.origin = self._layer.db.origin
+        return quantum
+
+    def finish(self, quantum: Quantum):
+        assert quantum.id is not None and quantum.origin == self._layer.db.origin
+        # Update the timespan and host in the quantum table.
+        c = self._static.quantum.columns
+        sql = self._static.quantum.update().where(
+            sqlalchemy.sql.and_(c.id == quantum.id, c.origin == quantum.origin)
+        ).values({
+            c[TIMESPAN_FIELD_SPECS.begin.name]: quantum.timespan.begin,
+            c[TIMESPAN_FIELD_SPECS.end.name]: quantum.timespan.end,
+            c.host: quantum.host,
+        })
+        self._layer.db.connection.execute(sql)
+        c = self._static.quantum_input.columns
+        predicted = set(itertools.chain.from_iterable(quantum.predictedInputs.values()))
+        unused = predicted - set(itertools.chain.from_iterable(quantum.actualInputs.values()))
+        sql = self._static.quantum_input.update().where(
+            sqlalchemy.sql.and_(c.quantum_id == quantum.id, c.origin == quantum.origin,
+                                c.dataset_id == sqlalchemy.sql.bindparam("dataset_id"))
+        ).values({
+            c.input_type: QuantumInputType.UNUSED
+        })
+        self._layer.db.connection.execute(sql, *[{"dataset_id": dataset.id} for dataset in unused])
 
     # TODO: we need methods for fetching and querying (but don't yet have the
     # high-level Registry API).
-
-    @property
-    def db(self) -> Database:
-        return self._layer.db
 
     dimensions: DimensionGraph
 
@@ -152,7 +182,7 @@ def _makeDynamicQuantumTableSpec(dimensions: DimensionGraph) -> TableSpec:
     return spec
 
 
-class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
+class ByDimensionHashRegistryLayerQuantumStorage(RegistryLayerQuantumStorage):
 
     def __init__(self, layer: RegistryLayer, *, universe: DimensionUniverse):
         self._layer = layer
@@ -161,7 +191,7 @@ class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
         self.refresh(universe=universe)
 
     @classmethod
-    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumRecordStorageManager:
+    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> RegistryLayerQuantumStorage:
         return cls(layer=layer, universe=universe)
 
     def refresh(self, *, universe: DimensionUniverse):
@@ -170,7 +200,7 @@ class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
         # Query for everything, then group by hash.
         meta = self._static.layer_meta_quantum
         dimensionsByHash = defaultdict(list)
-        for row in self.db.connection.execute(meta.select()).fetchall():
+        for row in self._layer.db.connection.execute(meta.select()).fetchall():
             dimensionsByHash[row[meta.columns.dimensions_hash]].append(row[meta.columns.dimension_name])
         # Iterate over those groups and construct managers for each table.
         result = {}
@@ -179,15 +209,17 @@ class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
             if dimensionsHash != _hashQuantumDimensions(dimensions):
                 raise RuntimeError(f"Bad dimensions hash: {dimensionsHash}.  "
                                    f"Registry database may be corrupted.")
-            table = self.db.getExistingTable(_DYNAMIC_QUANTUM_TABLE_NAME_FORMAT.format(dimensionsHash))
-            result[dimensions] = DatabaseQuantumRecordStorage(dimensions=dimensions, manager=self,
-                                                              table=table)
+            table = self._layer.db.getExistingTable(_DYNAMIC_QUANTUM_TABLE_NAME_FORMAT.format(dimensionsHash))
+            result[dimensions] = ByDimensionHashRegistryLayerQuantumRecords(dimensions=dimensions,
+                                                                            layer=self._layer,
+                                                                            static=self._static,
+                                                                            dynamic=table)
         return result
 
-    def get(self, dimensions: DimensionGraph) -> Optional[QuantumRecordStorage]:
+    def get(self, dimensions: DimensionGraph) -> Optional[RegistryLayerQuantumRecords]:
         return self._managed.get(dimensions)
 
-    def register(self, dimensions: DimensionGraph) -> QuantumRecordStorage:
+    def register(self, dimensions: DimensionGraph) -> RegistryLayerQuantumRecords:
         result = self._managed.get(dimensions)
         if result is None:
             dimensionsHash = _hashQuantumDimensions(dimensions)
@@ -195,18 +227,14 @@ class DatabaseQuantumRecordStorageManager(QuantumRecordStorageManager):
             # Create the table itself.  If it already exists but wasn't in
             # the dict because it was added by another client since this one
             # was initialized, that's fine.
-            table = self.db.ensureTableExists(tableName, _makeDynamicQuantumTableSpec(dimensions))
+            table = self._layer.db.ensureTableExists(tableName, _makeDynamicQuantumTableSpec(dimensions))
             # Add rows to the layer_meta table so we can find this table in
             # the future.  Also okay if those already exist, so we use sync.
             for dimension in dimensions:
-                self.db.sync(self._static.layer_meta_quantum,
-                             keys={"dimensions_hash": dimensionsHash,
-                                   "dimension_name": dimension.name})
-            result = DatabaseQuantumRecordStorage(dimensions=dimensions, db=self.db,
-                                                  static=self._static, dynamic=table)
+                self._layer.db.sync(self._static.layer_meta_quantum,
+                                    keys={"dimensions_hash": dimensionsHash,
+                                          "dimension_name": dimension.name})
+            result = ByDimensionHashRegistryLayerQuantumRecords(dimensions=dimensions, db=self._layer.db,
+                                                                static=self._static, dynamic=table)
             self._managed[dimensions] = result
         return result
-
-    @property
-    def db(self) -> Database:
-        return self._layer.db

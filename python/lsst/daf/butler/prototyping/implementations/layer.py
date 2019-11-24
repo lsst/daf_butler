@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+__all__ = ["DatabaseRegistryLayer"]
+
 import enum
 from typing import (
     Iterator,
     Optional,
     Type,
+    TYPE_CHECKING,
 )
 
 import sqlalchemy
@@ -15,14 +18,19 @@ from ..core.datasets import (
 from ..core.dimensions import (
     DimensionUniverse,
 )
-from ..core.schema import TableSpec, FieldSpec, ForeignKeySpec, Base64Bytes
-from ..core.timespan import TIMESPAN_FIELD_SPECS
-from .database import Database, makeTableStruct
-from .iterables import DatasetIterable
-from .run import Run
-from .opaqueRecordStorage import OpaqueRecordStorageManager
-from .dimensionRecordStorage import DimensionRecordStorageManager
-from .quantumRecordStorage import QuantumRecordStorageManager
+from ...core.schema import TableSpec, FieldSpec, ForeignKeySpec, Base64Bytes
+from ...core.timespan import TIMESPAN_FIELD_SPECS
+from ..database import Database, makeTableStruct
+from ..iterables import DatasetIterable
+from ..run import Run
+
+if TYPE_CHECKING:
+    from ..interfaces import (
+        RegistryLayerOpaqueStorage,
+        RegistryLayerDimensionStorage,
+        RegistryLayerQuantumStorage,
+        RegistryLayer,
+    )
 
 
 class CollectionType(enum.IntEnum):
@@ -123,17 +131,17 @@ class StaticLayerTablesTuple:
     )
 
 
-class RegistryLayer:
+class DatabaseRegistryLayer(RegistryLayer):
 
     def __init__(self, db: Database, *, universe: DimensionUniverse,
-                 opaque: Type[OpaqueRecordStorageManager],
-                 dimensions: Type[DimensionRecordStorageManager],
-                 quanta: Type[QuantumRecordStorageManager]):
-        self.db = db
+                 opaque: Type[RegistryLayerOpaqueStorage],
+                 dimensions: Type[RegistryLayerDimensionStorage],
+                 quanta: Type[RegistryLayerQuantumStorage]):
+        super().__init__(db=db)
         self._tables = StaticLayerTablesTuple(db)
-        self.opaque = OpaqueRecordStorageManager.load(self.db)
-        self.dimensions = DimensionRecordStorageManager.load(self.db, universe=universe)
-        self.quanta = QuantumRecordStorageManager.load(self, universe=universe)
+        self._opaque = RegistryLayerOpaqueStorage.load(self.db)
+        self._dimensions = RegistryLayerDimensionStorage.load(self.db, universe=universe)
+        self._quanta = RegistryLayerQuantumStorage.load(self, universe=universe)
 
     def syncRun(self, name: str) -> Run:
         collectionRow = self.db.sync(
@@ -168,17 +176,16 @@ class RegistryLayer:
         return Run(**values)
 
     def updateRun(self, run: Run):
-        assert run.collection_id is not None
-        values = {
-            TIMESPAN_FIELD_SPECS.begin.name: run.timespan.begin,
-            TIMESPAN_FIELD_SPECS.end.name: run.timespan.end,
-            "host": run,
-            "environment_id": run.environment_id,
-        }
+        assert run.collection_id is not None and run.origin == self.db.origin
+        c = self._tables.run.columns
         sql = self._tables.run.update().where(
             sqlalchemy.sql.and_(self._tables.run.columns.collection_id == run.collection_id,
                                 self._tables.run.columns.origin == run.origin)
-        ).values(**values)
+        ).values({
+            c[TIMESPAN_FIELD_SPECS.begin.name]: run.timespan.begin,
+            c[TIMESPAN_FIELD_SPECS.end.name]: run.timespan.end,
+            c.host: run.host,
+        })
         self.db.connection.execute(sql)
 
     def syncCollection(self, name: str, *, calibration: bool = False):
@@ -193,8 +200,8 @@ class RegistryLayer:
                                ephemeral: bool = False):
         if ephemeral:
             raise NotImplementedError("Ephemeral datasets are not yet supported.")
-        self.db.connection.execute(
-            self._tables.dataset_location.insert(),
+        self.db.insert(
+            self._tables.dataset_location,
             *[{"dataset_id": dataset.id, "origin": dataset.origin, "datastore_name": datastoreName}
               for dataset in datasets]
         )
@@ -232,6 +239,14 @@ class RegistryLayer:
     def selectCollections(self) -> sqlalchemy.sql.FromClause:
         return self._tables.collections
 
-    opaque: OpaqueRecordStorageManager
-    dimensions: DimensionRecordStorageManager
-    quanta: QuantumRecordStorageManager
+    @property
+    def opaque(self) -> RegistryLayerOpaqueStorage:
+        return self._opaque
+
+    @property
+    def dimensions(self) -> RegistryLayerDimensionStorage:
+        return self._dimensions
+
+    @property
+    def quanta(self) -> RegistryLayerQuantumStorage:
+        return self._quanta

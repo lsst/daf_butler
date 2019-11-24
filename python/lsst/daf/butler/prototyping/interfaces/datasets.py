@@ -57,3 +57,7 @@ class DatasetRecordStorage(ABC):
         pass
 
     datasetType: DatasetType
+
+
+class DatasetRecordStorageManager(ABC):
+    pass
