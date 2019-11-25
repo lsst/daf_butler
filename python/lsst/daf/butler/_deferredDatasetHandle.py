@@ -39,7 +39,8 @@ class DeferredDatasetHandle:
     """Proxy class that provides deferred loading of a dataset from a butler.
     """
 
-    def get(self, *, parameters: Optional = None, **kwargs: dict) -> Any:
+    def get(self, *, component: Optional[str] = None, parameters: Optional[dict] = None,
+            **kwargs: dict) -> Any:
         """ Retrieves the dataset pointed to by this handle
 
         This handle may be used multiple times, possibly with different
@@ -47,6 +48,9 @@ class DeferredDatasetHandle:
 
         Parameters
         ----------
+        component : `str` or None
+            If the deferred object is a component dataset type, this parameter
+            may specify the name of the component to use in the get operation.
         parameters : `dict` or None
             The parameters argument will be passed to the butler get method.
             It defaults to None. If the value is not None,  this dict will
@@ -71,6 +75,9 @@ class DeferredDatasetHandle:
         else:
             mergedParameters = {}
 
+        if component is not None:
+            return self.butler.get(self.ref.datasetType.componentTypeName(component),
+                                   self.ref.dataId, parameters=mergedParameters)
         return self.butler.getDirect(self.ref, parameters=mergedParameters)
 
     @property
