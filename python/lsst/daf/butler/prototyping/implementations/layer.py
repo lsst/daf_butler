@@ -39,12 +39,6 @@ class CollectionType(enum.IntEnum):
     CALIBRATION = 3
 
 
-class DatasetUniqueness(enum.IntEnum):
-    STANDARD = 1
-    NONSINGULAR = 2
-    GLOBAL = 3
-
-
 @makeTableStruct
 class StaticLayerTablesTuple:
     collection = TableSpec(

@@ -19,9 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ["DatasetType"]
+__all__ = ["DatasetType", "DatasetUniqueness"]
 
 from copy import deepcopy
+import enum
 import re
 
 from types import MappingProxyType
@@ -34,6 +35,27 @@ def _safeMakeMappingProxyType(data):
     if data is None:
         data = {}
     return MappingProxyType(data)
+
+
+class DatasetUniqueness(enum.IntEnum):
+    """Enumeration indicating the kind of uniqueness constraints to
+    define on data IDs of this dataset type.
+    """
+
+    GLOBAL = 1
+    """There may only be one dataset with this dataset type and a particular
+    data ID across all collections.
+    """
+
+    STANDARD = 2
+    """There may only be one dataset with this dataset type and a particular
+    data ID in a collection.
+    """
+
+    NONSINGULAR = 3
+    """There may be any number of datasets with this dataset type and a
+    particular data ID in a collection.
+    """
 
 
 class DatasetType:
@@ -62,12 +84,15 @@ class DatasetType:
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
+    uniqueness: `DatasetUniqueness`
+        Enumeration value indicating the kind of uniqueness constraints to
+        define on the data IDs of this dataset type.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to normalize ``dimensions`` if it
         is not already a `DimensionGraph`.
     """
 
-    __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName")
+    __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName", "_uniqueness")
 
     VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
@@ -91,7 +116,8 @@ class DatasetType:
         """
         return "{}.{}".format(datasetTypeName, componentName)
 
-    def __init__(self, name, dimensions, storageClass, *, universe=None):
+    def __init__(self, name, dimensions, storageClass, *, uniqueness=DatasetUniqueness.STANDARD,
+                 universe=None):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
@@ -108,6 +134,7 @@ class DatasetType:
         else:
             self._storageClass = None
             self._storageClassName = storageClass
+        self._uniqueness = uniqueness
 
     def __repr__(self):
         return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)
@@ -154,6 +181,13 @@ class DatasetType:
         if self._storageClass is None:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
+
+    @property
+    def uniqueness(self) -> DatasetUniqueness:
+        """Enumeration value indicating the kind of uniqueness constraints to
+        define on the data IDs of this dataset type (`DatasetUniqueness`).
+        """
+        return self._uniqueness
 
     @staticmethod
     def splitDatasetTypeName(datasetTypeName):
