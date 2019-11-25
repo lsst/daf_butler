@@ -814,9 +814,14 @@ class Config(collections.abc.MutableMapping):
         ----------
         path : `str`
             Path to the file to use for output.
+
+        Notes
+        -----
+        The name of the config file is stored in the Config object.
         """
         with open(path, "w") as f:
             self.dump(f)
+        self.configFile = path
 
     def dumpToS3File(self, bucket, key):
         """Writes the config to a file in S3 Bucket.
