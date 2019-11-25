@@ -195,6 +195,7 @@ class Config(collections.abc.MutableMapping):
 
         if isinstance(other, Config):
             self._data = copy.deepcopy(other._data)
+            self.configFile = other.configFile
         elif isinstance(other, collections.abc.Mapping):
             self.update(other)
         elif isinstance(other, str):
