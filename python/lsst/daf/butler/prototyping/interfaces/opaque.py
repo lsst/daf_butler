@@ -10,7 +10,7 @@ from typing import (
 )
 
 from ...core.schema import TableSpec
-from .layer import RegistryLayer
+from .database import Database
 
 
 class RegistryLayerOpaqueRecords(ABC):
@@ -37,7 +37,7 @@ class RegistryLayerOpaqueStorage(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, layer: RegistryLayer) -> RegistryLayerOpaqueStorage:
+    def load(cls, db: Database) -> RegistryLayerOpaqueStorage:
         pass
 
     @abstractmethod

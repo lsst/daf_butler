@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-__all__ = ["Database"]
+__all__ = ["Database", "SynchronizationConflict"]
 
 from abc import ABC, abstractmethod
 from collections import namedtuple
 from typing import (
+    Any,
+    Dict,
+    Iterable,
     Iterator,
     Optional,
     Tuple,
@@ -14,6 +17,13 @@ from typing import (
 import sqlalchemy
 
 from ...core.schema import TableSpec
+
+
+class SynchronizationConflict(RuntimeError):
+    """Exception raised when an attempt to synchronize rows fails because
+    the existing row has different values than the one that would be
+    inserted.
+    """
 
 
 class Database(ABC):
@@ -36,10 +46,48 @@ class Database(ABC):
 
     @abstractmethod
     def sync(self, table: sqlalchemy.schema.Table,
-             keys: dict,  # find the matching record with these
-             compared: Optional[dict] = None,  # these values must be the same on return
-             extra: Optional[dict] = None,  # these values should be used only when inserting
-             ) -> sqlalchemy.engine.RowProxy:
+             *,
+             keys: Dict[str, Any],
+             compared: Optional[Dict[str, Any]] = None,
+             extra: Optional[Dict[str, Any]] = None,
+             returning: Optional[Iterable[str]] = None,
+             ) -> Tuple[Optional[Dict[str, Any], bool]]:
+        """Insert into a table as necessary to ensure database contains
+        values equivalent to the given ones.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table to be queried and possibly inserted into.
+        keys : `dict`
+            Column name-value pairs used to search for an existing row; must
+            be a combination that can be used to select a single row if one
+            exists.  If such a row does not exist, these values are used in
+            the insert.
+        compared : `dict`, optional
+            Column name-value pairs that are compared to those in any existing
+            row.  If such a row does not exist, these rows are used in the
+            insert.
+        extra : `dict`, optional
+            Column name-value pairs that are ignored if a matching row exists,
+            but used in an insert if one is necessary.
+        returning : `str`, optional
+            The names of columns whose values should be returned.
+
+        Returns
+        -------
+        row : `dict`, optional
+            The value of the fields indicated by ``returning``, or `None` if
+            ``returning`` is `None`.
+        inserted : `bool`
+            If `True`, a new row was inserted.
+
+        Raises
+        ------
+        SynchronizationConflict
+            Raised if the values in ``compared`` do match the values in the
+            database.
+        """
         pass
 
     @abstractmethod

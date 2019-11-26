@@ -122,7 +122,7 @@ class SkyPixRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
 
 class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
 
-    _META_TABLE_NAME = "layer_meta_dimension"
+    _META_TABLE_NAME = "dimension_meta"
 
     _META_TABLE_SPEC = TableSpec(
         fields=[
@@ -134,7 +134,7 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
         super().__init__(universe=universe)
         self._db = db
         self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
-        self._managed = NamedKeyDict({})
+        self._records = NamedKeyDict({})
         self.refresh()
 
     @classmethod
@@ -142,7 +142,7 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
         return cls(db=db)
 
     def refresh(self):
-        managed = NamedKeyDict({})
+        records = NamedKeyDict({})
         for row in self._db.connection.execute(self._metaTable.select()).fetchall():
             element = self.universe[row[self._metaTable.columns.element_name]]
             table = self._db.getExistingTable(element.name)
@@ -152,17 +152,17 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
                 )
             else:
                 commonSkyPixOverlapTable = None
-            managed[element] = DatabaseRegistryLayerDimensionRecords(
+            records[element] = DatabaseRegistryLayerDimensionRecords(
                 db=self._db, element=element, table=table,
                 commonSkyPixOverlapTable=commonSkyPixOverlapTable
             )
-        self._managed = managed
+        self._records = records
 
     def get(self, element: DimensionElement) -> Optional[RegistryLayerDimensionRecords]:
-        return self._managed.get(element)
+        return self._records.get(element)
 
     def register(self, element: DimensionElement) -> RegistryLayerDimensionRecords:
-        result = self._managed.get(element)
+        result = self._records.get(element)
         if result is None:
             if isinstance(element, SkyPixDimension):
                 result = SkyPixRegistryLayerDimensionRecords(element)
@@ -192,5 +192,5 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
                     table=table,
                     commonSkyPixOverlapTable=commonSkyPixOverlapTable
                 )
-            self._managed[element] = result
+            self._records[element] = result
         return result

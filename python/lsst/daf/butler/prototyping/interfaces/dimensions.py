@@ -15,7 +15,7 @@ from ...core.dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from .layer import RegistryLayer
+from .database import Database
 
 
 class RegistryLayerDimensionRecords(ABC):
@@ -49,7 +49,7 @@ class RegistryLayerDimensionStorage(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> RegistryLayerDimensionStorage:
+    def load(cls, db: Database, *, universe: DimensionUniverse) -> RegistryLayerDimensionStorage:
         pass
 
     @abstractmethod

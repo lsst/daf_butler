@@ -11,7 +11,7 @@ from typing import (
 import sqlalchemy
 
 from ...core.schema import TableSpec, FieldSpec
-from ..interfaces import Database, RegistryLayerOpaqueStorage, RegistryLayerOpaqueRecords, RegistryLayer
+from ..interfaces import Database, RegistryLayerOpaqueStorage, RegistryLayerOpaqueRecords
 
 
 class ByNameRegistryLayerOpaqueRecords(RegistryLayerOpaqueRecords):
@@ -39,7 +39,7 @@ class ByNameRegistryLayerOpaqueRecords(RegistryLayerOpaqueRecords):
 
 class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
 
-    _META_TABLE_NAME = "layer_meta_opaque"
+    _META_TABLE_NAME = "opaque_meta"
 
     _META_TABLE_SPEC = TableSpec(
         fields=[
@@ -50,26 +50,26 @@ class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
     def __init__(self, db: Database):
         self._db = db
         self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
-        self._managed = {}
+        self._records = {}
         self.refresh()
 
     @classmethod
-    def load(cls, layer: RegistryLayer) -> RegistryLayerOpaqueStorage:
-        return cls(db=layer.db)
+    def load(cls, db: Database) -> RegistryLayerOpaqueStorage:
+        return cls(db=db)
 
     def refresh(self):
-        storage = {}
+        records = {}
         for row in self._db.connection.execute(self._metaTable.select()).fetchall():
             name = row[self._metaTable.columns.table_name]
             table = self._db.getExistingTable(name)
-            storage[name] = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
-        self._managed = storage
+            records[name] = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
+        self._records = records
 
     def get(self, name: str) -> Optional[RegistryLayerOpaqueRecords]:
-        return self._managed.get(name)
+        return self._records.get(name)
 
     def register(self, name: str, spec: TableSpec) -> RegistryLayerOpaqueRecords:
-        result = self._managed.get(name)
+        result = self._records.get(name)
         if result is None:
             # Create the table itself.  If it already exists but wasn't in
             # the dict because it was added by another client since this one
@@ -79,5 +79,5 @@ class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
             # future.  Also okay if that already exists, so we use sync.
             self._db.sync(self._metaTable, keys={"table_name": name})
             result = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
-            self._managed[name] = result
+            self._records[name] = result
         return result
