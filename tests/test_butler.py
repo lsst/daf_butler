@@ -410,6 +410,12 @@ class ButlerTests:
         self.assertEqual(collections1, set())
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
 
+        # Check that a config with no associated file name will not
+        # work properly with relocatable Butler repo
+        butlerConfig.configFile = None
+        with self.assertRaises(ValueError):
+            Butler(butlerConfig, collection="ingest")
+
     def testStringification(self):
         butler = Butler(self.tmpConfigFile)
         butlerStr = str(butler)
