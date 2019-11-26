@@ -415,6 +415,13 @@ class DimensionGraph:
             return _filterDependentElements(self._allTemporal,
                                             prefer=NamedValueSet(self.elements[p] for p in prefer))
 
+    @classmethod
+    def decode(cls, encoded: bytes, *, universe: DimensionUniverse) -> DimensionGraph:
+        raise NotImplementedError("TODO")
+
+    def encode(self) -> bytes:
+        raise NotImplementedError("TODO")
+
     def fingerprint(self, update: Callable[[bytes], None]):
         """Update a secure hash function with a hash of dimension names.
 
