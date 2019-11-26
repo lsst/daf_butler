@@ -83,7 +83,7 @@ def makeForeignKeySpec(dimension: Dimension) -> ForeignKeySpec:
 
 
 def addDimensionForeignKey(tableSpec: TableSpec, dimension: Dimension, *,
-                           primaryKey: bool, nullable: bool = False):
+                           primaryKey: bool, nullable: bool = False) -> FieldSpec:
     """Add a field and possibly a foreign key to a table specification that
     reference the table for the given `Dimension`.
 
@@ -103,6 +103,11 @@ def addDimensionForeignKey(tableSpec: TableSpec, dimension: Dimension, *,
     nullable : `bool`, optional
         If `False` (default) the new field will be added with a NOT NULL
         constraint.
+
+    Returns
+    -------
+    fieldSpec : `FieldSpec`
+        Specification for the field added.
     """
     # Add the dependency's primary key field, but use the dimension name for
     # the field name to make it unique and more meaningful in this table.
@@ -115,6 +120,7 @@ def addDimensionForeignKey(tableSpec: TableSpec, dimension: Dimension, *,
     # there actually is one.
     if dimension.hasTable() and dimension.viewOf is None:
         tableSpec.foreignKeys.append(makeForeignKeySpec(dimension))
+    return fieldSpec
 
 
 def makeElementTableSpec(element: DimensionElement) -> TableSpec:
