@@ -388,13 +388,13 @@ class ButlerTests:
         # Remove the file created in setUp
         os.unlink(self.tmpConfigFile)
 
-        Butler.makeRepo(self.root, config=Config(self.configFile))
+        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile))
         limited = Config(self.configFile)
-        butler1 = Butler(self.root, collection="ingest")
-        Butler.makeRepo(self.root, standalone=True, createRegistry=False,
-                        config=Config(self.configFile))
+        butler1 = Butler(butlerConfig, collection="ingest")
+        butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
+                                       config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
-        butler2 = Butler(self.root, collection="ingest")
+        butler2 = Butler(butlerConfig, collection="ingest")
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
         self.assertEqual(butler1.config, butler2.config)
@@ -409,6 +409,12 @@ class ButlerTests:
         collections1 = butler1.registry.getAllCollections()
         self.assertEqual(collections1, set())
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
+
+        # Check that a config with no associated file name will not
+        # work properly with relocatable Butler repo
+        butlerConfig.configFile = None
+        with self.assertRaises(ValueError):
+            Butler(butlerConfig, collection="ingest")
 
     def testStringification(self):
         butler = Butler(self.tmpConfigFile)

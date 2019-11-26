@@ -722,7 +722,7 @@ class TestOnConflictQueries(unittest.TestCase):
             from lsst.daf.butler.registries.sqliteRegistry import InsertOnConflict
             from sqlalchemy.dialects import sqlite
         except ImportError:
-            self.skipTest("Test skiped, cannot find imports")
+            self.skipTest("Test skipped, cannot find imports for sqlite conflict testing")
 
         table = self.makeTestTable()
 
@@ -747,7 +747,7 @@ class TestOnConflictQueries(unittest.TestCase):
             from lsst.daf.butler.registries.postgresqlRegistry import PostgreSqlRegistry
             from sqlalchemy.dialects import postgresql
         except ImportError:
-            self.skipTest("Test skiped, cannot find imports")
+            self.skipTest("Test skipped, cannot find postgres imports")
 
         table = self.makeTestTable()
 
@@ -773,7 +773,7 @@ class TestOnConflictQueries(unittest.TestCase):
         try:
             from sqlalchemy.dialects import oracle
         except ImportError:
-            self.skipTest("Test skiped, cannot find imports")
+            self.skipTest("Test skiped, cannot find Oracle imports")
 
         table = self.makeTestTable()
 

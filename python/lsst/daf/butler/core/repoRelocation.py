@@ -45,16 +45,27 @@ def replaceRoot(configRoot, butlerRoot):
         Butler root directory.  Absolute path is inserted into the
         ``configRoot`` where the
         `~lsst.daf.butler.core.repoRelocation.BUTLER_ROOT_TAG` string is
-        found.  If `None` the current working directory is used for the root.
+        found.
 
     Returns
     -------
     newRoot : `str`
         New configuration string, with the root tag replaced with the butler
         root if that tag was present in the supplied configuration root.
+
+    Raises
+    ------
+    ValueError
+        Raised if ``butlerRoot`` is not set but a value is required.
     """
 
-    if butlerRoot is None:
-        butlerRoot = os.path.curdir
+    # Do nothing if there is nothing to be done
+    if BUTLER_ROOT_TAG not in configRoot:
+        return configRoot
+
+    # None or empty string indicate a problem
+    if not butlerRoot:
+        raise ValueError(f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' "
+                         "but a replacement has not been defined")
 
     return configRoot.replace(BUTLER_ROOT_TAG, os.path.abspath(butlerRoot))

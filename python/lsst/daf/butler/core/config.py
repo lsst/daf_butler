@@ -195,6 +195,7 @@ class Config(collections.abc.MutableMapping):
 
         if isinstance(other, Config):
             self._data = copy.deepcopy(other._data)
+            self.configFile = other.configFile
         elif isinstance(other, collections.abc.Mapping):
             self.update(other)
         elif isinstance(other, str):
@@ -814,9 +815,14 @@ class Config(collections.abc.MutableMapping):
         ----------
         path : `str`
             Path to the file to use for output.
+
+        Notes
+        -----
+        The name of the config file is stored in the Config object.
         """
         with open(path, "w") as f:
             self.dump(f)
+        self.configFile = path
 
     def dumpToS3File(self, bucket, key):
         """Writes the config to a file in S3 Bucket.
