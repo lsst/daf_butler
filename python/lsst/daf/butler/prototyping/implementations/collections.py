@@ -2,138 +2,135 @@ from __future__ import annotations
 
 __all__ = ["AggressiveRegistryLayerCollectionStorage"]
 
+from datetime import datetime
 from typing import (
     Optional,
 )
 
 import sqlalchemy
 
-from ...core.schema import TableSpec, FieldSpec, ForeignKeySpec
-from ...core.timespan import TIMESPAN_FIELD_SPECS
-from ..collections import Run, Collection, CollectionType
+from ...core.dimensions.schema import TIMESPAN_FIELD_SPECS
+from ...core.timespan import Timespan
 
 from ..interfaces import (
+    CollectionType,
     Database,
-    makeTableStruct,
-    RegistryLayerCollectionStorage
+    RegistryLayerCollectionStorage,
+    RegistryLayerCollectionRecord,
+    RegistryLayerRunRecord,
 )
 
 
-@makeTableStruct
-class CollectionTablesTuple:
-    collection = TableSpec(
-        fields=[
-            FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
-            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
-            FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
-            FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
-        ],
-        unique={("name",)},
-    )
-    run = TableSpec(
-        fields=[
-            FieldSpec("id", dtype=sqlalchemy.BigInteger, primaryKey=True),
-            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
-            TIMESPAN_FIELD_SPECS.begin,
-            TIMESPAN_FIELD_SPECS.end,
-            FieldSpec("host", dtype=sqlalchemy.String, length=128),
-        ],
-        unique={("name",)},
-        foreignKeys=[
-            ForeignKeySpec("collection", source=("id", "origin"), target=("id", "origin"),
-                           onDelete="CASCADE"),
-        ],
-    )
+class AggressiveRegistryLayerRunRecord(RegistryLayerRunRecord):
+
+    def __init__(self, *, db: Database, table: sqlalchemy.schema.Table, name: str, id: int,
+                 host: Optional[str] = None, timespan: Timespan[Optional[datetime]] = None):
+        super().__init__(name=name, id=id, type=CollectionType.RUN)
+        self._db = db
+        self._table = table
+        self._host = host
+        self._timespan = timespan
+
+    def update(self, host: Optional[str] = None, timespan: Timespan[Optional[datetime]] = None):
+        values = {
+            TIMESPAN_FIELD_SPECS.begin.name: timespan.begin,
+            TIMESPAN_FIELD_SPECS.end.name: timespan.end,
+            "host": host,
+        }
+        self._db.connection.execute(
+            self._table.update().values(values).where(self._table.columns.id == self.id)
+        )
+        # TODO: make sure the above update modified exactly one record.
+        self._host = host
+        self._timespan = timespan
+
+    @property
+    def host(self) -> Optional[str]:
+        return self._host
+
+    @property
+    def timespan(self) -> Timespan[Optional[datetime]]:
+        return self._timespan
 
 
 class AggressiveRegistryLayerCollectionStorage(RegistryLayerCollectionStorage):
 
     def __init__(self, db: Database):
         self._db = db
-        self._tables = CollectionTablesTuple(db)
+        self._tables = self.TablesTuple(db)
+        self._byName = {}
+        self._byId = {}
+        self.refresh()
 
     @classmethod
     def load(cls, db: Database) -> RegistryLayerCollectionStorage:
         return cls(db)
 
-    def sync(self, collection: Collection) -> Collection:
-        if collection.id is None and collection.origin is None:
+    def refresh(self):
+        sql = sqlalchemy.sql.select().select_from(
+            self._tables.collection.join(self._tables.run, isouter=True)
+        )
+        byName = {}
+        byId = {}
+        for row in self._db.connection.execute(sql).fetchall():
+            kwds = {
+                "name": row[self._tables.collection.columns.name],
+                "id": row[self._tables.collection.columns.id],
+            }
+            type = CollectionType(row["type"])
+            if type is CollectionType.RUN:
+                kwds["db"] = self._db
+                kwds["table"] = self.tables.run
+                kwds[TIMESPAN_FIELD_SPECS.begin.name] = row[self._tables.run[TIMESPAN_FIELD_SPECS.begin.name]]
+                kwds[TIMESPAN_FIELD_SPECS.end.name] = row[self._tables.run[TIMESPAN_FIELD_SPECS.end.name]]
+                kwds["host"] = row[self._tables.run.host]
+                record = AggressiveRegistryLayerRunRecord(**kwds)
+            else:
+                kwds["type"] = type
+                record = RegistryLayerCollectionRecord(**kwds)
+            byName[record.name] = record
+            byId[record.id] = record
+        self._byName = byName
+        self._byId = byId
+
+    def register(self, name: str, type: CollectionType) -> RegistryLayerCollectionRecord:
+        record = self._byName.get(name)
+        if record is None:
             row, _ = self._db.sync(
                 self._tables.collection,
-                keys={"name": collection.name},
-                compared={"type": collection.type},
-                extra={"origin": self._db.origin},
-                returning={"id", "origin"},
+                keys={"name": name},
+                compared={"type": type},
+                returning={"id"}
             )
-            collection.id = row["id"]
-            collection.origin = row["origin"]
-        elif collection.id is not None and collection.origin is not None:
-            self._db.sync(
-                self._tables.collection,
-                keys={"name": collection.name},
-                compared={"type": collection.type, "origin": collection.origin, "id": collection.id}
-            )
-        else:
-            raise ValueError(f"Collection with name '{collection.name}' has id={collection.id} "
-                             f"but origin={collection.origin}.")
+            kwds = {
+                "name": name,
+                "id": row["id"],
+            }
+            if type is CollectionType.RUN:
+                row, _ = self._db.sync(
+                    self._tables.run,
+                    keys={"id": kwds["id"]},
+                    returning={"host", TIMESPAN_FIELD_SPECS.begin.name. TIMESPAN_FIELD_SPECS.end.name},
+                )
+                kwds["host"] = row["host"]
+                kwds["timespan"] = Timespan(
+                    row[TIMESPAN_FIELD_SPECS.begin.name],
+                    row[TIMESPAN_FIELD_SPECS.end.name]
+                )
+                record = AggressiveRegistryLayerRunRecord(**kwds)
+            else:
+                kwds["type"] = type
+                record = RegistryLayerCollectionRecord(**kwds)
+            self._byName[record.name] = record
+            self._byId[record.id] = record
+        return record
 
-        if collection.type is CollectionType.Run:
-            assert isinstance(collection, Run)
-            fields = {"host", TIMESPAN_FIELD_SPECS.begin.name, TIMESPAN_FIELD_SPECS.end.name}
-            compared = {}
-            returning = {}
-            for field in fields:
-                value = getattr(collection, field)
-                if value is None:
-                    returning.add(field)
-                else:
-                    compared[field] = value
-            row, _ = self.db.sync(
-                self._tables.run,
-                keys={"id": collection.id, "origin": collection.origin},
-                compared=compared,
-                returning=returning,
-            )
-            for field in returning.keys():
-                setattr(collection, field, row[field])
+    def find(self, name: str) -> Optional[RegistryLayerCollectionRecord]:
+        return self._byName.get(name)
 
-        return collection
+    def get(self, id: int) -> Optional[RegistryLayerCollectionRecord]:
+        return self._byId.get(id)
 
-    def _fetch(self, where: sqlalchemy.sql.ColumnElement) -> Optional[Collection]:
-        row = self._db.connection.execute(
-            sqlalchemy.sql.select().select_from(
-                self._tables.collection.join(self._tables.run, isouter=True)
-            ).where(where)
-        ).fetchone()
-        if row is None:
-            return None
-        kwds = {
-            "name": row[self._tables.collection.columns.name],
-            "id": row[self._tables.collection.columns.id],
-            "origin": row[self._tables.collection.columns.origin],
-        }
-        type = CollectionType(row["type"])
-        if type is CollectionType.RUN:
-            kwds[TIMESPAN_FIELD_SPECS.begin.name] = row[self._tables.run[TIMESPAN_FIELD_SPECS.begin.name]]
-            kwds[TIMESPAN_FIELD_SPECS.end.name] = row[self._tables.run[TIMESPAN_FIELD_SPECS.end.name]]
-            kwds["host"] = row[self._tables.run.host]
-            return Run(**kwds)
-        else:
-            kwds["type"] = type
-            return Collection(**kwds)
-
-    def find(self, name: str) -> Optional[Collection]:
-        return self._fetch(self._tables.collection.columns.name == name)
-
-    def get(self, id: int, origin: int) -> Optional[Collection]:
-        return self._fetch(
-            sqlalchemy.sql.and_(self._tables.collection.columns.id == id,
-                                self._tables.collection.columns.origin == origin)
-        )
-
-    def finish(self, run: Run):
-        pass
-        # TODO
-
-    def select(self) -> sqlalchemy.sql.FromClause:
-        return self._tables.collections
+    @property
+    def tables(self) -> RegistryLayerCollectionStorage.TablesTuple:
+        return self._tables
