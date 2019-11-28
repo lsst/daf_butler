@@ -95,6 +95,10 @@ class Database(ABC):
                ) -> Optional[Iterator[int]]:
         pass
 
+    @abstractmethod
+    def replace(self, table: sqlalchemy.schema.Table, *rows, dict):
+        pass
+
     origin: int
     connection: sqlalchemy.engine.Connection
 

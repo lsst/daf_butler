@@ -14,7 +14,6 @@ import sqlalchemy
 
 from ....core.datasets import DatasetType, ResolvedDatasetHandle, DatasetUniqueness
 from ....core.dimensions import DimensionGraph, DimensionUniverse
-from ....core.utils import NamedKeyDict
 
 from ...iterables import DatasetIterable
 from ...interfaces import (
@@ -28,50 +27,82 @@ from .base import StaticDatasetTablesTuple, ByDimensionsRegistryLayerDatasetReco
 
 class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
 
-    def __init__(self, db: Database,
+    def __init__(self, *, db: Database, collections: RegistryLayerCollectionStorage,
                  RecordClasses: Dict[DatasetUniqueness, Type[ByDimensionsRegistryLayerDatasetRecords]]):
         self._db = db
+        self._collections = collections
         self._static = StaticDatasetTablesTuple(db)
         self._RecordClasses = RecordClasses
-        self._records = NamedKeyDict({})
+        self._byName = {}
+        self._byId = {}
         self.refresh()
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database, collections: RegistryLayerCollectionStorage,
-             *, universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
+    def loadTypes(cls, db: Database, collections: RegistryLayerCollectionStorage,
+                  *, universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
         # TODO: ideally we'd load RecordClasses from configuration, to make
         # this configurable all the way down.  Maybe attach a config to
         # Database?
         pass
 
-    def refresh(self, *, universe: DimensionUniverse):
-        records = {}
+    def refreshTypes(self, *, universe: DimensionUniverse):
+        byName = {}
+        byId = {}
         c = self._static.dataset_type.columns
         for row in self._layer.db.execute(self._static.dataset_type.select()).fetchall():
             name = row[c.name]
             dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
             uniqueness = DatasetUniqueness(row[c.uniqueness])
             datasetType = DatasetType(name, dimensions, row[c.storage_class], uniqueness=uniqueness)
-            records[datasetType] = self._RecordClasses[uniqueness].load(db=self._db, datasetType=datasetType,
-                                                                        static=self._static,
-                                                                        id=row[c.id], origin=row[c.origin])
-        self._records = records
+            records = self._RecordClasses[uniqueness].load(db=self._db, datasetType=datasetType,
+                                                           static=self._static,
+                                                           collections=self._collections,
+                                                           id=row[c.id])
+            byName[name] = records
+            byId[records.id] = records
+        self._byName = byName
+        self._byId = byId
 
-    def get(self, datasetType: DatasetType) -> Optional[RegistryLayerDatasetRecords]:
-        return self._records.get(datasetType)
+    def getType(self, datasetType: DatasetType) -> Optional[RegistryLayerDatasetRecords]:
+        return self._records._byName(datasetType.name)
 
-    def register(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
-        result = self._records.get(datasetType)
-        if result is None:
-            result = self._RecordClasses[datasetType.uniqueness].register(db=self._db,
-                                                                          datasetType=datasetType,
-                                                                          static=self._static)
-            self._records[datasetType] = result
-        return result
+    def registerType(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
+        records = self._records.get(datasetType)
+        if records is None:
+            records = self._RecordClasses[datasetType.uniqueness].register(db=self._db,
+                                                                           datasetType=datasetType,
+                                                                           static=self._static,
+                                                                           collection=self._collections)
+            self._byName[datasetType.name] = records
+            self._byId[records.id] = records
+        return records
 
     def selectTypes(self) -> sqlalchemy.sql.FromClause:
         return self._static.dataset_type
+
+    def iterTypes(self) -> Iterator[RegistryLayerDatasetRecords]:
+        yield from self._records.values()
+
+    def getHandle(self, id: int, origin: int) -> Optional[ResolvedDatasetHandle]:
+        sql = self._static.dataset.select().where(
+            sqlalchemy.sql.and_(self._static.dataset.columns.id == id,
+                                self._static.dataset.columns.origin == origin)
+        )
+        row = self._db.connection.execute(sql).fetchone()
+        if row is None:
+            return None
+        recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
+        if recordsForType is None:
+            self.refresh()
+            recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
+            assert recordsForType is not None, "Should be guaranteed by foreign key constraints."
+        return ResolvedDatasetHandle(
+            recordsForType.datasetType,
+            dataId=recordsForType.getDataId(id=id, origin=origin),
+            id=id, origin=origin,
+            run=self._collections.get(row[self._static.dataset.columns.run_id]).name
+        )
 
     def insertLocations(self, datastoreName: str, datasets: DatasetIterable, *,
                         ephemeral: bool = False):
@@ -110,6 +141,3 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
             sql,
             *[{"dataset_id": dataset.id, "dataset_origin": dataset.origin} for dataset in datasets]
         )
-
-    def __iter__(self) -> Iterator[RegistryLayerDatasetRecords]:
-        yield from self._records.values()

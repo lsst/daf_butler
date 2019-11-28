@@ -7,6 +7,8 @@ from abc import abstractmethod
 import sqlalchemy
 
 from ...core.datasets import DatasetType
+from ...core.dimensions import DataCoordinate
+from ...core.dimensions.schema import TIMESPAN_FIELD_SPECS
 from ...core.schema import TableSpec, FieldSpec, ForeignKeySpec
 
 from ...interfaces import (
@@ -19,12 +21,14 @@ from ...interfaces import (
 DATASET_TYPE_NAME_LENGTH = 128
 
 
+# TODO: some of this should be part of the public API of
+# RegistryLayerDatasetStorage, but not all - need to add flexibility to
+# makeTableStruct to do that.
 @makeTableStruct
 class StaticDatasetTablesTuple:
     dataset_type = TableSpec(
         fields=[
             FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
-            FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("name", dtype=sqlalchemy.String, length=DATASET_TYPE_NAME_LENGTH),
             FieldSpec("storage_class", dtype=sqlalchemy.String, length=64, nullable=False),
             FieldSpec("dimensions_encoded", dtype=sqlalchemy.String, length=8, nullable=False),
@@ -36,16 +40,13 @@ class StaticDatasetTablesTuple:
             FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
             FieldSpec("origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, nullable=False),
-            FieldSpec("dataset_type_origin", dtype=sqlalchemy.BigInteger, nullable=False),
             FieldSpec("run_id", dtype=sqlalchemy.BigInteger, nullable=False),
-            FieldSpec("run_origin", dtype=sqlalchemy.BigInteger, nullable=False),
             FieldSpec("quantum_id", dtype=sqlalchemy.BigInteger),
             FieldSpec("quantum_origin", dtype=sqlalchemy.BigInteger),
         ],
         foreignKeys=[
-            ForeignKeySpec("dataset_type", source=("dataset_type_id", "dataset_type_origin"),
-                           target=("id", "origin")),
-            ForeignKeySpec("run", source=("run_id", "run_origin"), target=("id", "origin")),
+            ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id", "origin")),
+            ForeignKeySpec("run", source=("run_id",), target=("id",)),
             ForeignKeySpec("quantum", source=("quantum_id", "quantum_origin"), target=("id", "origin"),
                            onDelete="SET NULL"),
         ]
@@ -81,13 +82,26 @@ class StaticDatasetTablesTuple:
             FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("dataset_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
-            FieldSpec("collection_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
         ],
         foreignKeys=[
             ForeignKeySpec("dataset", source=("dataset_id", "dataset_origin"), target=("id", "origin"),
                            onDelete="CASCADE"),
-            ForeignKeySpec("collection", source=("collection_id", "collection_origin"),
-                           target=("id", "origin"),
+            ForeignKeySpec("collection", source=("collection_id",), target=("id",),
+                           onDelete="CASCADE"),
+        ]
+    )
+    dataset_collection_calibration = TableSpec(
+        fields=[
+            FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("dataset_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            TIMESPAN_FIELD_SPECS.begin,
+            TIMESPAN_FIELD_SPECS.end,
+        ],
+        foreignKeys=[
+            ForeignKeySpec("dataset", source=("dataset_id", "dataset_origin"), target=("id", "origin"),
+                           onDelete="CASCADE"),
+            ForeignKeySpec("collection", source=("collection_id",), target=("id",),
                            onDelete="CASCADE"),
         ]
     )
@@ -95,21 +109,26 @@ class StaticDatasetTablesTuple:
 
 class ByDimensionsRegistryLayerDatasetRecords(RegistryLayerDatasetRecords):
 
-    def __init__(self, *, datasetType: DatasetType, id: int, origin: int):
+    def __init__(self, *, datasetType: DatasetType, id: int):
         super().__init__(datasetType=datasetType)
         self.id = id
-        self.origin = origin
 
     @classmethod
     @abstractmethod
     def load(cls, *, db: Database, datasetType: DatasetType, static: StaticDatasetTablesTuple,
-             id: int, origin: int) -> ByDimensionsRegistryLayerDatasetRecords:
+             collections: RegistryLayerCollectionStorage, id: int,
+             ) -> ByDimensionsRegistryLayerDatasetRecords:
         pass
 
     @classmethod
     @abstractmethod
-    def register(cls, *, db: Database, datasetType: DatasetType, static: StaticDatasetTablesTuple
+    def register(cls, *, db: Database, datasetType: DatasetType, static: StaticDatasetTablesTuple,
+                 collections: RegistryLayerCollectionStorage,
                  ) -> ByDimensionsRegistryLayerDatasetRecords:
+        pass
+
+    @abstractmethod
+    def getDataId(self, id: int, origin: int) -> DataCoordinate:
         pass
 
     id: int

@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import (
     Iterator,
-    List,
     Optional,
     Union,
     TYPE_CHECKING,
@@ -18,7 +17,6 @@ from ...core.datasets import DatasetType, ResolvedDatasetHandle
 from ...core.dimensions import DimensionUniverse, DataCoordinate
 
 from ..iterables import DataIdIterable, SingleDatasetTypeIterable, DatasetIterable
-from ..collection import Collection, Run
 from ..quantum import Quantum
 
 if TYPE_CHECKING:
@@ -31,16 +29,20 @@ class RegistryLayerDatasetRecords(ABC):
         self.datasetType = datasetType
 
     @abstractmethod
-    def insert(self, run: Run, dataIds: DataIdIterable, *, quantum: Optional[Quantum] = None
+    def insert(self, run: str, dataIds: DataIdIterable, *, quantum: Optional[Quantum] = None
                ) -> SingleDatasetTypeIterable:
         """Insert one or more dataset entries into the database.
         """
         pass
 
     @abstractmethod
-    def find(self, collection: Collection, dataId: DataCoordinate) -> Optional[ResolvedDatasetHandle]:
+    def find(self, collection: str, dataId: DataCoordinate) -> Optional[ResolvedDatasetHandle]:
         """Search a collection for a dataset.
         """
+        pass
+
+    @abstractmethod
+    def get(self, id: int, origin: int) -> Optional[ResolvedDatasetHandle]:
         pass
 
     @abstractmethod
@@ -57,8 +59,12 @@ class RegistryLayerDatasetRecords(ABC):
         pass
 
     @abstractmethod
-    def select(self, collections: Union[List[Collection], ...],
-               isResult: bool = True, addRank: bool = False) -> Optional[sqlalchemy.sql.FromClause]:
+    def select(self, collection: Union[str, ...],
+               returnDimensions: bool = True,
+               returnId: bool = True,
+               returnOrigin: bool = True,
+               returnRun: bool = False,
+               returnQuantum: bool = False) -> Optional[sqlalchemy.sql.FromClause]:
         pass
 
     datasetType: DatasetType
@@ -68,24 +74,32 @@ class RegistryLayerDatasetStorage(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database, collections: RegistryLayerCollectionStorage,
-             *, universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
+    def loadTypes(cls, db: Database, collections: RegistryLayerCollectionStorage,
+                  *, universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
         pass
 
     @abstractmethod
-    def refresh(self, *, universe: DimensionUniverse):
+    def refreshTypes(self, *, universe: DimensionUniverse):
         pass
 
     @abstractmethod
-    def get(self, datasetType: DatasetType) -> Optional[RegistryLayerDatasetRecords]:
+    def getType(self, datasetType: DatasetType) -> Optional[RegistryLayerDatasetRecords]:
         pass
 
     @abstractmethod
-    def register(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
+    def registerType(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
         pass
 
     @abstractmethod
     def selectTypes(self) -> sqlalchemy.sql.FromClause:
+        pass
+
+    @abstractmethod
+    def iterTypes(self) -> Iterator[RegistryLayerDatasetRecords]:
+        pass
+
+    @abstractmethod
+    def getHandle(self, id: int, origin: int) -> Optional[ResolvedDatasetHandle]:
         pass
 
     @abstractmethod
@@ -99,8 +113,4 @@ class RegistryLayerDatasetStorage(ABC):
 
     @abstractmethod
     def deleteLocations(self, datastoreName: str, datasets: DatasetIterable):
-        pass
-
-    @abstractmethod
-    def __iter__(self) -> Iterator[RegistryLayerDatasetRecords]:
         pass
