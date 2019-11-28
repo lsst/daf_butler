@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["NonsingularByDimensionsRegistryLayerDatasetRecords"]
+__all__ = ["StandardByDimensionsRegistryLayerDatasetRecords"]
 
 from datetime import datetime
 from typing import (
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 
 def _makeDynamicTableName(datasetType: DatasetType) -> str:
-    return f"dataset_nonsingular_{datasetType.dimensions.encode().hex()}"
+    return f"dataset_collection_standard_{datasetType.dimensions.encode().hex()}"
 
 
 def _makeDynamicTableSpec(datasetType: DatasetType) -> TableSpec:
@@ -36,21 +36,21 @@ def _makeDynamicTableSpec(datasetType: DatasetType) -> TableSpec:
             FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("dataset_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, nullable=False),
-            FieldSpec("run_id", dtype=sqlalchemy.BigInteger, nullable=False),
+            FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
         ],
         foreignKeys=[
-            ForeignKeySpec("dataset", source=("dataset_id", "dataset_origin"),
-                           target=("id", "origin"), onDelete="CASCADE"),
+            ForeignKeySpec("dataset", source=("dataset_id", "dataset_origin"), target=("id", "origin"),
+                           onDelete="CASCADE"),
             ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
-            ForeignKeySpec("run", source=("run_id",), target=("id",)),
+            ForeignKeySpec("collection", source=("collection_id",), target=("id",),
+                           onDelete="CASCADE"),
         ]
     )
-    # DatasetTypes with nonsingular uniqueness have a constraint on dataset
-    # type + data ID + run ID, but no constraint in tagged or calibration
-    # collections.  We only bother including the required part of the data
-    # ID, as that's sufficient and saves us from worrying about nulls in the
-    # constraint.
-    constraint = ["dataset_type_id", "run_id"]
+    # DatasetTypes with standard uniqueness have a constraint on dataset type +
+    # data ID + collection ID.  We only bother including the required part of
+    # the data ID, as that's sufficient and saves us from worrying about nulls
+    # in the constraint.
+    constraint = ["dataset_type_id", "collection_id"]
     for dimension in datasetType.dimensions.required:
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         constraint.append(fieldSpec.name)
@@ -60,7 +60,7 @@ def _makeDynamicTableSpec(datasetType: DatasetType) -> TableSpec:
     return tableSpec
 
 
-class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLayerDatasetRecords):
+class StandardByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLayerDatasetRecords):
 
     def __init__(self, *, db: Database, datasetType: DatasetType, static: StaticDatasetTablesTuple,
                  collections: RegistryLayerCollectionStorage,
@@ -123,7 +123,7 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
         protoDynamicRow = {
             "origin": self._db.origin,
             "dataset_type_id": self.id,
-            "run_id": runRecord.id,
+            "collection_id": runRecord.id,
         }
         dynamicRows = [
             dict(protoDynamicRow, dataset_id=dataset_id, **dataId.full.byName())
@@ -138,23 +138,15 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
 
     def find(self, collection: str, dataId: DataCoordinate) -> Optional[ResolvedDatasetHandle]:
         collectionRecord = self._collections.find(collection)
-        fromClause = self._static.dataset.join(self._dynamic)
-        whereTerms = []
-        if collectionRecord.type is CollectionType.RUN:
-            whereTerms.append(self._static.dataset.columns.run_id == collectionRecord.id)
-            whereTerms.append(self._dynamic.columns.run_id == collectionRecord.id)
-        else:
-            # If we ever want runs to be able to have tagged datasets as well,
-            # remove the else and OR whereClause with any that already exists.
-            fromClause = fromClause.join(self._static.dataset_collection_unconstrained)
-            whereTerms.append(self._static.dataset_collection_unconstrained.columns.collection_id ==
-                              collectionRecord.id)
-        whereTerms.append(self._static.dataset.columns.dataset_type_id == self.id)
-        whereTerms.append(self._dynamic.columns.dataset_type_id == self.id)
+        assert collectionRecord.type is not CollectionType.CALIBRATION
+        whereTerms = [
+            self._dynamic.columns.collection_id == collectionRecord.id,
+            self._dynamic.columns.dataset_type_id == self.id,
+        ]
         for dimension, value in dataId.items():
             whereTerms.append(self._dynamic.columns[dimension.name] == value)
         whereClause = sqlalchemy.sql.and_(*whereTerms)
-        sql = sqlalchemy.sql.select(self._static.dataset.columns).select_from(fromClause).where(whereClause)
+        sql = self._dynamic.select().where(whereClause)
         row = self._db.connection.execute(sql).fetchone()
         if row is None:
             return row
@@ -167,9 +159,12 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
         )
 
     def getDataId(self, id: int, origin: int) -> DataCoordinate:
+        # This query could return multiple rows (one for each tagged collection
+        # the dataset is in, plus one for its run collection), and we don't
+        # care which of those we get.
         sql = self._dynamic.select().where(
             sqlalchemy.sql.and_(self._dynamic.columns.id == id, self._dynamic.columns.origin == origin)
-        )
+        ).limit(1)
         row = self._db.connection.execute(sql).fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.standardize(
@@ -195,6 +190,7 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
         assert datasets.datasetType == self.datasetType
         collectionRecord = self._collections.find(collection)
         protoRow = {
+            "dataset_type_id": self.id,
             "collection_id": collectionRecord.id,
         }
         if collectionRecord.type is CollectionType.CALIBRATION:
@@ -204,16 +200,21 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
         elif collectionRecord.type is CollectionType.RUN:
             raise TypeError(f"Cannot associate into run collection '{collection}'.")
         else:
-            table = self._static.dataset_collection_unconstrained
+            table = self._dynamic
             if begin is not None or end is not None:
                 raise TypeError(f"'{collection}' is not a calibration collection.")
-        rows = [dict(protoRow, dataset_id=dataset.id, dataset_origin=dataset.origin)
-                for dataset in datasets]
+        rows = []
+        for dataset in datasets:
+            row = dict(protoRow, dataset_id=dataset.id, dataset_origin=dataset.origin)
+            for dimension, value in dataset.dataId.items():
+                row[dimension.name] = value
+            rows.append(row)
         self._db.replace(table, *rows)
 
     def disassociate(self, collection: str, datasets: SingleDatasetTypeIterable):
         assert datasets.datasetType == self.datasetType
         collectionRecord = self._collections.find(collection)
+        assert collectionRecord.type is not CollectionType.RUN
         protoRow = {
             "collection_id": collectionRecord.id,
         }
@@ -222,7 +223,7 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
         if collectionRecord.type is CollectionType.CALIBRATION:
             table = self._static.dataset_collection_calibration
         else:
-            table = self._static.dataset_collection_unconstrained
+            table = self._dynamic
         sql = table.delete().where(
             sqlalchemy.sql.and_(
                 table.columns.dataset_id == sqlalchemy.sql.bindparam("dataset_id"),
@@ -237,42 +238,40 @@ class NonsingularByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLay
                returnOrigin: bool = True,
                returnRun: bool = False,
                returnQuantum: bool = False) -> Optional[sqlalchemy.sql.FromClause]:
-        fromClause = self._static.dataset
-        whereTerms = [self._static.dataset.columns.dataset_type_id == self.id]
+        fromClause = self._dynamic
+        whereTerms = [self._dynamic.columns.dataset_type_id == self.id]
         if collection is not ...:
             collectionRecord = self._collections.find(collection)
             if collectionRecord is None:
                 # This layer doesn't know about this collection, so we know
                 # we won't find anything here.
                 return None
-            if collectionRecord.type is CollectionType.TAGGED:
-                table = self._static.dataset_collection_unconstrained
+            if collectionRecord.type is CollectionType.TAGGED or collectionRecord.type is CollectionType.RUN:
+                table = self._dynamic
                 fromClause = fromClause.join(table)
                 whereTerms.append(table.columns.collection_id == collectionRecord.id)
             elif collectionRecord.type is CollectionType.CALIBRATION:
                 table = self._static.dataset_collection_calibration
-                fromClause = fromClause.join(table)
+                fromClause = fromClause.join(table)  # TODO: probably need explicit onclause
                 whereTerms.append(table.columns.collection_id == collectionRecord.id)
-            elif collectionRecord.type is CollectionType.RUN:
-                whereTerms.append(self._static.dataset.columns.run_id == collectionRecord.id)
             else:
                 raise RuntimeError(
                     f"Unrecognized type {collectionRecord.type} for collection '{collection}.'"
                 )
         columns = []
         if returnDimensions:
-            fromClause = fromClause.join(self._dynamic)
-            # Also constrain the dynamic table's dataset_type_id; that's
-            # redundant, but it may help the query optimizer.
-            whereTerms.append(self._dynamic.columns.dataset_type_id == self.id)
             columns.extend(self._dynamic.columns[dimension.name].label(dimension.name)
                            for dimension in self.datasetType.dimensions)
-        if returnId:
-            columns.append(self._static.dataset.columns.id.label("dataset_id"))
-        if returnOrigin:
-            columns.append(self._static.dataset.columns.origin.label("dataset_origin"))
-        if returnRun:
-            columns.append(self._static.dataset.columns.run_id.label("run_id"))
         if returnQuantum:
+            fromClause = fromClause.join(self._static.dataset)
+            # Also constrain the dynamic table's dataset_type_id; that's
+            # redundant, but it may help the query optimizer.
+            whereTerms.append(self._static_dataset.columns.dataset_type_id == self.id)
             columns.append(self._static.dataset.columns.quantum_id.label("quantum_id"))
+        if returnId:
+            columns.append(self._dynamic.columns.id.label("dataset_id"))
+        if returnOrigin:
+            columns.append(self._dynamic.columns.origin.label("dataset_origin"))
+        if returnRun:
+            columns.append(self._dynamic.columns.run_id.label("run_id"))
         return sqlalchemy.sql.select(columns).select_from(fromClause).where(sqlalchemy.sql.and_(*whereTerms))

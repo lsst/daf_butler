@@ -135,19 +135,20 @@ class GlobalByDimensionsRegistryLayerDatasetRecords(ByDimensionsRegistryLayerDat
     def find(self, collection: str, dataId: DataCoordinate) -> Optional[ResolvedDatasetHandle]:
         collectionRecord = self._collections.find(collection)
         fromClause = self._static.dataset.join(self._dynamic)
+        whereTerms = []
         if collectionRecord.type is CollectionType.RUN:
-            whereClause = self._static.dataset.columns.run_id == collectionRecord.id,
+            whereTerms.append(self._static.dataset.columns.run_id == collectionRecord.id)
         else:
             # If we ever want runs to be able to have tagged datasets as well,
             # remove the else and OR whereClause with any that already exists.
             fromClause = fromClause.join(self._static.dataset_collection_unconstrained)
-            whereClause = (self._static.dataset_collection_unconstrained.columns.collection_id ==
-                           collectionRecord.id)
-        whereClause = sqlalchemy.sql.and_(
-            whereClause,
-            self._static.dataset.columns.dataset_type_id == self.id,
-            self._dynamic.columns.dataset_type_id == self.id,
-        )
+            whereTerms.append(self._static.dataset_collection_unconstrained.columns.collection_id ==
+                              collectionRecord.id)
+        whereTerms.append(self._static.dataset.columns.dataset_type_id == self.id)
+        whereTerms.append(self._dynamic.columns.dataset_type_id == self.id)
+        for dimension, value in dataId.items():
+            whereTerms.append(self._dynamic.columns[dimension.name] == value)
+        whereClause = sqlalchemy.sql.and_(*whereTerms)
         sql = sqlalchemy.sql.select(self._static.dataset.columns).select_from(fromClause).where(whereClause)
         row = self._db.connection.execute(sql).fetchone()
         if row is None:
