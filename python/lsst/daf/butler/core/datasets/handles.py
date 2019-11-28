@@ -28,7 +28,6 @@ from typing import Dict, Optional
 
 from .type import DatasetType
 from ..dimensions import DataId, DataCoordinate
-from ..run import Run
 from ..utils import immutable
 
 
@@ -173,10 +172,11 @@ class ResolvedDatasetHandle(CheckedDatasetHandle):
 
     __slots__ = ("id", "run", "components")
 
-    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, id: int, run: Run,
-                components: Optional[Dict[str, ResolvedDatasetHandle]] = None):
+    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, id: int, origin: int,
+                run: str, components: Optional[Dict[str, ResolvedDatasetHandle]] = None):
         self = super().__new__(cls, datasetType, dataId)
         self.id = id
+        self.origin = origin
         self.run = run
         self.components = components
         return self
@@ -196,6 +196,8 @@ class ResolvedDatasetHandle(CheckedDatasetHandle):
 
     id: int
 
-    run: Run
+    origin: int
+
+    run: str
 
     components: Dict[str, ResolvedDatasetHandle]
