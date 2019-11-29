@@ -25,6 +25,10 @@ __all__ = ("Timespan",)
 import operator
 from typing import Generic, Optional, TypeVar
 
+import sqlalchemy
+
+from .schema import FieldSpec
+
 
 T = TypeVar("T")
 
@@ -35,6 +39,7 @@ class Timespan(Generic[T], tuple):
         return tuple.__new__(cls, (begin, end))
 
     def overlaps(self, other, ops=operator):
+        # TODO: handle None/NULL by treating as unbounded.
         return ops.not_(ops.or_(self.end < other.begin, self.begin > other.end))
 
     def intersection(*args) -> Optional[Timespan]:
@@ -59,3 +64,14 @@ class Timespan(Generic[T], tuple):
 
     def __getnewargs__(self) -> tuple:
         return (self.begin, self.end)
+
+
+TIMESPAN_FIELD_SPECS = Timespan(
+    begin=FieldSpec(name="datetime_begin", dtype=sqlalchemy.DateTime),
+    end=FieldSpec(name="datetime_end", dtype=sqlalchemy.DateTime),
+)
+
+
+def extractColumnTimespan(table: sqlalchemy.schema.Table) -> Timespan[sqlalchemy.sql.ColumnElement]:
+    return Timespan(table.columns[TIMESPAN_FIELD_SPECS.begin.name],
+                    table.columns[TIMESPAN_FIELD_SPECS.end.name])
