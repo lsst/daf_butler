@@ -4,10 +4,8 @@ __all__ = ["ByDimensionsRegistryLayerDatasetStorage"]
 
 from abc import abstractmethod
 from typing import (
-    Dict,
     Iterator,
     Optional,
-    Type,
 )
 
 import sqlalchemy
@@ -22,29 +20,26 @@ from ...interfaces import (
     RegistryLayerDatasetRecords,
     RegistryLayerDatasetStorage,
 )
-from .base import StaticDatasetTablesTuple, ByDimensionsRegistryLayerDatasetRecords
+from .ddl import StaticDatasetTablesTuple, makeDynamicTableName, makeDynamicTableSpec
+from .records import ByDimensionsRegistryLayerDatasetRecords
 
 
 class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
 
     def __init__(self, *, db: Database, collections: RegistryLayerCollectionStorage,
-                 RecordClasses: Dict[DatasetUniqueness, Type[ByDimensionsRegistryLayerDatasetRecords]]):
+                 universe: DimensionUniverse):
         self._db = db
         self._collections = collections
         self._static = StaticDatasetTablesTuple(db)
-        self._RecordClasses = RecordClasses
         self._byName = {}
         self._byId = {}
-        self.refresh()
+        self.refresh(universe=universe)
 
     @classmethod
     @abstractmethod
-    def loadTypes(cls, db: Database, collections: RegistryLayerCollectionStorage,
-                  *, universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
-        # TODO: ideally we'd load RecordClasses from configuration, to make
-        # this configurable all the way down.  Maybe attach a config to
-        # Database?
-        pass
+    def loadTypes(cls, db: Database, *, collections: RegistryLayerCollectionStorage,
+                  universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
+        return cls(db=db, collections=collections)
 
     def refreshTypes(self, *, universe: DimensionUniverse):
         byName = {}
@@ -55,10 +50,10 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
             dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
             uniqueness = DatasetUniqueness(row[c.uniqueness])
             datasetType = DatasetType(name, dimensions, row[c.storage_class], uniqueness=uniqueness)
-            records = self._RecordClasses[uniqueness].load(db=self._db, datasetType=datasetType,
-                                                           static=self._static,
-                                                           collections=self._collections,
-                                                           id=row[c.id])
+            dynamic = self._db.getExistingTable(makeDynamicTableName(datasetType))
+            records = ByDimensionsRegistryLayerDatasetRecords(db=self._db, datasetType=datasetType,
+                                                              static=self._static, dynamic=dynamic,
+                                                              id=row["id"])
             byName[name] = records
             byId[records.id] = records
         self._byName = byName
@@ -70,10 +65,23 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
     def registerType(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
         records = self._records.get(datasetType)
         if records is None:
-            records = self._RecordClasses[datasetType.uniqueness].register(db=self._db,
-                                                                           datasetType=datasetType,
-                                                                           static=self._static,
-                                                                           collection=self._collections)
+            dynamic = self._db.ensureTableExists(
+                makeDynamicTableName(datasetType),
+                makeDynamicTableSpec(datasetType),
+            )
+            row, _ = self._db.sync(
+                self._static.dataset_type,
+                keys={"name": datasetType.name},
+                compared={
+                    "uniqueness": datasetType.uniqueness,
+                    "dimensions_encoded": datasetType.dimensions.encoded(),
+                    "storage_class": datasetType.storageClass.name,
+                },
+                returning={"id"},
+            )
+            records = ByDimensionsRegistryLayerDatasetRecords(db=self._db, datasetType=datasetType,
+                                                              static=self._static, dynamic=dynamic,
+                                                              id=row["id"])
             self._byName[datasetType.name] = records
             self._byId[records.id] = records
         return records
@@ -84,7 +92,8 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
     def iterTypes(self) -> Iterator[RegistryLayerDatasetRecords]:
         yield from self._records.values()
 
-    def getHandle(self, id: int, origin: int) -> Optional[ResolvedDatasetHandle]:
+    def getHandle(self, id: int, origin: int, *, collections: RegistryLayerCollectionStorage
+                  ) -> Optional[ResolvedDatasetHandle]:
         sql = self._static.dataset.select().where(
             sqlalchemy.sql.and_(self._static.dataset.columns.id == id,
                                 self._static.dataset.columns.origin == origin)
@@ -101,7 +110,7 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
             recordsForType.datasetType,
             dataId=recordsForType.getDataId(id=id, origin=origin),
             id=id, origin=origin,
-            run=self._collections.get(row[self._static.dataset.columns.run_id]).name
+            run=collections.get(row[self._static.dataset.columns.run_id]).name
         )
 
     def insertLocations(self, datastoreName: str, datasets: DatasetIterable, *,

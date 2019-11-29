@@ -42,11 +42,6 @@ class DatasetUniqueness(enum.IntEnum):
     define on data IDs of this dataset type.
     """
 
-    GLOBAL = 1
-    """There may only be one dataset with this dataset type and a particular
-    data ID across all collections.
-    """
-
     STANDARD = 2
     """There may only be one dataset with this dataset type and a particular
     data ID in a collection.

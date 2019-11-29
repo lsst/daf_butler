@@ -26,29 +26,22 @@ __all__ = (
     "makeElementTableSpec",
     "makeOverlapTableSpec",
     "REGION_FIELD_SPEC",
-    "TIMESPAN_FIELD_SPECS",
     "OVERLAP_TABLE_NAME_PATTERN"
 )
 
 import copy
 
 from typing import TYPE_CHECKING
-from sqlalchemy import DateTime
 
 from ..schema import FieldSpec, TableSpec, ForeignKeySpec, Base64Region
+from ..timespan import TIMESPAN_FIELD_SPECS
 from ..utils import NamedValueSet
-from ..timespan import Timespan
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement, Dimension
 
 
 REGION_FIELD_SPEC = FieldSpec(name="region", dtype=Base64Region)
-
-TIMESPAN_FIELD_SPECS = Timespan(
-    begin=FieldSpec(name="datetime_begin", dtype=DateTime),
-    end=FieldSpec(name="datetime_end", dtype=DateTime),
-)
 
 OVERLAP_TABLE_NAME_PATTERN = "{0}_{1}_overlap"
 

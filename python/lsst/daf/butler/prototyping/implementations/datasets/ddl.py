@@ -1,22 +1,16 @@
 from __future__ import annotations
 
-__all__ = ["StaticDatasetTablesTuple", "ByDimensionsRegistryLayerDatasetRecords"]
-
-from abc import abstractmethod
+__all__ = ["StaticDatasetTablesTuple", "makeDynamicTableName", "makeDynamicTableSpec"]
 
 import sqlalchemy
 
-from ...core.datasets import DatasetType
-from ...core.dimensions import DataCoordinate
-from ...core.dimensions.schema import TIMESPAN_FIELD_SPECS
-from ...core.schema import TableSpec, FieldSpec, ForeignKeySpec
+from ....core.datasets import DatasetType
+from ....core.dimensions.schema import addDimensionForeignKey
+from ....core.schema import TableSpec, FieldSpec, ForeignKeySpec
+from ....core.timespan import TIMESPAN_FIELD_SPECS
 
-from ...interfaces import (
-    Database,
-    RegistryLayerDatasetRecords,
-    RegistryLayerCollectionStorage,
-    makeTableStruct,
-)
+from ...interfaces import makeTableStruct
+
 
 DATASET_TYPE_NAME_LENGTH = 128
 
@@ -77,7 +71,7 @@ class StaticDatasetTablesTuple:
                            onDelete="CASCADE"),
         ]
     )
-    dataset_collection_unconstrained = TableSpec(
+    dataset_collection_nonsingular = TableSpec(
         fields=[
             FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
             FieldSpec("dataset_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
@@ -107,30 +101,34 @@ class StaticDatasetTablesTuple:
     )
 
 
-class ByDimensionsRegistryLayerDatasetRecords(RegistryLayerDatasetRecords):
+def makeDynamicTableName(datasetType: DatasetType) -> str:
+    return f"dataset_collection_{datasetType.dimensions.encode().hex()}"
 
-    def __init__(self, *, datasetType: DatasetType, id: int):
-        super().__init__(datasetType=datasetType)
-        self.id = id
 
-    @classmethod
-    @abstractmethod
-    def load(cls, *, db: Database, datasetType: DatasetType, static: StaticDatasetTablesTuple,
-             collections: RegistryLayerCollectionStorage, id: int,
-             ) -> ByDimensionsRegistryLayerDatasetRecords:
-        pass
-
-    @classmethod
-    @abstractmethod
-    def register(cls, *, db: Database, datasetType: DatasetType, static: StaticDatasetTablesTuple,
-                 collections: RegistryLayerCollectionStorage,
-                 ) -> ByDimensionsRegistryLayerDatasetRecords:
-        pass
-
-    @abstractmethod
-    def getDataId(self, id: int, origin: int) -> DataCoordinate:
-        pass
-
-    id: int
-
-    origin: int
+def makeDynamicTableSpec(datasetType: DatasetType) -> TableSpec:
+    tableSpec = TableSpec(
+        fields=[
+            FieldSpec("dataset_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("dataset_origin", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            FieldSpec("dataset_type_id", dtype=sqlalchemy.BigInteger, nullable=False),
+            FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+        ],
+        foreignKeys=[
+            ForeignKeySpec("dataset", source=("dataset_id", "dataset_origin"), target=("id", "origin"),
+                           onDelete="CASCADE"),
+            ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
+            ForeignKeySpec("collection", source=("collection_id",), target=("id",),
+                           onDelete="CASCADE"),
+        ]
+    )
+    constraint = ["dataset_type_id", "collection_id"]
+    for dimension in datasetType.dimensions.required:
+        fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
+        constraint.append(fieldSpec.name)
+    for dimension in datasetType.dimensions.implied:
+        addDimensionForeignKey(tableSpec, dimension=dimension, nullable=True, primaryKey=False)
+    # Add a constraint on dataset type + collection + data ID.  We only include
+    # the required part of the data ID, as that's sufficient and saves us from
+    # worrying about nulls in the constraint.
+    tableSpec.unique.add(tuple(constraint))
+    return tableSpec
