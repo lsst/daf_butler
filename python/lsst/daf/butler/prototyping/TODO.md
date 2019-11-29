@@ -5,8 +5,8 @@ Registry Refactoring To-Do
 - Add multi-collection search to Butler.
 - Add label to `quantum` table.
 
-Integer IDs and Origins
------------------------
+Primary key categories in Registry
+----------------------------------
 
 Named entities with surrogate IDs
 """""""""""""""""""""""""""""""""
