@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["ByDimensionsRegistryLayerDatasetRecords"]
+__all__ = ["ByDimensionsDatasetTableRecords"]
 
 from datetime import datetime
 from typing import (
@@ -20,8 +20,8 @@ from ...quantum import Quantum
 from ...interfaces import (
     CollectionType,
     Database,
-    RegistryLayerCollectionStorage,
-    RegistryLayerDatasetRecords,
+    CollectionManager,
+    DatasetTableRecords,
     Select,
 )
 
@@ -63,10 +63,10 @@ class DatasetSelect:
     where: List[sqlalchemy.sql.ColumnElement]
 
 
-class ByDimensionsRegistryLayerDatasetRecords(RegistryLayerDatasetRecords):
+class ByDimensionsDatasetTableRecords(DatasetTableRecords):
 
     def __init__(self, *, datasetType: DatasetType, db: Database, id: int,
-                 collections: RegistryLayerCollectionStorage,
+                 collections: CollectionManager,
                  static: StaticDatasetTablesTuple, dynamic: sqlalchemy.sql.Table):
         super().__init__(datasetType=datasetType)
         self._id = id

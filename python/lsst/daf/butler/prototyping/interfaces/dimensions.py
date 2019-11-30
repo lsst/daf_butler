@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["RegistryLayerDimensionRecords", "RegistryLayerDimensionStorage"]
+__all__ = ["DimensionTableRecords", "DimensionTableManager"]
 
 from abc import ABC, abstractmethod
 from typing import (
@@ -18,7 +18,7 @@ from ...core.dimensions import (
 from .database import Database
 
 
-class RegistryLayerDimensionRecords(ABC):
+class DimensionTableRecords(ABC):
 
     def __init__(self, element: DimensionElement):
         self.element = element
@@ -42,14 +42,14 @@ class RegistryLayerDimensionRecords(ABC):
     element: DimensionElement
 
 
-class RegistryLayerDimensionStorage(ABC):
+class DimensionTableManager(ABC):
 
     def __init__(self, *, universe: DimensionUniverse):
         self.universe = universe
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database, *, universe: DimensionUniverse) -> RegistryLayerDimensionStorage:
+    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionTableManager:
         pass
 
     @abstractmethod
@@ -57,11 +57,11 @@ class RegistryLayerDimensionStorage(ABC):
         pass
 
     @abstractmethod
-    def get(self, element: DimensionElement) -> Optional[RegistryLayerDimensionRecords]:
+    def get(self, element: DimensionElement) -> Optional[DimensionTableRecords]:
         pass
 
     @abstractmethod
-    def register(self, element: DimensionElement) -> RegistryLayerDimensionRecords:
+    def register(self, element: DimensionElement) -> DimensionTableRecords:
         pass
 
     universe: DimensionUniverse

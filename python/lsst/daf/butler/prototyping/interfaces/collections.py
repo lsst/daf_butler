@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["RegistryLayerCollectionStorage"]
+__all__ = ["CollectionManager"]
 
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -50,7 +50,7 @@ class CollectionTablesTuple:
     )
 
 
-class RegistryLayerCollectionRecord(ABC):
+class CollectionRecord(ABC):
 
     def __init__(self, name: str, id: int, type: CollectionType):
         self.name = name
@@ -62,7 +62,7 @@ class RegistryLayerCollectionRecord(ABC):
     id: int
 
 
-class RegistryLayerRunRecord(RegistryLayerCollectionRecord):
+class RunRecord(CollectionRecord):
 
     @abstractmethod
     def update(self, host: Optional[str] = None, timespan: Timespan[Optional[datetime]] = None):
@@ -79,13 +79,13 @@ class RegistryLayerRunRecord(RegistryLayerCollectionRecord):
         pass
 
 
-class RegistryLayerCollectionStorage(ABC):
+class CollectionManager(ABC):
 
     TablesTuple = CollectionTablesTuple
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database) -> RegistryLayerCollectionStorage:
+    def load(cls, db: Database) -> CollectionManager:
         pass
 
     @abstractmethod
@@ -93,15 +93,15 @@ class RegistryLayerCollectionStorage(ABC):
         pass
 
     @abstractmethod
-    def register(self, name: str, type: CollectionType) -> RegistryLayerCollectionRecord:
+    def register(self, name: str, type: CollectionType) -> CollectionRecord:
         pass
 
     @abstractmethod
-    def find(self, name: str) -> Optional[RegistryLayerCollectionRecord]:
+    def find(self, name: str) -> Optional[CollectionRecord]:
         pass
 
     @abstractmethod
-    def get(self, id: int) -> Optional[RegistryLayerCollectionRecord]:
+    def get(self, id: int) -> Optional[CollectionRecord]:
         pass
 
     @property

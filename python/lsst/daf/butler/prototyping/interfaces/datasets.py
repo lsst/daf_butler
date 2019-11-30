@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["RegistryLayerDatasetStorage", "RegistryLayerDatasetRecords", "Select"]
+__all__ = ["DatasetTableManager", "DatasetTableRecords", "Select"]
 
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -25,7 +25,7 @@ from ..quantum import Quantum
 if TYPE_CHECKING:
     from ..interfaces import (
         Database,
-        RegistryLayerCollectionStorage,
+        CollectionManager,
     )
 
 
@@ -42,7 +42,7 @@ class Select:
 Select.Or = Union[T, Type[Select]]
 
 
-class RegistryLayerDatasetRecords(ABC):
+class DatasetTableRecords(ABC):
 
     def __init__(self, datasetType: DatasetType):
         self.datasetType = datasetType
@@ -88,12 +88,12 @@ class RegistryLayerDatasetRecords(ABC):
     datasetType: DatasetType
 
 
-class RegistryLayerDatasetStorage(ABC):
+class DatasetTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def loadTypes(cls, db: Database, *, collections: RegistryLayerCollectionStorage,
-                  universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
+    def loadTypes(cls, db: Database, *, collections: CollectionManager,
+                  universe: DimensionUniverse) -> DatasetTableManager:
         pass
 
     @abstractmethod
@@ -101,11 +101,11 @@ class RegistryLayerDatasetStorage(ABC):
         pass
 
     @abstractmethod
-    def getType(self, datasetType: DatasetType) -> Optional[RegistryLayerDatasetRecords]:
+    def getType(self, datasetType: DatasetType) -> Optional[DatasetTableRecords]:
         pass
 
     @abstractmethod
-    def registerType(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
+    def registerType(self, datasetType: DatasetType) -> DatasetTableRecords:
         pass
 
     @abstractmethod
@@ -113,7 +113,7 @@ class RegistryLayerDatasetStorage(ABC):
         pass
 
     @abstractmethod
-    def iterTypes(self) -> Iterator[RegistryLayerDatasetRecords]:
+    def iterTypes(self) -> Iterator[DatasetTableRecords]:
         pass
 
     @abstractmethod

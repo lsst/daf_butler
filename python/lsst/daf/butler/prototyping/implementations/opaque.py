@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["ByNameRegistryLayerOpaqueRecords", "ByNameRegistryLayerOpaqueStorage"]
+__all__ = ["ByNameOpaqueTableRecords", "ByNameOpaqueTableManager"]
 
 from typing import (
     Any,
@@ -11,10 +11,10 @@ from typing import (
 import sqlalchemy
 
 from ...core.schema import TableSpec, FieldSpec
-from ..interfaces import Database, RegistryLayerOpaqueStorage, RegistryLayerOpaqueRecords
+from ..interfaces import Database, OpaqueTableManager, OpaqueTableRecords
 
 
-class ByNameRegistryLayerOpaqueRecords(RegistryLayerOpaqueRecords):
+class ByNameOpaqueTableRecords(OpaqueTableRecords):
 
     def __init__(self, *, db: Database, name: str, table: sqlalchemy.schema.Table):
         super().__init__(name=name)
@@ -37,7 +37,7 @@ class ByNameRegistryLayerOpaqueRecords(RegistryLayerOpaqueRecords):
         self._db.connection.execute(sql)
 
 
-class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
+class ByNameOpaqueTableManager(OpaqueTableManager):
 
     _META_TABLE_NAME = "opaque_meta"
 
@@ -54,7 +54,7 @@ class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database) -> RegistryLayerOpaqueStorage:
+    def load(cls, db: Database) -> OpaqueTableManager:
         return cls(db=db)
 
     def refresh(self):
@@ -62,13 +62,13 @@ class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
         for row in self._db.connection.execute(self._metaTable.select()).fetchall():
             name = row[self._metaTable.columns.table_name]
             table = self._db.getExistingTable(name)
-            records[name] = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
+            records[name] = ByNameOpaqueTableRecords(name=name, table=table, db=self._db)
         self._records = records
 
-    def get(self, name: str) -> Optional[RegistryLayerOpaqueRecords]:
+    def get(self, name: str) -> Optional[OpaqueTableRecords]:
         return self._records.get(name)
 
-    def register(self, name: str, spec: TableSpec) -> RegistryLayerOpaqueRecords:
+    def register(self, name: str, spec: TableSpec) -> OpaqueTableRecords:
         result = self._records.get(name)
         if result is None:
             # Create the table itself.  If it already exists but wasn't in
@@ -78,6 +78,6 @@ class ByNameRegistryLayerOpaqueStorage(RegistryLayerOpaqueStorage):
             # Add a row to the meta table so we can find this table in the
             # future.  Also okay if that already exists, so we use sync.
             self._db.sync(self._metaTable, keys={"table_name": name})
-            result = ByNameRegistryLayerOpaqueRecords(name=name, table=table, db=self._db)
+            result = ByNameOpaqueTableRecords(name=name, table=table, db=self._db)
             self._records[name] = result
         return result

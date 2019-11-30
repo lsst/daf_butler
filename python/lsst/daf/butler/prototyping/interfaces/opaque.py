@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["RegistryLayerOpaqueStorage", "RegistryLayerOpaqueRecords"]
+__all__ = ["OpaqueTableManager", "OpaqueTableRecords"]
 
 from abc import ABC, abstractmethod
 from typing import (
@@ -13,7 +13,7 @@ from ...core.schema import TableSpec
 from .database import Database
 
 
-class RegistryLayerOpaqueRecords(ABC):
+class OpaqueTableRecords(ABC):
 
     def __init__(self, name: str):
         self.name = name
@@ -33,11 +33,11 @@ class RegistryLayerOpaqueRecords(ABC):
     name: str
 
 
-class RegistryLayerOpaqueStorage(ABC):
+class OpaqueTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database) -> RegistryLayerOpaqueStorage:
+    def load(cls, db: Database) -> OpaqueTableManager:
         pass
 
     @abstractmethod
@@ -45,9 +45,9 @@ class RegistryLayerOpaqueStorage(ABC):
         pass
 
     @abstractmethod
-    def get(self, name: str) -> Optional[RegistryLayerOpaqueRecords]:
+    def get(self, name: str) -> Optional[OpaqueTableRecords]:
         pass
 
     @abstractmethod
-    def register(self, name: str, spec: TableSpec) -> RegistryLayerOpaqueRecords:
+    def register(self, name: str, spec: TableSpec) -> OpaqueTableRecords:
         pass

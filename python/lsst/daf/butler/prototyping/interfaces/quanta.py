@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["RegistryLayerQuantumRecords", "RegistryLayerQuantumStorage"]
+__all__ = ["QuantumTableRecords", "QuantumTableManager"]
 
 from abc import ABC, abstractmethod
 from typing import (
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .registryLayer import RegistryLayer
 
 
-class RegistryLayerQuantumRecords(ABC):
+class QuantumTableRecords(ABC):
 
     def __init__(self, dimensions: DimensionGraph):
         self.dimensions = dimensions
@@ -35,11 +35,11 @@ class RegistryLayerQuantumRecords(ABC):
     dimensions: DimensionGraph
 
 
-class RegistryLayerQuantumStorage(ABC):
+class QuantumTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> RegistryLayerQuantumStorage:
+    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumTableManager:
         pass
 
     @abstractmethod
@@ -47,9 +47,9 @@ class RegistryLayerQuantumStorage(ABC):
         pass
 
     @abstractmethod
-    def get(self, dimensions: DimensionGraph) -> Optional[RegistryLayerQuantumRecords]:
+    def get(self, dimensions: DimensionGraph) -> Optional[QuantumTableRecords]:
         pass
 
     @abstractmethod
-    def register(self, dimensions: DimensionGraph) -> RegistryLayerQuantumRecords:
+    def register(self, dimensions: DimensionGraph) -> QuantumTableRecords:
         pass

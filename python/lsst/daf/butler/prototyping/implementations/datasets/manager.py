@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["ByDimensionsRegistryLayerDatasetStorage"]
+__all__ = ["ByDimensionsDatasetTableManager"]
 
 from abc import abstractmethod
 from typing import (
@@ -16,17 +16,17 @@ from ....core.dimensions import DimensionGraph, DimensionUniverse
 from ...iterables import DatasetIterable
 from ...interfaces import (
     Database,
-    RegistryLayerCollectionStorage,
-    RegistryLayerDatasetRecords,
-    RegistryLayerDatasetStorage,
+    CollectionManager,
+    DatasetTableRecords,
+    DatasetTableManager,
 )
 from .ddl import StaticDatasetTablesTuple, makeDynamicTableName, makeDynamicTableSpec
-from .records import ByDimensionsRegistryLayerDatasetRecords
+from .records import ByDimensionsDatasetTableRecords
 
 
-class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
+class ByDimensionsDatasetTableManager(DatasetTableManager):
 
-    def __init__(self, *, db: Database, collections: RegistryLayerCollectionStorage,
+    def __init__(self, *, db: Database, collections: CollectionManager,
                  universe: DimensionUniverse):
         self._db = db
         self._collections = collections
@@ -37,8 +37,8 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
 
     @classmethod
     @abstractmethod
-    def loadTypes(cls, db: Database, *, collections: RegistryLayerCollectionStorage,
-                  universe: DimensionUniverse) -> RegistryLayerDatasetStorage:
+    def loadTypes(cls, db: Database, *, collections: CollectionManager,
+                  universe: DimensionUniverse) -> DatasetTableManager:
         return cls(db=db, collections=collections)
 
     def refreshTypes(self, *, universe: DimensionUniverse):
@@ -51,7 +51,7 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
             uniqueness = DatasetUniqueness(row[c.uniqueness])
             datasetType = DatasetType(name, dimensions, row[c.storage_class], uniqueness=uniqueness)
             dynamic = self._db.getExistingTable(makeDynamicTableName(datasetType))
-            records = ByDimensionsRegistryLayerDatasetRecords(db=self._db, datasetType=datasetType,
+            records = ByDimensionsDatasetTableRecords(db=self._db, datasetType=datasetType,
                                                               static=self._static, dynamic=dynamic,
                                                               id=row["id"])
             byName[name] = records
@@ -59,10 +59,10 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
         self._byName = byName
         self._byId = byId
 
-    def getType(self, datasetType: DatasetType) -> Optional[RegistryLayerDatasetRecords]:
+    def getType(self, datasetType: DatasetType) -> Optional[DatasetTableRecords]:
         return self._records._byName(datasetType.name)
 
-    def registerType(self, datasetType: DatasetType) -> RegistryLayerDatasetRecords:
+    def registerType(self, datasetType: DatasetType) -> DatasetTableRecords:
         records = self._records.get(datasetType)
         if records is None:
             dynamic = self._db.ensureTableExists(
@@ -79,7 +79,7 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
                 },
                 returning={"id"},
             )
-            records = ByDimensionsRegistryLayerDatasetRecords(db=self._db, datasetType=datasetType,
+            records = ByDimensionsDatasetTableRecords(db=self._db, datasetType=datasetType,
                                                               static=self._static, dynamic=dynamic,
                                                               id=row["id"])
             self._byName[datasetType.name] = records
@@ -89,10 +89,10 @@ class ByDimensionsRegistryLayerDatasetStorage(RegistryLayerDatasetStorage):
     def selectTypes(self) -> sqlalchemy.sql.FromClause:
         return self._static.dataset_type
 
-    def iterTypes(self) -> Iterator[RegistryLayerDatasetRecords]:
+    def iterTypes(self) -> Iterator[DatasetTableRecords]:
         yield from self._records.values()
 
-    def getHandle(self, id: int, origin: int, *, collections: RegistryLayerCollectionStorage
+    def getHandle(self, id: int, origin: int, *, collections: CollectionManager
                   ) -> Optional[ResolvedDatasetHandle]:
         sql = self._static.dataset.select().where(
             sqlalchemy.sql.and_(self._static.dataset.columns.id == id,

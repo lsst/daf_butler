@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["AggressiveRegistryLayerCollectionStorage"]
+__all__ = ["AggressiveCollectionManager"]
 
 from datetime import datetime
 from typing import (
@@ -15,13 +15,13 @@ from ...core.timespan import Timespan
 from ..interfaces import (
     CollectionType,
     Database,
-    RegistryLayerCollectionStorage,
-    RegistryLayerCollectionRecord,
-    RegistryLayerRunRecord,
+    CollectionManager,
+    CollectionRecord,
+    RunRecord,
 )
 
 
-class AggressiveRegistryLayerRunRecord(RegistryLayerRunRecord):
+class AggressiveRunRecord(RunRecord):
 
     def __init__(self, *, db: Database, table: sqlalchemy.schema.Table, name: str, id: int,
                  host: Optional[str] = None, timespan: Timespan[Optional[datetime]] = None):
@@ -53,7 +53,7 @@ class AggressiveRegistryLayerRunRecord(RegistryLayerRunRecord):
         return self._timespan
 
 
-class AggressiveRegistryLayerCollectionStorage(RegistryLayerCollectionStorage):
+class AggressiveCollectionManager(CollectionManager):
 
     def __init__(self, db: Database):
         self._db = db
@@ -63,7 +63,7 @@ class AggressiveRegistryLayerCollectionStorage(RegistryLayerCollectionStorage):
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database) -> RegistryLayerCollectionStorage:
+    def load(cls, db: Database) -> CollectionManager:
         return cls(db)
 
     def refresh(self):
@@ -84,16 +84,16 @@ class AggressiveRegistryLayerCollectionStorage(RegistryLayerCollectionStorage):
                 kwds[TIMESPAN_FIELD_SPECS.begin.name] = row[self._tables.run[TIMESPAN_FIELD_SPECS.begin.name]]
                 kwds[TIMESPAN_FIELD_SPECS.end.name] = row[self._tables.run[TIMESPAN_FIELD_SPECS.end.name]]
                 kwds["host"] = row[self._tables.run.host]
-                record = AggressiveRegistryLayerRunRecord(**kwds)
+                record = AggressiveRunRecord(**kwds)
             else:
                 kwds["type"] = type
-                record = RegistryLayerCollectionRecord(**kwds)
+                record = CollectionRecord(**kwds)
             byName[record.name] = record
             byId[record.id] = record
         self._byName = byName
         self._byId = byId
 
-    def register(self, name: str, type: CollectionType) -> RegistryLayerCollectionRecord:
+    def register(self, name: str, type: CollectionType) -> CollectionRecord:
         record = self._byName.get(name)
         if record is None:
             row, _ = self._db.sync(
@@ -117,20 +117,20 @@ class AggressiveRegistryLayerCollectionStorage(RegistryLayerCollectionStorage):
                     row[TIMESPAN_FIELD_SPECS.begin.name],
                     row[TIMESPAN_FIELD_SPECS.end.name]
                 )
-                record = AggressiveRegistryLayerRunRecord(**kwds)
+                record = AggressiveRunRecord(**kwds)
             else:
                 kwds["type"] = type
-                record = RegistryLayerCollectionRecord(**kwds)
+                record = CollectionRecord(**kwds)
             self._byName[record.name] = record
             self._byId[record.id] = record
         return record
 
-    def find(self, name: str) -> Optional[RegistryLayerCollectionRecord]:
+    def find(self, name: str) -> Optional[CollectionRecord]:
         return self._byName.get(name)
 
-    def get(self, id: int) -> Optional[RegistryLayerCollectionRecord]:
+    def get(self, id: int) -> Optional[CollectionRecord]:
         return self._byId.get(id)
 
     @property
-    def tables(self) -> RegistryLayerCollectionStorage.TablesTuple:
+    def tables(self) -> CollectionManager.TablesTuple:
         return self._tables

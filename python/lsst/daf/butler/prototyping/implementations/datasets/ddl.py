@@ -16,7 +16,7 @@ DATASET_TYPE_NAME_LENGTH = 128
 
 
 # TODO: some of this should be part of the public API of
-# RegistryLayerDatasetStorage, but not all - need to add flexibility to
+# DatasetTableManager, but not all - need to add flexibility to
 # makeTableStruct to do that.
 @makeTableStruct
 class StaticDatasetTablesTuple:

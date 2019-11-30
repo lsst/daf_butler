@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-__all__ = ["ByDimensionHashRegistryLayerQuantumRecords", "ByDimensionHashRegistryLayerQuantumStorage"]
+__all__ = ["ByDimensionHashQuantumTableRecords", "ByDimensionHashQuantumTableManager"]
 
 from collections import defaultdict
 import enum
@@ -17,7 +17,7 @@ from ..core.dimensions import DimensionGraph, DimensionUniverse
 from ..core.dimensions.schema import TIMESPAN_FIELD_SPECS, addDimensionForeignKey
 from ..core.schema import TableSpec, FieldSpec, Base64Bytes, ForeignKeySpec
 
-from ..interfaces import makeTableStruct, RegistryLayerQuantumRecords, RegistryLayerQuantumStorage
+from ..interfaces import makeTableStruct, QuantumTableRecords, QuantumTableManager
 from ..quantum import Quantum
 
 if TYPE_CHECKING:
@@ -71,7 +71,7 @@ class StaticQuantumTablesTuple:
     )
 
 
-class ByDimensionHashRegistryLayerQuantumRecords(RegistryLayerQuantumRecords):
+class ByDimensionHashQuantumTableRecords(QuantumTableRecords):
 
     def __init__(self, *, dimensions: DimensionGraph, layer: RegistryLayer,
                  static: StaticQuantumTablesTuple, dynamic: sqlalchemy.schema.Table):
@@ -195,7 +195,7 @@ def _makeDynamicQuantumTableSpec(dimensions: DimensionGraph) -> TableSpec:
     return spec
 
 
-class ByDimensionHashRegistryLayerQuantumStorage(RegistryLayerQuantumStorage):
+class ByDimensionHashQuantumTableManager(QuantumTableManager):
 
     def __init__(self, layer: RegistryLayer, *, universe: DimensionUniverse):
         self._layer = layer
@@ -204,7 +204,7 @@ class ByDimensionHashRegistryLayerQuantumStorage(RegistryLayerQuantumStorage):
         self.refresh(universe=universe)
 
     @classmethod
-    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> RegistryLayerQuantumStorage:
+    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumTableManager:
         return cls(layer=layer, universe=universe)
 
     def refresh(self, *, universe: DimensionUniverse):
@@ -223,16 +223,16 @@ class ByDimensionHashRegistryLayerQuantumStorage(RegistryLayerQuantumStorage):
                 raise RuntimeError(f"Bad dimensions hash: {dimensionsHash}.  "
                                    f"Registry database may be corrupted.")
             table = self._layer.db.getExistingTable(_DYNAMIC_QUANTUM_TABLE_NAME_FORMAT.format(dimensionsHash))
-            records[dimensions] = ByDimensionHashRegistryLayerQuantumRecords(dimensions=dimensions,
+            records[dimensions] = ByDimensionHashQuantumTableRecords(dimensions=dimensions,
                                                                              layer=self._layer,
                                                                              static=self._static,
                                                                              dynamic=table)
         self._records = records
 
-    def get(self, dimensions: DimensionGraph) -> Optional[RegistryLayerQuantumRecords]:
+    def get(self, dimensions: DimensionGraph) -> Optional[QuantumTableRecords]:
         return self._records.get(dimensions)
 
-    def register(self, dimensions: DimensionGraph) -> RegistryLayerQuantumRecords:
+    def register(self, dimensions: DimensionGraph) -> QuantumTableRecords:
         result = self._records.get(dimensions)
         if result is None:
             dimensionsHash = _hashQuantumDimensions(dimensions)
@@ -247,7 +247,7 @@ class ByDimensionHashRegistryLayerQuantumStorage(RegistryLayerQuantumStorage):
                 self._layer.db.sync(self._static.layer_meta_quantum,
                                     keys={"dimensions_hash": dimensionsHash,
                                           "dimension_name": dimension.name})
-            result = ByDimensionHashRegistryLayerQuantumRecords(dimensions=dimensions, db=self._layer.db,
+            result = ByDimensionHashQuantumTableRecords(dimensions=dimensions, db=self._layer.db,
                                                                 static=self._static, dynamic=table)
             self._records[dimensions] = result
         return result

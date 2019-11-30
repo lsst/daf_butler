@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-__all__ = ["DatabaseRegistryLayerDimensionRecords",
-           "SkyPixRegistryLayerDimensionRecords",
-           "DatabaseRegistryLayerDimensionStorage"]
+__all__ = ["DatabaseDimensionTableRecords",
+           "SkyPixDimensionTableRecords",
+           "DatabaseDimensionTableManager"]
 
 from typing import (
     Optional,
@@ -20,10 +20,10 @@ from ...core.dimensions import (
 from ...core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN, makeOverlapTableSpec
 from ...core.schema import TableSpec, FieldSpec
 from ...core.utils import NamedKeyDict
-from ..interfaces import Database, RegistryLayerDimensionRecords, RegistryLayerDimensionStorage
+from ..interfaces import Database, DimensionTableRecords, DimensionTableManager
 
 
-class DatabaseRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
+class DatabaseDimensionTableRecords(DimensionTableRecords):
 
     def __init__(self, *, db: Database, element: DimensionElement,
                  table: sqlalchemy.schema.Table,
@@ -89,7 +89,7 @@ class DatabaseRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
         return self._commonSkyPixOverlapTable
 
 
-class SkyPixRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
+class SkyPixDimensionTableRecords(DimensionTableRecords):
     """A storage implementation specialized for `SkyPixDimension` records.
 
     `SkyPixDimension` records are never stored in a database, but are instead
@@ -120,7 +120,7 @@ class SkyPixRegistryLayerDimensionRecords(RegistryLayerDimensionRecords):
                                         self.element.pixelization.pixel(dataId[self.element.name]))
 
 
-class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
+class DatabaseDimensionTableManager(DimensionTableManager):
 
     _META_TABLE_NAME = "dimension_meta"
 
@@ -138,7 +138,7 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database, *, universe: DimensionUniverse) -> RegistryLayerDimensionStorage:
+    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionTableManager:
         return cls(db=db)
 
     def refresh(self):
@@ -152,20 +152,20 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
                 )
             else:
                 commonSkyPixOverlapTable = None
-            records[element] = DatabaseRegistryLayerDimensionRecords(
+            records[element] = DatabaseDimensionTableRecords(
                 db=self._db, element=element, table=table,
                 commonSkyPixOverlapTable=commonSkyPixOverlapTable
             )
         self._records = records
 
-    def get(self, element: DimensionElement) -> Optional[RegistryLayerDimensionRecords]:
+    def get(self, element: DimensionElement) -> Optional[DimensionTableRecords]:
         return self._records.get(element)
 
-    def register(self, element: DimensionElement) -> RegistryLayerDimensionRecords:
+    def register(self, element: DimensionElement) -> DimensionTableRecords:
         result = self._records.get(element)
         if result is None:
             if isinstance(element, SkyPixDimension):
-                result = SkyPixRegistryLayerDimensionRecords(element)
+                result = SkyPixDimensionTableRecords(element)
             elif not element.haElement():
                 raise RuntimeError(f"Dimension element subclass {element.__class__} is not supported.")
             else:
@@ -186,7 +186,7 @@ class DatabaseRegistryLayerDimensionStorage(RegistryLayerDimensionStorage):
                 # in the future.  Also okay if that already exists, so we use
                 # sync.
                 self._db.sync(self._metaTable, keys={"element_name": element.name})
-                result = DatabaseRegistryLayerDimensionRecords(
+                result = DatabaseDimensionTableRecords(
                     db=self._db,
                     element=element,
                     table=table,

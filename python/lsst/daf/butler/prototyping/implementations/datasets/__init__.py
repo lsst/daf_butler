@@ -1,2 +1,2 @@
 from .records import *
-from .storage import *
+from .manager import *
