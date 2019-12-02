@@ -25,10 +25,12 @@ class RegistryLayer:
                  opaque: Type[OpaqueTableManager],
                  dimensions: Type[DimensionTableManager],
                  datasets: Type[DatasetTableManager],
-                 quanta: Type[QuantumTableManager]):
+                 quanta: Type[QuantumTableManager],
+                 create: bool = True):
         self.db = db
-        self.collections = collections.load(self.db)
-        self.opaque = opaque.load(self.db)
+        with db.declareStaticTables(create=create) as context:
+            self.collections = collections.load(self.db, context=context)
+            self.opaque = opaque.load(self.db, context=context)
         self.dimensions = dimensions.load(self.db, universe=universe)
         self.datasets = datasets.load(self.db, self.collections, universe=universe)
         self.quanta = quanta.load(self.db, self.datasets, self.collections, universe=universe)

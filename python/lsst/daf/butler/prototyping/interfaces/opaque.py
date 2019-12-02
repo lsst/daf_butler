@@ -10,7 +10,7 @@ from typing import (
 )
 
 from ...core.schema import TableSpec
-from .database import Database
+from .database import Database, StaticTablesContext
 
 
 class OpaqueTableRecords(ABC):
@@ -37,7 +37,7 @@ class OpaqueTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database) -> OpaqueTableManager:
+    def load(cls, db: Database, context: StaticTablesContext) -> OpaqueTableManager:
         pass
 
     @abstractmethod

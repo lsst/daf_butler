@@ -11,7 +11,7 @@ from typing import (
 import sqlalchemy
 
 from ...core.schema import TableSpec, FieldSpec
-from ..interfaces import Database, OpaqueTableManager, OpaqueTableRecords
+from ..interfaces import Database, OpaqueTableManager, OpaqueTableRecords, StaticTablesContext
 
 
 class ByNameOpaqueTableRecords(OpaqueTableRecords):
@@ -22,19 +22,19 @@ class ByNameOpaqueTableRecords(OpaqueTableRecords):
         self._table = table
 
     def insert(self, *data: dict):
-        self._db.connection.execute(self._table.insert(), *data)
+        self._db.insert(self._table, *data)
 
     def fetch(self, **where: Any) -> Iterator[dict]:
         sql = self._table.select().where(
             sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
         )
-        yield from self._db.connection.execute(sql)
+        yield from self._db.query(sql).fetchall()
 
     def delete(self, **where: Any):
         sql = self._table.delete().where(
             sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
         )
-        self._db.connection.execute(sql)
+        self._db.delete(self._table, where.keys(), where)
 
 
 class ByNameOpaqueTableManager(OpaqueTableManager):
@@ -47,15 +47,16 @@ class ByNameOpaqueTableManager(OpaqueTableManager):
         ],
     )
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, metaTable: sqlalchemy.schema.Table):
         self._db = db
-        self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
+        self._metaTable = metaTable
         self._records = {}
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database) -> OpaqueTableManager:
-        return cls(db=db)
+    def load(cls, db: Database, context: StaticTablesContext) -> OpaqueTableManager:
+        metaTable = context.addTable(cls._META_TABLE_NAME, cls._META_TABLE_SPEC)
+        return cls(db=db, metaTable=metaTable)
 
     def refresh(self):
         records = {}

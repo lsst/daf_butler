@@ -2,6 +2,7 @@ from __future__ import annotations
 
 __all__ = ["AggressiveCollectionManager"]
 
+from collections import namedtuple
 from datetime import datetime
 from typing import (
     Optional,
@@ -9,6 +10,7 @@ from typing import (
 
 import sqlalchemy
 
+from ...core.schema import TableSpec, FieldSpec, ForeignKeySpec
 from ...core.dimensions.schema import TIMESPAN_FIELD_SPECS
 from ...core.timespan import Timespan
 
@@ -18,6 +20,32 @@ from ..interfaces import (
     CollectionManager,
     CollectionRecord,
     RunRecord,
+    StaticTablesContext,
+)
+
+CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run"])
+
+COLLECTION_TABLES_SPEC = CollectionTablesTuple(
+    collection=TableSpec(
+        fields=[
+            FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
+            FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
+            FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
+        ],
+        unique={("name",)},
+    ),
+    run=TableSpec(
+        fields=[
+            FieldSpec("id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+            TIMESPAN_FIELD_SPECS.begin,
+            TIMESPAN_FIELD_SPECS.end,
+            FieldSpec("host", dtype=sqlalchemy.String, length=128),
+        ],
+        unique={("name",)},
+        foreignKeys=[
+            ForeignKeySpec("collection", source=("id",), target=("id",), onDelete="CASCADE"),
+        ],
+    )
 )
 
 
@@ -32,15 +60,19 @@ class AggressiveRunRecord(RunRecord):
         self._timespan = timespan
 
     def update(self, host: Optional[str] = None, timespan: Timespan[Optional[datetime]] = None):
-        values = {
+        row = {
+            "id": self.id,
             TIMESPAN_FIELD_SPECS.begin.name: timespan.begin,
             TIMESPAN_FIELD_SPECS.end.name: timespan.end,
             "host": host,
         }
-        self._db.connection.execute(
-            self._table.update().values(values).where(self._table.columns.id == self.id)
-        )
-        # TODO: make sure the above update modified exactly one record.
+        count = self._db.update(self._table, keys=["id"],
+                                values=[TIMESPAN_FIELD_SPECS.begin.name,
+                                        TIMESPAN_FIELD_SPECS.end.name,
+                                        "host"],
+                                row)
+        if count != 1:
+            raise RuntimeError(f"Run update affected {count} records; expected exactly one.")
         self._host = host
         self._timespan = timespan
 
@@ -55,16 +87,32 @@ class AggressiveRunRecord(RunRecord):
 
 class AggressiveCollectionManager(CollectionManager):
 
-    def __init__(self, db: Database):
+    def __init__(self, db: Database, tables: CollectionTablesTuple):
         self._db = db
-        self._tables = self.TablesTuple(db)
+        self._tables = tables
         self._byName = {}
         self._byId = {}
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database) -> CollectionManager:
-        return cls(db)
+    def load(cls, db: Database, context: StaticTablesContext) -> CollectionManager:
+        return cls(db, tables=context.addTableTuple(COLLECTION_TABLES_SPEC))
+
+    def addCollectionForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+        original = COLLECTION_TABLES_SPEC.collection.fields["id"]
+        copy = FieldSpec("collection_id", dtype=original.dtype, nullable=False)
+        tableSpec.fields.add(copy)
+        tableSpec.foreignKeys.append(ForeignKeySpec("collection", source=(copy.name,),
+                                                    target=(original.name,)))
+        return copy
+
+    def addRunForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+        original = COLLECTION_TABLES_SPEC.run.fields["id"]
+        copy = FieldSpec("run_id", dtype=original.dtype, nullable=False)
+        tableSpec.fields.add(copy)
+        tableSpec.foreignKeys.append(ForeignKeySpec("table", source=(copy.name,),
+                                                    target=(original.name,)))
+        return copy
 
     def refresh(self):
         sql = sqlalchemy.sql.select().select_from(
@@ -72,7 +120,7 @@ class AggressiveCollectionManager(CollectionManager):
         )
         byName = {}
         byId = {}
-        for row in self._db.connection.execute(sql).fetchall():
+        for row in self._db.query(sql).fetchall():
             kwds = {
                 "name": row[self._tables.collection.columns.name],
                 "id": row[self._tables.collection.columns.id],
@@ -130,7 +178,3 @@ class AggressiveCollectionManager(CollectionManager):
 
     def get(self, id: int) -> Optional[CollectionRecord]:
         return self._byId.get(id)
-
-    @property
-    def tables(self) -> CollectionManager.TablesTuple:
-        return self._tables

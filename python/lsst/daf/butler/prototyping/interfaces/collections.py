@@ -10,44 +10,17 @@ from typing import (
     TYPE_CHECKING,
 )
 
-import sqlalchemy
-
-from ...core.schema import TableSpec, FieldSpec, ForeignKeySpec
-from ...core.dimensions.schema import TIMESPAN_FIELD_SPECS
+from ...core.schema import TableSpec, FieldSpec
 from ...core.timespan import Timespan
 
 if TYPE_CHECKING:
-    from .database import Database, makeTableStruct
+    from .database import Database, StaticTablesContext
 
 
 class CollectionType(enum.IntEnum):
     RUN = 1
     TAGGED = 2
     CALIBRATION = 3
-
-
-@makeTableStruct
-class CollectionTablesTuple:
-    collection = TableSpec(
-        fields=[
-            FieldSpec("id", dtype=sqlalchemy.BigInteger, autoincrement=True, primaryKey=True),
-            FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
-            FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
-        ],
-        unique={("name",)},
-    )
-    run = TableSpec(
-        fields=[
-            FieldSpec("id", dtype=sqlalchemy.BigInteger, primaryKey=True),
-            TIMESPAN_FIELD_SPECS.begin,
-            TIMESPAN_FIELD_SPECS.end,
-            FieldSpec("host", dtype=sqlalchemy.String, length=128),
-        ],
-        unique={("name",)},
-        foreignKeys=[
-            ForeignKeySpec("collection", source=("id",), target=("id",), onDelete="CASCADE"),
-        ],
-    )
 
 
 class CollectionRecord(ABC):
@@ -81,11 +54,17 @@ class RunRecord(CollectionRecord):
 
 class CollectionManager(ABC):
 
-    TablesTuple = CollectionTablesTuple
-
     @classmethod
     @abstractmethod
-    def load(cls, db: Database) -> CollectionManager:
+    def load(cls, db: Database, schema: StaticTablesContext) -> CollectionManager:
+        pass
+
+    @abstractmethod
+    def addCollectionForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+        pass
+
+    @abstractmethod
+    def addRunForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
         pass
 
     @abstractmethod
@@ -102,9 +81,4 @@ class CollectionManager(ABC):
 
     @abstractmethod
     def get(self, id: int) -> Optional[CollectionRecord]:
-        pass
-
-    @property
-    @abstractmethod
-    def tables(self) -> CollectionTablesTuple:
         pass

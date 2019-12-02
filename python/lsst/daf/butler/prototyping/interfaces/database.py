@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-__all__ = ["Database", "SynchronizationConflict"]
+__all__ = ["Database", "SynchronizationConflict", "TransactionInterruption", "StaticTablesContext"]
 
 from abc import ABC, abstractmethod
-from collections import namedtuple
 from contextlib import contextmanager
 from typing import (
     Any,
@@ -12,7 +11,6 @@ from typing import (
     List,
     Optional,
     Tuple,
-    Type,
 )
 
 import sqlalchemy
@@ -39,18 +37,18 @@ class TransactionInterruption(RuntimeError):
     """
 
 
-class StaticTableSchema:
+class StaticTablesContext:
     """Helper class used to declare the static schema for a registry layer
     in a database.
 
     An instance of this class is returned by `Database.declareStaticTables`,
-    which should be the only way this class is ever used.
+    which should be the only way this class should be constructed.
     """
 
     def __init__(self, db: Database):
         self._db = db
 
-    def add(self, name: str, spec: TableSpec) -> sqlalchemy.schema.Table:
+    def addTable(self, name: str, spec: TableSpec) -> sqlalchemy.schema.Table:
         """Add a new table to the schema, returning its sqlalchemy
         representation.
 
@@ -60,6 +58,17 @@ class StaticTableSchema:
         relationships.
         """
         return self._db._convertTableSpec(name, spec, self._db.metadata)
+
+    def addTableTuple(self, specs: Tuple[TableSpec]) -> Tuple[sqlalchemy.schema.Table]:
+        """Add a named tuple of tables to the schema, returning their
+        SQLAlchemy representations in a named tuple of the same type.
+
+        The new tables may not actually be created until the end of the
+        context created by `Database.declareStaticTables`, allowing tables
+        to be declared in any order even in the presence of foreign key
+        relationships.
+        """
+        return specs._make(self.addTable(name, spec) for name, spec in zip(specs._fields, specs))
 
 
 class Database(ABC):
@@ -117,7 +126,7 @@ class Database(ABC):
             self._transactions.pop()
 
     @contextmanager
-    def declareStaticTables(self, *, create: bool) -> StaticTableSchema:
+    def declareStaticTables(self, *, create: bool) -> StaticTablesContext:
         """Return a context manager in which the database's static DDL schema
         can be declared.
 
@@ -128,7 +137,7 @@ class Database(ABC):
 
         Returns
         -------
-        schema : `StaticTableSchema` A helper object that is used to add new
+        schema : `StaticTablesContext` A helper object that is used to add new
             tables.
 
         Example
@@ -136,8 +145,8 @@ class Database(ABC):
         Given a `Database` instance ``db``::
 
             with db.declareStaticTables(create=True) as schema:
-                schema.add("table1", TableSpec(...))
-                schema.add("table2", TableSpec(...))
+                schema.addTable("table1", TableSpec(...))
+                schema.addTable("table2", TableSpec(...))
 
         Notes
         -----
@@ -150,7 +159,7 @@ class Database(ABC):
         """
         self._metadata = sqlalchemy.MetaData()
         try:
-            yield StaticTableSchema(self)
+            yield StaticTablesContext(self)
             if create:
                 self._metadata.create_all(self._engine)
         except BaseException:
@@ -596,59 +605,3 @@ class Database(ABC):
         return self._connection.execute(sql, *args, **kwds)
 
     origin: int
-
-
-def makeTableStruct(cls) -> Type[Tuple]:
-    """Decorator that transforms a class containing TableSpec declarations
-    into a struct whos instances hold the corresponding SQLAlchemy table
-    objects.
-
-    The returned class will be a subclass of both the decorated class and a
-    `collections.namedtuple` constructed with the names of all class attributes
-    of type `TableSpec`.
-
-    Constructing an instance of the returned class with a single
-    `Database` argument will call `Database.ensureTableExists` on all
-    tables with those schema specifications, yielding a
-    `collections.namedtuple` subclass instance whose attributes are
-    `sqlalchemy.schema.Table` instances.
-
-    For example::
-
-        @makeTableStruct
-        class MyTables:
-            table1 = TableSpec(
-                fields=[
-                    FieldSpec("id", dtype=sqlalchemy.BigInteger,
-                              autoincrement=True, primaryKey=True),
-                ]
-            )
-            table2 = TableSpec(
-                fields=[
-                    FieldSpec("name", dtype=sqlalchemy.String, length=32,
-                              primaryKey=True),
-                ]
-            )
-
-        db: Database = ...  # connect to some database
-
-        # Create declared tables if they don't already exist, and get
-        # SQLAlchemy objects representing them regardless.
-        with db.declareStaticTables(create=True) as schema:
-            tables = MyTables(schema)
-
-        # Run a query against one of those tables.
-        for row in db.connection.execute(tables.table1.select()).fetchall():
-            ...  # do something with results
-
-    """
-    specs = {}
-    for name, attr in cls.__dict__.items():
-        if isinstance(attr, TableSpec):
-            specs[name] = attr
-    TupleBase = namedtuple("_" + cls.__name__, specs.keys())
-
-    def __new__(cls, helper: StaticTableSchema):  # noqa:807
-        return cls._make(helper.add(name, spec) for name, spec in specs.items())
-
-    return type(cls.__name__, (TupleBase,), {"__new__": __new__})
