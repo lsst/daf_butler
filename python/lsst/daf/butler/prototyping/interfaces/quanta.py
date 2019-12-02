@@ -25,7 +25,7 @@ class QuantumTableRecords(ABC):
         self.dimensions = dimensions
 
     @abstractmethod
-    def start(self, quantum: Quantum) -> Quantum:
+    def start(self, quantum: Quantum):
         pass
 
     @abstractmethod
@@ -50,10 +50,6 @@ class QuantumTableManager(ABC):
     @abstractmethod
     def addQuantumForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
                              onDelete: Optional[str] = None, **kwds: Any) -> Tuple[FieldSpec, FieldSpec]:
-        pass
-
-    @abstractmethod
-    def refresh(self, *, universe: DimensionUniverse):
         pass
 
     @abstractmethod

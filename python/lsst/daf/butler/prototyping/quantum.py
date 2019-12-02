@@ -29,13 +29,12 @@ from ..core.datasets import CheckedDatasetHandle, DatasetType
 from ..core.dimensions import ExpandedDataCoordinate
 from ..core.timespan import Timespan
 from ..core.utils import NamedKeyDict
-from .run import Run
 
 
 class Quantum:
     taskName: str
     taskClass: type
-    run: Run
+    run: str
     host: str
     timespan: Timespan
     dataId: ExpandedDataCoordinate
