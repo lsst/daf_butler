@@ -15,7 +15,7 @@ from ...core.dimensions import (
     DimensionRecord,
     DimensionUniverse,
 )
-from .database import Database
+from .database import Database, StaticTablesContext
 
 
 class DimensionTableRecords(ABC):
@@ -49,7 +49,8 @@ class DimensionTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionTableManager:
+    def initialize(cls, db: Database, context: StaticTablesContext, *,
+                   universe: DimensionUniverse) -> DimensionTableManager:
         pass
 
     @abstractmethod

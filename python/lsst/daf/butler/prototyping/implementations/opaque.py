@@ -31,9 +31,6 @@ class ByNameOpaqueTableRecords(OpaqueTableRecords):
         yield from self._db.query(sql).fetchall()
 
     def delete(self, **where: Any):
-        sql = self._table.delete().where(
-            sqlalchemy.sql.and_(*[self._table.columns[k] == v for k, v in where.items()])
-        )
         self._db.delete(self._table, where.keys(), where)
 
 
@@ -51,20 +48,11 @@ class ByNameOpaqueTableManager(OpaqueTableManager):
         self._db = db
         self._metaTable = metaTable
         self._records = {}
-        self.refresh()
 
     @classmethod
-    def load(cls, db: Database, context: StaticTablesContext) -> OpaqueTableManager:
+    def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableManager:
         metaTable = context.addTable(cls._META_TABLE_NAME, cls._META_TABLE_SPEC)
         return cls(db=db, metaTable=metaTable)
-
-    def refresh(self):
-        records = {}
-        for row in self._db.connection.execute(self._metaTable.select()).fetchall():
-            name = row[self._metaTable.columns.table_name]
-            table = self._db.getExistingTable(name)
-            records[name] = ByNameOpaqueTableRecords(name=name, table=table, db=self._db)
-        self._records = records
 
     def get(self, name: str) -> Optional[OpaqueTableRecords]:
         return self._records.get(name)

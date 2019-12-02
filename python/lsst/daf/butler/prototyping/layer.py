@@ -29,11 +29,13 @@ class RegistryLayer:
                  create: bool = True):
         self.db = db
         with db.declareStaticTables(create=create) as context:
-            self.collections = collections.load(self.db, context=context)
-            self.opaque = opaque.load(self.db, context=context)
-        self.dimensions = dimensions.load(self.db, universe=universe)
-        self.datasets = datasets.load(self.db, self.collections, universe=universe)
-        self.quanta = quanta.load(self.db, self.datasets, self.collections, universe=universe)
+            self.collections = collections.initialize(self.db, context)
+            self.opaque = opaque.initialize(self.db, context)
+            self.dimensions = dimensions.initialize(self.db, context, universe=universe)
+            self.datasets = datasets.initialize(self.db, context, collections=self.collections,
+                                                quanta=quanta, universe=universe)
+            self.quanta = quanta.initialize(self.db, context, collections=self.collections,
+                                            datasets=self.datasets, universe=universe)
 
     collections: CollectionManager
 

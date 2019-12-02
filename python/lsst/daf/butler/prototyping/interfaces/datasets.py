@@ -8,6 +8,7 @@ from typing import (
     Iterator,
     Optional,
     Union,
+    Tuple,
     Type,
     TypeVar,
     TYPE_CHECKING,
@@ -17,16 +18,16 @@ import sqlalchemy
 
 from ...core.datasets import DatasetType, ResolvedDatasetHandle
 from ...core.dimensions import DimensionUniverse, DataCoordinate
+from ...core.schema import FieldSpec, TableSpec
 from ...core.timespan import Timespan
 
 from ..iterables import DataIdIterable, SingleDatasetTypeIterable, DatasetIterable
 from ..quantum import Quantum
 
 if TYPE_CHECKING:
-    from ..interfaces import (
-        Database,
-        CollectionManager,
-    )
+    from .database import Database, StaticTablesContext
+    from .collections import CollectionManager
+    from .quanta import QuantumTableManager
 
 
 T = TypeVar("T")
@@ -92,16 +93,22 @@ class DatasetTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def loadTypes(cls, db: Database, *, collections: CollectionManager,
-                  universe: DimensionUniverse) -> DatasetTableManager:
+    def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
+                   quanta: Type[QuantumTableManager], universe: DimensionUniverse) -> DatasetTableManager:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def addDatasetForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                             onDelete: Optional[str] = None, **kwds) -> Tuple[FieldSpec, FieldSpec]:
         pass
 
     @abstractmethod
-    def refreshTypes(self, *, universe: DimensionUniverse):
+    def refresh(self, *, universe: DimensionUniverse):
         pass
 
     @abstractmethod
-    def getType(self, datasetType: DatasetType) -> Optional[DatasetTableRecords]:
+    def getRecordsForType(self, datasetType: DatasetType) -> Optional[DatasetTableRecords]:
         pass
 
     @abstractmethod

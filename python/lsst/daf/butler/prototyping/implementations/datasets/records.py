@@ -115,7 +115,7 @@ class ByDimensionsDatasetTableRecords(DatasetTableRecords):
         assert dataId.graph == self.datasetType.dimensions
         sql = self.select(collection=collection, dataId=dataId, timespan=timespan,
                           id=Select, origin=Select, run=Select)
-        row = self._db.connection.execute(sql).fetchone()
+        row = self._db.query(sql).fetchone()
         if row is None:
             return row
         return ResolvedDatasetHandle(
@@ -130,14 +130,11 @@ class ByDimensionsDatasetTableRecords(DatasetTableRecords):
         assert datasets.datasetType == self.datasetType
         # Only delete from common dataset table; ON DELETE CASCADE constraints
         # will handle the rest.
-        sql = self._static.dataset.delete().where(
-            sqlalchemy.sql.and_(
-                self._static.dataset.columns.id == sqlalchemy.sql.bindparam("id"),
-                self._static.dataset.columns.origin == sqlalchemy.sql.bindparam("origin"),
-            )
+        self._db.delete(
+            self._static.dataset,
+            *[{"id": dataset.id, "origin": dataset.origin} for dataset in datasets],
+            columns=["id", "origin"]
         )
-        params = [{"id": dataset.id, "origin": dataset.origin} for dataset in datasets]
-        self._db.connection.execute(sql, *params)
 
     def associate(self, collection: str, datasets: SingleDatasetTypeIterable, *,
                   timespan: Optional[Timespan[Optional[datetime]]] = None):
@@ -190,15 +187,9 @@ class ByDimensionsDatasetTableRecords(DatasetTableRecords):
             table = self._static.dataset_collection_calibration
         else:
             raise TypeError(f"Unrecognized CollectionType value {collectionRecord.type}.")
-        rows = [dict(dataset_id=dataset.id, dataset_origin=dataset.origin) for dataset in datasets]
-        sql = table.delete().where(
-            sqlalchemy.sql.and_(
-                table.columns.collection_id == collectionRecord.id,
-                table.columns.dataset_id == sqlalchemy.sql.bindparam("dataset_id"),
-                table.columns.dataset_origin == sqlalchemy.sql.bindparam("dataset_origin"),
-            )
-        )
-        self._db.connection.execute(sql, *rows)
+        rows = [dict(dataset_id=dataset.id, dataset_origin=dataset.origin, collection_id=collectionRecord.id)
+                for dataset in datasets]
+        self._db.delete(table, *rows)
 
     def select(self, collection: Select.Or[str] = Select,
                dataId: Select.Or[DataCoordinate] = Select,
@@ -310,7 +301,7 @@ class ByDimensionsDatasetTableRecords(DatasetTableRecords):
                 self._dynamic.columns.dataset_type_id == self._id
             )
         ).limit(1)
-        row = self._db.connection.execute(sql).fetchone()
+        row = self._db.query(sql).fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.standardize(
             {dimension: row[dimension.name] for dimension in self.datasetType.dimensions.required},

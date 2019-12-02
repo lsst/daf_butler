@@ -20,7 +20,7 @@ from ...core.dimensions import (
 from ...core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN, makeOverlapTableSpec
 from ...core.schema import TableSpec, FieldSpec
 from ...core.utils import NamedKeyDict
-from ..interfaces import Database, DimensionTableRecords, DimensionTableManager
+from ..interfaces import Database, DimensionTableRecords, DimensionTableManager, StaticTablesContext
 
 
 class DatabaseDimensionTableRecords(DimensionTableRecords):
@@ -52,10 +52,10 @@ class DatabaseDimensionTableRecords(DimensionTableRecords):
                         row = base.copy()
                         row[commonSkyPix.name] = skypix
                         commonSkyPixRows.append(row)
-        # TODO: wrap the operations below in a transaction.
-        self._db.connection.execute(self._elementTable.insert(), *elementRows)
-        if self.element.spatial and commonSkyPixRows:
-            self._db.connection.execute(self._commonSkyPixOverlapTable.insert(), *commonSkyPixRows)
+        with self._db.transaction():
+            self._db.insert(self._elementTable, *elementRows)
+            if self.element.spatial and commonSkyPixRows:
+                self._db.insert(self._commonSkyPixOverlapTable, *commonSkyPixRows)
 
     def fetch(self, dataId: DataCoordinate) -> DimensionRecord:
         RecordClass = self.element.RecordClass
@@ -71,13 +71,13 @@ class DatabaseDimensionTableRecords(DimensionTableRecords):
                             for fieldName in RecordClass.__slots__[:nRequired]]
         selectColumns = whereColumns + [self._table.columns[name]
                                         for name in RecordClass.__slots__[nRequired:]]
-        query = sqlalchemy.sql.select(
+        sql = sqlalchemy.sql.select(
             selectColumns
         ).select_from(self._table).where(
             sqlalchemy.sql.and_(*[column == dataId[dimension.name]
                                 for column, dimension in zip(whereColumns, self.element.graph.required)])
         )
-        row = self._db.connection.execute(query).fetchone()
+        row = self._db.query(sql).fetchone()
         if row is None:
             return None
         return RecordClass(*row)
@@ -130,25 +130,28 @@ class DatabaseDimensionTableManager(DimensionTableManager):
         ],
     )
 
-    def __init__(self, db: Database, *, universe: DimensionUniverse):
+    def __init__(self, db: Database, *, metaTable: sqlalchemy.schema.Table, universe: DimensionUniverse):
         super().__init__(universe=universe)
         self._db = db
-        self._metaTable = db.ensureTableExists(self._META_TABLE_NAME, self._META_TABLE_SPEC)
+        self._
         self._records = NamedKeyDict({})
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database, *, universe: DimensionUniverse) -> DimensionTableManager:
-        return cls(db=db)
+    def initialize(cls, db: Database, context: StaticTablesContext, *,
+                   universe: DimensionUniverse) -> DimensionTableManager:
+        metaTable = context.addTable(cls._META_TABLE_NAME, cls._META_TABLE_SPEC)
+        return cls(db=db, metaTable=metaTable)
 
     def refresh(self):
         records = NamedKeyDict({})
-        for row in self._db.connection.execute(self._metaTable.select()).fetchall():
+        for row in self._db.query(self._metaTable.select()).fetchall():
             element = self.universe[row[self._metaTable.columns.element_name]]
-            table = self._db.getExistingTable(element.name)
+            table = self._db.getExistingTable(element.name, element.makeTableSpec())
             if element.spatial:
                 commonSkyPixOverlapTable = self._db.getExistingTable(
-                    OVERLAP_TABLE_NAME_PATTERN.format(element.name, self.universe.commonSkyPix.name)
+                    OVERLAP_TABLE_NAME_PATTERN.format(element.name, self.universe.commonSkyPix.name),
+                    makeOverlapTableSpec(element, element.universe.commonSkyPix)
                 )
             else:
                 commonSkyPixOverlapTable = None

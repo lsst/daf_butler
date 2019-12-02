@@ -6,12 +6,15 @@ from abc import abstractmethod
 from typing import (
     Iterator,
     Optional,
+    Tuple,
+    Type,
 )
 
 import sqlalchemy
 
 from ....core.datasets import DatasetType, ResolvedDatasetHandle, DatasetUniqueness
 from ....core.dimensions import DimensionGraph, DimensionUniverse
+from ....core.schema import TableSpec, FieldSpec
 
 from ...iterables import DatasetIterable
 from ...interfaces import (
@@ -19,27 +22,36 @@ from ...interfaces import (
     CollectionManager,
     DatasetTableRecords,
     DatasetTableManager,
+    QuantumTableManager,
+    StaticTablesContext,
 )
-from .ddl import StaticDatasetTablesTuple, makeDynamicTableName, makeDynamicTableSpec
+from . import ddl
 from .records import ByDimensionsDatasetTableRecords
 
 
 class ByDimensionsDatasetTableManager(DatasetTableManager):
 
-    def __init__(self, *, db: Database, collections: CollectionManager,
+    def __init__(self, *, db: Database, collections: CollectionManager, static: ddl.StaticDatasetTablesTuple,
                  universe: DimensionUniverse):
         self._db = db
         self._collections = collections
-        self._static = StaticDatasetTablesTuple(db)
+        self._static = static
         self._byName = {}
         self._byId = {}
         self.refresh(universe=universe)
 
     @classmethod
     @abstractmethod
-    def loadTypes(cls, db: Database, *, collections: CollectionManager,
-                  universe: DimensionUniverse) -> DatasetTableManager:
-        return cls(db=db, collections=collections)
+    def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
+                   quanta: Type[QuantumTableManager], universe: DimensionUniverse) -> DatasetTableManager:
+        specs = ddl.makeStaticTableSpecs(type(collections), quanta)
+        static = context.addTableTuple(specs)
+        return cls(db=db, collections=collections, static=static)
+
+    @classmethod
+    def addDatasetForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                             onDelete: Optional[str] = None, **kwds) -> Tuple[FieldSpec, FieldSpec]:
+        return ddl.addDatasetForeignKey(tableSpec, name=name, onDelete=onDelete, **kwds)
 
     def refreshTypes(self, *, universe: DimensionUniverse):
         byName = {}
@@ -50,10 +62,12 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
             dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
             uniqueness = DatasetUniqueness(row[c.uniqueness])
             datasetType = DatasetType(name, dimensions, row[c.storage_class], uniqueness=uniqueness)
-            dynamic = self._db.getExistingTable(makeDynamicTableName(datasetType))
+            dynamic = self._db.getExistingTable(ddl.makeDynamicTableName(datasetType),
+                                                ddl.makeDynamicTableSpec(datasetType,
+                                                                         type(self._collections)))
             records = ByDimensionsDatasetTableRecords(db=self._db, datasetType=datasetType,
-                                                              static=self._static, dynamic=dynamic,
-                                                              id=row["id"])
+                                                      static=self._static, dynamic=dynamic,
+                                                      id=row["id"])
             byName[name] = records
             byId[records.id] = records
         self._byName = byName
@@ -66,8 +80,8 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
         records = self._records.get(datasetType)
         if records is None:
             dynamic = self._db.ensureTableExists(
-                makeDynamicTableName(datasetType),
-                makeDynamicTableSpec(datasetType),
+                ddl.makeDynamicTableName(datasetType),
+                ddl.makeDynamicTableSpec(datasetType, type(self._collections)),
             )
             row, _ = self._db.sync(
                 self._static.dataset_type,
@@ -80,8 +94,8 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
                 returning={"id"},
             )
             records = ByDimensionsDatasetTableRecords(db=self._db, datasetType=datasetType,
-                                                              static=self._static, dynamic=dynamic,
-                                                              id=row["id"])
+                                                      static=self._static, dynamic=dynamic,
+                                                      id=row["id"])
             self._byName[datasetType.name] = records
             self._byId[records.id] = records
         return records
@@ -98,7 +112,7 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
             sqlalchemy.sql.and_(self._static.dataset.columns.id == id,
                                 self._static.dataset.columns.origin == origin)
         )
-        row = self._db.connection.execute(sql).fetchone()
+        row = self._db.query(sql).fetchone()
         if row is None:
             return None
         recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
@@ -117,7 +131,7 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
                         ephemeral: bool = False):
         if ephemeral:
             raise NotImplementedError("Ephemeral datasets are not yet supported.")
-        self.db.insert(
+        self._db.insert(
             self._static.dataset_location,
             *[{"dataset_id": dataset.id, "dataset_origin": dataset.origin, "datastore_name": datastoreName}
               for dataset in datasets]
@@ -133,20 +147,14 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
                 table.columns.origin == dataset.origin
             )
         )
-        for row in self.db.connection.execute(sql, {"dataset_id": dataset.id,
-                                                    "dataset_origin": dataset.origin}):
+        for row in self._db.query(sql, {"dataset_id": dataset.id, "dataset_origin": dataset.origin}):
             yield row[table.columns.datastore_name]
 
     def deleteLocations(self, datastoreName: str, datasets: DatasetIterable):
         table = self._static.dataset_location
-        sql = table.delete().where(
-            sqlalchemy.sql.and_(
-                table.columns.datastore_name == datastoreName,
-                table.columns.dataset_id == sqlalchemy.sql.bindparam("dataset_id"),
-                table.columns.origin == sqlalchemy.sql.bindparam("dataset_origin"),
-            )
-        )
-        self.db.connection.execute(
-            sql,
-            *[{"dataset_id": dataset.id, "dataset_origin": dataset.origin} for dataset in datasets]
+        self._db.delete(
+            table,
+            *[{"dataset_id": dataset.id, "dataset_origin": dataset.origin, "datastore_name": datastoreName}
+              for dataset in datasets],
+            columns=["datastore_name", "dataset_id", "dataset_origin"]
         )

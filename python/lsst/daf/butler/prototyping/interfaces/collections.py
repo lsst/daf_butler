@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 import enum
 from typing import (
+    Any,
     Optional,
     TYPE_CHECKING,
 )
@@ -56,15 +57,19 @@ class CollectionManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database, schema: StaticTablesContext) -> CollectionManager:
+    def initialize(cls, db: Database, schema: StaticTablesContext) -> CollectionManager:
         pass
 
+    @classmethod
     @abstractmethod
-    def addCollectionForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+    def addCollectionForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                                onDelete: Optional[str] = None, **kwds: Any) -> FieldSpec:
         pass
 
+    @classmethod
     @abstractmethod
-    def addRunForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+    def addRunForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                         onDelete: Optional[str] = None, **kwds: Any) -> FieldSpec:
         pass
 
     @abstractmethod

@@ -224,9 +224,9 @@ class ByDimensionHashQuantumTableManager(QuantumTableManager):
                                    f"Registry database may be corrupted.")
             table = self._layer.db.getExistingTable(_DYNAMIC_QUANTUM_TABLE_NAME_FORMAT.format(dimensionsHash))
             records[dimensions] = ByDimensionHashQuantumTableRecords(dimensions=dimensions,
-                                                                             layer=self._layer,
-                                                                             static=self._static,
-                                                                             dynamic=table)
+                                                                     layer=self._layer,
+                                                                     static=self._static,
+                                                                     dynamic=table)
         self._records = records
 
     def get(self, dimensions: DimensionGraph) -> Optional[QuantumTableRecords]:
@@ -248,6 +248,6 @@ class ByDimensionHashQuantumTableManager(QuantumTableManager):
                                     keys={"dimensions_hash": dimensionsHash,
                                           "dimension_name": dimension.name})
             result = ByDimensionHashQuantumTableRecords(dimensions=dimensions, db=self._layer.db,
-                                                                static=self._static, dynamic=table)
+                                                        static=self._static, dynamic=table)
             self._records[dimensions] = result
         return result

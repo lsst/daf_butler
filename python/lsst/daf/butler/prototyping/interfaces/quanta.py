@@ -4,16 +4,19 @@ __all__ = ["QuantumTableRecords", "QuantumTableManager"]
 
 from abc import ABC, abstractmethod
 from typing import (
+    Any,
     Optional,
+    Tuple,
     TYPE_CHECKING
 )
 
 from ...core.dimensions import DimensionGraph, DimensionUniverse
+from ...core.schema import FieldSpec, TableSpec
 
 from ..quantum import Quantum
 
 if TYPE_CHECKING:
-    from .registryLayer import RegistryLayer
+    from .database import Database, StaticTablesContext, DatasetTableManager, CollectionManager
 
 
 class QuantumTableRecords(ABC):
@@ -39,7 +42,14 @@ class QuantumTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, layer: RegistryLayer, *, universe: DimensionUniverse) -> QuantumTableManager:
+    def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
+                   datasets: DatasetTableManager, universe: DimensionUniverse) -> QuantumTableManager:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def addQuantumForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                             onDelete: Optional[str] = None, **kwds: Any) -> Tuple[FieldSpec, FieldSpec]:
         pass
 
     @abstractmethod

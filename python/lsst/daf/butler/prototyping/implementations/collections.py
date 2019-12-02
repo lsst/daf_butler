@@ -5,6 +5,7 @@ __all__ = ["AggressiveCollectionManager"]
 from collections import namedtuple
 from datetime import datetime
 from typing import (
+    Any,
     Optional,
 )
 
@@ -66,11 +67,10 @@ class AggressiveRunRecord(RunRecord):
             TIMESPAN_FIELD_SPECS.end.name: timespan.end,
             "host": host,
         }
-        count = self._db.update(self._table, keys=["id"],
+        count = self._db.update(self._table, row, keys=["id"],
                                 values=[TIMESPAN_FIELD_SPECS.begin.name,
                                         TIMESPAN_FIELD_SPECS.end.name,
-                                        "host"],
-                                row)
+                                        "host"])
         if count != 1:
             raise RuntimeError(f"Run update affected {count} records; expected exactly one.")
         self._host = host
@@ -95,23 +95,31 @@ class AggressiveCollectionManager(CollectionManager):
         self.refresh()
 
     @classmethod
-    def load(cls, db: Database, context: StaticTablesContext) -> CollectionManager:
+    def initialize(cls, db: Database, context: StaticTablesContext) -> CollectionManager:
         return cls(db, tables=context.addTableTuple(COLLECTION_TABLES_SPEC))
 
-    def addCollectionForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+    @classmethod
+    def addCollectionForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                                onDelete: Optional[str] = None, **kwds: Any) -> FieldSpec:
+        if name is None:
+            name = "collection"
         original = COLLECTION_TABLES_SPEC.collection.fields["id"]
-        copy = FieldSpec("collection_id", dtype=original.dtype, nullable=False)
+        copy = FieldSpec(f"{name}_id", dtype=original.dtype, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ForeignKeySpec("collection", source=(copy.name,),
-                                                    target=(original.name,)))
+                                                    target=(original.name,), onDelete=onDelete))
         return copy
 
-    def addRunForeignKey(self, tableSpec: TableSpec) -> FieldSpec:
+    @classmethod
+    def addRunForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+                         onDelete: Optional[str] = None, **kwds) -> FieldSpec:
+        if name is None:
+            name = "run"
         original = COLLECTION_TABLES_SPEC.run.fields["id"]
-        copy = FieldSpec("run_id", dtype=original.dtype, nullable=False)
+        copy = FieldSpec(f"{name}_id", dtype=original.dtype, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ForeignKeySpec("table", source=(copy.name,),
-                                                    target=(original.name,)))
+                                                    target=(original.name,), onDelete=onDelete))
         return copy
 
     def refresh(self):

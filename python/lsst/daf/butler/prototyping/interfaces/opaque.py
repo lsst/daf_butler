@@ -37,11 +37,7 @@ class OpaqueTableManager(ABC):
 
     @classmethod
     @abstractmethod
-    def load(cls, db: Database, context: StaticTablesContext) -> OpaqueTableManager:
-        pass
-
-    @abstractmethod
-    def refresh(self):
+    def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableManager:
         pass
 
     @abstractmethod
