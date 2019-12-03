@@ -44,12 +44,12 @@ class DatasetUniqueness(enum.IntEnum):
 
     STANDARD = 2
     """There may only be one dataset with this dataset type and a particular
-    data ID in a collection.
+    data ID in a `~CollectionType.TAGGED` collection.
     """
 
     NONSINGULAR = 3
     """There may be any number of datasets with this dataset type and a
-    particular data ID in a collection.
+    particular data ID in a `~CollectionType.TAGGED` collection.
     """
 
 
