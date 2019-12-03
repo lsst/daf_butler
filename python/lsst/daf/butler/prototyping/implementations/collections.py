@@ -99,7 +99,7 @@ class AggressiveCollectionManager(CollectionManager):
         return cls(db, tables=context.addTableTuple(COLLECTION_TABLES_SPEC))
 
     @classmethod
-    def addCollectionForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+    def addCollectionForeignKey(cls, tableSpec: TableSpec, *, name: str = "collection",
                                 onDelete: Optional[str] = None, **kwds: Any) -> FieldSpec:
         if name is None:
             name = "collection"
@@ -111,7 +111,7 @@ class AggressiveCollectionManager(CollectionManager):
         return copy
 
     @classmethod
-    def addRunForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+    def addRunForeignKey(cls, tableSpec: TableSpec, *, name: str = "run",
                          onDelete: Optional[str] = None, **kwds) -> FieldSpec:
         if name is None:
             name = "run"

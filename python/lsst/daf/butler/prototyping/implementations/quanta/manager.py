@@ -42,7 +42,7 @@ class ByDimensionsQuantumTableManager(QuantumTableManager):
         return cls(db, static=static, collections=collections, datasets=datasets)
 
     @classmethod
-    def addQuantumForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+    def addQuantumForeignKey(cls, tableSpec: TableSpec, *, name: str = "quantum",
                              onDelete: Optional[str] = None, **kwds: Any) -> Tuple[FieldSpec, FieldSpec]:
         return ddl.addQuantumForeignKey(tableSpec, name=name, onDelete=onDelete, **kwds)
 

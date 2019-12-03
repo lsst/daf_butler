@@ -49,7 +49,7 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
         return cls(db=db, collections=collections, static=static)
 
     @classmethod
-    def addDatasetForeignKey(cls, tableSpec: TableSpec, *, name: Optional[str] = None,
+    def addDatasetForeignKey(cls, tableSpec: TableSpec, *, name: str = "dataset",
                              onDelete: Optional[str] = None, **kwds) -> Tuple[FieldSpec, FieldSpec]:
         return ddl.addDatasetForeignKey(tableSpec, name=name, onDelete=onDelete, **kwds)
 
@@ -103,8 +103,8 @@ class ByDimensionsDatasetTableManager(DatasetTableManager):
     def selectTypes(self) -> sqlalchemy.sql.FromClause:
         return self._static.dataset_type
 
-    def iterTypes(self) -> Iterator[DatasetTableRecords]:
-        yield from self._records.values()
+    def iterTypes(self) -> Iterator[DatasetType]:
+        yield from self._records.keys()
 
     def getHandle(self, id: int, origin: int, *, collections: CollectionManager
                   ) -> Optional[ResolvedDatasetHandle]:

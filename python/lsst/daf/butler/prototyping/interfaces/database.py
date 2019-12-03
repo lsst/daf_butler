@@ -37,12 +37,18 @@ class TransactionInterruption(RuntimeError):
     """
 
 
+class ReadOnlyDatabaseError(RuntimeError):
+    """Exception raised when a write operation is called on a read-only
+    `Database`.
+    """
+
+
 class StaticTablesContext:
     """Helper class used to declare the static schema for a registry layer
     in a database.
 
     An instance of this class is returned by `Database.declareStaticTables`,
-    which should be the only way this class should be constructed.
+    which should be the only way it should be constructed.
     """
 
     def __init__(self, db: Database):
@@ -87,6 +93,19 @@ class Database(ABC):
     connection : `sqlalchemy.engine.Connection`
         SQLAlchemy connection object.  May be shared with other `Database`
         instances.
+
+    Notes
+    -----
+    `Database` requires all write operations to go through its special named
+    methods.  Our write patterns are sufficiently simple that we don't really
+    need the full flexibility of SQL insert/update/delete syntax, and we need
+    non-standard (but common) functionality in these operations sufficiently
+    often that it seems worthwhile to provide our own generic API.
+
+    In contrast, `Database.query` allows arbitrary ``SELECT`` queries (via
+    their SQLAlchemy representation) to be run, as we expect these to require
+    significantly more sophistication while still being limited to standard
+    SQL.
     """
 
     def __init__(self, *, origin: int,
@@ -140,6 +159,12 @@ class Database(ABC):
         schema : `StaticTablesContext` A helper object that is used to add new
             tables.
 
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if ``create`` is `True`, `Database.isWriteable` is `False`,
+            and one or more declared tables do not already exist.
+
         Example
         -------
         Given a `Database` instance ``db``::
@@ -162,6 +187,8 @@ class Database(ABC):
             yield StaticTablesContext(self)
             if create:
                 self._metadata.create_all(self._engine)
+        # TODO: specialize except and re-raise ReadOnlyDatabaseError as
+        # documented.
         except BaseException:
             self._metadata = None
             raise
@@ -169,6 +196,13 @@ class Database(ABC):
     @abstractmethod
     def isWriteable(self) -> bool:
         """Return `True` if this database can be modified by this client.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return a human-readable identifier for this `Database`, including
+        any namespace or schema that identifies its names within a `Registry`.
         """
         raise NotImplementedError()
 
@@ -273,6 +307,9 @@ class Database(ABC):
         ------
         TransactionInterruption
             Raised if a transaction is active when this method is called.
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False`, and the table does not
+            already exist.
 
         Notes
         -----
@@ -288,8 +325,7 @@ class Database(ABC):
         # TODO: should we pass any kwargs down to the `sqlalchemy.schema.Table`
         # call here?
         table = self._convertTableSpec(name, spec, self._metadata)
-        # TODO: does the the line below work if the table exists but the
-        # database is read-only?
+        # TODO: catch and re-raise ReadOnlyDatabaseError.
         table.create(self._engine, checkfirst=True)
         return table
 
@@ -367,6 +403,9 @@ class Database(ABC):
         SynchronizationConflict
             Raised if the values in ``compared`` do match the values in the
             database.
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False`, and no matching record
+            already exists.
 
         Notes
         -----
@@ -425,6 +464,9 @@ class Database(ABC):
         SynchronizationConflict
             Raised if the values in ``compared`` do match the values in the
             database.
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False`, and no matching record
+            already exists.
 
         Notes
         -----
@@ -458,6 +500,11 @@ class Database(ABC):
             If ``returnIds`` is `True`, a `list` containing the inserted
             values for the table's autoincrement primary key.
 
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
         Notes
         -----
         The default implementation uses bulk insert syntax when ``returning``
@@ -469,6 +516,8 @@ class Database(ABC):
         May be used inside transaction contexts, so implementations may not
         perform operations that interrupt transactions.
         """
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
         if not returnIds:
             self._connection.execute(table.insert(), *rows)
         else:
@@ -494,6 +543,11 @@ class Database(ABC):
             Positional arguments are the rows to be inserted, as dictionaries
             mapping column name to value.  The keys in all dictionaries must
             be the same.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
 
         Notes
         -----
@@ -523,6 +577,11 @@ class Database(ABC):
         count : `int`
             Number of rows deleted.
 
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
         Notes
         -----
         May be used inside transaction contexts, so implementations may not
@@ -531,6 +590,8 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to delete from read-only database '{self}'.")
         sql = table.delete().where(
             sqlalchemy.sql.and_(
                 *[table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
@@ -556,6 +617,11 @@ class Database(ABC):
             mapping column name to value.  The keys in all dictionaries must
             be the combination of the names in ``keys`` and ``values``.
 
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
         Returns
         -------
         count : `int`
@@ -570,6 +636,8 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to update read-only database '{self}'.")
         sql = table.update().values(
             {table.columns[name]: sqlalchemy.sql.bindparam(name) for name in values}
         ).where(
@@ -605,3 +673,7 @@ class Database(ABC):
         return self._connection.execute(sql, *args, **kwds)
 
     origin: int
+    """An integer ID that should be used as the default for any datasets,
+    quanta, or other entities that use a (autoincrement, origin) compound
+    primary key (`int`).
+    """
