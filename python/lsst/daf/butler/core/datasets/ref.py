@@ -23,21 +23,17 @@ from __future__ import annotations
 __all__ = ["DatasetRef"]
 
 import hashlib
-from typing import Mapping, Optional, Tuple
+from typing import Any, Dict, Mapping, Optional, Tuple
 
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph
 from ..run import Run
 from ..configSupport import LookupKey
+from ..utils import immutable
 from .type import DatasetType
 
 
-def _safeMakeMappingProxyType(data):
-    if data is None:
-        data = {}
-    return MappingProxyType(data)
-
-
+@immutable
 class DatasetRef:
     """Reference to a Dataset in a `Registry`.
 
@@ -70,48 +66,49 @@ class DatasetRef:
         that the dimensions are already consistent.
     """
 
-    __slots__ = ("_id", "_datasetType", "_dataId", "_run", "_hash", "_components")
+    __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components")
 
-    def __init__(self, datasetType: DatasetType, dataId: DataCoordinate, *,
-                 id: Optional[int] = None,
-                 run: Optional[Run] = None, hash: Optional[bytes] = None,
-                 components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True):
+    def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, *,
+                id: Optional[int] = None,
+                run: Optional[Run] = None, hash: Optional[bytes] = None,
+                components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True) -> DatasetRef:
+        self = super().__new__(cls)
         assert isinstance(datasetType, DatasetType)
         # TODO: it would be nice to guarantee that id and run should be either
         # both None or not None together.  We can't easily do that yet because
         # the Query infrastructure has a hard time obtaining Run objects, but
         # that will change.
-        self._id = id
-        self._datasetType = datasetType
+        self.id = id
+        self.datasetType = datasetType
         if conform:
-            self._dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
+            self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
-            self._dataId = dataId
+            self.dataId = dataId
         self._components = dict()
         if components is not None:
             self._components.update(components)
-        self._run = run
-        self._hash = hash
+        self.run = run
+        if hash is not None:
+            # We only set self._hash if we know it; this plays nicely with
+            # the @immutable decorator, which allows an attribute to be set
+            # only one time.
+            self._hash = hash
+        return self
 
     def __eq__(self, other: DatasetRef):
-        return (self._datasetType, self.dataId, self._id) == (other._datasetType, other._dataId, other._id)
+        return (self.datasetType, self.dataId, self.id) == (other.datasetType, other.dataId, other.id)
+
+    def __hash__(self) -> int:
+        return hash(self.datasetType, self.dataId, self.id)
 
     def __repr__(self):
         return f"DatasetRef({self.datasetType}, {self.dataId}, id={self.id}, run={self.run})"
 
     @property
-    def id(self) -> Optional[int]:
-        """Primary key of the dataset (`int` or `None`)
-
-        Typically assigned by `Registry`.
-        """
-        return self._id
-
-    @property
     def hash(self) -> bytes:
         """Secure hash of the `DatasetType` name and data ID (`bytes`).
         """
-        if self._hash is None:
+        if not hasattr(self, "_hash"):
             message = hashlib.blake2b(digest_size=32)
             message.update(self.datasetType.name.encode("utf8"))
             self.dataId.fingerprint(message.update)
@@ -119,36 +116,12 @@ class DatasetRef:
         return self._hash
 
     @property
-    def datasetType(self) -> DatasetType:
-        """The `DatasetType` associated with the Dataset the `DatasetRef`
-        points to.
-        """
-        return self._datasetType
-
-    @property
-    def dataId(self) -> DataCoordinate:
-        """A mapping of `Dimension` primary key values that labels the Dataset
-        within a Collection (`DataCoordinate`).
-        """
-        return self._dataId
-
-    @property
-    def run(self) -> Optional[Run]:
-        """The `~lsst.daf.butler.Run` instance that produced (or will produce)
-        the Dataset.
-
-        Read-only; update via `~lsst.daf.butler.Registry.addDataset()` or
-        `~lsst.daf.butler.Butler.put()`.
-        """
-        return self._run
-
-    @property
     def components(self) -> Mapping[str, DatasetRef]:
         """Named `DatasetRef` components.
 
-        Read-only; update via `Registry.attachComponent()`.
+        Read-only (but not immutable); update via `Registry.attachComponent()`.
         """
-        return _safeMakeMappingProxyType(self._components)
+        return MappingProxyType(self._components)
 
     @property
     def dimensions(self) -> DimensionGraph:
@@ -162,6 +135,10 @@ class DatasetRef:
             components = ", components=[" + ", ".join(self.components) + "]"
         return "DatasetRef({}, id={}, dataId={} {})".format(self.datasetType.name,
                                                             self.id, self.dataId, components)
+
+    def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
+        return ((self.datasetType, self.dataId),
+                {"id": self.id, "run": self.run, "components": self._components})
 
     def resolved(self, id: int, run: Run, components: Optional[Mapping[str, DatasetRef]] = None
                  ) -> DatasetRef:
@@ -187,7 +164,7 @@ class DatasetRef:
         if components:
             newComponents.update(components)
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId,
-                          id=id, run=run, hash=self._hash, components=newComponents, conform=False)
+                          id=id, run=run, hash=self.hash, components=newComponents, conform=False)
 
     def unresolved(self) -> DatasetRef:
         """Return a new `DatasetRef` with the same data ID and dataset type,
@@ -207,7 +184,7 @@ class DatasetRef:
             if ref1.unresolved() == ref2.unresolved():
                 ...
         """
-        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, hash=self._hash, conform=False)
+        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, hash=self.hash, conform=False)
 
     def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetRef` refers to a
@@ -253,3 +230,33 @@ class DatasetRef:
                           for n in names) + names
 
         return names
+
+    datasetType: DatasetType
+    """The definition of this dataset (`DatasetType`).
+
+    Cannot be changed after a `DatasetRef` is constructed.
+    """
+
+    dataId: DataCoordinate
+    """A mapping of `Dimension` primary key values that labels the dataset
+    within a Collection (`DataCoordinate`).
+
+    Cannot be changed after a `DatasetRef` is constructed.
+    """
+
+    run: Optional[Run]
+    """The `~lsst.daf.butler.Run` instance that produced (or will produce)
+    the dataset.
+
+    Cannot be changed after a `DatasetRef` is constructed; use `resolved` or
+    `unresolved` to add or remove this information when creating a new
+    `DatasetRef`.
+    """
+
+    id: Optional[int]
+    """Primary key of the dataset (`int` or `None`).
+
+    Cannot be changed after a `DatasetRef` is constructed; use `resolved` or
+    `unresolved` to add or remove this information when creating a new
+    `DatasetRef`.
+    """

@@ -203,27 +203,22 @@ class DatasetRefTestCase(unittest.TestCase):
 
     def setUp(self):
         self.universe = DimensionUniverse()
+        datasetTypeName = "test"
+        storageClass = StorageClass("testref_StructuredData")
+        dimensions = self.universe.extract(("instrument", "visit"))
+        self.dataId = dict(instrument="DummyCam", visit=42)
+        self.datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
 
     def testConstructor(self):
         """Test construction preserves values.
         """
-        datasetTypeName = "test"
-        storageClass = StorageClass("testref_StructuredData")
-        dimensions = self.universe.extract(("instrument", "visit"))
-        dataId = dict(instrument="DummyCam", visit=42)
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        ref = DatasetRef(datasetType, dataId)
-        self.assertEqual(ref.datasetType, datasetType)
-        self.assertEqual(ref.dataId, dataId, msg=ref.dataId)
+        ref = DatasetRef(self.datasetType, self.dataId)
+        self.assertEqual(ref.datasetType, self.datasetType)
+        self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
         self.assertEqual(ref.components, dict())
 
     def testResolving(self):
-        datasetTypeName = "test"
-        storageClass = StorageClass("testref_StructuredData")
-        dimensions = self.universe.extract(("instrument", "visit"))
-        dataId = dict(instrument="DummyCam", visit=42)
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        ref = DatasetRef(datasetType, dataId, id=1, run=Run("somerun"))
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
         unresolvedRef = ref.unresolved()
         self.assertIsNotNone(ref.id)
         self.assertIsNone(unresolvedRef.id)
@@ -234,6 +229,11 @@ class DatasetRefTestCase(unittest.TestCase):
         reresolvedRef = unresolvedRef.resolved(id=1, run=Run("somerun"))
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
+
+    def testPickle(self):
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
+        s = pickle.dumps(ref)
+        self.assertEqual(pickle.loads(s), ref)
 
 
 if __name__ == "__main__":
