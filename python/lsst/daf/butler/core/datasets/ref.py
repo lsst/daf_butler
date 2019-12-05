@@ -49,8 +49,22 @@ class DatasetRef:
     dataId : `DataCoordinate`
         A mapping of dimensions that labels the Dataset within a Collection.
     id : `int`, optional
-        A unique identifier.
-        Normally set to `None` and assigned by `Registry`
+        The unique integer identifier assigned when the dataset is created.
+    run : `Run`, optional
+        The run this dataset was associated with when it was created.
+    hash : `bytes`, optional
+        A hash of the dataset type and data ID.  Should only be provided if
+        copying from another `DatasetRef` with the same dataset type and data
+        ID.
+    components : `dict`, optional
+        A dictionary mapping component name to a `DatasetRef` for that
+        component.
+    conform : `bool`, optional
+        If `True` (default), call `DataCoordinate.standardize` to ensure that
+        the data ID's dimensions are consistent with the dataset type's.
+        `False` is only intended for backwards compatibility with old code that
+        uses incomplete references internal to `Datastore`, and should not be
+        used in new code.
     """
 
     __slots__ = ("_id", "_datasetType", "_dataId", "_run", "_hash", "_components")
