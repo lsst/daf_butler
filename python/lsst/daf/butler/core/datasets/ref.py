@@ -18,15 +18,19 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = ["DatasetRef"]
 
 from copy import deepcopy
 import hashlib
+from typing import Mapping, Optional, Tuple
 
 from types import MappingProxyType
 from ..utils import slotValuesAreEqual
-from ..dimensions import DataCoordinate
+from ..dimensions import DataCoordinate, DimensionGraph
+from ..run import Run
+from ..configSupport import LookupKey
 from .type import DatasetType
 
 
@@ -69,7 +73,10 @@ class DatasetRef:
 
     __slots__ = ("_id", "_datasetType", "_dataId", "_run", "_hash", "_components")
 
-    def __init__(self, datasetType, dataId, *, id=None, run=None, hash=None, components=None, conform=True):
+    def __init__(self, datasetType: DatasetType, dataId: DataCoordinate, *,
+                 id: Optional[int] = None,
+                 run: Optional[Run] = None, hash: Optional[bytes] = None,
+                 components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True):
         assert isinstance(datasetType, DatasetType)
         self._id = id
         self._datasetType = datasetType
@@ -89,16 +96,16 @@ class DatasetRef:
         return f"DatasetRef({self.datasetType}, {self.dataId}, id={self.id}, run={self.run})"
 
     @property
-    def id(self):
-        """Primary key of the dataset (`int`)
+    def id(self) -> Optional[int]:
+        """Primary key of the dataset (`int` or `None`)
 
         Typically assigned by `Registry`.
         """
         return self._id
 
     @property
-    def hash(self):
-        """Secure hash of the `DatasetType` name and `DataId` (`bytes`).
+    def hash(self) -> bytes:
+        """Secure hash of the `DatasetType` name and data ID (`bytes`).
         """
         if self._hash is None:
             message = hashlib.blake2b(digest_size=32)
@@ -108,21 +115,21 @@ class DatasetRef:
         return self._hash
 
     @property
-    def datasetType(self):
+    def datasetType(self) -> DatasetType:
         """The `DatasetType` associated with the Dataset the `DatasetRef`
         points to.
         """
         return self._datasetType
 
     @property
-    def dataId(self):
+    def dataId(self) -> DataCoordinate:
         """A mapping of `Dimension` primary key values that labels the Dataset
         within a Collection (`DataCoordinate`).
         """
         return self._dataId
 
     @property
-    def run(self):
+    def run(self) -> Optional[Run]:
         """The `~lsst.daf.butler.Run` instance that produced (or will produce)
         the Dataset.
 
@@ -132,7 +139,7 @@ class DatasetRef:
         return self._run
 
     @property
-    def components(self):
+    def components(self) -> Mapping[str, DatasetRef]:
         """Named `DatasetRef` components.
 
         Read-only; update via `Registry.attachComponent()`.
@@ -140,19 +147,19 @@ class DatasetRef:
         return _safeMakeMappingProxyType(self._components)
 
     @property
-    def dimensions(self):
+    def dimensions(self) -> DimensionGraph:
         """The dimensions associated with the underlying `DatasetType`
         """
         return self.datasetType.dimensions
 
-    def __str__(self):
+    def __str__(self) -> str:
         components = ""
         if self.components:
             components = ", components=[" + ", ".join(self.components) + "]"
         return "DatasetRef({}, id={}, dataId={} {})".format(self.datasetType.name,
                                                             self.id, self.dataId, components)
 
-    def detach(self):
+    def detach(self) -> DatasetRef:
         """Obtain a new DatasetRef that is detached from the registry.
 
         Its ``id`` property will be `None`.  This can be used for transfers
@@ -162,7 +169,7 @@ class DatasetRef:
         ref._id = None
         return ref
 
-    def isComponent(self):
+    def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetRef` refers to a
         component of a composite.
 
@@ -173,7 +180,7 @@ class DatasetRef:
         """
         return self.datasetType.isComponent()
 
-    def isComposite(self):
+    def isComposite(self) -> bool:
         """Boolean indicating whether this `DatasetRef` is a composite type.
 
         Returns
@@ -184,7 +191,7 @@ class DatasetRef:
         """
         return self.datasetType.isComposite()
 
-    def _lookupNames(self):
+    def _lookupNames(self) -> Tuple[LookupKey]:
         """Name keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
