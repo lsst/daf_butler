@@ -27,7 +27,6 @@ import hashlib
 from typing import Mapping, Optional, Tuple
 
 from types import MappingProxyType
-from ..utils import slotValuesAreEqual
 from ..dimensions import DataCoordinate, DimensionGraph
 from ..run import Run
 from ..configSupport import LookupKey
@@ -90,7 +89,8 @@ class DatasetRef:
         self._run = run
         self._hash = hash
 
-    __eq__ = slotValuesAreEqual
+    def __eq__(self, other: DatasetRef):
+        return (self._datasetType, self.dataId, self._id) == (other._datasetType, other._dataId, other._id)
 
     def __repr__(self):
         return f"DatasetRef({self.datasetType}, {self.dataId}, id={self.id}, run={self.run})"
