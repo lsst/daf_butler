@@ -749,8 +749,8 @@ class Butler:
         TypeError
             Raised if the set of arguments passed is inconsistent.
 
-        Example
-        -------
+        Examples
+        --------
         Typically the `Registry.queryDimensions` and `Registry.queryDatasets`
         methods are used to provide the iterables over data IDs and/or datasets
         to be exported::
