@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = ["DatasetRef"]
 
-from copy import deepcopy
 import hashlib
 from typing import Mapping, Optional, Tuple
 
@@ -65,9 +64,10 @@ class DatasetRef:
     conform : `bool`, optional
         If `True` (default), call `DataCoordinate.standardize` to ensure that
         the data ID's dimensions are consistent with the dataset type's.
-        `False` is only intended for backwards compatibility with old code that
-        uses incomplete references internal to `Datastore`, and should not be
-        used in new code.
+        `DatasetRef` instances for which those dimensions are not equal should
+        not be created in new code, but are still supported for backwards
+        compatibility.  New code should only pass `False` if it can guarantee
+        that the dimensions are already consistent.
     """
 
     __slots__ = ("_id", "_datasetType", "_dataId", "_run", "_hash", "_components")
@@ -77,6 +77,10 @@ class DatasetRef:
                  run: Optional[Run] = None, hash: Optional[bytes] = None,
                  components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True):
         assert isinstance(datasetType, DatasetType)
+        # TODO: it would be nice to guarantee that id and run should be either
+        # both None or not None together.  We can't easily do that yet because
+        # the Query infrastructure has a hard time obtaining Run objects, but
+        # that will change.
         self._id = id
         self._datasetType = datasetType
         if conform:
@@ -159,15 +163,51 @@ class DatasetRef:
         return "DatasetRef({}, id={}, dataId={} {})".format(self.datasetType.name,
                                                             self.id, self.dataId, components)
 
-    def detach(self) -> DatasetRef:
-        """Obtain a new DatasetRef that is detached from the registry.
+    def resolved(self, id: int, run: Run, components: Optional[Mapping[str, DatasetRef]] = None
+                 ) -> DatasetRef:
+        """Return a new `DatasetRef` with the same data ID and dataset type
+        and the given ID and run.
 
-        Its ``id`` property will be `None`.  This can be used for transfers
-        and similar operations.
+        Parameters
+        ----------
+        id : `int`
+            The unique integer identifier assigned when the dataset is created.
+        run : `Run`
+            The run this dataset was associated with when it was created.
+        components : `dict`, optional
+            A dictionary mapping component name to a `DatasetRef` for that
+            component.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A new `DatasetRef`.
         """
-        ref = deepcopy(self)
-        ref._id = None
-        return ref
+        newComponents = self._components.copy()
+        if components:
+            newComponents.update(components)
+        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId,
+                          id=id, run=run, hash=self._hash, components=newComponents, conform=False)
+
+    def unresolved(self) -> DatasetRef:
+        """Return a new `DatasetRef` with the same data ID and dataset type,
+        but no ID, run, or components.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A new `DatasetRef`.
+
+        Notes
+        -----
+        This can be used to compare only the data ID and dataset type of a
+        pair of `DatasetRef` instances, regardless of whether either is
+        resolved::
+
+            if ref1.unresolved() == ref2.unresolved():
+                ...
+        """
+        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, hash=self._hash, conform=False)
 
     def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetRef` refers to a

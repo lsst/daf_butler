@@ -22,7 +22,14 @@
 import unittest
 import pickle
 
-from lsst.daf.butler import DatasetType, DatasetRef, StorageClass, StorageClassFactory, DimensionUniverse
+from lsst.daf.butler import (
+    DatasetType,
+    DatasetRef,
+    DimensionUniverse,
+    Run,
+    StorageClass,
+    StorageClassFactory,
+)
 
 """Tests for datasets module.
 """
@@ -210,19 +217,23 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.dataId, dataId, msg=ref.dataId)
         self.assertEqual(ref.components, dict())
 
-    def testDetach(self):
+    def testResolving(self):
         datasetTypeName = "test"
         storageClass = StorageClass("testref_StructuredData")
         dimensions = self.universe.extract(("instrument", "visit"))
         dataId = dict(instrument="DummyCam", visit=42)
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        ref = DatasetRef(datasetType, dataId, id=1)
-        detachedRef = ref.detach()
+        ref = DatasetRef(datasetType, dataId, id=1, run=Run("somerun"))
+        unresolvedRef = ref.unresolved()
         self.assertIsNotNone(ref.id)
-        self.assertIsNone(detachedRef.id)
-        self.assertEqual(ref.datasetType, detachedRef.datasetType)
-        self.assertEqual(ref.dataId, detachedRef.dataId)
-        self.assertEqual(ref.components, detachedRef.components)
+        self.assertIsNone(unresolvedRef.id)
+        self.assertNotEqual(ref, unresolvedRef)
+        self.assertEqual(ref.unresolved(), unresolvedRef)
+        self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
+        self.assertEqual(ref.dataId, unresolvedRef.dataId)
+        reresolvedRef = unresolvedRef.resolved(id=1, run=Run("somerun"))
+        self.assertEqual(ref, reresolvedRef)
+        self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
 
 
 if __name__ == "__main__":

@@ -462,7 +462,7 @@ class SqlRegistry(Registry):
         # back if the subsequent call to associate raises, which is what we
         # want.
         datasetTable = self._schema.tables["dataset"]
-        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId, run=run)
+        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId)
         # TODO add producer
         row = {k.name: v for k, v in dataId.full.items()}
         row.update(
@@ -472,10 +472,11 @@ class SqlRegistry(Registry):
             quantum_id=None
         )
         result = self._connection.execute(datasetTable.insert(), row)
-        datasetRef._id = result.inserted_primary_key[0]
+        datasetId = result.inserted_primary_key[0]
         # If the result is reported as a list of a number, unpack the list
-        if isinstance(datasetRef._id, list):
-            datasetRef._id = datasetRef._id[0]
+        if isinstance(datasetId, list):
+            datasetId = datasetId[0]
+        datasetRef = datasetRef.resolved(id=datasetId, run=run)
 
         # A dataset is always initially associated with its Run collection.
         self.associate(run.collection, [datasetRef, ])
