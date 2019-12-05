@@ -26,7 +26,7 @@ import hashlib
 from typing import Any, Dict, Mapping, Optional, Tuple
 
 from types import MappingProxyType
-from ..dimensions import DataCoordinate, DimensionGraph
+from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
 from ..run import Run
 from ..configSupport import LookupKey
 from ..utils import immutable
@@ -185,6 +185,25 @@ class DatasetRef:
                 ...
         """
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, hash=self.hash, conform=False)
+
+    def expanded(self, dataId: ExpandedDataCoordinate) -> DatasetRef:
+        """Return a new `DatasetRef` with the given expanded data ID.
+
+        Parameters
+        ----------
+        dataId : `ExpandedDataCoordinate`
+            Data ID for the new `DatasetRef`.  Must compare equal to the
+            original data ID.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A new `DatasetRef` with the given data ID.
+        """
+        assert dataId == self.dataId
+        return DatasetRef(datasetType=self.datasetType, dataId=dataId,
+                          id=self.id, run=self.run, hash=self.hash, components=self.components,
+                          conform=False)
 
     def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetRef` refers to a

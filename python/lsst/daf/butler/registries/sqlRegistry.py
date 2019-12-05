@@ -929,8 +929,7 @@ class SqlRegistry(Registry):
             if expand:
                 for ref in bestRefs.values():
                     dataId = self.expandDataId(ref.dataId, records=standardizedDataId.records)
-                    ref._dataId = dataId  # TODO: add semi-public API for this?
-                    yield ref
+                    yield ref.expanded(dataId)
             else:
                 yield from bestRefs.values()
 
