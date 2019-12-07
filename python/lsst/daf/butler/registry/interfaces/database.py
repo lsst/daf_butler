@@ -32,6 +32,7 @@ from contextlib import contextmanager
 from typing import (
     Any,
     Dict,
+    List,
     Optional,
     Tuple,
 )
@@ -560,6 +561,81 @@ class Database(ABC):
                     table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
                 return table
         return table
+
+    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
+               ) -> Optional[List[int]]:
+        """Insert one or more rows into a table, optionally returning
+        autoincrement primary key values.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table rows should be inserted into.
+        returnIds: `bool`
+            If `True` (`False` is default), return the values of the table's
+            autoincrement primary key field (which much exist).
+        rows
+            Positional arguments are the rows to be inserted, as dictionaries
+            mapping column name to value.  The keys in all dictionaries must
+            be the same.
+
+        Returns
+        -------
+        ids : `None`, or `list` of `int`
+            If ``returnIds`` is `True`, a `list` containing the inserted
+            values for the table's autoincrement primary key.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
+        Notes
+        -----
+        The default implementation uses bulk insert syntax when ``returnIds``
+        is `False`, and a loop over single-row insert operations when it is
+        `True`.
+
+        Derived classes should reimplement when they can provide a more
+        efficient implementation (especially for the latter case).
+
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+        """
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
+        if not returnIds:
+            self._connection.execute(table.insert(), *rows)
+        else:
+            sql = table.insert()
+            return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
+
+    def query(self, sql: sqlalchemy.sql.FromClause, *args, **kwds) -> sqlalchemy.engine.ResultProxy:
+        """Run a SELECT query against the database.
+
+        Parameters
+        ----------
+        sql : `sqlalchemy.sql.FromClause`
+            A SQLAlchemy representation of a ``SELECT`` query.
+        args
+            Additional positional arguments are forwarded to
+            `sqlalchemy.engine.Connection.execute`.
+        kwds
+            Additional keyword arguments are forwarded to
+            `sqlalchemy.engine.Connection.execute`.
+
+        Returns
+        -------
+        result : `sqlalchemy.engine.ResultProxy`
+            Query results.
+
+        Notes
+        -----
+        The default implementation should be sufficient for most derived
+        classes.
+        """
+        # TODO: should we guard against non-SELECT queries here?
+        return self._connection.execute(sql, *args, **kwds)
 
     origin: int
     """An integer ID that should be used as the default for any datasets,
