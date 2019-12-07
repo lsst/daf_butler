@@ -32,6 +32,7 @@ from contextlib import contextmanager
 from typing import (
     Any,
     Dict,
+    Iterable,
     List,
     Optional,
     Tuple,
@@ -609,6 +610,48 @@ class Database(ABC):
         else:
             sql = table.insert()
             return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
+
+    def delete(self, table: sqlalchemy.schema.Table, columns: Iterable[str], *rows: dict) -> int:
+        """Delete one or more rows from a table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table that rows should be deleted from.
+        columns: `~collections.abc.Iterable` of `str`
+            The names of columns that will be used to constrain the rows to
+            be deleted; these will be combined via ``AND`` to form the
+            ``WHERE`` clause of the delete query.
+        rows
+            Positional arguments are the keys of rows to be deleted, as
+            dictionaries mapping column name to value.  The keys in all
+            dictionaries must exactly the names in ``columns``.
+
+        Returns
+        -------
+        count : `int`
+            Number of rows deleted.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
+        Notes
+        -----
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+
+        The default implementation should be sufficient for most derived
+        classes.
+        """
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to delete from read-only database '{self}'.")
+        sql = table.delete()
+        whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
+        if whereTerms:
+            sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
+        return self._connection.execute(sql, *rows).rowcount
 
     def query(self, sql: sqlalchemy.sql.FromClause, *args, **kwds) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
