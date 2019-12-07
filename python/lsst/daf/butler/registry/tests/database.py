@@ -282,3 +282,21 @@ class DatabaseTests(ABC):
         self.assertEqual(n, 1)
         self.assertEqual(db.query(count.select_from(tables.a)).scalar(), 0)
         self.assertEqual(db.query(count.select_from(d)).scalar(), 0)
+
+    def testUpdate(self):
+        """Tests for `Database.update`.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Insert two rows into table a, both without regions.
+        db.insert(tables.a, {"name": "a1"}, {"name": "a2"})
+        # Update one of the rows with a region.
+        region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
+        n = db.update(tables.a, {"name": "k"}, {"k": "a2", "region": region})
+        self.assertEqual(n, 1)
+        sql = sqlalchemy.sql.select([tables.a.columns.name, tables.a.columns.region]).select_from(tables.a)
+        self.assertCountEqual(
+            [dict(r) for r in db.query(sql).fetchall()],
+            [{"name": "a1", "region": None}, {"name": "a2", "region": region}]
+        )

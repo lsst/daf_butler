@@ -653,6 +653,50 @@ class Database(ABC):
             sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
         return self._connection.execute(sql, *rows).rowcount
 
+    def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
+        """Update one or more rows in a table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table containing the rows to be updated.
+        where : `dict` [`str`, `str`]
+            A mapping from the names of columns that will be used to search for
+            existing rows to the keys that will hold these values in the
+            ``rows`` dictionaries.  Note that these may not be the same due to
+            SQLAlchemy limitations.
+        rows
+            Positional arguments are the rows to be updated.  The keys in all
+            dictionaries must be the same, and may correspond to either a
+            value in the ``where`` dictionary or the name of a column to be
+            updated.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
+        Returns
+        -------
+        count : `int`
+            Number of rows matched (regardless of whether the update actually
+            modified them).
+
+        Notes
+        -----
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+
+        The default implementation should be sufficient for most derived
+        classes.
+        """
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to update read-only database '{self}'.")
+        sql = table.update().where(
+            sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
+        )
+        return self._connection.execute(sql, *rows).rowcount
+
     def query(self, sql: sqlalchemy.sql.FromClause, *args, **kwds) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
 
