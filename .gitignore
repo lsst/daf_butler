@@ -16,3 +16,4 @@ bin/*
 .pytest_cache/
 .mypy_cache/
 .idea/
+.vscode/

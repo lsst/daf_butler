@@ -388,13 +388,13 @@ class ButlerTests:
         # Remove the file created in setUp
         os.unlink(self.tmpConfigFile)
 
-        Butler.makeRepo(self.root, config=Config(self.configFile))
+        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile))
         limited = Config(self.configFile)
-        butler1 = Butler(self.root, collection="ingest")
-        Butler.makeRepo(self.root, standalone=True, createRegistry=False,
-                        config=Config(self.configFile))
+        butler1 = Butler(butlerConfig, collection="ingest")
+        butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
+                                       config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
-        butler2 = Butler(self.root, collection="ingest")
+        butler2 = Butler(butlerConfig, collection="ingest")
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
         self.assertEqual(butler1.config, butler2.config)
@@ -409,6 +409,12 @@ class ButlerTests:
         collections1 = butler1.registry.getAllCollections()
         self.assertEqual(collections1, set())
         self.assertEqual(butler2.registry.getAllCollections(), collections1)
+
+        # Check that a config with no associated file name will not
+        # work properly with relocatable Butler repo
+        butlerConfig.configFile = None
+        with self.assertRaises(ValueError):
+            Butler(butlerConfig, collection="ingest")
 
     def testStringification(self):
         butler = Butler(self.tmpConfigFile)
@@ -449,9 +455,9 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
                                                                 "abstract_filter": "R"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "423",
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423, "name": "v423",
                                                       "physical_filter": "d-r"})
-        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "425",
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 425, "name": "v425",
                                                       "physical_filter": "d-r"})
 
         # Create and store a dataset
@@ -482,7 +488,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # must be consistent).
         ref = butler.put(metric, "metric2", dataId2)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
-                                             "ingest/metric2/d-r/DummyCamComp_423.pickle"))
+                                             "ingest/metric2/d-r/DummyCamComp_v423.pickle"))
 
         # Check the template based on dimensions
         butler.datastore.templates.validateTemplates([ref])
