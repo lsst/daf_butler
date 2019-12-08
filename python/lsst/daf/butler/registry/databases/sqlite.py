@@ -23,12 +23,14 @@ from __future__ import annotations
 __all__ = ["SqliteDatabase"]
 
 from contextlib import closing
+import copy
 from typing import Optional
 
 import sqlite3
 import sqlalchemy
 
 from ..interfaces import Database
+from .. import ddl
 
 
 def _onSqlite3Connect(dbapiConnection, connectionRecord):
@@ -89,6 +91,21 @@ class SqliteDatabase(Database):
 
     def __str__(self) -> str:
         return f"SQLite3@{self.filename}"
+
+    def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
+                          **kwds) -> sqlalchemy.schema.Column:
+        if spec.autoincrement:
+            if not spec.primaryKey:
+                raise RuntimeError(f"Autoincrement field {table}.{spec.name} that is not a "
+                                   f"primary key is not supported.")
+            if spec.dtype != sqlalchemy.Integer:
+                # SQLite's autoincrement is really limited; it only works if
+                # the column type is exactly "INTEGER".  But it also doesn't
+                # care about the distinctions between different integer types,
+                # so it's safe to change it.
+                spec = copy.copy(spec)
+                spec.dtype = sqlalchemy.Integer
+        return super()._convertFieldSpec(table, spec, metadata, **kwds)
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).
