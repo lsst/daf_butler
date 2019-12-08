@@ -28,6 +28,7 @@ from typing import ContextManager
 
 import sqlalchemy
 
+from lsst.sphgeom import ConvexPolygon, UnitVector3d
 from ..interfaces import (
     Database,
     ReadOnlyDatabaseError,
@@ -201,3 +202,83 @@ class DatabaseTests(ABC):
             # notice if db1 and db2 are pointing at the same schema.
             table = context.addTable("a", spec)
         self.checkTable(spec, table)
+
+    def testInsertQueryDelete(self):
+        """Test the `Database.insert`, `Database.query`, and `Database.delete`
+        methods, as well as the `Base64Region` type and the ``onDelete``
+        argument to `ddl.ForeignKeySpec`.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Insert a single, non-autoincrement row that contains a region and
+        # query to get it back.
+        region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
+        row = {"name": "a1", "region": region}
+        db.insert(tables.a, row)
+        self.assertEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row])
+        # Insert multiple autoincrement rows but do not try to get the IDs
+        # back immediately.
+        db.insert(tables.b, {"name": "b1", "value": 10}, {"name": "b2", "value": 20})
+        results = [dict(r) for r in db.query(tables.b.select().order_by("id")).fetchall()]
+        self.assertEqual(len(results), 2)
+        for row in results:
+            self.assertIn(row["name"], ("b1", "b2"))
+            self.assertIsInstance(row["id"], int)
+        self.assertGreater(results[1]["id"], results[0]["id"])
+        # Insert multiple autoincrement rows and get the IDs back from insert.
+        rows = [{"name": "b3", "value": 30}, {"name": "b4", "value": 40}]
+        ids = db.insert(tables.b, *rows, returnIds=True)
+        results = [
+            dict(r) for r in db.query(
+                tables.b.select().where(tables.b.columns.id > results[1]["id"])
+            ).fetchall()
+        ]
+        expected = [dict(row, id=id) for row, id in zip(rows, ids)]
+        self.assertCountEqual(results, expected)
+        self.assertTrue(all(result["id"] is not None for result in results))
+        # Insert multiple rows into a table with an autoincrement+origin
+        # primary key, then use the returned IDs to insert into a dynamic
+        # table.
+        rows = [{"origin": db.origin, "b_id": results[0]["id"]},
+                {"origin": db.origin, "b_id": None}]
+        ids = db.insert(tables.c, *rows, returnIds=True)
+        results = [dict(r) for r in db.query(tables.c.select()).fetchall()]
+        expected = [dict(row, id=id) for row, id in zip(rows, ids)]
+        self.assertCountEqual(results, expected)
+        self.assertTrue(all(result["id"] is not None for result in results))
+        # Add the dynamic table.
+        d = db.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
+        # Insert into it.
+        rows = [{"c_origin": db.origin, "c_id": id, "a_name": "a1"} for id in ids]
+        db.insert(d, *rows)
+        results = [dict(r) for r in db.query(d.select()).fetchall()]
+        self.assertCountEqual(rows, results)
+
+        # Define 'SELECT COUNT(*)' query for later use.
+        count = sqlalchemy.sql.select([sqlalchemy.sql.func.count()])
+        # Get the values we inserted into table b.
+        bValues = [dict(r) for r in db.query(tables.b.select()).fetchall()]
+        # Remove two row from table b by ID.
+        n = db.delete(tables.b, ["id"], {"id": bValues[0]["id"]}, {"id": bValues[1]["id"]})
+        self.assertEqual(n, 2)
+        # Remove the other two rows from table b by name.
+        n = db.delete(tables.b, ["name"], {"name": bValues[2]["name"]}, {"name": bValues[3]["name"]})
+        self.assertEqual(n, 2)
+        # There should now be no rows in table b.
+        self.assertEqual(
+            db.query(count.select_from(tables.b)).scalar(),
+            0
+        )
+        # All b_id values in table c should now be NULL, because there's an
+        # onDelete='SET NULL' foreign key.
+        self.assertEqual(
+            db.query(count.select_from(tables.c).where(tables.c.columns.b_id != None)).scalar(),  # noqa:E711
+            0
+        )
+        # Remove all rows in table a (there's only one); this should remove all
+        # rows in d due to onDelete='CASCADE'.
+        n = db.delete(tables.a, [])
+        self.assertEqual(n, 1)
+        self.assertEqual(db.query(count.select_from(tables.a)).scalar(), 0)
+        self.assertEqual(db.query(count.select_from(d)).scalar(), 0)
