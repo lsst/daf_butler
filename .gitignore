@@ -15,4 +15,5 @@ bin/*
 .coverage
 .pytest_cache/
 .mypy_cache/
+.idea/
 .vscode/

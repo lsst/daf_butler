@@ -32,7 +32,7 @@ from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import select, and_, union
 from sqlalchemy.exc import IntegrityError, SADeprecationWarning
 
-from ..core.utils import transactional, NamedKeyDict
+from ..core.utils import transactional, NamedKeyDict, iterable
 
 from ..core.datasets import DatasetType, DatasetRef
 from ..core.registryConfig import RegistryConfig
@@ -825,13 +825,14 @@ class SqlRegistry(Registry):
                             dimensionStorage=self._dimensionStorage,
                             datasetStorage=self._datasetStorage)
 
-    def queryDimensions(self, dimensions: Iterable[Union[Dimension, str]], *,
+    def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
                         datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
                         where: Optional[str] = None,
                         expand: bool = True,
                         **kwds) -> Iterator[DataCoordinate]:
-        # Docstring inherited from Registry.queryDimensions.
+        # Docstring inherited from Registry.queryDimensions
+        dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwds)
         standardizedDatasets = NamedKeyDict()
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
