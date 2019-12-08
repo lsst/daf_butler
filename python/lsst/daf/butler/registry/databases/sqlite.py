@@ -24,7 +24,8 @@ __all__ = ["SqliteDatabase"]
 
 from contextlib import closing
 import copy
-from typing import Optional
+from typing import List, Optional
+from dataclasses import dataclass
 
 import sqlite3
 import sqlalchemy
@@ -51,6 +52,28 @@ def _onSqlite3Begin(connection):
     # deadlocks).
     connection.execute("BEGIN IMMEDIATE")
     return connection
+
+
+_AUTOINCR_TABLE_SPEC = ddl.TableSpec(
+    fields=[ddl.FieldSpec(name="id", dtype=sqlalchemy.Integer, primaryKey=True)]
+)
+
+
+@dataclass
+class _AutoincrementWorkaround:
+    """A workaround for SQLite's lack of support for compound primary keys that
+    include an autoincrment field.
+    """
+
+    table: sqlalchemy.schema.Table
+    """A single-column internal table that can be inserted into to yield
+    autoincrement values (`sqlalchemy.schema.Table`).
+    """
+
+    column: str
+    """The name of the column in the original table that needs to be populated
+    with values from the internal table (`str`).
+    """
 
 
 class SqliteDatabase(Database):
@@ -85,6 +108,7 @@ class SqliteDatabase(Database):
         super().__init__(origin=origin, engine=engine)
         self._writeable = writeable
         self.filename = filename
+        self._autoincr = {}
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -106,6 +130,50 @@ class SqliteDatabase(Database):
                 spec = copy.copy(spec)
                 spec.dtype = sqlalchemy.Integer
         return super()._convertFieldSpec(table, spec, metadata, **kwds)
+
+    def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
+                          **kwds) -> sqlalchemy.schema.Table:
+        primaryKeyFieldNames = set(field.name for field in spec.fields if field.primaryKey)
+        autoincrFieldNames = set(field.name for field in spec.fields if field.autoincrement)
+        if len(autoincrFieldNames) > 1:
+            raise RuntimeError("At most one autoincrement field per table is allowed.")
+        if len(primaryKeyFieldNames) > 1 and len(autoincrFieldNames) > 0:
+            # SQLite's default rowid-based autoincrement doesn't work if the
+            # field is just one field in a compound primary key.
+            # As a workaround, we create an extra table with just one column
+            # that we'll insert into to generate those IDs.
+            autoincrFieldName, = autoincrFieldNames
+            self._autoincr[name] = _AutoincrementWorkaround(
+                table=self._convertTableSpec(f"_autoinc_{name}", _AUTOINCR_TABLE_SPEC, metadata, **kwds),
+                column=autoincrFieldName
+            )
+        return super()._convertTableSpec(name, spec, metadata, **kwds)
+
+    def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
+               ) -> Optional[List[int]]:
+        autoincr = self._autoincr.get(table.name)
+        if autoincr is not None:
+            # This table has a compound primary key that includes an
+            # autoincrement.  That doesn't work natively in SQLite, so we
+            # insert into this single-column table and use those IDs.
+            if not rows:
+                return [] if returnIds else None
+            with self.transaction():
+                newRows = []
+                ids = []
+                for row in rows:
+                    newRow = row.copy()
+                    id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
+                    newRow[autoincr.column] = id
+                    newRows.append(newRow)
+                    ids.append(id)
+                super().insert(table, *newRows)
+            if returnIds:
+                return ids
+            else:
+                return None
+        else:
+            return super().insert(table, *rows, returnIds=returnIds)
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).
