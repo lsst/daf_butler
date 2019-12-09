@@ -215,13 +215,15 @@ class DatasetRefTestCase(unittest.TestCase):
         ref = DatasetRef(self.datasetType, self.dataId)
         self.assertEqual(ref.datasetType, self.datasetType)
         self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
-        self.assertEqual(ref.components, dict())
+        self.assertIsNone(ref.components)
 
     def testResolving(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
         unresolvedRef = ref.unresolved()
         self.assertIsNotNone(ref.id)
         self.assertIsNone(unresolvedRef.id)
+        self.assertIsNone(unresolvedRef.run)
+        self.assertIsNone(unresolvedRef.components)
         self.assertNotEqual(ref, unresolvedRef)
         self.assertEqual(ref.unresolved(), unresolvedRef)
         self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
@@ -229,6 +231,8 @@ class DatasetRefTestCase(unittest.TestCase):
         reresolvedRef = unresolvedRef.resolved(id=1, run=Run("somerun"))
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
+        self.assertIsNotNone(reresolvedRef.run)
+        self.assertIsNotNone(reresolvedRef.components)
 
     def testPickle(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))

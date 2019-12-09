@@ -56,7 +56,8 @@ class DatasetRef:
         ID.
     components : `dict`, optional
         A dictionary mapping component name to a `DatasetRef` for that
-        component.
+        component.  Should not be passed unless ``id`` is also provided (i.e.
+        if this is a "resolved" reference).
     conform : `bool`, optional
         If `True` (default), call `DataCoordinate.standardize` to ensure that
         the data ID's dimensions are consistent with the dataset type's.
@@ -64,6 +65,12 @@ class DatasetRef:
         not be created in new code, but are still supported for backwards
         compatibility.  New code should only pass `False` if it can guarantee
         that the dimensions are already consistent.
+
+    Raises
+    ------
+    ValueError
+        Raised if ``run`` or ``components`` is provided but ``id`` is not, or
+        if a component dataset is inconsistent with the storage class.
     """
 
     __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components")
@@ -74,20 +81,43 @@ class DatasetRef:
                 components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True) -> DatasetRef:
         self = super().__new__(cls)
         assert isinstance(datasetType, DatasetType)
-        # TODO: it would be nice to guarantee that id and run should be either
-        # both None or not None together.  We can't easily do that yet because
-        # the Query infrastructure has a hard time obtaining Run objects, but
-        # that will change.
         self.id = id
         self.datasetType = datasetType
         if conform:
             self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:
             self.dataId = dataId
-        self._components = dict()
-        if components is not None:
-            self._components.update(components)
-        self.run = run
+        if self.id is not None:
+            self._components = dict()
+            if components is not None:
+                self._components.update(components)
+                for k, v in self._components.items():
+                    expectedStorageClass = self.datasetType.storageClass.components.get(k)
+                    if expectedStorageClass is None:
+                        raise ValueError(f"{k} is not a valid component for "
+                                         f"storage class {self.datasetType.storageClass.name}.")
+                    if not isinstance(v, DatasetRef):
+                        # It's easy to accidentally pass DatasetType or
+                        # StorageClass; make that error message friendly.
+                        raise ValueError(f"Component {k}={v} is not a DatasetRef.")
+                    if v.id is None:
+                        raise ValueError(f"DatasetRef components must be resolved ({k}={v} isn't).")
+                    if expectedStorageClass != v.datasetType.storageClass:
+                        raise ValueError(f"Storage class mismatch for component {k}: "
+                                         f"{v.datasetType.storageClass.name} != {expectedStorageClass.name}")
+            # TODO: it would be nice to guarantee that id and run should be
+            # either both None or not None together.  We can't easily do that
+            # yet because the Query infrastructure has a hard time obtaining
+            # Run objects, so we allow run to be `None` here, but that will
+            # change.
+            self.run = run
+        else:
+            self._components = None
+            if components:
+                raise ValueError("'components' cannot be provided unless 'id' is.")
+            if run is not None:
+                raise ValueError("'run' cannot be provided unless 'id' is.")
+            self.run = None
         if hash is not None:
             # We only set self._hash if we know it; this plays nicely with
             # the @immutable decorator, which allows an attribute to be set
@@ -96,7 +126,10 @@ class DatasetRef:
         return self
 
     def __eq__(self, other: DatasetRef):
-        return (self.datasetType, self.dataId, self.id) == (other.datasetType, other.dataId, other.id)
+        try:
+            return (self.datasetType, self.dataId, self.id) == (other.datasetType, other.dataId, other.id)
+        except AttributeError:
+            return NotImplemented
 
     def __hash__(self) -> int:
         return hash(self.datasetType, self.dataId, self.id)
@@ -116,11 +149,16 @@ class DatasetRef:
         return self._hash
 
     @property
-    def components(self) -> Mapping[str, DatasetRef]:
-        """Named `DatasetRef` components.
+    def components(self) -> Optional[Mapping[str, DatasetRef]]:
+        """Named `DatasetRef` components (`~collections.abc.Mapping` or
+        `None`).
 
-        Read-only (but not immutable); update via `Registry.attachComponent()`.
+        For resolved `DatasetRef` instances, this is a read-only mapping that
+        can be updated in-place via `Registry.attachComponent()`.  For
+        unresolved instances, this is always `None`.
         """
+        if self._components is None:
+            return None
         return MappingProxyType(self._components)
 
     @property
@@ -153,14 +191,19 @@ class DatasetRef:
             The run this dataset was associated with when it was created.
         components : `dict`, optional
             A dictionary mapping component name to a `DatasetRef` for that
-            component.
+            component.  If ``self`` is already a resolved `DatasetRef`,
+            its components will be merged with this dictionary, with this
+            dictionary taking precedence.
 
         Returns
         -------
         ref : `DatasetRef`
             A new `DatasetRef`.
         """
-        newComponents = self._components.copy()
+        if self._components is not None:
+            newComponents = self._components.copy()
+        else:
+            newComponents = {}
         if components:
             newComponents.update(components)
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId,
