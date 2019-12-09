@@ -402,7 +402,7 @@ class FormatterFactory:
         return formatter
 
     def registerFormatter(self, type_: Union[LookupKey, str, StorageClass, DatasetType],
-                          formatter: str) -> None:
+                          formatter: str, overwrite: bool = False) -> None:
         """Register a `Formatter`.
 
         Parameters
@@ -411,13 +411,17 @@ class FormatterFactory:
             Type for which this formatter is to be used.  If a `LookupKey`
             is not provided, one will be constructed from the supplied string
             or by using the ``name`` property of the supplied entity.
-        formatter : `str`
+        formatter : `str` or class of type `Formatter`
             Identifies a `Formatter` subclass to use for reading and writing
-            Datasets of this type.
+            Datasets of this type.  Can be a `Formatter` class.
+        overwrite : `bool`, optional
+            If `True` an existing entry will be replaced by the new value.
+            Default is `False`.
 
         Raises
         ------
         ValueError
-            Raised if the formatter does not name a valid formatter type.
+            Raised if the formatter does not name a valid formatter type and
+            ``overwrite`` is `False`.
         """
-        self._mappingFactory.placeInRegistry(type_, formatter)
+        self._mappingFactory.placeInRegistry(type_, formatter, overwrite=overwrite)

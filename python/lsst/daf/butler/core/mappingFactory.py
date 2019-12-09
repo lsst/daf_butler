@@ -200,7 +200,7 @@ class MappingFactory:
         _, instance = self.getFromRegistryWithMatch(targetClasses, *args, **kwargs)
         return instance
 
-    def placeInRegistry(self, registryKey, typeName):
+    def placeInRegistry(self, registryKey, typeName, overwrite=False):
         """Register a class name with the associated type.
 
         Parameters
@@ -209,14 +209,19 @@ class MappingFactory:
             Item to associate with the provided type.
         typeName : `str` or Python type
             Identifies a class to associate with the provided key.
+        overwrite : `bool`, optional
+            If `True`, an existing entry will be overwritten.  This option
+            is expected to be used to simplify test suites.
+            Default is `False`.
 
         Raises
         ------
         KeyError
-            Raised if item is already registered and has different value.
+            Raised if item is already registered and has different value and
+            ``overwrite`` is `False`.
         """
         key = self._getNameKey(registryKey)
-        if key in self._registry:
+        if key in self._registry and not overwrite:
             # Compare the class strings since dynamic classes can be the
             # same thing but be different.
             if str(self._registry[key]) == str(typeName):
