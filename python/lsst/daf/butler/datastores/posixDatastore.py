@@ -176,8 +176,10 @@ class PosixDatastore(FileLikeDatastore):
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
-            with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
-                safeMakeDir(storageDir)
+            # Never try to remove this after creating it since there might
+            # be a butler ingest process running concurrently that will
+            # already think this directory exists.
+            safeMakeDir(storageDir)
 
         # Write the file
         predictedFullPath = os.path.join(self.root, formatter.predictPath())
