@@ -27,6 +27,7 @@ from typing import Optional
 import sqlalchemy
 
 from ..interfaces import Database, ReadOnlyDatabaseError
+from ..nameShrinker import NameShrinker
 
 
 class PostgresqlDatabase(Database):
@@ -73,12 +74,19 @@ class PostgresqlDatabase(Database):
             dbapi.set_session(readonly=True)
         self.dbname = dsn["dbname"]
         self._writeable = writeable
+        self._shrinker = NameShrinker(engine.dialect.max_identifier_length)
 
     def isWriteable(self) -> bool:
         return self._writeable
 
     def __str__(self) -> str:
         return f"PostgreSQL@{self.dbname}:{self.namespace}"
+
+    def shrinkDatabaseEntityName(self, original: str) -> str:
+        return self._shrinker.shrink(original)
+
+    def expandDatabaseEntityName(self, shrunk: str) -> str:
+        return self._shrinker.expand(shrunk)
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
         if not self.isWriteable():

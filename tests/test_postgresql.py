@@ -32,7 +32,10 @@ try:
 except ImportError:
     testing = None
 
+import sqlalchemy
+
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase
+from lsst.daf.butler.registry import ddl
 from lsst.daf.butler.registry.tests import DatabaseTests
 
 
@@ -58,6 +61,63 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
     @contextmanager
     def asReadOnly(self, database: PostgresqlDatabase) -> PostgresqlDatabase:
         yield self.getNewConnection(database, writeable=False)
+
+    def testNameShrinking(self):
+        """Test that too-long names for database entities other than tables
+        and columns (which we preserve, and just expect to fit) are shrunk.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            # Table and field names are each below the 63-char limit even when
+            # accounting for the prefix, but their combination (which will
+            # appear in sequences and constraints) is not.
+            tableName = "a_table_with_a_very_very_long_42_char_name"
+            fieldName1 = "a_column_with_a_very_very_long_43_char_name"
+            fieldName2 = "another_column_with_a_very_very_long_49_char_name"
+            context.addTable(
+                tableName,
+                ddl.TableSpec(
+                    fields=[
+                        ddl.FieldSpec(
+                            fieldName1,
+                            dtype=sqlalchemy.BigInteger,
+                            autoincrement=True,
+                            primaryKey=True
+                        ),
+                        ddl.FieldSpec(
+                            fieldName2,
+                            dtype=sqlalchemy.String,
+                            length=16,
+                            nullable=False,
+                        ),
+                    ],
+                    unique={(fieldName2,)},
+                )
+            )
+        # Add another table, this time dynamically, with a foreign key to the
+        # first table.
+        db.ensureTableExists(
+            tableName + "_b",
+            ddl.TableSpec(
+                fields=[
+                    ddl.FieldSpec(
+                        fieldName1 + "_b",
+                        dtype=sqlalchemy.BigInteger,
+                        autoincrement=True,
+                        primaryKey=True
+                    ),
+                    ddl.FieldSpec(
+                        fieldName2 + "_b",
+                        dtype=sqlalchemy.String,
+                        length=16,
+                        nullable=False,
+                    ),
+                ],
+                foreignKeys=[
+                    ddl.ForeignKeySpec(tableName, source=(fieldName2 + "_b",), target=(fieldName2,)),
+                ]
+            )
+        )
 
 
 if __name__ == "__main__":
