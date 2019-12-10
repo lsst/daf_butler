@@ -22,7 +22,15 @@
 import unittest
 import pickle
 
-from lsst.daf.butler import DatasetType, DatasetRef, StorageClass, StorageClassFactory, DimensionUniverse
+from lsst.daf.butler import (
+    DataCoordinate,
+    DatasetType,
+    DatasetRef,
+    DimensionUniverse,
+    Run,
+    StorageClass,
+    StorageClassFactory,
+)
 
 """Tests for datasets module.
 """
@@ -196,38 +204,80 @@ class DatasetRefTestCase(unittest.TestCase):
 
     def setUp(self):
         self.universe = DimensionUniverse()
+        datasetTypeName = "test"
+        self.componentStorageClass1 = StorageClass("Component1")
+        self.componentStorageClass2 = StorageClass("Component2")
+        self.parentStorageClass = StorageClass("Parent", components={"a": self.componentStorageClass1,
+                                                                     "b": self.componentStorageClass2})
+        dimensions = self.universe.extract(("instrument", "visit"))
+        self.dataId = dict(instrument="DummyCam", visit=42)
+        self.datasetType = DatasetType(datasetTypeName, dimensions, self.parentStorageClass)
 
     def testConstructor(self):
-        """Test construction preserves values.
+        """Test that construction preserves and validates values.
         """
-        datasetTypeName = "test"
-        storageClass = StorageClass("testref_StructuredData")
-        dimensions = self.universe.extract(("instrument", "visit"))
-        dataId = dict(instrument="DummyCam", visit=42)
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        ref = DatasetRef(datasetType, dataId)
-        self.assertEqual(ref.datasetType, datasetType)
-        self.assertEqual(ref.dataId, dataId, msg=ref.dataId)
-        self.assertIsNone(ref.producer)
-        self.assertEqual(ref.predictedConsumers, dict())
-        self.assertEqual(ref.actualConsumers, dict())
-        self.assertEqual(ref.components, dict())
+        # Construct an unresolved ref.
+        ref = DatasetRef(self.datasetType, self.dataId)
+        self.assertEqual(ref.datasetType, self.datasetType)
+        self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
+        self.assertIsInstance(ref.dataId, DataCoordinate)
+        self.assertIsNone(ref.components)
+        # Constructing an unresolved ref with run and/or components should
+        # fail.
+        run = Run("somerun")
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, run=run)
+        components = {
+            "a": DatasetRef(self.datasetType.makeComponentDatasetType("a"), self.dataId, id=2, run=run)
+        }
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, components=components)
+        # Passing a data ID that is missing dimensions should fail.
+        with self.assertRaises(KeyError):
+            DatasetRef(self.datasetType, {"instrument": "DummyCam"})
+        # Constructing a resolved ref should preserve run and components,
+        # as well as everything else.
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run, components=components)
+        self.assertEqual(ref.datasetType, self.datasetType)
+        self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
+        self.assertIsInstance(ref.dataId, DataCoordinate)
+        self.assertEqual(ref.id, 1)
+        self.assertEqual(ref.run, run)
+        self.assertEqual(ref.components, components)
+        # Constructing a resolved ref with bad component storage classes
+        # should fail.
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, id=1, run=run, components={"b": components["a"]})
+        # Constructing a resolved ref with unresolved components should fail.
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, id=1, run=run,
+                       components={"a": components["a"].unresolved()})
+        # Constructing a resolved ref with bad component names should fail.
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, id=1, run=run,
+                       components={"c": components["a"]})
 
-    def testDetach(self):
-        datasetTypeName = "test"
-        storageClass = StorageClass("testref_StructuredData")
-        dimensions = self.universe.extract(("instrument", "visit"))
-        dataId = dict(instrument="DummyCam", visit=42)
-        datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
-        ref = DatasetRef(datasetType, dataId, id=1)
-        detachedRef = ref.detach()
+    def testResolving(self):
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
+        unresolvedRef = ref.unresolved()
         self.assertIsNotNone(ref.id)
-        self.assertIsNone(detachedRef.id)
-        self.assertEqual(ref.datasetType, detachedRef.datasetType)
-        self.assertEqual(ref.dataId, detachedRef.dataId)
-        self.assertEqual(ref.predictedConsumers, detachedRef.predictedConsumers)
-        self.assertEqual(ref.actualConsumers, detachedRef.actualConsumers)
-        self.assertEqual(ref.components, detachedRef.components)
+        self.assertIsNone(unresolvedRef.id)
+        self.assertIsNone(unresolvedRef.run)
+        self.assertIsNone(unresolvedRef.components)
+        self.assertNotEqual(ref, unresolvedRef)
+        self.assertEqual(ref.unresolved(), unresolvedRef)
+        self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
+        self.assertEqual(ref.dataId, unresolvedRef.dataId)
+        reresolvedRef = unresolvedRef.resolved(id=1, run=Run("somerun"))
+        self.assertEqual(ref, reresolvedRef)
+        self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
+        self.assertIsNotNone(reresolvedRef.run)
+        self.assertIsNotNone(reresolvedRef.components)
+
+    def testPickle(self):
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
+        s = pickle.dumps(ref)
+        self.assertEqual(pickle.loads(s), ref)
 
 
 if __name__ == "__main__":
