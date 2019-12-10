@@ -238,6 +238,11 @@ class S3Datastore(FileLikeDatastore):
                                         Filename=tmpFile.name)
                 log.debug("Wrote file to %s via a temporary directory.", location.uri)
 
+        # Register a callback to try to delete the uploaded data if
+        # the ingest fails below
+        self._transaction.registerUndo("write", self.client.delete_object,
+                                       Bucket=location.netloc, Key=location.relativeToPathRoot)
+
         # URI is needed to resolve what ingest case are we dealing with
         info = self._extractIngestInfo(location.uri, ref, formatter=formatter)
         self._register_datasets([(ref, info)])
