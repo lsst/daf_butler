@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ["DatasetType"]
 
 from copy import deepcopy
@@ -231,6 +233,23 @@ class DatasetType:
         if component in self.storageClass.components:
             return self.nameWithComponent(self.name, component)
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
+
+    def makeComponentDatasetType(self, component: str) -> DatasetType:
+        """Return a DatasetType suitable for the given component, assuming the
+        same dimensions as the parent.
+
+        Parameters
+        ----------
+        component : `str`
+            Name of component
+
+        Returns
+        -------
+        datasetType : `DatasetType`
+            A new DatasetType instance.
+        """
+        return DatasetType(self.componentTypeName(component), dimensions=self.dimensions,
+                           storageClass=self.storageClass.components[component])
 
     def isComponent(self):
         """Boolean indicating whether this `DatasetType` refers to a
