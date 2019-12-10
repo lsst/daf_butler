@@ -497,6 +497,10 @@ class FileLikeDatastore(GenericBaseDatastore):
             A URI has been requested for a dataset that does not exist and
             guessing is not allowed.
 
+        Notes
+        -----
+        When a predicted URI is requested an attempt will be made to form
+        a reasonable URI based on file templates and the expected formatter.
         """
         # if this has never been written then we have to guess
         if not self.exists(ref):
@@ -504,14 +508,27 @@ class FileLikeDatastore(GenericBaseDatastore):
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
             template = self.templates.getTemplate(ref)
-            location = self.locationFactory.fromPath(template.format(ref) + "#predicted")
-        else:
-            # If this is a ref that we have written we can get the path.
-            # Get file metadata and internal metadata
-            storedFileInfo = self.getStoredItemInfo(ref)
+            location = self.locationFactory.fromPath(template.format(ref))
+            storageClass = ref.datasetType.storageClass
+            formatter = self.formatterFactory.getFormatter(ref, FileDescriptor(location,
+                                                                               storageClass=storageClass))
+            # Try to use the extension attribute but ignore problems if the
+            # formatter does not define one.
+            try:
+                location = formatter.makeUpdatedLocation(location)
+            except Exception:
+                # Use the default extension
+                pass
 
-            # Use the path to determine the location
-            location = self.locationFactory.fromPath(storedFileInfo.path)
+            # Add a URI fragment to indicate this is a guess
+            return location.uri + "#predicted"
+
+        # If this is a ref that we have written we can get the path.
+        # Get file metadata and internal metadata
+        storedFileInfo = self.getStoredItemInfo(ref)
+
+        # Use the path to determine the location
+        location = self.locationFactory.fromPath(storedFileInfo.path)
 
         return location.uri
 
