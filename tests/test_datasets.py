@@ -23,6 +23,7 @@ import unittest
 import pickle
 
 from lsst.daf.butler import (
+    DataCoordinate,
     DatasetType,
     DatasetRef,
     DimensionUniverse,
@@ -204,18 +205,57 @@ class DatasetRefTestCase(unittest.TestCase):
     def setUp(self):
         self.universe = DimensionUniverse()
         datasetTypeName = "test"
-        storageClass = StorageClass("testref_StructuredData")
+        self.componentStorageClass1 = StorageClass("Component1")
+        self.componentStorageClass2 = StorageClass("Component2")
+        self.parentStorageClass = StorageClass("Parent", components={"a": self.componentStorageClass1,
+                                                                     "b": self.componentStorageClass2})
         dimensions = self.universe.extract(("instrument", "visit"))
         self.dataId = dict(instrument="DummyCam", visit=42)
-        self.datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        self.datasetType = DatasetType(datasetTypeName, dimensions, self.parentStorageClass)
 
     def testConstructor(self):
-        """Test construction preserves values.
+        """Test that construction preserves and validates values.
         """
+        # Construct an unresolved ref.
         ref = DatasetRef(self.datasetType, self.dataId)
         self.assertEqual(ref.datasetType, self.datasetType)
         self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
+        self.assertIsInstance(ref.dataId, DataCoordinate)
         self.assertIsNone(ref.components)
+        # Constructing an unresolved ref with run and/or components should
+        # fail.
+        run = Run("somerun")
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, run=run)
+        components = {
+            "a": DatasetRef(self.datasetType.makeComponentDatasetType("a"), self.dataId, id=2, run=run)
+        }
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, components=components)
+        # Passing a data ID that is missing dimensions should fail.
+        with self.assertRaises(KeyError):
+            DatasetRef(self.datasetType, {"instrument": "DummyCam"})
+        # Constructing a resolved ref should preserve run and components,
+        # as well as everything else.
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run, components=components)
+        self.assertEqual(ref.datasetType, self.datasetType)
+        self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
+        self.assertIsInstance(ref.dataId, DataCoordinate)
+        self.assertEqual(ref.id, 1)
+        self.assertEqual(ref.run, run)
+        self.assertEqual(ref.components, components)
+        # Constructing a resolved ref with bad component storage classes
+        # should fail.
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, id=1, run=run, components={"b": components["a"]})
+        # Constructing a resolved ref with unresolved components should fail.
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, id=1, run=run,
+                       components={"a": components["a"].unresolved()})
+        # Constructing a resolved ref with bad component names should fail.
+        with self.assertRaises(ValueError):
+            DatasetRef(self.datasetType, self.dataId, id=1, run=run,
+                       components={"c": components["a"]})
 
     def testResolving(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
