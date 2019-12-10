@@ -265,29 +265,7 @@ schema:
         doc: >
           A Collection name with which all Datasets in this Run are initially
           associated, also used as a human-readable name for this Run.
-      -
-        name: environment_id
-        type: int
-        doc: >
-          A dataset_id linking to a Dataset that contains a description of
-          the software environment (e.g. versions) used for this Run.
-      -
-        name: pipeline_id
-        type: int
-        doc: >
-          A dataset_id linking to a Dataset that contains a serialization of
-          the SuperTask Pipeline used for this Run (if any).
       foreignKeys:
-      -
-        table: dataset
-        source: environment_id
-        target: dataset_id
-        onDelete: SET NULL
-      -
-        table: dataset
-        source: pipeline_id
-        target: dataset_id
-        onDelete: SET NULL
       -
         table: execution
         source: execution_id

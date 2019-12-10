@@ -317,8 +317,6 @@ class YamlRepoExportBackend(RepoExportBackend):
             "end_time": run.endTime,
             "host": run.host,
             "collection": run.collection,
-            "pipeline": run.pipeline,
-            "environment": run.environment,
         })
         self.data.append({
             "type": "dataset",
@@ -378,8 +376,8 @@ class YamlRepoImportBackend(RepoImportBackend):
             if data["type"] == "dimension":
                 registry.insertDimensionData(data["element"], *data["records"])
             elif data["type"] == "run":
-                run = Run(collection=data["collection"], environment=data["environment"],
-                          pipeline=data["pipeline"], startTime=data["start_time"], endTime=data["end_time"],
+                run = Run(collection=data["collection"],
+                          startTime=data["start_time"], endTime=data["end_time"],
                           host=data["host"])
                 runs[data["id"]] = run
                 registry.ensureRun(run)

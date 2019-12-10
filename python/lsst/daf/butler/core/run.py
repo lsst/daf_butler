@@ -33,22 +33,14 @@ class Run(Execution):
     collection : `str`
         A Collection name with which all Datasets in this Run are initially
         associated, also used as a human-readable name for this Run.
-    environment : `DatasetRef`
-        A reference to a dataset that contains a description of
-        the software environment (e.g. versions) used for this Run.
-    pipeline : `DatasetRef`
-        A reference to a dataset that contains a serialization of
-        the SuperTask Pipeline used for this Run (if any).
     """
-    __slots__ = ("_collection", "_environment", "_pipeline")
+    __slots__ = ("_collection",)
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
-    def __init__(self, collection, environment=None, pipeline=None, *args, **kwargs):
+    def __init__(self, collection, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._collection = collection
-        self._environment = environment
-        self._pipeline = pipeline
 
     def __repr__(self):
         return "Run(collection='{}', id={})".format(self.collection, self.id)
@@ -56,11 +48,3 @@ class Run(Execution):
     @property
     def collection(self):
         return self._collection
-
-    @property
-    def environment(self):
-        return self._environment
-
-    @property
-    def pipeline(self):
-        return self._pipeline

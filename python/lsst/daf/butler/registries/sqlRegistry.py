@@ -708,9 +708,7 @@ class SqlRegistry(Registry):
         self.addExecution(run)
         # Then the Run specific part
         self._connection.execute(runTable.insert().values(execution_id=run.id,
-                                                          collection=run.collection,
-                                                          environment_id=None,  # TODO add environment
-                                                          pipeline_id=None))    # TODO add pipeline
+                                                          collection=run.collection))
         # TODO: set given Run's "id" attribute, add to self._cachedRuns.
 
     def getRun(self, id=None, collection=None):
@@ -727,9 +725,7 @@ class SqlRegistry(Registry):
                                                       executionTable.c.start_time,
                                                       executionTable.c.end_time,
                                                       executionTable.c.host,
-                                                      runTable.c.collection,
-                                                      runTable.c.environment_id,
-                                                      runTable.c.pipeline_id]).select_from(
+                                                      runTable.c.collection]).select_from(
                 runTable.join(executionTable)).where(
                 runTable.c.execution_id == id)).fetchone()
         # Retrieve by collection
@@ -741,9 +737,7 @@ class SqlRegistry(Registry):
                                                       executionTable.c.start_time,
                                                       executionTable.c.end_time,
                                                       executionTable.c.host,
-                                                      runTable.c.collection,
-                                                      runTable.c.environment_id,
-                                                      runTable.c.pipeline_id]).select_from(
+                                                      runTable.c.collection]).select_from(
                 runTable.join(executionTable)).where(
                 runTable.c.collection == collection)).fetchone()
         else:
@@ -753,9 +747,7 @@ class SqlRegistry(Registry):
                       startTime=result["start_time"],
                       endTime=result["end_time"],
                       host=result["host"],
-                      collection=result["collection"],
-                      environment=None,  # TODO add environment
-                      pipeline=None)     # TODO add pipeline
+                      collection=result["collection"])
             self._cachedRuns[run.id] = run
             self._cachedRuns[run.collection] = run
         return run

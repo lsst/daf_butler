@@ -36,16 +36,12 @@ class RunTestCase(unittest.TestCase):
         """Test of constructor.
         """
         collection = "ingest"
-        environment = None
-        pipeline = None
         # Base class arguments
         startTime = datetime(2018, 1, 1)
         endTime = datetime(2018, 1, 2)
         host = "localhost"
-        run = Run(collection, environment, pipeline, startTime, endTime, host)
+        run = Run(collection, startTime, endTime, host)
         self.assertEqual(run.collection, collection)
-        self.assertEqual(run.environment, environment)
-        self.assertEqual(run.pipeline, pipeline)
         self.assertIsNone(run.id)
         self.assertEqual(run.startTime, startTime)
         self.assertEqual(run.endTime, endTime)
