@@ -20,10 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("Timespan",)
+__all__ = ("Timespan", "TIMESPAN_FIELD_SPECS")
 
 import operator
 from typing import Generic, Optional, TypeVar
+
+from sqlalchemy import DateTime
+
+from .schema import FieldSpec
 
 
 T = TypeVar("T")
@@ -59,3 +63,9 @@ class Timespan(Generic[T], tuple):
 
     def __getnewargs__(self) -> tuple:
         return (self.begin, self.end)
+
+
+TIMESPAN_FIELD_SPECS = Timespan(
+    begin=FieldSpec(name="datetime_begin", dtype=DateTime),
+    end=FieldSpec(name="datetime_end", dtype=DateTime),
+)

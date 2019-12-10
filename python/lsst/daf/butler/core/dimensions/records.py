@@ -45,7 +45,7 @@ def _makeTimespanFromRecord(record: DimensionRecord):
 
     For internal use by `DimensionRecord`.
     """
-    from .schema import TIMESPAN_FIELD_SPECS
+    from ..timespan import TIMESPAN_FIELD_SPECS
     return Timespan(
         begin=getattr(record, TIMESPAN_FIELD_SPECS.begin.name),
         end=getattr(record, TIMESPAN_FIELD_SPECS.end.name),
