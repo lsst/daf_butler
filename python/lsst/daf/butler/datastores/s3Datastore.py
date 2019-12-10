@@ -341,7 +341,7 @@ class S3Datastore(FileLikeDatastore):
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
         """
-        location, storefFileInfo = self._get_dataset_location_info(ref)
+        location, _ = self._get_dataset_location_info(ref)
         if location is None:
             raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
 
