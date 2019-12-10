@@ -21,8 +21,6 @@
 
 __all__ = ("FitsExposureFormatter", )
 
-import copy
-
 from astro_metadata_translator import fix_header
 from lsst.daf.butler import Formatter
 
@@ -196,22 +194,3 @@ class FitsExposureFormatter(Formatter):
         self.fileDescriptor.location.updateExtension(self.extension)
         inMemoryDataset.writeFits(self.fileDescriptor.location.path)
         return self.fileDescriptor.location.pathInStore
-
-    @classmethod
-    def predictPathFromLocation(cls, location):
-        """Return the path that would be returned by write, without actually
-        writing.
-
-        Parameters
-        ----------
-        location : `Location`,
-            Location of file for which path prediction is required.
-
-        Returns
-        -------
-        path : `str`
-            Path within datastore that would be associated with this location.
-        """
-        location = copy.deepcopy(location)
-        location.updateExtension(cls.extension)
-        return location.pathInStore

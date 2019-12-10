@@ -23,6 +23,7 @@ __all__ = ("Formatter", "FormatterFactory")
 
 from abc import ABCMeta, abstractmethod
 import logging
+import copy
 from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type
 
 from .configSupport import processLookupConfigs, LookupKey
@@ -158,7 +159,34 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing to bytes.")
 
     @classmethod
-    @abstractmethod
+    def makeUpdatedLocation(cls, location: Location) -> Location:
+        """Return a new `Location` instance updated with this formatter's
+        extension.
+
+        Parameters
+        ----------
+        location : `Location`
+            The location to update.
+
+        Returns
+        -------
+        updated : `Location`
+            The updated location with a new file extension applied.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if there is no ``extension`` attribute associated with
+            this formatter.
+        """
+        location = copy.deepcopy(location)
+        try:
+            location.updateExtension(cls.extension)
+        except AttributeError:
+            raise NotImplementedError("No file extension registered with this formatter") from None
+        return location
+
+    @classmethod
     def predictPathFromLocation(cls, location: Location) -> str:
         """Return the path that would be returned by write, without actually
         writing.
@@ -173,7 +201,7 @@ class Formatter(metaclass=ABCMeta):
         path : `str`
             Path within datastore that would be associated with this location.
         """
-        raise NotImplementedError("Type does not support writing")
+        return cls.makeUpdatedLocation(location).pathInStore
 
     def predictPath(self) -> str:
         """Return the path that would be returned by write, without actually
@@ -402,7 +430,7 @@ class FormatterFactory:
         return formatter
 
     def registerFormatter(self, type_: Union[LookupKey, str, StorageClass, DatasetType],
-                          formatter: str) -> None:
+                          formatter: str, overwrite: bool = False) -> None:
         """Register a `Formatter`.
 
         Parameters
@@ -411,13 +439,17 @@ class FormatterFactory:
             Type for which this formatter is to be used.  If a `LookupKey`
             is not provided, one will be constructed from the supplied string
             or by using the ``name`` property of the supplied entity.
-        formatter : `str`
+        formatter : `str` or class of type `Formatter`
             Identifies a `Formatter` subclass to use for reading and writing
-            Datasets of this type.
+            Datasets of this type.  Can be a `Formatter` class.
+        overwrite : `bool`, optional
+            If `True` an existing entry will be replaced by the new value.
+            Default is `False`.
 
         Raises
         ------
         ValueError
-            Raised if the formatter does not name a valid formatter type.
+            Raised if the formatter does not name a valid formatter type and
+            ``overwrite`` is `False`.
         """
-        self._mappingFactory.placeInRegistry(type_, formatter)
+        self._mappingFactory.placeInRegistry(type_, formatter, overwrite=overwrite)

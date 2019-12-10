@@ -28,10 +28,12 @@ import lsst.utils
 
 from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse, FileDataset
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
+from lsst.daf.butler import ButlerURI
+from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
 
 from lsst.utils import doImport
 
-from datasetsHelper import DatasetTestHelper, DatastoreTestHelper
+from datasetsHelper import DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter, BadNoWriteFormatter
 from examplePythonTypes import MetricsExample
 
 from dummyRegistry import DummyRegistry
@@ -461,6 +463,65 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         # Override the working directory before calling the base class
         self.root = tempfile.mkdtemp(dir=TESTDIR)
         super().setUp()
+
+
+class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        # Override the working directory before calling the base class
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        super().setUp()
+
+    def testCleanup(self):
+        """Test that a failed formatter write does cleanup a partial file."""
+        metrics = makeExampleMetrics()
+        datastore = self.makeDatastore()
+
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "V"}
+
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+
+        # Determine where the file will end up (we assume Formatters use
+        # the same file extension)
+        expectedUri = datastore.getUri(ref, predict=True)
+        self.assertTrue(expectedUri.endswith(".yaml#predicted"),
+                        f"Is there a file extension in {expectedUri}")
+
+        # Convert to ButlerURI so we can extract the path component
+        expectedUri = ButlerURI(expectedUri)
+        expectedFile = expectedUri.path
+
+        # Try formatter that fails and formatter that fails and leaves
+        # a file behind
+        for formatter in (BadWriteFormatter, BadNoWriteFormatter):
+            with self.subTest(formatter=formatter):
+
+                # Monkey patch the formatter
+                datastore.formatterFactory.registerFormatter(ref.datasetType, formatter,
+                                                             overwrite=True)
+
+                # Try to put the dataset, it should fail
+                with self.assertRaises(Exception):
+                    datastore.put(metrics, ref)
+
+                # Check that there is no file on disk
+                self.assertFalse(os.path.exists(expectedFile), f"Check for existence of {expectedFile}")
+
+                # Check that there is a directory
+                self.assertTrue(os.path.exists(os.path.dirname(expectedFile)),
+                                f"Check for existence of directory {os.path.dirname(expectedFile)}")
+
+        # Force YamlFormatter and check that this time a file is written
+        datastore.formatterFactory.registerFormatter(ref.datasetType, YamlFormatter,
+                                                     overwrite=True)
+        datastore.put(metrics, ref)
+        self.assertTrue(os.path.exists(expectedFile), f"Check for existence of {expectedFile}")
+        datastore.remove(ref)
+        self.assertFalse(os.path.exists(expectedFile), f"Check for existence of now removed {expectedFile}")
 
 
 class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):

@@ -176,8 +176,10 @@ class PosixDatastore(FileLikeDatastore):
 
         storageDir = os.path.dirname(location.path)
         if not os.path.isdir(storageDir):
-            with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
-                safeMakeDir(storageDir)
+            # Never try to remove this after creating it since there might
+            # be a butler ingest process running concurrently that will
+            # already think this directory exists.
+            safeMakeDir(storageDir)
 
         # Write the file
         predictedFullPath = os.path.join(self.root, formatter.predictPath())
@@ -186,10 +188,30 @@ class PosixDatastore(FileLikeDatastore):
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {predictedFullPath} already exists")
 
-        with self._transaction.undoWith("write", os.remove, predictedFullPath):
-            path = formatter.write(inMemoryDataset)
-            assert predictedFullPath == os.path.join(self.root, path)
-            log.debug("Wrote file to %s", path)
+        def _removeFileExists(path):
+            """Remove a file and do not complain if it is not there.
+
+            This is important since a formatter might fail before the file
+            is written and we should not confuse people by writing spurious
+            error messages to the log.
+            """
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+        formatter_exception = None
+        with self._transaction.undoWith("write", _removeFileExists, predictedFullPath):
+            try:
+                path = formatter.write(inMemoryDataset)
+                log.debug("Wrote file to %s", path)
+            except Exception as e:
+                formatter_exception = e
+
+        if formatter_exception:
+            raise formatter_exception
+
+        assert predictedFullPath == os.path.join(self.root, path)
 
         info = self._extractIngestInfo(path, ref, formatter=formatter)
         self._register_datasets([(ref, info)])
