@@ -21,6 +21,7 @@
 
 import os
 from lsst.daf.butler import DatasetType, DatasetRef, Run
+from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
 
 
 class FitsCatalogDatasetsHelper:
@@ -118,3 +119,23 @@ class DatastoreTestHelper:
         else:
             registry = self.registry
         return self.datastoreType(config=config, registry=registry)
+
+
+class BadWriteFormatter(YamlFormatter):
+    """A formatter that never works but does leave a file behind."""
+
+    def _readFile(self, path, pytype=None):
+        raise NotImplementedError("This formatter can not read anything")
+
+    def _writeFile(self, inMemoryDataset):
+        """Write an empty file and then raise an exception."""
+        with open(self.fileDescriptor.location.path, "wb"):
+            pass
+        raise RuntimeError("Did not succeed in writing file")
+
+
+class BadNoWriteFormatter(BadWriteFormatter):
+    """A formatter that always fails without writing anything."""
+
+    def _writeFile(self, inMemoryDataset):
+        raise RuntimeError("Did not writing anything at all")
