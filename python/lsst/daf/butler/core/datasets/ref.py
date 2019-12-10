@@ -134,9 +134,6 @@ class DatasetRef:
     def __hash__(self) -> int:
         return hash(self.datasetType, self.dataId, self.id)
 
-    def __repr__(self):
-        return f"DatasetRef({self.datasetType}, {self.dataId}, id={self.id}, run={self.run})"
-
     @property
     def hash(self) -> bytes:
         """Secure hash of the `DatasetType` name and data ID (`bytes`).
@@ -167,12 +164,22 @@ class DatasetRef:
         """
         return self.datasetType.dimensions
 
+    def __repr__(self) -> str:
+        # We delegate to __str__ (i.e use "!s") for the data ID) below because
+        # DataCoordinate's __repr__ - while adhering to the guidelines for
+        # __repr__ - is much harder to users to read, while its __str__ just
+        # produces a dict that can also be passed to DatasetRef's constructor.
+        if self.id is not None:
+            return (f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r}, "
+                    f"components={self._components})")
+        else:
+            return f"DatasetRef({self.datasetType!r}, {self.dataId!s})"
+
     def __str__(self) -> str:
-        components = ""
-        if self.components:
-            components = ", components=[" + ", ".join(self.components) + "]"
-        return "DatasetRef({}, id={}, dataId={} {})".format(self.datasetType.name,
-                                                            self.id, self.dataId, components)
+        s = f"{self.datasetType.name}@{self.dataId!s}"
+        if self.id is not None:
+            s += " (id={self.id})"
+        return s
 
     def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
         return ((self.datasetType, self.dataId),
