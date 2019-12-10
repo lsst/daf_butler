@@ -22,7 +22,6 @@ from .mappingFactory import *
 from .quantum import *
 from .regions import *
 from .registry import *
-from .execution import *
 from .run import *
 from .schema import *
 from .storageClass import *

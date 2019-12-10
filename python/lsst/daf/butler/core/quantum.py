@@ -24,10 +24,9 @@ __all__ = ("Quantum",)
 from lsst.utils import doImport
 
 from .utils import NamedKeyDict
-from .execution import Execution
 
 
-class Quantum(Execution):
+class Quantum:
     """A discrete unit of work that may depend on one or more datasets and
     produces one or more datasets.
 
@@ -64,15 +63,24 @@ class Quantum(Execution):
     outputs : `~collections.abc.Mapping`, optional
         Outputs from executing this quantum of work, organized as a mapping
         from `DatasetType` to a list of `DatasetRef`.
-    kwargs
-        Additional arguments are forwarded to the base `Execution` constructor.
+    startTime : `datetime`
+        The start time for the quantum.
+    endTime : `datetime`
+        The end time for the quantum.
+    host : `str`
+        The system on this quantum was executed.
+    id : `int`, optional
+        Unique integer identifier for this quantum.  Usually set to `None`
+        (default) and assigned by `Registry`.
     """
 
     __slots__ = ("_taskName", "_taskClass", "_dataId", "_run",
-                 "_initInputs", "_predictedInputs", "_actualInputs", "_outputs")
+                 "_initInputs", "_predictedInputs", "_actualInputs", "_outputs",
+                 "_id", "_startTime", "_endTime", "_host")
 
     def __init__(self, *, taskName=None, taskClass=None, dataId=None, run=None,
                  initInputs=None, predictedInputs=(), actualInputs=(), outputs=(),
+                 startTime=None, endTime=None, host=None, id=None,
                  **kwargs):
         super().__init__(**kwargs)
         if taskClass is not None:
@@ -89,6 +97,10 @@ class Quantum(Execution):
         self._predictedInputs = NamedKeyDict(predictedInputs)
         self._actualInputs = NamedKeyDict(actualInputs)
         self._outputs = NamedKeyDict(outputs)
+        self._id = id
+        self._startTime = startTime
+        self._endTime = endTime
+        self._host = host
 
     @property
     def taskClass(self):
@@ -203,3 +215,19 @@ class Quantum(Execution):
             Reference for a Dataset to add to the Quantum's outputs.
         """
         self._outputs.setdefault(ref.datasetType, []).append(ref)
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def startTime(self):
+        return self._startTime
+
+    @property
+    def endTime(self):
+        return self._endTime
+
+    @property
+    def host(self):
+        return self._host

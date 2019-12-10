@@ -629,39 +629,6 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def addExecution(self, execution):
-        """Add a new `Execution` to the `Registry`.
-
-        If ``execution.id`` is `None` the `Registry` will update it to
-        that of the newly inserted entry.
-
-        Parameters
-        ----------
-        execution : `Execution`
-            Instance to add to the `Registry`.
-            The given `Execution` must not already be present in the
-            `Registry`.
-
-        Raises
-        ------
-        ConflictingDefinitionError
-            If ``execution`` is already present in the `Registry`.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def getExecution(self, id):
-        """Retrieve an Execution.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the Execution.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
     def makeRun(self, collection):
         """Create a new `Run` in the `Registry` and return it.
 

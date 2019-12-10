@@ -39,7 +39,6 @@ from ..core.registryConfig import RegistryConfig
 from ..core.registry import (Registry, ConflictingDefinitionError,
                              AmbiguousDatasetError, OrphanedRecordError)
 from ..core.schema import Schema, TableSpec
-from ..core.execution import Execution
 from ..core.run import Run
 from ..core.storageClass import StorageClassFactory
 from ..core.dimensions import (DataCoordinate, DimensionGraph, ExpandedDataCoordinate, DimensionElement,
@@ -513,16 +512,13 @@ class SqlRegistry(Registry):
 
         datasetTable = self._schema.tables["dataset"]
 
-        # Remove related quanta.  We actually delete from Execution, because
-        # Quantum's primary key (quantum_id) is also a foreign key to
-        # Execution.execution_id.  We then rely on ON DELETE CASCADE to remove
-        # the Quantum record as well as any related records in
-        # DatasetConsumers.  Note that we permit a Quantum to be deleted
-        # without removing the Datasets it refers to, but do not allow a
-        # Dataset to be deleting without removing the Quanta that refer to
-        # them.  A Dataset is still quite usable without provenance, but
+        # Remove related quanta.  We rely on ON DELETE CASCADE to remove any
+        # related records in DatasetConsumers.  Note that we permit a Quantum
+        # to be deleted without removing the Datasets it refers to, but do not
+        # allow a Dataset to be deleted without removing the Quanta that refer
+        # to them.  A Dataset is still quite usable without provenance, but
         # provenance is worthless if it's inaccurate.
-        executionTable = self._schema.tables["execution"]
+        quantumTable = self._schema.tables["quantum"]
         datasetConsumersTable = self._schema.tables["dataset_consumers"]
         selectProducer = select(
             [datasetTable.c.quantum_id]
@@ -535,8 +531,8 @@ class SqlRegistry(Registry):
             datasetConsumersTable.c.dataset_id == ref.id
         )
         self._connection.execute(
-            executionTable.delete().where(
-                executionTable.c.execution_id.in_(union(selectProducer, selectConsumers))
+            quantumTable.delete().where(
+                quantumTable.c.id.in_(union(selectProducer, selectConsumers))
             )
         )
 
@@ -632,42 +628,6 @@ class SqlRegistry(Registry):
                  datasetStorageTable.c.datastore_name == datastoreName)))
 
     @transactional
-    def addExecution(self, execution):
-        # Docstring inherited from Registry.addExecution
-        executionTable = self._schema.tables["execution"]
-        kwargs = {}
-        # Only pass in the execution_id to the insert statement if it is not
-        # None. Otherwise, some databases attempt to insert a null and fail.
-        # The Column is an auto increment primary key, so it will automatically
-        # be inserted if absent.
-        if execution.id is not None:
-            kwargs["execution_id"] = execution.id
-        kwargs["start_time"] = execution.startTime
-        kwargs["end_time"] = execution.endTime
-        kwargs["host"] = execution.host
-        result = self._connection.execute(executionTable.insert().values(**kwargs))
-        # Reassign id, may have been `None`
-        execution._id = result.inserted_primary_key[0]
-        # If the result is reported as a list of a number, unpack the list
-        if isinstance(execution._id, list):
-            execution._id = execution._id[0]
-
-    def getExecution(self, id):
-        # Docstring inherited from Registry.getExecution
-        executionTable = self._schema.tables["execution"]
-        result = self._connection.execute(
-            select([executionTable.c.start_time,
-                    executionTable.c.end_time,
-                    executionTable.c.host]).where(executionTable.c.execution_id == id)).fetchone()
-        if result is not None:
-            return Execution(startTime=result["start_time"],
-                             endTime=result["end_time"],
-                             host=result["host"],
-                             id=id)
-        else:
-            return None
-
-    @transactional
     def makeRun(self, collection):
         # Docstring inherited from Registry.makeRun
         run = Run(collection=collection)
@@ -704,46 +664,42 @@ class SqlRegistry(Registry):
                                                                        run.collection)
         if self._connection.execute(selection).scalar() > 0:
             raise ConflictingDefinitionError(f"A run already exists with this collection: {run.collection}")
-        # First add the Execution part
-        self.addExecution(run)
-        # Then the Run specific part
-        self._connection.execute(runTable.insert().values(execution_id=run.id,
-                                                          collection=run.collection))
-        # TODO: set given Run's "id" attribute, add to self._cachedRuns.
+        row = dict(
+            collection=run.collection,
+            start_time=run.startTime,
+            end_time=run.endTime,
+            host=run.host
+        )
+        if run.id is not None:
+            row["id"] = run.id
+        result = self._connection.execute(runTable.insert().values(row))
+        run._id = result.inserted_primary_key[0]
+        self._cachedRuns[run.id] = run
+        self._cachedRuns[run.collection] = run
 
     def getRun(self, id=None, collection=None):
         # Docstring inherited from Registry.getRun
-        executionTable = self._schema.tables["execution"]
         runTable = self._schema.tables["run"]
         run = None
         # Retrieve by id
+        whereClause = None
         if (id is not None) and (collection is None):
             run = self._cachedRuns.get(id)
             if run is not None:
                 return run
-            result = self._connection.execute(select([executionTable.c.execution_id,
-                                                      executionTable.c.start_time,
-                                                      executionTable.c.end_time,
-                                                      executionTable.c.host,
-                                                      runTable.c.collection]).select_from(
-                runTable.join(executionTable)).where(
-                runTable.c.execution_id == id)).fetchone()
+            whereClause = (runTable.columns.id == id)
         # Retrieve by collection
         elif (collection is not None) and (id is None):
             run = self._cachedRuns.get(collection, None)
             if run is not None:
                 return run
-            result = self._connection.execute(select([executionTable.c.execution_id,
-                                                      executionTable.c.start_time,
-                                                      executionTable.c.end_time,
-                                                      executionTable.c.host,
-                                                      runTable.c.collection]).select_from(
-                runTable.join(executionTable)).where(
-                runTable.c.collection == collection)).fetchone()
+            whereClause = (runTable.columns.collection == collection)
         else:
             raise ValueError("Either collection or id must be given")
+        assert whereClause is not None
+        result = self._connection.execute(runTable.select().where(whereClause)).fetchone()
         if result is not None:
-            run = Run(id=result["execution_id"],
+            run = Run(id=result["id"],
                       startTime=result["start_time"],
                       endTime=result["end_time"],
                       host=result["host"],

@@ -21,11 +21,10 @@
 
 __all__ = ("Run", )
 
-from .execution import Execution
 from .utils import slotValuesAreEqual, slotValuesToHash
 
 
-class Run(Execution):
+class Run:
     """Represent a processing run.
 
     Parameters
@@ -33,14 +32,26 @@ class Run(Execution):
     collection : `str`
         A Collection name with which all Datasets in this Run are initially
         associated, also used as a human-readable name for this Run.
+    startTime : `datetime`
+        The start time for the run.
+    endTime : `datetime`
+        The end time for the run.
+    host : `str`
+        The system on which the run was produced.
+    id : `int`, optional
+        Unique integer identifier for this run.  Usually set to `None`
+        (default) and assigned by `Registry`.
     """
-    __slots__ = ("_collection",)
+    __slots__ = ("_collection", "_startTime", "_endTime", "_host", "_id")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
-    def __init__(self, collection, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, collection, startTime=None, endTime=None, host=None, id=None):
         self._collection = collection
+        self._id = id
+        self._startTime = startTime
+        self._endTime = endTime
+        self._host = host
 
     def __repr__(self):
         return "Run(collection='{}', id={})".format(self.collection, self.id)
@@ -48,3 +59,19 @@ class Run(Execution):
     @property
     def collection(self):
         return self._collection
+
+    @property
+    def id(self):
+        return self._id
+
+    @property
+    def startTime(self):
+        return self._startTime
+
+    @property
+    def endTime(self):
+        return self._endTime
+
+    @property
+    def host(self):
+        return self._host

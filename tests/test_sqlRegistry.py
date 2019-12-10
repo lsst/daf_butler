@@ -22,7 +22,6 @@
 import os
 import unittest
 from abc import ABCMeta, abstractmethod
-from datetime import datetime, timedelta
 from itertools import combinations
 
 from sqlalchemy import Table, Column, Integer
@@ -32,7 +31,7 @@ from sqlalchemy.sql.expression import Executable
 
 import lsst.sphgeom
 
-from lsst.daf.butler import (Execution, Run, DatasetType, Registry,
+from lsst.daf.butler import (Run, DatasetType, Registry,
                              StorageClass, ButlerConfig,
                              ConflictingDefinitionError, OrphanedRecordError)
 from lsst.daf.butler.registries.sqlRegistry import SqlRegistry
@@ -181,18 +180,6 @@ class RegistryTests(metaclass=ABCMeta):
         # Now it should work
         registry.ensureRun(run2)
         self.assertEqual(run2, registry.getRun(id=run2.id))
-
-    def testExecution(self):
-        registry = self.makeRegistry()
-        startTime = datetime(2018, 1, 1)
-        endTime = startTime + timedelta(days=1, hours=5)
-        host = "localhost"
-        execution = Execution(startTime, endTime, host)
-        self.assertIsNone(execution.id)
-        registry.addExecution(execution)
-        self.assertIsInstance(execution.id, int)
-        outExecution = registry.getExecution(execution.id)
-        self.assertEqual(outExecution, execution)
 
     def testDatasetLocations(self):
         registry = self.makeRegistry()
