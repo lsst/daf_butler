@@ -188,8 +188,20 @@ class PosixDatastore(FileLikeDatastore):
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {predictedFullPath} already exists")
 
+        def _removeFileExists(path):
+            """Remove a file and do not complain if it is not there.
+
+            This is important since a formatter might fail before the file
+            is written and we should not confuse people by writing spurious
+            error messages to the log.
+            """
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
         formatter_exception = None
-        with self._transaction.undoWith("write", os.remove, predictedFullPath):
+        with self._transaction.undoWith("write", _removeFileExists, predictedFullPath):
             try:
                 path = formatter.write(inMemoryDataset)
                 log.debug("Wrote file to %s", path)
