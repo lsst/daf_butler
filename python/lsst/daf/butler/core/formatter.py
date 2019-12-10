@@ -23,6 +23,7 @@ __all__ = ("Formatter", "FormatterFactory")
 
 from abc import ABCMeta, abstractmethod
 import logging
+import copy
 from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type
 
 from .configSupport import processLookupConfigs, LookupKey
@@ -158,7 +159,34 @@ class Formatter(metaclass=ABCMeta):
         raise NotImplementedError("Type does not support writing to bytes.")
 
     @classmethod
-    @abstractmethod
+    def makeUpdatedLocation(cls, location: Location) -> Location:
+        """Return a new `Location` instance updated with this formatter's
+        extension.
+
+        Parameters
+        ----------
+        location : `Location`
+            The location to update.
+
+        Returns
+        -------
+        updated : `Location`
+            The updated location with a new file extension applied.
+
+        Raises
+        ------
+        NotImplementedError
+            Raised if there is no ``extension`` attribute associated with
+            this formatter.
+        """
+        location = copy.deepcopy(location)
+        try:
+            location.updateExtension(cls.extension)
+        except AttributeError:
+            raise NotImplementedError("No file extension registered with this formatter") from None
+        return location
+
+    @classmethod
     def predictPathFromLocation(cls, location: Location) -> str:
         """Return the path that would be returned by write, without actually
         writing.
@@ -173,7 +201,7 @@ class Formatter(metaclass=ABCMeta):
         path : `str`
             Path within datastore that would be associated with this location.
         """
-        raise NotImplementedError("Type does not support writing")
+        return cls.makeUpdatedLocation(location).pathInStore
 
     def predictPath(self) -> str:
         """Return the path that would be returned by write, without actually

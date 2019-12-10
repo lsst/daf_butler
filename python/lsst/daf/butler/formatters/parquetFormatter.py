@@ -25,7 +25,6 @@ import json
 import re
 import collections.abc
 import itertools
-import copy
 from typing import (
     Any,
     Dict,
@@ -42,7 +41,7 @@ import pandas as pd
 import pyarrow as pa
 
 from lsst.daf.butler.core.utils import iterable
-from lsst.daf.butler import Formatter, Location
+from lsst.daf.butler import Formatter
 
 
 class _ParquetLoader:
@@ -182,17 +181,3 @@ class ParquetFormatter(Formatter):
         location = self.makeUpdatedLocation(self.fileDescriptor.location)
         _writeParquet(location.path, inMemoryDataset)
         return location.pathInStore
-
-    @classmethod
-    def makeUpdatedLocation(cls, location: Location) -> Location:
-        """Return a new `Location` instance updated with this formatter's
-        extension.
-        """
-        location = copy.deepcopy(location)
-        location.updateExtension(cls.extension)
-        return location
-
-    @classmethod
-    def predictPathFromLocation(cls, location: Location) -> str:
-        # Docstring inherited from Formatter.predictPathFromLocation.
-        return cls.makeUpdatedLocation(location).pathInStore

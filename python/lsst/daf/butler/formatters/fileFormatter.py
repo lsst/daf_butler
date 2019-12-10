@@ -23,7 +23,6 @@
 
 __all__ = ("FileFormatter",)
 
-import copy
 from abc import abstractmethod
 
 from lsst.daf.butler import Formatter
@@ -268,22 +267,3 @@ class FileFormatter(Formatter):
             raise NotImplementedError("Type does not support reading from bytes.")
 
         return self._toBytes(inMemoryDataset)
-
-    @classmethod
-    def predictPathFromLocation(cls, location):
-        """Return the path that would be returned by write, without actually
-        writing.
-
-        Parameters
-        ----------
-        location : `Location`
-            Location of file for which path prediction is required.
-
-        Returns
-        -------
-        path : `str`
-            Path within datastore that would be associated with this location.
-        """
-        location = copy.deepcopy(location)
-        location.updateExtension(cls.extension)
-        return location.pathInStore
