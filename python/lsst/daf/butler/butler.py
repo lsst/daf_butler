@@ -250,35 +250,35 @@ class Butler:
             self.storageClasses.addFromConfig(self.config)
             self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
         if run is None:
-            runCollection = self.config.get("run", None)
+            runName = self.config.get("run", None)
             self.run = None
         else:
             if isinstance(run, Run):
                 self.run = run
-                runCollection = self.run.collection
+                runName = self.run.name
             else:
-                runCollection = run
+                runName = run
                 self.run = None
             # if run *arg* is not None and collection arg is, use run for
             # collection.
             if collection is None:
-                collection = runCollection
+                collection = runName
         del run  # it's a logic bug if we try to use this variable below
         if collection is None:  # didn't get a collection from collection or run *args*
             collection = self.config.get("collection", None)
             if collection is None:  # didn't get a collection from config["collection"]
-                collection = runCollection    # get collection from run found in config
+                collection = runName    # get collection from run found in config
         if collection is None:
             raise ValueError("No run or collection provided.")
-        if runCollection is not None and collection != runCollection:
+        if runName is not None and collection != runName:
             raise ValueError(
-                "Run ({}) and collection ({}) are inconsistent.".format(runCollection, collection)
+                "Run ({}) and collection ({}) are inconsistent.".format(runName, collection)
             )
         self.collection = collection
-        if runCollection is not None and self.run is None:
-            self.run = self.registry.getRun(collection=runCollection)
+        if runName is not None and self.run is None:
+            self.run = self.registry.getRun(name=runName)
             if self.run is None:
-                self.run = self.registry.makeRun(runCollection)
+                self.run = self.registry.makeRun(runName)
 
     def __reduce__(self):
         """Support pickling.

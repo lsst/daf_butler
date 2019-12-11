@@ -93,7 +93,7 @@ class RegistryTests(metaclass=ABCMeta):
 
     def testDataset(self):
         registry = self.makeRegistry()
-        run = registry.makeRun(collection="test")
+        run = registry.makeRun(name="test")
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         datasetType = DatasetType(name="testtype", dimensions=registry.dimensions.extract(("instrument",)),
@@ -108,7 +108,7 @@ class RegistryTests(metaclass=ABCMeta):
         with self.assertRaises(ConflictingDefinitionError):
             ref = registry.addDataset(datasetType, dataId=dataId, run=run)
         registry.removeDataset(ref)
-        self.assertIsNone(registry.find(run.collection, datasetType, dataId))
+        self.assertIsNone(registry.find(run.name, datasetType, dataId))
 
     def testComponents(self):
         registry = self.makeRegistry()
@@ -132,7 +132,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(childDatasetType2)
         dataId = {"instrument": "DummyCam"}
         registry.insertDimensionData("instrument", dataId)
-        run = registry.makeRun(collection="test")
+        run = registry.makeRun(name="test")
         parent = registry.addDataset(parentDatasetType, dataId=dataId, run=run)
         children = {"child1": registry.addDataset(childDatasetType1, dataId=dataId, run=run),
                     "child2": registry.addDataset(childDatasetType2, dataId=dataId, run=run)}
@@ -143,9 +143,9 @@ class RegistryTests(metaclass=ABCMeta):
         self.assertEqual(outParent.components, children)
         # Remove the parent; this should remove both children.
         registry.removeDataset(parent)
-        self.assertIsNone(registry.find(run.collection, parentDatasetType, dataId))
-        self.assertIsNone(registry.find(run.collection, childDatasetType1, dataId))
-        self.assertIsNone(registry.find(run.collection, childDatasetType2, dataId))
+        self.assertIsNone(registry.find(run.name, parentDatasetType, dataId))
+        self.assertIsNone(registry.find(run.name, childDatasetType1, dataId))
+        self.assertIsNone(registry.find(run.name, childDatasetType2, dataId))
 
     def testRun(self):
         registry = self.makeRegistry()
@@ -153,15 +153,15 @@ class RegistryTests(metaclass=ABCMeta):
         for collection in ["one", "two"]:
             run = registry.makeRun(collection)
             self.assertIsInstance(run, Run)
-            self.assertEqual(run.collection, collection)
+            self.assertEqual(run.name, collection)
             # Test retrieval by collection
-            runCpy1 = registry.getRun(collection=run.collection)
+            runCpy1 = registry.getRun(name=run.name)
             self.assertEqual(runCpy1, run)
             # Test retrieval by (run/execution) id
             runCpy2 = registry.getRun(id=run.id)
             self.assertEqual(runCpy2, run)
         # Non-existing collection should return None
-        self.assertIsNone(registry.getRun(collection="bogus"))
+        self.assertIsNone(registry.getRun(name="bogus"))
         # Non-existing id should return None
         self.assertIsNone(registry.getRun(id=100))
         # Inserting with a preexisting collection should fail
@@ -172,7 +172,7 @@ class RegistryTests(metaclass=ABCMeta):
         run = registry.makeRun(collection)
         registry.ensureRun(run)
         # Calling ensureRun with a different Run with the same id should fail
-        run2 = Run(collection="hello")
+        run2 = Run(name="hello")
         run2._id = run.id
         with self.assertRaises(ConflictingDefinitionError):
             registry.ensureRun(run2)
@@ -192,7 +192,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry.registerDatasetType(datasetType)
         registry.registerDatasetType(datasetType2)
         registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
-        run = registry.makeRun(collection="test")
+        run = registry.makeRun(name="test")
         ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
         ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
         datastoreName = "dummystore"
@@ -251,7 +251,7 @@ class RegistryTests(metaclass=ABCMeta):
                                       "physical_filter": "m-r"})
         collection = "test"
         dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
-        run = registry.makeRun(collection=collection)
+        run = registry.makeRun(name=collection)
         inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
         outputRef = registry.find(collection, datasetType, dataId)
         self.assertEqual(outputRef, inputRef)
@@ -292,7 +292,7 @@ class RegistryTests(metaclass=ABCMeta):
         registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 1, "name": "one",
                                                "physical_filter": "d-r"})
         collection = "ingest"
-        run = registry.makeRun(collection=collection)
+        run = registry.makeRun(name=collection)
         # Dataset.physical_filter should be populated as well here from the
         # visit Dimension values.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
@@ -300,9 +300,9 @@ class RegistryTests(metaclass=ABCMeta):
         dataId2 = {"instrument": "DummyCam", "visit": 1}
         inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
         # We should be able to find both datasets in their Run.collection
-        outputRef = registry.find(run.collection, datasetType, dataId1)
+        outputRef = registry.find(run.name, datasetType, dataId1)
         self.assertEqual(outputRef, inputRef1)
-        outputRef = registry.find(run.collection, datasetType, dataId2)
+        outputRef = registry.find(run.name, datasetType, dataId2)
         self.assertEqual(outputRef, inputRef2)
         # and with the associated collection
         newCollection = "something"
@@ -336,9 +336,9 @@ class RegistryTests(metaclass=ABCMeta):
                                                "physical_filter": "d-r"})
         registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 1, "name": "one",
                                                "physical_filter": "d-r"})
-        run1 = registry.makeRun(collection="ingest1")
-        run2 = registry.makeRun(collection="ingest2")
-        run3 = registry.makeRun(collection="ingest3")
+        run1 = registry.makeRun(name="ingest1")
+        run2 = registry.makeRun(name="ingest2")
+        run3 = registry.makeRun(name="ingest3")
         # Dataset.physical_filter should be populated as well here
         # from the visit Dimension values.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
@@ -436,7 +436,7 @@ class RegistryTests(metaclass=ABCMeta):
         datasetTypeC = DatasetType(name="C",
                                    dimensions=dimensions,
                                    storageClass=storageClass)
-        run = registry.makeRun(collection="test")
+        run = registry.makeRun(name="test")
         refId = None
         with registry.transaction():
             registry.registerDatasetType(datasetTypeA)

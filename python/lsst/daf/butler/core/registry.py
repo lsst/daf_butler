@@ -690,7 +690,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getRun(self, id=None, collection=None):
+    def getRun(self, id=None, name=None):
         """
         Get a `Run` corresponding to its collection or id
 

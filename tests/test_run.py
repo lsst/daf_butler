@@ -41,7 +41,7 @@ class RunTestCase(unittest.TestCase):
         endTime = datetime(2018, 1, 2)
         host = "localhost"
         run = Run(collection, startTime, endTime, host)
-        self.assertEqual(run.collection, collection)
+        self.assertEqual(run.name, collection)
         self.assertIsNone(run.id)
         self.assertEqual(run.startTime, startTime)
         self.assertEqual(run.endTime, endTime)

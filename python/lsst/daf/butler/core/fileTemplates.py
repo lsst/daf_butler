@@ -431,7 +431,7 @@ class FileTemplate:
             fields["component"] = component
 
         usedRunOrCollection = False
-        fields["collection"] = ref.run.collection
+        fields["collection"] = ref.run.name
         fields["run"] = ref.run.id
 
         fmt = string.Formatter()

@@ -73,8 +73,8 @@ class QueryBuilderTestCase(unittest.TestCase):
         # dataset types
         collection1 = "test"
         collection2 = "test2"
-        run = registry.makeRun(collection=collection1)
-        run2 = registry.makeRun(collection=collection2)
+        run = registry.makeRun(name=collection1)
+        run2 = registry.makeRun(name=collection2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         rawType = DatasetType(name="RAW",
@@ -98,7 +98,7 @@ class QueryBuilderTestCase(unittest.TestCase):
                 if exposure == 100:
                     registry.addDataset(rawType, dataId=dataId, run=run2)
                 if exposure == 101:
-                    registry.associate(run2.collection, [ref])
+                    registry.associate(run2.name, [ref])
         # Add pre-existing datasets to second collection.
         for exposure in (200, 201):
             for detector in (3, 4, 5):
@@ -211,7 +211,7 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # dataset types
         collection = "test"
-        run = registry.makeRun(collection=collection)
+        run = registry.makeRun(name=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         calexpType = DatasetType(name="deepCoadd_calexp",
@@ -292,7 +292,7 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # dataset types
         collection = "test"
-        registry.makeRun(collection=collection)
+        registry.makeRun(name=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
 
@@ -363,7 +363,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         # Different flats for different nights for detectors 1-3 in first
         # collection.
         collection1 = "calibs1"
-        run1 = registry.makeRun(collection=collection1)
+        run1 = registry.makeRun(name=collection1)
         for detector in (1, 2, 3):
             registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="first_night",
                                            physical_filter="dummy_i", detector=detector),
@@ -374,7 +374,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         # The same flat for both nights for detectors 3-5 (so detector 3 has
         # multiple valid flats) in second collection.
         collection2 = "calib2"
-        run2 = registry.makeRun(collection=collection2)
+        run2 = registry.makeRun(name=collection2)
         for detector in (3, 4, 5):
             registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="both_nights",
                                            physical_filter="dummy_i", detector=detector),

@@ -71,7 +71,7 @@ class DatasetTestHelper:
             self.id += 1
             id = self.id
         if run is None:
-            run = Run(id=1, collection="dummy")
+            run = Run(id=1, name="dummy")
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
 
 

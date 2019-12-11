@@ -29,9 +29,8 @@ class Run:
 
     Parameters
     ----------
-    collection : `str`
-        A Collection name with which all Datasets in this Run are initially
-        associated, also used as a human-readable name for this Run.
+    name : `str`
+        The name of the run.
     startTime : `datetime`
         The start time for the run.
     endTime : `datetime`
@@ -42,23 +41,23 @@ class Run:
         Unique integer identifier for this run.  Usually set to `None`
         (default) and assigned by `Registry`.
     """
-    __slots__ = ("_collection", "_startTime", "_endTime", "_host", "_id")
+    __slots__ = ("_name", "_startTime", "_endTime", "_host", "_id")
     __eq__ = slotValuesAreEqual
     __hash__ = slotValuesToHash
 
-    def __init__(self, collection, startTime=None, endTime=None, host=None, id=None):
-        self._collection = collection
+    def __init__(self, name, startTime=None, endTime=None, host=None, id=None):
+        self._name = name
         self._id = id
         self._startTime = startTime
         self._endTime = endTime
         self._host = host
 
     def __repr__(self):
-        return "Run(collection='{}', id={})".format(self.collection, self.id)
+        return "Run(name='{}', id={})".format(self.name, self.id)
 
     @property
-    def collection(self):
-        return self._collection
+    def name(self):
+        return self._name
 
     @property
     def id(self):

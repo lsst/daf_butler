@@ -478,7 +478,7 @@ class SqlRegistry(Registry):
         datasetRef = datasetRef.resolved(id=datasetId, run=run)
 
         # A dataset is always initially associated with its Run collection.
-        self.associate(run.collection, [datasetRef, ])
+        self.associate(run.name, [datasetRef, ])
 
         if recursive:
             for component in datasetType.storageClass.components:
@@ -628,9 +628,9 @@ class SqlRegistry(Registry):
                  datasetStorageTable.c.datastore_name == datastoreName)))
 
     @transactional
-    def makeRun(self, collection):
+    def makeRun(self, name):
         # Docstring inherited from Registry.makeRun
-        run = Run(collection=collection)
+        run = Run(name=name)
         self.addRun(run)
         return run
 
@@ -639,8 +639,8 @@ class SqlRegistry(Registry):
         # Docstring inherited from Registry.ensureRun
         if run.id is not None:
             existingRun = self.getRun(id=run.id)
-        elif run.collection is not None:
-            existingRun = self.getRun(collection=run.collection)
+        elif run.name is not None:
+            existingRun = self.getRun(name=run.name)
         else:
             existingRun = None
         if existingRun is not None:
@@ -657,15 +657,12 @@ class SqlRegistry(Registry):
     def addRun(self, run):
         # Docstring inherited from Registry.addRun
         runTable = self._schema.tables["run"]
-        # TODO: this check is probably undesirable, as we may want to have
-        # multiple Runs output to the same collection.  Fixing this requires
-        # (at least) modifying getRun() accordingly.
-        selection = select([func.count()]).select_from(runTable).where(runTable.c.collection ==
-                                                                       run.collection)
+        selection = select([func.count()]).select_from(runTable).where(runTable.c.name ==
+                                                                       run.name)
         if self._connection.execute(selection).scalar() > 0:
-            raise ConflictingDefinitionError(f"A run already exists with this collection: {run.collection}")
+            raise ConflictingDefinitionError(f"A run already exists with this name: {run.name}")
         row = dict(
-            collection=run.collection,
+            name=run.name,
             start_time=run.startTime,
             end_time=run.endTime,
             host=run.host
@@ -675,27 +672,27 @@ class SqlRegistry(Registry):
         result = self._connection.execute(runTable.insert().values(row))
         run._id = result.inserted_primary_key[0]
         self._cachedRuns[run.id] = run
-        self._cachedRuns[run.collection] = run
+        self._cachedRuns[run.name] = run
 
-    def getRun(self, id=None, collection=None):
+    def getRun(self, id=None, name=None):
         # Docstring inherited from Registry.getRun
         runTable = self._schema.tables["run"]
         run = None
         # Retrieve by id
         whereClause = None
-        if (id is not None) and (collection is None):
+        if (id is not None) and (name is None):
             run = self._cachedRuns.get(id)
             if run is not None:
                 return run
             whereClause = (runTable.columns.id == id)
-        # Retrieve by collection
-        elif (collection is not None) and (id is None):
-            run = self._cachedRuns.get(collection, None)
+        # Retrieve by name
+        elif (name is not None) and (id is None):
+            run = self._cachedRuns.get(name, None)
             if run is not None:
                 return run
-            whereClause = (runTable.columns.collection == collection)
+            whereClause = (runTable.columns.name == name)
         else:
-            raise ValueError("Either collection or id must be given")
+            raise ValueError("Either name or id must be given")
         assert whereClause is not None
         result = self._connection.execute(runTable.select().where(whereClause)).fetchone()
         if result is not None:
@@ -703,9 +700,9 @@ class SqlRegistry(Registry):
                       startTime=result["start_time"],
                       endTime=result["end_time"],
                       host=result["host"],
-                      collection=result["collection"])
+                      name=result["name"])
             self._cachedRuns[run.id] = run
-            self._cachedRuns[run.collection] = run
+            self._cachedRuns[run.name] = run
         return run
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,

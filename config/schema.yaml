@@ -220,12 +220,11 @@ schema:
         doc: >
           A unique autoincrement integer identifier for this run.
       -
-        name: collection
+        name: name
         type: string
         length: 128
         doc: >
-          A Collection name with which all Datasets in this Run are initially
-          associated, also used as a human-readable name for this Run.
+          The name of the run.
       -
         name: start_time
         type: datetime

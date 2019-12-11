@@ -41,7 +41,7 @@ class TestFileTemplates(unittest.TestCase):
             dataId = self.dataId
         datasetType = DatasetType(datasetTypeName, DimensionGraph(self.universe, names=dataId.keys()),
                                   StorageClass(storageClassName))
-        return DatasetRef(datasetType, dataId, id=1, run=Run(id=2, collection="run2"), conform=conform)
+        return DatasetRef(datasetType, dataId, id=1, run=Run(id=2, name="run2"), conform=conform)
 
     def setUp(self):
         self.universe = DimensionUniverse()
