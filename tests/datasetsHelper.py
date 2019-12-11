@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-from lsst.daf.butler import DatasetType, DatasetRef, Run
+from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
 
 
@@ -71,7 +71,7 @@ class DatasetTestHelper:
             self.id += 1
             id = self.id
         if run is None:
-            run = Run(id=1, name="dummy")
+            run = "dummy"
         return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
 
 

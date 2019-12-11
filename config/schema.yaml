@@ -244,6 +244,8 @@ schema:
         nullable: true
         doc: >
           The system on which the run was executed.
+      unique:
+      - [name]
 
     quantum:
       doc: >
@@ -268,7 +270,7 @@ schema:
         name: run_id
         type: int
         doc: >
-          Link to the Run this Quantum is a part of.
+          Link to the run this quantum is a part of.
       -
         name: start_time
         type: datetime

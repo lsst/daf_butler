@@ -27,7 +27,6 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
-from ..run import Run
 from ..configSupport import LookupKey
 from ..utils import immutable
 from .type import DatasetType
@@ -48,8 +47,9 @@ class DatasetRef:
         A mapping of dimensions that labels the Dataset within a Collection.
     id : `int`, optional
         The unique integer identifier assigned when the dataset is created.
-    run : `Run`, optional
-        The run this dataset was associated with when it was created.
+    run : `str`, optional
+        The name of the run this dataset was associated with when it was
+        created.
     hash : `bytes`, optional
         A hash of the dataset type and data ID.  Should only be provided if
         copying from another `DatasetRef` with the same dataset type and data
@@ -77,7 +77,7 @@ class DatasetRef:
 
     def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, *,
                 id: Optional[int] = None,
-                run: Optional[Run] = None, hash: Optional[bytes] = None,
+                run: Optional[str] = None, hash: Optional[bytes] = None,
                 components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True) -> DatasetRef:
         self = super().__new__(cls)
         assert isinstance(datasetType, DatasetType)
@@ -108,7 +108,7 @@ class DatasetRef:
             # TODO: it would be nice to guarantee that id and run should be
             # either both None or not None together.  We can't easily do that
             # yet because the Query infrastructure has a hard time obtaining
-            # Run objects, so we allow run to be `None` here, but that will
+            # run strings, so we allow run to be `None` here, but that will
             # change.
             self.run = run
         else:
@@ -185,7 +185,7 @@ class DatasetRef:
         return ((self.datasetType, self.dataId),
                 {"id": self.id, "run": self.run, "components": self._components})
 
-    def resolved(self, id: int, run: Run, components: Optional[Mapping[str, DatasetRef]] = None
+    def resolved(self, id: int, run: str, components: Optional[Mapping[str, DatasetRef]] = None
                  ) -> DatasetRef:
         """Return a new `DatasetRef` with the same data ID and dataset type
         and the given ID and run.
@@ -194,7 +194,7 @@ class DatasetRef:
         ----------
         id : `int`
             The unique integer identifier assigned when the dataset is created.
-        run : `Run`
+        run : `str`
             The run this dataset was associated with when it was created.
         components : `dict`, optional
             A dictionary mapping component name to a `DatasetRef` for that
@@ -313,9 +313,8 @@ class DatasetRef:
     Cannot be changed after a `DatasetRef` is constructed.
     """
 
-    run: Optional[Run]
-    """The `~lsst.daf.butler.Run` instance that produced (or will produce)
-    the dataset.
+    run: Optional[setattr]
+    """The name of the run that produced the dataset.
 
     Cannot be changed after a `DatasetRef` is constructed; use `resolved` or
     `unresolved` to add or remove this information when creating a new

@@ -48,8 +48,8 @@ class Quantum:
         provided.
     dataId : `DataId`, optional
         The dimension values that identify this `Quantum`.
-    run : `Run`, optional
-        The Run this Quantum is a part of.
+    run : `str`, optional
+        The name of the run this Quantum is a part of.
     initInputs : collection of `DatasetRef`, optional
         Datasets that are needed to construct an instance of the Task.  May
         be a flat iterable of `DatasetRef` instances or a mapping from
@@ -120,7 +120,7 @@ class Quantum:
 
     @property
     def run(self):
-        """The Run this Quantum is a part of (`Run`).
+        """The name of the run this Quantum is a part of (`str`).
         """
         return self._run
 

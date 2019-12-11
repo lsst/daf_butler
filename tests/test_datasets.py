@@ -27,7 +27,6 @@ from lsst.daf.butler import (
     DatasetType,
     DatasetRef,
     DimensionUniverse,
-    Run,
     StorageClass,
     StorageClassFactory,
 )
@@ -224,7 +223,7 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIsNone(ref.components)
         # Constructing an unresolved ref with run and/or components should
         # fail.
-        run = Run("somerun")
+        run = "somerun"
         with self.assertRaises(ValueError):
             DatasetRef(self.datasetType, self.dataId, run=run)
         components = {
@@ -258,7 +257,7 @@ class DatasetRefTestCase(unittest.TestCase):
                        components={"c": components["a"]})
 
     def testResolving(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
         unresolvedRef = ref.unresolved()
         self.assertIsNotNone(ref.id)
         self.assertIsNone(unresolvedRef.id)
@@ -268,14 +267,14 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.unresolved(), unresolvedRef)
         self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
         self.assertEqual(ref.dataId, unresolvedRef.dataId)
-        reresolvedRef = unresolvedRef.resolved(id=1, run=Run("somerun"))
+        reresolvedRef = unresolvedRef.resolved(id=1, run="somerun")
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
         self.assertIsNotNone(reresolvedRef.run)
         self.assertIsNotNone(reresolvedRef.components)
 
     def testPickle(self):
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=Run("somerun"))
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
         s = pickle.dumps(ref)
         self.assertEqual(pickle.loads(s), ref)
 

@@ -43,7 +43,6 @@ from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
 from .core.registry import Registry
 from .core.registryConfig import RegistryConfig
-from .core.run import Run
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
 from .core.butlerConfig import ButlerConfig
@@ -91,10 +90,10 @@ class Butler:
     collection : `str`, optional
         Collection to use for all input lookups, overriding
         config["collection"] if provided.
-    run : `str`, `Run`, optional
-        Collection associated with the `Run` to use for outputs, overriding
-        config["run"].  If a `Run` associated with the given Collection does
-        not exist, it will be created.  If "collection" is None, this
+    run : `str`, optional
+        Name of the run datasets should be output to; also used as a tagged
+        collection name these dataset will be associated with.  If the run
+        does not exist, it will be created.  If "collection" is None, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
     searchPaths : `list` of `str`, optional
@@ -250,35 +249,26 @@ class Butler:
             self.storageClasses.addFromConfig(self.config)
             self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
         if run is None:
-            runName = self.config.get("run", None)
-            self.run = None
+            self.run = self.config.get("run", None)
         else:
-            if isinstance(run, Run):
-                self.run = run
-                runName = self.run.name
-            else:
-                runName = run
-                self.run = None
+            self.run = run
             # if run *arg* is not None and collection arg is, use run for
             # collection.
             if collection is None:
-                collection = runName
-        del run  # it's a logic bug if we try to use this variable below
+                collection = run
         if collection is None:  # didn't get a collection from collection or run *args*
             collection = self.config.get("collection", None)
             if collection is None:  # didn't get a collection from config["collection"]
-                collection = runName    # get collection from run found in config
+                collection = self.run    # get collection from run found in config
         if collection is None:
             raise ValueError("No run or collection provided.")
-        if runName is not None and collection != runName:
+        if self.run is not None and collection != self.run:
             raise ValueError(
-                "Run ({}) and collection ({}) are inconsistent.".format(runName, collection)
+                "Run ({}) and collection ({}) are inconsistent.".format(self.run, collection)
             )
         self.collection = collection
-        if runName is not None and self.run is None:
-            self.run = self.registry.getRun(name=runName)
-            if self.run is None:
-                self.run = self.registry.makeRun(runName)
+        if self.run is not None:
+            self.registry.registerRun(self.run)
 
     def __reduce__(self):
         """Support pickling.
@@ -381,7 +371,7 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the butler was not constructed with a Run, and is hence
+            Raised if the butler was not constructed with a run, and is hence
             read-only.
         """
         log.debug("Butler put: %s, dataId=%s, producer=%s", datasetRefOrType, dataId, producer)
@@ -695,7 +685,7 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the butler was not constructed with a Run, and is hence
+            Raised if the butler was not constructed with a run, and is hence
             read-only.
         NotImplementedError
             Raised if the `Datastore` does not support the given transfer mode.

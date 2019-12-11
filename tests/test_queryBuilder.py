@@ -71,10 +71,10 @@ class QueryBuilderTestCase(unittest.TestCase):
             dict(instrument="DummyCam", id=201, name="201", visit=20, physical_filter="dummy_r"),
         )
         # dataset types
-        collection1 = "test"
-        collection2 = "test2"
-        run = registry.makeRun(name=collection1)
-        run2 = registry.makeRun(name=collection2)
+        run1 = "test"
+        run2 = "test2"
+        registry.registerRun(run1)
+        registry.registerRun(run2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         rawType = DatasetType(name="RAW",
@@ -91,14 +91,14 @@ class QueryBuilderTestCase(unittest.TestCase):
             for detector in (1, 2, 3):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                ref = registry.addDataset(rawType, dataId=dataId, run=run)
+                ref = registry.addDataset(rawType, dataId=dataId, run=run1)
                 # exposures 100 and 101 appear in both collections, 100 has
                 # different dataset_id in different collections, for 101 only
                 # single dataset_id exists
                 if exposure == 100:
                     registry.addDataset(rawType, dataId=dataId, run=run2)
                 if exposure == 101:
-                    registry.associate(run2.name, [ref])
+                    registry.associate(run2, [ref])
         # Add pre-existing datasets to second collection.
         for exposure in (200, 201):
             for detector in (3, 4, 5):
@@ -111,11 +111,11 @@ class QueryBuilderTestCase(unittest.TestCase):
             dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
         )
         # Test that single dim string works as well as list of str
-        rows = list(registry.queryDimensions("visit", datasets={rawType: [collection1]}, expand=True))
-        rowsI = list(registry.queryDimensions(["visit"], datasets={rawType: [collection1]}, expand=True))
+        rows = list(registry.queryDimensions("visit", datasets={rawType: [run1]}, expand=True))
+        rowsI = list(registry.queryDimensions(["visit"], datasets={rawType: [run1]}, expand=True))
         self.assertEqual(rows, rowsI)
         # with empty expression
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]}, expand=True))
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]}, expand=True))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -132,7 +132,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection2]}))
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run2]}))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -142,7 +142,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1, collection2]}))
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1, run2]}))
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -152,7 +152,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
                                              where="visit = 10"))
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
@@ -160,7 +160,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
                                              where="visit = 10 and detector > 1"))
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
@@ -168,13 +168,13 @@ class QueryBuilderTestCase(unittest.TestCase):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
         # expression excludes everything
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
                                              where="visit > 1000"))
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [collection1]},
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
                                              where="physical_filter = 'dummy_r'"))
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
@@ -210,8 +210,8 @@ class QueryBuilderTestCase(unittest.TestCase):
             )
 
         # dataset types
-        collection = "test"
-        run = registry.makeRun(name=collection)
+        run = "test"
+        registry.registerRun(run)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         calexpType = DatasetType(name="deepCoadd_calexp",
@@ -246,7 +246,7 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # with empty expression
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [collection], mergeType: [collection]}))
+                                             datasets={calexpType: [run], mergeType: [run]}))
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -256,7 +256,7 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # limit to 2 tracts and 2 patches
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [collection], mergeType: [collection]},
+                                             datasets={calexpType: [run], mergeType: [run]},
                                              where="tract IN (1, 5) AND patch IN (2, 7)"))
         self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
@@ -265,7 +265,7 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # limit to single filter
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [collection], mergeType: [collection]},
+                                             datasets={calexpType: [run], mergeType: [run]},
                                              where="abstract_filter = 'i'"))
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
@@ -275,7 +275,7 @@ class QueryBuilderTestCase(unittest.TestCase):
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [collection], mergeType: [collection]},
+                                             datasets={calexpType: [run], mergeType: [run]},
                                              where="skymap = 'Mars'"))
         self.assertEqual(len(rows), 0)
 
@@ -292,7 +292,7 @@ class QueryBuilderTestCase(unittest.TestCase):
 
         # dataset types
         collection = "test"
-        registry.makeRun(name=collection)
+        registry.registerRun(name=collection)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
 
@@ -362,8 +362,8 @@ class QueryBuilderTestCase(unittest.TestCase):
         )
         # Different flats for different nights for detectors 1-3 in first
         # collection.
-        collection1 = "calibs1"
-        run1 = registry.makeRun(name=collection1)
+        run1 = "calibs1"
+        registry.registerRun(run1)
         for detector in (1, 2, 3):
             registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="first_night",
                                            physical_filter="dummy_i", detector=detector),
@@ -373,8 +373,8 @@ class QueryBuilderTestCase(unittest.TestCase):
                                 run=run1)
         # The same flat for both nights for detectors 3-5 (so detector 3 has
         # multiple valid flats) in second collection.
-        collection2 = "calib2"
-        run2 = registry.makeRun(name=collection2)
+        run2 = "calib2"
+        registry.registerRun(run2)
         for detector in (3, 4, 5):
             registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="both_nights",
                                            physical_filter="dummy_i", detector=detector),
@@ -384,28 +384,28 @@ class QueryBuilderTestCase(unittest.TestCase):
         for exposure in (100, 101):
             for detector in (1, 2, 3):
                 with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[collection1],
+                    rows = registry.queryDatasets("flat", collections=[run1],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
                     self.assertEqual(len(list(rows)), 1)
             for detector in (3, 4, 5):
                 with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[collection2],
+                    rows = registry.queryDatasets("flat", collections=[run2],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
                     self.assertEqual(len(list(rows)), 1)
             for detector in (1, 2, 4, 5):
                 with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[collection1, collection2],
+                    rows = registry.queryDatasets("flat", collections=[run1, run2],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)
                     self.assertEqual(len(list(rows)), 1)
             for detector in (3,):
                 with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[collection1, collection2],
+                    rows = registry.queryDatasets("flat", collections=[run1, run2],
                                                   instrument="DummyCam",
                                                   exposure=exposure,
                                                   detector=detector)

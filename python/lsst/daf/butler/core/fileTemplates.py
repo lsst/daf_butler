@@ -288,11 +288,11 @@ class FileTemplate:
 
      - datasetType: `str`, `DatasetType.name`
      - component: `str`, name of the StorageClass component
-     - collection: `str`, `Run.collection`
-     - run: `int`, `Run.id`
+     - run: `str`, name of the run this dataset was added with
+     - collection: synonoym for ``run``
 
-    At least one or both of `run` or `collection` must be provided to ensure
-    unique filenames.
+    At least one of `run` or `collection` must be provided to ensure unique
+    filenames.
 
     More detailed information can be requested from dimensions by using a dot
     notation, so ``visit.name`` would use the name of the visit and
@@ -431,8 +431,8 @@ class FileTemplate:
             fields["component"] = component
 
         usedRunOrCollection = False
-        fields["collection"] = ref.run.name
-        fields["run"] = ref.run.id
+        fields["collection"] = ref.run
+        fields["run"] = ref.run
 
         fmt = string.Formatter()
         parts = fmt.parse(self.template)
