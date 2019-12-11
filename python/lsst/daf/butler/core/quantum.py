@@ -21,6 +21,8 @@
 
 __all__ = ("Quantum",)
 
+from datetime import datetime
+
 from lsst.utils import doImport
 
 from .utils import NamedKeyDict
@@ -217,17 +219,25 @@ class Quantum:
         self._outputs.setdefault(ref.datasetType, []).append(ref)
 
     @property
-    def id(self):
+    def id(self) -> int:
+        """Unique (autoincrement) integer for this quantum (`int`).
+        """
         return self._id
 
     @property
-    def startTime(self):
+    def startTime(self) -> datetime:
+        """Begin timestamp for the execution of this quantum (`datetime`).
+        """
         return self._startTime
 
     @property
-    def endTime(self):
+    def endTime(self) -> datetime:
+        """End timestamp for the execution of this quantum (`datetime`).
+        """
         return self._endTime
 
     @property
-    def host(self):
+    def host(self) -> str:
+        """Name of the system on which this quantum was executed (`str`).
+        """
         return self._host
