@@ -368,12 +368,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             if data["type"] == "dimension":
                 registry.insertDimensionData(data["element"], *data["records"])
             elif data["type"] == "run":
-                run = data.get("name")
-                if run is None:
-                    # Use 'collection' instead for backwards compatibility with
-                    # older files.
-                    run = data["collection"]
-                registry.registerRun(run)
+                registry.registerRun(data["name"])
             elif data["type"] == "dataset_type":
                 registry.registerDatasetType(
                     DatasetType(data["name"], dimensions=data["dimensions"],
