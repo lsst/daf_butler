@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = [
     "Database",
     "ReadOnlyDatabaseError",
-    "SynchronizationConflict",
+    "DatabaseConflictError",
     "StaticTablesContext",
 ]
 
@@ -60,14 +60,14 @@ def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Di
 
     Raises
     ------
-    RuntimeError
+    DatabaseConflictError
         Raised if the definitions are inconsistent.
     """
     columnNames = [c["name"] for c in inspection]
     if spec.fields.names != set(columnNames):
-        raise RuntimeError(f"Table '{name}' exists but is defined differently in the database; "
-                           f"specification has columns {list(spec.fields.names)}, while the "
-                           f"table in the database has {columnNames}.")
+        raise DatabaseConflictError(f"Table '{name}' exists but is defined differently in the database; "
+                                    f"specification has columns {list(spec.fields.names)}, while the "
+                                    f"table in the database has {columnNames}.")
 
 
 class ReadOnlyDatabaseError(RuntimeError):
@@ -76,10 +76,9 @@ class ReadOnlyDatabaseError(RuntimeError):
     """
 
 
-class SynchronizationConflict(RuntimeError):
-    """Exception raised when an attempt to synchronize rows fails because
-    the existing row has different values than the one that would be
-    inserted.
+class DatabaseConflictError(RuntimeError):
+    """Exception raised when database content (row values or schema entities)
+    are inconsistent with what this client expects.
     """
 
 
@@ -473,7 +472,7 @@ class Database(ABC):
         ReadOnlyDatabaseError
             Raised if `isWriteable` returns `False`, and the table does not
             already exist.
-        RuntimeError
+        DatabaseConflictError
             Raised if the table exists but ``spec`` is inconsistent with its
             definition.
 
@@ -521,7 +520,7 @@ class Database(ABC):
 
         Raises
         ------
-        RuntimeError
+        DatabaseConflictError
             Raised if the table exists but ``spec`` is inconsistent with its
             definition.
 
@@ -536,9 +535,9 @@ class Database(ABC):
         table = self._metadata.tables.get(name if self.namespace is None else f"{self.namespace}.{name}")
         if table is not None:
             if spec.fields.names != set(table.columns.keys()):
-                raise RuntimeError(f"Table '{name}' has already been defined differently; the new "
-                                   f"specification has columns {list(spec.fields.names)}, while the "
-                                   f"previous definition has {list(table.columns.keys())}.")
+                raise DatabaseConflictError(f"Table '{name}' has already been defined differently; the new "
+                                            f"specification has columns {list(spec.fields.names)}, while "
+                                            f"the previous definition has {list(table.columns.keys())}.")
         else:
             inspector = sqlalchemy.engine.reflection.Inspector(self._engine)
             if name in inspector.get_table_names(schema=self.namespace):
@@ -587,7 +586,7 @@ class Database(ABC):
 
         Raises
         ------
-        SynchronizationConflict
+        DatabaseConflictErrorError
             Raised if the values in ``compared`` do match the values in the
             database.
         ReadOnlyDatabaseError
@@ -695,8 +694,8 @@ class Database(ABC):
                                        f"unique constraint for table {table.name}.") from err
                 elif bad:
                     # No logic bug, but data conflicted on the keys given.
-                    raise SynchronizationConflict(f"Conflict in sync for table "
-                                                  f"{table.name} on column(s) {bad}.") from err
+                    raise DatabaseConflictError(f"Conflict in sync for table "
+                                                f"{table.name} on column(s) {bad}.") from err
                 # The desired row is already present and consistent with what
                 # we tried to insert.
                 inserted = False
@@ -710,7 +709,7 @@ class Database(ABC):
             elif n > 1:
                 raise RuntimeError("Keys passed to sync do not comprise a unique constraint.")
             elif bad:
-                raise SynchronizationConflict(f"Conflict in sync on column(s) {bad}.")
+                raise DatabaseConflictError(f"Conflict in sync on column(s) {bad}.")
             inserted = False
         return result, inserted
 

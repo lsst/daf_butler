@@ -32,7 +32,7 @@ from lsst.sphgeom import ConvexPolygon, UnitVector3d
 from ..interfaces import (
     Database,
     ReadOnlyDatabaseError,
-    SynchronizationConflict,
+    DatabaseConflictError,
 )
 from .. import ddl
 
@@ -171,7 +171,7 @@ class DatabaseTests(ABC):
             self.checkTable(DYNAMIC_TABLE_SPEC, table)
         # Trying to get the table with a different specification (at least
         # in terms of what columns are present) should raise.
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(DatabaseConflictError):
             newDatabase.ensureTableExists(
                 "d",
                 ddl.TableSpec(
@@ -339,7 +339,7 @@ class DatabaseTests(ABC):
                          [dict(r) for r in db.query(tables.b.select()).fetchall()])
         # Repeat the operation with an incorrect value in 'compared'; this
         # should raise.
-        with self.assertRaises(SynchronizationConflict):
+        with self.assertRaises(DatabaseConflictError):
             db.sync(tables.b, keys={"name": "b1"}, compared={"value": 20})
         # Try to sync inside a transaction.  That's always an error, regardless
         # of whether there would be an insertion or not.
