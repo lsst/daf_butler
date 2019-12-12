@@ -33,7 +33,6 @@ from ..interfaces import (
     Database,
     ReadOnlyDatabaseError,
     SynchronizationConflict,
-    TransactionInterruption,
 )
 from .. import ddl
 
@@ -182,7 +181,7 @@ class DatabaseTests(ABC):
         # Calling ensureTableExists inside a transaction block is an error,
         # even if it would do nothing.
         with newDatabase.transaction():
-            with self.assertRaises(TransactionInterruption):
+            with self.assertRaises(AssertionError):
                 newDatabase.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
 
     def testSchemaSeparation(self):
@@ -344,10 +343,10 @@ class DatabaseTests(ABC):
             db.sync(tables.b, keys={"name": "b1"}, compared={"value": 20})
         # Try to sync inside a transaction.  That's always an error, regardless
         # of whether there would be an insertion or not.
-        with self.assertRaises(TransactionInterruption):
+        with self.assertRaises(AssertionError):
             with db.transaction():
                 db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10})
-        with self.assertRaises(TransactionInterruption):
+        with self.assertRaises(AssertionError):
             with db.transaction():
                 db.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
         # Try to sync in a read-only database.  This should work if and only

@@ -25,7 +25,6 @@ __all__ = [
     "ReadOnlyDatabaseError",
     "SynchronizationConflict",
     "StaticTablesContext",
-    "TransactionInterruption",
 ]
 
 from abc import ABC, abstractmethod
@@ -69,18 +68,6 @@ def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Di
         raise RuntimeError(f"Table '{name}' exists but is defined differently in the database; "
                            f"specification has columns {list(spec.fields.names)}, while the "
                            f"table in the database has {columnNames}.")
-
-
-class TransactionInterruption(RuntimeError):
-    """Exception raised when a database operation that will interrupt a
-    transaction is performed in the middle of a transaction.
-
-    This is considered a logic error that should result in reordering calls to
-    `Database` methods.  It is raised whenever a transaction is active that
-    *could* be interrupted, regardless of whether it actually would be given a
-    particular database engine or state, to ensure code depending on `Database`
-    does not accidentally depend on an implementation.
-    """
 
 
 class ReadOnlyDatabaseError(RuntimeError):
@@ -220,19 +207,12 @@ class Database(ABC):
             without rolling back this transaction.
         interrupting : `bool`
             If `True`, this transaction block needs to be able to interrupt
-            any existing one in order to yield correct behavior, and hence
-            `TransactionInterruption` should be raised if this is not the
-            outermost transaction.
-
-        Raises
-        ------
-        TransactionInterruption
-            Raised if ``interrupting`` is `True` and a transaction is already
-            active.
+            any existing one in order to yield correct behavior.
         """
-        if interrupting and self._transactions:
-            raise TransactionInterruption("Logic error in transaction nesting: an operation that would "
-                                          "the active transation context has been requested.")
+        assert not (interrupting and self._transactions), (
+            "Logic error in transaction nesting: an operation that would "
+            "interrupt the active transaction context has been requested."
+        )
         if savepoint:
             trans = self._connection.begin_nested()
         else:
@@ -490,8 +470,6 @@ class Database(ABC):
 
         Raises
         ------
-        TransactionInterruption
-            Raised if a transaction is active when this method is called.
         ReadOnlyDatabaseError
             Raised if `isWriteable` returns `False`, and the table does not
             already exist.
@@ -507,8 +485,7 @@ class Database(ABC):
 
         Subclasses may override this method, but usually should not need to.
         """
-        if self._transactions:
-            raise TransactionInterruption("Table creation interrupts transactions.")
+        assert not self._transactions, "Table creation interrupts transactions."
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
         table = self.getExistingTable(name, spec)
         if table is not None:
@@ -610,8 +587,6 @@ class Database(ABC):
 
         Raises
         ------
-        TransactionInterruption
-            Raised if a transaction is active when this method is called.
         SynchronizationConflict
             Raised if the values in ``compared`` do match the values in the
             database.
@@ -726,9 +701,8 @@ class Database(ABC):
                 # we tried to insert.
                 inserted = False
         else:
-            if self._transactions:
-                raise TransactionInterruption("Calling sync in a transaction block is an error even "
-                                              "on a read-only database.")
+            assert not self._transactions, ("Calling sync within a transaction block is an error even "
+                                            "on a read-only database.")
             # Database is not writeable; just see if the row exists.
             n, bad, result = check()
             if n < 1:
