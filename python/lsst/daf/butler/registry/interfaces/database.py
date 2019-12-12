@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = [
     "Database",
     "ReadOnlyDatabaseError",
+    "SynchronizationConflict",
     "StaticTablesContext",
     "TransactionInterruption",
 ]
@@ -35,6 +36,7 @@ from typing import (
     Iterable,
     List,
     Optional,
+    Sequence,
     Tuple,
 )
 
@@ -84,6 +86,13 @@ class TransactionInterruption(RuntimeError):
 class ReadOnlyDatabaseError(RuntimeError):
     """Exception raised when a write operation is called on a read-only
     `Database`.
+    """
+
+
+class SynchronizationConflict(RuntimeError):
+    """Exception raised when an attempt to synchronize rows fails because
+    the existing row has different values than the one that would be
+    inserted.
     """
 
 
@@ -562,6 +571,174 @@ class Database(ABC):
                     table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
                 return table
         return table
+
+    def sync(self, table: sqlalchemy.schema.Table, *,
+             keys: Dict[str, Any],
+             compared: Optional[Dict[str, Any]] = None,
+             extra: Optional[Dict[str, Any]] = None,
+             returning: Optional[Sequence[str]] = None,
+             ) -> Tuple[Optional[Dict[str, Any], bool]]:
+        """Insert into a table as necessary to ensure database contains
+        values equivalent to the given ones.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table to be queried and possibly inserted into.
+        keys : `dict`
+            Column name-value pairs used to search for an existing row; must
+            be a combination that can be used to select a single row if one
+            exists.  If such a row does not exist, these values are used in
+            the insert.
+        compared : `dict`, optional
+            Column name-value pairs that are compared to those in any existing
+            row.  If such a row does not exist, these rows are used in the
+            insert.
+        extra : `dict`, optional
+            Column name-value pairs that are ignored if a matching row exists,
+            but used in an insert if one is necessary.
+        returning : `~collections.abc.Sequence` of `str`, optional
+            The names of columns whose values should be returned.
+
+        Returns
+        -------
+        row : `dict`, optional
+            The value of the fields indicated by ``returning``, or `None` if
+            ``returning`` is `None`.
+        inserted : `bool`
+            If `True`, a new row was inserted.
+
+        Raises
+        ------
+        TransactionInterruption
+            Raised if a transaction is active when this method is called.
+        SynchronizationConflict
+            Raised if the values in ``compared`` do match the values in the
+            database.
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False`, and no matching record
+            already exists.
+
+        Notes
+        -----
+        This method may not be called within transactions.  It may be called on
+        read-only databases if and only if the matching row does in fact
+        already exist.
+        """
+
+        def check():
+            """Query for a row that matches the ``key`` argument, and compare
+            to what was given by the caller.
+
+            Returns
+            -------
+            n : `int`
+                Number of matching rows.  ``n != 1`` is always an error, but
+                it's a different kind of error depending on where `check` is
+                being called.
+            bad : `list` of `str`, or `None`
+                The subset of the keys of ``compared`` for which the existing
+                values did not match the given one.  Once again, ``not bad``
+                is always an error, but a different kind on context.  `None`
+                if ``n != 1``
+            result : `list` or `None`
+                Results in the database that correspond to the columns given
+                in ``returning``, or `None` if ``returning is None``.
+            """
+            toSelect = set()
+            if compared is not None:
+                toSelect.update(compared.keys())
+            if returning is not None:
+                toSelect.update(returning)
+            if not toSelect:
+                # Need to select some column, even if we just want to see
+                # how many rows we get back.
+                toSelect.add(next(iter(keys.keys())))
+            selectSql = sqlalchemy.sql.select(
+                [table.columns[k].label(k) for k in toSelect]
+            ).select_from(table).where(
+                sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
+            )
+            fetched = list(self._connection.execute(selectSql).fetchall())
+            if len(fetched) != 1:
+                return len(fetched), None, None
+            existing = fetched[0]
+            if compared is not None:
+                inconsistencies = [k for k, v in compared.items() if existing[k] != v]
+            else:
+                inconsistencies = []
+            if returning is not None:
+                toReturn = [existing[k] for k in returning]
+            else:
+                toReturn = None
+            return 1, inconsistencies, toReturn
+
+        if self.isWriteable():
+            # Database is writeable.  Try an insert first, but allow it to fail
+            # (in only specific ways).
+            row = keys.copy()
+            if compared is not None:
+                row.update(compared)
+            if extra is not None:
+                row.update(extra)
+            insertSql = table.insert().values(row)
+            try:
+                with self.transaction(interrupting=True):
+                    self._connection.execute(insertSql)
+                    # Need to perform check() for this branch inside the
+                    # transaction, so we roll back an insert that didn't do
+                    # what we expected.  That limits the extent to which we
+                    # can reduce duplication between this block and the other
+                    # ones that perform similar logic.
+                    n, bad, result = check()
+                    if n < 1:
+                        raise RuntimeError("Insertion in sync did not seem to affect table.  This is a bug.")
+                    elif n > 2:
+                        raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
+                                           f"unique constraint for table {table.name}.")
+                    elif bad:
+                        raise RuntimeError("Conflict in sync after successful insert; this should only be "
+                                           "possible if the same table is being updated by a concurrent "
+                                           "process that isn't using sync.")
+                # No exceptions, so it looks like we inserted the requested row
+                # successfully.
+                inserted = True
+            except sqlalchemy.exc.IntegrityError as err:
+                # Most likely cause is that an equivalent row already exists,
+                # but it could also be some other constraint.  Query for the
+                # row we think we matched to resolve that question.
+                n, bad, result = check()
+                if n < 1:
+                    # There was no matched row; insertion failed for some
+                    # completely different reason.  Just re-raise the original
+                    # IntegrityError.
+                    raise
+                elif n > 2:
+                    # There were multiple matched rows, which means we
+                    # conflicted *and* the arguments were bad to begin with.
+                    raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
+                                       f"unique constraint for table {table.name}.") from err
+                elif bad:
+                    # No logic bug, but data conflicted on the keys given.
+                    raise SynchronizationConflict(f"Conflict in sync for table "
+                                                  f"{table.name} on column(s) {bad}.") from err
+                # The desired row is already present and consistent with what
+                # we tried to insert.
+                inserted = False
+        else:
+            if self._transactions:
+                raise TransactionInterruption("Calling sync in a transaction block is an error even "
+                                              "on a read-only database.")
+            # Database is not writeable; just see if the row exists.
+            n, bad, result = check()
+            if n < 1:
+                raise ReadOnlyDatabaseError("sync needs to insert, but database is read-only.")
+            elif n > 1:
+                raise RuntimeError("Keys passed to sync do not comprise a unique constraint.")
+            elif bad:
+                raise SynchronizationConflict(f"Conflict in sync on column(s) {bad}.")
+            inserted = False
+        return result, inserted
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
                ) -> Optional[List[int]]:

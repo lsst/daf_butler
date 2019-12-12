@@ -32,6 +32,7 @@ from lsst.sphgeom import ConvexPolygon, UnitVector3d
 from ..interfaces import (
     Database,
     ReadOnlyDatabaseError,
+    SynchronizationConflict,
     TransactionInterruption,
 )
 from .. import ddl
@@ -300,6 +301,66 @@ class DatabaseTests(ABC):
             [dict(r) for r in db.query(sql).fetchall()],
             [{"name": "a1", "region": None}, {"name": "a2", "region": region}]
         )
+
+    def testSync(self):
+        """Tests for `Database.sync`.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Insert a row with sync, because it doesn't exist yet.
+        values, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10}, returning=["id"])
+        self.assertTrue(inserted)
+        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+        # Repeat that operation, which should do nothing but return the
+        # requested values.
+        values, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10}, returning=["id"])
+        self.assertFalse(inserted)
+        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+        # Repeat the operation without the 'extra' arg, which should also just
+        # return the existing row.
+        values, inserted = db.sync(tables.b, keys={"name": "b1"}, returning=["id"])
+        self.assertFalse(inserted)
+        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+        # Repeat the operation with a different value in 'extra'.  That still
+        # shouldn't be an error, because 'extra' is only used if we really do
+        # insert.  Also drop the 'returning' argument.
+        _, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 20})
+        self.assertFalse(inserted)
+        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+        # Repeat the operation with the correct value in 'compared' instead of
+        # 'extra'.
+        _, inserted = db.sync(tables.b, keys={"name": "b1"}, compared={"value": 10})
+        self.assertFalse(inserted)
+        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+                         [dict(r) for r in db.query(tables.b.select()).fetchall()])
+        # Repeat the operation with an incorrect value in 'compared'; this
+        # should raise.
+        with self.assertRaises(SynchronizationConflict):
+            db.sync(tables.b, keys={"name": "b1"}, compared={"value": 20})
+        # Try to sync inside a transaction.  That's always an error, regardless
+        # of whether there would be an insertion or not.
+        with self.assertRaises(TransactionInterruption):
+            with db.transaction():
+                db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10})
+        with self.assertRaises(TransactionInterruption):
+            with db.transaction():
+                db.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
+        # Try to sync in a read-only database.  This should work if and only
+        # if the matching row already exists.
+        with self.asReadOnly(db) as rodb:
+            with rodb.declareStaticTables(create=False) as context:
+                tables = context.addTableTuple(STATIC_TABLE_SPECS)
+            _, inserted = rodb.sync(tables.b, keys={"name": "b1"})
+            self.assertFalse(inserted)
+            self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+                             [dict(r) for r in rodb.query(tables.b.select()).fetchall()])
+            with self.assertRaises(ReadOnlyDatabaseError):
+                rodb.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})
 
     def testReplace(self):
         """Tests for `Database.replace`.
