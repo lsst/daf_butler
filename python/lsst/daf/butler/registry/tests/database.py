@@ -254,6 +254,18 @@ class DatabaseTests(ABC):
         db.insert(d, *rows)
         results = [dict(r) for r in db.query(d.select()).fetchall()]
         self.assertCountEqual(rows, results)
+        # Insert multiple rows into a table with an autoincrement+origin
+        # primary key (this is especially tricky for SQLite, but good to test
+        # for all DBs), but pass in a value for the autoincrement key.
+        # For extra complexity, we re-use the autoincrement value with a
+        # different value for origin.
+        rows2 = [{"id": 700, "origin": db.origin, "b_id": None},
+                 {"id": 700, "origin": 60, "b_id": None},
+                 {"id": 1, "origin": 60, "b_id": None}]
+        db.insert(tables.c, *rows2)
+        results = [dict(r) for r in db.query(tables.c.select()).fetchall()]
+        self.assertCountEqual(results, expected + rows2)
+        self.assertTrue(all(result["id"] is not None for result in results))
 
         # Define 'SELECT COUNT(*)' query for later use.
         count = sqlalchemy.sql.select([sqlalchemy.sql.func.count()])
