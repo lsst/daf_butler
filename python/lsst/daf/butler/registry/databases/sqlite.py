@@ -85,9 +85,9 @@ _AUTOINCR_TABLE_SPEC = ddl.TableSpec(
 
 
 @dataclass
-class _AutoincrementWorkaround:
+class _AutoincrementCompoundKeyWorkaround:
     """A workaround for SQLite's lack of support for compound primary keys that
-    include an autoincrment field.
+    include an autoincrement field.
     """
 
     table: sqlalchemy.schema.Table
@@ -164,11 +164,22 @@ class SqliteDatabase(Database):
             raise RuntimeError("At most one autoincrement field per table is allowed.")
         if len(primaryKeyFieldNames) > 1 and len(autoincrFieldNames) > 0:
             # SQLite's default rowid-based autoincrement doesn't work if the
-            # field is just one field in a compound primary key.
-            # As a workaround, we create an extra table with just one column
-            # that we'll insert into to generate those IDs.
+            # field is just one field in a compound primary key.  As a
+            # workaround, we create an extra table with just one column that
+            # we'll insert into to generate those IDs.  That's only safe if
+            # that single-column table's records are already unique with just
+            # the autoincrement field, not the rest of the primary key.  In
+            # practice, that means the single-column table's records are those
+            # for which origin == self.origin.
             autoincrFieldName, = autoincrFieldNames
-            self._autoincr[name] = _AutoincrementWorkaround(
+            otherPrimaryKeyFieldNames = primaryKeyFieldNames - autoincrFieldNames
+            if otherPrimaryKeyFieldNames != {"origin"}:
+                # We need the only other field in the key to be 'origin'.
+                raise NotImplementedError(
+                    "Compound primary keys with an autoincrement are only supported in SQLite "
+                    "if the only non-autoincrement primary key field is 'origin'."
+                )
+            self._autoincr[name] = _AutoincrementCompoundKeyWorkaround(
                 table=self._convertTableSpec(f"_autoinc_{name}", _AUTOINCR_TABLE_SPEC, metadata, **kwds),
                 column=autoincrFieldName
             )
@@ -180,23 +191,51 @@ class SqliteDatabase(Database):
         if autoincr is not None:
             # This table has a compound primary key that includes an
             # autoincrement.  That doesn't work natively in SQLite, so we
-            # insert into this single-column table and use those IDs.
+            # insert into a single-column table and use those IDs.
             if not rows:
                 return [] if returnIds else None
-            with self.transaction():
-                newRows = []
-                ids = []
-                for row in rows:
-                    newRow = row.copy()
-                    id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
-                    newRow[autoincr.column] = id
-                    newRows.append(newRow)
-                    ids.append(id)
-                super().insert(table, *newRows)
-            if returnIds:
-                return ids
+            if autoincr.column in rows[0]:
+                # Caller passed the autoincrement key values explicitly in the
+                # first row.  They had better have done the same for all rows,
+                # or SQLAlchemy would have a problem, even if we didn't.
+                assert all(autoincr.column in row for row in rows)
+                # We need to insert only the values that correspond to
+                # ``origin == self.origin`` into the single-column table, to
+                # make sure we don't generate conflicting keys there later.
+                rowsForAutoincrTable = [dict(id=row[autoincr.column])
+                                        for row in rows if row["origin"] == self.origin]
+                # Insert into the autoincr table and the target table inside
+                # a transaction.  The main-table insertion can take care of
+                # returnIds for us.
+                with self.transaction():
+                    self._connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
+                    return super().insert(table, *rows, returnIds=returnIds)
             else:
-                return None
+                # Caller did not pass autoincrement key values on the first
+                # row.  Make sure they didn't ever do that, and also make
+                # sure the origin that was passed in is always self.origin,
+                # because we can't safely generate autoincrement values
+                # otherwise.
+                assert all(autoincr.column not in row and row["origin"] == self.origin for row in rows)
+                # Insert into the autoincr table one by one to get the
+                # primary key values back, then insert into the target table
+                # in the same transaction.
+                with self.transaction():
+                    newRows = []
+                    ids = []
+                    for row in rows:
+                        newRow = row.copy()
+                        id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
+                        newRow[autoincr.column] = id
+                        newRows.append(newRow)
+                        ids.append(id)
+                    # Don't ever ask to returnIds here, because we've already
+                    # got them.
+                    super().insert(table, *newRows)
+                if returnIds:
+                    return ids
+                else:
+                    return None
         else:
             return super().insert(table, *rows, returnIds=returnIds)
 
