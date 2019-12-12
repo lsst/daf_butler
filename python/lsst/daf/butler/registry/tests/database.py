@@ -300,3 +300,34 @@ class DatabaseTests(ABC):
             [dict(r) for r in db.query(sql).fetchall()],
             [{"name": "a1", "region": None}, {"name": "a2", "region": region}]
         )
+
+    def testReplace(self):
+        """Tests for `Database.replace`.
+        """
+        db = self.makeEmptyDatabase(origin=1)
+        with db.declareStaticTables(create=True) as context:
+            tables = context.addTableTuple(STATIC_TABLE_SPECS)
+        # Use 'replace' to insert a single row that contains a region and
+        # query to get it back.
+        region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
+        row1 = {"name": "a1", "region": region}
+        db.replace(tables.a, row1)
+        self.assertEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1])
+        # Insert another row without a region.
+        row2 = {"name": "a2", "region": None}
+        db.replace(tables.a, row2)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        # Use replace to re-insert both of those rows again, which should do
+        # nothing.
+        db.replace(tables.a, row1, row2)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2])
+        # Replace row1 with a row with no region, while reinserting row2.
+        row1a = {"name": "a1", "region": None}
+        db.replace(tables.a, row1a, row2)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1a, row2])
+        # Replace both rows, returning row1 to its original state, while adding
+        # a new one.  Pass them in in a different order.
+        row2a = {"name": "a2", "region": region}
+        row3 = {"name": "a3", "region": None}
+        db.replace(tables.a, row3, row2a, row1)
+        self.assertCountEqual([dict(r) for r in db.query(tables.a.select()).fetchall()], [row1, row2a, row3])

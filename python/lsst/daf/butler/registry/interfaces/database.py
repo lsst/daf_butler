@@ -611,6 +611,40 @@ class Database(ABC):
             sql = table.insert()
             return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
 
+    @abstractmethod
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
+        """Insert one or more rows into a table, replacing any existing rows
+        for which insertion of a new row would violate the primary key
+        constraint.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            Table rows should be inserted into.
+        rows
+            Positional arguments are the rows to be inserted, as dictionaries
+            mapping column name to value.  The keys in all dictionaries must
+            be the same.
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
+
+        Notes
+        -----
+        May be used inside transaction contexts, so implementations may not
+        perform operations that interrupt transactions.
+
+        Implementations should raise a `sqlalchemy.exc.IntegrityError`
+        exception when a constraint other than the primary key would be
+        violated.
+
+        Implementations are not required to support `replace` on tables
+        with autoincrement keys.
+        """
+        raise NotImplementedError()
+
     def delete(self, table: sqlalchemy.schema.Table, columns: Iterable[str], *rows: dict) -> int:
         """Delete one or more rows from a table.
 

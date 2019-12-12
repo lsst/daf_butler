@@ -26,7 +26,7 @@ from typing import Optional
 
 import sqlalchemy
 
-from ..interfaces import Database
+from ..interfaces import Database, ReadOnlyDatabaseError
 
 
 class PostgresqlDatabase(Database):
@@ -79,3 +79,19 @@ class PostgresqlDatabase(Database):
 
     def __str__(self) -> str:
         return f"PostgreSQL@{self.dbname}:{self.namespace}"
+
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
+        # This uses special support for UPSERT in PostgreSQL backend:
+        # https://docs.sqlalchemy.org/en/13/dialects/postgresql.html#insert-on-conflict-upsert
+        query = sqlalchemy.dialects.postgresql.dml.insert(table)
+        # In the SET clause assign all columns using special `excluded`
+        # pseudo-table.  If some column in the table does not appear in the
+        # INSERT list this will set it to NULL.
+        excluded = query.excluded
+        data = {column.name: getattr(excluded, column.name)
+                for column in table.columns
+                if column.name not in table.primary_key}
+        query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
+        self._connection.execute(query, *rows)

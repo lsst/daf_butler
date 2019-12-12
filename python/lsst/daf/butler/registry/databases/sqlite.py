@@ -30,7 +30,7 @@ from dataclasses import dataclass
 import sqlite3
 import sqlalchemy
 
-from ..interfaces import Database
+from ..interfaces import Database, ReadOnlyDatabaseError
 from .. import ddl
 
 
@@ -52,6 +52,31 @@ def _onSqlite3Begin(connection):
     # deadlocks).
     connection.execute("BEGIN IMMEDIATE")
     return connection
+
+
+class _Replace(sqlalchemy.sql.Insert):
+    """A SQLAlchemy query that compiles to INSERT ... ON CONFLICT REPLACE
+    on the primary key constraint for the table.
+    """
+    pass
+
+
+@sqlalchemy.ext.compiler.compiles(_Replace, "sqlite")
+def _replace(insert, compiler, **kw):
+    """Generate an INSERT ... ON CONFLICT REPLACE query.
+    """
+    # SQLite and PostgreSQL use similar syntax for their ON CONFLICT extension,
+    # but SQLAlchemy only knows about PostgreSQL's, so we have to compile some
+    # custom text SQL ourselves.
+    result = compiler.visit_insert(insert, **kw)
+    preparer = compiler.preparer
+    pk_columns = ", ".join([preparer.format_column(col) for col in insert.table.primary_key])
+    result += f" ON CONFLICT ({pk_columns})"
+    columns = [preparer.format_column(col) for col in insert.table.columns
+               if col.name not in insert.table.primary_key]
+    updates = ", ".join([f"{col} = excluded.{col}" for col in columns])
+    result += f" DO UPDATE SET {updates}"
+    return result
 
 
 _AUTOINCR_TABLE_SPEC = ddl.TableSpec(
@@ -174,6 +199,15 @@ class SqliteDatabase(Database):
                 return None
         else:
             return super().insert(table, *rows, returnIds=returnIds)
+
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
+        if not self.isWriteable():
+            raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
+        if table.name in self._autoincr:
+            raise NotImplementedError(
+                "replace does not support compound primary keys with autoincrement fields."
+            )
+        self._connection.execute(_Replace(table), *rows)
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).
