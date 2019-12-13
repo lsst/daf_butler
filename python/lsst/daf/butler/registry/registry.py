@@ -23,7 +23,6 @@ from __future__ import annotations
 
 __all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
-from abc import ABCMeta, abstractmethod
 import contextlib
 from typing import (
     Any,
@@ -85,7 +84,7 @@ class OrphanedRecordError(Exception):
     """
 
 
-class Registry(metaclass=ABCMeta):
+class Registry:
     """Registry interface.
 
     Parameters
@@ -104,7 +103,6 @@ class Registry(metaclass=ABCMeta):
     """
 
     @classmethod
-    @abstractmethod
     def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True):
         """Set any filesystem-dependent config options for this Registry to
         be appropriate for a new empty repository with the given root.
@@ -236,7 +234,6 @@ class Registry(metaclass=ABCMeta):
         """
         yield
 
-    @abstractmethod
     def registerOpaqueTable(self, name: str, spec: TableSpec):
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
         other data repository client.
@@ -254,7 +251,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def insertOpaqueData(self, name: str, *data: dict):
         """Insert records into an opaque table.
@@ -270,7 +266,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
         """Retrieve records from an opaque table.
 
@@ -292,7 +287,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def deleteOpaqueData(self, name: str, **where: Any):
         """Remove records from an opaque table.
@@ -310,7 +304,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def getAllCollections(self):
         """Get names of all the collections found in this repository.
 
@@ -321,7 +314,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def find(self, collection: str, datasetType: DatasetType, dataId: Optional[DataId] = None,
              **kwds: Any) -> Optional[DatasetRef]:
         """Lookup a dataset.
@@ -356,7 +348,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """
@@ -387,7 +378,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
 
@@ -408,7 +398,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def getAllDatasetTypes(self) -> FrozenSet[DatasetType]:
         """Get every registered `DatasetType`.
 
@@ -419,7 +408,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def addDataset(self, datasetType: Union[DatasetType, str],
                    dataId: DataId, run: str, producer: Optional[Quantum] = None,
@@ -468,7 +456,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def getDataset(self, id: int, datasetType: Optional[DatasetType] = None,
                    dataId: Optional[DataCoordinate] = None) -> Optional[DatasetRef]:
         """Retrieve a Dataset entry.
@@ -495,7 +482,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def removeDataset(self, ref: DatasetRef):
         """Remove a dataset from the Registry.
@@ -521,7 +507,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def attachComponent(self, name: str, parent: DatasetRef, component: DatasetRef):
         """Attach a component to a dataset.
@@ -543,7 +528,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def associate(self, collection: str, refs: List[DatasetRef]):
         """Add existing Datasets to a collection, implicitly creating the
@@ -571,7 +555,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def disassociate(self, collection: str, refs: List[DatasetRef]):
         """Remove existing Datasets from a collection.
@@ -594,7 +577,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def addDatasetLocation(self, ref: DatasetRef, datastoreName: str):
         """Add datastore name locating a given dataset.
@@ -618,7 +600,6 @@ class Registry(metaclass=ABCMeta):
         # `dataset_id`?
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
         """Retrieve datastore locations for a given dataset.
 
@@ -646,7 +627,6 @@ class Registry(metaclass=ABCMeta):
         # `dataset_id`?
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     @transactional
     def removeDatasetLocation(self, datastoreName, ref):
         """Remove datastore location associated with this dataset.
@@ -670,7 +650,6 @@ class Registry(metaclass=ABCMeta):
         # `dataset_id`?
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def registerRun(self, name: str):
         """Add a new run if one with the given name does not exist.
 
@@ -686,7 +665,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):
         """Expand a dimension-based data ID to include additional information.
@@ -716,7 +694,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[dict, DimensionRecord],
                             conform: bool = True):
@@ -737,7 +714,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
                         datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
@@ -783,7 +759,6 @@ class Registry(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    @abstractmethod
     def queryDatasets(self, datasetType: DatasetTypeExpression, *,
                       collections: CollectionsExpression,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
