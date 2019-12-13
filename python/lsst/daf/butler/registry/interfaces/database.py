@@ -188,6 +188,13 @@ class Database(ABC):
         self._metadata = None
 
     @classmethod
+    def makeDefaultUri(cls, root: str) -> Optional[str]:
+        """Create a default connection URI appropriate for the given root
+        directory, or `None` if there can be no such default.
+        """
+        return None
+
+    @classmethod
     def fromUri(cls, uri: str, *, origin: int, namespace: Optional[str] = None,
                 writeable: bool = True) -> Database:
         """Construct a database from a SQLAlchemy URI.

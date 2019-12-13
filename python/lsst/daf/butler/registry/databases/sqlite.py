@@ -26,6 +26,7 @@ from contextlib import closing
 import copy
 from typing import ContextManager, List, Optional
 from dataclasses import dataclass
+import os
 import urllib.parse
 
 import sqlite3
@@ -150,6 +151,10 @@ class SqliteDatabase(Database):
             self.filename = filename
         self._writeable = writeable
         self._autoincr = {}
+
+    @classmethod
+    def makeDefaultUri(cls, root: str) -> Optional[str]:
+        return "sqlite:///" + os.path.join(root, "gen3.sqlite3")
 
     @classmethod
     def connect(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,

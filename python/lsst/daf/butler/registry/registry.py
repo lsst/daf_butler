@@ -102,39 +102,6 @@ class Registry:
     absolute path. Can be None if no defaults specified.
     """
 
-    @classmethod
-    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True):
-        """Set any filesystem-dependent config options for this Registry to
-        be appropriate for a new empty repository with the given root.
-
-        Parameters
-        ----------
-        root : `str`
-            Filesystem path to the root of the data repository.
-        config : `Config`
-            A `Config` to update. Only the subset understood by
-            this component will be updated. Will not expand
-            defaults.
-        full : `Config`
-            A complete config with all defaults expanded that can be
-            converted to a `RegistryConfig`. Read-only and will not be
-            modified by this method.
-            Repository-specific options that should not be obtained
-            from defaults when Butler instances are constructed
-            should be copied from ``full`` to ``config``.
-        overwrite : `bool`, optional
-            If `False`, do not modify a value in ``config`` if the value
-            already exists.  Default is always to overwrite with the provided
-            ``root``.
-
-        Notes
-        -----
-        If a keyword is explicitly defined in the supplied ``config`` it
-        will not be overridden by this method if ``overwrite`` is `False`.
-        This allows explicit values set in external configs to be retained.
-        """
-        Config.updateParameters(RegistryConfig, config, full, toCopy=(), overwrite=overwrite)
-
     @staticmethod
     def fromConfig(registryConfig: Union[ButlerConfig, RegistryConfig, Config, str],
                    schemaConfig: Union[SchemaConfig, Config, str, None] = None,

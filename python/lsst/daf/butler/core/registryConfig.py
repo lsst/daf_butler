@@ -85,6 +85,23 @@ class RegistryConfig(ConfigSubset):
         databaseClass = self["engines", dialect]
         return doImport(databaseClass)
 
+    def makeDefaultDatabaseUri(self, root: str):
+        """Return a default 'db' URI for the registry configured here that is
+        appropriate for a new empty repository with the given root.
+
+        Parameters
+        ----------
+        root : `str`
+            Filesystem path to the root of the data repository.
+
+        Returns
+        -------
+        uri : `str`
+            URI usable as the 'db' string in a `RegistryConfig`.
+        """
+        DatabaseClass = self.getDatabaseClass()
+        return DatabaseClass.makeDefaultUri(root)
+
     @property
     def connectionString(self):
         """Return the connection string to the underlying database
