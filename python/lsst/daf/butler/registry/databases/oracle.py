@@ -27,7 +27,7 @@ from typing import Optional
 
 import sqlalchemy
 
-from ..interfaces import Database, ReadOnlyDatabaseError
+from ..interfaces import ConnectionStruct, Database, ReadOnlyDatabaseError
 from .. import ddl
 from ..nameShrinker import NameShrinker
 
@@ -93,61 +93,55 @@ class OracleDatabase(Database):
 
     Parameters
     ----------
+    cs : `ConnectionStruct`
+        An existing connection created by a previous call to `connect`.
     origin : `int`
         An integer ID that should be used as the default for any datasets,
         quanta, or other entities that use a (autoincrement, origin) compound
         primary key.
-    uri : `str`, optional
-        Database connection string.  If not provided, ``engine`` must be.
-    engine : `sqlalchemy.engine.Engine`, optional
-        SQLAlchemy engine instance to use directly.
     namespace : `str`, optional
-        Namespace (schema) for all tables used by this database.  May be,
-        `None` which will use the schema implied by ``uri`` or ``engine``
-        (which may be `None` for no schema).
+        The namespace (schema) this database is associated with.  If `None`,
+        the default schema for the connection is used (which may be `None`).
+    writeable : `bool`, optional
+        If `True`, allow write operations on the database, including
+        ``CREATE TABLE``.
     prefix : `str`, optional
         Prefix to add to all table names, effectively defining a virtual
         schema that can coexist with others within the same actual database
         schema.  This prefix must not be used in the un-prefixed names of
         tables.
-    writeable : `bool`, optional
-        If `True` (default) allow writes to the database.
     """
 
-    def __init__(self, *, origin: int,
-                 uri: Optional[str] = None,
-                 engine: Optional[sqlalchemy.engine.Engine] = None,
-                 namespace: Optional[str] = None,
-                 prefix: Optional[str] = None,
-                 writeable: bool = True):
-        if engine is None:
-            engine = sqlalchemy.engine.create_engine(uri, pool_size=1)
-        connection = engine.connect()
-        # Work around SQLAlchemy assuming that the Oracle limit on identifier
-        # names is even shorter than it is after 12.2.
-        oracle_ver = engine.dialect._get_server_version_info(connection)
-        if oracle_ver < (12, 2):
-            raise RuntimeError("Oracle server version >= 12.2 required.")
-        engine.dialect.max_identifier_length = 128
+    def __init__(self, *, cs: ConnectionStruct, origin: int, namespace: Optional[str] = None,
+                 writeable: bool = True, prefix: Optional[str] = None):
         # Get the schema that was included/implicit in the URI we used to
         # connect.
-        dbapi = engine.raw_connection()
-        if namespace is None:
-            namespace = dbapi.current_schema
-        else:
-            if dbapi.current_schema != namespace:
-                # TODO: could we instead add the schema to the URI before
-                # trying to connect?  Or is an Oracle connection without a
-                # schema not something that can exist?
-                raise RuntimeError("'namespace' and 'uri' arguments specify different schemas.")
-        # TODO: is there anything we can do to make the connection read-only if
-        # writeable is False?  If not (and at present) we just rely on the
-        # Python code being well-behaved and not *trying* to make changes.
-        super().__init__(origin=origin, engine=engine, namespace=namespace, connection=connection)
+        dbapi = cs.engine.raw_connection()
+        namespace = dbapi.current_schema
+        super().__init__(cs=cs, origin=origin, namespace=namespace)
         self._writeable = writeable
         self.dsn = dbapi.dsn
         self.prefix = prefix
-        self._shrinker = NameShrinker(engine.dialect.max_identifier_length)
+        self._shrinker = NameShrinker(cs.engine.dialect.max_identifier_length)
+
+    @classmethod
+    def connect(cls, uri: str, *, writeable: bool = True) -> ConnectionStruct:
+        cs = ConnectionStruct(sqlalchemy.engine.create_engine(uri, pool_size=1))
+        # Work around SQLAlchemy assuming that the Oracle limit on identifier
+        # names is even shorter than it is after 12.2.
+        oracle_ver = cs.engine.dialect._get_server_version_info(cs.connection)
+        if oracle_ver < (12, 2):
+            raise RuntimeError("Oracle server version >= 12.2 required.")
+        cs.engine.dialect.max_identifier_length = 128
+        return cs
+
+    @classmethod
+    def fromConnectionStruct(cls, cs: ConnectionStruct, *, origin: int, namespace: Optional[str] = None,
+                             writeable: bool = True) -> Database:
+        # TODO: is there anything we can do to make the connection read-only if
+        # writeable is False?  If not (and at present) we just rely on the
+        # Python code being well-behaved and not *trying* to make changes.
+        return cls(cs=cs, origin=origin, writeable=writeable, namespace=namespace)
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -186,7 +180,7 @@ class OracleDatabase(Database):
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
-        self._connection.execute(_Merge(table), *rows)
+        self._cs.connection.execute(_Merge(table), *rows)
 
     prefix: Optional[str]
     """A prefix included in all table names to simulate a database namespace

@@ -26,11 +26,12 @@ from contextlib import closing
 import copy
 from typing import List, Optional
 from dataclasses import dataclass
+import urllib.parse
 
 import sqlite3
 import sqlalchemy
 
-from ..interfaces import Database, ReadOnlyDatabaseError
+from ..interfaces import ConnectionStruct, Database, ReadOnlyDatabaseError
 from .. import ddl
 
 
@@ -106,34 +107,133 @@ class SqliteDatabase(Database):
 
     Parameters
     ----------
+    cs : `ConnectionStruct`
+        An existing connection created by a previous call to `connect`.
     origin : `int`
         An integer ID that should be used as the default for any datasets,
         quanta, or other entities that use a (autoincrement, origin) compound
         primary key.
-    filename : `str`, optional
-        Absolute or relative path to the database file to load, or `None` to
-        create a temporary in-memory database.
+    namespace : `str`, optional
+        The namespace (schema) this database is associated with.  If `None`,
+        the default schema for the connection is used (which may be `None`).
     writeable : `bool`, optional
-        If `True` (default) allow writes to the database.
+            If `True`, allow write operations on the database, including
+            ``CREATE TABLE``.
+
+    Notes
+    -----
+    The case where ``namespace is not None`` is not yet tested, and may be
+    broken; we need an API for attaching to different databases in order to
+    write those tests, but haven't yet worked out what is common/different
+    across databases well enough to define it.
     """
 
-    def __init__(self, *, origin: int, filename: Optional[str] = None, writeable: bool = True):
-        target = f"file:{filename}" if filename is not None else ":memory:"
-        if not writeable:
-            target += '?mode=ro&uri=true'
+    def __init__(self, *, cs: ConnectionStruct, origin: int, namespace: Optional[str] = None,
+                 writeable: bool = True):
+        super().__init__(origin=origin, cs=cs, namespace=namespace)
+        # Get the filename from a call to 'PRAGMA database_list'.
+        with closing(cs.connection.connection.cursor()) as cursor:
+            dbList = list(cursor.execute("PRAGMA database_list").fetchall())
+        if len(dbList) == 0:
+            raise RuntimeError("No database in connection.")
+        for _, dbname, filename in dbList:
+            if namespace is None and dbname == "main" or dbname == namespace:
+                break
+        else:
+            if namespace is None:
+                raise RuntimeError("No 'main' database in connection.")
+            else:
+                raise RuntimeError(f"No '{namespace}' database in connection.")
+        if not filename:
+            self.filename = None
+        else:
+            self.filename = filename
+        self._writeable = writeable
+        self._autoincr = {}
+
+    @classmethod
+    def connect(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,
+                writeable: bool = True) -> ConnectionStruct:
+        """Create a `ConnectionStruct` from a SQLAlchemy URI or filename.
+
+        Parameters
+        ----------
+        uri : `str`
+            A SQLAlchemy URI connection string.
+        filename : `str`
+            Name of the SQLite database file, or `None` to use an in-memory
+            database.  Ignored if ``uri is not None``.
+        origin : `int`
+            An integer ID that should be used as the default for any datasets,
+            quanta, or other entities that use a (autoincrement, origin)
+            compound primary key.
+        writeable : `bool`, optional
+            If `True`, allow write operations on the database, including
+            ``CREATE TABLE``.
+
+        Returns
+        -------
+        cs : `ConnectionStruct`
+            A database connection and transaction state.
+        """
+        # In order to be able to tell SQLite that we want a read-only or
+        # read-write connection, we need to make the SQLite DBAPI connection
+        # with a "URI"-based connection string.  SQLAlchemy claims it can do
+        # this
+        # (https://docs.sqlalchemy.org/en/13/dialects/sqlite.html#uri-connections),
+        # but it doesn't seem to work as advertised.  To work around this, we
+        # use the 'creator' argument to sqlalchemy.engine.create_engine, which
+        # lets us pass a callable that creates the DBAPI connection.
+        if uri is None:
+            if filename is None:
+                target = ":memory:"
+                uri = "sqlite://"
+            else:
+                target = f"file:{filename}"
+                uri = f"sqlite:///{filename}"
+        else:
+            parsed = urllib.parse.urlparse(uri)
+            queries = parsed.query.split("&")
+            if "uri=true" in queries:
+                # This is a SQLAlchemy URI that is already trying to make a
+                # SQLite connection via a SQLite URI, and hence there may
+                # be URI components for both SQLite and SQLAlchemy.  We
+                # don't need to support that, and it'd be a
+                # reimplementation of all of the (broken) logic in
+                # SQLAlchemy for doing this, so we just don't.
+                raise NotImplementedError("SQLite connection strings with 'uri=true' are not supported.")
+            # This is just a SQLAlchemy URI with a non-URI SQLite
+            # connection string inside it.  Pull that out so we can use it
+            # in the creator call.
+            if parsed.path.startswith("/"):
+                filename = parsed.path[1:]
+                target = f"file:{filename}"
+            else:
+                filename = None
+                target = ":memory:"
+        if filename is None:
+            if not writeable:
+                raise NotImplementedError("Read-only :memory: databases are not supported.")
+        else:
+            if writeable:
+                target += '?mode=rwc&uri=true'
+            else:
+                target += '?mode=ro&uri=true'
 
         def creator():
             return sqlite3.connect(target, check_same_thread=False, uri=True)
 
-        uri = f"sqlite:///{filename}"
         engine = sqlalchemy.engine.create_engine(uri, poolclass=sqlalchemy.pool.NullPool,
                                                  creator=creator)
+
         sqlalchemy.event.listen(engine, "connect", _onSqlite3Connect)
         sqlalchemy.event.listen(engine, "begin", _onSqlite3Begin)
-        super().__init__(origin=origin, engine=engine)
-        self._writeable = writeable
-        self.filename = filename
-        self._autoincr = {}
+        return ConnectionStruct(engine)
+
+    @classmethod
+    def fromConnectionStruct(cls, cs: ConnectionStruct, *, origin: int, namespace: Optional[str] = None,
+                             writeable: bool = True) -> Database:
+        return cls(cs=cs, origin=origin, writeable=writeable, namespace=namespace)
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -208,7 +308,7 @@ class SqliteDatabase(Database):
                 # a transaction.  The main-table insertion can take care of
                 # returnIds for us.
                 with self.transaction():
-                    self._connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
+                    self._cs.connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
                     return super().insert(table, *rows, returnIds=returnIds)
             else:
                 # Caller did not pass autoincrement key values on the first
@@ -225,7 +325,7 @@ class SqliteDatabase(Database):
                     ids = []
                     for row in rows:
                         newRow = row.copy()
-                        id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
+                        id = self._cs.connection.execute(autoincr.table.insert()).inserted_primary_key[0]
                         newRow[autoincr.column] = id
                         newRows.append(newRow)
                         ids.append(id)
@@ -246,7 +346,7 @@ class SqliteDatabase(Database):
             raise NotImplementedError(
                 "replace does not support compound primary keys with autoincrement fields."
             )
-        self._connection.execute(_Replace(table), *rows)
+        self._cs.connection.execute(_Replace(table), *rows)
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).

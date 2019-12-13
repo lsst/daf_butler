@@ -26,7 +26,7 @@ from typing import Optional
 
 import sqlalchemy
 
-from ..interfaces import Database, ReadOnlyDatabaseError
+from ..interfaces import ConnectionStruct, Database, ReadOnlyDatabaseError
 from ..nameShrinker import NameShrinker
 
 
@@ -35,17 +35,18 @@ class PostgresqlDatabase(Database):
 
     Parameters
     ----------
+    cs : `ConnectionStruct`
+        An existing connection created by a previous call to `connect`.
     origin : `int`
         An integer ID that should be used as the default for any datasets,
         quanta, or other entities that use a (autoincrement, origin) compound
         primary key.
-    uri : `str`, optional
-        Database connection string.
     namespace : `str`, optional
-        Namespace (schema) for all tables used by this database.  May be `None`
-        only if a schema is included in ``uri``.
+        The namespace (schema) this database is associated with.  If `None`,
+        the default schema for the connection is used (which may be `None`).
     writeable : `bool`, optional
-        If `True` (default) allow writes to the database.
+        If `True`, allow write operations on the database, including
+        ``CREATE TABLE``.
 
     Notes
     -----
@@ -55,26 +56,36 @@ class PostgresqlDatabase(Database):
     PostgreSQL server is installed and can be run locally in userspace.
     """
 
-    def __init__(self, *, origin: int, uri: str, namespace: Optional[str] = None, writeable: bool = True):
-        engine = sqlalchemy.engine.create_engine(uri, pool_size=1)
-        dbapi = engine.raw_connection()
+    def __init__(self, *, cs: ConnectionStruct, origin: int, namespace: Optional[str] = None,
+                 writeable: bool = True):
+        super().__init__(origin=origin, cs=cs, namespace=namespace)
+        dbapi = cs.engine.raw_connection()
         try:
             dsn = dbapi.get_dsn_parameters()
         except (AttributeError, KeyError) as err:
             raise RuntimeError(f"Only the psycopg2 driver for PostgreSQL is supported.") from err
         if namespace is None:
-            namespace = dsn.get("schema")
-            if namespace is None:
-                raise RuntimeError("Namespace (schema) must be provided as an argument or included in URI.")
-        else:
-            if dsn.get("schema", namespace) != namespace:
-                raise RuntimeError("'namespace' and 'uri' arguments specify different schemas.")
-        super().__init__(origin=origin, engine=engine, namespace=namespace)
-        if not writeable:
-            dbapi.set_session(readonly=True)
-        self.dbname = dsn["dbname"]
+            namespace = dsn["schema"]
+        self.namespace = namespace
+        self.dbname = dsn.get("dbname")
         self._writeable = writeable
-        self._shrinker = NameShrinker(engine.dialect.max_identifier_length)
+        self._shrinker = NameShrinker(cs.engine.dialect.max_identifier_length)
+
+    @classmethod
+    def connect(cls, uri: str, *, writeable: bool = True) -> ConnectionStruct:
+        cs = ConnectionStruct(sqlalchemy.engine.create_engine(uri, pool_size=1))
+        if not writeable:
+            dbapi = cs.engine.raw_connection()
+            try:
+                dbapi.set_session(readonly=True)
+            except AttributeError as err:
+                raise RuntimeError(f"Only the psycopg2 driver for PostgreSQL is supported.") from err
+        return cs
+
+    @classmethod
+    def fromConnectionStruct(cls, cs: ConnectionStruct, *, origin: int, namespace: Optional[str] = None,
+                             writeable: bool = True) -> Database:
+        return cls(cs=cs, origin=origin, namespace=namespace, writeable=writeable)
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -102,4 +113,4 @@ class PostgresqlDatabase(Database):
                 for column in table.columns
                 if column.name not in table.primary_key}
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
-        self._connection.execute(query, *rows)
+        self._cs.connection.execute(query, *rows)

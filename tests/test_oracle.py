@@ -42,13 +42,13 @@ class OracleDatabaseTestCase(unittest.TestCase, DatabaseTests):
     def setUpClass(cls):
         # Create a single engine for all Database instances we create, to avoid
         # repeatedly spending time connecting.
-        cls._engine = sqlalchemy.create_engine(TEST_URI, pool_size=1)
+        cls._cs = OracleDatabase.connect(TEST_URI)
         cls._prefixes = []
 
     @classmethod
     def tearDownClass(cls):
         commands = []
-        dbapi = cls._engine.raw_connection()
+        dbapi = cls._cs.engine.raw_connection()
         cursor = dbapi.cursor()
         for objectType, objectName in cursor.execute("SELECT object_type, object_name FROM user_objects"):
             if not any(objectName.lower().startswith(prefix) for prefix in cls._prefixes):
@@ -64,11 +64,11 @@ class OracleDatabaseTestCase(unittest.TestCase, DatabaseTests):
     def makeEmptyDatabase(self, origin: int = 0) -> OracleDatabase:
         prefix = f"test_{secrets.token_hex(8).lower()}_"
         self._prefixes.append(prefix)
-        return OracleDatabase(origin=origin, engine=self._engine, prefix=prefix)
+        return OracleDatabase(origin=origin, cs=self._cs, prefix=prefix)
 
     def getNewConnection(self, database: OracleDatabase, *, writeable: bool) -> OracleDatabase:
-        return OracleDatabase(origin=database.origin, engine=self._engine, prefix=database.prefix,
-                              namespace=database.namespace, writeable=writeable)
+        return OracleDatabase(origin=database.origin, cs=self._cs,
+                              prefix=database.prefix, writeable=writeable)
 
     @contextmanager
     def asReadOnly(self, database: OracleDatabase) -> OracleDatabase:

@@ -52,11 +52,11 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     def makeEmptyDatabase(self, origin: int = 0) -> PostgresqlDatabase:
         namespace = f"namespace_{secrets.token_hex(8).lower()}"
-        return PostgresqlDatabase(origin=origin, uri=self.server.url(), namespace=namespace)
+        return PostgresqlDatabase.fromUri(origin=origin, uri=self.server.url(), namespace=namespace)
 
     def getNewConnection(self, database: PostgresqlDatabase, *, writeable: bool) -> PostgresqlDatabase:
-        return PostgresqlDatabase(origin=database.origin, uri=self.server.url(),
-                                  namespace=database.namespace, writeable=writeable)
+        return PostgresqlDatabase.fromUri(origin=database.origin, uri=self.server.url(),
+                                          namespace=database.namespace, writeable=writeable)
 
     @contextmanager
     def asReadOnly(self, database: PostgresqlDatabase) -> PostgresqlDatabase:
