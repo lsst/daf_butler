@@ -6,3 +6,7 @@ registry:
     postgresql: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
     oracle: lsst.daf.butler.registries.oracleRegistry.OracleRegistry
   db: 'sqlite:///:memory:'
+  engines:
+    sqlite: lsst.daf.butler.registry.databases.sqlite.SqliteDatabase
+    postgresql: lsst.daf.butler.registry.databases.postgresql.PostgresqlDatabase
+    oracle: lsst.daf.butler.registry.databases.oracle.OracleDatabase

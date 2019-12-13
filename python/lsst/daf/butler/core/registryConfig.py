@@ -19,11 +19,19 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("RegistryConfig",)
+
+from typing import Type, TYPE_CHECKING
+
+from lsst.utils import doImport
 
 from .connectionString import ConnectionStringFactory
 from .config import ConfigSubset
-from lsst.utils import doImport
+
+if TYPE_CHECKING:
+    from ..registry.interfaces import Database
 
 
 class RegistryConfig(ConfigSubset):
@@ -63,6 +71,19 @@ class RegistryConfig(ConfigSubset):
             registryClass = self.get(("clsMap", dialect))
 
         return doImport(registryClass)
+
+    def getDatabaseClass(self) -> Type[Database]:
+        """Returns the `Database` class targeted by configuration values.
+
+        The appropriate class is determined by parsing the `db` key to extract
+        the dialect, and then looking that up under the `engines` key of the
+        registry config.
+        """
+        dialect = self.getDialect()
+        if dialect not in self["engines"]:
+            raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
+        databaseClass = self["engines", dialect]
+        return doImport(databaseClass)
 
     @property
     def connectionString(self):
