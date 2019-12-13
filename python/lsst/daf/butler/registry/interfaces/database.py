@@ -725,7 +725,7 @@ class Database(ABC):
         returnIds: `bool`
             If `True` (`False` is default), return the values of the table's
             autoincrement primary key field (which much exist).
-        rows
+        *rows
             Positional arguments are the rows to be inserted, as dictionaries
             mapping column name to value.  The keys in all dictionaries must
             be the same.
@@ -771,7 +771,7 @@ class Database(ABC):
         ----------
         table : `sqlalchemy.schema.Table`
             Table rows should be inserted into.
-        rows
+        *rows
             Positional arguments are the rows to be inserted, as dictionaries
             mapping column name to value.  The keys in all dictionaries must
             be the same.
@@ -806,7 +806,7 @@ class Database(ABC):
             The names of columns that will be used to constrain the rows to
             be deleted; these will be combined via ``AND`` to form the
             ``WHERE`` clause of the delete query.
-        rows
+        *rows
             Positional arguments are the keys of rows to be deleted, as
             dictionaries mapping column name to value.  The keys in all
             dictionaries must exactly the names in ``columns``.
@@ -849,7 +849,7 @@ class Database(ABC):
             existing rows to the keys that will hold these values in the
             ``rows`` dictionaries.  Note that these may not be the same due to
             SQLAlchemy limitations.
-        rows
+        *rows
             Positional arguments are the rows to be updated.  The keys in all
             dictionaries must be the same, and may correspond to either a
             value in the ``where`` dictionary or the name of a column to be
@@ -888,10 +888,10 @@ class Database(ABC):
         ----------
         sql : `sqlalchemy.sql.FromClause`
             A SQLAlchemy representation of a ``SELECT`` query.
-        args
+        *args
             Additional positional arguments are forwarded to
             `sqlalchemy.engine.Connection.execute`.
-        kwds
+        **kwds
             Additional keyword arguments are forwarded to
             `sqlalchemy.engine.Connection.execute`.
 
