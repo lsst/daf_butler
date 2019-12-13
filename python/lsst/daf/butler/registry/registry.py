@@ -19,16 +19,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 from abc import ABCMeta, abstractmethod
 import contextlib
 from typing import (
     Any,
+    FrozenSet,
     Iterable,
     Iterator,
+    List,
     Mapping,
     Optional,
+    Set,
+    TYPE_CHECKING,
     Union,
 )
 
@@ -52,6 +58,13 @@ from ..core.queries import (
 )
 from ..core.registryConfig import RegistryConfig
 from ..core.utils import transactional
+
+if TYPE_CHECKING:
+    from ..core import (
+        ButlerConfig,
+        DatasetType,
+        Quantum,
+    )
 
 
 class AmbiguousDatasetError(Exception):
@@ -92,7 +105,7 @@ class Registry(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def setConfigRoot(cls, root, config, full, overwrite=True):
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True):
         """Set any filesystem-dependent config options for this Registry to
         be appropriate for a new empty repository with the given root.
 
@@ -125,7 +138,11 @@ class Registry(metaclass=ABCMeta):
         Config.updateParameters(RegistryConfig, config, full, toCopy=(), overwrite=overwrite)
 
     @staticmethod
-    def fromConfig(registryConfig, schemaConfig=None, dimensionConfig=None, create=False, butlerRoot=None):
+    def fromConfig(registryConfig: Union[ButlerConfig, RegistryConfig, Config, str],
+                   schemaConfig: Union[SchemaConfig, Config, str, None] = None,
+                   dimensionConfig: Union[DimensionConfig, Config, str, None] = None,
+                   create: bool = False,
+                   butlerRoot: Optional[str] = None) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to
@@ -139,12 +156,14 @@ class Registry(metaclass=ABCMeta):
             Schema configuration. Can be read from supplied registryConfig
             if the relevant component is defined and ``schemaConfig`` is
             `None`.
-        dimensionConfig : `DimensionConfig` or `Config` or
-            `str`, optional. `DimensionGraph` configuration. Can be read
-            from supplied registryConfig if the relevant component is
+        dimensionConfig : `DimensionConfig` or `Config` or `str`, optional.
+            `DimensionGraph` configuration. Can be read from supplied
+            ``registryConfig`` if the relevant component is
             defined and ``dimensionConfig`` is `None`.
-        create : `bool`
+        create : `bool`, optional
             Assume empty Registry and create a new one.
+        butlerRoot : `str`, optional
+            Path to the repository root this `Registry` will manage.
 
         Returns
         -------
@@ -182,13 +201,16 @@ class Registry(metaclass=ABCMeta):
         return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
                    butlerRoot=butlerRoot)
 
-    def __init__(self, registryConfig, schemaConfig=None, dimensionConfig=None, create=False,
-                 butlerRoot=None):
+    def __init__(self, registryConfig: RegistryConfig,
+                 schemaConfig: Optional[SchemaConfig] = None,
+                 dimensionConfig: Optional[DimensionConfig] = None,
+                 create: bool = False,
+                 butlerRoot: Optional[str] = None):
         assert isinstance(registryConfig, RegistryConfig)
         self.config = registryConfig
         self.dimensions = DimensionUniverse(dimensionConfig)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "None"
 
     @contextlib.contextmanager
@@ -300,7 +322,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def find(self, collection, datasetType, dataId=None, **kwds):
+    def find(self, collection: str, datasetType: DatasetType, dataId: Optional[DataId] = None,
+             **kwds: Any) -> Optional[DatasetRef]:
         """Lookup a dataset.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
@@ -315,7 +338,7 @@ class Registry(metaclass=ABCMeta):
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        kwds
+        **kwds
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
             `DataCoordinate` or augment an existing one.
@@ -335,7 +358,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def registerDatasetType(self, datasetType):
+    def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """
         Add a new `DatasetType` to the Registry.
 
@@ -346,14 +369,6 @@ class Registry(metaclass=ABCMeta):
         datasetType : `DatasetType`
             The `DatasetType` to be added.
 
-        Raises
-        ------
-        ValueError
-            Raised if the dimensions or storage class are invalid.
-        ConflictingDefinitionError
-            Raised if this DatasetType is already registered with a different
-            definition.
-
         Returns
         -------
         inserted : `bool`
@@ -361,11 +376,19 @@ class Registry(metaclass=ABCMeta):
             existing `DatsetType` was found.  Note that in either case the
             DatasetType is guaranteed to be defined in the Registry
             consistently with the given definition.
+
+        Raises
+        ------
+        ValueError
+            Raised if the dimensions or storage class are invalid.
+        ConflictingDefinitionError
+            Raised if this DatasetType is already registered with a different
+            definition.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getDatasetType(self, name):
+    def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
 
         Parameters
@@ -386,8 +409,8 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getAllDatasetTypes(self):
-        r"""Get every registered `DatasetType`.
+    def getAllDatasetTypes(self) -> FrozenSet[DatasetType]:
+        """Get every registered `DatasetType`.
 
         Returns
         -------
@@ -398,7 +421,9 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def addDataset(self, datasetType, dataId, run, producer=None, recursive=False, **kwds):
+    def addDataset(self, datasetType: Union[DatasetType, str],
+                   dataId: DataId, run: str, producer: Optional[Quantum] = None,
+                   recursive: bool = False, **kwds: Any) -> DatasetRef:
         """Adds a Dataset entry to the `Registry`
 
         This always adds a new Dataset; to associate an existing Dataset with
@@ -420,7 +445,7 @@ class Registry(metaclass=ABCMeta):
         recursive : `bool`
             If True, recursively add Dataset and attach entries for component
             Datasets as well.
-        kwds
+        **kwds
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a
             true `DataCoordinate` or augment an existing
@@ -438,12 +463,14 @@ class Registry(metaclass=ABCMeta):
             given collection.
 
         Exception
-            If ``dataId`` contains unknown or invalid `Dimension` entries.
+            Raised if ``dataId`` contains unknown or invalid `Dimension`
+            entries.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getDataset(self, id, datasetType=None, dataId=None):
+    def getDataset(self, id: int, datasetType: Optional[DatasetType] = None,
+                   dataId: Optional[DataCoordinate] = None) -> Optional[DatasetRef]:
         """Retrieve a Dataset entry.
 
         Parameters
@@ -470,7 +497,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def removeDataset(self, ref):
+    def removeDataset(self, ref: DatasetRef):
         """Remove a dataset from the Registry.
 
         The dataset and all components will be removed unconditionally from
@@ -496,7 +523,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def attachComponent(self, name, parent, component):
+    def attachComponent(self, name: str, parent: DatasetRef, component: DatasetRef):
         """Attach a component to a dataset.
 
         Parameters
@@ -518,7 +545,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def associate(self, collection, refs):
+    def associate(self, collection: str, refs: List[DatasetRef]):
         """Add existing Datasets to a collection, implicitly creating the
         collection if it does not already exist.
 
@@ -546,8 +573,8 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def disassociate(self, collection, refs):
-        r"""Remove existing Datasets from a collection.
+    def disassociate(self, collection: str, refs: List[DatasetRef]):
+        """Remove existing Datasets from a collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
@@ -569,7 +596,7 @@ class Registry(metaclass=ABCMeta):
 
     @abstractmethod
     @transactional
-    def addDatasetLocation(self, ref, datastoreName):
+    def addDatasetLocation(self, ref: DatasetRef, datastoreName: str):
         """Add datastore name locating a given dataset.
 
         Typically used by `Datastore`.
@@ -592,7 +619,7 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getDatasetLocations(self, ref):
+    def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
         """Retrieve datastore locations for a given dataset.
 
         Typically used by `Datastore`.
@@ -662,8 +689,30 @@ class Registry(metaclass=ABCMeta):
     @abstractmethod
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):
-        """Expand a dimension-based data ID to include additional
-        information.
+        """Expand a dimension-based data ID to include additional information.
+
+        Parameters
+        ----------
+        dataId : `DataCoordinate` or `dict`, optional
+            Data ID to be expanded; augmented and overridden by ``kwds``.
+        graph : `DimensionGraph`, optional
+            Set of dimensions for the expanded ID.  If `None`, the dimensions
+            will be inferred from the keys of ``dataId`` and ``kwds``.
+            Dimensions that are in ``dataId`` or ``kwds`` but not in ``graph``
+            are silently ignored, providing a way to extract and expand a
+            subset of a data ID.
+        records : mapping [`DimensionElement`, `DimensionRecord`], optional
+            Dimension record data to use before querying the database for that
+            data.
+        **kwds
+            Additional keywords are treated like additional key-value pairs for
+            ``dataId``, extending and overriding
+
+        Returns
+        -------
+        expanded : `ExpandedDataCoordinate`
+            A data ID that includes full metadata for all of the dimensions it
+            identifieds.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
