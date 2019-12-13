@@ -43,12 +43,11 @@ from ..core import (
     DataId,
     DatasetRef,
     Dimension,
-    DimensionConfig,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
-    SchemaConfig,
+    StorageClassFactory,
     TableSpec,
 )
 from ..core.queries import (
@@ -64,6 +63,7 @@ if TYPE_CHECKING:
         DatasetType,
         Quantum,
     )
+    from .interfaces import Database
 
 
 class AmbiguousDatasetError(Exception):
@@ -89,12 +89,8 @@ class Registry:
 
     Parameters
     ----------
-    registryConfig : `RegistryConfig`
-        Registry configuration.
-    schemaConfig : `SchemaConfig`, optional
-        Schema configuration.
-    dimensionConfig : `DimensionConfig` or `Config` or
-        `DimensionGraph` configuration.
+    config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
+        Registry configuration
     """
 
     defaultConfigFile = None
@@ -102,11 +98,8 @@ class Registry:
     absolute path. Can be None if no defaults specified.
     """
 
-    @staticmethod
-    def fromConfig(registryConfig: Union[ButlerConfig, RegistryConfig, Config, str],
-                   schemaConfig: Union[SchemaConfig, Config, str, None] = None,
-                   dimensionConfig: Union[DimensionConfig, Config, str, None] = None,
-                   create: bool = False,
+    @classmethod
+    def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str], create: bool = False,
                    butlerRoot: Optional[str] = None) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
@@ -115,16 +108,8 @@ class Registry:
 
         Parameters
         ----------
-        registryConfig : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
+        config : `ButlerConfig`, `RegistryConfig`, `Config` or `str`
             Registry configuration
-        schemaConfig : `SchemaConfig`, `Config` or `str`, optional.
-            Schema configuration. Can be read from supplied registryConfig
-            if the relevant component is defined and ``schemaConfig`` is
-            `None`.
-        dimensionConfig : `DimensionConfig` or `Config` or `str`, optional.
-            `DimensionGraph` configuration. Can be read from supplied
-            ``registryConfig`` if the relevant component is
-            defined and ``dimensionConfig`` is `None`.
         create : `bool`, optional
             Assume empty Registry and create a new one.
         butlerRoot : `str`, optional
@@ -135,71 +120,33 @@ class Registry:
         registry : `Registry` (subclass)
             A new `Registry` subclass instance.
         """
-        if schemaConfig is None:
-            # Try to instantiate a schema configuration from the supplied
-            # registry configuration.
-            schemaConfig = SchemaConfig(registryConfig)
-        elif not isinstance(schemaConfig, SchemaConfig):
-            if isinstance(schemaConfig, str) or isinstance(schemaConfig, Config):
-                schemaConfig = SchemaConfig(schemaConfig)
+        if not isinstance(config, RegistryConfig):
+            if isinstance(config, str) or isinstance(config, Config):
+                config = RegistryConfig(config)
             else:
-                raise ValueError("Incompatible Schema configuration: {}".format(schemaConfig))
+                raise ValueError("Incompatible Registry configuration: {}".format(config))
+        DatabaseClass = config.getDatabaseClass()
+        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0))
+        dimensions = DimensionUniverse(config)
+        return cls(database=database, dimensions=dimensions, create=create)
 
-        if dimensionConfig is None:
-            # Try to instantiate a dimension configuration from the supplied
-            # registry configuration.
-            dimensionConfig = DimensionConfig(registryConfig)
-        elif not isinstance(dimensionConfig, DimensionConfig):
-            if isinstance(dimensionConfig, str) or isinstance(dimensionConfig, Config):
-                dimensionConfig = DimensionConfig(dimensionConfig)
-            else:
-                raise ValueError("Incompatible Dimension configuration: {}".format(dimensionConfig))
-
-        if not isinstance(registryConfig, RegistryConfig):
-            if isinstance(registryConfig, str) or isinstance(registryConfig, Config):
-                registryConfig = RegistryConfig(registryConfig)
-            else:
-                raise ValueError("Incompatible Registry configuration: {}".format(registryConfig))
-
-        cls = registryConfig.getRegistryClass()
-
-        return cls(registryConfig, schemaConfig, dimensionConfig, create=create,
-                   butlerRoot=butlerRoot)
-
-    def __init__(self, registryConfig: RegistryConfig,
-                 schemaConfig: Optional[SchemaConfig] = None,
-                 dimensionConfig: Optional[DimensionConfig] = None,
-                 create: bool = False,
-                 butlerRoot: Optional[str] = None):
-        assert isinstance(registryConfig, RegistryConfig)
-        self.config = registryConfig
-        self.dimensions = DimensionUniverse(dimensionConfig)
+    def __init__(self, database: Database, dimensions: DimensionUniverse, *, create: bool = False):
+        self._db = database
+        self.dimensions = dimensions
+        self.storageClasses = StorageClassFactory()
 
     def __str__(self) -> str:
-        return "None"
+        return str(self._db)
+
+    def __repr__(self) -> str:
+        return f"Registry({self._db!r}, {self.dimensions!r})"
 
     @contextlib.contextmanager
     def transaction(self):
-        """Optionally implemented in `Registry` subclasses to provide exception
-        safety guarantees in case an exception is raised in the enclosed block.
-
-        This context manager may be nested (e.g. any implementation by a
-        `Registry` subclass must nest properly).
-
-        .. warning::
-
-            The level of exception safety is not guaranteed by this API.
-            It may implement stong exception safety and roll back any changes
-            leaving the state unchanged, or it may do nothing leaving the
-            underlying `Registry` corrupted.  Depending on the implementation
-            in the subclass.
-
-        .. todo::
-
-            Investigate if we may want to provide a `TransactionalRegistry`
-            subclass that guarantees a particular level of exception safety.
+        """Return a context manager that represents a transaction.
         """
-        yield
+        with self._db.transaction():
+            yield
 
     def registerOpaqueTable(self, name: str, spec: TableSpec):
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
@@ -803,3 +750,12 @@ class Registry:
         `queryDatasets` with the returned data IDs passed as constraints.
         """
         raise NotImplementedError("Must be implemented by subclass")
+
+    dimensions: DimensionUniverse
+    """The universe of all dimensions known to the registry
+    (`DimensionUniverse`).
+    """
+
+    storageClasses: StorageClassFactory
+    """All storage classes known to the registry (`StorageClassFactory`).
+    """
