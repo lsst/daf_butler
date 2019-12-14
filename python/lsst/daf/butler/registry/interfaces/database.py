@@ -38,6 +38,7 @@ from typing import (
     Sequence,
     Tuple,
 )
+import warnings
 
 import sqlalchemy
 
@@ -365,7 +366,15 @@ class Database(ABC):
                 if self.namespace is not None:
                     if self.namespace not in context._inspector.get_schema_names():
                         self._connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
-                self._metadata.create_all(self._connection)
+                # In our tables we have columns that make use of sqlalchemy
+                # Sequence objects. There is currently a bug in sqlalchmey that
+                # causes a deprecation warning to be thrown on a property of
+                # the Sequence object when the repr for the sequence is
+                # created. Here a filter is used to catch these deprecation
+                # warnings when tables are created.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
+                    self._metadata.create_all(self._connection)
         except BaseException:
             self._metadata.drop_all(self._connection)
             self._metadata = None
