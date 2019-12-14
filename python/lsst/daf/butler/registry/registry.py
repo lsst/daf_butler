@@ -150,6 +150,7 @@ class Registry:
         self._connection = self._db._connection
         self._dimensionStorage = setupDimensionStorage(self._connection, dimensions, dimensionTables)
         self._opaqueTables = {}
+        self._datasetTypes = {}
 
     def __str__(self) -> str:
         return str(self._db)
@@ -170,6 +171,7 @@ class Registry:
             # need to.  Can we avoid that?
             for storage in self._dimensionStorage.values():
                 storage.clearCaches()
+            self._datasetTypes.clear()
             raise
 
     def registerOpaqueTable(self, tableName: str, spec: TableSpec):
@@ -301,7 +303,60 @@ class Registry:
             Raised if this DatasetType is already registered with a different
             definition.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        # TODO: this implementation isn't concurrent, except *maybe* in SQLite
+        # with aggressive locking (where starting a transaction is essentially
+        # the same as grabbing a full-database lock).  Should be reimplemented
+        # with Database.sync to fix this, but that may require schema changes
+        # as well so we only have to synchronize one row to know if we have
+        # inconsistent definitions.
+
+        # If the DatasetType is already in the cache, we assume it's already in
+        # the DB (note that we don't actually provide a way to remove them from
+        # the DB).
+        existingDatasetType = self._datasetTypes.get(datasetType.name)
+        # If it's not in the cache, try to insert it.
+        if existingDatasetType is None:
+            try:
+                with self._db.transaction():
+                    self._db.insert(
+                        self._tables.dataset_type,
+                        {
+                            "dataset_type_name": datasetType.name,
+                            "storage_class": datasetType.storageClass.name,
+                        }
+                    )
+            except sqlalchemy.exc.IntegrityError:
+                # Insert failed on the only unique constraint on this table:
+                # dataset_type_name.  So now the question is whether the one in
+                # there is the same as the one we tried to insert.
+                existingDatasetType = self.getDatasetType(datasetType.name)
+            else:
+                # If adding the DatasetType record itself succeeded, add its
+                # dimensions (if any).  We don't guard this in a try block
+                # because a problem with this insert means the database
+                # content must be corrupted.
+                if datasetType.dimensions:
+                    self._db.insert(
+                        self._tables.dataset_type_dimensions,
+                        *[{"dataset_type_name": datasetType.name,
+                           "dimension_name": dimensionName}
+                          for dimensionName in datasetType.dimensions.names]
+                    )
+                # Update the cache.
+                self._datasetTypes[datasetType.name] = datasetType
+                # Also register component DatasetTypes (if any).
+                for compName, compStorageClass in datasetType.storageClass.components.items():
+                    compType = DatasetType(datasetType.componentTypeName(compName),
+                                           dimensions=datasetType.dimensions,
+                                           storageClass=compStorageClass)
+                    self.registerDatasetType(compType)
+                # Inserts succeeded, nothing left to do here.
+                return True
+        # A DatasetType with this name exists, check if is equal
+        if datasetType == existingDatasetType:
+            return False
+        else:
+            raise ConflictingDefinitionError(f"DatasetType: {datasetType} != existing {existingDatasetType}")
 
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
@@ -321,7 +376,35 @@ class Registry:
         KeyError
             Requested named DatasetType could not be found in registry.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        datasetType = self._datasetTypes.get(name)
+        if datasetType is None:
+            # Get StorageClass from DatasetType table
+            result = self._db.query(
+                sqlalchemy.sql.select(
+                    [self._tables.dataset_type.c.storage_class]
+                ).where(
+                    self._tables.dataset_type.columns.dataset_type_name == name
+                )
+            ).fetchone()
+
+            if result is None:
+                raise KeyError("Could not find entry for datasetType {}".format(name))
+
+            storageClass = self.storageClasses.getStorageClass(result["storage_class"])
+            # Get Dimensions (if any) from DatasetTypeDimensions table
+            result = self._db.query(
+                sqlalchemy.sql.select(
+                    [self._tables.dataset_type_dimensions.columns.dimension_name]
+                ).where(
+                    self._tables.dataset_type_dimensions.columns.dataset_type_name == name
+                )
+            ).fetchall()
+            dimensions = DimensionGraph(self.dimensions, names=(r[0] for r in result) if result else ())
+            datasetType = DatasetType(name=name,
+                                      storageClass=storageClass,
+                                      dimensions=dimensions)
+            self._datasetTypes[name] = datasetType
+        return datasetType
 
     def getAllDatasetTypes(self) -> FrozenSet[DatasetType]:
         """Get every registered `DatasetType`.
@@ -331,7 +414,16 @@ class Registry:
         types : `frozenset` of `DatasetType`
             Every `DatasetType` in the registry.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        # Get all the registered names
+        result = self._db.query(
+            sqlalchemy.sql.select(
+                [self._tables.dataset_type.columns.dataset_type_name]
+            )
+        ).fetchall()
+        if result is None:
+            return frozenset()
+        datasetTypeNames = [r[0] for r in result]
+        return frozenset(self.getDatasetType(name) for name in datasetTypeNames)
 
     def find(self, collection: str, datasetType: DatasetType, dataId: Optional[DataId] = None,
              **kwds: Any) -> Optional[DatasetRef]:

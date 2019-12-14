@@ -26,7 +26,11 @@ from abc import ABC, abstractmethod
 
 import sqlalchemy
 
-from ..registry import Registry
+from ...core import (
+    DatasetType,
+    StorageClass,
+)
+from ..registry import Registry, ConflictingDefinitionError
 from .. import ddl
 
 
@@ -70,3 +74,40 @@ class RegistryTests(ABC):
         self.assertCountEqual(rows[:2], list(registry.fetchOpaqueData(table)))
         registry.deleteOpaqueData(table)
         self.assertEqual([], list(registry.fetchOpaqueData(table)))
+
+    def testDatasetType(self):
+        """Tests for `Registry.registerDatasetType` and
+        `Registry.getDatasetType`.
+        """
+        registry = self.makeRegistry()
+        # Check valid insert
+        datasetTypeName = "test"
+        storageClass = StorageClass("testDatasetType")
+        registry.storageClasses.registerStorageClass(storageClass)
+        dimensions = registry.dimensions.extract(("instrument", "visit"))
+        differentDimensions = registry.dimensions.extract(("instrument", "patch"))
+        inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        # Inserting for the first time should return True
+        self.assertTrue(registry.registerDatasetType(inDatasetType))
+        outDatasetType1 = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType1, inDatasetType)
+
+        # Re-inserting should work
+        self.assertFalse(registry.registerDatasetType(inDatasetType))
+        # Except when they are not identical
+        with self.assertRaises(ConflictingDefinitionError):
+            nonIdenticalDatasetType = DatasetType(datasetTypeName, differentDimensions, storageClass)
+            registry.registerDatasetType(nonIdenticalDatasetType)
+
+        # Template can be None
+        datasetTypeName = "testNoneTemplate"
+        storageClass = StorageClass("testDatasetType2")
+        registry.storageClasses.registerStorageClass(storageClass)
+        dimensions = registry.dimensions.extract(("instrument", "visit"))
+        inDatasetType = DatasetType(datasetTypeName, dimensions, storageClass)
+        registry.registerDatasetType(inDatasetType)
+        outDatasetType2 = registry.getDatasetType(datasetTypeName)
+        self.assertEqual(outDatasetType2, inDatasetType)
+
+        allTypes = registry.getAllDatasetTypes()
+        self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
