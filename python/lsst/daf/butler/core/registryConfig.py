@@ -29,6 +29,7 @@ from lsst.utils import doImport
 
 from .connectionString import ConnectionStringFactory
 from .config import ConfigSubset
+from .repoRelocation import replaceRoot
 
 if TYPE_CHECKING:
     from ..registry.interfaces import Database
@@ -101,6 +102,12 @@ class RegistryConfig(ConfigSubset):
         """
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
+
+    def replaceRoot(self, root: str):
+        """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
+        with the given root directory.
+        """
+        self["db"] = replaceRoot(self["db"], root)
 
     @property
     def connectionString(self):
