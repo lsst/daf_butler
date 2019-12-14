@@ -111,3 +111,47 @@ class RegistryTests(ABC):
 
         allTypes = registry.getAllDatasetTypes()
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
+
+    def testDimensions(self):
+        """Tests for `Registry.insertDimensionData` and
+        `Registry.expandDataId`.
+        """
+        registry = self.makeRegistry()
+        dimensionName = "instrument"
+        dimension = registry.dimensions[dimensionName]
+        dimensionValue = {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+        registry.insertDimensionData(dimensionName, dimensionValue)
+        # Inserting the same value twice should fail
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            registry.insertDimensionData(dimensionName, dimensionValue)
+        # expandDataId should retrieve the record we just inserted
+        self.assertEqual(
+            registry.expandDataId(
+                instrument="DummyCam",
+                graph=dimension.graph
+            ).records[dimensionName].toDict(),
+            dimensionValue
+        )
+        # expandDataId should raise if there is no record with the given ID.
+        with self.assertRaises(LookupError):
+            registry.expandDataId({"instrument": "Unknown"}, graph=dimension.graph)
+        # abstract_filter doesn't have a table; insert should fail.
+        with self.assertRaises(TypeError):
+            registry.insertDimensionData("abstract_filter", {"abstract_filter": "i"})
+        dimensionName2 = "physical_filter"
+        dimension2 = registry.dimensions[dimensionName2]
+        dimensionValue2 = {"name": "DummyCam_i", "abstract_filter": "i"}
+        # Missing required dependency ("instrument") should fail
+        with self.assertRaises(sqlalchemy.exc.IntegrityError):
+            registry.insertDimensionData(dimensionName2, dimensionValue2)
+        # Adding required dependency should fix the failure
+        dimensionValue2["instrument"] = "DummyCam"
+        registry.insertDimensionData(dimensionName2, dimensionValue2)
+        # expandDataId should retrieve the record we just inserted.
+        self.assertEqual(
+            registry.expandDataId(
+                instrument="DummyCam", physical_filter="DummyCam_i",
+                graph=dimension2.graph
+            ).records[dimensionName2].toDict(),
+            dimensionValue2
+        )

@@ -49,6 +49,7 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
+    ExpandedDataCoordinate,
     StorageClassFactory,
     TableSpec,
 )
@@ -728,7 +729,30 @@ class Registry:
             A data ID that includes full metadata for all of the dimensions it
             identifieds.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwds)
+        if isinstance(standardized, ExpandedDataCoordinate):
+            return standardized
+        elif isinstance(dataId, ExpandedDataCoordinate):
+            records = dict(records) if records is not None else {}
+            records.update(dataId.records)
+        else:
+            records = dict(records) if records is not None else {}
+        keys = dict(standardized)
+        for element in standardized.graph._primaryKeyTraversalOrder:
+            record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
+            if record is ...:
+                storage = self._dimensionStorage[element]
+                record = storage.fetch(keys)
+                records[element] = record
+            if record is not None:
+                keys.update((d, getattr(record, d.name)) for d in element.implied)
+            else:
+                if element in standardized.graph.required:
+                    raise LookupError(
+                        f"Could not fetch record for required dimension {element.name} via keys {keys}."
+                    )
+                records.update((d, None) for d in element.implied)
+        return ExpandedDataCoordinate(standardized.graph, standardized.values(), records=records)
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[dict, DimensionRecord],
@@ -748,7 +772,14 @@ class Registry:
             ``data`` is a one or more `DimensionRecord` instances of the
             appropriate subclass.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        if conform:
+            element = self.dimensions[element]  # if this is a name, convert it to a true DimensionElement.
+            records = [element.RecordClass.fromDict(row) if not type(row) is element.RecordClass else row
+                       for row in data]
+        else:
+            records = data
+        storage = self._dimensionStorage[element]
+        storage.insert(*records)
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
