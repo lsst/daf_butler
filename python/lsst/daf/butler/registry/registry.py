@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
 
 import contextlib
+import sys
 from typing import (
     Any,
     FrozenSet,
@@ -57,10 +58,13 @@ from ..core import (
 from ..core.dimensions.storage import setupDimensionStorage
 from ..core.queries import (
     CollectionsExpression,
+    DatasetRegistryStorage,
     DatasetTypeExpression,
+    QueryBuilder,
+    QuerySummary,
 )
 from ..core.registryConfig import RegistryConfig
-from ..core.utils import transactional
+from ..core.utils import iterable, transactional, NamedKeyDict
 
 from .tables import makeRegistryTableSpecs
 
@@ -194,6 +198,9 @@ class Registry:
         # while we transition to using the Database API more.
         self._connection = self._db._connection
         self._dimensionStorage = setupDimensionStorage(self._connection, dimensions, dimensionTables)
+        self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
+                                                      universe=self.dimensions,
+                                                      tables=self._tables._asdict())
         self._opaqueTables = {}
         self._datasetTypes = {}
         self._runIdsByName = {}   # key = name, value = id
@@ -1078,6 +1085,30 @@ class Registry:
         storage = self._dimensionStorage[element]
         storage.insert(*records)
 
+    def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
+        """Return a `QueryBuilder` instance capable of constructing and
+        managing more complex queries than those obtainable via `Registry`
+        interfaces.
+
+        This is an advanced `SqlRegistry`-only interface; downstream code
+        should prefer `Registry.queryDimensions` and `Registry.queryDatasets`
+        whenever those are sufficient.
+
+        Parameters
+        ----------
+        summary: `QuerySummary`
+            Object describing and categorizing the full set of dimensions that
+            will be included in the query.
+
+        Returns
+        -------
+        builder : `QueryBuilder`
+            Object that can be used to construct and perform advanced queries.
+        """
+        return QueryBuilder(connection=self._connection, summary=summary,
+                            dimensionStorage=self._dimensionStorage,
+                            datasetStorage=self._datasetStorage)
+
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
                         datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
@@ -1121,7 +1152,34 @@ class Registry:
             Data IDs matching the given query parameters.  Order is
             unspecified.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        dimensions = iterable(dimensions)
+        standardizedDataId = self.expandDataId(dataId, **kwds)
+        standardizedDatasets = NamedKeyDict()
+        requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
+        if datasets is not None:
+            for datasetTypeExpr, collectionsExpr in datasets.items():
+                for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetTypeExpr,
+                                                                              collections=collectionsExpr,
+                                                                              dataId=standardizedDataId):
+                    requestedDimensionNames.update(trueDatasetType.dimensions.names)
+                    standardizedDatasets[trueDatasetType] = collectionsExpr
+        summary = QuerySummary(
+            requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
+            dataId=standardizedDataId,
+            expression=where,
+        )
+        builder = self.makeQueryBuilder(summary)
+        for datasetType, collections in standardizedDatasets.items():
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish()
+        predicate = query.predicate()
+        for row in query.execute():
+            if predicate(row):
+                result = query.extractDataId(row)
+                if expand:
+                    yield self.expandDataId(result, records=standardizedDataId.records)
+                else:
+                    yield result
 
     def queryDatasets(self, datasetType: DatasetTypeExpression, *,
                       collections: CollectionsExpression,
@@ -1199,7 +1257,67 @@ class Registry:
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        # Standardize and expand the data ID provided as a constraint.
+        standardizedDataId = self.expandDataId(dataId, **kwds)
+        # If the datasetType passed isn't actually a DatasetType, expand it
+        # (it could be an expression that yields multiple DatasetTypes) and
+        # recurse.
+        if not isinstance(datasetType, DatasetType):
+            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType,
+                                                                          collections=collections,
+                                                                          dataId=standardizedDataId):
+                yield from self.queryDatasets(trueDatasetType, collections=collections,
+                                              dimensions=dimensions, dataId=standardizedDataId,
+                                              where=where, deduplicate=deduplicate)
+            return
+        # The full set of dimensions in the query is the combination of those
+        # needed for the DatasetType and those explicitly requested, if any.
+        requestedDimensionNames = set(datasetType.dimensions.names)
+        if dimensions is not None:
+            requestedDimensionNames.update(self.dimensions.extract(dimensions).names)
+        # Construct the summary structure needed to construct a QueryBuilder.
+        summary = QuerySummary(
+            requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
+            dataId=standardizedDataId,
+            expression=where,
+        )
+        builder = self.makeQueryBuilder(summary)
+        # Add the dataset subquery to the query, telling the QueryBuilder to
+        # include the rank of the selected collection in the results only if we
+        # need to deduplicate.  Note that if any of the collections are
+        # actually wildcard expressions, and we've asked for deduplication,
+        # this will raise TypeError for us.
+        builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate)
+        query = builder.finish()
+        predicate = query.predicate()
+        if not deduplicate or len(collections) == 1:
+            # No need to de-duplicate across collections.
+            for row in query.execute():
+                if predicate(row):
+                    dataId = query.extractDataId(row, graph=datasetType.dimensions)
+                    if expand:
+                        dataId = self.expandDataId(dataId, records=standardizedDataId.records)
+                    yield query.extractDatasetRef(row, datasetType, dataId)[0]
+        else:
+            # For each data ID, yield only the DatasetRef with the lowest
+            # collection rank.
+            bestRefs = {}
+            bestRanks = {}
+            for row in query.execute():
+                if predicate(row):
+                    ref, rank = query.extractDatasetRef(row, datasetType)
+                    bestRank = bestRanks.get(ref.dataId, sys.maxsize)
+                    if rank < bestRank:
+                        bestRefs[ref.dataId] = ref
+                        bestRanks[ref.dataId] = rank
+            # If caller requested expanded data IDs, we defer that until here
+            # so we do as little expansion as possible.
+            if expand:
+                for ref in bestRefs.values():
+                    dataId = self.expandDataId(ref.dataId, records=standardizedDataId.records)
+                    yield ref.expanded(dataId)
+            else:
+                yield from bestRefs.values()
 
     dimensions: DimensionUniverse
     """The universe of all dimensions known to the registry
