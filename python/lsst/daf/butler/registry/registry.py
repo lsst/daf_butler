@@ -44,6 +44,7 @@ from ..core import (
     DataCoordinate,
     DataId,
     DatasetRef,
+    DatasetType,
     Dimension,
     DimensionElement,
     DimensionGraph,
@@ -66,7 +67,6 @@ from .tables import makeRegistryTableSpecs
 if TYPE_CHECKING:
     from ..core import (
         ButlerConfig,
-        DatasetType,
         Quantum,
     )
     from .interfaces import Database
@@ -88,6 +88,50 @@ class OrphanedRecordError(Exception):
     """Exception raised when trying to remove or modify a database record
     that is still being used in some other table.
     """
+
+
+def _expandComponents(refs: Iterable[DatasetRef]) -> Iterator[DatasetRef]:
+    """Expand an iterable of datasets to include its components.
+
+    Parameters
+    ----------
+    refs : iterable of `DatasetRef`
+        An iterable of `DatasetRef` instances.
+
+    Yields
+    ------
+    refs : `DatasetRef`
+        Recursively expanded datasets.
+    """
+    for ref in refs:
+        yield ref
+        yield from _expandComponents(ref.components.values())
+
+
+def _checkAndGetId(ref: DatasetRef) -> int:
+    """Return the ID of the given `DatasetRef`, or raise if it is `None`.
+
+    This trivial function exists to allow operations that would otherwise be
+    natural list comprehensions to check that the ID is not `None` as well.
+
+    Parameters
+    ----------
+    ref : `DatasetRef`
+        Dataset reference.
+
+    Returns
+    -------
+    id : `int`
+        ``ref.id``
+
+    Raises
+    ------
+    AmbiguousDatasetError
+        Raised if ``ref.id`` is `None`.
+    """
+    if ref.id is None:
+        raise AmbiguousDatasetError("Dataset ID must not be `None`.")
+    return ref.id
 
 
 class Registry:
@@ -152,6 +196,8 @@ class Registry:
         self._dimensionStorage = setupDimensionStorage(self._connection, dimensions, dimensionTables)
         self._opaqueTables = {}
         self._datasetTypes = {}
+        self._runIdsByName = {}   # key = name, value = id
+        self._runNamesById = {}   # key = id, value = name
 
     def __str__(self) -> str:
         return str(self._db)
@@ -259,7 +305,11 @@ class Registry:
         collections : `set` of `str`
             The collections.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        table = self._tables.dataset_collection
+        result = self._db.query(sqlalchemy.sql.select([table.c.collection]).distinct()).fetchall()
+        if result is None:
+            return set()
+        return {r[0] for r in result}
 
     def registerRun(self, name: str):
         """Add a new run if one with the given name does not exist.
@@ -274,7 +324,53 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        id = self._runIdsByName.get(name)
+        if id is None:
+            (id,), _ = self._db.sync(self._tables.run, keys={"name": name}, returning=["id"])
+            self._runIdsByName[name] = id
+            self._runNamesById[id] = name
+        # Assume that if the run is in the cache, it's in the database, because
+        # right now there's no way to delete them.
+
+    def _getRunNameFromId(self, id: int) -> str:
+        """Return the name of the run associated with the given integer ID.
+        """
+        assert isinstance(id, int)
+        name = self._runNamesById.get(id)
+        if name is None:
+            table = self._tables.run
+            name = self._db.query(
+                sqlalchemy.sql.select(
+                    [table.columns.name]
+                ).select_from(
+                    table
+                ).where(
+                    table.columns.id == id
+                )
+            ).scalar()
+            self._runNamesById[id] = name
+            self._runIdsByName[name] = id
+        return name
+
+    def _getRunIdFromName(self, name: str) -> id:
+        """Return the integer ID of the run associated with the given name.
+        """
+        assert isinstance(name, str)
+        id = self._runIdsByName.get(name)
+        if id is None:
+            table = self._tables.run
+            id = self._db.query(
+                sqlalchemy.sql.select(
+                    [table.columns.id]
+                ).select_from(
+                    table
+                ).where(
+                    table.columns.name == name
+                )
+            ).scalar()
+            self._runNamesById[id] = name
+            self._runIdsByName[name] = id
+        return id
 
     @transactional
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
@@ -426,7 +522,81 @@ class Registry:
         datasetTypeNames = [r[0] for r in result]
         return frozenset(self.getDatasetType(name) for name in datasetTypeNames)
 
-    def find(self, collection: str, datasetType: DatasetType, dataId: Optional[DataId] = None,
+    def _makeDatasetRefFromRow(self, row: sqlalchemy.engine.RowProxy,
+                               datasetType: Optional[DatasetType] = None,
+                               dataId: Optional[DataCoordinate] = None):
+        """Construct a DatasetRef from the result of a query on the Dataset
+        table.
+
+        Parameters
+        ----------
+        row : `sqlalchemy.engine.RowProxy`.
+            Row of a query that contains all columns from the `Dataset` table.
+            May include additional fields (which will be ignored).
+        datasetType : `DatasetType`, optional
+            `DatasetType` associated with this dataset.  Will be retrieved
+            if not provided.  If provided, the caller guarantees that it is
+            already consistent with what would have been retrieved from the
+            database.
+        dataId : `DataCoordinate`, optional
+            Dimensions associated with this dataset.  Will be retrieved if not
+            provided.  If provided, the caller guarantees that it is already
+            consistent with what would have been retrieved from the database.
+
+        Returns
+        -------
+        ref : `DatasetRef`.
+            A new `DatasetRef` instance.
+        """
+        if datasetType is None:
+            datasetType = self.getDatasetType(row["dataset_type_name"])
+        run = self._getRunNameFromId(row["run_id"])
+        datasetRefHash = row["dataset_ref_hash"]
+        if dataId is None:
+            # TODO: should we expand here?
+            dataId = DataCoordinate.standardize(
+                row,
+                graph=datasetType.dimensions,
+                universe=self.dimensions
+            )
+        # Get components (if present)
+        components = {}
+        if datasetType.storageClass.isComposite():
+            t = self._tables
+            columns = list(t.dataset.columns)
+            columns.append(t.dataset_composition.columns.component_name)
+            results = self._db.query(
+                sqlalchemy.sql.select(
+                    columns
+                ).select_from(
+                    t.dataset.join(
+                        t.dataset_composition,
+                        (t.dataset.columns.dataset_id == t.dataset_composition.columns.component_dataset_id)
+                    )
+                ).where(
+                    t.dataset_composition.columns.parent_dataset_id == row["dataset_id"]
+                )
+            ).fetchall()
+            for result in results:
+                componentName = result["component_name"]
+                componentDatasetType = DatasetType(
+                    DatasetType.nameWithComponent(datasetType.name, componentName),
+                    dimensions=datasetType.dimensions,
+                    storageClass=datasetType.storageClass.components[componentName]
+                )
+                components[componentName] = self._makeDatasetRefFromRow(result, dataId=dataId,
+                                                                        datasetType=componentDatasetType)
+            if not components.keys() <= datasetType.storageClass.components.keys():
+                raise RuntimeError(
+                    f"Inconsistency detected between dataset and storage class definitions: "
+                    f"{datasetType.storageClass.name} has components "
+                    f"{set(datasetType.storageClass.components.keys())}, "
+                    f"but dataset has components {set(components.keys())}"
+                )
+        return DatasetRef(datasetType=datasetType, dataId=dataId, id=row["dataset_id"], run=run,
+                          hash=datasetRefHash, components=components)
+
+    def find(self, collection: str, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None,
              **kwds: Any) -> Optional[DatasetRef]:
         """Lookup a dataset.
 
@@ -458,7 +628,25 @@ class Registry:
         LookupError
             If one or more data ID keys are missing.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
+        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
+                                            universe=self.dimensions, **kwds)
+        whereTerms = [
+            self._tables.dataset.columns.dataset_type_name == datasetType.name,
+            self._tables.dataset_collection.columns.collection == collection,
+        ]
+        whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
+        result = self._db.query(
+            self._tables.dataset.select().select_from(
+                self._tables.dataset.join(self._tables.dataset_collection)
+            ).where(
+                sqlalchemy.sql.and_(*whereTerms)
+            )
+        ).fetchone()
+        if result is None:
+            return None
+        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
     def addDataset(self, datasetType: Union[DatasetType, str],
@@ -506,7 +694,39 @@ class Registry:
             Raised if ``dataId`` contains unknown or invalid `Dimension`
             entries.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
+        # Make an expanded, standardized data ID up front, so we don't do that
+        # multiple times in calls below.  Note that calling expandDataId with a
+        # full ExpandedDataCoordinate is basically a no-op.
+        dataId = self.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
+        # Retrieve the ID for the given run.
+        runId = self._getRunIdFromName(run)
+        # Add the dataset table entry itself.  Note that this will get rolled
+        # back if the subsequent call to associate raises, which is what we
+        # want.
+        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId)
+        # TODO add producer
+        row = {k.name: v for k, v in dataId.full.items()}
+        row.update(
+            dataset_type_name=datasetType.name,
+            run_id=runId,
+            dataset_ref_hash=datasetRef.hash,
+            quantum_id=None
+        )
+        datasetId, = self._db.insert(self._tables.dataset, row, returnIds=True)
+        datasetRef = datasetRef.resolved(id=datasetId, run=run)
+        # A dataset is always initially associated with its run as a
+        # collection.
+        self.associate(run, [datasetRef, ])
+        if recursive:
+            for component in datasetType.storageClass.components:
+                compTypeName = datasetType.componentTypeName(component)
+                compDatasetType = self.getDatasetType(compTypeName)
+                compRef = self.addDataset(compDatasetType, dataId, run=run, producer=producer,
+                                          recursive=True)
+                self.attachComponent(component, datasetRef, compRef)
+        return datasetRef
 
     def getDataset(self, id: int, datasetType: Optional[DatasetType] = None,
                    dataId: Optional[DataCoordinate] = None) -> Optional[DatasetRef]:
@@ -532,7 +752,14 @@ class Registry:
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        result = self._db.query(
+            self._tables.dataset.select().where(
+                self._tables.dataset.columns.dataset_id == id
+            )
+        ).fetchone()
+        if result is None:
+            return None
+        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
     def removeDataset(self, ref: DatasetRef):
@@ -557,7 +784,47 @@ class Registry:
         OrphanedRecordError
             Raised if the dataset is still present in any `Datastore`.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        if not ref.id:
+            raise AmbiguousDatasetError(f"Cannot remove dataset {ref} without ID.")
+        # Remove component datasets.  We assume ``ref.components`` is already
+        # correctly populated, and rely on ON DELETE CASCADE to remove entries
+        # from DatasetComposition.
+        for componentRef in ref.components.values():
+            self.removeDataset(componentRef)
+
+        # Remove related quanta.  We rely on ON DELETE CASCADE to remove any
+        # related records in dataset_consumers.  Note that we permit a Quantum
+        # to be deleted without removing the datasets it refers to, but do not
+        # allow a dataset to be deleted without removing the Quanta that refer
+        # to them.  A dataset is still quite usable without provenance, but
+        # provenance is worthless if it's inaccurate.
+        t = self._tables
+        selectProducer = sqlalchemy.sql.select(
+            [t.dataset.columns.quantum_id]
+        ).where(
+            t.dataset.columns.dataset_id == ref.id
+        )
+        selectConsumers = sqlalchemy.sql.select(
+            [t.dataset_consumers.columns.quantum_id]
+        ).where(
+            t.dataset_consumers.columns.dataset_id == ref.id
+        )
+        # TODO: we'd like to use Database.delete here, but it doesn't general
+        # queries yet.
+        self._connection.execute(
+            t.quantum.delete().where(
+                t.quantum.columns.id.in_(sqlalchemy.sql.union(selectProducer, selectConsumers))
+            )
+        )
+        # Remove the Dataset record itself.  We rely on ON DELETE CASCADE to
+        # remove from DatasetCollection, and assume foreign key violations
+        # come from DatasetLocation (everything else should have an ON DELETE).
+        try:
+            self._connection.execute(
+                t.dataset.delete().where(t.dataset.c.dataset_id == ref.id)
+            )
+        except sqlalchemy.exc.IntegrityError as err:
+            raise OrphanedRecordError(f"Dataset {ref} is still present in one or more Datastores.") from err
 
     @transactional
     def attachComponent(self, name: str, parent: DatasetRef, component: DatasetRef):
@@ -578,7 +845,17 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``parent.id`` or ``component.id`` is `None`.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        # TODO Insert check for component name and type against
+        # parent.storageClass specified components
+        if parent.id is None:
+            raise AmbiguousDatasetError(f"Cannot attach component to dataset {parent} without ID.")
+        if component.id is None:
+            raise AmbiguousDatasetError(f"Cannot attach component {component} without ID.")
+        values = dict(component_name=name,
+                      parent_dataset_id=parent.id,
+                      component_dataset_id=component.id)
+        self._db.insert(self._tables.dataset_composition, values)
+        parent._components[name] = component
 
     @transactional
     def associate(self, collection: str, refs: List[DatasetRef]):
@@ -604,8 +881,21 @@ class Registry:
         ConflictingDefinitionError
             If a Dataset with the given `DatasetRef` already exists in the
             given collection.
+        AmbiguousDatasetError
+            Raised if ``any(ref.id is None for ref in refs)``.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        rows = [{"dataset_id": _checkAndGetId(ref),
+                 "dataset_ref_hash": ref.hash,
+                 "collection": collection}
+                for ref in _expandComponents(refs)]
+        try:
+            self._db.replace(self._tables.dataset_collection, *rows)
+        except sqlalchemy.exc.IntegrityError as err:
+            raise ConflictingDefinitionError(
+                f"Constraint violation while associating datasets with collection {collection}. "
+                f"This probably means that one or more datasets with the same dataset type and data ID "
+                f"already exist in the collection, but it may also indicate that the datasets do not exist."
+            ) from err
 
     @transactional
     def disassociate(self, collection: str, refs: List[DatasetRef]):
@@ -627,7 +917,9 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        rows = [{"dataset_id": _checkAndGetId(ref), "collection": collection}
+                for ref in _expandComponents(refs)]
+        self._db.delete(self._tables.dataset_collection, ["dataset_id", "collection"], *rows)
 
     @transactional
     def addDatasetLocation(self, ref: DatasetRef, datastoreName: str):
