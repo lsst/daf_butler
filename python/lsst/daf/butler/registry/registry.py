@@ -50,12 +50,15 @@ from ..core import (
     StorageClassFactory,
     TableSpec,
 )
+from ..core.dimensions.storage import setupDimensionStorage
 from ..core.queries import (
     CollectionsExpression,
     DatasetTypeExpression,
 )
 from ..core.registryConfig import RegistryConfig
 from ..core.utils import transactional
+
+from .tables import makeRegistryTableSpecs
 
 if TYPE_CHECKING:
     from ..core import (
@@ -134,6 +137,16 @@ class Registry:
         self._db = database
         self.dimensions = dimensions
         self.storageClasses = StorageClassFactory()
+        dimensionTables = {}
+        with self._db.declareStaticTables(create=create) as context:
+            for name, spec in self.dimensions.makeSchemaSpec().items():
+                dimensionTables[name] = context.addTable(name, spec)
+            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions))
+        # TODO: we shouldn't be grabbing the private connection from the
+        # Database instance like this, but it's a reasonable way to proceed
+        # while we transition to using the Database API more.
+        self._connection = self._db._connection
+        self._dimensionStorage = setupDimensionStorage(self._connection, dimensions, dimensionTables)
 
     def __str__(self) -> str:
         return str(self._db)
@@ -145,8 +158,16 @@ class Registry:
     def transaction(self):
         """Return a context manager that represents a transaction.
         """
-        with self._db.transaction():
-            yield
+        # TODO make savepoint=False the default.
+        try:
+            with self._db.transaction():
+                yield
+        except BaseException:
+            # TODO: this clears the caches sometimes when we wouldn't actually
+            # need to.  Can we avoid that?
+            for storage in self._dimensionStorage.values():
+                storage.clearCaches()
+            raise
 
     def registerOpaqueTable(self, name: str, spec: TableSpec):
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
