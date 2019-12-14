@@ -258,37 +258,18 @@ class Registry:
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def find(self, collection: str, datasetType: DatasetType, dataId: Optional[DataId] = None,
-             **kwds: Any) -> Optional[DatasetRef]:
-        """Lookup a dataset.
-
-        This can be used to obtain a `DatasetRef` that permits the dataset to
-        be read from a `Datastore`.
+    def registerRun(self, name: str):
+        """Add a new run if one with the given name does not exist.
 
         Parameters
         ----------
-        collection : `str`
-            Identifies the collection to search.
-        datasetType : `DatasetType` or `str`
-            A `DatasetType` or the name of one.
-        dataId : `dict` or `DataCoordinate`, optional
-            A `dict`-like object containing the `Dimension` links that identify
-            the dataset within a collection.
-        **kwds
-            Additional keyword arguments passed to
-            `DataCoordinate.standardize` to convert ``dataId`` to a true
-            `DataCoordinate` or augment an existing one.
+        name : `str`
+            The name of the run to create.
 
-        Returns
-        -------
-        ref : `DatasetRef`
-            A ref to the Dataset, or `None` if no matching Dataset
-            was found.
-
-        Raises
-        ------
-        LookupError
-            If one or more data ID keys are missing.
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -349,6 +330,40 @@ class Registry:
         -------
         types : `frozenset` of `DatasetType`
             Every `DatasetType` in the registry.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    def find(self, collection: str, datasetType: DatasetType, dataId: Optional[DataId] = None,
+             **kwds: Any) -> Optional[DatasetRef]:
+        """Lookup a dataset.
+
+        This can be used to obtain a `DatasetRef` that permits the dataset to
+        be read from a `Datastore`.
+
+        Parameters
+        ----------
+        collection : `str`
+            Identifies the collection to search.
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
+        dataId : `dict` or `DataCoordinate`, optional
+            A `dict`-like object containing the `Dimension` links that identify
+            the dataset within a collection.
+        **kwds
+            Additional keyword arguments passed to
+            `DataCoordinate.standardize` to convert ``dataId`` to a true
+            `DataCoordinate` or augment an existing one.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A ref to the Dataset, or `None` if no matching Dataset
+            was found.
+
+        Raises
+        ------
+        LookupError
+            If one or more data ID keys are missing.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
@@ -592,21 +607,6 @@ class Registry:
         # TODO: this requires `ref.dataset_id` to be not None, and probably
         # doesn't use anything else from `ref`.  Should it just take a
         # `dataset_id`?
-        raise NotImplementedError("Must be implemented by subclass")
-
-    def registerRun(self, name: str):
-        """Add a new run if one with the given name does not exist.
-
-        Parameters
-        ----------
-        name : `str`
-            The name of the run to create.
-
-        Notes
-        -----
-        This method cannot be called within transactions, as it needs to be
-        able to perform its own transaction to be concurrent.
-        """
         raise NotImplementedError("Must be implemented by subclass")
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
