@@ -939,10 +939,9 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
-        # TODO: this requires `ref.dataset_id` to be not None, and probably
-        # doesn't use anything else from `ref`.  Should it just take a
-        # `dataset_id`?
-        raise NotImplementedError("Must be implemented by subclass")
+        self._db.insert(self._tables.dataset_storage,
+                        {"dataset_id": _checkAndGetId(ref),
+                         "datastore_name": datastoreName})
 
     def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
         """Retrieve datastore locations for a given dataset.
@@ -966,10 +965,15 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
-        # TODO: this requires `ref.dataset_id` to be not None, and probably
-        # doesn't use anything else from `ref`.  Should it just take a
-        # `dataset_id`?
-        raise NotImplementedError("Must be implemented by subclass")
+        table = self._tables.dataset_storage
+        result = self._db.query(
+            sqlalchemy.sql.select(
+                [table.columns.datastore_name]
+            ).where(
+                table.columns.dataset_id == ref.id
+            )
+        ).fetchall()
+        return {r["datastore_name"] for r in result}
 
     @transactional
     def removeDatasetLocation(self, datastoreName, ref):
@@ -989,10 +993,11 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
-        # TODO: this requires `ref.dataset_id` to be not None, and probably
-        # doesn't use anything else from `ref`.  Should it just take a
-        # `dataset_id`?
-        raise NotImplementedError("Must be implemented by subclass")
+        self._db.delete(
+            self._tables.dataset_storage,
+            ["dataset_id", "datastore_name"],
+            {"dataset_id": _checkAndGetId(ref), "datastore_name": datastoreName}
+        )
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):

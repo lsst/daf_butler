@@ -30,7 +30,7 @@ from ...core import (
     DatasetType,
     StorageClass,
 )
-from ..registry import Registry, ConflictingDefinitionError
+from ..registry import Registry, ConflictingDefinitionError, OrphanedRecordError
 from .. import ddl
 
 
@@ -398,3 +398,50 @@ class RegistryTests(ABC):
             registry.associate(newCollection, [ref1_run3])
         with self.assertRaises(ConflictingDefinitionError):
             registry.associate(newCollection, [ref1_run3, ref2_run3])
+
+    def testDatasetLocations(self):
+        """Tests for `Registry.addDatasetLocation`,
+        `Registry.getDatasetLocations`, and `Registry.removeDatasetLocations`.
+        """
+        registry = self.makeRegistry()
+        storageClass = StorageClass("testStorageInfo")
+        registry.storageClasses.registerStorageClass(storageClass)
+        datasetType = DatasetType(name="test", dimensions=registry.dimensions.extract(("instrument",)),
+                                  storageClass=storageClass)
+        datasetType2 = DatasetType(name="test2", dimensions=registry.dimensions.extract(("instrument",)),
+                                   storageClass=storageClass)
+        registry.registerDatasetType(datasetType)
+        registry.registerDatasetType(datasetType2)
+        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
+        run = "test"
+        registry.registerRun(run)
+        ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
+        ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
+        datastoreName = "dummystore"
+        datastoreName2 = "dummystore2"
+        # Test adding information about a new dataset
+        registry.addDatasetLocation(ref, datastoreName)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertIn(datastoreName, addresses)
+        self.assertEqual(len(addresses), 1)
+        registry.addDatasetLocation(ref, datastoreName2)
+        registry.addDatasetLocation(ref2, datastoreName2)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertEqual(len(addresses), 2)
+        self.assertIn(datastoreName, addresses)
+        self.assertIn(datastoreName2, addresses)
+        registry.removeDatasetLocation(datastoreName, ref)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertEqual(len(addresses), 1)
+        self.assertNotIn(datastoreName, addresses)
+        self.assertIn(datastoreName2, addresses)
+        with self.assertRaises(OrphanedRecordError):
+            registry.removeDataset(ref)
+        registry.removeDatasetLocation(datastoreName2, ref)
+        addresses = registry.getDatasetLocations(ref)
+        self.assertEqual(len(addresses), 0)
+        self.assertNotIn(datastoreName2, addresses)
+        registry.removeDataset(ref)  # should not raise
+        addresses = registry.getDatasetLocations(ref2)
+        self.assertEqual(len(addresses), 1)
+        self.assertIn(datastoreName2, addresses)
