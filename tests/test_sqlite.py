@@ -29,9 +29,10 @@ import unittest
 
 import sqlalchemy
 
+from lsst.daf.butler.core.registryConfig import RegistryConfig
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
-from lsst.daf.butler.registry.tests import DatabaseTests
-from lsst.daf.butler.registry import ddl
+from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
+from lsst.daf.butler.registry import Registry, ddl
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -166,6 +167,34 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # We don't support read-only in-memory databases.
         with self.assertRaises(NotImplementedError):
             SqliteDatabase.connect(filename=None, writeable=False)
+
+
+class SqliteFileRegistryTestCase(unittest.TestCase, RegistryTests):
+    """Tests for `Registry` backed by a SQLite file-based database.
+    """
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+
+    def tearDown(self):
+        if self.root is not None and os.path.exists(self.root):
+            shutil.rmtree(self.root, ignore_errors=True)
+
+    def makeRegistry(self) -> Registry:
+        _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
+        config = RegistryConfig()
+        config["db"] = f"sqlite:///{filename}"
+        return Registry.fromConfig(config, create=True, butlerRoot=self.root)
+
+
+class SqliteMemoryRegistryTestCase(unittest.TestCase, RegistryTests):
+    """Tests for `Registry` backed by a SQLite in-memory database.
+    """
+
+    def makeRegistry(self) -> Registry:
+        config = RegistryConfig()
+        config["db"] = f"sqlite://"
+        return Registry.fromConfig(config, create=True)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,8 @@ from typing import (
     Union,
 )
 
+import sqlalchemy
+
 from ..core import (
     Config,
     DataCoordinate,
@@ -147,6 +149,7 @@ class Registry:
         # while we transition to using the Database API more.
         self._connection = self._db._connection
         self._dimensionStorage = setupDimensionStorage(self._connection, dimensions, dimensionTables)
+        self._opaqueTables = {}
 
     def __str__(self) -> str:
         return str(self._db)
@@ -169,7 +172,7 @@ class Registry:
                 storage.clearCaches()
             raise
 
-    def registerOpaqueTable(self, name: str, spec: TableSpec):
+    def registerOpaqueTable(self, tableName: str, spec: TableSpec):
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
         other data repository client.
 
@@ -178,35 +181,35 @@ class Registry:
 
         Parameters
         ----------
-        name : `str`
+        tableName : `str`
             Logical name of the opaque table.  This may differ from the
             actual name used in the database by a prefix and/or suffix.
         spec : `TableSpec`
             Specification for the table to be added.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        self._opaqueTables[tableName] = self._db.ensureTableExists(tableName, spec)
 
     @transactional
-    def insertOpaqueData(self, name: str, *data: dict):
+    def insertOpaqueData(self, tableName: str, *data: dict):
         """Insert records into an opaque table.
 
         Parameters
         ----------
-        name : `str`
+        tableName : `str`
             Logical name of the opaque table.  Must match the name used in a
             previous call to `registerOpaqueTable`.
         data
             Each additional positional argument is a dictionary that represents
             a single row to be added.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        self._db.insert(self._opaqueTables[tableName], *data)
 
-    def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
+    def fetchOpaqueData(self, tableName: str, **where: Any) -> Iterator[dict]:
         """Retrieve records from an opaque table.
 
         Parameters
         ----------
-        name : `str`
+        tableName : `str`
             Logical name of the opaque table.  Must match the name used in a
             previous call to `registerOpaqueTable`.
         where
@@ -220,24 +223,30 @@ class Registry:
         row : `dict`
             A dictionary representing a single result row.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        table = self._opaqueTables[tableName]
+        sql = table.select()
+        whereTerms = [table.columns[k] == v for k, v in where.items()]
+        if whereTerms:
+            sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
+        for row in self._db.query(sql):
+            yield dict(row)
 
     @transactional
-    def deleteOpaqueData(self, name: str, **where: Any):
+    def deleteOpaqueData(self, tableName: str, **where: Any):
         """Remove records from an opaque table.
 
         Parameters
         ----------
-        name : `str`
+        tableName : `str`
             Logical name of the opaque table.  Must match the name used in a
             previous call to `registerOpaqueTable`.
         where
             Additional keyword arguments are interpreted as equality
-            constraints that restrict the deketed rows (combined with AND);
+            constraints that restrict the deleted rows (combined with AND);
             keyword arguments are column names and values are the values they
             must have.
         """
-        raise NotImplementedError("Must be implemented by subclass")
+        self._db.delete(self._opaqueTables[tableName], where.keys(), where)
 
     def getAllCollections(self):
         """Get names of all the collections found in this repository.
