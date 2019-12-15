@@ -529,6 +529,9 @@ class Database(ABC):
         avoid circular dependencies.  These are added by higher-level logic in
         `ensureTableExists`, `getExistingTable`, and `declareStaticTables`.
         """
+        # TODO: remove workaround for older FieldSpec instance.
+        if not hasattr(spec, "indexes"):
+            spec.indexes = []
         args = [self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields]
         args.extend(
             sqlalchemy.schema.UniqueConstraint(
