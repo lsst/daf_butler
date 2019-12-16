@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ["OracleDatabase"]
 
+from contextlib import closing, contextmanager
 import copy
 from typing import Optional
 
@@ -138,10 +139,15 @@ class OracleDatabase(Database):
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
                        namespace: Optional[str] = None, writeable: bool = True) -> Database:
-        # TODO: is there anything we can do to make the connection read-only if
-        # writeable is False?  If not (and at present) we just rely on the
-        # Python code being well-behaved and not *trying* to make changes.
         return cls(connection=connection, origin=origin, writeable=writeable, namespace=namespace)
+
+    @contextmanager
+    def transaction(self, *, interrupting: bool = False) -> None:
+        with super().transaction(interrupting=interrupting):
+            if not self.isWriteable():
+                with closing(self._connection.connection.cursor()) as cursor:
+                    cursor.execute("SET TRANSACTION READ ONLY")
+            yield
 
     def isWriteable(self) -> bool:
         return self._writeable

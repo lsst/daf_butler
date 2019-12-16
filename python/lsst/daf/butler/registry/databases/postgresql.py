@@ -22,6 +22,7 @@ from __future__ import annotations
 
 __all__ = ["PostgresqlDatabase"]
 
+from contextlib import contextmanager, closing
 from typing import Optional
 
 import sqlalchemy
@@ -73,19 +74,20 @@ class PostgresqlDatabase(Database):
 
     @classmethod
     def connect(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Connection:
-        connection = sqlalchemy.engine.create_engine(uri, pool_size=1).connect()
-        if not writeable:
-            dbapi = connection.engine.raw_connection()
-            try:
-                dbapi.set_session(readonly=True)
-            except AttributeError as err:
-                raise RuntimeError(f"Only the psycopg2 driver for PostgreSQL is supported.") from err
-        return connection
+        return sqlalchemy.engine.create_engine(uri, pool_size=1).connect()
 
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
                        namespace: Optional[str] = None, writeable: bool = True) -> Database:
         return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
+
+    @contextmanager
+    def transaction(self, *, interrupting: bool = False) -> None:
+        with super().transaction(interrupting=interrupting):
+            if not self.isWriteable():
+                with closing(self._connection.connection.cursor()) as cursor:
+                    cursor.execute("SET TRANSACTION READ ONLY")
+            yield
 
     def isWriteable(self) -> bool:
         return self._writeable
