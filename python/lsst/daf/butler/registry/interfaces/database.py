@@ -95,7 +95,7 @@ class StaticTablesContext:
     def __init__(self, db: Database):
         self._db = db
         self._foreignKeys = []
-        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._cs.engine)
+        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._cs.connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
 
     def addTable(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
@@ -389,10 +389,10 @@ class Database(ABC):
             if create:
                 if self.namespace is not None:
                     if self.namespace not in context._inspector.get_schema_names():
-                        self._cs.engine.execute(sqlalchemy.schema.CreateSchema(self.namespace))
-                self._metadata.create_all(self._cs.engine)
+                        self._cs.connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                self._metadata.create_all(self._cs.connection)
         except BaseException:
-            self._metadata.drop_all(self._cs.engine)
+            self._metadata.drop_all(self._cs.connection)
             self._metadata = None
             raise
 
@@ -610,7 +610,7 @@ class Database(ABC):
         table = self._convertTableSpec(name, spec, self._metadata)
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
-        table.create(self._cs.engine)
+        table.create(self._cs.connection)
         return table
 
     def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
@@ -652,7 +652,7 @@ class Database(ABC):
                                             f"specification has columns {list(spec.fields.names)}, while "
                                             f"the previous definition has {list(table.columns.keys())}.")
         else:
-            inspector = sqlalchemy.engine.reflection.Inspector(self._cs.engine)
+            inspector = sqlalchemy.engine.reflection.Inspector(self._cs.connection)
             if name in inspector.get_table_names(schema=self.namespace):
                 _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
                 table = self._convertTableSpec(name, spec, self._metadata)
