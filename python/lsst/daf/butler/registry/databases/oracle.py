@@ -112,6 +112,14 @@ class OracleDatabase(Database):
         schema that can coexist with others within the same actual database
         schema.  This prefix must not be used in the un-prefixed names of
         tables.
+
+    Notes
+    -----
+    To use a prefix from standardized factory functions like `Database.fromUri`
+    and `Database.fromConnectionStruct`, a '+' character in the namespace will
+    be interpreted as a combination of ``namespace`` (first) and ``prefix``
+    (second).  Either may be empty.  This does *not* work when constructing
+    an `OracleDatabase` instance directly.
     """
 
     def __init__(self, *, connection: sqlalchemy.engine.Connection, origin: int,
@@ -140,7 +148,16 @@ class OracleDatabase(Database):
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
                        namespace: Optional[str] = None, writeable: bool = True) -> Database:
-        return cls(connection=connection, origin=origin, writeable=writeable, namespace=namespace)
+        if namespace and "+" in namespace:
+            namespace, prefix = namespace.split("+")
+            if not namespace:
+                namespace = None
+            if not prefix:
+                prefix = None
+        else:
+            prefix = None
+        return cls(connection=connection, origin=origin, writeable=writeable, namespace=namespace,
+                   prefix=prefix)
 
     @contextmanager
     def transaction(self, *, interrupting: bool = False) -> None:
