@@ -34,9 +34,10 @@ except ImportError:
 
 import sqlalchemy
 
+from lsst.daf.butler.core.registryConfig import RegistryConfig
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase
-from lsst.daf.butler.registry import ddl
-from lsst.daf.butler.registry.tests import DatabaseTests
+from lsst.daf.butler.registry import ddl, Registry
+from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
@@ -118,6 +119,27 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
                 ]
             )
         )
+
+
+@unittest.skipUnless(testing is not None, "testing.postgresql module not found")
+class PostgresqlRegistryTestCase(unittest.TestCase, RegistryTests):
+    """Tests for `Registry` backed by a PostgreSQL database.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.server = testing.postgresql.Postgresql()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.server.stop()
+
+    def makeRegistry(self) -> Registry:
+        namespace = f"namespace_{secrets.token_hex(8).lower()}"
+        config = RegistryConfig()
+        config["db"] = self.server.url()
+        config["namespace"] = namespace
+        return Registry.fromConfig(config, create=True)
 
 
 if __name__ == "__main__":
