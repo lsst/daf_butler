@@ -239,7 +239,11 @@ class SqliteDatabase(Database):
         return self._writeable
 
     def __str__(self) -> str:
-        return f"SQLite3@{self.filename}"
+        if self.filename:
+            return f"SQLite3@{self.filename}"
+        else:
+            return "SQLite3@:memory:"
+
 
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
                           **kwds) -> sqlalchemy.schema.Column:
