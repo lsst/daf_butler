@@ -24,14 +24,14 @@ __all__ = ["SqliteDatabase"]
 
 from contextlib import closing
 import copy
-from typing import List, Optional
+from typing import ContextManager, List, Optional
 from dataclasses import dataclass
 import urllib.parse
 
 import sqlite3
 import sqlalchemy
 
-from ..interfaces import Database, ReadOnlyDatabaseError
+from ..interfaces import Database, ReadOnlyDatabaseError, StaticTablesContext
 from .. import ddl
 
 
@@ -244,6 +244,11 @@ class SqliteDatabase(Database):
         else:
             return "SQLite3@:memory:"
 
+    def declareStaticTables(self, *, create: bool) -> ContextManager[StaticTablesContext]:
+        # If the user asked for an in-memory, writeable database, assume
+        # create=True.  This is only really relevant for tests, and it's
+        # convenient there.
+        return super().declareStaticTables(create=(create if self.filename else self.isWriteable()))
 
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
                           **kwds) -> sqlalchemy.schema.Column:
