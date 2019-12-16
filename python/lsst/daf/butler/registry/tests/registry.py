@@ -445,3 +445,77 @@ class RegistryTests(ABC):
         addresses = registry.getDatasetLocations(ref2)
         self.assertEqual(len(addresses), 1)
         self.assertIn(datastoreName2, addresses)
+
+    def testBasicTransaction(self):
+        """Test that all operations within a single transaction block are
+        rolled back if an exception propagates out of the block.
+        """
+        registry = self.makeRegistry()
+        storageClass = StorageClass("testDatasetType")
+        registry.storageClasses.registerStorageClass(storageClass)
+        dimensions = registry.dimensions.extract(("instrument",))
+        dataId = {"instrument": "DummyCam"}
+        datasetTypeA = DatasetType(name="A",
+                                   dimensions=dimensions,
+                                   storageClass=storageClass)
+        datasetTypeB = DatasetType(name="B",
+                                   dimensions=dimensions,
+                                   storageClass=storageClass)
+        datasetTypeC = DatasetType(name="C",
+                                   dimensions=dimensions,
+                                   storageClass=storageClass)
+        run = "test"
+        registry.registerRun(run)
+        refId = None
+        with registry.transaction():
+            registry.registerDatasetType(datasetTypeA)
+        with self.assertRaises(ValueError):
+            with registry.transaction():
+                registry.registerDatasetType(datasetTypeB)
+                registry.registerDatasetType(datasetTypeC)
+                registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
+                ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
+                refId = ref.id
+                raise ValueError("Oops, something went wrong")
+        # A should exist
+        self.assertEqual(registry.getDatasetType("A"), datasetTypeA)
+        # But B and C should both not exist
+        with self.assertRaises(KeyError):
+            registry.getDatasetType("B")
+        with self.assertRaises(KeyError):
+            registry.getDatasetType("C")
+        # And neither should the dataset
+        self.assertIsNotNone(refId)
+        self.assertIsNone(registry.getDataset(refId))
+        # Or the Dimension entries
+        with self.assertRaises(LookupError):
+            registry.expandDataId({"instrument": "DummyCam"})
+
+    def testNestedTransaction(self):
+        """Test that operations within a transaction block are not rolled back
+        if an exception propagates out of an inner transaction block and is
+        then caught.
+        """
+        registry = self.makeRegistry()
+        dimension = registry.dimensions["instrument"]
+        dataId1 = {"instrument": "DummyCam"}
+        dataId2 = {"instrument": "DummyCam2"}
+        checkpointReached = False
+        with registry.transaction():
+            # This should be added and (ultimately) committed.
+            registry.insertDimensionData(dimension, dataId1)
+            with self.assertRaises(sqlalchemy.exc.IntegrityError):
+                with registry.transaction():
+                    # This does not conflict, and should succeed (but not
+                    # be committed).
+                    registry.insertDimensionData(dimension, dataId2)
+                    checkpointReached = True
+                    # This should conflict and raise, triggerring a rollback
+                    # of the previous insertion within the same transaction
+                    # context, but not the original insertion in the outer
+                    # block.
+                    registry.insertDimensionData(dimension, dataId1)
+        self.assertTrue(checkpointReached)
+        self.assertIsNotNone(registry.expandDataId(dataId1, graph=dimension.graph))
+        with self.assertRaises(LookupError):
+            registry.expandDataId(dataId2, graph=dimension.graph)
