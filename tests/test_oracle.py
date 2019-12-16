@@ -19,20 +19,41 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from contextlib import contextmanager
+from contextlib import contextmanager, closing
 import os
 import os.path
 import secrets
+from typing import List
 import unittest
 
 import sqlalchemy
 
+from lsst.daf.butler import DimensionUniverse
+from lsst.daf.butler.core.registryConfig import RegistryConfig
 from lsst.daf.butler.registry.databases.oracle import OracleDatabase
-from lsst.daf.butler.registry import ddl
-from lsst.daf.butler.registry.tests import DatabaseTests
+from lsst.daf.butler.registry import ddl, Registry
+from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 
 ENVVAR = "DAF_BUTLER_ORACLE_TEST_URI"
 TEST_URI = os.environ.get(ENVVAR)
+
+
+def cleanUpPrefixes(connection: sqlalchemy.engine.Connection, prefixes: List[str]):
+    """Drop all tables and other schema entities that start with any of the
+    given prefixes.
+    """
+    commands = []
+    dbapi = connection.connection
+    with closing(dbapi.cursor()) as cursor:
+        for objectType, objectName in cursor.execute("SELECT object_type, object_name FROM user_objects"):
+            if not any(objectName.lower().startswith(prefix) for prefix in prefixes):
+                continue
+            if objectType == "TABLE":
+                commands.append(f'DROP TABLE "{objectName}" CASCADE CONSTRAINTS')
+            elif objectType in ("VIEW", "PROCEDURE", "SEQUENCE"):
+                commands.append(f'DROP {objectType} "{objectName}"')
+        for command in commands:
+            cursor.execute(command)
 
 
 @unittest.skipUnless(TEST_URI is not None, f"{ENVVAR} environment variable not set.")
@@ -47,19 +68,7 @@ class OracleDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     @classmethod
     def tearDownClass(cls):
-        commands = []
-        dbapi = cls._connection.connection
-        cursor = dbapi.cursor()
-        for objectType, objectName in cursor.execute("SELECT object_type, object_name FROM user_objects"):
-            if not any(objectName.lower().startswith(prefix) for prefix in cls._prefixes):
-                continue
-            if objectType == "TABLE":
-                commands.append(f'DROP TABLE "{objectName}" CASCADE CONSTRAINTS')
-            elif objectType in ("VIEW", "PROCEDURE", "SEQUENCE"):
-                commands.append(f'DROP {objectType} "{objectName}"')
-        for command in commands:
-            cursor.execute(command)
-        cursor.close()
+        cleanUpPrefixes(cls._connection, cls._prefixes)
 
     def makeEmptyDatabase(self, origin: int = 0) -> OracleDatabase:
         prefix = f"test_{secrets.token_hex(8).lower()}_"
@@ -130,6 +139,35 @@ class OracleDatabaseTestCase(unittest.TestCase, DatabaseTests):
                 ]
             )
         )
+
+
+@unittest.skipUnless(TEST_URI is not None, f"{ENVVAR} environment variable not set.")
+class OracleRegistryTestCase(unittest.TestCase, RegistryTests):
+    """Tests for `Registry` backed by an `Oracle` database.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Create a single engine for all Database instances we create, to avoid
+        # repeatedly spending time connecting.
+        cls._connection = OracleDatabase.connect(TEST_URI)
+        cls._prefixes = []
+
+    @classmethod
+    def tearDownClass(cls):
+        cleanUpPrefixes(cls._connection, cls._prefixes)
+
+    def makeRegistry(self) -> Registry:
+        prefix = f"test_{secrets.token_hex(8).lower()}_"
+        self._prefixes.append(prefix)
+        config = RegistryConfig()
+        # Can't use Registry.fromConfig for these tests because we don't want
+        # to reconnect to the server every single time.  But we at least use
+        # OracleDatabase.fromConnection rather than the constructor so
+        # we can try to pass a prefix through via "+" in a namespace.
+        database = OracleDatabase.fromConnection(connection=self._connection, origin=0,
+                                                 namespace=f"+{prefix}")
+        return Registry(database=database, dimensions=DimensionUniverse(config), create=True)
 
 
 if __name__ == "__main__":
