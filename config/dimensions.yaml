@@ -63,7 +63,7 @@ dimensions:
       -
         name: name
         type: string
-        length: 8
+        length: 32
       requires:
       - instrument
       implies:
