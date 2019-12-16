@@ -145,12 +145,11 @@ class ConnectionStruct:
     information in this struct as well (including transaction state).
     """
 
-    __slots__ = ("engine", "connection", "transactions")
+    __slots__ = ("engine", "connection")
 
     def __init__(self, engine: sqlalchemy.engine.Engine):
         object.__setattr__(self, "engine", engine)
         object.__setattr__(self, "connection", engine.connect())
-        object.__setattr__(self, "transactions", [])
 
     engine: sqlalchemy.engine.Engine
     """The SQLAlchemy object representing a way to connect to a database
@@ -159,11 +158,6 @@ class ConnectionStruct:
 
     connection: sqlalchemy.engine.Connection
     """A SQLAlchemy object representing the connection itself.
-    """
-
-    transactions: List[sqlalchemy.engine.Transaction]
-    """A list of active transactions for this connection; an empty list
-    indicates that no transaction is active.
     """
 
 
@@ -332,7 +326,7 @@ class Database(ABC):
             If `True`, this transaction block needs to be able to interrupt
             any existing one in order to yield correct behavior.
         """
-        assert not (interrupting and self._cs.transactions), (
+        assert not (interrupting and self._cs.connection.in_transaction()), (
             "Logic error in transaction nesting: an operation that would "
             "interrupt the active transaction context has been requested."
         )
@@ -340,15 +334,12 @@ class Database(ABC):
             trans = self._cs.connection.begin_nested()
         else:
             trans = self._cs.connection.begin()
-        self._cs.transactions.append(trans)
         try:
             yield
             trans.commit()
         except BaseException:
             trans.rollback()
             raise
-        finally:
-            self._cs.transactions.pop()
 
     @contextmanager
     def declareStaticTables(self, *, create: bool) -> StaticTablesContext:
@@ -608,7 +599,7 @@ class Database(ABC):
 
         Subclasses may override this method, but usually should not need to.
         """
-        assert not self._cs.transactions, "Table creation interrupts transactions."
+        assert not self._cs.connection.in_transaction(), "Table creation interrupts transactions."
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
         table = self.getExistingTable(name, spec)
         if table is not None:
@@ -824,8 +815,10 @@ class Database(ABC):
                 # we tried to insert.
                 inserted = False
         else:
-            assert not self._cs.transactions, ("Calling sync within a transaction block is an error even "
-                                               "on a read-only database.")
+            assert not self._cs.connection.in_transaction(), (
+                "Calling sync within a transaction block is an error even "
+                "on a read-only database."
+            )
             # Database is not writeable; just see if the row exists.
             n, bad, result = check()
             if n < 1:
