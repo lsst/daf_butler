@@ -31,7 +31,7 @@ import urllib.parse
 import sqlite3
 import sqlalchemy
 
-from ..interfaces import ConnectionStruct, Database, ReadOnlyDatabaseError
+from ..interfaces import Database, ReadOnlyDatabaseError
 from .. import ddl
 
 
@@ -107,7 +107,7 @@ class SqliteDatabase(Database):
 
     Parameters
     ----------
-    cs : `ConnectionStruct`
+    connection : `sqlalchemy.engine.Connection`
         An existing connection created by a previous call to `connect`.
     origin : `int`
         An integer ID that should be used as the default for any datasets,
@@ -128,11 +128,11 @@ class SqliteDatabase(Database):
     across databases well enough to define it.
     """
 
-    def __init__(self, *, cs: ConnectionStruct, origin: int, namespace: Optional[str] = None,
-                 writeable: bool = True):
-        super().__init__(origin=origin, cs=cs, namespace=namespace)
+    def __init__(self, *, connection: sqlalchemy.engine.Connection, origin: int,
+                 namespace: Optional[str] = None, writeable: bool = True):
+        super().__init__(origin=origin, connection=connection, namespace=namespace)
         # Get the filename from a call to 'PRAGMA database_list'.
-        with closing(cs.connection.connection.cursor()) as cursor:
+        with closing(connection.connection.cursor()) as cursor:
             dbList = list(cursor.execute("PRAGMA database_list").fetchall())
         if len(dbList) == 0:
             raise RuntimeError("No database in connection.")
@@ -152,8 +152,9 @@ class SqliteDatabase(Database):
 
     @classmethod
     def connect(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,
-                writeable: bool = True) -> ConnectionStruct:
-        """Create a `ConnectionStruct` from a SQLAlchemy URI or filename.
+                writeable: bool = True) -> sqlalchemy.engine.Connection:
+        """Create a `sqlalchemy.engine.Connection` from a SQLAlchemy URI or
+        filename.
 
         Parameters
         ----------
@@ -172,7 +173,7 @@ class SqliteDatabase(Database):
 
         Returns
         -------
-        cs : `ConnectionStruct`
+        cs : `sqlalchemy.engine.Connection`
             A database connection and transaction state.
         """
         # In order to be able to tell SQLite that we want a read-only or
@@ -227,12 +228,12 @@ class SqliteDatabase(Database):
 
         sqlalchemy.event.listen(engine, "connect", _onSqlite3Connect)
         sqlalchemy.event.listen(engine, "begin", _onSqlite3Begin)
-        return ConnectionStruct(engine)
+        return engine.connect()
 
     @classmethod
-    def fromConnectionStruct(cls, cs: ConnectionStruct, *, origin: int, namespace: Optional[str] = None,
-                             writeable: bool = True) -> Database:
-        return cls(cs=cs, origin=origin, writeable=writeable, namespace=namespace)
+    def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
+                       namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        return cls(connection=connection, origin=origin, writeable=writeable, namespace=namespace)
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -307,7 +308,7 @@ class SqliteDatabase(Database):
                 # a transaction.  The main-table insertion can take care of
                 # returnIds for us.
                 with self.transaction():
-                    self._cs.connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
+                    self._connection.execute(autoincr.table.insert(), *rowsForAutoincrTable)
                     return super().insert(table, *rows, returnIds=returnIds)
             else:
                 # Caller did not pass autoincrement key values on the first
@@ -324,7 +325,7 @@ class SqliteDatabase(Database):
                     ids = []
                     for row in rows:
                         newRow = row.copy()
-                        id = self._cs.connection.execute(autoincr.table.insert()).inserted_primary_key[0]
+                        id = self._connection.execute(autoincr.table.insert()).inserted_primary_key[0]
                         newRow[autoincr.column] = id
                         newRows.append(newRow)
                         ids.append(id)
@@ -345,7 +346,7 @@ class SqliteDatabase(Database):
             raise NotImplementedError(
                 "replace does not support compound primary keys with autoincrement fields."
             )
-        self._cs.connection.execute(_Replace(table), *rows)
+        self._connection.execute(_Replace(table), *rows)
 
     filename: Optional[str]
     """Name of the file this database is connected to (`str` or `None`).

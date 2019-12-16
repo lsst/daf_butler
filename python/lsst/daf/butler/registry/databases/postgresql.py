@@ -26,7 +26,7 @@ from typing import Optional
 
 import sqlalchemy
 
-from ..interfaces import ConnectionStruct, Database, ReadOnlyDatabaseError
+from ..interfaces import Database, ReadOnlyDatabaseError
 from ..nameShrinker import NameShrinker
 
 
@@ -35,7 +35,7 @@ class PostgresqlDatabase(Database):
 
     Parameters
     ----------
-    cs : `ConnectionStruct`
+    connection : `sqlalchemy.engine.Connection`
         An existing connection created by a previous call to `connect`.
     origin : `int`
         An integer ID that should be used as the default for any datasets,
@@ -56,10 +56,10 @@ class PostgresqlDatabase(Database):
     PostgreSQL server is installed and can be run locally in userspace.
     """
 
-    def __init__(self, *, cs: ConnectionStruct, origin: int, namespace: Optional[str] = None,
-                 writeable: bool = True):
-        super().__init__(origin=origin, cs=cs, namespace=namespace)
-        dbapi = cs.engine.raw_connection()
+    def __init__(self, *, connection: sqlalchemy.engine.Connection, origin: int,
+                 namespace: Optional[str] = None, writeable: bool = True):
+        super().__init__(origin=origin, connection=connection, namespace=namespace)
+        dbapi = connection.connection
         try:
             dsn = dbapi.get_dsn_parameters()
         except (AttributeError, KeyError) as err:
@@ -69,23 +69,23 @@ class PostgresqlDatabase(Database):
         self.namespace = namespace
         self.dbname = dsn.get("dbname")
         self._writeable = writeable
-        self._shrinker = NameShrinker(cs.engine.dialect.max_identifier_length)
+        self._shrinker = NameShrinker(connection.engine.dialect.max_identifier_length)
 
     @classmethod
-    def connect(cls, uri: str, *, writeable: bool = True) -> ConnectionStruct:
-        cs = ConnectionStruct(sqlalchemy.engine.create_engine(uri, pool_size=1))
+    def connect(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Connection:
+        connection = sqlalchemy.engine.create_engine(uri, pool_size=1).connect()
         if not writeable:
-            dbapi = cs.engine.raw_connection()
+            dbapi = connection.engine.raw_connection()
             try:
                 dbapi.set_session(readonly=True)
             except AttributeError as err:
                 raise RuntimeError(f"Only the psycopg2 driver for PostgreSQL is supported.") from err
-        return cs
+        return connection
 
     @classmethod
-    def fromConnectionStruct(cls, cs: ConnectionStruct, *, origin: int, namespace: Optional[str] = None,
-                             writeable: bool = True) -> Database:
-        return cls(cs=cs, origin=origin, namespace=namespace, writeable=writeable)
+    def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
+                       namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
 
     def isWriteable(self) -> bool:
         return self._writeable
@@ -113,4 +113,4 @@ class PostgresqlDatabase(Database):
                 for column in table.columns
                 if column.name not in table.primary_key}
         query = query.on_conflict_do_update(constraint=table.primary_key, set_=data)
-        self._cs.connection.execute(query, *rows)
+        self._connection.execute(query, *rows)

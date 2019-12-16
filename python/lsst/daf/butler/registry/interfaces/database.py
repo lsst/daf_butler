@@ -21,7 +21,6 @@
 from __future__ import annotations
 
 __all__ = [
-    "ConnectionStruct",
     "Database",
     "ReadOnlyDatabaseError",
     "DatabaseConflictError",
@@ -30,7 +29,6 @@ __all__ = [
 
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import (
     Any,
     Dict,
@@ -95,7 +93,7 @@ class StaticTablesContext:
     def __init__(self, db: Database):
         self._db = db
         self._foreignKeys = []
-        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._cs.connection)
+        self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
 
     def addTable(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
@@ -137,30 +135,6 @@ class StaticTablesContext:
         return specs._make(self.addTable(name, spec) for name, spec in zip(specs._fields, specs))
 
 
-@dataclass(frozen=True)
-class ConnectionStruct:
-    """A simple struct aggregating information about a SQLAlchemy connection.
-
-    When `Database` instances share a connection, they must share all
-    information in this struct as well (including transaction state).
-    """
-
-    __slots__ = ("engine", "connection")
-
-    def __init__(self, engine: sqlalchemy.engine.Engine):
-        object.__setattr__(self, "engine", engine)
-        object.__setattr__(self, "connection", engine.connect())
-
-    engine: sqlalchemy.engine.Engine
-    """The SQLAlchemy object representing a way to connect to a database
-    server.
-    """
-
-    connection: sqlalchemy.engine.Connection
-    """A SQLAlchemy object representing the connection itself.
-    """
-
-
 class Database(ABC):
     """An abstract interface that represents a particular database engine's
     representation of a single schema/namespace/database.
@@ -171,9 +145,8 @@ class Database(ABC):
         An integer ID that should be used as the default for any datasets,
         quanta, or other entities that use a (autoincrement, origin) compound
         primary key.
-    cs : `ConnectionStruct`
-        A struct containing connection and transaction state for the database.
-        May be shared between `Database` instances.
+    connection : `sqlalchemy.engine.Connection`
+        The SQLAlchemy connection this `Database` wraps.
     namespace : `str`, optional
         Name of the schema or namespace this instance is associated with.
         This is passed as the ``schema`` argument when constructing a
@@ -203,13 +176,14 @@ class Database(ABC):
 
     These are considered protected (derived classes may access them, but other
     code should not), and read-only, aside from executing SQL via
-    ``_cs.connection``.
+    ``_connection``.
     """
 
-    def __init__(self, *, origin: int, cs: ConnectionStruct, namespace: Optional[str] = None):
+    def __init__(self, *, origin: int, connection: sqlalchemy.engine.Connection,
+                 namespace: Optional[str] = None):
         self.origin = origin
         self.namespace = namespace
-        self._cs = cs
+        self._connection = connection
         self._metadata = None
 
     @classmethod
@@ -238,15 +212,15 @@ class Database(ABC):
         db : `Database`
             A new `Database` instance.
         """
-        return cls.fromConnectionStruct(cls.connect(uri, writeable=writeable),
-                                        origin=origin,
-                                        namespace=namespace,
-                                        writeable=writeable)
+        return cls.fromConnection(cls.connect(uri, writeable=writeable),
+                                  origin=origin,
+                                  namespace=namespace,
+                                  writeable=writeable)
 
     @classmethod
     @abstractmethod
-    def connect(cls, uri: str, *, writeable: bool = True) -> ConnectionStruct:
-        """Create a `ConnectionStruct` from a SQLAlchemy URI.
+    def connect(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Connection:
+        """Create a `sqlalchemy.engine.Connection` from a SQLAlchemy URI.
 
         Parameters
         ----------
@@ -262,8 +236,8 @@ class Database(ABC):
 
         Returns
         -------
-        cs : `ConnectionStruct`
-            A database connection and transaction state.
+        connection : `sqlalchemy.engine.Connection`
+            A database connection.
 
         Notes
         -----
@@ -276,15 +250,16 @@ class Database(ABC):
 
     @classmethod
     @abstractmethod
-    def fromConnectionStruct(cls, cs: ConnectionStruct, *, origin: int, namespace: Optional[str] = None,
-                             writeable: bool = True) -> Database:
-        """Create a new `Database` from an existing `ConnectionStruct`.
+    def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
+                       namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        """Create a new `Database` from an existing
+        `sqlalchemy.engine.Connection`.
 
         Parameters
         ----------
-        cs : `ConnectionStruct`
-            A struct containing connection and transaction state for the
-            database.  May be shared between `Database` instances.
+        connection : `sqllachemy.engine.Connection`
+            The connection for the the database.  May be shared between
+            `Database` instances.
         origin : `int`
             An integer ID that should be used as the default for any datasets,
             quanta, or other entities that use a (autoincrement, origin)
@@ -322,16 +297,16 @@ class Database(ABC):
             If `True`, this transaction block needs to be able to interrupt
             any existing one in order to yield correct behavior.
         """
-        assert not (interrupting and self._cs.connection.in_transaction()), (
+        assert not (interrupting and self._connection.in_transaction()), (
             "Logic error in transaction nesting: an operation that would "
             "interrupt the active transaction context has been requested."
         )
-        if self._cs.connection.in_transaction():
-            trans = self._cs.connection.begin_nested()
+        if self._connection.in_transaction():
+            trans = self._connection.begin_nested()
         else:
             # Use a regular (non-savepoint) transaction only for the outermost
             # context.
-            trans = self._cs.connection.begin()
+            trans = self._connection.begin()
         try:
             yield
             trans.commit()
@@ -389,10 +364,10 @@ class Database(ABC):
             if create:
                 if self.namespace is not None:
                     if self.namespace not in context._inspector.get_schema_names():
-                        self._cs.connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
-                self._metadata.create_all(self._cs.connection)
+                        self._connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
+                self._metadata.create_all(self._connection)
         except BaseException:
-            self._metadata.drop_all(self._cs.connection)
+            self._metadata.drop_all(self._connection)
             self._metadata = None
             raise
 
@@ -597,7 +572,7 @@ class Database(ABC):
 
         Subclasses may override this method, but usually should not need to.
         """
-        assert not self._cs.connection.in_transaction(), "Table creation interrupts transactions."
+        assert not self._connection.in_transaction(), "Table creation interrupts transactions."
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
         table = self.getExistingTable(name, spec)
         if table is not None:
@@ -610,7 +585,7 @@ class Database(ABC):
         table = self._convertTableSpec(name, spec, self._metadata)
         for foreignKeySpec in spec.foreignKeys:
             table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
-        table.create(self._cs.connection)
+        table.create(self._connection)
         return table
 
     def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
@@ -652,7 +627,7 @@ class Database(ABC):
                                             f"specification has columns {list(spec.fields.names)}, while "
                                             f"the previous definition has {list(table.columns.keys())}.")
         else:
-            inspector = sqlalchemy.engine.reflection.Inspector(self._cs.connection)
+            inspector = sqlalchemy.engine.reflection.Inspector(self._connection)
             if name in inspector.get_table_names(schema=self.namespace):
                 _checkExistingTableDefinition(name, spec, inspector.get_columns(name, schema=self.namespace))
                 table = self._convertTableSpec(name, spec, self._metadata)
@@ -746,7 +721,7 @@ class Database(ABC):
             ).select_from(table).where(
                 sqlalchemy.sql.and_(*[table.columns[k] == v for k, v in keys.items()])
             )
-            fetched = list(self._cs.connection.execute(selectSql).fetchall())
+            fetched = list(self._connection.execute(selectSql).fetchall())
             if len(fetched) != 1:
                 return len(fetched), None, None
             existing = fetched[0]
@@ -771,7 +746,7 @@ class Database(ABC):
             insertSql = table.insert().values(row)
             try:
                 with self.transaction(interrupting=True):
-                    self._cs.connection.execute(insertSql)
+                    self._connection.execute(insertSql)
                     # Need to perform check() for this branch inside the
                     # transaction, so we roll back an insert that didn't do
                     # what we expected.  That limits the extent to which we
@@ -813,7 +788,7 @@ class Database(ABC):
                 # we tried to insert.
                 inserted = False
         else:
-            assert not self._cs.connection.in_transaction(), (
+            assert not self._connection.in_transaction(), (
                 "Calling sync within a transaction block is an error even "
                 "on a read-only database."
             )
@@ -871,10 +846,10 @@ class Database(ABC):
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
         if not returnIds:
-            self._cs.connection.execute(table.insert(), *rows)
+            self._connection.execute(table.insert(), *rows)
         else:
             sql = table.insert()
-            return [self._cs.connection.execute(sql, row).inserted_primary_key[0] for row in rows]
+            return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
 
     @abstractmethod
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
@@ -950,7 +925,7 @@ class Database(ABC):
         whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
         if whereTerms:
             sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-        return self._cs.connection.execute(sql, *rows).rowcount
+        return self._connection.execute(sql, *rows).rowcount
 
     def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
         """Update one or more rows in a table.
@@ -994,7 +969,7 @@ class Database(ABC):
         sql = table.update().where(
             sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
         )
-        return self._cs.connection.execute(sql, *rows).rowcount
+        return self._connection.execute(sql, *rows).rowcount
 
     def query(self, sql: sqlalchemy.sql.FromClause, *args, **kwds) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
@@ -1021,7 +996,7 @@ class Database(ABC):
         classes.
         """
         # TODO: should we guard against non-SELECT queries here?
-        return self._cs.connection.execute(sql, *args, **kwds)
+        return self._connection.execute(sql, *args, **kwds)
 
     origin: int
     """An integer ID that should be used as the default for any datasets,

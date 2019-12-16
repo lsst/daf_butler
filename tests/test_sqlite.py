@@ -57,12 +57,13 @@ class SqliteDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     def makeEmptyDatabase(self, origin: int = 0) -> SqliteDatabase:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
-        cs = SqliteDatabase.connect(filename=filename)
-        return SqliteDatabase.fromConnectionStruct(cs=cs, origin=origin)
+        connection = SqliteDatabase.connect(filename=filename)
+        return SqliteDatabase.fromConnection(connection=connection, origin=origin)
 
     def getNewConnection(self, database: SqliteDatabase, *, writeable: bool) -> SqliteDatabase:
-        cs = SqliteDatabase.connect(filename=database.filename, writeable=writeable)
-        return SqliteDatabase.fromConnectionStruct(origin=database.origin, cs=cs, writeable=writeable)
+        connection = SqliteDatabase.connect(filename=database.filename, writeable=writeable)
+        return SqliteDatabase.fromConnection(origin=database.origin, connection=connection,
+                                             writeable=writeable)
 
     @contextmanager
     def asReadOnly(self, database: SqliteDatabase) -> SqliteDatabase:
@@ -91,7 +92,7 @@ class SqliteDatabaseTestCase(unittest.TestCase, DatabaseTests):
         are equivalent.
         """
         # Create an in-memory database by passing filename=None.
-        memFilename = SqliteDatabase.fromConnectionStruct(SqliteDatabase.connect(filename=None), origin=0)
+        memFilename = SqliteDatabase.fromConnection(SqliteDatabase.connect(filename=None), origin=0)
         self.assertIsNone(memFilename.filename)
         self.assertEqual(memFilename.origin, 0)
         self.assertTrue(memFilename.isWriteable())
@@ -112,7 +113,7 @@ class SqliteDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # Make a temporary file for the rest of the next set of tests.
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         # Create a read-write database by passing in the filename.
-        rwFilename = SqliteDatabase.fromConnectionStruct(SqliteDatabase.connect(filename=filename), origin=0)
+        rwFilename = SqliteDatabase.fromConnection(SqliteDatabase.connect(filename=filename), origin=0)
         self.assertEqual(rwFilename.filename, filename)
         self.assertEqual(rwFilename.origin, 0)
         self.assertTrue(rwFilename.isWriteable())
@@ -130,8 +131,8 @@ class SqliteDatabaseTestCase(unittest.TestCase, DatabaseTests):
         # Test read-only connections against a read-only file.
         with removeWritePermission(filename):
             # Create a read-only database by passing in the filename.
-            roFilename = SqliteDatabase.fromConnectionStruct(SqliteDatabase.connect(filename=filename),
-                                                             origin=0, writeable=False)
+            roFilename = SqliteDatabase.fromConnection(SqliteDatabase.connect(filename=filename),
+                                                       origin=0, writeable=False)
             self.assertEqual(roFilename.filename, filename)
             self.assertEqual(roFilename.origin, 0)
             self.assertFalse(roFilename.isWriteable())
