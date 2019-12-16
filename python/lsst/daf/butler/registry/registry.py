@@ -181,7 +181,8 @@ class Registry:
                 raise ValueError("Incompatible Registry configuration: {}".format(config))
         config.replaceRoot(butlerRoot)
         DatabaseClass = config.getDatabaseClass()
-        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0))
+        database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
+                                         namespace=config.get("namespace"))
         dimensions = DimensionUniverse(config)
         return cls(database=database, dimensions=dimensions, create=create)
 
