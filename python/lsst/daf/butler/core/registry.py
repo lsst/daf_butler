@@ -393,10 +393,8 @@ class Registry(metaclass=ABCMeta):
         dataId : `dict` or `DataCoordinate`
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        run : `Run`
-            The `Run` instance that produced the Dataset.  Ignored if
-            ``producer`` is passed (`producer.run` is then used instead).
-            A Run must be provided by one of the two arguments.
+        run : `str`
+            The name of the run that produced the dataset.
         producer : `Quantum`
             Unit of work that produced the Dataset.  May be `None` to store
             no provenance information, but if present the `Quantum` must
@@ -628,121 +626,18 @@ class Registry(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    @transactional
-    def addExecution(self, execution):
-        """Add a new `Execution` to the `Registry`.
-
-        If ``execution.id`` is `None` the `Registry` will update it to
-        that of the newly inserted entry.
+    def registerRun(self, name: str):
+        """Add a new run if one with the given name does not exist.
 
         Parameters
         ----------
-        execution : `Execution`
-            Instance to add to the `Registry`.
-            The given `Execution` must not already be present in the
-            `Registry`.
+        name : `str`
+            The name of the run to create.
 
-        Raises
-        ------
-        ConflictingDefinitionError
-            If ``execution`` is already present in the `Registry`.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def getExecution(self, id):
-        """Retrieve an Execution.
-
-        Parameters
-        ----------
-        id : `int`
-            The unique identifier for the Execution.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def makeRun(self, collection):
-        """Create a new `Run` in the `Registry` and return it.
-
-        If a run with this collection already exists, return that instead.
-
-        Parameters
-        ----------
-        collection : `str`
-            The collection used to identify all inputs and outputs
-            of the `Run`.
-
-        Returns
-        -------
-        run : `Run`
-            A new `Run` instance.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def ensureRun(self, run):
-        """Conditionally add a new `Run` to the `Registry`.
-
-        If the ``run.id`` is `None` or a `Run` with this ``id`` or
-        ``collection`` doesn't exist in the `Registry` yet, add it.  Otherwise,
-        ensure the provided run is identical to the one already in the
-        registry.
-
-        Parameters
-        ----------
-        run : `Run`
-            Instance to add to the `Registry`.
-
-        Raises
-        ------
-        ConflictingDefinitionError
-            If ``run`` already exists, but is not identical.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    @transactional
-    def addRun(self, run):
-        """Add a new `Run` to the `Registry`.
-
-        Parameters
-        ----------
-        run : `Run`
-            Instance to add to the `Registry`.
-            The given `Run` must not already be present in the `Registry`
-            (or any other).  Therefore its `id` must be `None` and its
-            `collection` must not be associated with any existing `Run`.
-
-        Raises
-        ------
-        ConflictingDefinitionError
-            If a run already exists with this collection.
-        """
-        raise NotImplementedError("Must be implemented by subclass")
-
-    @abstractmethod
-    def getRun(self, id=None, collection=None):
-        """
-        Get a `Run` corresponding to its collection or id
-
-        Parameters
-        ----------
-        id : `int`, optional
-            Retrieve the run with the given integer ``id``.
-        collection : `str`
-            If given, lookup by ``collection`` name instead.
-
-        Returns
-        -------
-        run : `Run`
-            The `Run` instance.
-
-        Raises
-        ------
-        ValueError
-            Must supply one of ``collection`` or ``id``.
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
         """
         raise NotImplementedError("Must be implemented by subclass")
 

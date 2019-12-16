@@ -21,13 +21,14 @@
 
 __all__ = ("Quantum",)
 
+from datetime import datetime
+
 from lsst.utils import doImport
 
 from .utils import NamedKeyDict
-from .execution import Execution
 
 
-class Quantum(Execution):
+class Quantum:
     """A discrete unit of work that may depend on one or more datasets and
     produces one or more datasets.
 
@@ -47,8 +48,8 @@ class Quantum(Execution):
         provided.
     dataId : `DataId`, optional
         The dimension values that identify this `Quantum`.
-    run : `Run`, optional
-        The Run this Quantum is a part of.
+    run : `str`, optional
+        The name of the run this Quantum is a part of.
     initInputs : collection of `DatasetRef`, optional
         Datasets that are needed to construct an instance of the Task.  May
         be a flat iterable of `DatasetRef` instances or a mapping from
@@ -64,15 +65,24 @@ class Quantum(Execution):
     outputs : `~collections.abc.Mapping`, optional
         Outputs from executing this quantum of work, organized as a mapping
         from `DatasetType` to a list of `DatasetRef`.
-    kwargs
-        Additional arguments are forwarded to the base `Execution` constructor.
+    startTime : `datetime`
+        The start time for the quantum.
+    endTime : `datetime`
+        The end time for the quantum.
+    host : `str`
+        The system on this quantum was executed.
+    id : `int`, optional
+        Unique integer identifier for this quantum.  Usually set to `None`
+        (default) and assigned by `Registry`.
     """
 
     __slots__ = ("_taskName", "_taskClass", "_dataId", "_run",
-                 "_initInputs", "_predictedInputs", "_actualInputs", "_outputs")
+                 "_initInputs", "_predictedInputs", "_actualInputs", "_outputs",
+                 "_id", "_startTime", "_endTime", "_host")
 
     def __init__(self, *, taskName=None, taskClass=None, dataId=None, run=None,
                  initInputs=None, predictedInputs=(), actualInputs=(), outputs=(),
+                 startTime=None, endTime=None, host=None, id=None,
                  **kwargs):
         super().__init__(**kwargs)
         if taskClass is not None:
@@ -89,6 +99,10 @@ class Quantum(Execution):
         self._predictedInputs = NamedKeyDict(predictedInputs)
         self._actualInputs = NamedKeyDict(actualInputs)
         self._outputs = NamedKeyDict(outputs)
+        self._id = id
+        self._startTime = startTime
+        self._endTime = endTime
+        self._host = host
 
     @property
     def taskClass(self):
@@ -106,7 +120,7 @@ class Quantum(Execution):
 
     @property
     def run(self):
-        """The Run this Quantum is a part of (`Run`).
+        """The name of the run this Quantum is a part of (`str`).
         """
         return self._run
 
@@ -203,3 +217,27 @@ class Quantum(Execution):
             Reference for a Dataset to add to the Quantum's outputs.
         """
         self._outputs.setdefault(ref.datasetType, []).append(ref)
+
+    @property
+    def id(self) -> int:
+        """Unique (autoincrement) integer for this quantum (`int`).
+        """
+        return self._id
+
+    @property
+    def startTime(self) -> datetime:
+        """Begin timestamp for the execution of this quantum (`datetime`).
+        """
+        return self._startTime
+
+    @property
+    def endTime(self) -> datetime:
+        """End timestamp for the execution of this quantum (`datetime`).
+        """
+        return self._endTime
+
+    @property
+    def host(self) -> str:
+        """Name of the system on which this quantum was executed (`str`).
+        """
+        return self._host

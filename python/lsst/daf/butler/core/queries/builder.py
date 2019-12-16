@@ -29,10 +29,10 @@ import sqlalchemy.sql
 from sqlalchemy.engine import Connection
 
 from ..datasets import DatasetType
-from ..timespan import Timespan
+from ..timespan import Timespan, TIMESPAN_FIELD_SPECS
 from ..utils import NamedValueSet, NamedKeyDict
 from ..dimensions import DimensionElement, SkyPixDimension, Dimension
-from ..dimensions.schema import REGION_FIELD_SPEC, TIMESPAN_FIELD_SPECS
+from ..dimensions.schema import REGION_FIELD_SPEC
 from ..dimensions.storage import DimensionRecordStorage
 
 from .structs import QuerySummary, QueryColumns, QueryParameters, GivenTime

@@ -27,7 +27,7 @@ import contextlib
 import warnings
 from typing import Union, Iterable, Optional, Mapping, Iterator, Any
 
-from sqlalchemy import create_engine, text, func
+from sqlalchemy import create_engine, text
 from sqlalchemy.pool import NullPool
 from sqlalchemy.sql import select, and_, union
 from sqlalchemy.exc import IntegrityError, SADeprecationWarning
@@ -39,8 +39,6 @@ from ..core.registryConfig import RegistryConfig
 from ..core.registry import (Registry, ConflictingDefinitionError,
                              AmbiguousDatasetError, OrphanedRecordError)
 from ..core.schema import Schema, TableSpec
-from ..core.execution import Execution
-from ..core.run import Run
 from ..core.storageClass import StorageClassFactory
 from ..core.dimensions import (DataCoordinate, DimensionGraph, ExpandedDataCoordinate, DimensionElement,
                                DataId, DimensionRecord, Dimension)
@@ -92,7 +90,8 @@ class SqlRegistry(Registry):
         self._datasetTypes = {}
         self._engine = self._createEngine()
         self._connection = self._createConnection(self._engine)
-        self._cachedRuns = {}   # Run objects, keyed by id or collection
+        self._runIdsByName = {}   # key = name, value = id
+        self._runNamesById = {}   # key = id, value = name
         self._dimensionStorage = setupDimensionStorage(connection=self._connection,
                                                        universe=self.dimensions,
                                                        tables=self._schema.tables)
@@ -230,6 +229,34 @@ class SqlRegistry(Registry):
             query = query.where(and_(*whereTerms))
         self._connection.execute(query)
 
+    def _getRunNameFromId(self, id: int) -> str:
+        """Return the name of the run associated with the given integer ID.
+        """
+        assert isinstance(id, int)
+        name = self._runNamesById.get(id)
+        if name is None:
+            runTable = self._schema.tables["run"]
+            name = self._connection.execute(
+                select([runTable.columns.name]).select_from(runTable).where(runTable.columns.id == id)
+            ).scalar()
+            self._runNamesById[id] = name
+            self._runIdsByName[name] = id
+        return name
+
+    def _getRunIdFromName(self, name: str) -> id:
+        """Return the integer ID of the run associated with the given name.
+        """
+        assert isinstance(name, str)
+        id = self._runIdsByName.get(name)
+        if id is None:
+            runTable = self._schema.tables["run"]
+            id = self._connection.execute(
+                select([runTable.columns.id]).select_from(runTable).where(runTable.columns.name == name)
+            ).scalar()
+            self._runNamesById[id] = name
+            self._runIdsByName[name] = id
+        return id
+
     def _makeDatasetRefFromRow(self, row, datasetType=None, dataId=None):
         """Construct a DatasetRef from the result of a query on the Dataset
         table.
@@ -256,7 +283,7 @@ class SqlRegistry(Registry):
         """
         if datasetType is None:
             datasetType = self.getDatasetType(row["dataset_type_name"])
-        run = self.getRun(id=row.run_id)
+        run = self._getRunNameFromId(row["run_id"])
         datasetRefHash = row["dataset_ref_hash"]
         if dataId is None:
             # TODO: should we expand here?
@@ -332,7 +359,6 @@ class SqlRegistry(Registry):
                 )
             )
         ).fetchone()
-        # TODO update dimension values and add Run, Quantum and assembler?
         if result is None:
             return None
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
@@ -458,6 +484,8 @@ class SqlRegistry(Registry):
         # full ExpandedDataCoordinate is basically a no-op.
         dataId = self.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
 
+        runId = self._getRunIdFromName(run)
+
         # Add the Dataset table entry itself.  Note that this will get rolled
         # back if the subsequent call to associate raises, which is what we
         # want.
@@ -467,7 +495,7 @@ class SqlRegistry(Registry):
         row = {k.name: v for k, v in dataId.full.items()}
         row.update(
             dataset_type_name=datasetType.name,
-            run_id=run.id,
+            run_id=runId,
             dataset_ref_hash=datasetRef.hash,
             quantum_id=None
         )
@@ -478,8 +506,9 @@ class SqlRegistry(Registry):
             datasetId = datasetId[0]
         datasetRef = datasetRef.resolved(id=datasetId, run=run)
 
-        # A dataset is always initially associated with its Run collection.
-        self.associate(run.collection, [datasetRef, ])
+        # A dataset is always initially associated with its run as a
+        # collection.
+        self.associate(run, [datasetRef, ])
 
         if recursive:
             for component in datasetType.storageClass.components:
@@ -513,16 +542,13 @@ class SqlRegistry(Registry):
 
         datasetTable = self._schema.tables["dataset"]
 
-        # Remove related quanta.  We actually delete from Execution, because
-        # Quantum's primary key (quantum_id) is also a foreign key to
-        # Execution.execution_id.  We then rely on ON DELETE CASCADE to remove
-        # the Quantum record as well as any related records in
-        # DatasetConsumers.  Note that we permit a Quantum to be deleted
-        # without removing the Datasets it refers to, but do not allow a
-        # Dataset to be deleting without removing the Quanta that refer to
-        # them.  A Dataset is still quite usable without provenance, but
+        # Remove related quanta.  We rely on ON DELETE CASCADE to remove any
+        # related records in DatasetConsumers.  Note that we permit a Quantum
+        # to be deleted without removing the Datasets it refers to, but do not
+        # allow a Dataset to be deleted without removing the Quanta that refer
+        # to them.  A Dataset is still quite usable without provenance, but
         # provenance is worthless if it's inaccurate.
-        executionTable = self._schema.tables["execution"]
+        quantumTable = self._schema.tables["quantum"]
         datasetConsumersTable = self._schema.tables["dataset_consumers"]
         selectProducer = select(
             [datasetTable.c.quantum_id]
@@ -535,8 +561,8 @@ class SqlRegistry(Registry):
             datasetConsumersTable.c.dataset_id == ref.id
         )
         self._connection.execute(
-            executionTable.delete().where(
-                executionTable.c.execution_id.in_(union(selectProducer, selectConsumers))
+            quantumTable.delete().where(
+                quantumTable.c.id.in_(union(selectProducer, selectConsumers))
             )
         )
 
@@ -631,134 +657,24 @@ class SqlRegistry(Registry):
             and_(datasetStorageTable.c.dataset_id == ref.id,
                  datasetStorageTable.c.datastore_name == datastoreName)))
 
-    @transactional
-    def addExecution(self, execution):
-        # Docstring inherited from Registry.addExecution
-        executionTable = self._schema.tables["execution"]
-        kwargs = {}
-        # Only pass in the execution_id to the insert statement if it is not
-        # None. Otherwise, some databases attempt to insert a null and fail.
-        # The Column is an auto increment primary key, so it will automatically
-        # be inserted if absent.
-        if execution.id is not None:
-            kwargs["execution_id"] = execution.id
-        kwargs["start_time"] = execution.startTime
-        kwargs["end_time"] = execution.endTime
-        kwargs["host"] = execution.host
-        result = self._connection.execute(executionTable.insert().values(**kwargs))
-        # Reassign id, may have been `None`
-        execution._id = result.inserted_primary_key[0]
-        # If the result is reported as a list of a number, unpack the list
-        if isinstance(execution._id, list):
-            execution._id = execution._id[0]
-
-    def getExecution(self, id):
-        # Docstring inherited from Registry.getExecution
-        executionTable = self._schema.tables["execution"]
-        result = self._connection.execute(
-            select([executionTable.c.start_time,
-                    executionTable.c.end_time,
-                    executionTable.c.host]).where(executionTable.c.execution_id == id)).fetchone()
-        if result is not None:
-            return Execution(startTime=result["start_time"],
-                             endTime=result["end_time"],
-                             host=result["host"],
-                             id=id)
-        else:
-            return None
-
-    @transactional
-    def makeRun(self, collection):
-        # Docstring inherited from Registry.makeRun
-        run = Run(collection=collection)
-        self.addRun(run)
-        return run
-
-    @transactional
-    def ensureRun(self, run):
-        # Docstring inherited from Registry.ensureRun
-        if run.id is not None:
-            existingRun = self.getRun(id=run.id)
-        elif run.collection is not None:
-            existingRun = self.getRun(collection=run.collection)
-        else:
-            existingRun = None
-        if existingRun is not None:
-            # Handle the case where the caller just doesn't know the ID yet;
-            # don't want that to be the reason we consider them unequal.
-            if run.id is None:
-                run._id = existingRun.id
-            if run != existingRun:
-                raise ConflictingDefinitionError(f"{run} != existing: {existingRun}")
+    def registerRun(self, name: str):
+        # Docstring inherited from Registry.registerRun.
+        runTable = self._schema.tables["run"]
+        try:
+            with self.transaction():
+                id = self._connection.execute(runTable.insert(), {"name": name}).inserted_primary_key[0]
+            # No exception means we inserted a new run.  Remember its ID.
+            self._runIdsByName[name] = id
+            self._runNamesById[id] = name
             return
-        self.addRun(run)
-
-    @transactional
-    def addRun(self, run):
-        # Docstring inherited from Registry.addRun
-        runTable = self._schema.tables["run"]
-        # TODO: this check is probably undesirable, as we may want to have
-        # multiple Runs output to the same collection.  Fixing this requires
-        # (at least) modifying getRun() accordingly.
-        selection = select([func.count()]).select_from(runTable).where(runTable.c.collection ==
-                                                                       run.collection)
-        if self._connection.execute(selection).scalar() > 0:
-            raise ConflictingDefinitionError(f"A run already exists with this collection: {run.collection}")
-        # First add the Execution part
-        self.addExecution(run)
-        # Then the Run specific part
-        self._connection.execute(runTable.insert().values(execution_id=run.id,
-                                                          collection=run.collection,
-                                                          environment_id=None,  # TODO add environment
-                                                          pipeline_id=None))    # TODO add pipeline
-        # TODO: set given Run's "id" attribute, add to self._cachedRuns.
-
-    def getRun(self, id=None, collection=None):
-        # Docstring inherited from Registry.getRun
-        executionTable = self._schema.tables["execution"]
-        runTable = self._schema.tables["run"]
-        run = None
-        # Retrieve by id
-        if (id is not None) and (collection is None):
-            run = self._cachedRuns.get(id)
-            if run is not None:
-                return run
-            result = self._connection.execute(select([executionTable.c.execution_id,
-                                                      executionTable.c.start_time,
-                                                      executionTable.c.end_time,
-                                                      executionTable.c.host,
-                                                      runTable.c.collection,
-                                                      runTable.c.environment_id,
-                                                      runTable.c.pipeline_id]).select_from(
-                runTable.join(executionTable)).where(
-                runTable.c.execution_id == id)).fetchone()
-        # Retrieve by collection
-        elif (collection is not None) and (id is None):
-            run = self._cachedRuns.get(collection, None)
-            if run is not None:
-                return run
-            result = self._connection.execute(select([executionTable.c.execution_id,
-                                                      executionTable.c.start_time,
-                                                      executionTable.c.end_time,
-                                                      executionTable.c.host,
-                                                      runTable.c.collection,
-                                                      runTable.c.environment_id,
-                                                      runTable.c.pipeline_id]).select_from(
-                runTable.join(executionTable)).where(
-                runTable.c.collection == collection)).fetchone()
-        else:
-            raise ValueError("Either collection or id must be given")
-        if result is not None:
-            run = Run(id=result["execution_id"],
-                      startTime=result["start_time"],
-                      endTime=result["end_time"],
-                      host=result["host"],
-                      collection=result["collection"],
-                      environment=None,  # TODO add environment
-                      pipeline=None)     # TODO add pipeline
-            self._cachedRuns[run.id] = run
-            self._cachedRuns[run.collection] = run
-        return run
+        except IntegrityError:
+            # Assume this means the run already existed
+            pass
+        id = self._connection.execute(
+            select([runTable.columns.id]).select_from(runTable).where(runTable.columns.name == name)
+        ).scalar()
+        self._runIdsByName[name] = id
+        self._runNamesById[id] = name
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):

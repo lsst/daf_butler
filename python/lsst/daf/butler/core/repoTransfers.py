@@ -36,7 +36,6 @@ import yaml
 from lsst.utils import doImport
 from .config import ConfigSubset
 from .datasets import DatasetType
-from .run import Run
 
 if TYPE_CHECKING:
     from .dimensions import DimensionElement, DimensionRecord, ExpandedDataCoordinate
@@ -169,12 +168,12 @@ class RepoExport:
         Note
         ----
         At present, this only associates datasets with the collection that
-        identifies their `Run`.  Other collections will be included in the
+        matches their run name.  Other collections will be included in the
         export in the future (once `Registry` provides a way to look up that
         information).
         """
         dataIds = set()
-        datasets: Mapping[Tuple[DatasetType, Run], List[FileDataset]] = defaultdict(list)
+        datasets: Mapping[Tuple[DatasetType, str], List[FileDataset]] = defaultdict(list)
         for ref in refs:
             # The query interfaces that are often used to generate the refs
             # passed here often don't remove duplicates, so do that here for
@@ -225,23 +224,23 @@ class RepoExportBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def saveDatasets(self, datasetType: DatasetType, run: Run, *datasets: FileDataset,
+    def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset,
                      collections: Iterable[str] = ()):
         """Export one or more datasets, including their associated DatasetType
-        and Run information (but not including associated dimension
+        and run information (but not including associated dimension
         information).
 
         Parameters
         ----------
         datasetType : `DatasetType`
             Type of all datasets being exported with this call.
-        run : `Run`
+        run : `str`
             Run associated with all datasets being exported with this call.
         datasets : `FileDataset`, variadic
             Per-dataset information to be exported.  `FileDataset.formatter`
             attributes should be strings, not `Formatter` instances or classes.
         collections : iterable of `str`
-            Extra collections (in addition to `Run.collection`) the dataset
+            Extra collections (in addition to ``run``) the dataset
             should be associated with.
         """
         raise NotImplementedError()
@@ -302,7 +301,7 @@ class YamlRepoExportBackend(RepoExportBackend):
             "records": [d.toDict() for d in data],  # TODO: encode regions
         })
 
-    def saveDatasets(self, datasetType: DatasetType, run: Run, *datasets: FileDataset):
+    def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset):
         # Docstring inherited from RepoExportBackend.saveDatasets.
         self.data.append({
             "type": "dataset_type",
@@ -312,18 +311,12 @@ class YamlRepoExportBackend(RepoExportBackend):
         })
         self.data.append({
             "type": "run",
-            "id": run.id,
-            "start_time": run.startTime,
-            "end_time": run.endTime,
-            "host": run.host,
-            "collection": run.collection,
-            "pipeline": run.pipeline,
-            "environment": run.environment,
+            "name": run,
         })
         self.data.append({
             "type": "dataset",
             "dataset_type": datasetType.name,
-            "run_id": run.id,
+            "run": run,
             "records": [
                 {
                     "dataset_id": dataset.ref.id,
@@ -367,9 +360,6 @@ class YamlRepoImportBackend(RepoImportBackend):
         wrapper = yaml.safe_load(self.stream)
         # TODO: When version numbers become meaningful, check here that we can
         # read the version in the file.
-        # Mapping from saved ID to inserted Run (which may have a different
-        # ID).
-        runs = {}
         # Mapping from collection name to list of DatasetRefs to associate.
         collections = {}
         # FileDatasets to ingest into the datastore (in bulk):
@@ -378,11 +368,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             if data["type"] == "dimension":
                 registry.insertDimensionData(data["element"], *data["records"])
             elif data["type"] == "run":
-                run = Run(collection=data["collection"], environment=data["environment"],
-                          pipeline=data["pipeline"], startTime=data["start_time"], endTime=data["end_time"],
-                          host=data["host"])
-                runs[data["id"]] = run
-                registry.ensureRun(run)
+                registry.registerRun(data["name"])
             elif data["type"] == "dataset_type":
                 registry.registerDatasetType(
                     DatasetType(data["name"], dimensions=data["dimensions"],
@@ -390,9 +376,9 @@ class YamlRepoImportBackend(RepoImportBackend):
                 )
             elif data["type"] == "dataset":
                 datasetType = registry.getDatasetType(data["dataset_type"])
-                run = runs[data["run_id"]]
                 for dataset in data["records"]:
-                    ref = registry.addDataset(datasetType, dataset["data_id"], run=run, recursive=True)
+                    ref = registry.addDataset(datasetType, dataset["data_id"], run=data["run"],
+                                              recursive=True)
                     formatter = doImport(dataset["formatter"])
                     if directory is not None:
                         path = os.path.join(directory, dataset["path"])

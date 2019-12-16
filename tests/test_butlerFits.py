@@ -124,7 +124,7 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
             compTypeName = DatasetType.nameWithComponent(datasetTypeName, compName)
             component = butler.get(compTypeName, dataId)
             # TODO enable check for component instance types
-            # compRef = butler.registry.find(butler.run.collection,
+            # compRef = butler.registry.find(butler.run.name,
             #                                f"calexp.{compName}", dataId)
             # self.assertIsInstance(component,
             #                       compRef.datasetType.storageClass.pytype)

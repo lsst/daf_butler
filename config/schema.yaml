@@ -49,11 +49,12 @@ schema:
       -
         table: run
         source: run_id
-        target: execution_id
+        target: id
+        onDelete: CASCADE
       -
         table: quantum
         source: quantum_id
-        target: execution_id
+        target: id
         onDelete: SET NULL
 
     dataset_composition:
@@ -207,107 +208,58 @@ schema:
       unique:
       - [dataset_ref_hash, collection]
 
-    execution:
+    run:
       doc: >
-        A table whose entries represent any step in a production.
+        A table used to capture coarse provenance for all datasets.
       columns:
       -
-        name: execution_id
+        name: id
         type: int
         primaryKey: true
         nullable: false
-        autoincrement: true
         doc: >
-          A unique autoincrement field used as the primary key for
-          Execution.
+          A unique autoincrement integer identifier for this run.
+      -
+        name: name
+        type: string
+        length: 128
+        doc: >
+          The name of the run.
       -
         name: start_time
         type: datetime
         nullable: true
         doc: >
-          The start time for the Execution.  May have a different
-          interpretation for different kinds of Execution.
+          The start time for the run.
       -
         name: end_time
         type: datetime
         nullable: true
         doc: >
-          The end time for the Execution.  May have a different
-          interpretation for different kinds of Execution.
+          The end time for the run.
       -
         name: host
         type: string
         length: 64
         nullable: true
         doc: >
-          The system on which the Execution was run.  May have a different
-          interpretation for different kinds of Execution.
-
-    run:
-      doc: >
-        A table used to capture coarse provenance for all Datasets. For
-        Datasets produced by SuperTask Pipelines, a Run represents a single
-        execution of a single Pipeline. Each run record is uniquely
-        associated with an execution record.
-      columns:
-      -
-        name: execution_id
-        type: int
-        primaryKey: true
-        nullable: false
-        doc: >
-          A unique integer identifier for this Run, which
-          is also the execution_id for an associated execution record.
-      -
-        name: collection
-        type: string
-        length: 128
-        doc: >
-          A Collection name with which all Datasets in this Run are initially
-          associated, also used as a human-readable name for this Run.
-      -
-        name: environment_id
-        type: int
-        doc: >
-          A dataset_id linking to a Dataset that contains a description of
-          the software environment (e.g. versions) used for this Run.
-      -
-        name: pipeline_id
-        type: int
-        doc: >
-          A dataset_id linking to a Dataset that contains a serialization of
-          the SuperTask Pipeline used for this Run (if any).
-      foreignKeys:
-      -
-        table: dataset
-        source: environment_id
-        target: dataset_id
-        onDelete: SET NULL
-      -
-        table: dataset
-        source: pipeline_id
-        target: dataset_id
-        onDelete: SET NULL
-      -
-        table: execution
-        source: execution_id
-        target: execution_id
-        onDelete: CASCADE
+          The system on which the run was executed.
+      unique:
+      - [name]
 
     quantum:
       doc: >
-        A table used to capture fine-grained provenance for Datasets
-        produced by SuperTasks. Each Quantum record is uniquely associated
-        with an execution record.
+        A table used to capture fine-grained provenance for datasets
+        produced by PipelineTasks.
       columns:
       -
-        name: execution_id
+        name: id
         type: int
         primaryKey: true
         nullable: false
+        autoincrement: true
         doc: >
-          A unique integer identifier for this Quantum,
-          which is also the execution_id for an associated execution record.
+          A unique autoincrement integer identifier for this quantum.
       -
         name: task
         type: string
@@ -318,17 +270,31 @@ schema:
         name: run_id
         type: int
         doc: >
-          Link to the Run this Quantum is a part of.
+          Link to the run this quantum is a part of.
+      -
+        name: start_time
+        type: datetime
+        nullable: true
+        doc: >
+          The start time for the quantum.
+      -
+        name: end_time
+        type: datetime
+        nullable: true
+        doc: >
+          The end time for the quantum.
+      -
+        name: host
+        type: string
+        length: 64
+        nullable: true
+        doc: >
+          The system on which the quantum was executed.
       foreignKeys:
       -
         table: run
         source: run_id
-        target: execution_id
-        onDelete: CASCADE
-      -
-        table: execution
-        source: execution_id
-        target: execution_id
+        target: id
         onDelete: CASCADE
 
     dataset_consumers:
@@ -358,7 +324,7 @@ schema:
       -
         table: quantum
         source: quantum_id
-        target: execution_id
+        target: id
         onDelete: CASCADE
       -
         table: dataset
