@@ -462,6 +462,7 @@ class Database(ABC):
             # sqlalchemy for databases that do support it.
             args.append(sqlalchemy.Sequence(self.shrinkDatabaseEntityName(f"{table}_seq_{spec.name}"),
                                             metadata=metadata))
+        assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
         return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
                                         comment=spec.doc, **kwds)
 
@@ -544,6 +545,7 @@ class Database(ABC):
             )
             for columns in spec.indexes
         )
+        assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 
     def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.sql.FromClause:
