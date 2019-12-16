@@ -136,14 +136,13 @@ class SqliteDatabase(Database):
             dbList = list(cursor.execute("PRAGMA database_list").fetchall())
         if len(dbList) == 0:
             raise RuntimeError("No database in connection.")
+        if namespace is None:
+            namespace = "main"
         for _, dbname, filename in dbList:
-            if namespace is None and dbname == "main" or dbname == namespace:
+            if dbname == namespace:
                 break
         else:
-            if namespace is None:
-                raise RuntimeError("No 'main' database in connection.")
-            else:
-                raise RuntimeError(f"No '{namespace}' database in connection.")
+            raise RuntimeError(f"No '{namespace}' database in connection.")
         if not filename:
             self.filename = None
         else:
