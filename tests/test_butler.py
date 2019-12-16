@@ -550,7 +550,7 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     validationCanFail = False
     datastoreStr = ["datastore='InMemory"]
     datastoreName = ["InMemoryDatastore@"]
-    registryStr = "registry='sqlite:///:memory:'"
+    registryStr = ":memory:"
 
 
 class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
@@ -561,7 +561,7 @@ class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     datastoreStr = ["datastore='InMemory", "/PosixDatastore_1,", "/PosixDatastore_2'"]
     datastoreName = ["InMemoryDatastore@", f"PosixDatastore@{BUTLER_ROOT_TAG}/PosixDatastore_1",
                      "SecondDatastore"]
-    registryStr = "/gen3.sqlite3'"
+    registryStr = "/gen3.sqlite3"
 
 
 class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
@@ -647,7 +647,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
     datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
     """The expected format of the S3Datastore string."""
 
-    registryStr = f"registry='sqlite:///:memory:'"
+    registryStr = f":memory:"
     """Expected format of the Registry string."""
 
     def genRoot(self):

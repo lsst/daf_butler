@@ -41,7 +41,7 @@ from .core.utils import transactional, getClassOf
 from .core.datasets import DatasetRef, DatasetType
 from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
-from .core.registry import Registry
+from .registry import Registry
 from .core.registryConfig import RegistryConfig
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
@@ -207,22 +207,27 @@ class Butler:
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
-        # if "cls" or "db" keys exist in given config, parse them, otherwise
-        # parse the defaults in the expanded config
-        if any((config.get(("registry", "cls")), config.get(("registry", "db")))):
+        # if key exists in given config, parse it, otherwise parse the defaults
+        # in the expanded config
+        if config.get(("registry", "db")):
             registryConfig = RegistryConfig(config)
-            registryClass = registryConfig.getRegistryClass()
         else:
             registryConfig = RegistryConfig(full)
-            registryClass = registryConfig.getRegistryClass()
-        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
+        defaultDatabaseUri = registryConfig.makeDefaultDatabaseUri(BUTLER_ROOT_TAG)
+        if defaultDatabaseUri is not None:
+            Config.updateParameters(RegistryConfig, config, full,
+                                    toUpdate={"db": defaultDatabaseUri},
+                                    overwrite=forceConfigRoot)
+        else:
+            Config.updateParameters(RegistryConfig, config, full, toCopy=("db",),
+                                    overwrite=forceConfigRoot)
 
         if standalone:
             config.merge(full)
         config.dumpToUri(uri)
 
         # Create Registry and populate tables
-        registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
+        Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
     def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
