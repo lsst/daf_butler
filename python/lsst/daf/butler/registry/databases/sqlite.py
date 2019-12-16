@@ -229,7 +229,11 @@ class SqliteDatabase(Database):
 
         sqlalchemy.event.listen(engine, "connect", _onSqlite3Connect)
         sqlalchemy.event.listen(engine, "begin", _onSqlite3Begin)
-        return engine.connect()
+        try:
+            return engine.connect()
+        except sqlalchemy.exc.OperationalError as err:
+            raise RuntimeError(f"Error creating connection with uri='{uri}', filename='{filename}', "
+                               f"target={target}.") from err
 
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
