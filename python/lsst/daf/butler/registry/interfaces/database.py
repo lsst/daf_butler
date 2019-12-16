@@ -313,15 +313,11 @@ class Database(ABC):
         raise NotImplementedError()
 
     @contextmanager
-    def transaction(self, *, savepoint: bool = False, interrupting: bool = False) -> None:
+    def transaction(self, *, interrupting: bool = False) -> None:
         """Return a context manager that represents a transaction.
 
         Parameters
         ----------
-        savepoint : `bool`
-            If `True`, issue a ``SAVEPOINT`` command that allows child
-            transaction blocks that also use ``savepoint=True`` to roll back
-            without rolling back this transaction.
         interrupting : `bool`
             If `True`, this transaction block needs to be able to interrupt
             any existing one in order to yield correct behavior.
@@ -330,9 +326,11 @@ class Database(ABC):
             "Logic error in transaction nesting: an operation that would "
             "interrupt the active transaction context has been requested."
         )
-        if savepoint:
+        if self._cs.connection.in_transaction():
             trans = self._cs.connection.begin_nested()
         else:
+            # Use a regular (non-savepoint) transaction only for the outermost
+            # context.
             trans = self._cs.connection.begin()
         try:
             yield
