@@ -223,7 +223,7 @@ class SqliteMemoryRegistryTestCase(unittest.TestCase, RegistryTests):
         for a, b in itertools.combinations((regionTract, regionPatch, regionVisit, regionVisitDetector), 2):
             self.assertNotEqual(a, b)
 
-        # This depends on current schema.yaml and dimensions.yaml definitions
+        # This depends on current dimensions.yaml definitions
         self.assertEqual(len(list(registry.queryDimensions(["patch", "htm7"]))), 0)
 
         # Add some dimension entries

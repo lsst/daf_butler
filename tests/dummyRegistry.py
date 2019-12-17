@@ -22,7 +22,7 @@
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-from lsst.daf.butler import DimensionUniverse, TableSpec
+from lsst.daf.butler import DimensionUniverse, ddl
 
 
 class DummyRegistry:
@@ -35,7 +35,7 @@ class DummyRegistry:
         self._externalTableSpecs = {}
         self.dimensions = DimensionUniverse()
 
-    def registerOpaqueTable(self, name: str, spec: TableSpec):
+    def registerOpaqueTable(self, name: str, spec: ddl.TableSpec):
         self._externalTableSpecs[name] = spec
         self._externalTableRows[name] = []
 

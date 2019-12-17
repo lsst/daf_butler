@@ -56,7 +56,7 @@ def _merge(merge, compiler, **kw):
     pkColumns = [col.name for col in table.primary_key]
     nonPkColumns = [col for col in allColumns if col not in pkColumns]
 
-    # To properly support type decorators defined in core/schema.py we need
+    # To properly support type decorators defined in core/ddl.py we need
     # to pass column type to `bindparam`.
     selectColumns = [sqlalchemy.sql.bindparam(col.name, type_=col.type).label(col.name)
                      for col in table.columns]
