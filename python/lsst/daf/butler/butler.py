@@ -39,13 +39,11 @@ except ImportError:
 from lsst.utils import doImport
 from .core.utils import transactional, getClassOf
 from .core.datasets import DatasetRef, DatasetType
-from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
 from .registry import Registry
 from .core.registryConfig import RegistryConfig
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
-from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataCoordinate, DataId
 from .core.exceptions import ValidationError
@@ -53,6 +51,8 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
 from .core.repoTransfers import RepoExport, FileDataset
+from .deferredDatasetHandle import DeferredDatasetHandle
+from .butlerConfig import ButlerConfig
 
 log = logging.getLogger(__name__)
 
@@ -459,7 +459,7 @@ class Butler:
 
     def getDeferred(self, datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
                     dataId: typing.Optional[DataId] = None, parameters: typing.Union[dict, None] = None,
-                    **kwds) -> dDH.DeferredDatasetHandle:
+                    **kwds) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset
 
         Parameters
@@ -483,7 +483,7 @@ class Butler:
         obj : `DeferredDatasetHandle`
             A handle which can be used to retrieve a dataset at a later time
         """
-        return dDH.DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
+        return DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
 
     def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
         """Retrieve a stored dataset.

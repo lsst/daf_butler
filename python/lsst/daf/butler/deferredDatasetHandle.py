@@ -29,11 +29,10 @@ import dataclasses
 import typing
 import types
 
-from .datasets import DatasetRef, DatasetType
-from .dimensions import DataId
+from .core import DataId, DatasetRef, DatasetType
 
 if typing.TYPE_CHECKING:
-    from ..butler import Butler
+    from .butler import Butler
 
 
 @dataclasses.dataclass(frozen=True)
