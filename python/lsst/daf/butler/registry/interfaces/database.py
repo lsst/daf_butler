@@ -42,7 +42,7 @@ import warnings
 
 import sqlalchemy
 
-from .. import ddl
+from ...core import ddl
 
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Dict[str, Any]):

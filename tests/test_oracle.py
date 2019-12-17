@@ -28,10 +28,10 @@ import unittest
 
 import sqlalchemy
 
-from lsst.daf.butler import DimensionUniverse
+from lsst.daf.butler import DimensionUniverse, ddl
 from lsst.daf.butler.core.registryConfig import RegistryConfig
 from lsst.daf.butler.registry.databases.oracle import OracleDatabase
-from lsst.daf.butler.registry import ddl, Registry
+from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 
 ENVVAR = "DAF_BUTLER_ORACLE_TEST_URI"

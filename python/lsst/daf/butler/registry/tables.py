@@ -29,7 +29,7 @@ import sqlalchemy
 from ..core.dimensions import DimensionUniverse
 from ..core.dimensions.schema import addDimensionForeignKey
 
-from . import ddl
+from ..core import ddl
 
 
 RegistryTablesTuple = namedtuple(

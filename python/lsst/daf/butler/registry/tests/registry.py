@@ -32,9 +32,9 @@ from ...core import (
     DatasetType,
     DimensionGraph,
     StorageClass,
+    ddl,
 )
 from ..registry import Registry, ConflictingDefinitionError, OrphanedRecordError
-from .. import ddl
 
 
 class RegistryTests(ABC):

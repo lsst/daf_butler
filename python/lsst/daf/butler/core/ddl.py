@@ -18,6 +18,17 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""Classes for representing SQL data-definition language (DDL; "CREATE TABLE",
+etc.) in Python.
+
+This provides an extra layer on top of SQLAlchemy's classes for these concepts,
+because we need a level of indirection between logical tables and the actual
+SQL, and SQLAlchemy's DDL classes always map 1-1 to SQL.
+
+We've opted for the rather more obscure "ddl" as the name of this module
+instead of "schema" because the latter is too overloaded; in most SQL
+databases, a "schema" is also another term for a namespace.
+"""
 from __future__ import annotations
 
 __all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Region")
@@ -30,8 +41,9 @@ from typing import Optional, Tuple, Sequence, Set
 import sqlalchemy
 
 from lsst.sphgeom import ConvexPolygon
-from ..core import Config, ValidationError
-from ..core.utils import iterable, stripIfNotNone, NamedValueSet
+from .config import Config
+from .exceptions import ValidationError
+from .utils import iterable, stripIfNotNone, NamedValueSet
 
 
 class SchemaValidationError(ValidationError):

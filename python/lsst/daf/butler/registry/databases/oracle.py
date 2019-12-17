@@ -30,7 +30,7 @@ import sqlalchemy
 import sqlalchemy.ext.compiler
 
 from ..interfaces import Database, ReadOnlyDatabaseError
-from .. import ddl
+from ...core import ddl
 from ..nameShrinker import NameShrinker
 
 

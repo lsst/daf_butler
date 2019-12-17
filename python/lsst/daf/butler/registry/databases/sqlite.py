@@ -34,7 +34,7 @@ import sqlalchemy
 import sqlalchemy.ext.compiler
 
 from ..interfaces import Database, ReadOnlyDatabaseError, StaticTablesContext
-from .. import ddl
+from ...core import ddl
 
 
 def _onSqlite3Connect(dbapiConnection, connectionRecord):

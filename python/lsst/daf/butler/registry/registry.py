@@ -53,7 +53,6 @@ from ..core import (
     DimensionUniverse,
     ExpandedDataCoordinate,
     StorageClassFactory,
-    TableSpec,
 )
 from ..core.dimensions.storage import setupDimensionStorage
 from ..core.queries import (
@@ -63,6 +62,7 @@ from ..core.queries import (
     QueryBuilder,
     QuerySummary,
 )
+from ..core import ddl
 from ..core.registryConfig import RegistryConfig
 from ..core.utils import iterable, transactional, NamedKeyDict
 
@@ -230,7 +230,7 @@ class Registry:
             self._datasetTypes.clear()
             raise
 
-    def registerOpaqueTable(self, tableName: str, spec: TableSpec):
+    def registerOpaqueTable(self, tableName: str, spec: ddl.TableSpec):
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
         other data repository client.
 
@@ -242,7 +242,7 @@ class Registry:
         tableName : `str`
             Logical name of the opaque table.  This may differ from the
             actual name used in the database by a prefix and/or suffix.
-        spec : `TableSpec`
+        spec : `ddl.TableSpec`
             Specification for the table to be added.
         """
         self._opaqueTables[tableName] = self._db.ensureTableExists(tableName, spec)
