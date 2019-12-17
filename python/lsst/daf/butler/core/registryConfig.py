@@ -51,28 +51,6 @@ class RegistryConfig(ConfigSubset):
         conStr = ConnectionStringFactory.fromConfig(self)
         return conStr.get_backend_name()
 
-    def getRegistryClass(self):
-        """Returns registry class targeted by configuration values.
-
-        The appropriate class is determined from the `cls` key, if it exists.
-        Otherwise the `db` key is parsed and the correct class is determined
-        from a list of aliases found under `clsMap` key of the registry config.
-
-        Returns
-        -------
-        registry : `type`
-           Class of type `Registry` targeted by the registry configuration.
-        """
-        if self.get("cls") is not None:
-            registryClass = self.get("cls")
-        else:
-            dialect = self.getDialect()
-            if dialect not in self["clsMap"]:
-                raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
-            registryClass = self.get(("clsMap", dialect))
-
-        return doImport(registryClass)
-
     def getDatabaseClass(self) -> Type[Database]:
         """Returns the `Database` class targeted by configuration values.
 

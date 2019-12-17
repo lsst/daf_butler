@@ -21,7 +21,6 @@ from .location import *
 from .mappingFactory import *
 from .quantum import *
 from .regions import *
-from .registry import *
 from .schema import *
 from .storageClass import *
 from .storedFileInfo import *

@@ -85,13 +85,6 @@ Example datastores
    :no-main-docstr:
    :headings: ^"
 
-Example registries
-------------------
-
-.. automodapi:: lsst.daf.butler.registries.sqlRegistry
-   :no-main-docstr:
-   :headings: ^"
-
 Example formatters
 ------------------
 

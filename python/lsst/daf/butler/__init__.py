@@ -6,5 +6,6 @@ Data Access Butler
 # dependencies.
 
 from .core import *
+from .registry import *
 from .butler import *
 from .version import *
