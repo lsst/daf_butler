@@ -28,17 +28,22 @@ from sqlalchemy.sql import ColumnElement, and_, literal, bindparam, select, From
 import sqlalchemy.sql
 from sqlalchemy.engine import Connection
 
-from ..datasets import DatasetType
-from ..timespan import Timespan, TIMESPAN_FIELD_SPECS
-from ..utils import NamedValueSet, NamedKeyDict
-from ..dimensions import DimensionElement, SkyPixDimension, Dimension
-from ..dimensions.schema import REGION_FIELD_SPEC
-from ..dimensions.storage import DimensionRecordStorage
+from ...core import (
+    DimensionElement,
+    SkyPixDimension,
+    Dimension,
+    DatasetType,
+    Timespan,
+    TIMESPAN_FIELD_SPECS,
+)
+from ...core.utils import NamedValueSet, NamedKeyDict
+from ...core.dimensions.schema import REGION_FIELD_SPEC
+from ...core.dimensions.storage import DimensionRecordStorage
 
-from .structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
-from .datasets import DatasetRegistryStorage, CollectionsExpression
+from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
+from ._datasets import DatasetRegistryStorage, CollectionsExpression
 from .expressions import ClauseVisitor
-from .query import Query
+from ._query import Query
 
 
 class QueryBuilder:

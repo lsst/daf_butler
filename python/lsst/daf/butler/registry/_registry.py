@@ -55,17 +55,16 @@ from ..core import (
     StorageClassFactory,
 )
 from ..core.dimensions.storage import setupDimensionStorage
-from ..core.queries import (
+from ..core import ddl
+from ..core.utils import iterable, transactional, NamedKeyDict
+from ._config import RegistryConfig
+from .queries import (
     CollectionsExpression,
     DatasetRegistryStorage,
     DatasetTypeExpression,
     QueryBuilder,
     QuerySummary,
 )
-from ..core import ddl
-from ..core.utils import iterable, transactional, NamedKeyDict
-from ._config import RegistryConfig
-
 from .tables import makeRegistryTableSpecs
 
 if TYPE_CHECKING:

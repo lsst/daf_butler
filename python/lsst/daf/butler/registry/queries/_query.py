@@ -30,10 +30,14 @@ from sqlalchemy.engine import RowProxy, ResultProxy, Connection
 
 from lsst.sphgeom import Region
 
-from ..datasets import DatasetType, DatasetRef
-from ..dimensions import DimensionGraph, DataCoordinate, ExpandedDataCoordinate
-
-from .structs import QuerySummary, QueryColumns, QueryParameters
+from ...core import (
+    DataCoordinate,
+    DatasetRef,
+    DatasetType,
+    DimensionGraph,
+    ExpandedDataCoordinate,
+)
+from ._structs import QuerySummary, QueryColumns, QueryParameters
 
 
 class Query:

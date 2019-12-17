@@ -24,3 +24,4 @@ from ._registry import *
 from ._dbAuth import *
 
 from . import interfaces
+from . import queries

@@ -28,11 +28,17 @@ from typing import Optional, Tuple, List, Set, Union
 
 from sqlalchemy.sql import ColumnElement, bindparam
 
-from ..timespan import Timespan
-from ..datasets import DatasetType
-from ..utils import NamedValueSet, NamedKeyDict
-from ..dimensions import (Dimension, DimensionElement, SkyPixDimension, DimensionGraph, DimensionUniverse,
-                          ExpandedDataCoordinate)
+from ...core import (
+    DatasetType,
+    Dimension,
+    DimensionElement,
+    DimensionGraph,
+    DimensionUniverse,
+    ExpandedDataCoordinate,
+    SkyPixDimension,
+    Timespan,
+)
+from ...core.utils import NamedValueSet, NamedKeyDict
 from .exprParser import Node, ParserYacc
 
 
