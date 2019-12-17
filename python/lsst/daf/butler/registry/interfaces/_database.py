@@ -344,8 +344,8 @@ class Database(ABC):
             Raised if ``create`` is `True`, `Database.isWriteable` is `False`,
             and one or more declared tables do not already exist.
 
-        Example
-        -------
+        Examples
+        --------
         Given a `Database` instance ``db``::
 
             with db.declareStaticTables(create=True) as schema:
