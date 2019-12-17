@@ -24,3 +24,4 @@ from .storageClass import *
 from .storedFileInfo import *
 from .dimensions import *
 from .repoTransfers import *
+from .timespan import *
