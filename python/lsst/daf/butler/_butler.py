@@ -40,8 +40,6 @@ from lsst.utils import doImport
 from .core.utils import transactional, getClassOf
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
-from .registry import Registry
-from .registry import RegistryConfig
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
 from .core.composites import CompositesMap
@@ -51,8 +49,9 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
 from .core.repoTransfers import RepoExport, FileDataset
-from .deferredDatasetHandle import DeferredDatasetHandle
-from .butlerConfig import ButlerConfig
+from ._deferredDatasetHandle import DeferredDatasetHandle
+from ._butlerConfig import ButlerConfig
+from .registry import Registry, RegistryConfig
 
 log = logging.getLogger(__name__)
 
