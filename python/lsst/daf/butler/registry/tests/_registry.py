@@ -34,7 +34,7 @@ from ...core import (
     StorageClass,
     ddl,
 )
-from ..registry import Registry, ConflictingDefinitionError, OrphanedRecordError
+from .._registry import Registry, ConflictingDefinitionError, OrphanedRecordError
 
 
 class RegistryTests(ABC):

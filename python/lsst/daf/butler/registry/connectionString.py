@@ -22,7 +22,7 @@
 __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
-from .dbAuth import DbAuth, DbAuthError, DbAuthPermissionsError
+from ._dbAuth import DbAuth, DbAuthError, DbAuthPermissionsError
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
