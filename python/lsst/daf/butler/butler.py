@@ -41,7 +41,7 @@ from .core.utils import transactional, getClassOf
 from .core.datasets import DatasetRef, DatasetType
 from .core.datastore import Datastore
 from .registry import Registry
-from .core.registryConfig import RegistryConfig
+from .registry import RegistryConfig
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
 from .core.composites import CompositesMap

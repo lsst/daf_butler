@@ -27,12 +27,12 @@ from typing import Type, TYPE_CHECKING
 
 from lsst.utils import doImport
 
+from ..core import ConfigSubset
+from ..core.repoRelocation import replaceRoot
 from .connectionString import ConnectionStringFactory
-from .config import ConfigSubset
-from .repoRelocation import replaceRoot
 
 if TYPE_CHECKING:
-    from ..registry.interfaces import Database
+    from .interfaces import Database
 
 
 class RegistryConfig(ConfigSubset):

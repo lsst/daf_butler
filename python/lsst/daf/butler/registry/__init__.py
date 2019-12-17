@@ -19,4 +19,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = [
+    "AmbiguousDatasetError",
+    "DbAuth",
+    "DbAuthError",
+    "ConflictingDefinitionError",
+    "OrphanedRecordError",
+    "Registry",
+]
+
+from .config import *
 from .registry import *
+from .dbAuth import *
+from .interfaces import *

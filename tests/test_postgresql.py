@@ -35,7 +35,7 @@ except ImportError:
 import sqlalchemy
 
 from lsst.daf.butler import ddl
-from lsst.daf.butler.core.registryConfig import RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase
 from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests

@@ -22,7 +22,7 @@
 __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
-from lsst.daf.butler.core.dbAuth import DbAuth, DbAuthError, DbAuthPermissionsError
+from .dbAuth import DbAuth, DbAuthError, DbAuthPermissionsError
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
@@ -71,7 +71,7 @@ class ConnectionStringFactory:
             If the credentials file has incorrect permissions.
         """
         # this import can not live on the top because of circular import issue
-        from lsst.daf.butler.core.registryConfig import RegistryConfig
+        from lsst.daf.butler.registry import RegistryConfig
         regConf = RegistryConfig(registryConfig)
         conStr = url.make_url(regConf['db'])
 

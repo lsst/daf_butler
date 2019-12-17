@@ -37,7 +37,7 @@ from .core import (
     RepoTransferFormatConfig,
     StorageClassConfig,
 )
-from .core.registryConfig import RegistryConfig
+from .registry import RegistryConfig
 
 CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig,
                             DatastoreConfig, CompositesConfig, DimensionConfig,

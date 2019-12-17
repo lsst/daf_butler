@@ -26,9 +26,9 @@ import unittest
 import os
 import os.path
 
-from lsst.daf.butler.core.registryConfig import RegistryConfig
-import lsst.daf.butler.core.connectionString as ConnectionStringModule
-from lsst.daf.butler.core.connectionString import ConnectionStringFactory
+from lsst.daf.butler.registry import RegistryConfig
+import lsst.daf.butler.registry.connectionString as ConnectionStringModule
+from lsst.daf.butler.registry.connectionString import ConnectionStringFactory
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

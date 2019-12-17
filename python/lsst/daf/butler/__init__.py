@@ -7,7 +7,7 @@ Data Access Butler
 
 from .core import *
 from .registry import *
-from .butler import *
 from .butlerConfig import *
 from .deferredDatasetHandle import *
+from .butler import *
 from .version import *

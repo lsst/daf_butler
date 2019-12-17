@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = ["Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError"]
 
 import contextlib
 import sys
@@ -63,15 +63,15 @@ from ..core.queries import (
     QuerySummary,
 )
 from ..core import ddl
-from ..core.registryConfig import RegistryConfig
 from ..core.utils import iterable, transactional, NamedKeyDict
+from .config import RegistryConfig
 
 from .tables import makeRegistryTableSpecs
 
 if TYPE_CHECKING:
+    from ..butlerConfig import ButlerConfig
     from ..core import (
-        ButlerConfig,
-        Quantum,
+        Quantum
     )
     from .interfaces import Database
 

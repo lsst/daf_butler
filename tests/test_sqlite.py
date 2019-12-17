@@ -33,7 +33,7 @@ import sqlalchemy
 from lsst.sphgeom import ConvexPolygon, UnitVector3d
 
 from lsst.daf.butler import ddl
-from lsst.daf.butler.core.registryConfig import RegistryConfig
+from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.registry import Registry
