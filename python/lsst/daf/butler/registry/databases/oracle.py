@@ -27,6 +27,7 @@ import copy
 from typing import Optional
 
 import sqlalchemy
+import sqlalchemy.ext.compiler
 
 from ..interfaces import Database, ReadOnlyDatabaseError
 from .. import ddl

@@ -30,6 +30,7 @@ import urllib.parse
 
 import sqlite3
 import sqlalchemy
+import sqlalchemy.ext.compiler
 
 from ..interfaces import Database, ReadOnlyDatabaseError, StaticTablesContext
 from .. import ddl
