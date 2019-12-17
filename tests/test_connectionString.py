@@ -67,3 +67,7 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         conStrFactory = ConnectionStringFactory()
         conStr = conStrFactory.fromConfig(regConf)
         self.assertEqual(str(conStr), 'sqlite:///relative/path/conf1.sqlite3')
+
+
+if __name__ == "__main__":
+    unittest.main()
