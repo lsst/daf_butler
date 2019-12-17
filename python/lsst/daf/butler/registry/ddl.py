@@ -30,8 +30,40 @@ from typing import Optional, Tuple, Sequence, Set
 import sqlalchemy
 
 from lsst.sphgeom import ConvexPolygon
-from ..core.utils import NamedValueSet
-from sqlalchemy.types import TypeEngine
+from ..core import Config, ValidationError
+from ..core.utils import iterable, stripIfNotNone, NamedValueSet
+
+
+class SchemaValidationError(ValidationError):
+    """Exceptions used to indicate problems in Registry schema configuration.
+    """
+
+    @classmethod
+    def translate(cls, caught, message):
+        """A decorator that re-raises exceptions as `SchemaValidationError`.
+
+        Decorated functions must be class or instance methods, with a
+        ``config`` parameter as their first argument.  This will be passed
+        to ``message.format()`` as a keyword argument, along with ``err``,
+        the original exception.
+
+        Parameters
+        ----------
+        caught : `type` (`Exception` subclass)
+            The type of exception to catch.
+        message : `str`
+            A `str.format` string that may contain named placeholders for
+            ``config``, ``err``, or any keyword-only argument accepted by
+            the decorated function.
+        """
+        def decorate(func):
+            def decorated(self, config, *args, **kwds):
+                try:
+                    return func(self, config, *args, **kwds)
+                except caught as err:
+                    raise cls(message.format(config=str(config), err=err))
+            return decorated
+        return decorate
 
 
 class Base64Bytes(sqlalchemy.TypeDecorator):
@@ -81,6 +113,18 @@ class Base64Region(Base64Bytes):
         return ConvexPolygon.decode(super().process_result_value(value, dialect))
 
 
+VALID_CONFIG_COLUMN_TYPES = {
+    "string": sqlalchemy.String,
+    "int": sqlalchemy.Integer,
+    "float": sqlalchemy.Float,
+    "region": Base64Region,
+    "bool": sqlalchemy.Boolean,
+    "blob": sqlalchemy.LargeBinary,
+    "datetime": sqlalchemy.DateTime,
+    "hash": Base64Bytes
+}
+
+
 @dataclass
 class FieldSpec:
     """A struct-like class used to define a column in a logical `Registry`
@@ -123,7 +167,47 @@ class FieldSpec:
     def __hash__(self):
         return hash(self.name)
 
-    def getSizedColumnType(self) -> TypeEngine:
+    @classmethod
+    @SchemaValidationError.translate(KeyError, "Missing key {err} in column config '{config}'.")
+    def fromConfig(cls, config: Config, **kwds) -> FieldSpec:
+        """Create a `FieldSpec` from a subset of a `SchemaConfig`.
+
+        Parameters
+        ----------
+        config: `Config`
+            Configuration describing the column.  Nested configuration keys
+            correspond to `FieldSpec` attributes.
+        kwds
+            Additional keyword arguments that provide defaults for values
+            not present in config.
+
+        Returns
+        -------
+        spec: `FieldSpec`
+            Specification structure for the column.
+
+        Raises
+        ------
+        SchemaValidationError
+            Raised if configuration keys are missing or have invalid values.
+        """
+        dtype = VALID_CONFIG_COLUMN_TYPES.get(config["type"])
+        if dtype is None:
+            raise SchemaValidationError(f"Invalid field type string: '{config['type']}'.")
+        if not config["name"].islower():
+            raise SchemaValidationError(f"Column name '{config['name']}' is not all lowercase.")
+        self = cls(name=config["name"], dtype=dtype, **kwds)
+        self.length = config.get("length", self.length)
+        self.nbytes = config.get("nbytes", self.nbytes)
+        if self.length is not None and self.nbytes is not None:
+            raise SchemaValidationError(f"Both length and nbytes provided for field '{self.name}'.")
+        self.primaryKey = config.get("primaryKey", self.primaryKey)
+        self.autoincrement = config.get("autoincrement", self.autoincrement)
+        self.nullable = config.get("nullable", False if self.primaryKey else self.nullable)
+        self.doc = stripIfNotNone(config.get("doc", None))
+        return self
+
+    def getSizedColumnType(self) -> sqlalchemy.types.TypeEngine:
         """Return a sized version of the column type, utilizing either (or
         neither) of ``self.length`` and ``self.nbytes``.
 
@@ -161,6 +245,32 @@ class ForeignKeySpec:
     be raised), should be either "SET NULL" or "CASCADE".
     """
 
+    @classmethod
+    @SchemaValidationError.translate(KeyError, "Missing key {err} in foreignKey config '{config}'.")
+    def fromConfig(cls, config: Config) -> ForeignKeySpec:
+        """Create a `ForeignKeySpec` from a subset of a `SchemaConfig`.
+
+        Parameters
+        ----------
+        config: `Config`
+            Configuration describing the constraint.  Nested configuration keys
+            correspond to `ForeignKeySpec` attributes.
+
+        Returns
+        -------
+        spec: `ForeignKeySpec`
+            Specification structure for the constraint.
+
+        Raises
+        ------
+        SchemaValidationError
+            Raised if configuration keys are missing or have invalid values.
+        """
+        return cls(table=config["table"],
+                   source=tuple(iterable(config["source"])),
+                   target=tuple(iterable(config["target"])),
+                   onDelete=config.get("onDelete", None))
+
 
 @dataclass
 class TableSpec:
@@ -188,3 +298,32 @@ class TableSpec:
         self.unique = set(self.unique)
         self.indexes = set(self.indexes)
         self.foreignKeys = list(self.foreignKeys)
+
+    @classmethod
+    @SchemaValidationError.translate(KeyError, "Missing key {err} in table config '{config}'.")
+    def fromConfig(cls, config: Config) -> TableSpec:
+        """Create a `ForeignKeySpec` from a subset of a `SchemaConfig`.
+
+        Parameters
+        ----------
+        config: `Config`
+            Configuration describing the constraint.  Nested configuration keys
+            correspond to `TableSpec` attributes.
+
+        Returns
+        -------
+        spec: `TableSpec`
+            Specification structure for the table.
+
+        Raises
+        ------
+        SchemaValidationError
+            Raised if configuration keys are missing or have invalid values.
+        """
+        return cls(
+            fields=NamedValueSet(FieldSpec.fromConfig(c) for c in config["columns"]),
+            unique={tuple(u) for u in config.get("unique", ())},
+            foreignKeys=[ForeignKeySpec.fromConfig(c) for c in config.get("foreignKeys", ())],
+            sql=config.get("sql"),
+            doc=stripIfNotNone(config.get("doc")),
+        )
