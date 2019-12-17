@@ -27,7 +27,7 @@ from typing import Generic, Optional, TypeVar
 
 from sqlalchemy import DateTime
 
-from .schema import FieldSpec
+from . import ddl
 
 
 T = TypeVar("T")
@@ -66,6 +66,6 @@ class Timespan(Generic[T], tuple):
 
 
 TIMESPAN_FIELD_SPECS = Timespan(
-    begin=FieldSpec(name="datetime_begin", dtype=DateTime),
-    end=FieldSpec(name="datetime_end", dtype=DateTime),
+    begin=ddl.FieldSpec(name="datetime_begin", dtype=DateTime),
+    end=ddl.FieldSpec(name="datetime_end", dtype=DateTime),
 )
