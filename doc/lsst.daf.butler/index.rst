@@ -72,6 +72,15 @@ Python API reference
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
 
+.. automodapi:: lsst.daf.butler.registry
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.interfaces
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.queries
+   :no-main-docstr:
+
 Example datastores
 ------------------
 
