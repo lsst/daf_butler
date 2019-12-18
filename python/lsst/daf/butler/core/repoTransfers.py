@@ -35,12 +35,12 @@ import yaml
 
 from lsst.utils import doImport
 from .config import ConfigSubset
-from .datasets import DatasetType
+from .datasets import DatasetType, DatasetRef
+from .utils import NamedValueSet
 
 if TYPE_CHECKING:
     from .dimensions import DimensionElement, DimensionRecord, ExpandedDataCoordinate
-    from .datasets import DatasetRef
-    from .registry import Registry
+    from ..registry import Registry
     from .datastore import Datastore
     from .formatters import Formatter
 
@@ -254,17 +254,29 @@ class RepoExportBackend(ABC):
 
 class RepoImportBackend(ABC):
     """An abstract interface for data repository import implementations.
+
+    Import backends are expected to be constructed with a description of
+    the objects that need to be imported (from, e.g., a file written by the
+    corresponding export backend), along with a `Registry`.
     """
 
     @abstractmethod
-    def load(self, registry: Registry, datastore: Datastore, *,
+    def register(self):
+        """Register all runs and dataset types associated with the backend with
+        the `Registry` the backend was constructed with.
+
+        These operations cannot be performed inside transactions, unlike those
+        performed by `load`, and must in general be performed before `load`.
+        """
+
+    @abstractmethod
+    def load(self, datastore: Datastore, *,
              directory: Optional[str] = None, transfer: Optional[str] = None):
-        """Import all information associated with the backend into the given
+        """Import information associated with the backend into the given
         registry and datastore.
 
-        Import backends are expected to be constructed with a description of
-        the objects that need to be imported (from, e.g., a file written by the
-        corresponding export backend).
+        This must be run after `register`, and may be performed inside a
+        transaction.
 
         Parameters
         ----------
@@ -349,46 +361,89 @@ class YamlRepoImportBackend(RepoImportBackend):
     ----------
     stream
         A readable file-like object.
+    registry : `Registry`
+        The registry datasets will be imported into.  Only used to retreive
+        dataset types during construction; all write happen in `register`
+        and `load`.
     """
 
-    def __init__(self, stream: IO):
-        self.stream = stream
-
-    def load(self, registry: Registry, datastore: Datastore, *,
-             directory: Optional[str] = None, transfer: Optional[str] = None):
-        # Docstring inherited from RepoImportBackend.load.
-        wrapper = yaml.safe_load(self.stream)
+    def __init__(self, stream: IO, registry: Registry):
+        # We read the file fully and convert its contents to Python objects
+        # instead of loading incrementally so we can spot some problems early;
+        # because `register` can't be put inside a transaction, we'd rather not
+        # run that at all if there's going to be problem later in `load`.
+        wrapper = yaml.safe_load(stream)
         # TODO: When version numbers become meaningful, check here that we can
         # read the version in the file.
-        # Mapping from collection name to list of DatasetRefs to associate.
-        collections = {}
-        # FileDatasets to ingest into the datastore (in bulk):
-        datasets = []
+        self.runs: List[str] = []
+        self.datasetTypes: NamedValueSet[DatasetType] = NamedValueSet()
+        self.dimensions: Mapping[DimensionElement, List[DimensionRecord]] = defaultdict(list)
+        self.registry: Registry = registry
+        datasetData = []
         for data in wrapper["data"]:
             if data["type"] == "dimension":
-                registry.insertDimensionData(data["element"], *data["records"])
+                element = self.registry.dimensions[data["element"]]
+                self.dimensions[element].extend(element.RecordClass.fromDict(r) for r in data["records"])
             elif data["type"] == "run":
-                registry.registerRun(data["name"])
+                self.runs.append(data["name"])
             elif data["type"] == "dataset_type":
-                registry.registerDatasetType(
+                self.datasetTypes.add(
                     DatasetType(data["name"], dimensions=data["dimensions"],
-                                storageClass=data["storage_class"], universe=registry.dimensions)
+                                storageClass=data["storage_class"], universe=self.registry.dimensions)
                 )
             elif data["type"] == "dataset":
-                datasetType = registry.getDatasetType(data["dataset_type"])
-                for dataset in data["records"]:
-                    ref = registry.addDataset(datasetType, dataset["data_id"], run=data["run"],
-                                              recursive=True)
-                    formatter = doImport(dataset["formatter"])
-                    if directory is not None:
-                        path = os.path.join(directory, dataset["path"])
-                    else:
-                        path = dataset["path"]
-                    datasets.append(FileDataset(path, ref, formatter=formatter))
-                    for collection in dataset.get("collections", []):
-                        collections[collection].append(ref)
+                # Save raw dataset data for a second loop, so we can ensure we
+                # know about all dataset types first.
+                datasetData.append(data)
             else:
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
-        datastore.ingest(*datasets, transfer=transfer)
+        # key is (dataset type name, run); inner most list is collections
+        self.datasets: Mapping[(str, str), List[Tuple[FileDataset, List[str]]]] = defaultdict(list)
+        for data in datasetData:
+            datasetType = self.datasetTypes.get(data["dataset_type"])
+            if datasetType is None:
+                datasetType = self.registry.getDatasetType(data["dataset_type"])
+            self.datasets[data["dataset_type"], data["run"]].extend(
+                (
+                    FileDataset(
+                        d["path"],
+                        DatasetRef(datasetType, d["data_id"], run=data["run"], id=d["dataset_id"]),
+                        formatter=doImport(d["formatter"])
+                    ),
+                    d.get("collections", [])
+                )
+                for d in data["records"]
+            )
+
+    def register(self):
+        # Docstring inherited from RepoImportBackend.register.
+        for run in self.runs:
+            self.registry.registerRun(run)
+        for datasetType in self.datasetTypes:
+            self.registry.registerDatasetType(datasetType)
+
+    def load(self, datastore: Datastore, *,
+             directory: Optional[str] = None, transfer: Optional[str] = None):
+        # Docstring inherited from RepoImportBackend.load.
+        for element, records in self.dimensions.items():
+            self.registry.insertDimensionData(element, *records)
+        # Mapping from collection name to list of DatasetRefs to associate.
+        collections = defaultdict(list)
+        # FileDatasets to ingest into the datastore (in bulk):
+        fileDatasets = []
+        for (datasetTypeName, run), records in self.datasets.items():
+            datasetType = self.registry.getDatasetType(datasetTypeName)
+            for fileDataset, collectionsForDataset in records:
+                # For now, we ignore the dataset_id we pulled from the file
+                # and just insert without one to get a new autoincrement value.
+                # Eventually (once we have origin in IDs) we'll preserve them.
+                fileDataset.ref = self.registry.addDataset(datasetType, fileDataset.ref.dataId, run=run,
+                                                           recursive=True)
+                if directory is not None:
+                    fileDataset.path = os.path.join(directory, fileDataset.path)
+                fileDatasets.append(fileDataset)
+                for collection in collectionsForDataset:
+                    collections[collection].append(fileDataset.ref)
+        datastore.ingest(*fileDatasets, transfer=transfer)
         for collection, refs in collections.items():
-            registry.associate(collection, refs)
+            self.registry.associate(collection, refs)

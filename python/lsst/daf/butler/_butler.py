@@ -821,10 +821,10 @@ class Butler:
             filename = os.path.join(directory, filename)
         BackendClass = getClassOf(self.config["repo_transfer_formats"][format]["import"])
         with open(filename, 'r') as stream:
-            backend = BackendClass(stream)
+            backend = BackendClass(stream, self.registry)
+            backend.register()
             with self.transaction():
-                backend.load(self.registry, self.datastore,
-                             directory=directory, transfer=transfer)
+                backend.load(self.datastore, directory=directory, transfer=transfer)
 
     def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
         """Validate butler configuration.
