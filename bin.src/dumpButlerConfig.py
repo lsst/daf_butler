@@ -21,37 +21,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
 import sys
-import logging
+from lsst.daf.butler.script.dumpButlerConfig import main
 
-from lsst.daf.butler import ButlerConfig
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Dump either a subset or full Butler configuration to "
-                                     "standard output.")
-    parser.add_argument("root",
-                        help="Filesystem path for an existing Butler repository or path to config file.")
-    parser.add_argument("--subset", "-s", default=None, type=str,
-                        help="Subset of a configuration to report. This can be any key in the"
-                             " hierarchy such as '.datastore.root' where the leading '.' specified"
-                             " the delimiter for the hierarchy.")
-    parser.add_argument("--searchpath", "-p", action="append", type=str,
-                        help="Additional search paths to use for configuration overrides")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        help="Turn on debug reporting.")
-
-    args = parser.parse_args()
-
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-
-    config = ButlerConfig(args.root, searchPaths=args.searchpath)
-
-    if args.subset is not None:
-        config = config[args.subset]
-
-    try:
-        config.dump(sys.stdout)
-    except AttributeError:
-        print(config)
+if __name__ == '__main__':
+    sys.exit(main())
