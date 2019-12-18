@@ -28,6 +28,24 @@ Using the Butler
   configuring.rst
   exprParser.rst
 
+.. _lsst.daf.butler-scripts:
+
+Command Line Scripts
+====================
+
+.. autoprogram:: lsst.daf.butler.script.makeButlerRepo:build_argparser()
+   :prog: makeButlerRepo.py
+   :groups:
+
+.. autoprogram:: lsst.daf.butler.script.dumpButlerConfig:build_argparser()
+   :prog: dumpButlerConfig.py
+   :groups:
+
+.. autoprogram:: lsst.daf.butler.script.validateButlerConfiguration:build_argparser()
+   :prog: validateButlerConfiguration.py
+   :groups:
+
+
 .. _lsst.daf.butler-dimensions:
 
 The Dimensions System
