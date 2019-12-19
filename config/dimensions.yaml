@@ -70,6 +70,20 @@ dimensions:
       - abstract_filter
       cached: true
 
+    subfilter:
+      doc: >
+        A mathematical division of an abstract_filter. Subfilters are used to
+        model wavelength-dependent effects such as differential chromatic
+        refraction.
+      keys:
+      -
+        name: name
+        type: string
+        length: 8
+      implies:
+      - abstract_filter
+      cached: true
+
     detector:
       doc: >
         A detector associated with a particular instrument (not an observation
