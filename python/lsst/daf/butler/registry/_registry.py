@@ -657,6 +657,88 @@ class Registry:
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
+    def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
+                       run: str, *, producer: Optional[Quantum] = None, recursive: bool = False
+                       ) -> List[DatasetRef]:
+        """Insert one or more datasets into the `Registry`
+
+        This always adds new datasets; to associate existing datasets with
+        a new collection, use ``associate``.
+
+        Parameters
+        ----------
+        datasetType : `DatasetType` or `str`
+            A `DatasetType` or the name of one.
+        dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
+            Dimension-based identifiers for the new datasets.
+        run : `str`
+            The name of the run that produced the datasets.
+        producer : `Quantum`
+            Unit of work that produced the datasets.  May be `None` to store
+            no provenance information, but if present the `Quantum` must
+            already have been added to the Registry.
+        recursive : `bool`
+            If True, recursively add datasets and attach entries for component
+            datasets as well.
+
+        Returns
+        -------
+        refs : `list` of `DatasetRef`
+            Resolved `DatasetRef` instances for all given data IDs (in the same
+            order).
+        ConflictingDefinitionError
+            If a dataset with the same dataset type and data ID as one of those
+            given already exists in the given collection.
+        """
+        if not isinstance(datasetType, DatasetType):
+            datasetType = self.getDatasetType(datasetType)
+        rows = []
+        refs = []
+        base = {
+            "dataset_type_name": datasetType.name,
+            "run_id": self._getRunIdFromName(run),
+            "quantum_id": producer.id if producer is not None else None,
+        }
+        # Expand data IDs and build both a list of unresolved DatasetRefs
+        # and a list of dictionary rows for the dataset table.
+        for dataId in dataIds:
+            ref = DatasetRef(datasetType, self.expandDataId(dataId, graph=datasetType.dimensions))
+            refs.append(ref)
+            row = dict(base, dataset_ref_hash=ref.hash)
+            for dimension, value in ref.dataId.full.items():
+                row[dimension.name] = value
+            rows.append(row)
+        # Actually insert into the dataset table.
+        datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+        # Resolve the DatasetRefs with the autoincrement IDs we generated.
+        refs = [ref.resolved(id=datasetId, run=run) for datasetId, ref in zip(datasetIds, refs)]
+        # Associate the datasets with the run as a collection.  Note that we
+        # do this before inserting component datasets so recursing doesn't try
+        # to associate those twice.
+        self.associate(run, refs)
+        if recursive and datasetType.isComposite():
+            # Insert component rows by recursing, and gather a single big list
+            # of rows to insert into the dataset_composition table.
+            compositionRows = []
+            for componentName in datasetType.storageClass.components:
+                componentDatasetType = datasetType.makeComponentDatasetType(componentName)
+                componentRefs = self.insertDatasets(componentDatasetType,
+                                                    dataIds=(ref.dataId for ref in refs),
+                                                    run=run,
+                                                    producer=producer,
+                                                    recursive=True)
+                for parentRef, componentRef in zip(refs, componentRefs):
+                    parentRef._components[componentName] = componentRef
+                    compositionRows.append({
+                        "parent_dataset_id": parentRef.id,
+                        "component_dataset_id": componentRef.id,
+                        "component_name": componentName,
+                    })
+            if compositionRows:
+                self._db.insert(self._tables.dataset_composition, *compositionRows)
+        return refs
+
+    @transactional
     def addDataset(self, datasetType: Union[DatasetType, str],
                    dataId: DataId, run: str, producer: Optional[Quantum] = None,
                    recursive: bool = False, **kwds: Any) -> DatasetRef:
