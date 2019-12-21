@@ -400,7 +400,7 @@ class RegistryTests(ABC):
             registry.associate(newCollection, [ref1_run3, ref2_run3])
 
     def testDatasetLocations(self):
-        """Tests for `Registry.addDatasetLocation`,
+        """Tests for `Registry.insertDatasetLocations`,
         `Registry.getDatasetLocations`, and `Registry.removeDatasetLocations`.
         """
         registry = self.makeRegistry()
@@ -420,12 +420,11 @@ class RegistryTests(ABC):
         datastoreName = "dummystore"
         datastoreName2 = "dummystore2"
         # Test adding information about a new dataset
-        registry.addDatasetLocation(ref, datastoreName)
+        registry.insertDatasetLocations(datastoreName, [ref])
         addresses = registry.getDatasetLocations(ref)
         self.assertIn(datastoreName, addresses)
         self.assertEqual(len(addresses), 1)
-        registry.addDatasetLocation(ref, datastoreName2)
-        registry.addDatasetLocation(ref2, datastoreName2)
+        registry.insertDatasetLocations(datastoreName2, [ref, ref2])
         addresses = registry.getDatasetLocations(ref)
         self.assertEqual(len(addresses), 2)
         self.assertIn(datastoreName, addresses)
