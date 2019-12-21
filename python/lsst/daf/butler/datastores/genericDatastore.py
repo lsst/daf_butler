@@ -105,11 +105,7 @@ class GenericBaseDatastore(Datastore):
             expandedRefs.extend(ref.components.values())
             expandedItemInfos.extend([itemInfo] * len(ref.components))
 
-        for ref in expandedRefs:
-            # TODO: when a vectorized API for addDatasetLocation is available,
-            # use it.
-            self.registry.addDatasetLocation(ref, self.name)
-
+        self.registry.insertDatasetLocations(self.name, expandedRefs)
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
     def _remove_from_registry(self, ref):
