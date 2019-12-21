@@ -932,6 +932,29 @@ class Registry:
         self._db.delete(self._tables.dataset_collection, ["dataset_id", "collection"], *rows)
 
     @transactional
+    def insertDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
+        """Record that a datastore holds the given datasets.
+
+        Typically used by `Datastore`.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of the datastore holding these datasets.
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            References to the datasets.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``any(ref.id is None for ref in refs)``.
+        """
+        self._db.insert(
+            self._tables.dataset_storage,
+            *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
+        )
+
+    @transactional
     def addDatasetLocation(self, ref: DatasetRef, datastoreName: str):
         """Add datastore name locating a given dataset.
 
