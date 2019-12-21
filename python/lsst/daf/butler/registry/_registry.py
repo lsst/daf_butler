@@ -954,28 +954,6 @@ class Registry:
             *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
         )
 
-    @transactional
-    def addDatasetLocation(self, ref: DatasetRef, datastoreName: str):
-        """Add datastore name locating a given dataset.
-
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to add storage information.
-        datastoreName : `str`
-            Name of the datastore holding this dataset.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
-        """
-        self._db.insert(self._tables.dataset_storage,
-                        {"dataset_id": _checkAndGetId(ref),
-                         "datastore_name": datastoreName})
-
     def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
         """Retrieve datastore locations for a given dataset.
 
