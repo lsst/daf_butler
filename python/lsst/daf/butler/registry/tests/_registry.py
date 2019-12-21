@@ -173,8 +173,8 @@ class RegistryTests(ABC):
         )
 
     def testDataset(self):
-        """Basic tests for `Registry.addDataset`, `Registry.getDataset`, and
-        `Registry.removeDataset`.
+        """Basic tests for `Registry.insertDatasets`, `Registry.getDataset`,
+        and `Registry.removeDataset`.
         """
         registry = self.makeRegistry()
         run = "test"
@@ -186,12 +186,12 @@ class RegistryTests(ABC):
         registry.registerDatasetType(datasetType)
         dataId = {"instrument": "DummyCam"}
         registry.insertDimensionData("instrument", dataId)
-        ref = registry.addDataset(datasetType, dataId=dataId, run=run)
+        ref, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
         self.assertEqual(ref, outRef)
         with self.assertRaises(ConflictingDefinitionError):
-            ref = registry.addDataset(datasetType, dataId=dataId, run=run)
+            registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         registry.removeDataset(ref)
         self.assertIsNone(registry.find(run, datasetType, dataId))
 
@@ -222,9 +222,9 @@ class RegistryTests(ABC):
         registry.insertDimensionData("instrument", dataId)
         run = "test"
         registry.registerRun(run)
-        parent = registry.addDataset(parentDatasetType, dataId=dataId, run=run)
-        children = {"child1": registry.addDataset(childDatasetType1, dataId=dataId, run=run),
-                    "child2": registry.addDataset(childDatasetType2, dataId=dataId, run=run)}
+        parent, = registry.insertDatasets(parentDatasetType, dataIds=[dataId], run=run)
+        children = {"child1": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
+                    "child2": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
@@ -266,7 +266,7 @@ class RegistryTests(ABC):
         run = "test"
         dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
         registry.registerRun(run)
-        inputRef = registry.addDataset(datasetType, dataId=dataId, run=run)
+        inputRef, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outputRef = registry.find(run, datasetType, dataId)
         self.assertEqual(outputRef, inputRef)
         # Check that retrieval with invalid dataId raises
@@ -275,11 +275,11 @@ class RegistryTests(ABC):
             registry.find(run, datasetType, dataId)
         # Check that different dataIds match to different datasets
         dataId1 = {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r", "abstract_filter": None}
-        inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
+        inputRef1, = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
         dataId2 = {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r", "abstract_filter": None}
-        inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
+        inputRef2, = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
         dataId3 = {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r", "abstract_filter": None}
-        inputRef3 = registry.addDataset(datasetType, dataId=dataId3, run=run)
+        inputRef3, = registry.insertDatasets(datasetType, dataIds=[dataId3], run=run)
         self.assertEqual(registry.find(run, datasetType, dataId1), inputRef1)
         self.assertEqual(registry.find(run, datasetType, dataId2), inputRef2)
         self.assertEqual(registry.find(run, datasetType, dataId3), inputRef3)
@@ -314,9 +314,9 @@ class RegistryTests(ABC):
         # Dataset.physical_filter should be populated as well here from the
         # visit Dimension values.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
-        inputRef1 = registry.addDataset(datasetType, dataId=dataId1, run=run)
+        inputRef1, = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
         dataId2 = {"instrument": "DummyCam", "visit": 1}
-        inputRef2 = registry.addDataset(datasetType, dataId=dataId2, run=run)
+        inputRef2, = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
         # We should be able to find both datasets in their run
         outputRef = registry.find(run, datasetType, dataId1)
         self.assertEqual(outputRef, inputRef1)
@@ -365,12 +365,9 @@ class RegistryTests(ABC):
         # from the visit Dimension values.
         dataId1 = {"instrument": "DummyCam", "visit": 0}
         dataId2 = {"instrument": "DummyCam", "visit": 1}
-        ref1_run1 = registry.addDataset(datasetType1, dataId=dataId1, run=run1)
-        ref2_run1 = registry.addDataset(datasetType1, dataId=dataId2, run=run1)
-        ref1_run2 = registry.addDataset(datasetType2, dataId=dataId1, run=run2)
-        ref2_run2 = registry.addDataset(datasetType2, dataId=dataId2, run=run2)
-        ref1_run3 = registry.addDataset(datasetType2, dataId=dataId1, run=run3)
-        ref2_run3 = registry.addDataset(datasetType2, dataId=dataId2, run=run3)
+        ref1_run1, ref2_run1 = registry.insertDatasets(datasetType1, dataIds=[dataId1, dataId2], run=run1)
+        ref1_run2, ref2_run2 = registry.insertDatasets(datasetType2, dataIds=[dataId1, dataId2], run=run2)
+        ref1_run3, ref2_run3 = registry.insertDatasets(datasetType2, dataIds=[dataId1, dataId2], run=run3)
         for ref in (ref1_run1, ref2_run1, ref1_run2, ref2_run2, ref1_run3, ref2_run3):
             self.assertEqual(ref.dataId.records["visit"].physical_filter, "d-r")
             self.assertEqual(ref.dataId.records["physical_filter"].abstract_filter, "R")
@@ -379,7 +376,7 @@ class RegistryTests(ABC):
         self.assertRowCount(registry, "dataset_collection", 6)
         # adding same DatasetRef to the same run is an error
         with self.assertRaises(ConflictingDefinitionError):
-            registry.addDataset(datasetType1, dataId=dataId2, run=run1)
+            registry.insertDatasets(datasetType1, dataIds=[dataId2], run=run1)
         # above exception must rollback and not add anything to Dataset
         self.assertRowCount(registry, "dataset", 6)
         self.assertRowCount(registry, "dataset_collection", 6)
@@ -418,8 +415,8 @@ class RegistryTests(ABC):
         registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
         run = "test"
         registry.registerRun(run)
-        ref = registry.addDataset(datasetType, dataId={"instrument": "DummyCam"}, run=run)
-        ref2 = registry.addDataset(datasetType2, dataId={"instrument": "DummyCam"}, run=run)
+        ref, = registry.insertDatasets(datasetType, dataIds=[{"instrument": "DummyCam"}], run=run)
+        ref2, = registry.insertDatasets(datasetType2, dataIds=[{"instrument": "DummyCam"}], run=run)
         datastoreName = "dummystore"
         datastoreName2 = "dummystore2"
         # Test adding information about a new dataset
@@ -477,7 +474,7 @@ class RegistryTests(ABC):
                 registry.registerDatasetType(datasetTypeB)
                 registry.registerDatasetType(datasetTypeC)
                 registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
-                ref = registry.addDataset(datasetTypeA, dataId=dataId, run=run)
+                ref, = registry.insertDatasets(datasetTypeA, dataIds=[dataId], run=run)
                 refId = ref.id
                 raise ValueError("Oops, something went wrong")
         # A should exist
@@ -578,12 +575,12 @@ class RegistryTests(ABC):
             for detector in (1, 2, 3):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                ref = registry.addDataset(rawType, dataId=dataId, run=run1)
+                ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run1)
                 # exposures 100 and 101 appear in both collections, 100 has
                 # different dataset_id in different collections, for 101 only
                 # single dataset_id exists
                 if exposure == 100:
-                    registry.addDataset(rawType, dataId=dataId, run=run2)
+                    registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
                 if exposure == 101:
                     registry.associate(run2, [ref])
         # Add pre-existing datasets to second collection.
@@ -591,7 +588,7 @@ class RegistryTests(ABC):
             for detector in (3, 4, 5):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                registry.addDataset(rawType, dataId=dataId, run=run2)
+                registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
 
         dimensions = DimensionGraph(
             registry.dimensions,
@@ -726,10 +723,10 @@ class RegistryTests(ABC):
         for tract in (1, 3, 5):
             for patch in (2, 4, 6, 7):
                 dataId = dict(skymap="DummyMap", tract=tract, patch=patch)
-                registry.addDataset(mergeType, dataId=dataId, run=run)
+                registry.insertDatasets(mergeType, dataIds=[dataId], run=run)
                 for aFilter in ("i", "r"):
                     dataId = dict(skymap="DummyMap", tract=tract, patch=patch, abstract_filter=aFilter)
-                    registry.addDataset(calexpType, dataId=dataId, run=run)
+                    registry.insertDatasets(calexpType, dataIds=[dataId], run=run)
 
         # with empty expression
         rows = list(registry.queryDimensions(dimensions,
@@ -852,20 +849,20 @@ class RegistryTests(ABC):
         run1 = "calibs1"
         registry.registerRun(run1)
         for detector in (1, 2, 3):
-            registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="first_night",
-                                           physical_filter="dummy_i", detector=detector),
-                                run=run1)
-            registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="second_night",
-                                           physical_filter="dummy_i", detector=detector),
-                                run=run1)
+            registry.insertDatasets(flat, [dict(instrument="DummyCam", calibration_label="first_night",
+                                                physical_filter="dummy_i", detector=detector)],
+                                    run=run1)
+            registry.insertDatasets(flat, [dict(instrument="DummyCam", calibration_label="second_night",
+                                                physical_filter="dummy_i", detector=detector)],
+                                    run=run1)
         # The same flat for both nights for detectors 3-5 (so detector 3 has
         # multiple valid flats) in second collection.
         run2 = "calib2"
         registry.registerRun(run2)
         for detector in (3, 4, 5):
-            registry.addDataset(flat, dict(instrument="DummyCam", calibration_label="both_nights",
-                                           physical_filter="dummy_i", detector=detector),
-                                run=run2)
+            registry.insertDatasets(flat, [dict(instrument="DummyCam", calibration_label="both_nights",
+                                                physical_filter="dummy_i", detector=detector)],
+                                    run=run2)
         # Perform queries for individual exposure+detector combinations, which
         # should always return exactly one flat.
         for exposure in (100, 101):
