@@ -437,17 +437,38 @@ class YamlRepoImportBackend(RepoImportBackend):
         fileDatasets = []
         for (datasetTypeName, run), records in self.datasets.items():
             datasetType = self.registry.getDatasetType(datasetTypeName)
-            for fileDataset, collectionsForDataset in records:
-                # For now, we ignore the dataset_id we pulled from the file
-                # and just insert without one to get a new autoincrement value.
-                # Eventually (once we have origin in IDs) we'll preserve them.
-                fileDataset.refs = [self.registry.addDataset(datasetType, ref.dataId, run=run,
-                                                             recursive=True) for ref in fileDataset.refs]
+            # Make a big flattened list of all data IDs, while remembering
+            # slices that associate them with the FileDataset instances they
+            # came from.
+            dataIds = []
+            slices = []
+            for fileDataset, _ in records:
+                start = len(dataIds)
+                dataIds.extend(ref.dataId for ref in fileDataset.refs)
+                stop = len(dataIds)
+                slices.append(slice(start, stop))
+            # Insert all of those DatasetRefs at once.
+            # For now, we ignore the dataset_id we pulled from the file
+            # and just insert without one to get a new autoincrement value.
+            # Eventually (once we have origin in IDs) we'll preserve them.
+            resolvedRefs = self.registry.insertDatasets(
+                datasetType,
+                dataIds=dataIds,
+                run=run,
+                recursive=True
+            )
+            # Now iterate over the original records, and install the new
+            # resolved DatasetRefs to replace the unresolved ones as we
+            # reorganize the collection information.
+            for sliceForFileDataset, (fileDataset, collectionsForDataset) in zip(slices, records):
+                fileDataset.refs = resolvedRefs[sliceForFileDataset]
                 if directory is not None:
                     fileDataset.path = os.path.join(directory, fileDataset.path)
                 fileDatasets.append(fileDataset)
                 for collection in collectionsForDataset:
                     collections[collection].extend(fileDataset.refs)
+        # Ingest everything into the datastore at once.
         datastore.ingest(*fileDatasets, transfer=transfer)
+        # Associate with collections, one collection at a time.
         for collection, refs in collections.items():
             self.registry.associate(collection, refs)
