@@ -865,8 +865,8 @@ class SqlRegistry(Registry):
         retryLimit : `int`, optional
             Number of retries for insertion.
 
-        Note
-        ----
+        Notes
+        -----
         Conflict resolution is based on table primary key only, if there are
         other unique constraints defined for a table they are not checked and
         can result in `IntegrityError` exceptions.
