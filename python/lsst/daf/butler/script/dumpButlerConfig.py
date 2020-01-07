@@ -92,9 +92,5 @@ def main():
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    try:
-        dumpButlerConfig(args.root, args.searchpath, args.subset, sys.stdout)
-    except Exception as e:
-        print(f"{e}", file=sys.stderr)
-        return 1
+    dumpButlerConfig(args.root, args.searchpath, args.subset, sys.stdout)
     return 0

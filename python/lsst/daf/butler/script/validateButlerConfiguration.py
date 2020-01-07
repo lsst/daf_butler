@@ -24,7 +24,6 @@
 __all__ = ("main",)
 
 import argparse
-import sys
 
 from lsst.daf.butler import Butler, ValidationError
 
@@ -120,11 +119,7 @@ def main():
     ignore = processCommas(args.ignore)
     datasetTypes = processCommas(args.datasettype)
 
-    try:
-        valid = validateButlerConfiguration(args.root, datasetTypes, ignore, args.quiet, args.collection)
-    except Exception as e:
-        print(f"{e}", file=sys.stderr)
-        return 1
+    valid = validateButlerConfiguration(args.root, datasetTypes, ignore, args.quiet, args.collection)
 
     if valid:
         print("No problems encountered with configuration.")

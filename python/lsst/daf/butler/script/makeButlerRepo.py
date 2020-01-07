@@ -23,7 +23,6 @@
 
 __all__ = ("main",)
 
-import sys
 import argparse
 import logging
 
@@ -89,10 +88,5 @@ def main():
     if args.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
-    try:
-        makeButlerRepo(args.root, args.config, args.standalone, args.override, args.outfile)
-    except Exception as e:
-        print(f"{e}", file=sys.stderr)
-        return 1
-
+    makeButlerRepo(args.root, args.config, args.standalone, args.override, args.outfile)
     return 0
