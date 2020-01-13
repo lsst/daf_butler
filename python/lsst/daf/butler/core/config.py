@@ -935,8 +935,8 @@ class ConfigSubset(Config):
 
     Subclasses define their own component and when given a configuration
     that includes that component, the resulting configuration only includes
-    the subset.  For example, your config might contain ``schema`` if it's
-    part of a global config and that subset will be stored. If ``schema``
+    the subset.  For example, your config might contain ``dimensions`` if it's
+    part of a global config and that subset will be stored. If ``dimensions``
     can not be found it is assumed that the entire contents of the
     configuration should be used.
 

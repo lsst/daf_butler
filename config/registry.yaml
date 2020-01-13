@@ -1,8 +1,7 @@
 # Default with a sqlLite registry
 registry:
-  clsMap:
-    sql: lsst.daf.butler.registries.sqlRegistry.SqlRegistry
-    sqlite: lsst.daf.butler.registries.sqliteRegistry.SqliteRegistry
-    postgresql: lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry
-    oracle: lsst.daf.butler.registries.oracleRegistry.OracleRegistry
   db: 'sqlite:///:memory:'
+  engines:
+    sqlite: lsst.daf.butler.registry.databases.sqlite.SqliteDatabase
+    postgresql: lsst.daf.butler.registry.databases.postgresql.PostgresqlDatabase
+    oracle: lsst.daf.butler.registry.databases.oracle.OracleDatabase

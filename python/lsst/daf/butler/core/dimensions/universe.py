@@ -28,7 +28,7 @@ from typing import Optional, Iterable, List, Dict, Union, TYPE_CHECKING
 
 from ..config import Config
 from ..utils import NamedValueSet, immutable
-from ..schema import TableSpec
+from .. import ddl
 from .elements import Dimension, DimensionElement, SkyPixDimension
 from .graph import DimensionGraph
 from .schema import makeOverlapTableSpec, OVERLAP_TABLE_NAME_PATTERN
@@ -186,13 +186,13 @@ class DimensionUniverse(DimensionGraph):
             result.reverse()
         return result
 
-    def makeSchemaSpec(self) -> Dict[str, TableSpec]:
+    def makeSchemaSpec(self) -> Dict[str, ddl.TableSpec]:
         """Create a database-agnostic schema specification for all dimensions.
 
         Returns
         -------
         spec : `dict`
-            Mapping from `str` logical table name to `TableSpec`.  Callers
+            Mapping from `str` logical table name to `ddl.TableSpec`.  Callers
             may use other names for actual database tables, but should use
             the keys in this dictionary when calling `setupDimensionStorage`.
         """

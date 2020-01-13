@@ -48,10 +48,9 @@ from lsst.daf.butler import (
     LocationFactory,
     StorageClass,
     StoredFileInfo,
-    TableSpec,
-    FieldSpec,
-    ForeignKeySpec,
 )
+
+from lsst.daf.butler import ddl
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
@@ -169,19 +168,19 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     @classmethod
     def makeTableSpec(cls):
-        return TableSpec(
+        return ddl.TableSpec(
             fields=NamedValueSet([
-                FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
-                FieldSpec(name="path", dtype=String, length=256, nullable=False),
-                FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
-                FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
+                ddl.FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
+                ddl.FieldSpec(name="path", dtype=String, length=256, nullable=False),
+                ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
+                ddl.FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
                 # TODO: should checksum be Base64Bytes instead?
-                FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
-                FieldSpec(name="file_size", dtype=Integer, nullable=True),
+                ddl.FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
+                ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),
             ]),
             unique=frozenset(),
-            foreignKeys=[ForeignKeySpec(table="dataset", source=("dataset_id",), target=("dataset_id",),
-                                        onDelete="CASCADE")]
+            foreignKeys=[ddl.ForeignKeySpec(table="dataset", source=("dataset_id",), target=("dataset_id",),
+                                            onDelete="CASCADE")]
         )
 
     def __init__(self, config, registry, butlerRoot=None):

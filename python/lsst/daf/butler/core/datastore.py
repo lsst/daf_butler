@@ -37,11 +37,11 @@ from abc import ABCMeta, abstractmethod
 from lsst.utils import doImport
 from .config import ConfigSubset, Config
 from .exceptions import ValidationError, DatasetTypeNotSupportedError
-from .registry import Registry
 from .constraints import Constraints
 from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
+    from ..registry import Registry
     from .datasets import DatasetRef
     from .repoTransfer import FileDataset
 

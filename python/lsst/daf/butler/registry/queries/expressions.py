@@ -25,10 +25,10 @@ __all__ = ()  # all symbols intentionally private; for internal package use.
 
 from sqlalchemy.sql import not_, or_, and_, literal, FromClause
 
-from ..utils import NamedValueSet, NamedKeyDict
-from ..dimensions import DimensionUniverse, Dimension, DimensionElement
+from ...core.utils import NamedValueSet, NamedKeyDict
+from ...core import DimensionUniverse, Dimension, DimensionElement
 from .exprParser import TreeVisitor
-from .structs import QueryColumns
+from ._structs import QueryColumns
 
 
 def categorizeIdentifier(universe: DimensionUniverse, name: str):

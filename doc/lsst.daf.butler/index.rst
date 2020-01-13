@@ -72,6 +72,15 @@ Python API reference
 .. automodapi:: lsst.daf.butler
    :no-main-docstr:
 
+.. automodapi:: lsst.daf.butler.registry
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.interfaces
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.queries
+   :no-main-docstr:
+
 Example datastores
 ------------------
 
@@ -82,13 +91,6 @@ Example datastores
    :no-main-docstr:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.datastores.chainedDatastore
-   :no-main-docstr:
-   :headings: ^"
-
-Example registries
-------------------
-
-.. automodapi:: lsst.daf.butler.registries.sqlRegistry
    :no-main-docstr:
    :headings: ^"
 
@@ -105,6 +107,19 @@ Example formatters
    :no-main-docstr:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.formatters.pickleFormatter
+   :no-main-docstr:
+   :headings: ^"
+
+Database backends
+-----------------
+
+.. automodapi:: lsst.daf.butler.registry.databases.sqlite
+   :no-main-docstr:
+   :headings: ^"
+.. automodapi:: lsst.daf.butler.registry.databases.postgresql
+   :no-main-docstr:
+   :headings: ^"
+.. automodapi:: lsst.daf.butler.registry.databases.oracle
    :no-main-docstr:
    :headings: ^"
 

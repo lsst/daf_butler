@@ -28,8 +28,12 @@ from typing import Mapping, Optional, Sequence, List, Union
 from sqlalchemy.sql import FromClause, select, case, and_, or_, ColumnElement
 from sqlalchemy.engine import Connection
 
-from ..datasets import DatasetType
-from ..dimensions import ExpandedDataCoordinate, DimensionGraph, DimensionUniverse
+from ...core import (
+    DatasetType,
+    ExpandedDataCoordinate,
+    DimensionGraph,
+    DimensionUniverse,
+)
 
 
 @dataclass(frozen=True)

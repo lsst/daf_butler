@@ -38,10 +38,11 @@ from typing import (
     Sequence,
     Tuple,
 )
+import warnings
 
 import sqlalchemy
 
-from .. import ddl
+from ...core import ddl
 
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Dict[str, Any]):
@@ -185,6 +186,13 @@ class Database(ABC):
         self.namespace = namespace
         self._connection = connection
         self._metadata = None
+
+    @classmethod
+    def makeDefaultUri(cls, root: str) -> Optional[str]:
+        """Create a default connection URI appropriate for the given root
+        directory, or `None` if there can be no such default.
+        """
+        return None
 
     @classmethod
     def fromUri(cls, uri: str, *, origin: int, namespace: Optional[str] = None,
@@ -336,8 +344,8 @@ class Database(ABC):
             Raised if ``create`` is `True`, `Database.isWriteable` is `False`,
             and one or more declared tables do not already exist.
 
-        Example
-        -------
+        Examples
+        --------
         Given a `Database` instance ``db``::
 
             with db.declareStaticTables(create=True) as schema:
@@ -365,7 +373,15 @@ class Database(ABC):
                 if self.namespace is not None:
                     if self.namespace not in context._inspector.get_schema_names():
                         self._connection.execute(sqlalchemy.schema.CreateSchema(self.namespace))
-                self._metadata.create_all(self._connection)
+                # In our tables we have columns that make use of sqlalchemy
+                # Sequence objects. There is currently a bug in sqlalchmey that
+                # causes a deprecation warning to be thrown on a property of
+                # the Sequence object when the repr for the sequence is
+                # created. Here a filter is used to catch these deprecation
+                # warnings when tables are created.
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
+                    self._metadata.create_all(self._connection)
         except BaseException:
             self._metadata.drop_all(self._connection)
             self._metadata = None
@@ -453,6 +469,7 @@ class Database(ABC):
             # sqlalchemy for databases that do support it.
             args.append(sqlalchemy.Sequence(self.shrinkDatabaseEntityName(f"{table}_seq_{spec.name}"),
                                             metadata=metadata))
+        assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {table}.{spec.name}."
         return sqlalchemy.schema.Column(*args, nullable=spec.nullable, primary_key=spec.primaryKey,
                                         comment=spec.doc, **kwds)
 
@@ -535,6 +552,7 @@ class Database(ABC):
             )
             for columns in spec.indexes
         )
+        assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 
     def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.sql.FromClause:

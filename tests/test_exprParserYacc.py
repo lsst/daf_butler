@@ -24,7 +24,7 @@
 
 import unittest
 
-from lsst.daf.butler.core.queries.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
+from lsst.daf.butler.registry.queries.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
 
 
 class _Visitor(TreeVisitor):

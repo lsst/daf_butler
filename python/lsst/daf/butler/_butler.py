@@ -39,13 +39,9 @@ except ImportError:
 from lsst.utils import doImport
 from .core.utils import transactional, getClassOf
 from .core.datasets import DatasetRef, DatasetType
-from .core import deferredDatasetHandle as dDH
 from .core.datastore import Datastore
-from .core.registry import Registry
-from .core.registryConfig import RegistryConfig
 from .core.storageClass import StorageClassFactory
 from .core.config import Config, ConfigSubset
-from .core.butlerConfig import ButlerConfig
 from .core.composites import CompositesMap
 from .core.dimensions import DataCoordinate, DataId
 from .core.exceptions import ValidationError
@@ -53,6 +49,9 @@ from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
 from .core.repoTransfers import RepoExport, FileDataset
+from ._deferredDatasetHandle import DeferredDatasetHandle
+from ._butlerConfig import ButlerConfig
+from .registry import Registry, RegistryConfig
 
 log = logging.getLogger(__name__)
 
@@ -207,22 +206,27 @@ class Butler:
         datastoreClass = doImport(full["datastore", "cls"])
         datastoreClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
 
-        # if "cls" or "db" keys exist in given config, parse them, otherwise
-        # parse the defaults in the expanded config
-        if any((config.get(("registry", "cls")), config.get(("registry", "db")))):
+        # if key exists in given config, parse it, otherwise parse the defaults
+        # in the expanded config
+        if config.get(("registry", "db")):
             registryConfig = RegistryConfig(config)
-            registryClass = registryConfig.getRegistryClass()
         else:
             registryConfig = RegistryConfig(full)
-            registryClass = registryConfig.getRegistryClass()
-        registryClass.setConfigRoot(BUTLER_ROOT_TAG, config, full, overwrite=forceConfigRoot)
+        defaultDatabaseUri = registryConfig.makeDefaultDatabaseUri(BUTLER_ROOT_TAG)
+        if defaultDatabaseUri is not None:
+            Config.updateParameters(RegistryConfig, config, full,
+                                    toUpdate={"db": defaultDatabaseUri},
+                                    overwrite=forceConfigRoot)
+        else:
+            Config.updateParameters(RegistryConfig, config, full, toCopy=("db",),
+                                    overwrite=forceConfigRoot)
 
         if standalone:
             config.merge(full)
         config.dumpToUri(uri)
 
         # Create Registry and populate tables
-        registryClass.fromConfig(config, create=createRegistry, butlerRoot=root)
+        Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
     def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
@@ -454,7 +458,7 @@ class Butler:
 
     def getDeferred(self, datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
                     dataId: typing.Optional[DataId] = None, parameters: typing.Union[dict, None] = None,
-                    **kwds) -> dDH.DeferredDatasetHandle:
+                    **kwds) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset
 
         Parameters
@@ -478,7 +482,7 @@ class Butler:
         obj : `DeferredDatasetHandle`
             A handle which can be used to retrieve a dataset at a later time
         """
-        return dDH.DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
+        return DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
 
     def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
         """Retrieve a stored dataset.
@@ -817,10 +821,10 @@ class Butler:
             filename = os.path.join(directory, filename)
         BackendClass = getClassOf(self.config["repo_transfer_formats"][format]["import"])
         with open(filename, 'r') as stream:
-            backend = BackendClass(stream)
+            backend = BackendClass(stream, self.registry)
+            backend.register()
             with self.transaction():
-                backend.load(self.registry, self.datastore,
-                             directory=directory, transfer=transfer)
+                backend.load(self.datastore, directory=directory, transfer=transfer)
 
     def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
         """Validate butler configuration.

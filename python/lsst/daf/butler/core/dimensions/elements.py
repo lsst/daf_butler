@@ -29,7 +29,7 @@ from sqlalchemy import Integer
 
 from lsst.sphgeom import Pixelization
 from ..utils import NamedValueSet, immutable
-from ..schema import FieldSpec, TableSpec
+from .. import ddl
 from .records import _subclassDimensionRecord
 from .schema import makeElementTableSpec
 from .graph import DimensionGraph
@@ -93,7 +93,7 @@ class DimensionElement:
                  impliedDependencyNames: Iterable[str] = (),
                  spatial: bool = False,
                  temporal: bool = False,
-                 metadata: Iterable[FieldSpec] = (),
+                 metadata: Iterable[ddl.FieldSpec] = (),
                  cached: bool = False,
                  viewOf: Optional[str] = None):
         self.name = name
@@ -203,7 +203,7 @@ class DimensionElement:
         """
         return True
 
-    def makeTableSpec(self) -> Optional[TableSpec]:
+    def makeTableSpec(self) -> Optional[ddl.TableSpec]:
         """Return a specification of the schema for the table corresponding
         to this element.
 
@@ -267,7 +267,7 @@ class DimensionElement:
     """Whether records of this element are associated with a timespan (`bool`).
     """
 
-    metadata: NamedValueSet[FieldSpec]
+    metadata: NamedValueSet[ddl.FieldSpec]
     """Additional metadata fields included in this element's table
     (`NamedValueSet` of `FieldSpec`).
     """
@@ -313,7 +313,7 @@ class Dimension(DimensionElement):
         constructor.
     """
 
-    def __init__(self, name: str, *, uniqueKeys: Iterable[FieldSpec], **kwds):
+    def __init__(self, name: str, *, uniqueKeys: Iterable[ddl.FieldSpec], **kwds):
         super().__init__(name, **kwds)
         self.uniqueKeys = NamedValueSet(uniqueKeys)
         self.uniqueKeys.freeze()
@@ -339,13 +339,13 @@ class Dimension(DimensionElement):
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
-    uniqueKeys: NamedValueSet[FieldSpec]
+    uniqueKeys: NamedValueSet[ddl.FieldSpec]
     """All fields that can individually be used to identify records of this
     element, given the primary keys of all required dependencies
     (`NamedValueSet` of `FieldSpec`).
     """
 
-    primaryKey: FieldSpec
+    primaryKey: ddl.FieldSpec
     """The primary key field for this dimension (`FieldSpec`).
 
     Note that the database primary keys for dimension tables are in general
@@ -353,7 +353,7 @@ class Dimension(DimensionElement):
     not also a foreign key (to a required dependency dimension table).
     """
 
-    alternateKeys: NamedValueSet[FieldSpec]
+    alternateKeys: NamedValueSet[ddl.FieldSpec]
     """Additional unique key fields for this dimension that are not the the
     primary key (`NamedValueSet` of `FieldSpec`).
     """
@@ -381,7 +381,7 @@ class SkyPixDimension(Dimension):
     """
 
     def __init__(self, name: str, pixelization: Pixelization):
-        uniqueKeys = [FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
+        uniqueKeys = [ddl.FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
         super().__init__(name, uniqueKeys=uniqueKeys, spatial=True)
         self.pixelization = pixelization
 

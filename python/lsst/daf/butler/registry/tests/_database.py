@@ -34,7 +34,7 @@ from ..interfaces import (
     ReadOnlyDatabaseError,
     DatabaseConflictError,
 )
-from .. import ddl
+from ...core import ddl
 
 StaticTablesTuple = namedtuple("StaticTablesTuple", ["a", "b", "c"])
 

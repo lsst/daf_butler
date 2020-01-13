@@ -33,7 +33,7 @@ import copy
 
 from typing import TYPE_CHECKING
 
-from ..schema import FieldSpec, TableSpec, ForeignKeySpec, Base64Region
+from .. import ddl
 from ..utils import NamedValueSet
 from ..timespan import TIMESPAN_FIELD_SPECS
 
@@ -41,13 +41,15 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement, Dimension
 
 
-REGION_FIELD_SPEC = FieldSpec(name="region", dtype=Base64Region)
+# TODO: not sure we need 512 bytes for regions (probably much less), but we
+# should see what they look like in practice before making this smaller.
+REGION_FIELD_SPEC = ddl.FieldSpec(name="region", nbytes=512, dtype=ddl.Base64Region)
 
 OVERLAP_TABLE_NAME_PATTERN = "{0}_{1}_overlap"
 
 
-def makeForeignKeySpec(dimension: Dimension) -> ForeignKeySpec:
-    """Make a `ForeignKeySpec` that references the table for the given
+def makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
+    """Make a `ddl.ForeignKeySpec` that references the table for the given
     `Dimension` table.
 
     Most callers should use the higher-level `addDimensionForeignKey` function
@@ -61,7 +63,7 @@ def makeForeignKeySpec(dimension: Dimension) -> ForeignKeySpec:
 
     Returns
     -------
-    spec : `ForeignKeySpec`
+    spec : `ddl.ForeignKeySpec`
         A database-agnostic foreign key specification.
     """
     source = []
@@ -72,17 +74,17 @@ def makeForeignKeySpec(dimension: Dimension) -> ForeignKeySpec:
         else:
             target.append(other.name)
         source.append(other.name)
-    return ForeignKeySpec(table=dimension.name, source=tuple(source), target=tuple(target))
+    return ddl.ForeignKeySpec(table=dimension.name, source=tuple(source), target=tuple(target))
 
 
-def addDimensionForeignKey(tableSpec: TableSpec, dimension: Dimension, *,
+def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
                            primaryKey: bool, nullable: bool = False):
     """Add a field and possibly a foreign key to a table specification that
     reference the table for the given `Dimension`.
 
     Parameters
     ----------
-    tableSpec : `TableSpec`
+    tableSpec : `ddl.TableSpec`
         Specification the field and foreign key are to be added to.
     dimension : `Dimension`
         Dimension to be referenced.  If this dimension has required
@@ -110,7 +112,7 @@ def addDimensionForeignKey(tableSpec: TableSpec, dimension: Dimension, *,
         tableSpec.foreignKeys.append(makeForeignKeySpec(dimension))
 
 
-def makeElementTableSpec(element: DimensionElement) -> TableSpec:
+def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
     """Create a complete table specification for a `DimensionElement`.
 
     This combines the foreign key fields from dependencies, unique keys
@@ -128,10 +130,10 @@ def makeElementTableSpec(element: DimensionElement) -> TableSpec:
 
     Returns
     -------
-    spec : `TableSpec`
+    spec : `ddl.TableSpec`
         Database-agnostic specification for a table.
     """
-    tableSpec = TableSpec(
+    tableSpec = ddl.TableSpec(
         fields=NamedValueSet(),
         unique=set(),
         foreignKeys=[]
@@ -170,7 +172,7 @@ def makeElementTableSpec(element: DimensionElement) -> TableSpec:
     return tableSpec
 
 
-def makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> TableSpec:
+def makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> ddl.TableSpec:
     """Create a specification for a table that represents a many-to-many
     relationship between two `DimensionElement` tables.
 
@@ -186,7 +188,7 @@ def makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> TableSpec:
     spec : `TableSpec`
         Database-agnostic specification for a table.
     """
-    tableSpec = TableSpec(
+    tableSpec = ddl.TableSpec(
         fields=NamedValueSet(),
         unique=set(),
         foreignKeys=[],

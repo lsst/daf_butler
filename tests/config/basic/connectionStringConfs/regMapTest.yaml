@@ -4,4 +4,4 @@ registry:
   port: 3307
   database: 'conf2'
   expected: 'postgresql://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf2'
-  expectedRegistry: 'lsst.daf.butler.registries.postgresqlRegistry.PostgreSqlRegistry'
+  expectedDatabase: 'lsst.daf.butler.registry.databases.PostgresqlDatabase'

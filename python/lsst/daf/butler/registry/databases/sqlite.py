@@ -24,15 +24,17 @@ __all__ = ["SqliteDatabase"]
 
 from contextlib import closing
 import copy
-from typing import List, Optional
+from typing import ContextManager, List, Optional
 from dataclasses import dataclass
+import os
 import urllib.parse
 
 import sqlite3
 import sqlalchemy
+import sqlalchemy.ext.compiler
 
-from ..interfaces import Database, ReadOnlyDatabaseError
-from .. import ddl
+from ..interfaces import Database, ReadOnlyDatabaseError, StaticTablesContext
+from ...core import ddl
 
 
 def _onSqlite3Connect(dbapiConnection, connectionRecord):
@@ -151,6 +153,10 @@ class SqliteDatabase(Database):
         self._autoincr = {}
 
     @classmethod
+    def makeDefaultUri(cls, root: str) -> Optional[str]:
+        return "sqlite:///" + os.path.join(root, "gen3.sqlite3")
+
+    @classmethod
     def connect(cls, uri: Optional[str] = None, *, filename: Optional[str] = None,
                 writeable: bool = True) -> sqlalchemy.engine.Connection:
         """Create a `sqlalchemy.engine.Connection` from a SQLAlchemy URI or
@@ -228,7 +234,11 @@ class SqliteDatabase(Database):
 
         sqlalchemy.event.listen(engine, "connect", _onSqlite3Connect)
         sqlalchemy.event.listen(engine, "begin", _onSqlite3Begin)
-        return engine.connect()
+        try:
+            return engine.connect()
+        except sqlalchemy.exc.OperationalError as err:
+            raise RuntimeError(f"Error creating connection with uri='{uri}', filename='{filename}', "
+                               f"target={target}.") from err
 
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
@@ -239,7 +249,16 @@ class SqliteDatabase(Database):
         return self._writeable
 
     def __str__(self) -> str:
-        return f"SQLite3@{self.filename}"
+        if self.filename:
+            return f"SQLite3@{self.filename}"
+        else:
+            return "SQLite3@:memory:"
+
+    def declareStaticTables(self, *, create: bool) -> ContextManager[StaticTablesContext]:
+        # If the user asked for an in-memory, writeable database, assume
+        # create=True.  This is only really relevant for tests, and it's
+        # convenient there.
+        return super().declareStaticTables(create=(create if self.filename else self.isWriteable()))
 
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
                           **kwds) -> sqlalchemy.schema.Column:

@@ -19,11 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("RegistryConfig",)
 
-from .connectionString import ConnectionStringFactory
-from .config import ConfigSubset
+from typing import Type, TYPE_CHECKING
+
 from lsst.utils import doImport
+
+from ..core import ConfigSubset
+from ..core.repoRelocation import replaceRoot
+from .connectionString import ConnectionStringFactory
+
+if TYPE_CHECKING:
+    from .interfaces import Database
 
 
 class RegistryConfig(ConfigSubset):
@@ -42,27 +51,41 @@ class RegistryConfig(ConfigSubset):
         conStr = ConnectionStringFactory.fromConfig(self)
         return conStr.get_backend_name()
 
-    def getRegistryClass(self):
-        """Returns registry class targeted by configuration values.
+    def getDatabaseClass(self) -> Type[Database]:
+        """Returns the `Database` class targeted by configuration values.
 
-        The appropriate class is determined from the `cls` key, if it exists.
-        Otherwise the `db` key is parsed and the correct class is determined
-        from a list of aliases found under `clsMap` key of the registry config.
+        The appropriate class is determined by parsing the `db` key to extract
+        the dialect, and then looking that up under the `engines` key of the
+        registry config.
+        """
+        dialect = self.getDialect()
+        if dialect not in self["engines"]:
+            raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
+        databaseClass = self["engines", dialect]
+        return doImport(databaseClass)
+
+    def makeDefaultDatabaseUri(self, root: str):
+        """Return a default 'db' URI for the registry configured here that is
+        appropriate for a new empty repository with the given root.
+
+        Parameters
+        ----------
+        root : `str`
+            Filesystem path to the root of the data repository.
 
         Returns
         -------
-        registry : `type`
-           Class of type `Registry` targeted by the registry configuration.
+        uri : `str`
+            URI usable as the 'db' string in a `RegistryConfig`.
         """
-        if self.get("cls") is not None:
-            registryClass = self.get("cls")
-        else:
-            dialect = self.getDialect()
-            if dialect not in self["clsMap"]:
-                raise ValueError(f"Connection string dialect has no known aliases. Received: {dialect}")
-            registryClass = self.get(("clsMap", dialect))
+        DatabaseClass = self.getDatabaseClass()
+        return DatabaseClass.makeDefaultUri(root)
 
-        return doImport(registryClass)
+    def replaceRoot(self, root: str):
+        """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
+        with the given root directory.
+        """
+        self["db"] = replaceRoot(self["db"], root)
 
     @property
     def connectionString(self):

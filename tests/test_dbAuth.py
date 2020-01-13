@@ -23,7 +23,7 @@ import os
 import unittest
 import lsst.utils.tests
 
-from lsst.daf.butler import DbAuth, DbAuthError
+from lsst.daf.butler.registry import DbAuth, DbAuthError
 
 TESTDIR = os.path.join(
     os.path.abspath(os.path.dirname(__file__)), "data", "dbAuth")

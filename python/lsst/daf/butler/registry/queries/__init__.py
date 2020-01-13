@@ -19,26 +19,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from ._query import *
+from ._builder import *
+from ._structs import *
+from ._datasets import *
 
-from lsst.daf.butler.schema import metadata
-
-
-def createDatabase(dbname):
-    engine = create_engine(dbname)
-    maker = sessionmaker()
-    maker.configure(bind=engine)
-    metadata.create_all(engine)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Create SQL schema.")
-    parser.add_argument("--dbname", dest="dbname", help="Name of database to connect to",
-                        default="sqlite:///:memory:")
-
-    args = parser.parse_args()
-
-    createDatabase(args.dbname)
+# Symbols from other modules intentionally not lifted to package scope,
+# as they're all internal.

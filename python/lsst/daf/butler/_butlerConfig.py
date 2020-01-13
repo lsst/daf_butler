@@ -28,17 +28,18 @@ __all__ = ("ButlerConfig",)
 import os.path
 import posixpath
 
-from .location import ButlerURI
-from .config import Config
-from .datastore import DatastoreConfig
-from .schema import SchemaConfig
-from .registryConfig import RegistryConfig
-from .storageClass import StorageClassConfig
-from .dimensions import DimensionConfig
-from .composites import CompositesConfig
-from .repoTransfers import RepoTransferFormatConfig
+from .core import (
+    ButlerURI,
+    CompositesConfig,
+    Config,
+    DatastoreConfig,
+    DimensionConfig,
+    RepoTransferFormatConfig,
+    StorageClassConfig,
+)
+from .registry import RegistryConfig
 
-CONFIG_COMPONENT_CLASSES = (SchemaConfig, RegistryConfig, StorageClassConfig,
+CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig,
                             DatastoreConfig, CompositesConfig, DimensionConfig,
                             RepoTransferFormatConfig)
 
