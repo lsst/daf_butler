@@ -43,11 +43,13 @@ except ImportError:
         """
         return cls
 
+from lsst.utils import doImport
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
+from lsst.daf.butler import FileDataset
 from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
@@ -271,6 +273,53 @@ class ButlerTests:
         self.assertEqual(collections, {"ingest", })
 
         return butler
+
+    def testIngest(self):
+        butler = Butler(self.tmpConfigFile)
+
+        # Create and register a DatasetType
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit", "detector"])
+
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDictYaml")
+        datasetTypeName = "metric"
+
+        datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
+
+        # Add needed Dimensions
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "abstract_filter": "R"})
+        for detector in (1, 2):
+            butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp", "id": detector,
+                                                             "full_name": f"detector{detector}"})
+
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
+                                                      "name": "fourtwentythree", "physical_filter": "d-r"},
+                                                     {"instrument": "DummyCamComp", "id": 424,
+                                                      "name": "fourtwentyfour", "physical_filter": "d-r"})
+
+        formatter = doImport("lsst.daf.butler.formatters.yamlFormatter.YamlFormatter")
+        dataRoot = os.path.join(TESTDIR, "data", "basic")
+        datasets = []
+        for detector in (1, 2):
+            detector_name = f"detector_{detector}"
+            metricFile = os.path.join(dataRoot, f"{detector_name}.yaml")
+            dataId = {"instrument": "DummyCamComp", "visit": 423, "detector": detector}
+            # Create a DatasetRef for ingest
+            refIn = DatasetRef(datasetType, dataId, id=None)
+
+            datasets.append(FileDataset(path=metricFile,
+                                        ref=refIn,
+                                        formatter=formatter))
+
+        butler.ingest(*datasets, transfer="copy")
+
+        metrics1 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
+                                                "detector": 1, "visit": 423})
+        metrics2 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
+                                                "detector": 2, "visit": 423})
+        self.assertNotEqual(metrics1, metrics2)
 
     def testPickle(self):
         """Test pickle support.
@@ -551,6 +600,9 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     datastoreStr = ["datastore='InMemory"]
     datastoreName = ["InMemoryDatastore@"]
     registryStr = ":memory:"
+
+    def testIngest(self):
+        pass
 
 
 class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
