@@ -488,7 +488,7 @@ class Datastore(metaclass=ABCMeta):
         in their class documentation.
         """
         prepData = self._prepIngest(*datasets, transfer=transfer)
-        refs = {dataset.ref.id: dataset.ref for dataset in datasets}
+        refs = {ref.id: ref for dataset in datasets for ref in dataset.refs}
         if refs.keys() != prepData.refs.keys():
             unsupported = refs.keys() - prepData.refs.keys()
             # Group unsupported refs by DatasetType for an informative

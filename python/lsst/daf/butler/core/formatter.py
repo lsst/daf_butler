@@ -19,12 +19,14 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("Formatter", "FormatterFactory")
 
 from abc import ABCMeta, abstractmethod
 import logging
 import copy
-from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type
+from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type, TYPE_CHECKING
 
 from .configSupport import processLookupConfigs, LookupKey
 from .mappingFactory import MappingFactory
@@ -40,6 +42,10 @@ log = logging.getLogger(__name__)
 
 # Define a new special type for functions that take "entity"
 Entity = Union[DatasetType, DatasetRef, StorageClass, str]
+
+
+if TYPE_CHECKING:
+    from .dimensions import DataCoordinate
 
 
 class Formatter(metaclass=ABCMeta):
@@ -60,10 +66,11 @@ class Formatter(metaclass=ABCMeta):
     are supported (`frozenset`).
     """
 
-    def __init__(self, fileDescriptor: FileDescriptor):
+    def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
+        self._dataId = dataId
 
     def __str__(self):
         return f"{self.name()}@{self.fileDescriptor.location.path}"
@@ -76,6 +83,11 @@ class Formatter(metaclass=ABCMeta):
         """FileDescriptor associated with this formatter
         (`FileDescriptor`, read-only)"""
         return self._fileDescriptor
+
+    @property
+    def dataId(self) -> DataCoordinate:
+        """DataId associated with this formatter (`DataCoordinate`)"""
+        return self._dataId
 
     @classmethod
     def name(cls) -> str:

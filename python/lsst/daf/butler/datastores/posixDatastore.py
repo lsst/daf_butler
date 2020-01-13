@@ -340,7 +340,7 @@ class PosixDatastore(FileLikeDatastore):
                 raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
-                yield FileDataset(ref=ref, path=location.pathInStore, formatter=storedFileInfo.formatter)
+                yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
             else:
                 # TODO: add support for other transfer modes.  If we support
                 # moving, this method should become transactional.

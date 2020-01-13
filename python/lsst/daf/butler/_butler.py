@@ -706,8 +706,9 @@ class Butler:
             raise TypeError("Butler is read-only.")
         # TODO: once Registry has vectorized API for addDataset, use it here.
         for dataset in datasets:
-            dataset.ref = self.registry.addDataset(dataset.ref.datasetType, dataset.ref.dataId,
-                                                   run=self.run, recursive=True)
+            for i, ref in enumerate(dataset.refs):
+                dataset.refs[i] = self.registry.addDataset(ref.datasetType, ref.dataId,
+                                                           run=self.run, recursive=True)
         self.datastore.ingest(*datasets, transfer=transfer)
 
     @contextlib.contextmanager

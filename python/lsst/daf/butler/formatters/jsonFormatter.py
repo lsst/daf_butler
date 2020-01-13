@@ -51,7 +51,7 @@ class JsonFormatter(FileFormatter):
         """
         try:
             with open(path, "rb") as fd:
-                data = self._fromBytes(fd.read())
+                data = self._fromBytes(fd.read(), pytype)
         except FileNotFoundError:
             data = None
 

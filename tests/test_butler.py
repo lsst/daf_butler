@@ -56,6 +56,7 @@ from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 
+from datasetsHelper import MultiDetectorFormatter
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -310,7 +311,7 @@ class ButlerTests:
             refIn = DatasetRef(datasetType, dataId, id=None)
 
             datasets.append(FileDataset(path=metricFile,
-                                        ref=refIn,
+                                        refs=[refIn],
                                         formatter=formatter))
 
         butler.ingest(*datasets, transfer="copy")
@@ -320,6 +321,30 @@ class ButlerTests:
         metrics2 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
                                                 "detector": 2, "visit": 423})
         self.assertNotEqual(metrics1, metrics2)
+
+        # Now do a multi-dataset but single file ingest
+        metricFile = os.path.join(dataRoot, "detectors.yaml")
+        refs = []
+        for detector in (1, 2):
+            detector_name = f"detector_{detector}"
+            dataId = {"instrument": "DummyCamComp", "visit": 424, "detector": detector}
+            # Create a DatasetRef for ingest
+            refs.append(DatasetRef(datasetType, dataId, id=None))
+
+        datasets = []
+        datasets.append(FileDataset(path=metricFile,
+                                    refs=refs,
+                                    formatter=MultiDetectorFormatter))
+
+        butler.ingest(*datasets, transfer="copy")
+
+        multi1 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
+                                              "detector": 1, "visit": 424})
+        multi2 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
+                                              "detector": 2, "visit": 424})
+
+        self.assertEqual(multi1, metrics1)
+        self.assertEqual(multi2, metrics2)
 
     def testPickle(self):
         """Test pickle support.

@@ -36,7 +36,7 @@ import yaml
 from lsst.utils import doImport
 from .config import ConfigSubset
 from .datasets import DatasetType, DatasetRef
-from .utils import NamedValueSet
+from .utils import NamedValueSet, iterable
 
 if TYPE_CHECKING:
     from .dimensions import DimensionElement, DimensionRecord, ExpandedDataCoordinate
@@ -57,10 +57,10 @@ class RepoTransferFormatConfig(ConfigSubset):
 class FileDataset:
     """A struct that represents a dataset exported to a file.
     """
-    __slots__ = ("ref", "path", "formatter")
+    __slots__ = ("refs", "path", "formatter")
 
-    ref: DatasetRef
-    """Registry information about the dataset (`DatasetRef`).
+    refs: List[DatasetRef]
+    """Registry information about the dataset. (`list` of `DatasetRef`).
     """
 
     path: str
@@ -77,9 +77,12 @@ class FileDataset:
     """A `Formatter` class or fully-qualified name.
     """
 
-    def __init__(self, path: str, ref: DatasetRef, *, formatter: Union[None, str, Type[Formatter]] = None):
+    def __init__(self, path: str, refs: Union[DatasetRef, List[DatasetRef]], *,
+                 formatter: Union[None, str, Type[Formatter]] = None):
         self.path = path
-        self.ref = ref
+        if isinstance(refs, DatasetRef):
+            refs = [refs]
+        self.refs = refs
         self.formatter = formatter
 
 
@@ -331,8 +334,8 @@ class YamlRepoExportBackend(RepoExportBackend):
             "run": run,
             "records": [
                 {
-                    "dataset_id": dataset.ref.id,
-                    "data_id": dataset.ref.dataId.byName(),
+                    "dataset_id": [ref.id for ref in dataset.refs],
+                    "data_id": [ref.dataId.byName() for ref in dataset.refs],
                     "path": dataset.path,
                     "formatter": dataset.formatter,
                     # TODO: look up and save other collections
@@ -407,7 +410,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                 (
                     FileDataset(
                         d["path"],
-                        DatasetRef(datasetType, d["data_id"], run=data["run"], id=d["dataset_id"]),
+                        [DatasetRef(datasetType, dataId, run=data["run"], id=refid)
+                         for dataId, refid in zip(iterable(d["data_id"]), iterable(d["dataset_id"]))],
                         formatter=doImport(d["formatter"])
                     ),
                     d.get("collections", [])
@@ -437,13 +441,13 @@ class YamlRepoImportBackend(RepoImportBackend):
                 # For now, we ignore the dataset_id we pulled from the file
                 # and just insert without one to get a new autoincrement value.
                 # Eventually (once we have origin in IDs) we'll preserve them.
-                fileDataset.ref = self.registry.addDataset(datasetType, fileDataset.ref.dataId, run=run,
-                                                           recursive=True)
+                fileDataset.refs = [self.registry.addDataset(datasetType, ref.dataId, run=run,
+                                                             recursive=True) for ref in fileDataset.refs]
                 if directory is not None:
                     fileDataset.path = os.path.join(directory, fileDataset.path)
                 fileDatasets.append(fileDataset)
                 for collection in collectionsForDataset:
-                    collections[collection].append(fileDataset.ref)
+                    collections[collection].extend(fileDataset.refs)
         datastore.ingest(*fileDatasets, transfer=transfer)
         for collection, refs in collections.items():
             self.registry.associate(collection, refs)

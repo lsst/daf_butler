@@ -330,8 +330,10 @@ class ChainedDatastore(Datastore):
             raise NotImplementedError("ChainedDatastore does not support transfer=None or transfer='move'.")
 
         def isDatasetAcceptable(dataset, *, name, constraints):
-            if not constraints.isAcceptable(dataset.ref):
-                log.debug("Datastore %s skipping ingest via configuration for ref %s", name, dataset.ref)
+            acceptable = [ref for ref in dataset.refs if constraints.isAcceptable(ref)]
+            if not acceptable:
+                log.debug("Datastore %s skipping ingest via configuration for refs %s",
+                          name, ", ".join(str(ref) for ref in dataset.refs))
                 return False
             else:
                 return True
