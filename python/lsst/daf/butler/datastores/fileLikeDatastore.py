@@ -24,6 +24,7 @@
 __all__ = ("FileLikeDatastore", )
 
 import logging
+import itertools
 from abc import abstractmethod
 
 from sqlalchemy import Integer, String
@@ -246,21 +247,22 @@ class FileLikeDatastore(GenericBaseDatastore):
                               checksum=record["checksum"],
                               file_size=record["file_size"])
 
-    def getStoredItemInfoForPath(self, pathInStore):
-        # Docstring inherited from GenericBaseDatastore
+    def _registered_refs_per_artifact(self, pathInStore):
+        """Return all dataset refs associated with the supplied path.
+
+        Parameters
+        ----------
+        pathInStore : `str`
+            Path of interest in the data store.
+
+        Returns
+        -------
+        refs : `set` of `int`
+            All `DatasetRef` IDs associated with this path.
+        """
         records = list(self.registry.fetchOpaqueData(self._tableName, path=pathInStore))
-        if len(records) == 0:
-            return records
-
-        for r in records:
-            print(r["path"])
-
-        return [StoredFileInfo(formatter=r["formatter"],
-                               path=r["path"],
-                               storageClass=self.storageClassFactory.getStorageClass(r["storage_class"]),
-                               checksum=r["checksum"],
-                               file_size=r["file_size"])
-                for r in records]
+        refs = {r["dataset_id"] for r in records}
+        return refs
 
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
@@ -293,6 +295,38 @@ class FileLikeDatastore(GenericBaseDatastore):
         location = self.locationFactory.fromPath(storedFileInfo.path)
 
         return location, storedFileInfo
+
+    def _can_remove_dataset_artifact(self, ref):
+        """Check that there is only one dataset associated with the
+        specified artifact.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to be removed.
+
+        Returns
+        -------
+        can_remove : `Bool`
+            True if the artifact can be safely removed.
+        """
+        storedFileInfo = self.getStoredItemInfo(ref)
+
+        # Get all entries associated with this path
+        allRefs = self._registered_refs_per_artifact(storedFileInfo.path)
+        if not allRefs:
+            raise RuntimeError(f"Datastore inconsistency error. {storedFileInfo.path} not in registry")
+
+        # Get all the refs associated with this dataset if it is a composite
+        theseRefs = {r.id for r in itertools.chain([ref], ref.components.values())}
+
+        # Remove these refs from all the refs and if there is nothing left
+        # then we can delete
+        remainingRefs = allRefs - theseRefs
+
+        if remainingRefs:
+            return False
+        return True
 
     def _prepare_for_get(self, ref, parameters=None):
         """Check parameters for ``get`` and obtain formatter and

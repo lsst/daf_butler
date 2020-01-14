@@ -28,7 +28,6 @@ __all__ = ("Butler", "ButlerValidationError")
 import os
 import contextlib
 import logging
-import itertools
 import typing
 
 try:
@@ -649,14 +648,21 @@ class Butler:
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref = self.registry.find(self.collection, datasetType, dataId)
         if delete:
-            for r in itertools.chain([ref], ref.components.values()):
-                # If dataset is a composite, we don't know whether it's the
-                # parent or the components that actually need to be removed,
-                # so try them all and swallow errors.
-                try:
+            # There is a difference between a concrete composite and virtual
+            # composite. In a virtual composite the datastore is never
+            # given the top level DatasetRef. In the concrete composite
+            # the datastore knows all the refs and will clean up itself
+            # if asked to remove the parent ref.
+            # We can not check configuration for this since we can not trust
+            # that the configuration is the same. We therefore have to ask
+            # if the ref exists or not
+            if self.datastore.exists(ref):
+                self.datastore.remove(ref)
+            elif ref.isComposite():
+                for r in ref.components.values():
                     self.datastore.remove(r)
-                except FileNotFoundError:
-                    pass
+            else:
+                raise FileNotFoundError(f"Dataset {ref} not known to datastore")
         elif not remember:
             raise ValueError("Cannot retain dataset in Datastore without keeping Registry dataset record.")
         if remember:

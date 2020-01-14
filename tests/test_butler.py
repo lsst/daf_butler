@@ -258,6 +258,21 @@ class ButlerTests:
         self.assertEqual(metric.output, sliced.output)
         self.assertEqual(metric.data[:stop], sliced.data)
 
+        if storageClass.isComposite():
+            # Delete one component and check that the other components
+            # can still be retrieved
+            metricOut = butler.get(ref.datasetType.name, dataId)
+            compNameS = DatasetType.nameWithComponent(datasetTypeName, "summary")
+            compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
+            summary = butler.get(compNameS, dataId)
+            self.assertEqual(summary, metric.summary)
+
+            butler.remove(compNameS, dataId, remember=False)
+            with self.assertRaises(LookupError):
+                butler.datasetExists(compNameS, dataId)
+            data = butler.get(compNameD, dataId)
+            self.assertEqual(data, metric.data)
+
         # Combining a DatasetRef with a dataId should fail
         with self.assertRaises(ValueError):
             butler.get(ref, dataId)
@@ -272,6 +287,14 @@ class ButlerTests:
         # Check we have a collection
         collections = butler.registry.getAllCollections()
         self.assertEqual(collections, {"ingest", })
+
+        # Clean up to check that we can remove something that may have
+        # already had a component removed
+        butler.remove(ref.datasetType.name, dataId)
+
+        # Add a dataset back in since some downstream tests require
+        # something to be present
+        ref = butler.put(metric, refIn)
 
         return butler
 
