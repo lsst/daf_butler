@@ -316,11 +316,17 @@ class ButlerTests:
 
         butler.ingest(*datasets, transfer="copy")
 
-        metrics1 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
-                                                "detector": 1, "visit": 423})
-        metrics2 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
-                                                "detector": 2, "visit": 423})
+        dataId1 = {"instrument": "DummyCamComp", "detector": 1, "visit": 423}
+        dataId2 = {"instrument": "DummyCamComp", "detector": 2, "visit": 423}
+
+        metrics1 = butler.get(datasetTypeName, dataId1)
+        metrics2 = butler.get(datasetTypeName, dataId2)
         self.assertNotEqual(metrics1, metrics2)
+
+        # Compare URIs
+        uri1 = butler.getUri(datasetTypeName, dataId1)
+        uri2 = butler.getUri(datasetTypeName, dataId2)
+        self.assertNotEqual(uri1, uri2)
 
         # Now do a multi-dataset but single file ingest
         metricFile = os.path.join(dataRoot, "detectors.yaml")
@@ -338,13 +344,27 @@ class ButlerTests:
 
         butler.ingest(*datasets, transfer="copy")
 
-        multi1 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
-                                              "detector": 1, "visit": 424})
-        multi2 = butler.get(datasetTypeName, {"instrument": "DummyCamComp",
-                                              "detector": 2, "visit": 424})
+        dataId1 = {"instrument": "DummyCamComp", "detector": 1, "visit": 424}
+        dataId2 = {"instrument": "DummyCamComp", "detector": 2, "visit": 424}
+
+        multi1 = butler.get(datasetTypeName, dataId1)
+        multi2 = butler.get(datasetTypeName, dataId2)
 
         self.assertEqual(multi1, metrics1)
         self.assertEqual(multi2, metrics2)
+
+        # Compare URIs
+        uri1 = butler.getUri(datasetTypeName, dataId1)
+        uri2 = butler.getUri(datasetTypeName, dataId2)
+        self.assertEqual(uri1, uri2)
+
+        # Test that removing one does not break the second
+        butler.remove(datasetTypeName, dataId1)
+        with self.assertRaises(LookupError):
+            butler.datasetExists(datasetTypeName, dataId1)
+        self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
+        multi2b = butler.get(datasetTypeName, dataId2)
+        self.assertEqual(multi2, multi2b)
 
     def testPickle(self):
         """Test pickle support.
