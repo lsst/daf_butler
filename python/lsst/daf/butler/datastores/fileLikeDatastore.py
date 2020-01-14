@@ -468,10 +468,10 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Docstring inherited from Datastore._finishIngest.
         refsAndInfos = []
         for dataset in prepData.datasets:
-            for ref in dataset.refs:
-                info = self._extractIngestInfo(dataset.path, ref, formatter=dataset.formatter,
-                                               transfer=transfer)
-                refsAndInfos.append((ref, info))
+            # Do ingest as if the first dataset ref is associated with the file
+            info = self._extractIngestInfo(dataset.path, dataset.refs[0], formatter=dataset.formatter,
+                                           transfer=transfer)
+            refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)
 
     def getUri(self, ref, predict=False):
