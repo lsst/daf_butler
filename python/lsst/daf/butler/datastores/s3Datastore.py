@@ -341,16 +341,23 @@ class S3Datastore(FileLikeDatastore):
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
         """
-        location, _ = self._get_dataset_location_info(ref)
+        location, storedFileInfo = self._get_dataset_location_info(ref)
         if location is None:
             raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
 
         if not s3CheckFileExists(location, client=self.client):
             raise FileNotFoundError(f"No such file: {location.uri}")
 
-        # https://github.com/boto/boto3/issues/507 - there is no way of knowing
-        # if the file was actually deleted
-        self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
+        # Get all entries associated with this path
+        paths = self.getStoredItemInfoForPath(storedFileInfo.path)
+        if not len(paths):
+            raise RuntimeError(f"Datastore inconsistency error. {storedFileInfo.path} disappeared"
+                               " from registry.")
+
+        if len(paths) == 1:
+            # https://github.com/boto/boto3/issues/507 - there is no way of
+            # knowing if the file was actually deleted
+            self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
 
         # Remove rows from registries
         self._remove_from_registry(ref)

@@ -74,6 +74,23 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
+    def getStoredItemInfoForPath(self, pathInStore):
+        """Retrieve information associated with a particular file in the
+        datastore.
+
+        Parameters
+        ----------
+        pathInStore : `str`
+            Path of interest in the data store.
+
+        Returns
+        -------
+        infos : `list` of `StoredFileInfo`
+            The list is empty if there are no matches.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def removeStoredItemInfo(self, ref):
         """Remove information about the file associated with this dataset.
 

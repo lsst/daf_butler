@@ -290,13 +290,22 @@ class PosixDatastore(FileLikeDatastore):
             Attempt to remove a dataset that does not exist.
         """
         # Get file metadata and internal metadata
-        location, storefFileInfo = self._get_dataset_location_info(ref)
+        location, storedFileInfo = self._get_dataset_location_info(ref)
         if location is None:
             raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
 
         if not os.path.exists(location.path):
             raise FileNotFoundError(f"No such file: {location.uri}")
-        os.remove(location.path)
+
+        # Get all entries associated with this path
+        paths = self.getStoredItemInfoForPath(storedFileInfo.path)
+        if not len(paths):
+            raise RuntimeError(f"Datastore inconsistency error. {storedFileInfo.path} disappeared"
+                               " from registry.")
+
+        if len(paths) == 1:
+            # Only reference to this path so we can remove it
+            os.remove(location.path)
 
         # Remove rows from registries
         self._remove_from_registry(ref)

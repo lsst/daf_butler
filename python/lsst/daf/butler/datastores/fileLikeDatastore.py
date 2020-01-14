@@ -246,6 +246,22 @@ class FileLikeDatastore(GenericBaseDatastore):
                               checksum=record["checksum"],
                               file_size=record["file_size"])
 
+    def getStoredItemInfoForPath(self, pathInStore):
+        # Docstring inherited from GenericBaseDatastore
+        records = list(self.registry.fetchOpaqueData(self._tableName, path=pathInStore))
+        if len(records) == 0:
+            return records
+
+        for r in records:
+            print(r["path"])
+
+        return [StoredFileInfo(formatter=r["formatter"],
+                               path=r["path"],
+                               storageClass=self.storageClassFactory.getStorageClass(r["storage_class"]),
+                               checksum=r["checksum"],
+                               file_size=r["file_size"])
+                for r in records]
+
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
         self.registry.deleteOpaqueData(self._tableName, dataset_id=ref.id)

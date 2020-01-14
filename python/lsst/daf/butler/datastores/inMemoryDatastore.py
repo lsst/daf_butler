@@ -153,6 +153,11 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         del self.records[ref.id]
 
+    def getStoredItemInfoForPath(self, pathInStore):
+        # Docstring inherited from GenericBaseDatastore.
+        # Always returns empty list.
+        return []
+
     def exists(self, ref):
         """Check if the dataset exists in the datastore.
 
