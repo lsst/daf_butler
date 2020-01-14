@@ -43,7 +43,8 @@ class FitsCatalogDatasetsHelper:
         outputRecord = outputCatalog[0]
         self.assertEqual(inputRecord.getPsfInstFlux(), outputRecord.getPsfInstFlux())
         self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
-        self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())
+        self.assertEqual(inputTable.getSchema().getAliasMap().get("slot_Centroid"),
+                         outputTable.getSchema().getAliasMap().get("slot_Centroid"))
         self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
         self.assertFloatsAlmostEqual(
             inputRecord.getCentroidErr()[0, 0],
@@ -51,7 +52,8 @@ class FitsCatalogDatasetsHelper:
         self.assertFloatsAlmostEqual(
             inputRecord.getCentroidErr()[1, 1],
             outputRecord.getCentroidErr()[1, 1], rtol=1e-6)
-        self.assertEqual(inputTable.getShapeDefinition(), outputTable.getShapeDefinition())
+        self.assertEqual(inputTable.getSchema().getAliasMap().get("slot_Shape"),
+                         outputTable.getSchema().getAliasMap().get("slot_Shape"))
         self.assertFloatsAlmostEqual(
             inputRecord.getShapeErr()[0, 0],
             outputRecord.getShapeErr()[0, 0], rtol=1e-6)
