@@ -20,3 +20,4 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._database import *
+from ._opaque import *
