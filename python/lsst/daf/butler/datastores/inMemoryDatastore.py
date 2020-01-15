@@ -156,6 +156,11 @@ class InMemoryDatastore(GenericBaseDatastore):
 
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore.
+        # If a component has been removed previously then we can sometimes
+        # be asked to remove it again. Other datastores ignore this
+        # so also ignore here
+        if ref.id not in self.records:
+            return
         record = self.records[ref.id]
         del self.records[ref.id]
         self.related[record.parentID].remove(ref.id)

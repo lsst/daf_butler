@@ -660,7 +660,10 @@ class Butler:
                 self.datastore.remove(ref)
             elif ref.isComposite():
                 for r in ref.components.values():
-                    self.datastore.remove(r)
+                    # If a dataset was removed previously but remembered
+                    # in registry, skip the removal in the datastore.
+                    if self.registry.getDatasetLocations(r):
+                        self.datastore.remove(r)
             else:
                 raise FileNotFoundError(f"Dataset {ref} not known to datastore")
         elif not remember:

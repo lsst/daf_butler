@@ -267,7 +267,7 @@ class ButlerTests:
             summary = butler.get(compNameS, dataId)
             self.assertEqual(summary, metric.summary)
 
-            butler.remove(compNameS, dataId, remember=False)
+            butler.remove(compNameS, dataId, remember=True)
             with self.assertRaises(LookupError):
                 butler.datasetExists(compNameS, dataId)
             data = butler.get(compNameD, dataId)
