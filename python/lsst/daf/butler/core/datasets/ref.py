@@ -178,7 +178,7 @@ class DatasetRef:
     def __str__(self) -> str:
         s = f"{self.datasetType.name}@{self.dataId!s}"
         if self.id is not None:
-            s += " (id={self.id})"
+            s += f" (id={self.id})"
         return s
 
     def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:

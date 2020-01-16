@@ -28,7 +28,6 @@ __all__ = ("Butler", "ButlerValidationError")
 import os
 import contextlib
 import logging
-import itertools
 import typing
 
 try:
@@ -649,14 +648,26 @@ class Butler:
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref = self.registry.find(self.collection, datasetType, dataId)
         if delete:
-            for r in itertools.chain([ref], ref.components.values()):
-                # If dataset is a composite, we don't know whether it's the
-                # parent or the components that actually need to be removed,
-                # so try them all and swallow errors.
-                try:
-                    self.datastore.remove(r)
-                except FileNotFoundError:
-                    pass
+            # There is a difference between a concrete composite and virtual
+            # composite. In a virtual composite the datastore is never
+            # given the top level DatasetRef. In the concrete composite
+            # the datastore knows all the refs and will clean up itself
+            # if asked to remove the parent ref.
+            # We can not check configuration for this since we can not trust
+            # that the configuration is the same. We therefore have to ask
+            # if the ref exists or not
+            if self.datastore.exists(ref):
+                self.datastore.remove(ref)
+            elif ref.isComposite():
+                datastoreNames = set(self.datastore.names)
+                for r in ref.components.values():
+                    # If a dataset was removed previously but remembered
+                    # in registry, skip the removal in the datastore.
+                    datastoreLocations = self.registry.getDatasetLocations(r)
+                    if datastoreLocations & datastoreNames:
+                        self.datastore.remove(r)
+            else:
+                raise FileNotFoundError(f"Dataset {ref} not known to datastore")
         elif not remember:
             raise ValueError("Cannot retain dataset in Datastore without keeping Registry dataset record.")
         if remember:
@@ -706,8 +717,9 @@ class Butler:
             raise TypeError("Butler is read-only.")
         # TODO: once Registry has vectorized API for addDataset, use it here.
         for dataset in datasets:
-            dataset.ref = self.registry.addDataset(dataset.ref.datasetType, dataset.ref.dataId,
-                                                   run=self.run, recursive=True)
+            for i, ref in enumerate(dataset.refs):
+                dataset.refs[i] = self.registry.addDataset(ref.datasetType, ref.dataId,
+                                                           run=self.run, recursive=True)
         self.datastore.ingest(*datasets, transfer=transfer)
 
     @contextlib.contextmanager

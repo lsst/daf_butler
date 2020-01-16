@@ -43,17 +43,20 @@ except ImportError:
         """
         return cls
 
+from lsst.utils import doImport
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
+from lsst.daf.butler import FileDataset
 from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 
+from datasetsHelper import MultiDetectorFormatter
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -255,6 +258,24 @@ class ButlerTests:
         self.assertEqual(metric.output, sliced.output)
         self.assertEqual(metric.data[:stop], sliced.data)
 
+        if storageClass.isComposite():
+            # Delete one component and check that the other components
+            # can still be retrieved
+            metricOut = butler.get(ref.datasetType.name, dataId)
+            compNameS = DatasetType.nameWithComponent(datasetTypeName, "summary")
+            compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
+            summary = butler.get(compNameS, dataId)
+            self.assertEqual(summary, metric.summary)
+            self.assertTrue(butler.datastore.exists(ref.components["summary"]))
+
+            butler.remove(compNameS, dataId, remember=True)
+            with self.assertRaises(LookupError):
+                butler.datasetExists(compNameS, dataId)
+            self.assertFalse(butler.datastore.exists(ref.components["summary"]))
+            self.assertTrue(butler.datastore.exists(ref.components["data"]))
+            data = butler.get(compNameD, dataId)
+            self.assertEqual(data, metric.data)
+
         # Combining a DatasetRef with a dataId should fail
         with self.assertRaises(ValueError):
             butler.get(ref, dataId)
@@ -270,7 +291,106 @@ class ButlerTests:
         collections = butler.registry.getAllCollections()
         self.assertEqual(collections, {"ingest", })
 
+        # Clean up to check that we can remove something that may have
+        # already had a component removed
+        butler.remove(ref.datasetType.name, dataId)
+
+        # Add a dataset back in since some downstream tests require
+        # something to be present
+        ref = butler.put(metric, refIn)
+
         return butler
+
+    def testIngest(self):
+        butler = Butler(self.tmpConfigFile)
+
+        # Create and register a DatasetType
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit", "detector"])
+
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataDictYaml")
+        datasetTypeName = "metric"
+
+        datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
+
+        # Add needed Dimensions
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "abstract_filter": "R"})
+        for detector in (1, 2):
+            butler.registry.insertDimensionData("detector", {"instrument": "DummyCamComp", "id": detector,
+                                                             "full_name": f"detector{detector}"})
+
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
+                                                      "name": "fourtwentythree", "physical_filter": "d-r"},
+                                                     {"instrument": "DummyCamComp", "id": 424,
+                                                      "name": "fourtwentyfour", "physical_filter": "d-r"})
+
+        formatter = doImport("lsst.daf.butler.formatters.yamlFormatter.YamlFormatter")
+        dataRoot = os.path.join(TESTDIR, "data", "basic")
+        datasets = []
+        for detector in (1, 2):
+            detector_name = f"detector_{detector}"
+            metricFile = os.path.join(dataRoot, f"{detector_name}.yaml")
+            dataId = {"instrument": "DummyCamComp", "visit": 423, "detector": detector}
+            # Create a DatasetRef for ingest
+            refIn = DatasetRef(datasetType, dataId, id=None)
+
+            datasets.append(FileDataset(path=metricFile,
+                                        refs=[refIn],
+                                        formatter=formatter))
+
+        butler.ingest(*datasets, transfer="copy")
+
+        dataId1 = {"instrument": "DummyCamComp", "detector": 1, "visit": 423}
+        dataId2 = {"instrument": "DummyCamComp", "detector": 2, "visit": 423}
+
+        metrics1 = butler.get(datasetTypeName, dataId1)
+        metrics2 = butler.get(datasetTypeName, dataId2)
+        self.assertNotEqual(metrics1, metrics2)
+
+        # Compare URIs
+        uri1 = butler.getUri(datasetTypeName, dataId1)
+        uri2 = butler.getUri(datasetTypeName, dataId2)
+        self.assertNotEqual(uri1, uri2)
+
+        # Now do a multi-dataset but single file ingest
+        metricFile = os.path.join(dataRoot, "detectors.yaml")
+        refs = []
+        for detector in (1, 2):
+            detector_name = f"detector_{detector}"
+            dataId = {"instrument": "DummyCamComp", "visit": 424, "detector": detector}
+            # Create a DatasetRef for ingest
+            refs.append(DatasetRef(datasetType, dataId, id=None))
+
+        datasets = []
+        datasets.append(FileDataset(path=metricFile,
+                                    refs=refs,
+                                    formatter=MultiDetectorFormatter))
+
+        butler.ingest(*datasets, transfer="copy")
+
+        dataId1 = {"instrument": "DummyCamComp", "detector": 1, "visit": 424}
+        dataId2 = {"instrument": "DummyCamComp", "detector": 2, "visit": 424}
+
+        multi1 = butler.get(datasetTypeName, dataId1)
+        multi2 = butler.get(datasetTypeName, dataId2)
+
+        self.assertEqual(multi1, metrics1)
+        self.assertEqual(multi2, metrics2)
+
+        # Compare URIs
+        uri1 = butler.getUri(datasetTypeName, dataId1)
+        uri2 = butler.getUri(datasetTypeName, dataId2)
+        self.assertEqual(uri1, uri2)
+
+        # Test that removing one does not break the second
+        butler.remove(datasetTypeName, dataId1)
+        with self.assertRaises(LookupError):
+            butler.datasetExists(datasetTypeName, dataId1)
+        self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
+        multi2b = butler.get(datasetTypeName, dataId2)
+        self.assertEqual(multi2, multi2b)
 
     def testPickle(self):
         """Test pickle support.
@@ -551,6 +671,9 @@ class InMemoryDatastoreButlerTestCase(ButlerTests, unittest.TestCase):
     datastoreStr = ["datastore='InMemory"]
     datastoreName = ["InMemoryDatastore@"]
     registryStr = ":memory:"
+
+    def testIngest(self):
+        pass
 
 
 class ChainedDatastoreButlerTestCase(ButlerTests, unittest.TestCase):

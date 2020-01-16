@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+__all__ = ("FitsCatalogDatasetsHelper", "DatasetTestHelper", "DatastoreTestHelper",
+           "BadWriteFormatter", "BadNoWriteFormatter", "MultiDetectorFormatter")
+
 import os
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
@@ -40,7 +43,8 @@ class FitsCatalogDatasetsHelper:
         outputRecord = outputCatalog[0]
         self.assertEqual(inputRecord.getPsfInstFlux(), outputRecord.getPsfInstFlux())
         self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
-        self.assertEqual(inputTable.getCentroidDefinition(), outputTable.getCentroidDefinition())
+        self.assertEqual(inputTable.getSchema().getAliasMap().get("slot_Centroid"),
+                         outputTable.getSchema().getAliasMap().get("slot_Centroid"))
         self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
         self.assertFloatsAlmostEqual(
             inputRecord.getCentroidErr()[0, 0],
@@ -48,7 +52,8 @@ class FitsCatalogDatasetsHelper:
         self.assertFloatsAlmostEqual(
             inputRecord.getCentroidErr()[1, 1],
             outputRecord.getCentroidErr()[1, 1], rtol=1e-6)
-        self.assertEqual(inputTable.getShapeDefinition(), outputTable.getShapeDefinition())
+        self.assertEqual(inputTable.getSchema().getAliasMap().get("slot_Shape"),
+                         outputTable.getSchema().getAliasMap().get("slot_Shape"))
         self.assertFloatsAlmostEqual(
             inputRecord.getShapeErr()[0, 0],
             outputRecord.getShapeErr()[0, 0], rtol=1e-6)
@@ -139,3 +144,20 @@ class BadNoWriteFormatter(BadWriteFormatter):
 
     def _writeFile(self, inMemoryDataset):
         raise RuntimeError("Did not writing anything at all")
+
+
+class MultiDetectorFormatter(YamlFormatter):
+
+    def _writeFile(self, inMemoryDataset):
+        raise NotImplementedError("Can not write")
+
+    def _fromBytes(self, serializedDataset, pytype=None):
+        data = super()._fromBytes(serializedDataset)
+        if self.dataId is None:
+            raise RuntimeError("This formatter requires a dataId")
+        if "detector" not in self.dataId:
+            raise RuntimeError("This formatter requires detector to be present in dataId")
+        key = f"detector{self.dataId['detector']}"
+        if key in data:
+            return pytype(data[key])
+        raise RuntimeError(f"Could not find '{key}' in data file")

@@ -169,9 +169,12 @@ class ChainedDatastore(Datastore):
 
         # Name ourself based on our children
         if self.datastores:
-            childNames = ",".join([d.name for d in self.datastores])
+            # We must set the names explicitly
+            self._names = [d.name for d in self.datastores]
+            childNames = ",".join(self.names)
         else:
             childNames = "(empty@{})".format(time.time())
+            self._names = [childNames]
         self.name = "{}[{}]".format(type(self).__qualname__, childNames)
 
         # We declare we are ephemeral if all our child datastores declare
@@ -199,6 +202,10 @@ class ChainedDatastore(Datastore):
             self.datastoreConstraints = (None,) * len(self.datastores)
 
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
+
+    @property
+    def names(self):
+        return self._names
 
     def __str__(self):
         chainName = ", ".join(str(ds) for ds in self.datastores)
@@ -330,8 +337,10 @@ class ChainedDatastore(Datastore):
             raise NotImplementedError("ChainedDatastore does not support transfer=None or transfer='move'.")
 
         def isDatasetAcceptable(dataset, *, name, constraints):
-            if not constraints.isAcceptable(dataset.ref):
-                log.debug("Datastore %s skipping ingest via configuration for ref %s", name, dataset.ref)
+            acceptable = [ref for ref in dataset.refs if constraints.isAcceptable(ref)]
+            if not acceptable:
+                log.debug("Datastore %s skipping ingest via configuration for refs %s",
+                          name, ", ".join(str(ref) for ref in dataset.refs))
                 return False
             else:
                 return True

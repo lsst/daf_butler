@@ -24,6 +24,7 @@
 __all__ = ("FileLikeDatastore", )
 
 import logging
+import itertools
 from abc import abstractmethod
 
 from sqlalchemy import Integer, String
@@ -68,7 +69,7 @@ class _IngestPrepData(Datastore.IngestPrepData):
         Files to be ingested by this datastore.
     """
     def __init__(self, datasets: List[FileDataset]):
-        super().__init__(dataset.ref for dataset in datasets)
+        super().__init__(ref for dataset in datasets for ref in dataset.refs)
         self.datasets = datasets
 
 
@@ -246,6 +247,23 @@ class FileLikeDatastore(GenericBaseDatastore):
                               checksum=record["checksum"],
                               file_size=record["file_size"])
 
+    def _registered_refs_per_artifact(self, pathInStore):
+        """Return all dataset refs associated with the supplied path.
+
+        Parameters
+        ----------
+        pathInStore : `str`
+            Path of interest in the data store.
+
+        Returns
+        -------
+        ids : `set` of `int`
+            All `DatasetRef` IDs associated with this path.
+        """
+        records = list(self.registry.fetchOpaqueData(self._tableName, path=pathInStore))
+        ids = {r["dataset_id"] for r in records}
+        return ids
+
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
         self.registry.deleteOpaqueData(self._tableName, dataset_id=ref.id)
@@ -277,6 +295,38 @@ class FileLikeDatastore(GenericBaseDatastore):
         location = self.locationFactory.fromPath(storedFileInfo.path)
 
         return location, storedFileInfo
+
+    def _can_remove_dataset_artifact(self, ref):
+        """Check that there is only one dataset associated with the
+        specified artifact.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Dataset to be removed.
+
+        Returns
+        -------
+        can_remove : `Bool`
+            True if the artifact can be safely removed.
+        """
+        storedFileInfo = self.getStoredItemInfo(ref)
+
+        # Get all entries associated with this path
+        allRefs = self._registered_refs_per_artifact(storedFileInfo.path)
+        if not allRefs:
+            raise RuntimeError(f"Datastore inconsistency error. {storedFileInfo.path} not in registry")
+
+        # Get all the refs associated with this dataset if it is a composite
+        theseRefs = {r.id for r in itertools.chain([ref], ref.components.values())}
+
+        # Remove these refs from all the refs and if there is nothing left
+        # then we can delete
+        remainingRefs = allRefs - theseRefs
+
+        if remainingRefs:
+            return False
+        return True
 
     def _prepare_for_get(self, ref, parameters=None):
         """Check parameters for ``get`` and obtain formatter and
@@ -315,7 +365,8 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         formatter = getInstanceOf(storedFileInfo.formatter,
                                   FileDescriptor(location, readStorageClass=readStorageClass,
-                                                 storageClass=writeStorageClass, parameters=parameters))
+                                                 storageClass=writeStorageClass, parameters=parameters),
+                                  ref.dataId)
         formatterParams, assemblerParams = formatter.segregateParameters()
 
         return DatastoreFileGetInformation(location, formatter, storedFileInfo,
@@ -361,7 +412,8 @@ class FileLikeDatastore(GenericBaseDatastore):
         try:
             formatter = self.formatterFactory.getFormatter(ref,
                                                            FileDescriptor(location,
-                                                                          storageClass=storageClass))
+                                                                          storageClass=storageClass),
+                                                           ref.dataId)
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
@@ -448,10 +500,13 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Docstring inherited from Datastore._prepIngest.
         filtered = []
         for dataset in datasets:
-            if not self.constraints.isAcceptable(dataset.ref):
+            acceptable = [ref for ref in dataset.refs if self.constraints.isAcceptable(ref)]
+            if not acceptable:
                 continue
+            else:
+                dataset.refs = acceptable
             if dataset.formatter is None:
-                dataset.formatter = self.formatterFactory.getFormatterClass(dataset.ref)
+                dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
                 dataset.formatter = getClassOf(dataset.formatter)
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
@@ -463,9 +518,10 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Docstring inherited from Datastore._finishIngest.
         refsAndInfos = []
         for dataset in prepData.datasets:
-            info = self._extractIngestInfo(dataset.path, dataset.ref, formatter=dataset.formatter,
+            # Do ingest as if the first dataset ref is associated with the file
+            info = self._extractIngestInfo(dataset.path, dataset.refs[0], formatter=dataset.formatter,
                                            transfer=transfer)
-            refsAndInfos.append((dataset.ref, info))
+            refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)
 
     def getUri(self, ref, predict=False):

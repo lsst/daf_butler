@@ -202,6 +202,10 @@ class Datastore(metaclass=ABCMeta):
     name: str
     """Label associated with this Datastore."""
 
+    names: list
+    """List of names associated with this Datastore. Can be different to
+    ``name`` for a chaining datastore."""
+
     storageClassFactory: StorageClassFactory
     """Factory for creating storage class instances from name."""
 
@@ -280,6 +284,15 @@ class Datastore(metaclass=ABCMeta):
 
     def __repr__(self):
         return self.name
+
+    @property
+    def names(self):
+        """Names associated with this datastore returned as a list.
+
+        Some datastores can have child datastores.
+        """
+        # Default implementation returns solely the name itself
+        return [self.name]
 
     @contextlib.contextmanager
     def transaction(self):
@@ -488,7 +501,7 @@ class Datastore(metaclass=ABCMeta):
         in their class documentation.
         """
         prepData = self._prepIngest(*datasets, transfer=transfer)
-        refs = {dataset.ref.id: dataset.ref for dataset in datasets}
+        refs = {ref.id: ref for dataset in datasets for ref in dataset.refs}
         if refs.keys() != prepData.refs.keys():
             unsupported = refs.keys() - prepData.refs.keys()
             # Group unsupported refs by DatasetType for an informative

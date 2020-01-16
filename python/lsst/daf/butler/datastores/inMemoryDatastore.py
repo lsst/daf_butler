@@ -25,6 +25,7 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 
 import time
 import logging
+import itertools
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
@@ -105,6 +106,9 @@ class InMemoryDatastore(GenericBaseDatastore):
         # where we register multiple components for a single dataset.
         self.records = {}
 
+        # Related records that share the same parent
+        self.related = {}
+
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
         """Set any filesystem-dependent config options for this Datastore to
@@ -144,6 +148,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         for ref, info in zip(refs, infos):
             self.records[ref.id] = info
+            self.related.setdefault(info.parentID, set()).add(ref.id)
 
     def getStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore.
@@ -151,7 +156,14 @@ class InMemoryDatastore(GenericBaseDatastore):
 
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore.
+        # If a component has been removed previously then we can sometimes
+        # be asked to remove it again. Other datastores ignore this
+        # so also ignore here
+        if ref.id not in self.records:
+            return
+        record = self.records[ref.id]
         del self.records[ref.id]
+        self.related[record.parentID].remove(ref.id)
 
     def exists(self, ref):
         """Check if the dataset exists in the datastore.
@@ -344,9 +356,23 @@ class InMemoryDatastore(GenericBaseDatastore):
             Attempt to remove a dataset that does not exist.
 
         """
-        if ref.id not in self.datasets:
+        try:
+            storedItemInfo = self.getStoredItemInfo(ref)
+        except KeyError:
+            raise FileNotFoundError(f"No such file dataset in memory: {ref}") from None
+        thisID = ref.id
+        if storedItemInfo.parentID is not None:
+            thisID = storedItemInfo.parentID
+
+        if thisID not in self.datasets:
             raise FileNotFoundError("No such file dataset in memory: {}".format(ref))
-        del self.datasets[ref.id]
+
+        # Only delete if this is the only dataset associated with this data
+        allRefs = self.related[thisID]
+        theseRefs = {r.id for r in itertools.chain([ref], ref.components.values())}
+        remainingRefs = allRefs - theseRefs
+        if not remainingRefs:
+            del self.datasets[thisID]
 
         # Remove rows from registries
         self._remove_from_registry(ref)

@@ -54,9 +54,10 @@ def iterable(a):
 
     There are three cases, when the input is:
 
-    - iterable, but not a `str` -> iterate over elements
+    - iterable, but not a `str`  or Mapping -> iterate over elements
       (e.g. ``[i for i in a]``)
     - a `str` -> return single element iterable (e.g. ``[a]``)
+    - a Mapping -> return single element iterable
     - not iterable -> return single elment iterable (e.g. ``[a]``).
 
     Parameters
@@ -70,6 +71,9 @@ def iterable(a):
         Iterable version of the input value.
     """
     if isinstance(a, str):
+        yield a
+        return
+    if isinstance(a, Mapping):
         yield a
         return
     try:

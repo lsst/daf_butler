@@ -1,0 +1,19 @@
+summary:
+  AM1: 5.2
+  AMS: 30.6
+output:
+  a:
+    - 1
+    - 2
+    - 3
+  b:
+    blue: 5
+    red: green
+data:
+  - 563
+  - 234
+  - 456.7
+  - 752
+  - 8
+  - 9
+  - 27

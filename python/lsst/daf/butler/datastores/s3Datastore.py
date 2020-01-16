@@ -348,9 +348,10 @@ class S3Datastore(FileLikeDatastore):
         if not s3CheckFileExists(location, client=self.client):
             raise FileNotFoundError(f"No such file: {location.uri}")
 
-        # https://github.com/boto/boto3/issues/507 - there is no way of knowing
-        # if the file was actually deleted
-        self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
+        if self._can_remove_dataset_artifact(ref):
+            # https://github.com/boto/boto3/issues/507 - there is no way of
+            # knowing if the file was actually deleted
+            self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
 
         # Remove rows from registries
         self._remove_from_registry(ref)
