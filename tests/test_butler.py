@@ -266,10 +266,13 @@ class ButlerTests:
             compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
             summary = butler.get(compNameS, dataId)
             self.assertEqual(summary, metric.summary)
+            self.assertTrue(butler.datastore.exists(ref.components["summary"]))
 
             butler.remove(compNameS, dataId, remember=True)
             with self.assertRaises(LookupError):
                 butler.datasetExists(compNameS, dataId)
+            self.assertFalse(butler.datastore.exists(ref.components["summary"]))
+            self.assertTrue(butler.datastore.exists(ref.components["data"]))
             data = butler.get(compNameD, dataId)
             self.assertEqual(data, metric.data)
 
