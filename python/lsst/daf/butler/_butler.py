@@ -26,6 +26,7 @@ Butler top level classes.
 __all__ = ("Butler", "ButlerValidationError")
 
 import os
+from collections import defaultdict
 import contextlib
 import logging
 import typing
@@ -389,8 +390,8 @@ class Butler:
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        ref = self.registry.addDataset(datasetType, dataId, run=self.run, producer=producer,
-                                       recursive=not isVirtualComposite)
+        ref, = self.registry.insertDatasets(datasetType, run=self.run, dataIds=[dataId],
+                                            producer=producer, recursive=not isVirtualComposite)
 
         # Check to see if this datasetType requires disassembly
         if isVirtualComposite:
@@ -688,11 +689,12 @@ class Butler:
             relative to the datastore root, if applicable), a `DatasetRef`,
             and optionally a formatter class or its fully-qualified string
             name.  If a formatter is not provided, the formatter that would be
-            used for `put` is assumed.  On return, all `FileDataset.ref`
-            attributes will have their `DatasetRef.id` attribute populated and
-            all `FileDataset.formatter` attributes will be set to the formatter
-            class used.  `FileDataset.path` attributes may be modified to put
-            paths in whatever the datastore considers a standardized form.
+            used for `put` is assumed.  On successful return, all
+            `FileDataset.ref` attributes will have their `DatasetRef.id`
+            attribute populated and all `FileDataset.formatter` attributes will
+            be set to the formatter class used.  `FileDataset.path` attributes
+            may be modified to put paths in whatever the datastore considers a
+            standardized form.
         transfer : `str`, optional
             If not `None`, must be one of 'move', 'copy', 'hardlink', or
             'symlink', indicating how to transfer the file.
@@ -712,14 +714,56 @@ class Butler:
         FileExistsError
             Raised if transfer is not `None` but the (internal) location the
             file would be moved to is already occupied.
+
+        Notes
+        -----
+        This operation is not fully exception safe: if a database operation
+        fails, the given `FileDataset` instances may be only partially updated.
+
+        It is atomic in terms of database operations (they will either all
+        succeed or all fail) providing the database engine implements
+        transactions correctly.  It will attempt to be atomic in terms of
+        filesystem operations as well, but this cannot be implemented
+        rigorously for most datastores.
         """
         if self.run is None:
             raise TypeError("Butler is read-only.")
-        # TODO: once Registry has vectorized API for addDataset, use it here.
+
+        # Reorganize the inputs so they're grouped by DatasetType and then
+        # data ID.  We also include a list of DatasetRefs for each FileDataset
+        # to hold the resolved DatasetRefs returned by the Registry, before
+        # it's safe to swap them into FileDataset.refs.
+        # Some type annotation aliases to make that clearer:
+        GroupForType = typing.Dict[DataCoordinate, typing.Tuple[FileDataset, typing.List[DatasetRef]]]
+        GroupedData = typing.MutableMapping[DatasetType, GroupForType]
+        # The actual data structure:
+        groupedData: GroupedData = defaultdict(dict)
+        # And the nested loop that populates it:
         for dataset in datasets:
-            for i, ref in enumerate(dataset.refs):
-                dataset.refs[i] = self.registry.addDataset(ref.datasetType, ref.dataId,
-                                                           run=self.run, recursive=True)
+            # This list intentionally shared across the inner loop, since it's
+            # associated with `dataset`.
+            resolvedRefs = []
+            for ref in dataset.refs:
+                groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
+
+        # Now we can bulk-insert into Registry for each DatasetType.
+        for datasetType, groupForType in groupedData.items():
+            refs = self.registry.insertDatasets(datasetType,
+                                                dataIds=groupForType.keys(),
+                                                run=self.run,
+                                                recursive=True)
+            # Append those resolved DatasetRefs to the new lists we set up for
+            # them.
+            for ref, (_, resolvedRefs) in zip(refs, groupForType.values()):
+                resolvedRefs.append(ref)
+
+        # Go back to the original FileDatasets to replace their refs with the
+        # new resolved ones.
+        for groupForType in groupedData.values():
+            for dataset, resolvedRefs in groupForType.values():
+                dataset.refs = resolvedRefs
+
+        # Bulk-insert everything into Datastore.
         self.datastore.ingest(*datasets, transfer=transfer)
 
     @contextlib.contextmanager

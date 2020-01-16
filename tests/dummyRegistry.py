@@ -62,17 +62,18 @@ class DummyRegistry:
                 kept.append(d)
         self._externalTableRows[name] = kept
 
-    def addDatasetLocation(self, ref, datastoreName):
+    def insertDatasetLocations(self, datastoreName, refs):
         # Only set ID if ID is 0 or None
-        incrementCounter = True
-        if ref.id is None or ref.id == 0:
-            ref._id = self._counter
-            incrementCounter = False
-        if ref.id not in self._entries:
-            self._entries[ref.id] = set()
-        self._entries[ref.id].add(datastoreName)
-        if incrementCounter:
-            self._counter += 1
+        for ref in refs:
+            incrementCounter = True
+            if ref.id is None or ref.id == 0:
+                ref._id = self._counter
+                incrementCounter = False
+            if ref.id not in self._entries:
+                self._entries[ref.id] = set()
+            self._entries[ref.id].add(datastoreName)
+            if incrementCounter:
+                self._counter += 1
 
     def getDatasetLocations(self, ref):
         return self._entries[ref.id].copy()

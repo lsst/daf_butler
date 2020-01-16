@@ -657,84 +657,86 @@ class Registry:
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
-    def addDataset(self, datasetType: Union[DatasetType, str],
-                   dataId: DataId, run: str, producer: Optional[Quantum] = None,
-                   recursive: bool = False, **kwds: Any) -> DatasetRef:
-        """Adds a Dataset entry to the `Registry`
+    def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
+                       run: str, *, producer: Optional[Quantum] = None, recursive: bool = False
+                       ) -> List[DatasetRef]:
+        """Insert one or more datasets into the `Registry`
 
-        This always adds a new Dataset; to associate an existing Dataset with
+        This always adds new datasets; to associate existing datasets with
         a new collection, use ``associate``.
 
         Parameters
         ----------
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
-        dataId : `dict` or `DataCoordinate`
-            A `dict`-like object containing the `Dimension` links that identify
-            the dataset within a collection.
+        dataIds :  `~collections.abc.Iterable` of `dict` or `DataCoordinate`
+            Dimension-based identifiers for the new datasets.
         run : `str`
-            The name of the run that produced the dataset.
+            The name of the run that produced the datasets.
         producer : `Quantum`
-            Unit of work that produced the Dataset.  May be `None` to store
+            Unit of work that produced the datasets.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.
         recursive : `bool`
-            If True, recursively add Dataset and attach entries for component
-            Datasets as well.
-        **kwds
-            Additional keyword arguments passed to
-            `DataCoordinate.standardize` to convert ``dataId`` to a
-            true `DataCoordinate` or augment an existing
-            one.
+            If True, recursively add datasets and attach entries for component
+            datasets as well.
 
         Returns
         -------
-        ref : `DatasetRef`
-            A newly-created `DatasetRef` instance.
-
-        Raises
-        ------
+        refs : `list` of `DatasetRef`
+            Resolved `DatasetRef` instances for all given data IDs (in the same
+            order).
         ConflictingDefinitionError
-            If a Dataset with the given `DatasetRef` already exists in the
-            given collection.
-
-        Exception
-            Raised if ``dataId`` contains unknown or invalid `Dimension`
-            entries.
+            If a dataset with the same dataset type and data ID as one of those
+            given already exists in the given collection.
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
-        # Make an expanded, standardized data ID up front, so we don't do that
-        # multiple times in calls below.  Note that calling expandDataId with a
-        # full ExpandedDataCoordinate is basically a no-op.
-        dataId = self.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        # Retrieve the ID for the given run.
-        runId = self._getRunIdFromName(run)
-        # Add the dataset table entry itself.  Note that this will get rolled
-        # back if the subsequent call to associate raises, which is what we
-        # want.
-        datasetRef = DatasetRef(datasetType=datasetType, dataId=dataId)
-        # TODO add producer
-        row = {k.name: v for k, v in dataId.full.items()}
-        row.update(
-            dataset_type_name=datasetType.name,
-            run_id=runId,
-            dataset_ref_hash=datasetRef.hash,
-            quantum_id=None
-        )
-        datasetId, = self._db.insert(self._tables.dataset, row, returnIds=True)
-        datasetRef = datasetRef.resolved(id=datasetId, run=run)
-        # A dataset is always initially associated with its run as a
-        # collection.
-        self.associate(run, [datasetRef, ])
-        if recursive:
-            for component in datasetType.storageClass.components:
-                compTypeName = datasetType.componentTypeName(component)
-                compDatasetType = self.getDatasetType(compTypeName)
-                compRef = self.addDataset(compDatasetType, dataId, run=run, producer=producer,
-                                          recursive=True)
-                self.attachComponent(component, datasetRef, compRef)
-        return datasetRef
+        rows = []
+        refs = []
+        base = {
+            "dataset_type_name": datasetType.name,
+            "run_id": self._getRunIdFromName(run),
+            "quantum_id": producer.id if producer is not None else None,
+        }
+        # Expand data IDs and build both a list of unresolved DatasetRefs
+        # and a list of dictionary rows for the dataset table.
+        for dataId in dataIds:
+            ref = DatasetRef(datasetType, self.expandDataId(dataId, graph=datasetType.dimensions))
+            refs.append(ref)
+            row = dict(base, dataset_ref_hash=ref.hash)
+            for dimension, value in ref.dataId.full.items():
+                row[dimension.name] = value
+            rows.append(row)
+        # Actually insert into the dataset table.
+        datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+        # Resolve the DatasetRefs with the autoincrement IDs we generated.
+        refs = [ref.resolved(id=datasetId, run=run) for datasetId, ref in zip(datasetIds, refs)]
+        # Associate the datasets with the run as a collection.  Note that we
+        # do this before inserting component datasets so recursing doesn't try
+        # to associate those twice.
+        self.associate(run, refs)
+        if recursive and datasetType.isComposite():
+            # Insert component rows by recursing, and gather a single big list
+            # of rows to insert into the dataset_composition table.
+            compositionRows = []
+            for componentName in datasetType.storageClass.components:
+                componentDatasetType = datasetType.makeComponentDatasetType(componentName)
+                componentRefs = self.insertDatasets(componentDatasetType,
+                                                    dataIds=(ref.dataId for ref in refs),
+                                                    run=run,
+                                                    producer=producer,
+                                                    recursive=True)
+                for parentRef, componentRef in zip(refs, componentRefs):
+                    parentRef._components[componentName] = componentRef
+                    compositionRows.append({
+                        "parent_dataset_id": parentRef.id,
+                        "component_dataset_id": componentRef.id,
+                        "component_name": componentName,
+                    })
+            if compositionRows:
+                self._db.insert(self._tables.dataset_composition, *compositionRows)
+        return refs
 
     def getDataset(self, id: int, datasetType: Optional[DatasetType] = None,
                    dataId: Optional[DataCoordinate] = None) -> Optional[DatasetRef]:
@@ -930,26 +932,27 @@ class Registry:
         self._db.delete(self._tables.dataset_collection, ["dataset_id", "collection"], *rows)
 
     @transactional
-    def addDatasetLocation(self, ref: DatasetRef, datastoreName: str):
-        """Add datastore name locating a given dataset.
+    def insertDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
+        """Record that a datastore holds the given datasets.
 
         Typically used by `Datastore`.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            A reference to the dataset for which to add storage information.
         datastoreName : `str`
-            Name of the datastore holding this dataset.
+            Name of the datastore holding these datasets.
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            References to the datasets.
 
         Raises
         ------
         AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
+            Raised if ``any(ref.id is None for ref in refs)``.
         """
-        self._db.insert(self._tables.dataset_storage,
-                        {"dataset_id": _checkAndGetId(ref),
-                         "datastore_name": datastoreName})
+        self._db.insert(
+            self._tables.dataset_storage,
+            *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
+        )
 
     def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
         """Retrieve datastore locations for a given dataset.
