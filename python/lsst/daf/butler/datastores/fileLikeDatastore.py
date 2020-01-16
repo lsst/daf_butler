@@ -257,12 +257,12 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        refs : `set` of `int`
+        ids : `set` of `int`
             All `DatasetRef` IDs associated with this path.
         """
         records = list(self.registry.fetchOpaqueData(self._tableName, path=pathInStore))
-        refs = {r["dataset_id"] for r in records}
-        return refs
+        ids = {r["dataset_id"] for r in records}
+        return ids
 
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
