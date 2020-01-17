@@ -5,3 +5,5 @@ registry:
     sqlite: lsst.daf.butler.registry.databases.sqlite.SqliteDatabase
     postgresql: lsst.daf.butler.registry.databases.postgresql.PostgresqlDatabase
     oracle: lsst.daf.butler.registry.databases.oracle.OracleDatabase
+  managers:
+    opaque: lsst.daf.butler.registry.opaque.ByNameOpaqueTableStorageManager

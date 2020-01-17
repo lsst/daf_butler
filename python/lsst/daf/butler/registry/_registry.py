@@ -34,6 +34,7 @@ from typing import (
     Mapping,
     Optional,
     Set,
+    Type,
     TYPE_CHECKING,
     Union,
 )
@@ -56,7 +57,7 @@ from ..core import (
 )
 from ..core.dimensions.storage import setupDimensionStorage
 from ..core import ddl
-from ..core.utils import iterable, transactional, NamedKeyDict
+from ..core.utils import doImport, iterable, transactional, NamedKeyDict
 from ._config import RegistryConfig
 from .queries import (
     CollectionsExpression,
@@ -72,7 +73,7 @@ if TYPE_CHECKING:
     from ..core import (
         Quantum
     )
-    from .interfaces import Database
+    from .interfaces import Database, OpaqueTableStorageManager
 
 
 class AmbiguousDatasetError(Exception):
@@ -183,9 +184,12 @@ class Registry:
         database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
                                          namespace=config.get("namespace"))
         dimensions = DimensionUniverse(config)
-        return cls(database=database, dimensions=dimensions, create=create)
+        opaque = doImport(config["managers", "opaque"])
+        return cls(database=database, dimensions=dimensions, opaque=opaque, create=create)
 
-    def __init__(self, database: Database, dimensions: DimensionUniverse, *, create: bool = False):
+    def __init__(self, database: Database, dimensions: DimensionUniverse, *,
+                 opaque: Type[OpaqueTableStorageManager],
+                 create: bool = False):
         self._db = database
         self.dimensions = dimensions
         self.storageClasses = StorageClassFactory()
@@ -194,6 +198,7 @@ class Registry:
             for name, spec in self.dimensions.makeSchemaSpec().items():
                 dimensionTables[name] = context.addTable(name, spec)
             self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions))
+            self._opaque = opaque.initialize(self._db, context)
         # TODO: we shouldn't be grabbing the private connection from the
         # Database instance like this, but it's a reasonable way to proceed
         # while we transition to using the Database API more.
@@ -202,7 +207,6 @@ class Registry:
         self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
                                                       universe=self.dimensions,
                                                       tables=self._tables._asdict())
-        self._opaqueTables = {}
         self._datasetTypes = {}
         self._runIdsByName = {}   # key = name, value = id
         self._runNamesById = {}   # key = id, value = name
@@ -244,7 +248,7 @@ class Registry:
         spec : `ddl.TableSpec`
             Specification for the table to be added.
         """
-        self._opaqueTables[tableName] = self._db.ensureTableExists(tableName, spec)
+        self._opaque.register(tableName, spec)
 
     @transactional
     def insertOpaqueData(self, tableName: str, *data: dict):
@@ -259,7 +263,7 @@ class Registry:
             Each additional positional argument is a dictionary that represents
             a single row to be added.
         """
-        self._db.insert(self._opaqueTables[tableName], *data)
+        self._opaque[tableName].insert(*data)
 
     def fetchOpaqueData(self, tableName: str, **where: Any) -> Iterator[dict]:
         """Retrieve records from an opaque table.
@@ -280,13 +284,7 @@ class Registry:
         row : `dict`
             A dictionary representing a single result row.
         """
-        table = self._opaqueTables[tableName]
-        sql = table.select()
-        whereTerms = [table.columns[k] == v for k, v in where.items()]
-        if whereTerms:
-            sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
-        for row in self._db.query(sql):
-            yield dict(row)
+        yield from self._opaque[tableName].fetch(**where)
 
     @transactional
     def deleteOpaqueData(self, tableName: str, **where: Any):
@@ -303,7 +301,7 @@ class Registry:
             keyword arguments are column names and values are the values they
             must have.
         """
-        self._db.delete(self._opaqueTables[tableName], where.keys(), where)
+        self._opaque[tableName].delete(**where)
 
     def getAllCollections(self):
         """Get names of all the collections found in this repository.
