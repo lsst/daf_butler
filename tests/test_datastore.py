@@ -465,6 +465,36 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
         super().setUp()
 
 
+class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
+    """Posix datastore tests but with checksums disabled."""
+    configFile = os.path.join(TESTDIR, "config/basic/posixDatastoreNoChecksums.yaml")
+
+    def testChecksum(self):
+        """Ensure that checksums have not been calculated."""
+
+        datastore = self.makeDatastore()
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        metrics = makeExampleMetrics()
+
+        dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V"}
+        ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId,
+                                  conform=False)
+
+        # Configuration should have disabled checksum calculation
+        datastore.put(metrics, ref)
+        info = datastore.getStoredItemInfo(ref)
+        self.assertIsNone(info.checksum)
+
+        # Remove put back but with checksums enabled explicitly
+        datastore.remove(ref)
+        datastore.useChecksum = True
+        datastore.put(metrics, ref)
+
+        info = datastore.getStoredItemInfo(ref)
+        self.assertIsNotNone(info.checksum)
+
+
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
 

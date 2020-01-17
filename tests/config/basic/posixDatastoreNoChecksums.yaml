@@ -1,0 +1,3 @@
+includeConfigs: posixDatastore.yaml
+datastore:
+  checksum: false
