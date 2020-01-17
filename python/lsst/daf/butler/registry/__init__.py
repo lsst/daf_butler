@@ -25,3 +25,8 @@ from ._dbAuth import *
 
 from . import interfaces
 from . import queries
+
+# Some modules intentionally not imported, either because they are purely
+# internal (e.g. nameShrinker.py) or they contain implementations that are
+# always loaded from configuration strings (e.g. databases subpackage,
+# opaque.py, ...).
