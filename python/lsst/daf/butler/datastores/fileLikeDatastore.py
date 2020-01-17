@@ -218,6 +218,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         self._tableName = self.config["records", "table"]
         registry.registerOpaqueTable(self._tableName, self.makeTableSpec())
 
+        # Determine whether checksums should be used
+        self.useChecksum = self.config.get("checksum", True)
+
     def __str__(self):
         return self.root
 

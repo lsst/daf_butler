@@ -263,7 +263,10 @@ class PosixDatastore(FileLikeDatastore):
                 raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
             path = newPath
             fullPath = newFullPath
-        checksum = self.computeChecksum(fullPath)
+        if self.useChecksum:
+            checksum = self.computeChecksum(fullPath)
+        else:
+            checksum = None
         stat = os.stat(fullPath)
         size = stat.st_size
         return StoredFileInfo(formatter=formatter, path=path, storageClass=ref.datasetType.storageClass,
