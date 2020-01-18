@@ -41,9 +41,9 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement, Dimension
 
 
-# TODO: not sure we need 512 bytes for regions (probably much less), but we
-# should see what they look like in practice before making this smaller.
-REGION_FIELD_SPEC = ddl.FieldSpec(name="region", nbytes=512, dtype=ddl.Base64Region)
+# Most regions are small (they're quadrilaterals), but visit ones can be quite
+# large because they have a complicated boundary.  For HSC, about ~1400 bytes.
+REGION_FIELD_SPEC = ddl.FieldSpec(name="region", nbytes=2048, dtype=ddl.Base64Region)
 
 OVERLAP_TABLE_NAME_PATTERN = "{0}_{1}_overlap"
 
