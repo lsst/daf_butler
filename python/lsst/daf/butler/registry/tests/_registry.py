@@ -893,3 +893,23 @@ class RegistryTests(ABC):
                                                   exposure=exposure,
                                                   detector=detector)
                     self.assertEqual(len(list(rows)), 2)
+
+    def testAbstractFilterQuery(self):
+        """Test that we can run a query that just lists the known
+        abstract_filters.  This is tricky because abstract_filter is
+        backed by a query against physical_filter.
+        """
+        registry = self.makeRegistry()
+        registry.insertDimensionData("instrument", dict(name="DummyCam"))
+        registry.insertDimensionData(
+            "physical_filter",
+            dict(instrument="DummyCam", name="dummy_i", abstract_filter="i"),
+            dict(instrument="DummyCam", name="dummy_i2", abstract_filter="i"),
+            dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
+        )
+        rows = list(registry.queryDimensions(["abstract_filter"]))
+        self.assertCountEqual(
+            rows,
+            [DataCoordinate.standardize(abstract_filter="i", universe=registry.dimensions),
+             DataCoordinate.standardize(abstract_filter="r", universe=registry.dimensions)]
+        )

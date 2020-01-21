@@ -25,7 +25,7 @@ __all__ = ["DimensionRecordStorage"]
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from sqlalchemy.sql import FromClause
+import sqlalchemy
 
 from ...core import DataId, DimensionElement, DimensionRecord
 
@@ -93,7 +93,8 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None) -> FromClause:
+    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None
+                                    ) -> Optional[sqlalchemy.sql.FromClause]:
         """Return the logical table that relates the given element to the
         common skypix dimension.
 
@@ -118,9 +119,10 @@ class DimensionRecordStorage(ABC):
 
         Returns
         -------
-        table : `sqlalchemy.sql.FromClause`
+        table : `sqlalchemy.sql.FromClause` or `None`
             A table or table-like SQLAlchemy expression object that can be
-            included in a select query.
+            included in a select query.  `None` if this element has no such
+            overlap table.
         """
         raise NotImplementedError()
 

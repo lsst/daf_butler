@@ -30,7 +30,9 @@ from ...core.utils import NamedKeyDict
 from ...core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN
 from ...core import DimensionElement, DimensionUniverse, SkyPixDimension
 from ..interfaces import DimensionRecordStorage, Database
-from .database import DatabaseDimensionRecordStorage
+from .table import TableDimensionRecordStorage
+from .query import QueryDimensionRecordStorage
+from .spatial import SpatialDimensionRecordStorage
 from .skypix import SkyPixDimensionRecordStorage
 from .caching import CachingDimensionRecordStorage
 
@@ -65,16 +67,16 @@ def setupDimensionStorage(db: Database,
     for element in universe.elements:
         if element.hasTable():
             if element.viewOf is not None:
-                elementTable = tables[element.viewOf]
+                storage = QueryDimensionRecordStorage(db, element)
             else:
-                elementTable = tables[element.name]
-            if element.spatial:
-                commonSkyPixOverlapTable = \
-                    tables[OVERLAP_TABLE_NAME_PATTERN.format(element.name, universe.commonSkyPix.name)]
-            else:
-                commonSkyPixOverlapTable = None
-            storage = DatabaseDimensionRecordStorage(db, element, elementTable=elementTable,
-                                                     commonSkyPixOverlapTable=commonSkyPixOverlapTable)
+                table = tables[element.name]
+                if element.spatial:
+                    commonSkyPixOverlapTable = \
+                        tables[OVERLAP_TABLE_NAME_PATTERN.format(element.name, universe.commonSkyPix.name)]
+                    storage = SpatialDimensionRecordStorage(db, element, table=table,
+                                                            commonSkyPixOverlapTable=commonSkyPixOverlapTable)
+                else:
+                    storage = TableDimensionRecordStorage(db, element, table=table)
         elif isinstance(element, SkyPixDimension):
             storage = SkyPixDimensionRecordStorage(element)
         else:
