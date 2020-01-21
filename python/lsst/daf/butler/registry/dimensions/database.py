@@ -68,10 +68,6 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def matches(self, dataId: Optional[DataId] = None) -> bool:
-        # Docstring inherited from DimensionRecordStorage.matches.
-        return True
-
     def getElementTable(self, dataId: Optional[DataId] = None) -> FromClause:
         # Docstring inherited from DimensionRecordStorage.getElementTable.
         return self._elementTable

@@ -63,27 +63,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def matches(self, dataId: Optional[DataId] = None) -> bool:
-        """Test whether this storage could hold any records consistent with the
-        given data ID.
-
-        Parameters
-        ----------
-        dataId : `DataId`, optional
-            The data ID to test.  May be an informal data ID dictionary or
-            a validated `DataCoordinate`.
-
-        Returns
-        -------
-        matches : `bool`
-            `True` if this storage might hold a record whose data ID matches
-            the given on; this is not a guarantee that any such record exists.
-            `False` only if a matching record definitely does not exist.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def getElementTable(self, dataId: Optional[DataId] = None) -> FromClause:
+    def getElementTable(self, dataId: Optional[DataId] = None) -> sqlalchemy.sql.FromClause:
         """Return the logical table for the element as a SQLAlchemy object.
 
         The returned object may be a select statement or view instead of a

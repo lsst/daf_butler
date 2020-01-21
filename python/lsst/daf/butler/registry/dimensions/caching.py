@@ -55,10 +55,6 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         self._cache.clear()
         self._nested.clearCaches()
 
-    def matches(self, dataId: Optional[DataId]) -> bool:
-        # Docstring inherited from DimensionRecordStorage.matches.
-        return self._nested.matches(dataId)
-
     def getElementTable(self, dataId: Optional[DataId] = None) -> FromClause:
         # Docstring inherited from DimensionRecordStorage.getElementTable.
         return self._nested.getElementTable(dataId)
