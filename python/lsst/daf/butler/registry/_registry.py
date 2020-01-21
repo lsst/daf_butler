@@ -205,7 +205,7 @@ class Registry:
         # Database instance like this, but it's a reasonable way to proceed
         # while we transition to using the Database API more.
         self._connection = self._db._connection
-        self._dimensionStorage = setupDimensionStorage(self._connection, dimensions, dimensionTables)
+        self._dimensionStorage = setupDimensionStorage(self._db, dimensions, dimensionTables)
         self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
                                                       universe=self.dimensions,
                                                       tables=self._tables._asdict())

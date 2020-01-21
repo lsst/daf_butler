@@ -25,20 +25,20 @@ __all__ = ["DatabaseDimensionRecordStorage"]
 from typing import Optional
 
 from sqlalchemy.sql import FromClause, select, and_
-from sqlalchemy.engine import Connection
 
 from ...core import DataCoordinate, DataId, DimensionElement, DimensionRecord
-from ..interfaces import DimensionRecordStorage
+from ..interfaces import DimensionRecordStorage, Database
 
 
 class DatabaseDimensionRecordStorage(DimensionRecordStorage):
-    """A record storage implementation that uses a SQL database by sharing
-    a SQLAlchemy connection with a `Registry`.
+    """A record storage implementation that uses a `Database` instance
+    provided by its parent `Registry`.
 
     Parameters
     ----------
-    connection : `sqlalchemy.engine.Connection`
-        The SQLAlchemy connection to use for inserts and fetches.
+    db : `Database`
+        Interface to the database engine namespace that will hold these
+        dimension records.
     element : `DimensionElement`
         The element whose records this storage will manage.
     elementTable : `sqlalchemy.sql.FromClause`
@@ -49,10 +49,10 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
         common skypix dimension.
     """
 
-    def __init__(self, connection: Connection, element: DimensionElement, *,
+    def __init__(self, db: Database, element: DimensionElement, *,
                  elementTable: FromClause,
                  commonSkyPixOverlapTable: Optional[FromClause] = None):
-        self._connection = connection
+        self._db = db
         self._element = element
         self._elementTable = elementTable
         self._commonSkyPixOverlapTable = commonSkyPixOverlapTable
@@ -100,10 +100,10 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
                         row = base.copy()
                         row[commonSkyPix.name] = skypix
                         commonSkyPixRows.append(row)
-        # TODO: wrap the operations below in a transaction.
-        self._connection.execute(self._elementTable.insert(), *elementRows)
-        if self.element.spatial and commonSkyPixRows:
-            self._connection.execute(self._commonSkyPixOverlapTable.insert(), *commonSkyPixRows)
+        with self._db.transaction():
+            self._db.insert(self._elementTable, *elementRows)
+            if self.element.spatial and commonSkyPixRows:
+                self._db.insert(self._commonSkyPixOverlapTable, *commonSkyPixRows)
 
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
@@ -126,7 +126,7 @@ class DatabaseDimensionRecordStorage(DimensionRecordStorage):
             and_(*[column == dataId[dimension.name]
                    for column, dimension in zip(whereColumns, self.element.graph.required)])
         )
-        row = self._connection.execute(query).fetchone()
+        row = self._db.query(query).fetchone()
         if row is None:
             return None
         return RecordClass(*row)

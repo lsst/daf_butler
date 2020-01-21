@@ -25,18 +25,17 @@ __all__ = ["setupDimensionStorage"]
 from typing import Dict
 
 from sqlalchemy.sql import FromClause
-from sqlalchemy.engine import Connection
 
 from ...core.utils import NamedKeyDict
 from ...core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN
 from ...core import DimensionElement, DimensionUniverse, SkyPixDimension
-from ..interfaces import DimensionRecordStorage
+from ..interfaces import DimensionRecordStorage, Database
 from .database import DatabaseDimensionRecordStorage
 from .skypix import SkyPixDimensionRecordStorage
 from .caching import CachingDimensionRecordStorage
 
 
-def setupDimensionStorage(connection: Connection,
+def setupDimensionStorage(db: Database,
                           universe: DimensionUniverse,
                           tables: Dict[str, FromClause]
                           ) -> NamedKeyDict[DimensionElement, DimensionRecordStorage]:
@@ -45,9 +44,9 @@ def setupDimensionStorage(connection: Connection,
 
     Parameters
     ----------
-    connection : `sqlalchemy.engine.Connection`
-        A SQLAlchemy connection object, typically shared with the `Registry`
-        that will own the storage instances.
+    db : `Database`
+        Interface to the database engine namespace that will hold these
+        dimension records.
     universe : `DimensionUniverse`
         The set of all dimensions for which storage instances should be
         constructed.
@@ -74,7 +73,7 @@ def setupDimensionStorage(connection: Connection,
                     tables[OVERLAP_TABLE_NAME_PATTERN.format(element.name, universe.commonSkyPix.name)]
             else:
                 commonSkyPixOverlapTable = None
-            storage = DatabaseDimensionRecordStorage(connection, element, elementTable=elementTable,
+            storage = DatabaseDimensionRecordStorage(db, element, elementTable=elementTable,
                                                      commonSkyPixOverlapTable=commonSkyPixOverlapTable)
         elif isinstance(element, SkyPixDimension):
             storage = SkyPixDimensionRecordStorage(element)
