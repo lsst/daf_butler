@@ -38,8 +38,8 @@ from ...core import (
 )
 from ...core.utils import NamedValueSet, NamedKeyDict
 from ...core.dimensions.schema import REGION_FIELD_SPEC
-from ...core.dimensions.storage import DimensionRecordStorage
 
+from ..interfaces import DimensionRecordStorage
 from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
 from ._datasets import DatasetRegistryStorage, CollectionsExpression
 from .expressions import ClauseVisitor

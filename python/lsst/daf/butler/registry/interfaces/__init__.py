@@ -21,3 +21,4 @@
 
 from ._database import *
 from ._opaque import *
+from ._dimensions import *

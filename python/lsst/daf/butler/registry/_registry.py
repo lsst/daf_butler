@@ -55,7 +55,6 @@ from ..core import (
     ExpandedDataCoordinate,
     StorageClassFactory,
 )
-from ..core.dimensions.storage import setupDimensionStorage
 from ..core import ddl
 from ..core.utils import doImport, iterable, transactional, NamedKeyDict
 from ._config import RegistryConfig
@@ -67,6 +66,7 @@ from .queries import (
     QuerySummary,
 )
 from .tables import makeRegistryTableSpecs
+from .dimensions.setup import setupDimensionStorage
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
