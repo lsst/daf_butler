@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import List, Iterable
+from typing import List, Iterable, TYPE_CHECKING
 
 from sqlalchemy.sql import ColumnElement, and_, literal, bindparam, select, FromClause
 import sqlalchemy.sql
@@ -34,16 +34,16 @@ from ...core import (
     Dimension,
     DatasetType,
     Timespan,
-    TIMESPAN_FIELD_SPECS,
 )
-from ...core.utils import NamedValueSet, NamedKeyDict
-from ...core.dimensions.schema import REGION_FIELD_SPEC
+from ...core.utils import NamedKeyDict, NamedValueSet
 
-from ..interfaces import DimensionRecordStorage
 from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
 from ._datasets import DatasetRegistryStorage, CollectionsExpression
 from .expressions import ClauseVisitor
 from ._query import Query
+
+if TYPE_CHECKING:
+    from ..interfaces import DimensionRecordStorage
 
 
 class QueryBuilder:
@@ -73,8 +73,15 @@ class QueryBuilder:
         self._dimensionStorage = dimensionStorage
         self._datasetStorage = datasetStorage
         self._sql = None
-        self._elements: NamedKeyDict[DimensionElement, FromClause] = NamedKeyDict()
+        self._elements: NamedValueSet[DimensionElement] = NamedValueSet()
         self._columns = QueryColumns()
+
+    def hasDimensionKey(self, dimension: Dimension) -> bool:
+        """Return `True` if the given dimension's primary key column has
+        been included in the query (possibly via a foreign key column on some
+        other table).
+        """
+        return dimension in self._columns.keys
 
     def joinDimensionElement(self, element: DimensionElement):
         """Add the table for a `DimensionElement` to the query.
@@ -94,50 +101,13 @@ class QueryBuilder:
             associated with a database table (see `DimensionElement.hasTable`).
         """
         assert element not in self._elements, "Element already included in query."
-        assert element.hasTable(), "Cannot join element with no table."
-        table = self._dimensionStorage[element].getElementTable(self.summary.dataId)
-        if element in self.summary.spatial:
-            self.joinToCommonSkyPix(element)
-            self._columns.regions[element] = table.columns[REGION_FIELD_SPEC.name]
-        joinDimensions = list(element.graph.required)
-        joinDimensions.extend(element.implied)
-        joinOn = self.startJoin(table, joinDimensions, element.RecordClass.__slots__)
-        if element in self.summary.temporal:
-            intervalInTable = Timespan(
-                begin=table.columns[TIMESPAN_FIELD_SPECS.begin.name],
-                end=table.columns[TIMESPAN_FIELD_SPECS.end.name],
-            )
-            for intervalInQuery in self._columns.timespans.values():
-                joinOn.append(intervalInQuery.overlaps(intervalInTable, ops=sqlalchemy.sql))
-            self._columns.timespans[element] = intervalInTable
-        self.finishJoin(table, joinOn)
-        self._elements[element] = table
-
-    def joinToCommonSkyPix(self, element: DimensionElement):
-        """Add the table relating a spatial `DimensionElement` to the
-        universe's `~DimensionUniverse.commonSkyPix` dimension to the query.
-
-        External calls to this method should rarely be necessary; `finish` will
-        automatically call it if the `DimensionElement` has been identified as
-        one that must be included.
-
-        Parameters
-        ----------
-        element : `DimensionElement`
-            Element for which the relationship should be added.  The element
-            must be associated with a database table (see
-            `DimensionElement.hasTable`) and must have
-            `Dimensionelement.spatial` `True`.
-        """
-        if element is self.summary.universe.commonSkyPix:
-            return
-        assert element in self.summary.spatial,\
-            f"{element}'s spatial information is not relevant for this query."
-        table = self._dimensionStorage[element].getCommonSkyPixOverlapTable(self.summary.dataId)
-        assert table is not None, f"No relationship found from the common skypix to {element}."
-        dimensions = NamedValueSet(element.graph.required)
-        dimensions.add(self.summary.universe.commonSkyPix)
-        self.joinTable(table, dimensions)
+        storage = self._dimensionStorage[element]
+        storage.join(
+            self,
+            regions=self._columns.regions if element in self.summary.spatial else None,
+            timespans=self._columns.timespans if element in self.summary.temporal else None,
+        )
+        self._elements.add(element)
 
     def joinDataset(self, datasetType: DatasetType, collections: CollectionsExpression, *,
                     isResult: bool = True, addRank: bool = False):
@@ -270,31 +240,19 @@ class QueryBuilder:
         only by called) by `finish`.
         """
         # Join all DimensionElement tables that we need for spatial/temporal
-        # joins/filters or a nontrivial WHERE expression, skipping but
-        # remembering any SkyPixDimensions for now.
+        # joins/filters or a nontrivial WHERE expression.
         # We iterate over these in *reverse* topological order to minimize the
         # number of tables joined.  For example, the "visit" table provides
         # the primary key value for the "instrument" table it depends on, so we
         # don't need to join "instrument" as well unless we had a nontrivial
         # expression on it (and hence included it already above).
-        skyPixDimensions = NamedValueSet()
         for element in self.summary.universe.sorted(self.summary.mustHaveTableJoined, reverse=True):
-            if isinstance(element, SkyPixDimension):
-                skyPixDimensions.add(element)
-            else:
-                self.joinDimensionElement(element)
+            self.joinDimensionElement(element)
         # Join in any requested Dimension tables that don't already have their
         # primary keys identified by the query.
         for dimension in self.summary.universe.sorted(self.summary.mustHaveKeysJoined, reverse=True):
             if dimension not in self._columns.keys:
                 self.joinDimensionElement(dimension)
-        # If the query involves the commonSkyPix dimension (usually an
-        # indicator of a spatial join), we need to make sure any *other* SkyPix
-        # dimensions are related to it.  We've already made sure above that any
-        # other spatial dimension is related to it.
-        if self.summary.universe.commonSkyPix in self.summary.spatial:
-            for dimension in skyPixDimensions:
-                self.joinToCommonSkyPix(dimension)
 
     def _addWhereClause(self):
         """Add a WHERE clause to the query under construction, connecting all

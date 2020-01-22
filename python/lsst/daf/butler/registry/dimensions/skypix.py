@@ -24,9 +24,11 @@ __all__ = ["SkyPixDimensionRecordStorage"]
 
 from typing import Optional
 
-from sqlalchemy.sql import FromClause
+import sqlalchemy
 
-from ...core import DataCoordinate, DataId, DimensionElement, DimensionRecord, SkyPixDimension
+from ...core import DataCoordinate, DimensionElement, DimensionRecord, SkyPixDimension, Timespan
+from ...core.utils import NamedKeyDict
+from ..queries import QueryBuilder
 from ..interfaces import DimensionRecordStorage
 
 
@@ -54,14 +56,25 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def getElementTable(self, dataId: Optional[DataId] = None) -> FromClause:
-        # Docstring inherited from DimensionRecordStorage.getElementTable.
-        raise TypeError(f"SkyPix dimension {self._dimension.name} has no database representation.")
-
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None) -> FromClause:
-        # Docstring inherited from
-        # DimensionRecordStorage.getCommonSkyPixOverlapTable.
-        raise TypeError(f"SkyPix dimension {self._dimension.name} has no database representation.")
+    def join(
+        self,
+        builder: QueryBuilder, *,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+    ):
+        if builder.hasDimensionKey(self.element):
+            # If joining some other element or dataset type already brought in
+            # the key for this dimension, there's nothing left to do, because
+            # a SkyPix dimension never has metadata or implied dependencies,
+            # and its regions are never stored in the database.  This code path
+            # is the usual case for the storage instance that manages
+            # ``DimensionUniverse.commonSkyPix`` instance, which has no table
+            # of its own but many overlap tables.
+            # Storage instances for other skypix dimensions will probably hit
+            # the error below, but we don't currently have a use case for
+            # joining them in anyway.
+            return
+        raise NotImplementedError(f"Cannot includeSkyPix dimension {self.element.name} directly in query.")
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.

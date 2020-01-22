@@ -24,10 +24,12 @@ __all__ = ["CachingDimensionRecordStorage"]
 
 from typing import Optional
 
-from sqlalchemy.sql import FromClause
+import sqlalchemy
 
-from ...core import DataCoordinate, DataId, DimensionElement, DimensionRecord
+from ...core import DataCoordinate, DimensionElement, DimensionRecord, Timespan
+from ...core.utils import NamedKeyDict
 from ..interfaces import DimensionRecordStorage
+from ..queries import QueryBuilder
 
 
 class CachingDimensionRecordStorage(DimensionRecordStorage):
@@ -55,14 +57,13 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         self._cache.clear()
         self._nested.clearCaches()
 
-    def getElementTable(self, dataId: Optional[DataId] = None) -> FromClause:
-        # Docstring inherited from DimensionRecordStorage.getElementTable.
-        return self._nested.getElementTable(dataId)
-
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None) -> FromClause:
-        # Docstring inherited from
-        # DimensionRecordStorage.getCommonSkyPixOverlapTable.
-        return self._nested.getCommonSkyPixOverlapTable(dataId)
+    def join(
+        self,
+        builder: QueryBuilder, *,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+    ):
+        self._nested.join(builder, regions=regions, timespans=timespans)
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.

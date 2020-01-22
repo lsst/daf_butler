@@ -102,13 +102,25 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
                 self.element.name
             )
 
-    def getElementTable(self, dataId: Optional[DataId] = None) -> Optional[sqlalchemy.sql.FromClause]:
+    def join(
+        self,
+        builder: QueryBuilder, *,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+    ):
+        # Docstring inherited from DimensionRecordStorage.
+        assert regions is None, "Should be guaranteed by constructor checks."
+        assert timespans is None, "Should be guaranteed by constructor checks."
+        if self._target in builder.summary.mustHaveKeysJoined:
+            # Do nothing; the target dimension is already being included, so
+            # joining against a subquery referencing it would just produce a
+            # more complicated query that's guaranteed to return the same
+            # results.
+            return
         self._ensureQuery()
-        return self._query
-
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None
-                                    ) -> Optional[sqlalchemy.sql.FromClause]:
-        return None
+        joinOn = builder.startJoin(self._query, list(self.element.graph.required),
+                                   self.element.RecordClass.__slots__)
+        builder.finishJoin(self._query, joinOn)
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.

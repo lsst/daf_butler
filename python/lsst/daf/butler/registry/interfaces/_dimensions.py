@@ -23,11 +23,14 @@ from __future__ import annotations
 __all__ = ["DimensionRecordStorage"]
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 import sqlalchemy
 
-from ...core import DataId, DimensionElement, DimensionRecord
+if TYPE_CHECKING:
+    from ..queries import QueryBuilder
+    from ..core import DataId, DimensionElement, DimensionRecord, Timespan
+    from ..core.utils import NamedKeyDict
 
 
 class DimensionRecordStorage(ABC):
@@ -63,66 +66,41 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getElementTable(self, dataId: Optional[DataId] = None) -> sqlalchemy.sql.FromClause:
-        """Return the logical table for the element as a SQLAlchemy object.
+    def join(
+        self,
+        builder: QueryBuilder, *,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+    ):
+        """Add the dimension element's logical table to a query under
+        construction.
 
-        The returned object may be a select statement or view instead of a
-        true table.
-
-        The caller is responsible for checking that the element actually has
-        a table (via `DimensionElement.hasTable`).  The exception raised when
-        this is not true is unspecified.
-
-        Parameters
-        ----------
-        dataId : `DataId`, optional
-            A data ID that restricts any query that includes the returned
-            logical table, which may be used by implementations to return
-            a simpler object in some contexts (for example, if the records
-            are split across multiple tables that in general must be combined
-            via a UNION query).  Implementations are *not* required to
-            apply a filter based on this ID, and should only do so when it
-            allows them to simplify what is returned.
-
-        Returns
-        -------
-        table : `sqlalchemy.sql.FromClause`
-            A table or table-like SQLAlchemy expression object that can be
-            included in a select query.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None
-                                    ) -> Optional[sqlalchemy.sql.FromClause]:
-        """Return the logical table that relates the given element to the
-        common skypix dimension.
-
-        The returned object may be a select statement or view instead of a
-        true table.
-
-        The caller is responsible for checking that the element actually has
-        a skypix overlap table, which is the case when
-        `DimensionElement.hasTable` and `DimensionElement.spatial` are both
-        `True`.
+        This is a visitor pattern interface that is expected to be called only
+        by `QueryBuilder.joinDimensionElement`.
 
         Parameters
         ----------
-        dataId : `DataId`, optional
-            A data ID that restricts any query that includes the returned
-            logical table, which may be used by implementations to return
-            a simpler object in some contexts (for example, if the records
-            are split across multiple tables that in general must be combined
-            via a UNION query).  Implementations are *not* required to
-            apply a filter based on this ID, and should only do so when it
-            allows them to simplify what is returned.
+        builder : `QueryBuilder`
+            Builder for the query that should contain this element.
+        regions : `NamedKeyDict`, optional
+            A mapping from `DimensionElement` to a SQLAlchemy column containing
+            the region for that element, which should be updated to include a
+            region column for this element if one exists.  If `None`,
+            ``self.element`` is not being included in the query via a spatial
+            join.
+        timespan : `NamedKeyDict`, optional
+            A mapping from `DimensionElement` to a `Timespan` of SQLALchemy
+            columns containing the timespan for that element, which should be
+            updated to include timespan columns for this element if they exist.
+            If `None`, ``self.element`` is not being included in the query via
+            a temporal join.
 
-        Returns
-        -------
-        table : `sqlalchemy.sql.FromClause` or `None`
-            A table or table-like SQLAlchemy expression object that can be
-            included in a select query.  `None` if this element has no such
-            overlap table.
+        Notes
+        -----
+        Elements are only included in queries via spatial and/or temporal joins
+        when necessary to connect them to other elements in the query, so
+        ``regions`` and ``timespans`` cannot be assumed to be not `None` just
+        because an element has a region or timespan.
         """
         raise NotImplementedError()
 

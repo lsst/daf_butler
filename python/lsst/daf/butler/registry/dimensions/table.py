@@ -26,8 +26,10 @@ from typing import Optional
 
 import sqlalchemy
 
-from ...core import DataCoordinate, DataId, DimensionElement, DimensionRecord
+from ...core import DataCoordinate, DimensionElement, DimensionRecord, Timespan, TIMESPAN_FIELD_SPECS
+from ...core.utils import NamedKeyDict
 from ..interfaces import Database, DimensionRecordStorage
+from ..queries import QueryBuilder
 
 
 class TableDimensionRecordStorage(DimensionRecordStorage):
@@ -60,12 +62,26 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def getElementTable(self, dataId: Optional[DataId] = None) -> Optional[sqlalchemy.sql.FromClause]:
-        return self._table
-
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None
-                                    ) -> Optional[sqlalchemy.sql.FromClause]:
-        return None
+    def join(
+        self,
+        builder: QueryBuilder, *,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+    ):
+        # Docstring inherited from DimensionRecordStorage.
+        assert regions is None, "This implementation does not handle spatial joins."
+        joinDimensions = list(self.element.graph.required)
+        joinDimensions.extend(self.element.implied)
+        joinOn = builder.startJoin(self._table, joinDimensions, self.element.RecordClass.__slots__)
+        if timespans is not None:
+            timespanInTable = Timespan(
+                begin=self._table.columns[TIMESPAN_FIELD_SPECS.begin.name],
+                end=self._table.columns[TIMESPAN_FIELD_SPECS.end.name],
+            )
+            for timespanInQuery in timespans.values():
+                joinOn.append(timespanInQuery.overlaps(timespanInTable, ops=sqlalchemy.sql))
+            timespans[self.element] = timespanInTable
+        builder.finishJoin(self._table, joinOn)
 
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

@@ -26,7 +26,10 @@ from typing import Optional
 
 import sqlalchemy
 
-from ...core import DataId, DimensionElement, DimensionRecord
+from ...core import DimensionElement, DimensionRecord, Timespan
+from ...core.utils import NamedKeyDict, NamedValueSet
+from ...core.dimensions.schema import REGION_FIELD_SPEC
+from ..queries import QueryBuilder
 from .table import TableDimensionRecordStorage, Database
 
 
@@ -53,10 +56,19 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         self._commonSkyPixOverlapTable = commonSkyPixOverlapTable
         assert element.spatial
 
-    def getCommonSkyPixOverlapTable(self, dataId: Optional[DataId] = None) -> sqlalchemy.schema.Table:
-        # Docstring inherited from
-        # DimensionRecordStorage.getCommonSkyPixOverlapTable.
-        return self._commonSkyPixOverlapTable
+    def join(
+        self,
+        builder: QueryBuilder, *,
+        regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
+        timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
+    ):
+        # Docstring inherited from DimensionRecordStorage.
+        if regions is not None:
+            dimensions = NamedValueSet(self.element.graph.required)
+            dimensions.add(self.element.universe.universe.commonSkyPix)
+            builder.joinTable(self._commonSkyPixOverlapTable, dimensions)
+            regions[self.element] = self._table.columns[REGION_FIELD_SPEC.name]
+        super().join(builder, regions=None, timespans=timespans)
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.
