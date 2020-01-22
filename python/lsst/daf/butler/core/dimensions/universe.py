@@ -24,14 +24,12 @@ from __future__ import annotations
 __all__ = ["DimensionUniverse"]
 
 import pickle
-from typing import Optional, Iterable, List, Dict, Union, TYPE_CHECKING
+from typing import Optional, Iterable, List, Union, TYPE_CHECKING
 
 from ..config import Config
 from ..utils import NamedValueSet, immutable
-from .. import ddl
 from .elements import Dimension, DimensionElement, SkyPixDimension
 from .graph import DimensionGraph
-from .schema import makeOverlapTableSpec, OVERLAP_TABLE_NAME_PATTERN
 from .config import processElementsConfig, processSkyPixConfig, DimensionConfig
 from .packer import DimensionPackerFactory
 
@@ -184,29 +182,6 @@ class DimensionUniverse(DimensionGraph):
         result = [element for element in self.elements if element in s or element.name in s]
         if reverse:
             result.reverse()
-        return result
-
-    def makeSchemaSpec(self) -> Dict[str, ddl.TableSpec]:
-        """Create a database-agnostic schema specification for all dimensions.
-
-        Returns
-        -------
-        spec : `dict`
-            Mapping from `str` logical table name to `ddl.TableSpec`.  Callers
-            may use other names for actual database tables, but should use
-            the keys in this dictionary when calling `setupDimensionStorage`.
-        """
-        result = {}
-        for element in self.elements:
-            if element.viewOf is not None:
-                continue
-            tableSpec = element.makeTableSpec()
-            if tableSpec is not None:
-                result[element.name] = tableSpec
-                if element.spatial:
-                    tableName = OVERLAP_TABLE_NAME_PATTERN.format(element.name, self.commonSkyPix.name)
-                    tableSpec = makeOverlapTableSpec(element, self.commonSkyPix)
-                    result[tableName] = tableSpec
         return result
 
     def makePacker(self, name: str, dataId: ExpandedDataCoordinate) -> DimensionPacker:

@@ -35,7 +35,7 @@ from ...core import (
     DatasetType,
     Timespan,
 )
-from ...core.utils import NamedKeyDict, NamedValueSet
+from ...core.utils import NamedValueSet
 
 from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
 from ._datasets import DatasetRegistryStorage, CollectionsExpression
@@ -43,7 +43,7 @@ from .expressions import ClauseVisitor
 from ._query import Query
 
 if TYPE_CHECKING:
-    from ..interfaces import DimensionRecordStorage
+    from ..interfaces import DimensionRecordStorageManager
 
 
 class QueryBuilder:
@@ -57,16 +57,15 @@ class QueryBuilder:
         to the `Query` object returned by `finish`.
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    dimensionStorage : `NamedKeyDict`
-        Storage backend objects that abstract access to dimension tables,
-        organized as a `NamedKeyDict` mapping `DimensionElement` to
-        `DimensionRecordStorage`.
+    dimensionStorage : `DimensionRecordStorageManager`
+        Manager for storage backend objects that abstract access to dimension
+        tables.
     datasetStorage : `DatasetRegistryStorage`
         Storage backend object that abstracts access to dataset tables.
     """
 
     def __init__(self, connection: Connection, summary: QuerySummary,
-                 dimensionStorage: NamedKeyDict[DimensionElement, DimensionRecordStorage],
+                 dimensionStorage: DimensionRecordStorageManager,
                  datasetStorage: DatasetRegistryStorage):
         self.summary = summary
         self._connection = connection

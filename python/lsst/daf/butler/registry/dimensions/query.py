@@ -29,7 +29,7 @@ import sqlalchemy
 from ...core import DataCoordinate, Dimension, DimensionElement, DimensionRecord, Timespan
 from ...core.dimensions.schema import makeElementTableSpec
 from ...core.utils import NamedKeyDict
-from ..interfaces import Database, DimensionRecordStorage
+from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 
 
@@ -68,6 +68,12 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             raise NotImplementedError("Cannot use query to back spatial dimension.")
         if element.temporal:
             raise NotImplementedError("Cannot use query to back temporal dimension.")
+
+    @classmethod
+    def initialize(cls, db: Database, element: DimensionElement, *,
+                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+        # Docstring inherited from DimensionRecordStorage.
+        return cls(db, element)
 
     @property
     def element(self) -> DimensionElement:

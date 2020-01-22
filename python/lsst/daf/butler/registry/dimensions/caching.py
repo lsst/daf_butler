@@ -28,7 +28,7 @@ import sqlalchemy
 
 from ...core import DataCoordinate, DimensionElement, DimensionRecord, Timespan
 from ...core.utils import NamedKeyDict
-from ..interfaces import DimensionRecordStorage
+from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 
 
@@ -42,10 +42,17 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         The other storage to cache fetches from and to delegate all other
         operations to.
     """
-
     def __init__(self, nested: DimensionRecordStorage):
         self._nested = nested
         self._cache = {}
+
+    @classmethod
+    def initialize(cls, db: Database, element: DimensionElement, *,
+                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+        # Docstring inherited from DimensionRecordStorage.
+        NestedClass = DimensionRecordStorage.getDefaultImplementation(element, ignoreCached=True)
+        nested = NestedClass.initialize(db, element, context=context)
+        return cls(nested)
 
     @property
     def element(self) -> DimensionElement:
@@ -63,6 +70,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
     ):
+        # Docstring inherited from DimensionRecordStorage.
         self._nested.join(builder, regions=regions, timespans=timespans)
 
     def insert(self, *records: DimensionRecord):

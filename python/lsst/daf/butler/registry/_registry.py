@@ -66,14 +66,17 @@ from .queries import (
     QuerySummary,
 )
 from .tables import makeRegistryTableSpecs
-from .dimensions.setup import setupDimensionStorage
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
     from ..core import (
         Quantum
     )
-    from .interfaces import Database, OpaqueTableStorageManager
+    from .interfaces import (
+        Database,
+        OpaqueTableStorageManager,
+        DimensionRecordStorageManager,
+    )
 
 
 class AmbiguousDatasetError(Exception):
@@ -185,27 +188,25 @@ class Registry:
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
                                          namespace=config.get("namespace"), writeable=writeable)
-        dimensions = DimensionUniverse(config)
+        universe = DimensionUniverse(config)
         opaque = doImport(config["managers", "opaque"])
-        return cls(database=database, dimensions=dimensions, opaque=opaque, create=create)
+        dimensions = doImport(config["managers", "dimensions"])
+        return cls(database, universe, dimensions=dimensions, opaque=opaque, create=create)
 
-    def __init__(self, database: Database, dimensions: DimensionUniverse, *,
+    def __init__(self, database: Database, universe: DimensionUniverse, *,
                  opaque: Type[OpaqueTableStorageManager],
+                 dimensions: Type[DimensionRecordStorageManager],
                  create: bool = False):
         self._db = database
-        self.dimensions = dimensions
         self.storageClasses = StorageClassFactory()
-        dimensionTables = {}
         with self._db.declareStaticTables(create=create) as context:
-            for name, spec in self.dimensions.makeSchemaSpec().items():
-                dimensionTables[name] = context.addTable(name, spec)
+            self._dimensions = dimensions.initialize(self._db, context, universe=universe)
             self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions))
             self._opaque = opaque.initialize(self._db, context)
         # TODO: we shouldn't be grabbing the private connection from the
         # Database instance like this, but it's a reasonable way to proceed
         # while we transition to using the Database API more.
         self._connection = self._db._connection
-        self._dimensionStorage = setupDimensionStorage(self._db, dimensions, dimensionTables)
         self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
                                                       universe=self.dimensions,
                                                       tables=self._tables._asdict())
@@ -225,6 +226,12 @@ class Registry:
         """
         return self._db.isWriteable()
 
+    @property
+    def dimensions(self) -> DimensionUniverse:
+        """All dimensions recognized by this `Registry` (`DimensionUniverse`).
+        """
+        return self._dimensions.universe
+
     @contextlib.contextmanager
     def transaction(self):
         """Return a context manager that represents a transaction.
@@ -236,8 +243,7 @@ class Registry:
         except BaseException:
             # TODO: this clears the caches sometimes when we wouldn't actually
             # need to.  Can we avoid that?
-            for storage in self._dimensionStorage.values():
-                storage.clearCaches()
+            self._dimensions.clearCaches()
             self._datasetTypes.clear()
             raise
 
@@ -1055,7 +1061,7 @@ class Registry:
         for element in standardized.graph._primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
-                storage = self._dimensionStorage[element]
+                storage = self._dimensions[element]
                 record = storage.fetch(keys)
                 records[element] = record
             if record is not None:
@@ -1092,7 +1098,7 @@ class Registry:
                        for row in data]
         else:
             records = data
-        storage = self._dimensionStorage[element]
+        storage = self._dimensions[element]
         storage.insert(*records)
 
     def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
@@ -1116,7 +1122,7 @@ class Registry:
             Object that can be used to construct and perform advanced queries.
         """
         return QueryBuilder(connection=self._connection, summary=summary,
-                            dimensionStorage=self._dimensionStorage,
+                            dimensionStorage=self._dimensions,
                             datasetStorage=self._datasetStorage)
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,

@@ -29,7 +29,7 @@ import sqlalchemy
 from ...core import DataCoordinate, DimensionElement, DimensionRecord, SkyPixDimension, Timespan
 from ...core.utils import NamedKeyDict
 from ..queries import QueryBuilder
-from ..interfaces import DimensionRecordStorage
+from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 
 
 class SkyPixDimensionRecordStorage(DimensionRecordStorage):
@@ -43,9 +43,14 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
     dimension : `SkyPixDimension`
         The dimension for which this instance will simulate storage.
     """
-
     def __init__(self, dimension: SkyPixDimension):
         self._dimension = dimension
+
+    @classmethod
+    def initialize(cls, db: Database, element: DimensionElement, *,
+                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+        # Docstring inherited from DimensionRecordStorage.
+        return cls(element)
 
     @property
     def element(self) -> DimensionElement:

@@ -20,17 +20,26 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DimensionRecordStorage"]
+__all__ = ["DimensionRecordStorage", "DimensionRecordStorageManager"]
 
 from abc import ABC, abstractmethod
-from typing import Optional, TYPE_CHECKING
+from typing import Optional, Type, TYPE_CHECKING
 
 import sqlalchemy
 
+from ...core import SkyPixDimension
+
 if TYPE_CHECKING:
+    from ...core import (
+        DataId,
+        DimensionElement,
+        DimensionRecord,
+        DimensionUniverse,
+        Timespan,
+    )
+    from ...core.utils import NamedKeyDict
     from ..queries import QueryBuilder
-    from ..core import DataId, DimensionElement, DimensionRecord, Timespan
-    from ..core.utils import NamedKeyDict
+    from ._database import Database, StaticTablesContext
 
 
 class DimensionRecordStorage(ABC):
@@ -47,6 +56,74 @@ class DimensionRecordStorage(ABC):
     potentially-defaultable implementations are extremely trivial, so asking
     subclasses to provide them is not a significant burden.
     """
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, element: DimensionElement, *,
+                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+        """Construct an instance of this class using a standardized interface.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        element : `DimensionElement`
+            Dimension element the new instance will manage records for.
+        context : `StaticTablesContext`, optional
+            If provided, an object to use to create any new tables.  If not
+            provided, ``db.ensureTableExists`` should be used instead.
+
+        Returns
+        -------
+        storage : `DimensionRecordStorage`
+            A new `DimensionRecordStorage` subclass instance.
+        """
+        raise NotImplementedError()
+
+    @staticmethod
+    def getDefaultImplementation(element: DimensionElement, ignoreCached: bool = False
+                                 ) -> Type[DimensionRecordStorage]:
+        """Return the default `DimensionRecordStorage` implementation for the
+        given `DimensionElement`.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            The element whose properties should be examined to determine the
+            appropriate default implementation class.
+        ignoreCached : `bool`, optional
+            If `True`, ignore `DimensionElement.cached` and always return the
+            storage implementation that would be used without caching.
+
+        Returns
+        -------
+        cls : `type`
+            A concrete subclass of `DimensionRecordStorage`.
+
+        Notes
+        -----
+        At present, these defaults are always used, but we may add support for
+        explicitly setting the class to use in configuration in the future.
+        """
+        if not ignoreCached and element.cached:
+            from ..dimensions.caching import CachingDimensionRecordStorage
+            return CachingDimensionRecordStorage
+        elif element.hasTable():
+            if element.viewOf is not None:
+                if element.spatial:
+                    raise NotImplementedError("Spatial view dimension storage is not supported.")
+                from ..dimensions.query import QueryDimensionRecordStorage
+                return QueryDimensionRecordStorage
+            elif element.spatial:
+                from ..dimensions.spatial import SpatialDimensionRecordStorage
+                return SpatialDimensionRecordStorage
+            else:
+                from ..dimensions.table import TableDimensionRecordStorage
+                return TableDimensionRecordStorage
+        elif isinstance(element, SkyPixDimension):
+            from ..dimensions.skypix import SkyPixDimensionRecordStorage
+            return SkyPixDimensionRecordStorage
+        raise NotImplementedError(f"No default DimensionRecordStorage class for {element}.")
 
     @property
     @abstractmethod
@@ -148,3 +225,132 @@ class DimensionRecordStorage(ABC):
             record.
         """
         raise NotImplementedError()
+
+
+class DimensionRecordStorageManager(ABC):
+    """An interface for managing the dimension records in a `Registry`.
+
+    `DimensionRecordStorageManager` primarily serves as a container and factory
+    for `DimensionRecordStorage` instances, which each provide access to the
+    records for a different `DimensionElement`.
+
+    Parameters
+    ----------
+    universe : `DimensionUniverse`
+        Universe of all dimensions and dimension elements known to the
+        `Registry`.
+
+    Notes
+    -----
+    In a multi-layer `Registry`, many dimension elements will only have
+    records in one layer (often the base layer).  The union of the records
+    across all layers forms the logical table for the full `Registry`.
+    """
+    def __init__(self, *, universe: DimensionUniverse):
+        self.universe = universe
+
+    @classmethod
+    @abstractmethod
+    def initialize(cls, db: Database, context: StaticTablesContext, *,
+                   universe: DimensionUniverse) -> DimensionRecordStorageManager:
+        """Construct an instance of the manager.
+
+        Parameters
+        ----------
+        db : `Database`
+            Interface to the underlying database engine and namespace.
+        context : `StaticTablesContext`
+            Context object obtained from `Database.declareStaticTables`; used
+            to declare any tables that should always be present in a layer
+            implemented with this manager.
+        universe : `DimensionUniverse`
+            Universe graph containing dimensions known to this `Registry`.
+
+        Returns
+        -------
+        manager : `DimensionRecordStorageManager`
+            An instance of a concrete `DimensionRecordStorageManager` subclass.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def refresh(self):
+        """Ensure all other operations on this manager are aware of any
+        dataset types that may have been registered by other clients since
+        it was initialized or last refreshed.
+        """
+        raise NotImplementedError()
+
+    def __getitem__(self, element: DimensionElement) -> DimensionRecordStorage:
+        """Interface to `get` that raises `LookupError` instead of returning
+        `None` on failure.
+        """
+        r = self.get(element)
+        if r is None:
+            raise LookupError(f"No dimension element '{element.name}' found in this registry layer.")
+        return r
+
+    @abstractmethod
+    def get(self, element: DimensionElement) -> Optional[DimensionRecordStorage]:
+        """Return an object that provides access to the records associated with
+        the given element, if one exists in this layer.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            Element for which records should be returned.
+
+        Returns
+        -------
+        records : `DimensionRecordStorage` or `None`
+            The object representing the records for the given element in this
+            layer, or `None` if there are no records for that element in this
+            layer.
+
+        Note
+        ----
+        Dimension elements registered by another client of the same layer since
+        the last call to `initialize` or `refresh` may not be found.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def register(self, element: DimensionElement) -> DimensionRecordStorage:
+        """Ensure that this layer can hold records for the given element,
+        creating new tables as necessary.
+
+        Parameters
+        ----------
+        element : `DimensionElement`
+            Element for which a table should created (as necessary) and
+            an associated `DimensionRecordStorage` returned.
+
+        Returns
+        -------
+        records : `DimensionRecordStorage`
+            The object representing the records for the given element in this
+            layer.
+
+        Raises
+        ------
+        TransactionInterruption
+            Raised if this operation is invoked within a `Database.transaction`
+            context.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def clearCaches(self):
+        """Clear any in-memory caches held by nested `DimensionRecordStorage`
+        instances.
+
+        This is called by `Registry` when transactions are rolled back, to
+        avoid in-memory caches from ever containing records that are not
+        present in persistent storage.
+        """
+        raise NotImplementedError()
+
+    universe: DimensionUniverse
+    """Universe of all dimensions and dimension elements known to the
+    `Registry` (`DimensionUniverse`).
+    """

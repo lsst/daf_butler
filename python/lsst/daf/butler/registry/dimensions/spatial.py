@@ -28,9 +28,15 @@ import sqlalchemy
 
 from ...core import DimensionElement, DimensionRecord, Timespan
 from ...core.utils import NamedKeyDict, NamedValueSet
-from ...core.dimensions.schema import REGION_FIELD_SPEC
+from ...core.dimensions.schema import (
+    makeElementTableSpec,
+    makeOverlapTableSpec,
+    OVERLAP_TABLE_NAME_PATTERN,
+    REGION_FIELD_SPEC
+)
+from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
-from .table import TableDimensionRecordStorage, Database
+from .table import TableDimensionRecordStorage
 
 
 class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
@@ -55,6 +61,24 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         super().__init__(db, element, table=table)
         self._commonSkyPixOverlapTable = commonSkyPixOverlapTable
         assert element.spatial
+
+    @classmethod
+    def initialize(cls, db: Database, element: DimensionElement, *,
+                   context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
+        # Docstring inherited from DimensionRecordStorage.
+        if context is not None:
+            method = context.addTable
+        else:
+            method = db.ensureTableExists
+        return cls(
+            db,
+            element,
+            table=method(element.name, makeElementTableSpec(element)),
+            commonSkyPixOverlapTable=method(
+                OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
+                makeOverlapTableSpec(element, element.universe.commonSkyPix)
+            )
+        )
 
     def join(
         self,
