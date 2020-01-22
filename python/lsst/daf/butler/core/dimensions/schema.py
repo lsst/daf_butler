@@ -24,9 +24,7 @@ __all__ = (
     "makeForeignKeySpec",
     "addDimensionForeignKey",
     "makeElementTableSpec",
-    "makeOverlapTableSpec",
     "REGION_FIELD_SPEC",
-    "OVERLAP_TABLE_NAME_PATTERN"
 )
 
 import copy
@@ -44,8 +42,6 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 # Most regions are small (they're quadrilaterals), but visit ones can be quite
 # large because they have a complicated boundary.  For HSC, about ~1400 bytes.
 REGION_FIELD_SPEC = ddl.FieldSpec(name="region", nbytes=2048, dtype=ddl.Base64Region)
-
-OVERLAP_TABLE_NAME_PATTERN = "{0}_{1}_overlap"
 
 
 def makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
@@ -169,32 +165,4 @@ def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
     if element.temporal:
         for fieldSpec in TIMESPAN_FIELD_SPECS:
             tableSpec.fields.add(fieldSpec)
-    return tableSpec
-
-
-def makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> ddl.TableSpec:
-    """Create a specification for a table that represents a many-to-many
-    relationship between two `DimensionElement` tables.
-
-    Parameters
-    ----------
-    a : `DimensionElement`
-        First element in the relationship.
-    b : `DimensionElement`
-        Second element in the relationship.
-
-    Returns
-    -------
-    spec : `TableSpec`
-        Database-agnostic specification for a table.
-    """
-    tableSpec = ddl.TableSpec(
-        fields=NamedValueSet(),
-        unique=set(),
-        foreignKeys=[],
-    )
-    for dimension in a.graph.required:
-        addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
-    for dimension in b.graph.required:
-        addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
     return tableSpec

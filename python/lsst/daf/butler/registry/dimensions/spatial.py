@@ -26,17 +26,43 @@ from typing import Optional
 
 import sqlalchemy
 
-from ...core import DimensionElement, DimensionRecord, Timespan
+from ...core import DimensionElement, DimensionRecord, Timespan, ddl
 from ...core.utils import NamedKeyDict, NamedValueSet
-from ...core.dimensions.schema import (
-    makeElementTableSpec,
-    makeOverlapTableSpec,
-    OVERLAP_TABLE_NAME_PATTERN,
-    REGION_FIELD_SPEC
-)
+from ...core.dimensions.schema import makeElementTableSpec, REGION_FIELD_SPEC, addDimensionForeignKey
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 from .table import TableDimensionRecordStorage
+
+
+_OVERLAP_TABLE_NAME_PATTERN = "{0}_{1}_overlap"
+
+
+def _makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> ddl.TableSpec:
+    """Create a specification for a table that represents a many-to-many
+    relationship between two `DimensionElement` tables.
+
+    Parameters
+    ----------
+    a : `DimensionElement`
+        First element in the relationship.
+    b : `DimensionElement`
+        Second element in the relationship.
+
+    Returns
+    -------
+    spec : `TableSpec`
+        Database-agnostic specification for a table.
+    """
+    tableSpec = ddl.TableSpec(
+        fields=NamedValueSet(),
+        unique=set(),
+        foreignKeys=[],
+    )
+    for dimension in a.graph.required:
+        addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
+    for dimension in b.graph.required:
+        addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
+    return tableSpec
 
 
 class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
@@ -75,8 +101,8 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
             element,
             table=method(element.name, makeElementTableSpec(element)),
             commonSkyPixOverlapTable=method(
-                OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
-                makeOverlapTableSpec(element, element.universe.commonSkyPix)
+                _OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
+                _makeOverlapTableSpec(element, element.universe.commonSkyPix)
             )
         )
 
