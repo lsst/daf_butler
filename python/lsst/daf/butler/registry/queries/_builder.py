@@ -101,7 +101,7 @@ class QueryBuilder:
             self._columns.regions[element] = table.columns[REGION_FIELD_SPEC.name]
         joinDimensions = list(element.graph.required)
         joinDimensions.extend(element.implied)
-        joinOn = self._startJoin(table, joinDimensions, element.RecordClass.__slots__)
+        joinOn = self.startJoin(table, joinDimensions, element.RecordClass.__slots__)
         if element in self.summary.temporal:
             intervalInTable = Timespan(
                 begin=table.columns[TIMESPAN_FIELD_SPECS.begin.name],
@@ -110,7 +110,7 @@ class QueryBuilder:
             for intervalInQuery in self._columns.timespans.values():
                 joinOn.append(intervalInQuery.overlaps(intervalInTable, ops=sqlalchemy.sql))
             self._columns.timespans[element] = intervalInTable
-        self._finishJoin(table, joinOn)
+        self.finishJoin(table, joinOn)
         self._elements[element] = table
 
     def joinToCommonSkyPix(self, element: DimensionElement):
@@ -196,15 +196,14 @@ class QueryBuilder:
             query.  The table must have columns with the names of the
             dimensions.
         """
-        joinOn = self._startJoin(table, dimensions, dimensions.names)
-        self._finishJoin(table, joinOn)
+        joinOn = self.startJoin(table, dimensions, dimensions.names)
+        self.finishJoin(table, joinOn)
 
-    def _startJoin(self, table: FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
-                   ) -> List[ColumnElement]:
+    def startJoin(self, table: FromClause, dimensions: Iterable[Dimension], columnNames: Iterable[str]
+                  ) -> List[ColumnElement]:
         """Begin a join on dimensions.
 
-        This is intended for internal use by `QueryBuilder` only.  Must be
-        followed by call to `_finishJoin`.
+        Must be followed by call to `finishJoin`.
 
         Parameters
         ----------
@@ -234,22 +233,21 @@ class QueryBuilder:
             columnsInQuery.append(columnInTable)
         return joinOn
 
-    def _finishJoin(self, table, joinOn):
+    def finishJoin(self, table, joinOn):
         """Complete a join on dimensions.
 
-        This is intended for internal use by `QueryBuilder` only.  Must be
-        preceded by call to `_startJoin`.
+        Must be preceded by call to `startJoin`.
 
         Parameters
         ----------
         table : `sqlalchemy.sql.FromClause`
             SQLAlchemy object representing the logical table (which may be a
             join or subquery expression) to be joined.  Must be the same object
-            passed to `_startJoin`.
+            passed to `startJoin`.
         joinOn : `list` of `sqlalchemy.sql.ColumnElement`
             Sequence of boolean expressions that should be combined with AND
             to form (part of) the ON expression for this JOIN.  Should include
-            at least the elements of the list returned by `_startJoin`.
+            at least the elements of the list returned by `startJoin`.
         """
         if joinOn:
             self._sql = self._sql.join(table, and_(*joinOn))
