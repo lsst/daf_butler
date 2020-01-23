@@ -22,10 +22,12 @@
 from ._config import *
 from ._registry import *
 from ._dbAuth import *
+from ._collectionType import *
 
 from . import wildcards
 from .wildcards import Like  # other symbols are mostly internal
 from . import interfaces
+from .interfaces import MissingCollectionError
 from . import queries
 
 # Some modules intentionally not imported, either because they are purely

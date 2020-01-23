@@ -19,7 +19,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._database import *
-from ._opaque import *
-from ._dimensions import *
-from ._collections import *
+__all__ = [
+    "CollectionType",
+]
+
+import enum
+
+
+class CollectionType(enum.IntEnum):
+    """Enumeration used to label different types of collections.
+    """
+
+    RUN = 1
+    """A ``RUN`` collection (also just called a 'run') is the initial
+    collection a dataset is inserted into and the only one it can never be
+    removed from.
+
+    Within a particular run, there may only be one dataset with a particular
+    dataset type and data ID.
+    """
+
+    TAGGED = 2
+    """Datasets can be associated with and removed from ``TAGGED`` collections
+    arbitrarily.
+
+    Within a particular tagged collection, there may only be one dataset with
+    a particular dataset type and data ID.
+    """
