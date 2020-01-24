@@ -35,15 +35,7 @@ You can find Jira issues for this module under the `daf_butler <https://jira.lss
 
    dev/dataCoordinate.rst
 
-.. _lsst.daf.butler-scripts:
-
-Command Line Scripts
-====================
-
-.. click:: lsst.daf.butler.cli.butler:cli
-   :prog: butler
-   :show-nested:
-
+=======
 .. _lsst.daf.butler-dimensions:
 
 The Dimensions System
@@ -54,8 +46,6 @@ The Dimensions System
 
   dimensions.rst
 
-.. _lsst.daf.butler-pyapi:
-
 Concrete Storage Classes
 ========================
 
@@ -63,6 +53,18 @@ Concrete Storage Classes
   :maxdepth: 1
 
   concreteStorageClasses.rst
+
+.. _lsst.daf.butler-scripts:
+
+Script reference
+================
+
+.. toctree::
+   :maxdepth: 1
+
+   scripts/butler.py
+
+.. _lsst.daf.butler-pyapi:
 
 Python API reference
 ====================
