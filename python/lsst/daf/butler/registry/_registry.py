@@ -154,7 +154,7 @@ class Registry:
 
     @classmethod
     def fromConfig(cls, config: Union[ButlerConfig, RegistryConfig, Config, str], create: bool = False,
-                   butlerRoot: Optional[str] = None) -> Registry:
+                   butlerRoot: Optional[str] = None, writeable: bool = True) -> Registry:
         """Create `Registry` subclass instance from `config`.
 
         Uses ``registry.cls`` from `config` to determine which subclass to
@@ -168,6 +168,8 @@ class Registry:
             Assume empty Registry and create a new one.
         butlerRoot : `str`, optional
             Path to the repository root this `Registry` will manage.
+        writeable : `bool`, optional
+            If `True` (default) create a read-write connection to the database.
 
         Returns
         -------
@@ -182,7 +184,7 @@ class Registry:
         config.replaceRoot(butlerRoot)
         DatabaseClass = config.getDatabaseClass()
         database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
-                                         namespace=config.get("namespace"))
+                                         namespace=config.get("namespace"), writeable=writeable)
         dimensions = DimensionUniverse(config)
         opaque = doImport(config["managers", "opaque"])
         return cls(database=database, dimensions=dimensions, opaque=opaque, create=create)
@@ -216,6 +218,12 @@ class Registry:
 
     def __repr__(self) -> str:
         return f"Registry({self._db!r}, {self.dimensions!r})"
+
+    def isWriteable(self) -> bool:
+        """Return `True` if this registry allows write operations, and `False`
+        otherwise.
+        """
+        return self._db.isWriteable()
 
     @contextlib.contextmanager
     def transaction(self):
