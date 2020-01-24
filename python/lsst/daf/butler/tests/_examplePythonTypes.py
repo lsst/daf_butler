@@ -25,6 +25,9 @@ large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
 
+__all__ = ("ListAssembler", "MetricsAssembler", "MetricsExample")
+
+
 import copy
 from lsst.daf.butler import CompositeAssembler
 
