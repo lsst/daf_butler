@@ -164,8 +164,8 @@ class OpaqueTableStorageManager(ABC):
             layer, or `None` if there are no records for that table in this
             layer.
 
-        Note
-        ----
+        Notes
+        -----
         Opaque tables must be registered with the layer (see `register`) by
         the same client before they can safely be retrieved with `get`.
         Unlike most other manager classes, the set of opaque tables cannot be
