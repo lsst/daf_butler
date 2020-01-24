@@ -28,24 +28,6 @@ Using the Butler
   configuring.rst
   exprParser.rst
 
-.. _lsst.daf.butler-scripts:
-
-Command Line Scripts
-====================
-
-.. autoprogram:: lsst.daf.butler.script.makeButlerRepo:build_argparser()
-   :prog: makeButlerRepo.py
-   :groups:
-
-.. autoprogram:: lsst.daf.butler.script.dumpButlerConfig:build_argparser()
-   :prog: dumpButlerConfig.py
-   :groups:
-
-.. autoprogram:: lsst.daf.butler.script.validateButlerConfiguration:build_argparser()
-   :prog: validateButlerConfiguration.py
-   :groups:
-
-
 .. _lsst.daf.butler-dimensions:
 
 The Dimensions System
@@ -56,8 +38,6 @@ The Dimensions System
 
   dimensions.rst
 
-.. _lsst.daf.butler-pyapi:
-
 Concrete Storage Classes
 ========================
 
@@ -65,6 +45,20 @@ Concrete Storage Classes
   :maxdepth: 1
 
   concreteStorageClasses.rst
+
+.. _lsst.daf.butler-scripts:
+
+Script reference
+================
+
+.. toctree::
+   :maxdepth: 1
+
+   scripts/makeButlerRepo.py
+   scripts/dumpButlerConfig.py
+   scripts/validateButlerConfiguration.py
+
+.. _lsst.daf.butler-pyapi:
 
 Python API reference
 ====================
