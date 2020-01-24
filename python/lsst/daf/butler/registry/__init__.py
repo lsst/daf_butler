@@ -23,6 +23,8 @@ from ._config import *
 from ._registry import *
 from ._dbAuth import *
 
+from . import wildcards
+from .wildcards import Like  # other symbols are mostly internal
 from . import interfaces
 from . import queries
 

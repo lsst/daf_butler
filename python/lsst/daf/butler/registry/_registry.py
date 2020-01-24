@@ -58,8 +58,8 @@ from ..core import (
 from ..core import ddl
 from ..core.utils import doImport, iterable, transactional, NamedKeyDict
 from ._config import RegistryConfig
+from .wildcards import WildcardExpression
 from .queries import (
-    CollectionsExpression,
     DatasetRegistryStorage,
     DatasetTypeExpression,
     QueryBuilder,
@@ -1127,7 +1127,7 @@ class Registry:
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
-                        datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
+                        datasets: Optional[Mapping[DatasetTypeExpression, WildcardExpression]] = None,
                         where: Optional[str] = None,
                         expand: bool = True,
                         **kwds) -> Iterator[DataCoordinate]:
@@ -1196,7 +1196,7 @@ class Registry:
                     yield result
 
     def queryDatasets(self, datasetType: DatasetTypeExpression, *,
-                      collections: CollectionsExpression,
+                      collections: WildcardExpression,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,

@@ -20,10 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("DatasetRegistryStorage", "Like", "DatasetTypeExpression", "CollectionsExpression")
+__all__ = ("DatasetRegistryStorage", "DatasetTypeExpression")
 
-from dataclasses import dataclass
-from typing import Mapping, Optional, Sequence, List, Union
+from typing import Mapping, Iterator, Sequence, Union
 
 import sqlalchemy
 
@@ -32,76 +31,10 @@ from ...core import (
     DimensionGraph,
     DimensionUniverse,
 )
+from ..wildcards import WildcardExpression, CategorizedWildcard
 
 
-@dataclass(frozen=True)
-class Like:
-    """Simple wrapper around a string pattern used to indicate that a string is
-    a pattern to be used with the SQL ``LIKE`` operator rather than a complete
-    name.
-    """
-
-    pattern: str
-    """The string pattern, in SQL ``LIKE`` syntax.
-    """
-
-
-DatasetTypeExpression = Union[DatasetType, str, Like, type(...)]
-"""Type annotation alias for the types accepted when querying for a dataset
-type.
-
-Ellipsis (``...``) is used as a full wildcard, indicating that any
-`DatasetType` will be matched.
-"""
-
-CollectionsExpression = Union[Sequence[Union[str, Like]], type(...)]
-"""Type annotation alias for the types accepted to describe the collections to
-be searched for a dataset.
-
-Ellipsis (``...``) is used as a full wildcard, indicating that all
-collections will be searched.
-"""
-
-
-def makeCollectionsWhereExpression(column: sqlalchemy.sql.ColumnElement,
-                                   collections: CollectionsExpression
-                                   ) -> Optional[sqlalchemy.sql.ColumnElement]:
-    """Construct a boolean SQL expression corresponding to a Python expression
-    for the collections to search for one or more datasets.
-
-    Parameters
-    ----------
-    column : `sqlalchemy.sql.ColumnElement`
-        The "collection" name column from a dataset subquery or table.
-    collections : `list` of `str` or `Like`, or ``...``
-        An expression indicating the collections to be searched.  This may
-        be a sequence containing complete collection names (`str` values),
-        wildcard expressions (`Like` instances) or the special value ``...``,
-        indicating all collections.
-
-    Returns
-    -------
-    where : `sqlalchemy.sql.ColumnElement` or `None`
-        A boolean SQL expression object, or `None` if all collections are to
-        be searched and hence there is no WHERE expression for the given Python
-        expression (or, more precisely, the WHERE expression is the literal
-        "true", but we don't want to pollute our SQL queries with those when
-        we can avoid it).
-    """
-    if collections is ...:
-        return None
-    terms = []
-    equalities = []
-    for collection in collections:
-        if isinstance(collection, Like):
-            terms.append(column.like(collection.pattern))
-        else:
-            equalities.append(collection)
-    if len(equalities) == 1:
-        terms.append(column == equalities[0])
-    if len(equalities) > 1:
-        terms.append(column.in_(equalities))
-    return sqlalchemy.sql.or_(*terms)
+DatasetTypeExpression = Union[DatasetType, Sequence[DatasetType], WildcardExpression]
 
 
 class DatasetRegistryStorage:
@@ -138,43 +71,21 @@ class DatasetRegistryStorage:
         self._datasetTable = tables["dataset"]
         self._datasetCollectionTable = tables["dataset_collection"]
 
-    def fetchDatasetTypes(self, datasetType: DatasetTypeExpression = ...) -> List[DatasetType]:
+    def fetchDatasetTypes(self, datasetType: DatasetTypeExpression = ...) -> Iterator[DatasetType]:
         """Retrieve `DatasetType` instances from the database matching an
         expression.
 
         Parameters
         ----------
-        datasetType : `str`, `Like`, `DatasetType`, or ``...``
-            An expression indicating the dataset type(s) to fetch.  If this is
-            a true `DatasetType` instance, it will be returned directly without
-            querying the database.  If this is a `str`, the `DatasetType`
-            matching that name will be returned if it exists.  If it is a
-            `Like` expression, dataset types whose name match the expression
-            will be returned.  The special value ``...`` fetches all dataset
-            types.  If no dataset types match, an empty `list` is returned.
+        datasetType : `DatasetType`, `str`, `Like`, sequence thereof, or `...`
+            An expression indicating the dataset type(s) to fetch.  See
+            `WildcardExpression` for more information.
 
-        Returns
+        Yields
         -------
-        datasetTypes : `list` of `DatasetType`
-            All datasets in the registry matching the given arguments.
+        datasetType
+            A dataset matching the given argument.
         """
-        if isinstance(datasetType, DatasetType):
-            # This *could* return an empty list if we could determine
-            # efficiently that there are no entries of this dataset type
-            # that match the given data ID or collections, but we are not
-            # required to do that filtering.
-            return [datasetType]
-        whereTerms = []
-        if datasetType is ...:
-            # "..." means no restriction on the dataset types; get all
-            # of them.
-            pass
-        elif isinstance(datasetType, str):
-            whereTerms.append(self._datasetTypeTable.columns.dataset_type_name == datasetType)
-        elif isinstance(datasetType, Like):
-            whereTerms.append(self._datasetTypeTable.columns.dataset_type_name.like(datasetType.pattern))
-        else:
-            raise TypeError(f"Unexpected dataset type expression '{datasetType}' in query.")
         query = sqlalchemy.sql.select([
             self._datasetTypeTable.columns.dataset_type_name,
             self._datasetTypeTable.columns.storage_class,
@@ -182,23 +93,30 @@ class DatasetRegistryStorage:
         ]).select_from(
             self._datasetTypeTable.join(self._datasetTypeDimensionsTable)
         )
-        if whereTerms:
-            query = query.where(*whereTerms)
-        # Collections and dataId arguments are currently ignored; they are
-        # provided so future code *may* restrict the list of returned dataset
-        # types, but are not required to be used.
+        wildcard = CategorizedWildcard.categorize(datasetType)
+        if wildcard is not None:
+            for item in wildcard.other:
+                if isinstance(item, DatasetType):
+                    yield item
+                else:
+                    raise TypeError(f"Object of unsupported type in dataset type expression: '{item}'.")
+            where = wildcard.makeWhereExpression(self._datasetTypeTable.columns.dataset_type_name)
+            if where is None:
+                return
+            query = query.where(where)
+        # Run the query and group by dataset type name.
         grouped = {}
         for row in self._connection.execute(query).fetchall():
             datasetTypeName, storageClassName, dimensionName = row
             _, dimensionNames = grouped.setdefault(datasetTypeName, (storageClassName, set()))
             dimensionNames.add(dimensionName)
-        return [DatasetType(datasetTypeName,
-                            dimensions=DimensionGraph(self._universe, names=dimensionNames),
-                            storageClass=storageClassName)
-                for datasetTypeName, (storageClassName, dimensionNames) in grouped.items()]
+        for datasetTypeName, (storageClassName, dimensionNames) in grouped.items():
+            yield DatasetType(datasetTypeName,
+                              dimensions=DimensionGraph(self._universe, names=dimensionNames),
+                              storageClass=storageClassName)
 
     def getDatasetSubquery(self, datasetType: DatasetType, *,
-                           collections: CollectionsExpression,
+                           collections: WildcardExpression,
                            isResult: bool = True,
                            addRank: bool = False) -> sqlalchemy.sql.FromClause:
         """Return a SQL expression that searches for a dataset of a particular
@@ -209,19 +127,16 @@ class DatasetRegistryStorage:
         datasetType : `DatasetType`
             Type of dataset to search for.  Must be a true `DatasetType`;
             call `fetchDatasetTypes` first to expand an expression if desired.
-        collections : sequence of `str` or `Like`, or ``...``
+        collections : `str`, `Like`, `list` thereof, or `...`
             An expression describing the collections in which to search for
-            the datasets.  ``...`` indicates that all collections should be
-            searched.  Returned datasets are guaranteed to be from one of the
-            given collections (unlike the behavior of the same argument in
-            `fetchDatasetTypes`).
+            the datasets.  See `WildcardExpression` for more information.
         isResult : `bool`, optional
             If `True` (default), include the ``dataset_id`` column in the
             result columns of the query.
         addRank : `bool`, optional
             If `True` (`False` is default), also include a calculated column
             that ranks the collection in which the dataset was found (lower
-            is better).  Requires that all entries in ``collections`` be
+            is better).  Requires that ``collections`` be a `list` of `str`
             regular strings, so there is a clear search order.  Ignored if
             ``isResult`` is `False`.
 
@@ -233,6 +148,7 @@ class DatasetRegistryStorage:
             ``datasetType.dimensions``; may have additional columns depending
             on the values of ``isResult`` and ``addRank``.
         """
+        wildcard = CategorizedWildcard.categorize(collections)
         # Always include dimension columns, because that's what we use to
         # join against other tables.
         columns = [self._datasetTable.columns[dimension.name] for dimension in datasetType.dimensions]
@@ -242,14 +158,10 @@ class DatasetRegistryStorage:
         if isResult:
             columns.append(self._datasetTable.columns.dataset_id)
             if addRank:
-                if collections is ...:
-                    raise TypeError("Cannot rank collections when no collections are provided.")
+                if wildcard is None or wildcard.patterns:
+                    raise TypeError("Cannot rank collections that include wildcards.")
                 ranks = {}
-                for n, collection in enumerate(collections):
-                    if isinstance(collection, Like):
-                        raise TypeError(
-                            f"Cannot rank collections that include LIKE pattern '{collection.pattern}'."
-                        )
+                for n, collection in enumerate(wildcard.strings):
                     ranks[collection] = n
                 columns.append(
                     sqlalchemy.sql.case(
@@ -258,9 +170,10 @@ class DatasetRegistryStorage:
                     ).label("rank")
                 )
         whereTerms = [self._datasetTable.columns.dataset_type_name == datasetType.name]
-        collectionsTerm = makeCollectionsWhereExpression(self._datasetCollectionTable.columns.collection,
-                                                         collections)
-        if collectionsTerm is not None:
+        if wildcard is not None:
+            collectionsTerm = wildcard.makeWhereExpression(self._datasetCollectionTable.columns.collection)
+            if collectionsTerm is None:
+                raise ValueError(f"No collections given in query for dataset type {datasetType.name}.")
             whereTerms.append(collectionsTerm)
         return sqlalchemy.sql.select(
             columns

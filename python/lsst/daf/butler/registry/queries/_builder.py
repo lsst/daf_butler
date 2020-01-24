@@ -37,8 +37,9 @@ from ...core import (
 )
 from ...core.utils import NamedValueSet
 
+from ..wildcards import WildcardExpression
 from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
-from ._datasets import DatasetRegistryStorage, CollectionsExpression
+from ._datasets import DatasetRegistryStorage
 from .expressions import ClauseVisitor
 from ._query import Query
 
@@ -108,7 +109,7 @@ class QueryBuilder:
         )
         self._elements.add(element)
 
-    def joinDataset(self, datasetType: DatasetType, collections: CollectionsExpression, *,
+    def joinDataset(self, datasetType: DatasetType, collections: WildcardExpression, *,
                     isResult: bool = True, addRank: bool = False):
         """Add a dataset search or constraint to the query.
 
