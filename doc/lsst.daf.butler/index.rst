@@ -37,41 +37,6 @@ You can find Jira issues for this module under the `daf_butler <https://jira.lss
 
    dev/dataCoordinate.rst
 
-.. _lsst.daf.butler-scripts:
-
-Command Line Scripts
-====================
-
-.. click:: lsst.daf.butler.cli.butler:cli
-   :prog: butler
-   :show-nested:
-
-Specifying Command-Line Options from a File
--------------------------------------------
-
-Many of the ``butler`` subcommands support the ability to provide default command-line options from an external text file.
-This is done with the ``-@`` (or ``--options-file``) option.
-A YAML file can be supplied with new default values for any of the options, grouped by subcommand.
-
-.. code-block:: yaml
-
-   config-dump:
-     subset: .datastore
-   ingest-raws:
-     config: keyword=value
-
-For example, if the above file is called ``defaults.yaml`` then calling
-
-.. prompt:: bash
-
-   butler config-dump -@defaults.yaml myrepo
-
-would only report the datastore section of the config.
-
-.. note::
-
-  Options explicitly given on the command-line always take precedence over those specified from an external options file.
-
 .. _lsst.daf.butler-dimensions:
 
 The Dimensions System
@@ -82,8 +47,6 @@ The Dimensions System
 
   dimensions.rst
 
-.. _lsst.daf.butler-pyapi:
-
 Concrete Storage Classes
 ========================
 
@@ -91,6 +54,18 @@ Concrete Storage Classes
   :maxdepth: 1
 
   concreteStorageClasses.rst
+
+.. _lsst.daf.butler-scripts:
+
+Script reference
+================
+
+.. toctree::
+   :maxdepth: 1
+
+   scripts/butler.py
+
+.. _lsst.daf.butler-pyapi:
 
 Python API reference
 ====================
