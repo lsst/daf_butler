@@ -30,7 +30,7 @@ from lsst.utils import doImport
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatastoreConfig
 
-from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
+from lsst.daf.butler.tests import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
 
 from dummyRegistry import DummyRegistry
 

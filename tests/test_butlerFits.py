@@ -44,8 +44,8 @@ from lsst.daf.butler import Butler, Config
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType
 from lsst.daf.butler.core.location import ButlerURI
-from datasetsHelper import FitsCatalogDatasetsHelper, DatasetTestHelper
 from lsst.daf.butler.core.s3utils import setAwsEnvCredentials, unsetAwsEnvCredentials
+from lsst.daf.butler.tests import FitsCatalogDatasetsHelper, DatasetTestHelper
 
 try:
     import lsst.afw.image

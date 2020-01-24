@@ -26,7 +26,7 @@ import inspect
 import os.path
 import unittest
 
-from datasetsHelper import DatasetTestHelper
+from lsst.daf.butler.tests import DatasetTestHelper
 from lsst.daf.butler import (Formatter, FormatterFactory, StorageClass, DatasetType, Config,
                              FileDescriptor, Location, DimensionUniverse, DimensionGraph)
 

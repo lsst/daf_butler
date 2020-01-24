@@ -56,7 +56,7 @@ from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 
-from datasetsHelper import MultiDetectorFormatter
+from lsst.daf.butler.tests import MultiDetectorFormatter
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

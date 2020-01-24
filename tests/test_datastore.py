@@ -26,14 +26,15 @@ import yaml
 import tempfile
 import lsst.utils
 
+from lsst.utils import doImport
+
 from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse, FileDataset
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
 from lsst.daf.butler import ButlerURI
 from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
 
-from lsst.utils import doImport
-
-from datasetsHelper import DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter, BadNoWriteFormatter
+from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
+                                   BadNoWriteFormatter)
 from examplePythonTypes import MetricsExample
 
 from dummyRegistry import DummyRegistry
