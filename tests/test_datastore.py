@@ -34,10 +34,8 @@ from lsst.daf.butler import ButlerURI
 from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
 
 from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
-                                   BadNoWriteFormatter)
+                                   BadNoWriteFormatter, DummyRegistry)
 from examplePythonTypes import MetricsExample
-
-from dummyRegistry import DummyRegistry
 
 
 TESTDIR = os.path.dirname(__file__)

@@ -30,9 +30,8 @@ from lsst.utils import doImport
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatastoreConfig
 
-from lsst.daf.butler.tests import FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper
-
-from dummyRegistry import DummyRegistry
+from lsst.daf.butler.tests import (FitsCatalogDatasetsHelper, DatasetTestHelper, DatastoreTestHelper,
+                                   DummyRegistry)
 
 try:
     import lsst.afw.table
