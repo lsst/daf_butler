@@ -4,7 +4,7 @@ storageClasses:
     pytype: dict
   StructuredDataListYaml:
     pytype: list
-    assembler: examplePythonTypes.ListAssembler
+    assembler: lsst.daf.butler.tests.ListAssembler
     parameters:
       - slice
   StructuredDataDictJson:
@@ -17,14 +17,14 @@ storageClasses:
     pytype: list
   StructuredDataNoComponents:
     # Reading and writing a blob and no components known
-    pytype: examplePythonTypes.MetricsExample
-    assembler: examplePythonTypes.MetricsAssembler
+    pytype: lsst.daf.butler.tests.MetricsExample
+    assembler: lsst.daf.butler.tests.MetricsAssembler
     parameters:
       - slice
   StructuredData:
     # Data from a simple Python class
-    pytype: examplePythonTypes.MetricsExample
-    assembler: examplePythonTypes.MetricsAssembler
+    pytype: lsst.daf.butler.tests.MetricsExample
+    assembler: lsst.daf.butler.tests.MetricsAssembler
     # Use YAML formatter by default
     components:
       # Components are those supported by get.
