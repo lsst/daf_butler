@@ -30,7 +30,6 @@ from sqlalchemy.engine import Connection
 
 from ...core import (
     DatasetType,
-    ExpandedDataCoordinate,
     DimensionGraph,
     DimensionUniverse,
 )
@@ -139,9 +138,7 @@ class DatasetRegistryStorage:
         self._datasetTable = tables["dataset"]
         self._datasetCollectionTable = tables["dataset_collection"]
 
-    def fetchDatasetTypes(self, datasetType: DatasetTypeExpression = ..., *,
-                          collections: CollectionsExpression = ...,
-                          dataId: Optional[ExpandedDataCoordinate] = None) -> List[DatasetType]:
+    def fetchDatasetTypes(self, datasetType: DatasetTypeExpression = ...) -> List[DatasetType]:
         """Retrieve `DatasetType` instances from the database matching an
         expression.
 
@@ -155,18 +152,6 @@ class DatasetRegistryStorage:
             `Like` expression, dataset types whose name match the expression
             will be returned.  The special value ``...`` fetches all dataset
             types.  If no dataset types match, an empty `list` is returned.
-        collections : sequence of `str` or `Like`, or ``...``
-            An expression indicating collections that *may* be used to limit
-            the dataset types returned to only those that might have datasets
-            in these collections.  This is intended as an optimization for
-            higher-level functionality; it may simply be ignored, and cannot
-            be relied upon to filter the returned dataset types.
-        dataId : `ExpandedDataCoordinate`, optional
-            A data ID that *may* be used to limit the dataset types returned
-            to only those with datasets matching the given data ID.  This is
-            intended as an optimization for higher-level functionality; it may
-            simply be ignored, and cannot be relied upon to filter the returned
-            dataset types.
 
         Returns
         -------
@@ -214,7 +199,6 @@ class DatasetRegistryStorage:
 
     def getDatasetSubquery(self, datasetType: DatasetType, *,
                            collections: CollectionsExpression,
-                           dataId: Optional[ExpandedDataCoordinate] = None,
                            isResult: bool = True,
                            addRank: bool = False) -> FromClause:
         """Return a SQL expression that searches for a dataset of a particular
@@ -231,12 +215,6 @@ class DatasetRegistryStorage:
             searched.  Returned datasets are guaranteed to be from one of the
             given collections (unlike the behavior of the same argument in
             `fetchDatasetTypes`).
-        dataId : `ExpandedDataCoordinate`, optional
-            A data ID that *may* be used to limit the datasets returned
-            to only those matching the given data ID.  This is intended as an
-            optimization for higher-level functionality; it may simply be
-            ignored, and cannot be relied upon to filter the returned dataset
-            types.
         isResult : `bool`, optional
             If `True` (default), include the ``dataset_id`` column in the
             result columns of the query.

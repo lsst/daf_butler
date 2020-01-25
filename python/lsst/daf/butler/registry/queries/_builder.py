@@ -141,7 +141,6 @@ class QueryBuilder:
         """
         assert datasetType.dimensions.issubset(self.summary.requested)
         table = self._datasetStorage.getDatasetSubquery(datasetType, collections=collections,
-                                                        dataId=self.summary.dataId,
                                                         isResult=isResult, addRank=addRank)
         self.joinTable(table, datasetType.dimensions)
         if isResult:

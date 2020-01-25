@@ -1174,9 +1174,7 @@ class Registry:
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
         if datasets is not None:
             for datasetTypeExpr, collectionsExpr in datasets.items():
-                for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetTypeExpr,
-                                                                              collections=collectionsExpr,
-                                                                              dataId=standardizedDataId):
+                for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetTypeExpr):
                     requestedDimensionNames.update(trueDatasetType.dimensions.names)
                     standardizedDatasets[trueDatasetType] = collectionsExpr
         summary = QuerySummary(
@@ -1279,9 +1277,7 @@ class Registry:
         # (it could be an expression that yields multiple DatasetTypes) and
         # recurse.
         if not isinstance(datasetType, DatasetType):
-            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType,
-                                                                          collections=collections,
-                                                                          dataId=standardizedDataId):
+            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType):
                 yield from self.queryDatasets(trueDatasetType, collections=collections,
                                               dimensions=dimensions, dataId=standardizedDataId,
                                               where=where, deduplicate=deduplicate)
