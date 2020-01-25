@@ -25,8 +25,7 @@ __all__ = ("DatasetRegistryStorage", "Like", "DatasetTypeExpression", "Collectio
 from dataclasses import dataclass
 from typing import Mapping, Optional, Sequence, List, Union
 
-from sqlalchemy.sql import FromClause, select, case, and_, or_, ColumnElement
-from sqlalchemy.engine import Connection
+import sqlalchemy
 
 from ...core import (
     DatasetType,
@@ -64,8 +63,9 @@ collections will be searched.
 """
 
 
-def makeCollectionsWhereExpression(column: ColumnElement,
-                                   collections: CollectionsExpression) -> Optional[ColumnElement]:
+def makeCollectionsWhereExpression(column: sqlalchemy.sql.ColumnElement,
+                                   collections: CollectionsExpression
+                                   ) -> Optional[sqlalchemy.sql.ColumnElement]:
     """Construct a boolean SQL expression corresponding to a Python expression
     for the collections to search for one or more datasets.
 
@@ -101,7 +101,7 @@ def makeCollectionsWhereExpression(column: ColumnElement,
         terms.append(column == equalities[0])
     if len(equalities) > 1:
         terms.append(column.in_(equalities))
-    return or_(*terms)
+    return sqlalchemy.sql.or_(*terms)
 
 
 class DatasetRegistryStorage:
@@ -129,8 +129,8 @@ class DatasetRegistryStorage:
     allow the initial `QueryBuilder` design and implementation to be more
     forward-looking.
     """
-    def __init__(self, connection: Connection, universe: DimensionUniverse,
-                 tables: Mapping[str, FromClause]):
+    def __init__(self, connection: sqlalchemy.engine.Connection, universe: DimensionUniverse,
+                 tables: Mapping[str, sqlalchemy.sql.FromClause]):
         self._connection = connection
         self._universe = universe
         self._datasetTypeTable = tables["dataset_type"]
@@ -175,7 +175,7 @@ class DatasetRegistryStorage:
             whereTerms.append(self._datasetTypeTable.columns.dataset_type_name.like(datasetType.pattern))
         else:
             raise TypeError(f"Unexpected dataset type expression '{datasetType}' in query.")
-        query = select([
+        query = sqlalchemy.sql.select([
             self._datasetTypeTable.columns.dataset_type_name,
             self._datasetTypeTable.columns.storage_class,
             self._datasetTypeDimensionsTable.columns.dimension_name,
@@ -200,7 +200,7 @@ class DatasetRegistryStorage:
     def getDatasetSubquery(self, datasetType: DatasetType, *,
                            collections: CollectionsExpression,
                            isResult: bool = True,
-                           addRank: bool = False) -> FromClause:
+                           addRank: bool = False) -> sqlalchemy.sql.FromClause:
         """Return a SQL expression that searches for a dataset of a particular
         type in one or more collections.
 
@@ -252,7 +252,7 @@ class DatasetRegistryStorage:
                         )
                     ranks[collection] = n
                 columns.append(
-                    case(
+                    sqlalchemy.sql.case(
                         ranks,
                         value=self._datasetCollectionTable.columns.collection
                     ).label("rank")
@@ -262,10 +262,10 @@ class DatasetRegistryStorage:
                                                          collections)
         if collectionsTerm is not None:
             whereTerms.append(collectionsTerm)
-        return select(
+        return sqlalchemy.sql.select(
             columns
         ).select_from(
             self._datasetTable.join(self._datasetCollectionTable)
         ).where(
-            and_(*whereTerms)
+            sqlalchemy.sql.and_(*whereTerms)
         ).alias(datasetType.name)
