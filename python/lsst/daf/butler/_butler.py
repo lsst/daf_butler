@@ -87,12 +87,11 @@ class Butler:
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config`` and ``searchPaths`` arguments.
     collection : `str`, optional
-        Collection to use for all input lookups, overriding
-        config["collection"] if provided.
+        Collection to use for all input lookups.
     run : `str`, optional
         Name of the run datasets should be output to; also used as a tagged
         collection name these dataset will be associated with.  If the run
-        does not exist, it will be created.  If "collection" is None, this
+        does not exist, it will be created.  If ``collection`` is `None`, this
         collection will be used for input lookups as well; if not, it must have
         the same value as "run".
     searchPaths : `list` of `str`, optional
@@ -252,20 +251,14 @@ class Butler:
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self.config)
             self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
-        if run is None:
-            self.run = self.config.get("run", None)
-        else:
-            self.run = run
-            # if run *arg* is not None and collection arg is, use run for
-            # collection.
-            if collection is None:
-                collection = run
-        if collection is None:  # didn't get a collection from collection or run *args*
-            collection = self.config.get("collection", None)
-            if collection is None:  # didn't get a collection from config["collection"]
-                collection = self.run    # get collection from run found in config
+        if "run" in self.config or "collection" in self.config:
+            raise ValueError("Passing a run or collection via configuration is no longer supported.")
+        self.run = run
+        # if run is not None and collection arg is, use run for collection.
         if collection is None:
-            raise ValueError("No run or collection provided.")
+            collection = run
+            if collection is None:  # didn't get a collection from collection or run
+                raise ValueError("No run or collection provided.")
         if self.run is not None and collection != self.run:
             raise ValueError(
                 "Run ({}) and collection ({}) are inconsistent.".format(self.run, collection)

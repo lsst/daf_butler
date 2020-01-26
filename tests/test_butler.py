@@ -139,7 +139,7 @@ class ButlerTests:
     def testConstructor(self):
         """Independent test of constructor.
         """
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
         collections = butler.registry.getAllCollections()
@@ -158,7 +158,7 @@ class ButlerTests:
         self.runPutGetTest(storageClass, "test_metric_comp")
 
     def runPutGetTest(self, storageClass, datasetTypeName):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
 
         # There will not be a collection yet
         collections = butler.registry.getAllCollections()
@@ -302,7 +302,7 @@ class ButlerTests:
         return butler
 
     def testIngest(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
 
         # Create and register a DatasetType
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "detector"])
@@ -395,7 +395,7 @@ class ButlerTests:
     def testPickle(self):
         """Test pickle support.
         """
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut.config, butler.config)
@@ -403,7 +403,7 @@ class ButlerTests:
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries = [
             ("instrument", {"instrument": "DummyCam"}, {"instrument": "DummyHSC"},
@@ -450,7 +450,7 @@ class ButlerTests:
                                              "datasetType.component"])
 
     def testTransaction(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         datasetTypeName = "test_metric"
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
@@ -537,7 +537,7 @@ class ButlerTests:
             Butler(butlerConfig, collection="ingest")
 
     def testStringification(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         butlerStr = str(butler)
 
         if self.datastoreStr is not None:
@@ -568,7 +568,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
@@ -642,7 +642,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
                 Butler.makeRepo(importDir, config=Config(self.configFile))
-                importButler = Butler(importDir)
+                importButler = Butler(importDir, run="ingest")
                 importButler.import_(filename=exportFile, directory=exportButler.datastore.root,
                                      transfer="symlink")
                 for ref in datasets:
@@ -718,27 +718,6 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.dir2, "butler2.yaml")))
         self.assertFalse(os.path.exists(os.path.join(self.dir1, "butler.yaml")))
         self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
-
-
-class ButlerConfigNoRunTestCase(unittest.TestCase):
-    """Test case for butler config which does not have ``run``.
-    """
-    configFile = os.path.join(TESTDIR, "config/basic/butler-norun.yaml")
-
-    def testPickle(self):
-        """Test pickle support.
-        """
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
-        Butler.makeRepo(self.root, config=Config(self.configFile))
-        self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
-        butler = Butler(self.tmpConfigFile, run="ingest")
-        butlerOut = pickle.loads(pickle.dumps(butler))
-        self.assertIsInstance(butlerOut, Butler)
-        self.assertEqual(butlerOut.config, butler.config)
-
-    def tearDown(self):
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")

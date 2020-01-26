@@ -103,7 +103,7 @@ class ButlerFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper):
     def runExposureCompositePutGetTest(self, storageClass, datasetTypeName):
         example = os.path.join(TESTDIR, "data", "basic", "small.fits")
         exposure = lsst.afw.image.ExposureF(example)
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         self.registerDatasetTypes(datasetTypeName, dimensions, storageClass, butler.registry)
         dataId = {"visit": 42, "instrument": "DummyCam", "physical_filter": "d-r"}
