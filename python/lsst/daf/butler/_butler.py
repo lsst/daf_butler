@@ -22,6 +22,7 @@
 """
 Butler top level classes.
 """
+from __future__ import annotations
 
 __all__ = ("Butler", "ButlerValidationError")
 
@@ -228,9 +229,34 @@ class Butler:
         Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
         return config
 
+    @classmethod
+    def _unpickle(cls, config: ButlerConfig, collection: str, run: typing.Optional[str]) -> Butler:
+        """Callable used to unpickle a Butler.
+
+        We prefer not to use ``Butler.__init__`` directly so we can force some
+        of its many arguments to be keyword-only (note that ``__reduce__``
+        can only invoke callables with positional arguments).
+
+        Parameters
+        ----------
+        config : `ButlerConfig`
+            Butler configuration, already coerced into a true `ButlerConfig`
+            instance (and hence after any search paths for overrides have been
+            utilized).
+        collection : `str`
+            String name of a collection to use for read operations.
+        run : `str`, optional
+            String name of a run to use for write operations, or `None` for a
+            read-only butler.
+
+        Returns
+        -------
+        butler : `Butler`
+            A new `Butler` instance.
+        """
+        return cls(config=config, collection=collection, run=run)
+
     def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
-        # save arguments for pickling
-        self._args = (config, butler, collection, run, searchPaths)
         if butler is not None:
             if config is not None or searchPaths is not None:
                 raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
@@ -240,7 +266,6 @@ class Butler:
             self.composites = butler.composites
             self.config = butler.config
         else:
-            # save arguments for pickling
             self.config = ButlerConfig(config, searchPaths=searchPaths)
             if "root" in self.config:
                 butlerRoot = self.config["root"]
@@ -270,7 +295,7 @@ class Butler:
     def __reduce__(self):
         """Support pickling.
         """
-        return (Butler, self._args)
+        return (Butler._unpickle, (self.config, self.collection, self.run))
 
     def __str__(self):
         return "Butler(collection='{}', datastore='{}', registry='{}')".format(
