@@ -30,7 +30,18 @@ import os
 from collections import defaultdict
 import contextlib
 import logging
-import typing
+from typing import (
+    Any,
+    ClassVar,
+    ContextManager,
+    Dict,
+    Iterable,
+    List,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 try:
     import boto3
@@ -49,6 +60,7 @@ from .core.exceptions import ValidationError
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.location import ButlerURI
+from .core.quantum import Quantum
 from .core.repoTransfers import RepoExport, FileDataset
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
@@ -106,7 +118,9 @@ class Butler:
         Raised if neither "collection" nor "run" are provided by argument or
         config, or if both are provided and are inconsistent.
     """
-    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
+    def __init__(self, config: Union[Config, str, None] = None, butler: Optional[Butler] = None,
+                 collection: Optional[str] = None, run: Optional[str] = None,
+                 searchPaths: Optional[List[str]] = None):
         if butler is not None:
             if config is not None or searchPaths is not None:
                 raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
@@ -142,7 +156,7 @@ class Butler:
         if self.run is not None:
             self.registry.registerRun(self.run)
 
-    GENERATION = 3
+    GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
 
     This attribute may be removed in the future, once the Generation 2 Butler
@@ -151,8 +165,9 @@ class Butler:
     """
 
     @staticmethod
-    def makeRepo(root, config=None, standalone=False, createRegistry=True, searchPaths=None,
-                 forceConfigRoot=True, outfile=None):
+    def makeRepo(root: str, config: Union[Config, str, None] = None, standalone: bool = False,
+                 createRegistry: bool = True, searchPaths: Optional[List[str]] = None,
+                 forceConfigRoot: bool = True, outfile: Optional[str] = None) -> Config:
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -265,7 +280,7 @@ class Butler:
         return config
 
     @classmethod
-    def _unpickle(cls, config: ButlerConfig, collection: str, run: typing.Optional[str]) -> Butler:
+    def _unpickle(cls, config: ButlerConfig, collection: str, run: Optional[str]) -> Butler:
         """Callable used to unpickle a Butler.
 
         We prefer not to use ``Butler.__init__`` directly so we can force some
@@ -310,7 +325,8 @@ class Butler:
             with self.datastore.transaction():
                 yield
 
-    def _standardizeArgs(self, datasetRefOrType, dataId=None, **kwds):
+    def _standardizeArgs(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                         dataId: Optional[DataId] = None, **kwds: Any) -> Tuple[DatasetType, DataId]:
         """Standardize the arguments passed to several Butler APIs.
 
         Parameters
@@ -362,7 +378,10 @@ class Butler:
         return datasetType, dataId
 
     @transactional
-    def put(self, obj, datasetRefOrType, dataId=None, producer=None, **kwds):
+    def put(self, obj: Any, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+            dataId: Optional[DataId] = None, *,
+            producer: Optional[Quantum] = None,
+            **kwds: Any) -> DatasetRef:
         """Store and register a dataset.
 
         Parameters
@@ -423,7 +442,7 @@ class Butler:
 
         return ref
 
-    def getDirect(self, ref, parameters=None):
+    def getDirect(self, ref: DatasetRef, *, parameters: Optional[Dict[str, Any]] = None):
         """Retrieve a stored dataset.
 
         Unlike `Butler.get`, this method allows datasets outside the Butler's
@@ -473,9 +492,10 @@ class Butler:
             # single entity in datastore
             raise FileNotFoundError(f"Unable to locate dataset '{ref}' in datastore {self.datastore.name}")
 
-    def getDeferred(self, datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
-                    dataId: typing.Optional[DataId] = None, parameters: typing.Union[dict, None] = None,
-                    **kwds) -> DeferredDatasetHandle:
+    def getDeferred(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                    dataId: Optional[DataId] = None, *,
+                    parameters: Union[dict, None] = None,
+                    **kwds: Any) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset
 
         Parameters
@@ -501,7 +521,10 @@ class Butler:
         """
         return DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
 
-    def get(self, datasetRefOrType, dataId=None, parameters=None, **kwds):
+    def get(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+            dataId: Optional[DataId] = None, *,
+            parameters: Optional[Dict[str, Any]] = None,
+            **kwds: Any) -> Any:
         """Retrieve a stored dataset.
 
         Parameters
@@ -543,7 +566,10 @@ class Butler:
             raise ValueError("DatasetRef.id does not match id in registry")
         return self.getDirect(ref, parameters=parameters)
 
-    def getUri(self, datasetRefOrType, dataId=None, predict=False, **kwds):
+    def getUri(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+               dataId: Optional[DataId] = None, *,
+               predict: bool = False,
+               **kwds: Any) -> str:
         """Return the URI to the Dataset.
 
         Parameters
@@ -592,7 +618,9 @@ class Butler:
                 raise FileNotFoundError(f"Dataset {datasetType} {dataId} does not exist in Registry.")
         return self.datastore.getUri(ref, predict)
 
-    def datasetExists(self, datasetRefOrType, dataId=None, **kwds):
+    def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                      dataId: Optional[DataId] = None,
+                      **kwds: Any) -> bool:
         """Return True if the Dataset is actually present in the Datastore.
 
         Parameters
@@ -623,7 +651,9 @@ class Butler:
             )
         return self.datastore.exists(ref)
 
-    def remove(self, datasetRefOrType, dataId=None, *, delete=True, remember=True, **kwds):
+    def remove(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+               dataId: Optional[DataId] = None, *,
+               delete: bool = True, remember: bool = True, **kwds: Any):
         """Remove a dataset from the collection and possibly the repository.
 
         The identified dataset is always at least removed from the Butler's
@@ -695,7 +725,7 @@ class Butler:
             self.registry.removeDataset(ref)
 
     @transactional
-    def ingest(self, *datasets: FileDataset, transfer: typing.Optional[str] = None):
+    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None):
         """Store and register one or more datasets that already exist on disk.
 
         Parameters
@@ -751,8 +781,8 @@ class Butler:
         # to hold the resolved DatasetRefs returned by the Registry, before
         # it's safe to swap them into FileDataset.refs.
         # Some type annotation aliases to make that clearer:
-        GroupForType = typing.Dict[DataCoordinate, typing.Tuple[FileDataset, typing.List[DatasetRef]]]
-        GroupedData = typing.MutableMapping[DatasetType, GroupForType]
+        GroupForType = Dict[DataCoordinate, Tuple[FileDataset, List[DatasetRef]]]
+        GroupedData = MutableMapping[DatasetType, GroupForType]
         # The actual data structure:
         groupedData: GroupedData = defaultdict(dict)
         # And the nested loop that populates it:
@@ -784,10 +814,10 @@ class Butler:
         self.datastore.ingest(*datasets, transfer=transfer)
 
     @contextlib.contextmanager
-    def export(self, *, directory: typing.Optional[str] = None,
-               filename: typing.Optional[str] = None,
-               format: typing.Optional[str] = None,
-               transfer: typing.Optional[str] = None) -> typing.ContextManager[RepoExport]:
+    def export(self, *, directory: Optional[str] = None,
+               filename: Optional[str] = None,
+               format: Optional[str] = None,
+               transfer: Optional[str] = None) -> ContextManager[RepoExport]:
         """Export datasets from the repository represented by this `Butler`.
 
         This method is a context manager that returns a helper object
@@ -855,10 +885,10 @@ class Butler:
                 else:
                     helper._finish()
 
-    def import_(self, *, directory: typing.Optional[str] = None,
-                filename: typing.Optional[str] = None,
-                format: typing.Optional[str] = None,
-                transfer: typing.Optional[str] = None):
+    def import_(self, *, directory: Optional[str] = None,
+                filename: Optional[str] = None,
+                format: Optional[str] = None,
+                transfer: Optional[str] = None):
         """Import datasets exported from a different butler repository.
 
         Parameters
@@ -899,7 +929,9 @@ class Butler:
             with self.transaction():
                 backend.load(self.datastore, directory=directory, transfer=transfer)
 
-    def validateConfiguration(self, logFailures=False, datasetTypeNames=None, ignore=None):
+    def validateConfiguration(self, logFailures: bool = False,
+                              datasetTypeNames: Optional[Iterable[str]] = None,
+                              ignore: Iterable[str] = None):
         """Validate butler configuration.
 
         Checks that each `DatasetType` can be stored in the `Datastore`.
