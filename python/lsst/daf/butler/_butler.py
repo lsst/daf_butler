@@ -49,19 +49,25 @@ except ImportError:
     boto3 = None
 
 from lsst.utils import doImport
-from .core.utils import transactional, getClassOf
-from .core.datasets import DatasetRef, DatasetType
-from .core.datastore import Datastore
-from .core.storageClass import StorageClassFactory
-from .core.config import Config, ConfigSubset
-from .core.composites import CompositesMap
-from .core.dimensions import DataCoordinate, DataId
-from .core.exceptions import ValidationError
+from .core import (
+    ButlerURI,
+    CompositesMap,
+    Config,
+    ConfigSubset,
+    DataCoordinate,
+    DataId,
+    DatasetRef,
+    DatasetType,
+    Datastore,
+    FileDataset,
+    Quantum,
+    RepoExport,
+    StorageClassFactory,
+    ValidationError,
+)
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
-from .core.location import ButlerURI
-from .core.quantum import Quantum
-from .core.repoTransfers import RepoExport, FileDataset
+from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig
