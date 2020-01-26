@@ -135,20 +135,20 @@ class Butler:
             self.registry = butler.registry
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
-            self.composites = butler.composites
-            self.config = butler.config
+            self._composites = butler._composites
+            self._config = butler._config
         else:
-            self.config = ButlerConfig(config, searchPaths=searchPaths)
-            if "root" in self.config:
-                butlerRoot = self.config["root"]
+            self._config = ButlerConfig(config, searchPaths=searchPaths)
+            if "root" in self._config:
+                butlerRoot = self._config["root"]
             else:
-                butlerRoot = self.config.configDir
-            self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
-            self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
+                butlerRoot = self._config.configDir
+            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot)
+            self.datastore = Datastore.fromConfig(self._config, self.registry, butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
-            self.storageClasses.addFromConfig(self.config)
-            self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
-        if "run" in self.config or "collection" in self.config:
+            self.storageClasses.addFromConfig(self._config)
+            self._composites = CompositesMap(self._config, universe=self.registry.dimensions)
+        if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
         self.run = run
         # if run is not None and collection arg is, use run for collection.
@@ -317,7 +317,7 @@ class Butler:
     def __reduce__(self):
         """Support pickling.
         """
-        return (Butler._unpickle, (self.config, self.collection, self.run))
+        return (Butler._unpickle, (self._config, self.collection, self.run))
 
     def __str__(self):
         return "Butler(collection='{}', datastore='{}', registry='{}')".format(
@@ -429,7 +429,7 @@ class Butler:
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
             raise ValueError("DatasetRef must not be in registry, must have None id")
 
-        isVirtualComposite = self.composites.shouldBeDisassembled(datasetType)
+        isVirtualComposite = self._composites.shouldBeDisassembled(datasetType)
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.
@@ -880,7 +880,7 @@ class Butler:
             filename = f"export.{format}"
         if directory is not None:
             filename = os.path.join(directory, filename)
-        BackendClass = getClassOf(self.config["repo_transfer_formats"][format]["export"])
+        BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["export"])
         with open(filename, 'w') as stream:
             backend = BackendClass(stream)
             with self.transaction():
@@ -930,7 +930,7 @@ class Butler:
             filename = f"export.{format}"
         if directory is not None and not os.path.exists(filename):
             filename = os.path.join(directory, filename)
-        BackendClass = getClassOf(self.config["repo_transfer_formats"][format]["import"])
+        BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["import"])
         with open(filename, 'r') as stream:
             backend = BackendClass(stream, self.registry)
             backend.register()
@@ -1057,3 +1057,31 @@ class Butler:
 
         if messages:
             raise ValidationError(";\n".join(messages))
+
+    registry: Registry
+    """The object that manages dataset metadata and relationships (`Registry`).
+
+    Most operations that don't involve reading or writing butler datasets are
+    accessible only via `Registry` methods.
+    """
+
+    datastore: Datastore
+    """The object that manages actual dataset storage (`Datastore`).
+
+    Direct user access to the datastore should rarely be necessary; the primary
+    exception is the case where a `Datastore` implementation provides extra
+    functionality beyond what the base class defines.
+    """
+
+    storageClasses: StorageClassFactory
+    """An object that maps known storage class names to objects that fully
+    describe them (`StorageClassFactory`).
+    """
+
+    run: Optional[str]
+    """Name of the run this butler writes outputs to (`str` or `None`).
+    """
+
+    collection: str
+    """Name of the collection this butler searches for datasets (`str`).
+    """

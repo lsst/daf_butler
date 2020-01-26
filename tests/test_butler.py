@@ -398,7 +398,7 @@ class ButlerTests:
         butler = Butler(self.tmpConfigFile, run="ingest")
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
-        self.assertEqual(butlerOut.config, butler.config)
+        self.assertEqual(butlerOut._config, butler._config)
         self.assertEqual(butlerOut.collection, butler.collection)
         self.assertEqual(butlerOut.run, butler.run)
 
@@ -517,7 +517,7 @@ class ButlerTests:
         butler2 = Butler(butlerConfig, collection="ingest")
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
-        self.assertEqual(butler1.config, butler2.config)
+        self.assertEqual(butler1._config, butler2._config)
         # Config files loaded directly should not be the same.
         self.assertNotEqual(limited, full)
         # Make sure "limited" doesn't have a few keys we know it should be
