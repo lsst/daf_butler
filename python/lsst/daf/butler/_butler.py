@@ -124,8 +124,10 @@ class Butler:
         Raised if neither "collection" nor "run" are provided by argument or
         config, or if both are provided and are inconsistent.
     """
-    def __init__(self, config: Union[Config, str, None] = None, butler: Optional[Butler] = None,
-                 collection: Optional[str] = None, run: Optional[str] = None,
+    def __init__(self, config: Union[Config, str, None] = None, *,
+                 butler: Optional[Butler] = None,
+                 collection: Optional[str] = None,
+                 run: Optional[str] = None,
                  searchPaths: Optional[List[str]] = None):
         if butler is not None:
             if config is not None or searchPaths is not None:
@@ -440,7 +442,7 @@ class Butler:
             components = datasetType.storageClass.assembler().disassemble(obj)
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)
-                compRef = self.put(info.component, compTypeName, dataId, producer)
+                compRef = self.put(info.component, compTypeName, dataId, producer=producer)
                 self.registry.attachComponent(component, ref, compRef)
         else:
             # This is an entity without a disassembler.
