@@ -106,6 +106,41 @@ class Butler:
         Raised if neither "collection" nor "run" are provided by argument or
         config, or if both are provided and are inconsistent.
     """
+    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
+        if butler is not None:
+            if config is not None or searchPaths is not None:
+                raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
+            self.registry = butler.registry
+            self.datastore = butler.datastore
+            self.storageClasses = butler.storageClasses
+            self.composites = butler.composites
+            self.config = butler.config
+        else:
+            self.config = ButlerConfig(config, searchPaths=searchPaths)
+            if "root" in self.config:
+                butlerRoot = self.config["root"]
+            else:
+                butlerRoot = self.config.configDir
+            self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
+            self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
+            self.storageClasses = StorageClassFactory()
+            self.storageClasses.addFromConfig(self.config)
+            self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
+        if "run" in self.config or "collection" in self.config:
+            raise ValueError("Passing a run or collection via configuration is no longer supported.")
+        self.run = run
+        # if run is not None and collection arg is, use run for collection.
+        if collection is None:
+            collection = run
+            if collection is None:  # didn't get a collection from collection or run
+                raise ValueError("No run or collection provided.")
+        if self.run is not None and collection != self.run:
+            raise ValueError(
+                "Run ({}) and collection ({}) are inconsistent.".format(self.run, collection)
+            )
+        self.collection = collection
+        if self.run is not None:
+            self.registry.registerRun(self.run)
 
     GENERATION = 3
     """This is a Generation 3 Butler.
@@ -255,42 +290,6 @@ class Butler:
             A new `Butler` instance.
         """
         return cls(config=config, collection=collection, run=run)
-
-    def __init__(self, config=None, butler=None, collection=None, run=None, searchPaths=None):
-        if butler is not None:
-            if config is not None or searchPaths is not None:
-                raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
-            self.registry = butler.registry
-            self.datastore = butler.datastore
-            self.storageClasses = butler.storageClasses
-            self.composites = butler.composites
-            self.config = butler.config
-        else:
-            self.config = ButlerConfig(config, searchPaths=searchPaths)
-            if "root" in self.config:
-                butlerRoot = self.config["root"]
-            else:
-                butlerRoot = self.config.configDir
-            self.registry = Registry.fromConfig(self.config, butlerRoot=butlerRoot)
-            self.datastore = Datastore.fromConfig(self.config, self.registry, butlerRoot=butlerRoot)
-            self.storageClasses = StorageClassFactory()
-            self.storageClasses.addFromConfig(self.config)
-            self.composites = CompositesMap(self.config, universe=self.registry.dimensions)
-        if "run" in self.config or "collection" in self.config:
-            raise ValueError("Passing a run or collection via configuration is no longer supported.")
-        self.run = run
-        # if run is not None and collection arg is, use run for collection.
-        if collection is None:
-            collection = run
-            if collection is None:  # didn't get a collection from collection or run
-                raise ValueError("No run or collection provided.")
-        if self.run is not None and collection != self.run:
-            raise ValueError(
-                "Run ({}) and collection ({}) are inconsistent.".format(self.run, collection)
-            )
-        self.collection = collection
-        if self.run is not None:
-            self.registry.registerRun(self.run)
 
     def __reduce__(self):
         """Support pickling.
