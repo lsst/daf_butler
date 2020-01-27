@@ -41,23 +41,12 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         # this has a prohibitive run-time cost at present
         cls.root = tempfile.mkdtemp(dir=TESTDIR)
 
-        dataIds = {}
-        dataIds["instrument"] = [{"name": "notACam"}]
-        dataIds["physical_filter"] = [{
-            "name": "k2020",
-            "instrument": "notACam",
-        }]
-        dataIds["visit"] = [{
-            "id": 101,
-            "name": "unique_visit",
-            "instrument": "notACam",
-            "physical_filter": "k2020",
-        }]
-        dataIds["detector"] = [{
-            "id": 5,
-            "full_name": "chip_5",
-            "instrument": "notACam",
-        }]
+        dataIds = {
+            "instrument": ["notACam", "dummyCam"],
+            "physical_filter": ["k2020", "l2019"],
+            "visit": [101, 102],
+            "detector": [5]
+        }
         cls.butler = makeTestButler(cls.root, dataIds)
 
         addDatasetType(cls.butler, "DataType1", {"instrument"}, "NumpyArray")
@@ -78,18 +67,24 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             where=query,
             expand=False)]
         self.assertEqual(len(result), 1)
-        self.assertEqual(dict(result[0]), expected)
+        self.assertIn(dict(result[0]), expected)
 
     def testButlerDimensions(self):
         self. _checkButlerDimension({"instrument"},
                                     "instrument='notACam'",
-                                    {"instrument": "notACam"})
+                                    [{"instrument": "notACam"}, {"instrument": "dummyCam"}])
         self. _checkButlerDimension({"visit", "instrument"},
-                                    "visit.name='unique_visit'",
-                                    {"instrument": "notACam", "visit": 101})
+                                    "visit=101",
+                                    [{"instrument": "notACam", "visit": 101},
+                                     {"instrument": "dummyCam", "visit": 101}])
+        self. _checkButlerDimension({"visit", "instrument"},
+                                    "visit=102",
+                                    [{"instrument": "notACam", "visit": 102},
+                                     {"instrument": "dummyCam", "visit": 102}])
         self. _checkButlerDimension({"detector", "instrument"},
-                                    "detector.full_name='chip_5'",
-                                    {"instrument": "notACam", "detector": 5})
+                                    "detector=5",
+                                    [{"instrument": "notACam", "detector": 5},
+                                     {"instrument": "dummyCam", "detector": 5}])
 
     def testAddDatasetType(self):
         self.assertEqual(len(self.butler.registry.getAllDatasetTypes()), 2)
