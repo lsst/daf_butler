@@ -52,6 +52,7 @@ from lsst.daf.butler import (
 )
 
 from lsst.daf.butler import ddl
+from lsst.daf.butler.registry.interfaces import ReadOnlyDatabaseError
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
@@ -216,7 +217,16 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Storage of paths and formatters, keyed by dataset_id
         self._tableName = self.config["records", "table"]
-        registry.registerOpaqueTable(self._tableName, self.makeTableSpec())
+        try:
+            registry.registerOpaqueTable(self._tableName, self.makeTableSpec())
+        except ReadOnlyDatabaseError:
+            # If the database is read only and we just tried and failed to
+            # create a table, it means someone is trying to create a read-only
+            # butler client for an empty repo.  That should be okay, as long
+            # as they then try to get any datasets before some other client
+            # creates the table.  Chances are they'rejust validating
+            # configuration.
+            pass
 
         # Determine whether checksums should be used
         self.useChecksum = self.config.get("checksum", True)
