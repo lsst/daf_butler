@@ -528,11 +528,11 @@ class ButlerTests:
 
         butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile))
         limited = Config(self.configFile)
-        butler1 = Butler(butlerConfig, collection="ingest")
+        butler1 = Butler(butlerConfig)
         butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
                                        config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
-        butler2 = Butler(butlerConfig, collection="ingest")
+        butler2 = Butler(butlerConfig)
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
         self.assertEqual(butler1._config, butler2._config)
@@ -552,7 +552,7 @@ class ButlerTests:
         # work properly with relocatable Butler repo
         butlerConfig.configFile = None
         with self.assertRaises(ValueError):
-            Butler(butlerConfig, collection="ingest")
+            Butler(butlerConfig)
 
     def testStringification(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
