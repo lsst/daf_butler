@@ -28,7 +28,7 @@ import shutil
 import tempfile
 import unittest
 
-from lsst.daf.butler.tests import makeTestButler, addDatasetType
+from lsst.daf.butler.tests import makeTestButler, addDatasetType, expandUniqueId
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -99,6 +99,21 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             addDatasetType(self.butler, "DataType3", {"4thDimension"}, "NumpyArray")
         with self.assertRaises(ValueError):
             addDatasetType(self.butler, "DataType3", {"instrument"}, "UnstorableType")
+
+    def testExpandUniqueId(self):
+        self.assertEqual(dict(expandUniqueId(self.butler, {"instrument": "notACam"})),
+                         {"instrument": "notACam"})
+        self.assertIn(dict(expandUniqueId(self.butler, {"visit": 101})),
+                      [{"instrument": "notACam", "visit": 101},
+                       {"instrument": "dummyCam", "visit": 101}])
+        self.assertIn(dict(expandUniqueId(self.butler, {"detector": 5})),
+                      [{"instrument": "notACam", "detector": 5},
+                       {"instrument": "dummyCam", "detector": 5}])
+        self.assertIn(dict(expandUniqueId(self.butler, {"physical_filter": "k2020"})),
+                      [{"instrument": "notACam", "physical_filter": "k2020"},
+                       {"instrument": "notACam", "physical_filter": "k2020"}])
+        with self.assertRaises(ValueError):
+            expandUniqueId(self.butler, {"tract": 42})
 
 
 if __name__ == "__main__":
