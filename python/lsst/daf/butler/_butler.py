@@ -416,6 +416,65 @@ class Butler:
                 datasetType = self.registry.getDatasetType(datasetRefOrType)
         return datasetType, dataId
 
+    def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                        dataId: Optional[DataId] = None, *,
+                        allowUnresolved: bool = False,
+                        **kwds: Any) -> DatasetRef:
+        """Shared logic for methods that start with a search for a dataset in
+        the registry.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataCoordinate`, optional
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        allowUnresolved : `bool`, optional
+            If `True`, return an unresolved `DatasetRef` if finding a resolved
+            one in the `Registry` fails.  Defaults to `False`.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataId`.  See `DataId` parameters.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A reference to the dataset identified by the given arguments.
+
+        Raises
+        ------
+        LookupError
+            Raised if no matching dataset exists in the `Registry` (and
+            ``allowUnresolved is False``).
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry in this collection.
+        """
+        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
+        if isinstance(datasetRefOrType, DatasetRef):
+            idNumber = datasetRefOrType.id
+        else:
+            idNumber = None
+        # Expand the data ID first instead of letting registry.find do it, so
+        # we get the result even if it returns None.
+        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
+        # Always lookup the DatasetRef, even if one is given, to ensure it is
+        # present in the current collection.
+        ref = self.registry.find(self.collection, datasetType, dataId)
+        if ref is None:
+            if allowUnresolved:
+                return DatasetRef(datasetType, dataId)
+            else:
+                raise LookupError(f"Dataset {datasetType.name} with data ID {dataId} "
+                                  f"could not be found in collection '{self.collection}'.")
+        if idNumber is not None and idNumber != ref.id:
+            raise ValueError(f"DatasetRef.id provided ({idNumber}) does not match "
+                             f"id ({ref.id}) in registry in collection '{self.collection}'.")
+        return ref
+
     @transactional
     def put(self, obj: Any, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
@@ -586,22 +645,17 @@ class Butler:
         -------
         obj : `object`
             The dataset.
+
+        Raises
+        ------
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry in this collection.
+        LookupError
+            Raised if no matching dataset exists in the `Registry`.
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        if isinstance(datasetRefOrType, DatasetRef):
-            idNumber = datasetRefOrType.id
-        else:
-            idNumber = None
-        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions, **kwds)
-        # Always lookup the DatasetRef, even if one is given, to ensure it is
-        # present in the current collection.
-        ref = self.registry.find(self.collection, datasetType, dataId, **kwds)
-        if ref is None:
-            raise LookupError("Dataset {} with data ID {} could not be found in {}".format(
-                              datasetType.name, dataId, self.collection))
-        if idNumber is not None and idNumber != ref.id:
-            raise ValueError("DatasetRef.id does not match id in registry")
+        ref = self._findDatasetRef(datasetRefOrType, dataId, **kwds)
         return self.getDirect(ref, parameters=parameters)
 
     def getUri(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
@@ -640,20 +694,20 @@ class Butler:
 
         Raises
         ------
-        FileNotFoundError
+        LookupError
             A URI has been requested for a dataset that does not exist and
             guessing is not allowed.
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry in this collection.
         """
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        ref = self.registry.find(self.collection, datasetType, dataId)
-        if ref is None:
-            if predict:
-                if self.run is None:
-                    raise ValueError("Cannot predict location from read-only Butler.")
-                ref = DatasetRef(datasetType, dataId, run=self.run)
-            else:
-                raise FileNotFoundError(f"Dataset {datasetType} {dataId} does not exist in Registry.")
+        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict, **kwds)
+        if ref.id is None:  # only possible if predict is True
+            if self.run is None:
+                raise ValueError("Cannot predict location with run=None.")
+            # Lie about ID, because we can't guess it, and only
+            # Datastore.getUri() will ever see it (and it doesn't use it).
+            ref = ref.resolved(id=0, run=self.run)
         return self.datastore.getUri(ref, predict)
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
@@ -678,15 +732,12 @@ class Butler:
         Raises
         ------
         LookupError
-            Raised if the Dataset is not even present in the Registry.
+            Raised if the dataset is not even present in the Registry.
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry in this collection.
         """
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        ref = self.registry.find(self.collection, datasetType, dataId)
-        if ref is None:
-            raise LookupError(
-                "{} with {} not found in collection {}".format(datasetType, dataId, self.collection)
-            )
+        ref = self._findDatasetRef(datasetRefOrType, dataId, **kwds)
         return self.datastore.exists(ref)
 
     def remove(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
@@ -723,20 +774,19 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the butler is read-only.
-        ValueError
-            Raised if ``delete`` and ``remember`` are both `False`; a dataset
-            cannot remain in a `Datastore` if all of its `Registry` entries are
-            removed.
+            Raised if the butler is read-only, or if ``delete`` and
+            ``remember`` are both `False`; a dataset cannot remain in a
+            `Datastore` if all of its `Registry` entries are removed.
         OrphanedRecordError
             Raised if ``remember`` is `False` but the dataset is still present
             in a `Datastore` not recognized by this `Butler` client.
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry in this collection.
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
-        dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        ref = self.registry.find(self.collection, datasetType, dataId)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, **kwds)
         if delete:
             # There is a difference between a concrete composite and virtual
             # composite. In a virtual composite the datastore is never
