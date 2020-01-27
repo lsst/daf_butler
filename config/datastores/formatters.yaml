@@ -42,3 +42,4 @@ NumpyArray: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 Plot: lsst.daf.butler.formatters.matplotlibFormatter.MatplotlibFormatter
 MetricValue: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
 BrighterFatterKernel: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+StructuredDataDict: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
