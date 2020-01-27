@@ -227,7 +227,7 @@ class ButlerTests:
 
                 # Reinsert into collection, then delete from Datastore *and*
                 # remove from collection.
-                butler.registry.associate(butler.collection, [ref])
+                butler.registry.associate(butler.collections[0], [ref])
                 butler.remove(*args)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
@@ -417,7 +417,7 @@ class ButlerTests:
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
-        self.assertEqual(butlerOut.collection, butler.collection)
+        self.assertEqual(butlerOut.collections, butler.collections)
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self):
@@ -508,7 +508,7 @@ class ButlerTests:
         with self.assertRaises(KeyError):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.registry.find(butler.collection, datasetType, dataId))
+        self.assertIsNone(butler.registry.find(butler.collections[0], datasetType, dataId))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError):
             butler.getDirect(ref)

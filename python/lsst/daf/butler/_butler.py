@@ -30,6 +30,7 @@ import os
 from collections import defaultdict
 import contextlib
 import logging
+import types
 from typing import (
     Any,
     ClassVar,
@@ -37,8 +38,10 @@ from typing import (
     Dict,
     Iterable,
     List,
+    Mapping,
     MutableMapping,
     Optional,
+    Sequence,
     Tuple,
     Union,
 )
@@ -106,23 +109,30 @@ class Butler:
         datastore as the given one, but with the given collection and run.
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
-    collection : `str`, optional
-        Collection to use for all input lookups.  May be `None` to either use
-        the value passed to ``run``, or to defer passing a collection until
-        the methods that require one are called.
+    collections : `~collections.abc.Mapping` [`str`, `bool`], optional
+        A dictionary mapping the name of a collection to whether it should be
+        used as an output collection.  Collections will be searched in
+        iteration order until a dataset is found.  Datasets added to the
+        repository with `put` or `ingest` will be associated with all output
+        collections.
+    rw : `str`, optional
+        A shortcut for ``collections={<rw>: True}``.  Cannot be passed if
+        ``collections`` is.
+    ro : `str`, optional
+        A shortcut for ``collections={<ro>: False}``.  Cannot be passed if
+        ``collections`` is.
     run : `str`, optional
-        Name of the run datasets should be output to; also used as a tagged
-        collection name these dataset will be associated with.  If the run
-        does not exist, it will be created.  If ``collection`` is `None`, this
-        collection will be used for input lookups as well; if not, it must have
-        the same value as ``run``.
+        Name of the run datasets should be output to.  If the run
+        does not exist, it will be created.  If this is not in ``collections``,
+        it will be added (to the front).
     searchPaths : `list` of `str`, optional
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
         `ButlerConfig`.
     writeable : `bool`, optional
         Explicitly sets whether the butler supports write operations.  If not
-        provided, a read-only butler is created unless ``run`` is passed.
+        provided, a read-write butler is created only if
+        ``any(collections.values())``.
 
     Raises
     ------
@@ -132,10 +142,25 @@ class Butler:
     """
     def __init__(self, config: Union[Config, str, None] = None, *,
                  butler: Optional[Butler] = None,
-                 collection: Optional[str] = None,
+                 collections: Optional[Mapping[str, bool]] = None,
+                 rw: Optional[str] = None,
+                 ro: Optional[str] = None,
                  run: Optional[str] = None,
                  searchPaths: Optional[List[str]] = None,
                  writeable: Optional[bool] = None):
+        if collections is None:
+            collections = {}
+        if rw is not None:
+            if collections:
+                raise TypeError("Exactly one of collections, rw, and ro may be passed.")
+            collections[rw] = True
+        if ro is not None:
+            if collections:
+                raise TypeError("Exactly one of collections, rw, and ro may be passed.")
+            collections[ro] = False
+        if run is not None and run not in collections:
+            collections = {"run": True}.update(collections)
+        self.collections = types.MappingProxyType(collections)
         if butler is not None:
             if config is not None or searchPaths is not None or writeable is not None:
                 raise TypeError("Cannot pass 'config', 'searchPaths', or 'writeable' "
@@ -152,25 +177,17 @@ class Butler:
             else:
                 butlerRoot = self._config.configDir
             if writeable is None:
-                writeable = run is not None
+                writeable = run is not None or any(collections.values())
             self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable)
             self.datastore = Datastore.fromConfig(self._config, self.registry, butlerRoot=butlerRoot)
             self._storageClasses = StorageClassFactory()
             self._storageClasses.addFromConfig(self._config)
             self._composites = CompositesMap(self._config, universe=self.registry.dimensions)
+
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
-        if run is not None and writeable is False:
-            raise ValueError(f"Butler initialized with run='{run}', "
-                             f"but is read-only; use collection='{run}' instead.")
+
         self.run = run
-        if collection is None and run is not None:
-            collection = run
-        if self.run is not None and collection != self.run:
-            raise ValueError(
-                "Run ({}) and collection ({}) are inconsistent.".format(self.run, collection)
-            )
-        self.collection = collection
         if self.run is not None:
             self.registry.registerRun(self.run)
 
@@ -195,6 +212,15 @@ class Butler:
     Direct user access to the datastore should rarely be necessary; the primary
     exception is the case where a `Datastore` implementation provides extra
     functionality beyond what the base class defines.
+    """
+
+    run: Optional[str]
+    """Name of the run that new datasets are inserted into (`str` or `None`).
+    """
+
+    collections: Mapping[str, bool]
+    """Dictionary mapping collection name to whether new datasets should be
+    added to it, ordered from the first collection searched to the last.
     """
 
     @staticmethod
@@ -313,7 +339,8 @@ class Butler:
         return config
 
     @classmethod
-    def _unpickle(cls, config: ButlerConfig, collection: str, run: Optional[str], writeable: bool) -> Butler:
+    def _unpickle(cls, config: ButlerConfig, rw: Tuple[str, ...], ro: Tuple[str, ...], writeable: bool
+                  ) -> Butler:
         """Callable used to unpickle a Butler.
 
         We prefer not to use ``Butler.__init__`` directly so we can force some
@@ -326,27 +353,28 @@ class Butler:
             Butler configuration, already coerced into a true `ButlerConfig`
             instance (and hence after any search paths for overrides have been
             utilized).
-        collection : `str`
-            String name of a collection to use for read operations.
-        run : `str`, optional
-            String name of a run to use for write operations, or `None` for a
-            read-only butler.
+        rw : `tuple` [`str`]
+            Names of read-write collections.
+        ro : `tuple` [`str`]
+            Names of read-only collections.
+        writeable : `bool`
+            Whether the Butler should support write operations.
 
         Returns
         -------
         butler : `Butler`
             A new `Butler` instance.
         """
-        return cls(config=config, collection=collection, run=run, writeable=writeable)
+        return cls(config=config, rw=rw, ro=ro, writeable=writeable)
 
     def __reduce__(self):
         """Support pickling.
         """
-        return (Butler._unpickle, (self._config, self.collection, self.run, self.registry.isWriteable()))
+        return (Butler._unpickle, (self._config, self.rw, self.ro, self.registry.isWriteable()))
 
     def __str__(self):
-        return "Butler(collection='{}', datastore='{}', registry='{}')".format(
-            self.collection, self.datastore, self.registry)
+        return "Butler(rw={}, ro={}, datastore='{}', registry='{}')".format(
+            self.rw, self.ro, self.datastore, self.registry)
 
     def isWriteable(self) -> bool:
         """Return `True` if this `Butler` supports write operations.
@@ -417,7 +445,7 @@ class Butler:
 
     def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                         dataId: Optional[DataId] = None, *,
-                        collection: Optional[str] = None,
+                        collections: Optional[Sequence[str]] = None,
                         allowUnresolved: bool = False,
                         **kwds: Any) -> DatasetRef:
         """Shared logic for methods that start with a search for a dataset in
@@ -432,8 +460,8 @@ class Butler:
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
-        collection : `str`, optional
-            Name of the collection to search, overriding ``self.collection``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Collections to be searched, overriding ``self.collections``.
         allowUnresolved : `bool`, optional
             If `True`, return an unresolved `DatasetRef` if finding a resolved
             one in the `Registry` fails.  Defaults to `False`.
@@ -453,9 +481,9 @@ class Butler:
             ``allowUnresolved is False``).
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            differs from the one found in the registry.
         TypeError
-            Raised if ``collection`` and ``self.collection`` are both `None`.
+            Raised if no collections were provided.
         """
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
         if isinstance(datasetRefOrType, DatasetRef):
@@ -465,22 +493,25 @@ class Butler:
         # Expand the data ID first instead of letting registry.find do it, so
         # we get the result even if it returns None.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        if collection is None:
-            collection = self.collection
-            if collection is None:
-                raise TypeError("No collection provided.")
+        if collections is None:
+            collections = self.collections.keys()
+            if not collections:
+                raise TypeError("No input collections provided.")
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.find(collection, datasetType, dataId)
+        for collection in collections:
+            ref = self.registry.find(collection, datasetType, dataId)
+            if ref is not None:
+                break
         if ref is None:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)
             else:
                 raise LookupError(f"Dataset {datasetType.name} with data ID {dataId} "
-                                  f"could not be found in collection '{self.collection}'.")
+                                  f"could not be found in collections {collections}.")
         if idNumber is not None and idNumber != ref.id:
             raise ValueError(f"DatasetRef.id provided ({idNumber}) does not match "
-                             f"id ({ref.id}) in registry in collection '{self.collection}'.")
+                             f"id ({ref.id}) in registry in collections {collections}.")
         return ref
 
     @transactional
@@ -488,6 +519,7 @@ class Butler:
             dataId: Optional[DataId] = None, *,
             producer: Optional[Quantum] = None,
             run: Optional[str] = None,
+            collections: Optional[Sequence[str]] = None,
             **kwds: Any) -> DatasetRef:
         """Store and register a dataset.
 
@@ -505,8 +537,12 @@ class Butler:
         producer : `Quantum`, optional
             The producer.
         run : `str`, optional
-            The name of the run the dataset should be added to, overriding
-            ``self.run``.
+            The name of the run the dataset should be created with,
+            overriding ``self.run``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Additional collections the dataset should be associated with.
+            If not provided, all collections mapped to `True` in
+            ``self.collections`` will be used.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -535,6 +571,10 @@ class Butler:
                 raise TypeError("No run provided.")
             run = self.run
 
+        if collections is None:
+            collections = tuple(name for name, writeable in self.collections.items()
+                                if name != run and writeable)
+
         isVirtualComposite = self._composites.shouldBeDisassembled(datasetType)
 
         # Add Registry Dataset entry.  If not a virtual composite, add
@@ -553,6 +593,9 @@ class Butler:
         else:
             # This is an entity without a disassembler.
             self.datastore.put(obj, ref)
+
+        for name in collections:
+            self.registry.associate(name, ref)
 
         return ref
 
@@ -609,7 +652,7 @@ class Butler:
     def getDeferred(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                     dataId: Optional[DataId] = None, *,
                     parameters: Union[dict, None] = None,
-                    collection: Optional[str] = None,
+                    collections: Optional[Sequence[str]] = None,
                     **kwds: Any) -> DeferredDatasetHandle:
         """Create a `DeferredDatasetHandle` which can later retrieve a dataset
 
@@ -622,13 +665,11 @@ class Butler:
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
-        collection : `str`, optional
-            Name of the collection to search, overriding ``self.collection``.
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
-        collection : `str`, optional
-            Collection to search, overriding ``self.collection``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Collections to be searched, overriding ``self.collections``.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -645,17 +686,17 @@ class Butler:
             ``allowUnresolved is False``).
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            differs from the one found in the registry.
         TypeError
-            Raised if ``collection`` and ``self.collection`` are both `None`.
+            Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collection=collection, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
 
     def get(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
             parameters: Optional[Dict[str, Any]] = None,
-            collection: Optional[str] = None,
+            collections: Optional[Sequence[str]] = None,
             **kwds: Any) -> Any:
         """Retrieve a stored dataset.
 
@@ -671,8 +712,8 @@ class Butler:
         parameters : `dict`
             Additional StorageClass-defined options to control reading,
             typically used to efficiently read only a subset of the dataset.
-        collection : `str`, optional
-            Collection to search, overriding ``self.collection``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Collections to be searched, overriding ``self.collections``.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -687,20 +728,20 @@ class Butler:
         ------
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            differs from the one found in the registry.
         LookupError
             Raised if no matching dataset exists in the `Registry`.
         TypeError
-            Raised if ``collection`` and ``self.collection`` are both `None`.
+            Raised if no collections were provided.
         """
         log.debug("Butler get: %s, dataId=%s, parameters=%s", datasetRefOrType, dataId, parameters)
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collection=collection, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.getDirect(ref, parameters=parameters)
 
     def getUri(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                dataId: Optional[DataId] = None, *,
                predict: bool = False,
-               collection: Optional[str] = None,
+               collections: Optional[Sequence[str]] = None,
                run: Optional[str] = None,
                **kwds: Any) -> str:
         """Return the URI to the Dataset.
@@ -717,8 +758,8 @@ class Butler:
         predict : `bool`
             If `True`, allow URIs to be returned of datasets that have not
             been written.
-        collection : `str`, optional
-            Collection to search, overriding ``self.collection``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Collections to be searched, overriding ``self.collections``.
         run : `str`, optional
             Run to use for predictions, overriding ``self.run``.
         kwds
@@ -744,12 +785,12 @@ class Butler:
             guessing is not allowed.
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            differs from the one found in the registry.
         TypeError
-            Raised if ``collection`` and ``self.collection`` are both `None`.
+            Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict, collection=collection,
-                                   **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict,
+                                   collections=collections, **kwds)
         if ref.id is None:  # only possible if predict is True
             if run is None:
                 run = self.run
@@ -762,7 +803,7 @@ class Butler:
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,
-                      collection: Optional[str] = None,
+                      collections: Optional[Sequence[str]] = None,
                       **kwds: Any) -> bool:
         """Return True if the Dataset is actually present in the Datastore.
 
@@ -775,8 +816,8 @@ class Butler:
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the first argument.
-        collection : `str`, optional
-            Collection to search, overriding ``self.collection``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Collections to be searched, overriding ``self.collections``.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -788,16 +829,18 @@ class Butler:
             Raised if the dataset is not even present in the Registry.
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            differs from the one found in the registry.
         TypeError
-            Raised if ``collection`` and ``self.collection`` are both `None`.
+            Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collection=collection, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.datastore.exists(ref)
 
     def remove(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                dataId: Optional[DataId] = None, *,
-               delete: bool = True, remember: bool = True, collection: Optional[str] = None, **kwds: Any):
+               delete: bool = True, remember: bool = True,
+               collections: Optional[Mapping[str, bool]] = None,
+               **kwds: Any):
         """Remove a dataset from the collection and possibly the repository.
 
         The identified dataset is always at least removed from the Butler's
@@ -822,8 +865,11 @@ class Butler:
         remember : `bool`
             If `True` (default), retain dataset and provenance records in
             the `Registry` for this dataset.
-        collection : `str`, optional
-            Collection to search, overriding ``self.collection``.
+        collections : `~collections.abc.Mapping` [`str`, `bool`], optional
+            Collections to be searched and deleted from, overriding
+            ``self.collections`.  The dataset deleted will be the first one
+            found in ``collections.keys()``, and if ``remember`` is `True`,
+            it will then be removed only from collections mapped to `True`.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataId`.  See `DataId` parameters.
@@ -831,7 +877,7 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the butler is read-only, if no collection was provided,
+            Raised if the butler is read-only, if no collections were provided,
             or if ``delete`` and ``remember`` are both `False`; a dataset
             cannot remain in a `Datastore` if its `Registry` entries is
             removed.
@@ -840,11 +886,11 @@ class Butler:
             in a `Datastore` not recognized by this `Butler` client.
         ValueError
             Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            differs from the one found in the registry.
         """
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collection=collection, **kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         if delete:
             # There is a difference between a concrete composite and virtual
             # composite. In a virtual composite the datastore is never
@@ -869,13 +915,19 @@ class Butler:
         elif not remember:
             raise ValueError("Cannot retain dataset in Datastore without keeping Registry dataset record.")
         if remember:
-            self.registry.disassociate(self.collection, [ref])
+            if collections is None:
+                collections = self.collections
+            for name, writeable in collections.items():
+                if writeable:
+                    self.registry.disassociate(name, [ref])
         else:
             # This also implicitly disassociates.
             self.registry.removeDataset(ref)
 
     @transactional
-    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None):
+    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None,
+               run: Optional[str] = None,
+               collections: Optional[Sequence[str]] = None):
         """Store and register one or more datasets that already exist on disk.
 
         Parameters
@@ -895,6 +947,16 @@ class Butler:
         transfer : `str`, optional
             If not `None`, must be one of 'move', 'copy', 'hardlink', or
             'symlink', indicating how to transfer the file.
+        run : `str`, optional
+            The name of the run the dataset should be created with,
+            overriding ``self.run``.
+        collections : `~collections.abc.Sequence` [`str`], optional
+            Additional collections the dataset should be associated with.
+            If not provided, all collections mapped to `True` in
+            ``self.collections`` will be used.
+        tagged : `str`, optional
+            Additional tagged collections the datasets should be added to,
+            overriding the non-run entries in ``self.rw``.
 
         Raises
         ------
@@ -925,6 +987,15 @@ class Butler:
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
+        if run is None:
+            if self.run is None:
+                raise TypeError("No run provided.")
+            run = self.run
+
+        if collections is None:
+            collections = tuple(name for name, writeable in self.collections
+                                if name != run and writeable)
+
         # Reorganize the inputs so they're grouped by DatasetType and then
         # data ID.  We also include a list of DatasetRefs for each FileDataset
         # to hold the resolved DatasetRefs returned by the Registry, before
@@ -943,15 +1014,21 @@ class Butler:
                 groupedData[ref.datasetType][ref.dataId] = (dataset, resolvedRefs)
 
         # Now we can bulk-insert into Registry for each DatasetType.
+        allResolvedRefs = []
         for datasetType, groupForType in groupedData.items():
             refs = self.registry.insertDatasets(datasetType,
                                                 dataIds=groupForType.keys(),
-                                                run=self.run,
+                                                run=run,
                                                 recursive=True)
             # Append those resolved DatasetRefs to the new lists we set up for
             # them.
             for ref, (_, resolvedRefs) in zip(refs, groupForType.values()):
                 resolvedRefs.append(ref)
+                allResolvedRefs.append(ref)
+
+        # Associate refs with any tagged collections.
+        for name in collections:
+            self.registry.associate(name, allResolvedRefs)
 
         # Go back to the original FileDatasets to replace their refs with the
         # new resolved ones.
