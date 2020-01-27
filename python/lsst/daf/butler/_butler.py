@@ -599,9 +599,19 @@ class Butler:
         Returns
         -------
         obj : `DeferredDatasetHandle`
-            A handle which can be used to retrieve a dataset at a later time
+            A handle which can be used to retrieve a dataset at a later time.
+
+        Raises
+        ------
+        LookupError
+            Raised if no matching dataset exists in the `Registry` (and
+            ``allowUnresolved is False``).
+        ValueError
+            Raised if a resolved `DatasetRef` was passed as an input, but it
+            differs from the one found in the registry in this collection.
         """
-        return DeferredDatasetHandle(self, datasetRefOrType, dataId, parameters, kwds)
+        ref = self._findDatasetRef(datasetRefOrType, dataId, **kwds)
+        return DeferredDatasetHandle(butler=self, ref=ref, parameters=parameters)
 
     def get(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
