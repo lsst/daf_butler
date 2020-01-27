@@ -319,6 +319,50 @@ class ButlerTests:
 
         return butler
 
+        # Construct a butler with no run or collection, but make it writeable.
+        butler = Butler(self.tmpConfigFile, writeable=True)
+        # Create and register a DatasetType
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
+        datasetType = self.addDatasetType("example", dimensions,
+                                          self.storageClassFactory.getStorageClass("StructuredData"),
+                                          butler.registry)
+        # Add needed Dimensions
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "abstract_filter": "R"})
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
+                                                      "name": "fourtwentythree", "physical_filter": "d-r"})
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        # Create dataset.
+        metric = makeExampleMetrics()
+        # Register a new run and put dataset.
+        run = "deferred"
+        butler.registry.registerRun(run)
+        ref = butler.put(metric, datasetType, dataId, run=run)
+        # Putting with no run should fail with TypeError.
+        with self.assertRaises(TypeError):
+            butler.put(metric, datasetType, dataId)
+        # Dataset should exist.
+        self.assertTrue(butler.datasetExists(datasetType, dataId, collection=run))
+        # We should be able to get the dataset back, but with and without
+        # a deferred dataset handle.
+        self.assertEqual(metric, butler.get(datasetType, dataId, collection=run))
+        self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collection=run).get())
+        # Trying to find the dataset without any collection is a TypeError.
+        with self.assertRaises(TypeError):
+            butler.datasetExists(datasetType, dataId)
+        with self.assertRaises(TypeError):
+            butler.get(datasetType, dataId)
+        with self.assertRaises(TypeError):
+            butler.remove(datasetType, dataId)
+        # Associate the dataset with a different collection.
+        butler.registry.associate("tagged", [ref])
+        # Deleting the dataset from the new collection should make it findable
+        # in the original collection but without a Datastore entry.
+        butler.remove(datasetType, dataId, collection="tagged")
+        self.assertFalse(butler.datasetExists(datasetType, dataId, collection=run))
+
     def testIngest(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
 
