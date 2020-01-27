@@ -28,7 +28,9 @@ import shutil
 import tempfile
 import unittest
 
-from lsst.daf.butler.tests import makeTestButler, addDatasetType, expandUniqueId
+import numpy as np
+
+from lsst.daf.butler.tests import makeTestRepo, makeTestCollection, addDatasetType, expandUniqueId
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -37,7 +39,7 @@ TESTDIR = os.path.abspath(os.path.dirname(__file__))
 class ButlerUtilsTestSuite(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Butler or collection should be re-created for each test case, but
+        # Repository should be re-created for each test case, but
         # this has a prohibitive run-time cost at present
         cls.root = tempfile.mkdtemp(dir=TESTDIR)
 
@@ -47,16 +49,19 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             "visit": [101, 102],
             "detector": [5]
         }
-        cls.butler = makeTestButler(cls.root, dataIds)
+        cls.creatorButler = makeTestRepo(cls.root, dataIds)
 
-        addDatasetType(cls.butler, "DataType1", {"instrument"}, "NumpyArray")
-        addDatasetType(cls.butler, "DataType2", {"instrument", "visit", "detector"}, "NumpyArray")
+        addDatasetType(cls.creatorButler, "DataType1", {"instrument"}, "NumpyArray")
+        addDatasetType(cls.creatorButler, "DataType2", {"instrument", "visit", "detector"}, "NumpyArray")
 
     @classmethod
     def tearDownClass(cls):
         # TODO: use addClassCleanup rather than tearDownClass in Python 3.8
         # to keep the addition and removal together and make it more robust
         shutil.rmtree(cls.root, ignore_errors=True)
+
+    def setUp(self):
+        self.butler = makeTestCollection(self.creatorButler)
 
     def testButlerValid(self):
         self.butler.validateConfiguration()
@@ -99,6 +104,15 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             addDatasetType(self.butler, "DataType3", {"4thDimension"}, "NumpyArray")
         with self.assertRaises(ValueError):
             addDatasetType(self.butler, "DataType3", {"instrument"}, "UnstorableType")
+
+    def testUniqueButler(self):
+        dataId = {"instrument": "notACam"}
+        self.butler.put(np.array([1, 2, 3]), "DataType1", dataId)
+        self.assertTrue(self.butler.datasetExists("DataType1", dataId))
+
+        newButler = makeTestCollection(self.creatorButler)
+        with self.assertRaises(LookupError):
+            newButler.datasetExists("DataType1", dataId)
 
     def testExpandUniqueId(self):
         self.assertEqual(dict(expandUniqueId(self.butler, {"instrument": "notACam"})),

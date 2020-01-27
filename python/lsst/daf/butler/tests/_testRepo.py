@@ -20,13 +20,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-__all__ = ["makeTestButler", "addDatasetType", "expandUniqueId"]
+__all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUniqueId"]
 
+
+import numpy as np
 
 from lsst.daf.butler import Butler, DatasetType
 
 
-def makeTestButler(root, dataIds):
+def makeTestRepo(root, dataIds):
     """Create an empty repository with default configuration.
 
     Parameters
@@ -42,7 +44,10 @@ def makeTestButler(root, dataIds):
     Returns
     -------
     butler : `lsst.daf.butler.Butler`
-        A Butler referring to the new repository.
+        A Butler referring to the new repository. This Butler is provided only
+        for additional setup; to keep test cases isolated, it is highly
+        recommended that each test create its own Butler with a
+        unique run/collection. See `makeTestCollection`.
 
     Notes
     -----
@@ -57,14 +62,33 @@ def makeTestButler(root, dataIds):
     `expandUniqueId`, so long as no other code has inserted dimensions into
     the repository registry.
     """
-    # TODO: takes 5 seconds to run; split up into class-level Butler
-    #     with test-level runs after DM-21246
     Butler.makeRepo(root)
-    butler = Butler(root, run="test")
+    butler = Butler(root, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.registry.dimensions)
     for dimension, records in dimensionRecords.items():
         butler.registry.insertDimensionData(dimension, *records)
     return butler
+
+
+def makeTestCollection(repo):
+    """Create a read/write Butler to a fresh collection.
+
+    Parameters
+    ----------
+    repo : `lsst.daf.butler.Butler`
+        A previously existing Butler to a repository, such as that returned by
+        `~lsst.daf.butler.Butler.makeRepo` or `makeTestRepo`.
+
+    Returns
+    -------
+    butler : `lsst.daf.butler.Butler`
+        A Butler referring to a new collection in the repository at ``root``.
+        The collection is (almost) guaranteed to be new.
+    """
+    # Create a "random" collection name
+    # Speed matters more than cryptographic guarantees
+    collection = "test" + "".join((str(i) for i in np.random.randint(0, 10, size=8)))
+    return Butler(butler=repo, run=collection)
 
 
 def _makeRecords(dataIds, universe):
@@ -158,7 +182,7 @@ def expandUniqueId(butler, partialId):
     --------
     .. code-block:: py
 
-       >>> butler = makeTestButler(
+       >>> butler = makeTestRepo(
                "testdir", {"instrument": ["notACam"], "detector": [1]})
        >>> expandUniqueId(butler, {"detector": 1})
        DataCoordinate({instrument, detector}, ('notACam', 1))
@@ -199,6 +223,11 @@ def addDatasetType(butler, name, dimensions, storageClass):
     ------
     ValueError
         Raised if the dimensions or storage class is invalid.
+
+    Notes
+    -----
+    Dataset types are shared across all collections in a repository, so this
+    function does not need to be run for each collection.
     """
     try:
         datasetType = DatasetType(name, dimensions, storageClass,
