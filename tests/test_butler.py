@@ -204,6 +204,12 @@ class ButlerTests:
                 # Test get with a datasetRef
                 metricOut = butler.get(ref)
                 self.assertEqual(metric, metricOut)
+                # Test getDeferred with dataId
+                metricOut = butler.getDeferred(ref.datasetType.name, dataId).get()
+                self.assertEqual(metric, metricOut)
+                # Test getDeferred with a datasetRef
+                metricOut = butler.getDeferred(ref).get()
+                self.assertEqual(metric, metricOut)
 
                 # Check we can get components
                 if storageClass.isComposite():
@@ -253,6 +259,18 @@ class ButlerTests:
         # Get with parameters
         stop = 4
         sliced = butler.get(ref, parameters={"slice": slice(stop)})
+        self.assertNotEqual(metric, sliced)
+        self.assertEqual(metric.summary, sliced.summary)
+        self.assertEqual(metric.output, sliced.output)
+        self.assertEqual(metric.data[:stop], sliced.data)
+        # getDeferred with parameters
+        sliced = butler.getDeferred(ref, parameters={"slice": slice(stop)}).get()
+        self.assertNotEqual(metric, sliced)
+        self.assertEqual(metric.summary, sliced.summary)
+        self.assertEqual(metric.output, sliced.output)
+        self.assertEqual(metric.data[:stop], sliced.data)
+        # getDeferred with deferred parameters
+        sliced = butler.getDeferred(ref).get(parameters={"slice": slice(stop)})
         self.assertNotEqual(metric, sliced)
         self.assertEqual(metric.summary, sliced.summary)
         self.assertEqual(metric.output, sliced.output)
