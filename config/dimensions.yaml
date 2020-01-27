@@ -165,7 +165,8 @@ dimensions:
 
         The exposure table contains metadata entries that are relevant for
         calibration exposures, and does not duplicate entries in visit that
-        would be the same for all exposures within a visit.
+        would be the same for all exposures within a visit with the exception
+        of the exposure.group entry.
       keys:
       -
         name: id
@@ -191,6 +192,11 @@ dimensions:
         type: string
         length: 16
         doc: The observation type of this exposure (e.g. dark, bias, science).
+      -
+        name: group
+        type: string
+        length: 64
+        doc: Group identifier associated with this exposure by the acquisition system.
 
     skymap:
       doc: >
