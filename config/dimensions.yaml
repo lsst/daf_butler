@@ -189,7 +189,8 @@ dimensions:
       -
         name: observation_type
         type: string
-        length: 64
+        length: 16
+        doc: The observation type of this exposure (e.g. dark, bias, science).
 
     skymap:
       doc: >
