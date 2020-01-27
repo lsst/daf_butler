@@ -104,7 +104,8 @@ class Butler:
     butler : `Butler`, optional.
         If provided, construct a new Butler that uses the same registry and
         datastore as the given one, but with the given collection and run.
-        Incompatible with the ``config`` and ``searchPaths`` arguments.
+        Incompatible with the ``config``, ``searchPaths``, and ``writeable``
+        arguments.
     collection : `str`, optional
         Collection to use for all input lookups.
     run : `str`, optional
@@ -117,6 +118,9 @@ class Butler:
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
         `ButlerConfig`.
+    writeable : `bool`, optional
+        Explicitly sets whether the butler supports write operations.  If not
+        provided, a read-only butler is created unless ``run`` is passed.
 
     Raises
     ------
@@ -128,10 +132,12 @@ class Butler:
                  butler: Optional[Butler] = None,
                  collection: Optional[str] = None,
                  run: Optional[str] = None,
-                 searchPaths: Optional[List[str]] = None):
+                 searchPaths: Optional[List[str]] = None,
+                 writeable: Optional[bool] = None):
         if butler is not None:
-            if config is not None or searchPaths is not None:
-                raise TypeError("Cannot pass config or searchPaths arguments with butler argument.")
+            if config is not None or searchPaths is not None or writeable is not None:
+                raise TypeError("Cannot pass 'config', 'searchPaths', or 'writeable' "
+                                "arguments with 'butler' argument.")
             self.registry = butler.registry
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
@@ -143,13 +149,18 @@ class Butler:
                 butlerRoot = self._config["root"]
             else:
                 butlerRoot = self._config.configDir
-            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot)
+            if writeable is None:
+                writeable = run is not None
+            self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable)
             self.datastore = Datastore.fromConfig(self._config, self.registry, butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self._config)
             self._composites = CompositesMap(self._config, universe=self.registry.dimensions)
         if "run" in self._config or "collection" in self._config:
             raise ValueError("Passing a run or collection via configuration is no longer supported.")
+        if run is not None and writeable is False:
+            raise ValueError(f"Butler initialized with run='{run}', "
+                             f"but is read-only; use collection='{run}' instead.")
         self.run = run
         # if run is not None and collection arg is, use run for collection.
         if collection is None:
@@ -288,7 +299,7 @@ class Butler:
         return config
 
     @classmethod
-    def _unpickle(cls, config: ButlerConfig, collection: str, run: Optional[str]) -> Butler:
+    def _unpickle(cls, config: ButlerConfig, collection: str, run: Optional[str], writeable: bool) -> Butler:
         """Callable used to unpickle a Butler.
 
         We prefer not to use ``Butler.__init__`` directly so we can force some
@@ -312,16 +323,21 @@ class Butler:
         butler : `Butler`
             A new `Butler` instance.
         """
-        return cls(config=config, collection=collection, run=run)
+        return cls(config=config, collection=collection, run=run, writeable=writeable)
 
     def __reduce__(self):
         """Support pickling.
         """
-        return (Butler._unpickle, (self._config, self.collection, self.run))
+        return (Butler._unpickle, (self._config, self.collection, self.run, self.registry.isWriteable()))
 
     def __str__(self):
         return "Butler(collection='{}', datastore='{}', registry='{}')".format(
             self.collection, self.datastore, self.registry)
+
+    def isWriteable(self) -> bool:
+        """Return `True` if this `Butler` supports write operations.
+        """
+        return self.registry.isWriteable()
 
     @contextlib.contextmanager
     def transaction(self):
@@ -419,11 +435,10 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the butler was not constructed with a run, and is hence
-            read-only.
+            Raised if the butler is read-only.
         """
         log.debug("Butler put: %s, dataId=%s, producer=%s", datasetRefOrType, dataId, producer)
-        if self.run is None:
+        if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
         if isinstance(datasetRefOrType, DatasetRef) and datasetRefOrType.id is not None:
@@ -692,6 +707,8 @@ class Butler:
 
         Raises
         ------
+        TypeError
+            Raised if the butler is read-only.
         ValueError
             Raised if ``delete`` and ``remember`` are both `False`; a dataset
             cannot remain in a `Datastore` if all of its `Registry` entries are
@@ -700,6 +717,8 @@ class Butler:
             Raised if ``remember`` is `False` but the dataset is still present
             in a `Datastore` not recognized by this `Butler` client.
         """
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref = self.registry.find(self.collection, datasetType, dataId)
@@ -757,8 +776,7 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the butler was not constructed with a run, and is hence
-            read-only.
+            Raised if the butler is read-only.
         NotImplementedError
             Raised if the `Datastore` does not support the given transfer mode.
         DatasetTypeNotSupportedError
@@ -781,7 +799,7 @@ class Butler:
         filesystem operations as well, but this cannot be implemented
         rigorously for most datastores.
         """
-        if self.run is None:
+        if not self.isWriteable():
             raise TypeError("Butler is read-only.")
 
         # Reorganize the inputs so they're grouped by DatasetType and then
@@ -919,8 +937,11 @@ class Butler:
         Raises
         ------
         TypeError
-            Raised if the set of arguments passed is inconsistent.
+            Raised if the set of arguments passed is inconsistent, or if the
+            butler is read-only.
         """
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
         if format is None:
             if filename is None:
                 raise TypeError("At least one of 'filename' or 'format' must be provided.")
