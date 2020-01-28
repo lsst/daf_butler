@@ -30,7 +30,7 @@ import dataclasses
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .core import DatasetRef
+    from .core import DatasetRef, ExpandedDataCoordinate
     from .butler import Butler
 
 
@@ -72,6 +72,13 @@ class DeferredDatasetHandle:
             mergedParameters = {}
 
         return self.butler.getDirect(self.ref, parameters=mergedParameters)
+
+    @property
+    def dataId(self) -> ExpandedDataCoordinate:
+        """The full data ID associated with the dataset
+        (`ExpandedDataCoordinate`).
+        """
+        return self.ref.dataId
 
     butler: Butler
     """The butler that will be used to fetch the dataset (`Butler`).
