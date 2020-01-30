@@ -28,9 +28,8 @@ import shutil
 import tempfile
 import unittest
 
-import numpy as np
-
-from lsst.daf.butler.tests import makeTestRepo, makeTestCollection, addDatasetType, expandUniqueId
+from lsst.daf.butler.tests import (makeTestRepo, makeTestCollection, addDatasetType, expandUniqueId,
+                                   MetricsExample, registerMetricsExample)
 
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
@@ -51,8 +50,9 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         }
         cls.creatorButler = makeTestRepo(cls.root, dataIds)
 
-        addDatasetType(cls.creatorButler, "DataType1", {"instrument"}, "NumpyArray")
-        addDatasetType(cls.creatorButler, "DataType2", {"instrument", "visit", "detector"}, "NumpyArray")
+        registerMetricsExample(cls.creatorButler)
+        addDatasetType(cls.creatorButler, "DataType1", {"instrument"}, "StructuredDataNoComponents")
+        addDatasetType(cls.creatorButler, "DataType2", {"instrument", "visit"}, "StructuredData")
 
     @classmethod
     def tearDownClass(cls):
@@ -92,7 +92,8 @@ class ButlerUtilsTestSuite(unittest.TestCase):
                                      {"instrument": "dummyCam", "detector": 5}])
 
     def testAddDatasetType(self):
-        self.assertEqual(len(self.butler.registry.getAllDatasetTypes()), 2)
+        # 1 for StructuredDataNoComponents, 4 for StructuredData
+        self.assertEqual(len(self.butler.registry.getAllDatasetTypes()), 5)
 
         # Testing the DatasetType objects is not practical, because all tests
         # need a DimensionUniverse. So just check that we have the dataset
@@ -105,9 +106,21 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         with self.assertRaises(ValueError):
             addDatasetType(self.butler, "DataType3", {"instrument"}, "UnstorableType")
 
+    def testRegisterMetricsExample(self):
+        id1 = {"instrument": "notACam"}
+        id2 = expandUniqueId(self.butler, {"visit": 101})
+        data = MetricsExample(summary={"answer": 42, "question": "unknown"})
+
+        self.butler.put(data, "DataType1", id1)
+        self.assertEqual(self.butler.get("DataType1", id1), data)
+
+        self.butler.put(data, "DataType2", id2)
+        self.assertEqual(self.butler.get("DataType2", id2), data)
+        self.assertEqual(self.butler.get("DataType2.summary", id2), data.summary)
+
     def testUniqueButler(self):
         dataId = {"instrument": "notACam"}
-        self.butler.put(np.array([1, 2, 3]), "DataType1", dataId)
+        self.butler.put(MetricsExample({"answer": 42, "question": "unknown"}), "DataType1", dataId)
         self.assertTrue(self.butler.datasetExists("DataType1", dataId))
 
         newButler = makeTestCollection(self.creatorButler)
