@@ -28,8 +28,8 @@ import numpy as np
 from lsst.daf.butler import Butler, DatasetType
 
 
-def makeTestRepo(root, dataIds):
-    """Create an empty repository with default configuration.
+def makeTestRepo(root, dataIds, *, config=None, **kwargs):
+    """Create an empty repository with dummy data IDs.
 
     Parameters
     ----------
@@ -40,6 +40,12 @@ def makeTestRepo(root, dataIds):
         is an iterable of names for that dimension (e.g., detector IDs for
         `"detector"`). Related dimensions (e.g., instruments and detectors)
         are linked arbitrarily.
+    config : `lsst.daf.butler.Config`, optional
+        A configuration for the repository (for details, see
+        `lsst.daf.butler.Butler.makeRepo`). If omitted, uses the
+        default config.
+    **kwargs
+        Extra arguments to `lsst.daf.butler.Butler.makeRepo`.
 
     Returns
     -------
@@ -62,8 +68,9 @@ def makeTestRepo(root, dataIds):
     `expandUniqueId`, so long as no other code has inserted dimensions into
     the repository registry.
     """
-    Butler.makeRepo(root)
-    butler = Butler(root, writeable=True)
+    # newConfig guards against location-related keywords like outfile
+    newConfig = Butler.makeRepo(root, config=config, **kwargs)
+    butler = Butler(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.registry.dimensions)
     for dimension, records in dimensionRecords.items():
         butler.registry.insertDimensionData(dimension, *records)

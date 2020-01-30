@@ -67,6 +67,16 @@ class ButlerUtilsTestSuite(unittest.TestCase):
     def testButlerValid(self):
         self.butler.validateConfiguration()
 
+    def testButlerKwargs(self):
+        # outfile has the most obvious effects of any Butler.makeRepo keyword
+        temp = tempfile.mkdtemp(dir=TESTDIR)
+        try:
+            path = os.path.join(temp, 'oddConfig.py')
+            makeTestRepo(self.root, {}, outfile=path)
+            self.assertTrue(os.path.isfile(path))
+        finally:
+            shutil.rmtree(temp, ignore_errors=True)
+
     def _checkButlerDimension(self, dimensions, query, expected):
         result = [id for id in self.butler.registry.queryDimensions(
             dimensions,
