@@ -22,63 +22,24 @@
 """
 Module containing classes used with deferring dataset loading
 """
+from __future__ import annotations
 
 __all__ = ("DeferredDatasetHandle",)
 
 import dataclasses
-import typing
-import types
+from typing import Any, Optional, TYPE_CHECKING
 
-from .core import DataId, DatasetRef, DatasetType
-
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
+    from .core import DatasetRef, ExpandedDataCoordinate
     from .butler import Butler
 
 
 @dataclasses.dataclass(frozen=True)
 class DeferredDatasetHandle:
-    """This is a class to support deferred loading of a dataset from a butler.
-
-    Parameters
-    ----------
-    butler : `Butler`
-        The butler that will be used to fetch the deferred dataset
-    datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-        When `DatasetRef` the `dataId` should be `None`.
-        Otherwise the `DatasetType` or name thereof.
-    dataId : `dict` or `DataCoordinate`, optional
-        A dictionary of `Dimension` link name, value pairs that label the
-        `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-        should be provided as the first argument.
-    parameters : `dict`
-        Additional StorageClass-defined options to control reading,
-        typically used to efficiently read only a subset of the dataset.
-    kwds : `dict`
-        Additional keyword arguments used to augment or construct a
-        `DataId`.  See `DataId` construction parameters.
-
+    """Proxy class that provides deferred loading of a dataset from a butler.
     """
 
-    datasetRefOrType: typing.Union[DatasetRef, DatasetType, str]
-    dataId: DataId
-    parameters: typing.Union[dict, None]
-    kwds: dict
-
-    def __init__(self, butler: 'Butler', datasetRefOrType: typing.Union[DatasetRef, DatasetType, str],
-                 dataId: typing.Union[dict, DataId], parameters: typing.Union[dict, None], kwds: dict):
-        object.__setattr__(self, 'datasetRefOrType', datasetRefOrType)
-        object.__setattr__(self, 'dataId', dataId)
-        object.__setattr__(self, 'parameters', parameters)
-        object.__setattr__(self, 'kwds', kwds)
-
-        # Closure over butler to discourage accessing a raw butler through a
-        # deferred handle
-        def _get(self, parameters: typing.Union[None, dict]) -> typing.Any:
-            return butler.get(self.datasetRefOrType, self.dataId, parameters, **self.kwds)
-
-        object.__setattr__(self, '_get', types.MethodType(_get, self))
-
-    def get(self, parameters: typing.Union[None, dict] = None, **kwargs: dict) -> typing.Any:
+    def get(self, *, parameters: Optional = None, **kwargs: dict) -> Any:
         """ Retrieves the dataset pointed to by this handle
 
         This handle may be used multiple times, possibly with different
@@ -110,4 +71,24 @@ class DeferredDatasetHandle:
         else:
             mergedParameters = {}
 
-        return self._get(mergedParameters)
+        return self.butler.getDirect(self.ref, parameters=mergedParameters)
+
+    @property
+    def dataId(self) -> ExpandedDataCoordinate:
+        """The full data ID associated with the dataset
+        (`ExpandedDataCoordinate`).
+        """
+        return self.ref.dataId
+
+    butler: Butler
+    """The butler that will be used to fetch the dataset (`Butler`).
+    """
+
+    ref: DatasetRef
+    """Reference to the dataset (`DatasetRef`).
+    """
+
+    parameters: Optional[dict]
+    """Optional parameters that may be used to specify a subset of the dataset
+    to be loaded (`dict` or `None`).
+    """

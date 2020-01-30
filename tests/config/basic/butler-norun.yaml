@@ -1,3 +1,0 @@
-datastore: !include posixDatastore.yaml
-storageClasses: !include storageClasses.yaml
-composites: !include composites.yaml

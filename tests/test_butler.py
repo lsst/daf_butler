@@ -139,11 +139,17 @@ class ButlerTests:
     def testConstructor(self):
         """Independent test of constructor.
         """
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
         collections = butler.registry.getAllCollections()
         self.assertEqual(collections, set())
+
+        butler2 = Butler(butler=butler, collection="other")
+        self.assertEqual(butler2.collection, "other")
+        self.assertIsNone(butler2.run)
+        self.assertIs(butler.registry, butler2.registry)
+        self.assertIs(butler.datastore, butler2.datastore)
 
     def testBasicPutGet(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
@@ -158,7 +164,7 @@ class ButlerTests:
         self.runPutGetTest(storageClass, "test_metric_comp")
 
     def runPutGetTest(self, storageClass, datasetTypeName):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
 
         # There will not be a collection yet
         collections = butler.registry.getAllCollections()
@@ -203,6 +209,12 @@ class ButlerTests:
                 self.assertEqual(metric, metricOut)
                 # Test get with a datasetRef
                 metricOut = butler.get(ref)
+                self.assertEqual(metric, metricOut)
+                # Test getDeferred with dataId
+                metricOut = butler.getDeferred(ref.datasetType.name, dataId).get()
+                self.assertEqual(metric, metricOut)
+                # Test getDeferred with a datasetRef
+                metricOut = butler.getDeferred(ref).get()
                 self.assertEqual(metric, metricOut)
 
                 # Check we can get components
@@ -257,6 +269,18 @@ class ButlerTests:
         self.assertEqual(metric.summary, sliced.summary)
         self.assertEqual(metric.output, sliced.output)
         self.assertEqual(metric.data[:stop], sliced.data)
+        # getDeferred with parameters
+        sliced = butler.getDeferred(ref, parameters={"slice": slice(stop)}).get()
+        self.assertNotEqual(metric, sliced)
+        self.assertEqual(metric.summary, sliced.summary)
+        self.assertEqual(metric.output, sliced.output)
+        self.assertEqual(metric.data[:stop], sliced.data)
+        # getDeferred with deferred parameters
+        sliced = butler.getDeferred(ref).get(parameters={"slice": slice(stop)})
+        self.assertNotEqual(metric, sliced)
+        self.assertEqual(metric.summary, sliced.summary)
+        self.assertEqual(metric.output, sliced.output)
+        self.assertEqual(metric.data[:stop], sliced.data)
 
         if storageClass.isComposite():
             # Delete one component and check that the other components
@@ -301,8 +325,52 @@ class ButlerTests:
 
         return butler
 
+        # Construct a butler with no run or collection, but make it writeable.
+        butler = Butler(self.tmpConfigFile, writeable=True)
+        # Create and register a DatasetType
+        dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
+        datasetType = self.addDatasetType("example", dimensions,
+                                          self.storageClassFactory.getStorageClass("StructuredData"),
+                                          butler.registry)
+        # Add needed Dimensions
+        butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
+        butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
+                                                                "name": "d-r",
+                                                                "abstract_filter": "R"})
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
+                                                      "name": "fourtwentythree", "physical_filter": "d-r"})
+        dataId = {"instrument": "DummyCamComp", "visit": 423}
+        # Create dataset.
+        metric = makeExampleMetrics()
+        # Register a new run and put dataset.
+        run = "deferred"
+        butler.registry.registerRun(run)
+        ref = butler.put(metric, datasetType, dataId, run=run)
+        # Putting with no run should fail with TypeError.
+        with self.assertRaises(TypeError):
+            butler.put(metric, datasetType, dataId)
+        # Dataset should exist.
+        self.assertTrue(butler.datasetExists(datasetType, dataId, collection=run))
+        # We should be able to get the dataset back, but with and without
+        # a deferred dataset handle.
+        self.assertEqual(metric, butler.get(datasetType, dataId, collection=run))
+        self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collection=run).get())
+        # Trying to find the dataset without any collection is a TypeError.
+        with self.assertRaises(TypeError):
+            butler.datasetExists(datasetType, dataId)
+        with self.assertRaises(TypeError):
+            butler.get(datasetType, dataId)
+        with self.assertRaises(TypeError):
+            butler.remove(datasetType, dataId)
+        # Associate the dataset with a different collection.
+        butler.registry.associate("tagged", [ref])
+        # Deleting the dataset from the new collection should make it findable
+        # in the original collection but without a Datastore entry.
+        butler.remove(datasetType, dataId, collection="tagged")
+        self.assertFalse(butler.datasetExists(datasetType, dataId, collection=run))
+
     def testIngest(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
 
         # Create and register a DatasetType
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "detector"])
@@ -395,15 +463,15 @@ class ButlerTests:
     def testPickle(self):
         """Test pickle support.
         """
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
-        self.assertEqual(butlerOut.config, butler.config)
+        self.assertEqual(butlerOut._config, butler._config)
         self.assertEqual(butlerOut.collection, butler.collection)
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         dimensions = butler.registry.dimensions.extract(["instrument", "visit", "physical_filter"])
         dimensionEntries = [
             ("instrument", {"instrument": "DummyCam"}, {"instrument": "DummyHSC"},
@@ -450,7 +518,7 @@ class ButlerTests:
                                              "datasetType.component"])
 
     def testTransaction(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         datasetTypeName = "test_metric"
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
         dimensionEntries = (("instrument", {"instrument": "DummyCam"}),
@@ -510,14 +578,14 @@ class ButlerTests:
 
         butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile))
         limited = Config(self.configFile)
-        butler1 = Butler(butlerConfig, collection="ingest")
+        butler1 = Butler(butlerConfig)
         butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
                                        config=Config(self.configFile))
         full = Config(self.tmpConfigFile)
-        butler2 = Butler(butlerConfig, collection="ingest")
+        butler2 = Butler(butlerConfig)
         # Butlers should have the same configuration regardless of whether
         # defaults were expanded.
-        self.assertEqual(butler1.config, butler2.config)
+        self.assertEqual(butler1._config, butler2._config)
         # Config files loaded directly should not be the same.
         self.assertNotEqual(limited, full)
         # Make sure "limited" doesn't have a few keys we know it should be
@@ -534,10 +602,10 @@ class ButlerTests:
         # work properly with relocatable Butler repo
         butlerConfig.configFile = None
         with self.assertRaises(ValueError):
-            Butler(butlerConfig, collection="ingest")
+            Butler(butlerConfig)
 
     def testStringification(self):
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
         butlerStr = str(butler)
 
         if self.datastoreStr is not None:
@@ -568,7 +636,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
 
     def testPutTemplates(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        butler = Butler(self.tmpConfigFile)
+        butler = Butler(self.tmpConfigFile, run="ingest")
 
         # Add needed Dimensions
         butler.registry.insertDimensionData("instrument", {"name": "DummyCamComp"})
@@ -642,7 +710,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
                 Butler.makeRepo(importDir, config=Config(self.configFile))
-                importButler = Butler(importDir)
+                importButler = Butler(importDir, run="ingest")
                 importButler.import_(filename=exportFile, directory=exportButler.datastore.root,
                                      transfer="symlink")
                 for ref in datasets:
@@ -718,27 +786,6 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.dir2, "butler2.yaml")))
         self.assertFalse(os.path.exists(os.path.join(self.dir1, "butler.yaml")))
         self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
-
-
-class ButlerConfigNoRunTestCase(unittest.TestCase):
-    """Test case for butler config which does not have ``run``.
-    """
-    configFile = os.path.join(TESTDIR, "config/basic/butler-norun.yaml")
-
-    def testPickle(self):
-        """Test pickle support.
-        """
-        self.root = tempfile.mkdtemp(dir=TESTDIR)
-        Butler.makeRepo(self.root, config=Config(self.configFile))
-        self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
-        butler = Butler(self.tmpConfigFile, run="ingest")
-        butlerOut = pickle.loads(pickle.dumps(butler))
-        self.assertIsInstance(butlerOut, Butler)
-        self.assertEqual(butlerOut.config, butler.config)
-
-    def tearDown(self):
-        if self.root is not None and os.path.exists(self.root):
-            shutil.rmtree(self.root, ignore_errors=True)
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
