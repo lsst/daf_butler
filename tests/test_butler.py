@@ -788,6 +788,28 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
 
 
+class ButlerMakeRepoOutfileTestCase(PosixDatastoreButlerTestCase):
+    """Test that a config file created by makeRepo outside of repo works."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+
+        self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
+        Butler.makeRepo(self.root, config=Config(self.configFile),
+                        outfile=self.tmpConfigFile)
+
+    def tearDown(self):
+        if os.path.exists(self.root2):
+            shutil.rmtree(self.root2, ignore_errors=True)
+        super().tearDown()
+
+    def testMakeRepo(self):
+        """This test makes no sense for the makeRepo configuration we
+        are using in this class so skip it."""
+        pass
+
+
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
 @mock_s3
 class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase):

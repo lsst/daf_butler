@@ -223,7 +223,9 @@ class Butler:
             forced into the resulting config if appropriate.
         outfile : `str`, optional
             If not-`None`, the output configuration will be written to this
-            location rather than into the repository itself.
+            location rather than into the repository itself. Can be a URI
+            string.  Can refer to a directory that will be used to write
+            ``butler.yaml``.
 
         Returns
         -------
@@ -291,7 +293,15 @@ class Butler:
 
         if standalone:
             config.merge(full)
-        config.dumpToUri(uri)
+        if outfile is not None:
+            # When writing to a separate location we must include
+            # the root of the butler repo in the config else it won't know
+            # where to look.
+            config["root"] = uri.geturl()
+            configURI = outfile
+        else:
+            configURI = uri
+        config.dumpToUri(configURI)
 
         # Create Registry and populate tables
         Registry.fromConfig(config, create=createRegistry, butlerRoot=root)
