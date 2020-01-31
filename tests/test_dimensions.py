@@ -67,7 +67,8 @@ class DimensionTestCase(unittest.TestCase):
     def testConfigRead(self):
         self.assertEqual(self.universe.dimensions.names,
                          {"instrument", "visit", "exposure", "detector", "physical_filter",
-                          "abstract_filter", "calibration_label", "skymap", "tract", "patch", "htm7", "htm9"})
+                          "abstract_filter", "subfilter", "calibration_label",
+                          "skymap", "tract", "patch", "htm7", "htm9"})
 
     def testGraphs(self):
         self.checkGraphInvariants(self.universe.empty)
