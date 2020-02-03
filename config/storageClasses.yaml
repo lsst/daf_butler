@@ -140,6 +140,8 @@ storageClasses:
     pytype: numpy.ndarray
   StrayLightData:
     pytype: lsst.ip.isr.StrayLightData
+  BrighterFatterKernel:
+    pytype: lsst.cp.pipe.makeBrighterFatterKernel.BrighterFatterKernel
   Thumbnail:
     pytype: numpy.ndarray
   Plot:
