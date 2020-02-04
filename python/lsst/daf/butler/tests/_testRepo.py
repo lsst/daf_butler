@@ -25,7 +25,7 @@ __all__ = ["makeTestRepo", "makeTestCollection", "addDatasetType", "expandUnique
 
 import numpy as np
 
-from lsst.daf.butler import Butler, DatasetType
+from lsst.daf.butler import Butler, Config, DatasetType
 
 
 def makeTestRepo(root, dataIds, *, config=None, **kwargs):
@@ -42,8 +42,8 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
         are linked arbitrarily.
     config : `lsst.daf.butler.Config`, optional
         A configuration for the repository (for details, see
-        `lsst.daf.butler.Butler.makeRepo`). If omitted, uses the
-        default config.
+        `lsst.daf.butler.Butler.makeRepo`). If omitted, creates a repository
+        with default dataset and storage types, but optimized for speed.
     **kwargs
         Extra arguments to `lsst.daf.butler.Butler.makeRepo`.
 
@@ -68,6 +68,11 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     `expandUniqueId`, so long as no other code has inserted dimensions into
     the repository registry.
     """
+    if not config:
+        config = Config()
+        config["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
+        config["datastore", "checksum"] = False  # In case of future changes
+        config["registry", "db"] = "sqlite:///:memory:"
     # newConfig guards against location-related keywords like outfile
     newConfig = Butler.makeRepo(root, config=config, **kwargs)
     butler = Butler(newConfig, writeable=True)
