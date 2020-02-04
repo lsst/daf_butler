@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING, Iterable, Optional, Type
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler.core.utils import transactional
-from lsst.daf.butler import FileDataset, StoredFileInfo, Formatter
+from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, Formatter
 
 if TYPE_CHECKING:
     from lsst.daf.butler import DatasetRef
@@ -74,6 +74,12 @@ class PosixDatastore(FileLikeDatastore):
     def __init__(self, config, registry, butlerRoot=None):
         super().__init__(config, registry, butlerRoot)
 
+        # Check that root is a valid URI for this datastore
+        root = ButlerURI(self.root)
+        if root.scheme and root.scheme != "file":
+            raise ValueError(f"Root location must only be a file URI not {self.root}")
+
+        self.root = root.path
         if not os.path.isdir(self.root):
             if "create" not in self.config or not self.config["create"]:
                 raise ValueError(f"No valid root at: {self.root}")

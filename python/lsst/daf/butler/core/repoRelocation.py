@@ -24,6 +24,7 @@
 __all__ = ("BUTLER_ROOT_TAG", "replaceRoot")
 
 import os.path
+from .location import ButlerURI
 
 BUTLER_ROOT_TAG = "<butlerRoot>"
 """The special string to be used in configuration files to indicate that
@@ -68,4 +69,9 @@ def replaceRoot(configRoot, butlerRoot):
         raise ValueError(f"Required to replace {BUTLER_ROOT_TAG} in '{configRoot}' "
                          "but a replacement has not been defined")
 
-    return configRoot.replace(BUTLER_ROOT_TAG, os.path.abspath(butlerRoot))
+    # Use absolute file path if this uses file scheme, else use unchanged
+    uri = ButlerURI(butlerRoot)
+    if not uri.scheme or uri.scheme == "file":
+        butlerRoot = os.path.abspath(uri.path)
+
+    return configRoot.replace(BUTLER_ROOT_TAG, butlerRoot)

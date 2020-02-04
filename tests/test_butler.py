@@ -96,10 +96,11 @@ class ButlerConfigTests(unittest.TestCase):
         self.assertEqual(config2[key], "override_record")
 
 
-class ButlerTests:
-    """Tests for Butler.
-    """
-    useTempRoot = True
+class ButlerPutGetTests:
+    """Helper method for running a suite of put/get tests from different
+    butler configurations."""
+
+    root = None
 
     @staticmethod
     def addDatasetType(datasetTypeName, dimensions, storageClass, registry):
@@ -122,46 +123,9 @@ class ButlerTests:
             result = butler.get(compTypeName, dataId)
             self.assertEqual(result, getattr(reference, component))
 
-    def setUp(self):
-        """Create a new butler root for each test."""
-        if self.useTempRoot:
-            self.root = tempfile.mkdtemp(dir=TESTDIR)
-            Butler.makeRepo(self.root, config=Config(self.configFile))
-            self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
-        else:
-            self.root = None
-            self.tmpConfigFile = self.configFile
-
     def tearDown(self):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
-
-    def testConstructor(self):
-        """Independent test of constructor.
-        """
-        butler = Butler(self.tmpConfigFile, run="ingest")
-        self.assertIsInstance(butler, Butler)
-
-        collections = butler.registry.getAllCollections()
-        self.assertEqual(collections, set())
-
-        butler2 = Butler(butler=butler, collection="other")
-        self.assertEqual(butler2.collection, "other")
-        self.assertIsNone(butler2.run)
-        self.assertIs(butler.registry, butler2.registry)
-        self.assertIs(butler.datastore, butler2.datastore)
-
-    def testBasicPutGet(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
-        self.runPutGetTest(storageClass, "test_metric")
-
-    def testCompositePutGetConcrete(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        self.runPutGetTest(storageClass, "test_metric")
-
-    def testCompositePutGetVirtual(self):
-        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
-        self.runPutGetTest(storageClass, "test_metric_comp")
 
     def runPutGetTest(self, storageClass, datasetTypeName):
         butler = Butler(self.tmpConfigFile, run="ingest")
@@ -368,6 +332,49 @@ class ButlerTests:
         # in the original collection but without a Datastore entry.
         butler.remove(datasetType, dataId, collection="tagged")
         self.assertFalse(butler.datasetExists(datasetType, dataId, collection=run))
+
+
+class ButlerTests(ButlerPutGetTests):
+    """Tests for Butler.
+    """
+    useTempRoot = True
+
+    def setUp(self):
+        """Create a new butler root for each test."""
+        if self.useTempRoot:
+            self.root = tempfile.mkdtemp(dir=TESTDIR)
+            Butler.makeRepo(self.root, config=Config(self.configFile))
+            self.tmpConfigFile = os.path.join(self.root, "butler.yaml")
+        else:
+            self.root = None
+            self.tmpConfigFile = self.configFile
+
+    def testConstructor(self):
+        """Independent test of constructor.
+        """
+        butler = Butler(self.tmpConfigFile, run="ingest")
+        self.assertIsInstance(butler, Butler)
+
+        collections = butler.registry.getAllCollections()
+        self.assertEqual(collections, set())
+
+        butler2 = Butler(butler=butler, collection="other")
+        self.assertEqual(butler2.collection, "other")
+        self.assertIsNone(butler2.run)
+        self.assertIs(butler.registry, butler2.registry)
+        self.assertIs(butler.datastore, butler2.datastore)
+
+    def testBasicPutGet(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        self.runPutGetTest(storageClass, "test_metric")
+
+    def testCompositePutGetConcrete(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredData")
+        self.runPutGetTest(storageClass, "test_metric")
+
+    def testCompositePutGetVirtual(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
+        self.runPutGetTest(storageClass, "test_metric_comp")
 
     def testIngest(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
@@ -786,6 +793,70 @@ class ButlerExplicitRootTestCase(PosixDatastoreButlerTestCase):
         self.assertTrue(os.path.exists(os.path.join(self.dir2, "butler2.yaml")))
         self.assertFalse(os.path.exists(os.path.join(self.dir1, "butler.yaml")))
         self.assertTrue(os.path.exists(os.path.join(self.dir1, "gen3.sqlite3")))
+
+
+class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
+    """Test that a config file created by makeRepo outside of repo works."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+
+        self.tmpConfigFile = os.path.join(self.root2, "different.yaml")
+        Butler.makeRepo(self.root, config=Config(self.configFile),
+                        outfile=self.tmpConfigFile)
+
+    def tearDown(self):
+        if os.path.exists(self.root2):
+            shutil.rmtree(self.root2, ignore_errors=True)
+        super().tearDown()
+
+    def testConfigExistence(self):
+        c = Config(self.tmpConfigFile)
+        uri_config = ButlerURI(c["root"])
+        uri_expected = ButlerURI(self.root)
+        self.assertEqual(uri_config.geturl(), uri_expected.geturl())
+        self.assertNotIn(":", uri_config.path, "Check for URI concatenated with normal path")
+
+    def testPutGet(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        self.runPutGetTest(storageClass, "test_metric")
+
+
+class ButlerMakeRepoOutfileDirTestCase(ButlerMakeRepoOutfileTestCase):
+    """Test that a config file created by makeRepo outside of repo works."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+
+        self.tmpConfigFile = self.root2
+        Butler.makeRepo(self.root, config=Config(self.configFile),
+                        outfile=self.tmpConfigFile)
+
+    def testConfigExistence(self):
+        # Append the yaml file else Config constructor does not know the file
+        # type.
+        self.tmpConfigFile = os.path.join(self.tmpConfigFile, "butler.yaml")
+        super().testConfigExistence()
+
+
+class ButlerMakeRepoOutfileUriTestCase(ButlerMakeRepoOutfileTestCase):
+    """Test that a config file created by makeRepo outside of repo works."""
+
+    configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp(dir=TESTDIR)
+        self.root2 = tempfile.mkdtemp(dir=TESTDIR)
+
+        self.tmpConfigFile = ButlerURI(os.path.join(self.root2, "something.yaml")).geturl()
+        Butler.makeRepo(self.root, config=Config(self.configFile),
+                        outfile=self.tmpConfigFile)
 
 
 @unittest.skipIf(not boto3, "Warning: boto3 AWS SDK not found!")
