@@ -136,3 +136,10 @@ Support API
    :no-main-docstr:
    :headings: ^"
    :include-all-objects:
+
+Test utilities
+--------------
+
+.. automodapi:: lsst.daf.butler.tests
+   :no-main-docstr:
+   :no-inheritance-diagram:

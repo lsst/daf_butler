@@ -50,13 +50,12 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from lsst.daf.butler import FileDataset
-from examplePythonTypes import MetricsExample
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 
-from datasetsHelper import MultiDetectorFormatter
+from lsst.daf.butler.tests import MultiDetectorFormatter, MetricsExample
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 

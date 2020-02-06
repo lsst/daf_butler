@@ -24,7 +24,7 @@
 import unittest
 
 from lsst.daf.butler import Constraints, ConstraintsConfig, StorageClass, ValidationError, DimensionUniverse
-from datasetsHelper import DatasetTestHelper
+from lsst.daf.butler.tests import DatasetTestHelper
 
 
 class ConstraintsTestCase(unittest.TestCase, DatasetTestHelper):

@@ -25,8 +25,140 @@ large external dependencies on python classes such as afw or serialization
 formats such as FITS or HDF5.
 """
 
+__all__ = ("ListAssembler", "MetricsAssembler", "MetricsExample", "registerMetricsExample")
+
+
 import copy
-from lsst.daf.butler import CompositeAssembler
+from lsst.daf.butler import CompositeAssembler, StorageClass
+
+
+def registerMetricsExample(butler):
+    """Modify a repository to support reading and writing
+    `MetricsExample` objects.
+
+    This method allows `MetricsExample` to be used with test repositories
+    in any package without needing to provide a custom configuration there.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The repository that needs to support `MetricsExample`.
+
+    Notes
+    -----
+    This method enables the following storage classes:
+
+    ``StructuredData``
+        A `MetricsExample` whose ``summary``, ``output``, and ``data`` members
+        can be retrieved as dataset components.
+    ``StructuredDataNoComponents``
+        A monolithic write of a `MetricsExample`.
+    """
+    yamlDict = _addFullStorageClass(
+        butler,
+        "StructuredDataDictYaml",
+        "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter",
+        pytype=dict,
+    )
+
+    yamlList = _addFullStorageClass(
+        butler,
+        "StructuredDataListYaml",
+        "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter",
+        pytype=list,
+        parameters={"slice"},
+        assembler="lsst.daf.butler.tests.ListAssembler"
+    )
+
+    _addFullStorageClass(
+        butler,
+        "StructuredDataNoComponents",
+        "lsst.daf.butler.formatters.pickleFormatter.PickleFormatter",
+        pytype=MetricsExample,
+        parameters={"slice"},
+        assembler="lsst.daf.butler.tests.MetricsAssembler"
+    )
+
+    _addFullStorageClass(
+        butler,
+        "StructuredData",
+        "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter",
+        pytype=MetricsExample,
+        components={"summary": yamlDict,
+                    "output": yamlDict,
+                    "data": yamlList,
+                    },
+        assembler="lsst.daf.butler.tests.MetricsAssembler"
+    )
+
+
+def _addFullStorageClass(butler, name, formatter, *args, **kwargs):
+    """Create a storage class-formatter pair in a repository if it does not
+    already exist.
+
+    Parameters
+    ----------
+    butler : `lsst.daf.butler.Butler`
+        The repository that needs to contain the class.
+    name : `str`
+        The name to use for the class.
+    formatter : `str`
+        The formatter to use with the storage class. Ignored if ``butler``
+        does not use formatters.
+    *args
+    **kwargs
+        Arguments, other than ``name``, to the `~lsst.daf.butler.StorageClass`
+        constructor.
+
+    Returns
+    -------
+    class : `lsst.daf.butler.StorageClass`
+        The newly created storage class, or the class of the same name
+        previously found in the repository.
+    """
+    storageRegistry = butler.datastore.storageClassFactory
+
+    storage = StorageClass(name, *args, **kwargs)
+    try:
+        storageRegistry.registerStorageClass(storage)
+    except ValueError:
+        storage = storageRegistry.getStorageClass(name)
+
+    for registry in _getAllFormatterRegistries(butler.datastore):
+        registry.registerFormatter(storage, formatter)
+
+    return storage
+
+
+def _getAllFormatterRegistries(datastore):
+    """Return all formatter registries used by a datastore.
+
+    Parameters
+    ----------
+    datastore : `lsst.daf.butler.Datastore`
+        A datastore containing zero or more formatter registries.
+
+    Returns
+    -------
+    registries : `list` [`lsst.daf.butler.FormatterRegistry`]
+        A possibly empty list of all formatter registries used
+        by ``datastore``.
+    """
+    try:
+        datastores = datastore.datastores
+    except AttributeError:
+        datastores = [datastore]
+
+    registries = []
+    for datastore in datastores:
+        try:
+            # Not all datastores have a formatterFactory
+            formatterRegistry = datastore.formatterFactory
+        except AttributeError:
+            pass  # no formatter needed
+        else:
+            registries.append(formatterRegistry)
+    return registries
 
 
 class MetricsExample:
