@@ -28,6 +28,7 @@ import shutil
 import tempfile
 import unittest
 
+import lsst.daf.butler
 from lsst.daf.butler.tests import (makeTestRepo, makeTestCollection, addDatasetType, expandUniqueId,
                                    MetricsExample, registerMetricsExample)
 
@@ -117,6 +118,29 @@ class ButlerUtilsTestSuite(unittest.TestCase):
         self.butler.put(data, "DataType2", id2)
         self.assertEqual(self.butler.get("DataType2", id2), data)
         self.assertEqual(self.butler.get("DataType2.summary", id2), data.summary)
+
+    def testRegisterMetricsExampleChained(self):
+        """Regression test for registerMetricsExample having no effect
+        on ChainedDatastore.
+        """
+        temp = tempfile.mkdtemp(dir=TESTDIR)
+        try:
+            config = lsst.daf.butler.Config()
+            config["datastore", "cls"] = "lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore"
+            config["datastore", "datastores"] = [{
+                "cls": "lsst.daf.butler.datastores.posixDatastore.PosixDatastore",
+            }]
+
+            repo = lsst.daf.butler.Butler.makeRepo(temp, config=config)
+            butler = lsst.daf.butler.Butler(repo, run="chainedExample")
+            registerMetricsExample(butler)
+            addDatasetType(butler, "DummyType", {}, "StructuredDataNoComponents")
+
+            data = MetricsExample(summary={})
+            # Should not raise
+            butler.put(data, "DummyType")
+        finally:
+            shutil.rmtree(temp, ignore_errors=True)
 
     def testUniqueButler(self):
         dataId = {"instrument": "notACam"}

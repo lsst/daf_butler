@@ -124,15 +124,41 @@ def _addFullStorageClass(butler, name, formatter, *args, **kwargs):
     except ValueError:
         storage = storageRegistry.getStorageClass(name)
 
-    try:
-        # if lsst.daf.butler.datastores.fileLikeDatastore.FileLikeDatastore
-        formatterRegistry = butler.datastore.formatterFactory
-    except AttributeError:
-        pass  # no formatter needed
-    else:
-        formatterRegistry.registerFormatter(storage, formatter)
+    for registry in _getAllFormatterRegistries(butler.datastore):
+        registry.registerFormatter(storage, formatter)
 
     return storage
+
+
+def _getAllFormatterRegistries(datastore):
+    """Return all formatter registries used by a datastore.
+
+    Parameters
+    ----------
+    datastore : `lsst.daf.butler.Datastore`
+        A datastore containing zero or more formatter registries.
+
+    Returns
+    -------
+    registries : `list` [`lsst.daf.butler.FormatterRegistry`]
+        A possibly empty list of all formatter registries used
+        by ``datastore``.
+    """
+    try:
+        datastores = datastore.datastores
+    except AttributeError:
+        datastores = [datastore]
+
+    registries = []
+    for datastore in datastores:
+        try:
+            # Not all datastores have a formatterFactory
+            formatterRegistry = datastore.formatterFactory
+        except AttributeError:
+            pass  # no formatter needed
+        else:
+            registries.append(formatterRegistry)
+    return registries
 
 
 class MetricsExample:
