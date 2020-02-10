@@ -819,7 +819,7 @@ class Database(ABC):
             elif bad:
                 raise DatabaseConflictError(f"Conflict in sync on column(s) {bad}.")
             inserted = False
-        return result, inserted
+        return {k: v for k, v in zip(returning, result)} if returning is not None else None, inserted
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
                ) -> Optional[List[int]]:

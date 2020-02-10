@@ -346,7 +346,8 @@ class Registry:
         """
         id = self._runIdsByName.get(name)
         if id is None:
-            (id,), _ = self._db.sync(self._tables.run, keys={"name": name}, returning=["id"])
+            row, _ = self._db.sync(self._tables.run, keys={"name": name}, returning=["id"])
+            id = row["id"]
             self._runIdsByName[name] = id
             self._runNamesById[id] = name
         # Assume that if the run is in the cache, it's in the database, because
