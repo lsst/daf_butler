@@ -807,84 +807,152 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collection=collection, **kwds)
         return self.datastore.exists(ref)
 
-    def remove(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
-               dataId: Optional[DataId] = None, *,
-               delete: bool = True, remember: bool = True, collection: Optional[str] = None, **kwds: Any):
-        """Remove a dataset from the collection and possibly the repository.
-
-        The identified dataset is always at least removed from the Butler's
-        collection.  By default it is also deleted from the Datastore (e.g.
-        files are actually deleted), but the dataset is "remembered" by
-        retaining its row in the dataset and provenance tables in the registry.
-
-        If the dataset is a composite, all components will also be removed.
+    def prune(self, refs: Iterable[DatasetRef], *,
+              disassociate: bool = True,
+              unstore: bool = False,
+              collection: Optional[str] = None,
+              purge: bool = False,
+              recursive: bool = True):
+        """Remove one or more datasets from a collection and/or storage.
 
         Parameters
         ----------
-        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
-            When `DatasetRef` the `dataId` should be `None`.
-            Otherwise the `DatasetType` or name thereof.
-        dataId : `dict` or `DataId`
-            A `dict` of `Dimension` link name, value pairs that label the
-            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
-            should be provided as the first argument.
-        delete : `bool`
-            If `True` (default) actually delete the dataset from the
-            Datastore (i.e. actually remove files).
-        remember : `bool`
-            If `True` (default), retain dataset and provenance records in
-            the `Registry` for this dataset.
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            Datasets to prune.  These must be "resolved" references (not just
+            a `DatasetType` and data ID).
+        disassociate : bool`, optional
+            Disassociate pruned datasets from ``self.collection`` (or the
+            collection given as the ``collection`` argument).  Dataset that are
+            not in this collection are ignored, unless ``purge`` is `True`.
+        unstore : `bool`, optional
+            If `True` (`False` is default) remove these datasets from all
+            datastores known to this butler.  Note that this will make it
+            impossible to retrieve these datasets even via other collections.
+            Datasets that are already not stored are ignored by this option.
         collection : `str`, optional
-            Collection to search, overriding ``self.collection``.
-        kwds
-            Additional keyword arguments used to augment or construct a
-            `DataId`.  See `DataId` parameters.
+            Collection to remove the datasets from, overriding
+            ``self.collection``.  Ignored if ``disassociate`` is `False`.
+        purge : `bool`, optional
+            If `True` (`False` is default), completely remove the dataset from
+            the `Registry`.  To prevent accidental deletions, ``purge`` may
+            only be `True` if all of the following conditions are met:
+
+             - ``disassociate`` is `True`
+             - ``unstore`` is `True`
+             - none of the given datasets are components of some other dataset.
+
+            This mode may remove provenance information from datasets other
+            than those provided, and should be used with extreme care.
+        recursive : `bool`, optional
+            If `True` (default) also prune component datasets of any given
+            composite datasets.  This will only prune components that are
+            actually attached to the given `DatasetRef` objects, which may
+            not reflect what is in the database (especially if they were
+            obtained from `Registry.queryDatasets`, which by does not include
+            components in its results).
 
         Raises
         ------
         TypeError
             Raised if the butler is read-only, if no collection was provided,
-            or if ``delete`` and ``remember`` are both `False`; a dataset
-            cannot remain in a `Datastore` if its `Registry` entries is
-            removed.
-        OrphanedRecordError
-            Raised if ``remember`` is `False` but the dataset is still present
-            in a `Datastore` not recognized by this `Butler` client.
-        ValueError
-            Raised if a resolved `DatasetRef` was passed as an input, but it
-            differs from the one found in the registry in this collection.
+            or the conditions for ``purge=True`` were not met.
+        IOError
+            Raised an incomplete deletion may have left the repository in an
+            inconsistent state.  Only possible if ``unstore=True``, and always
+            accompanied by a chained exception describing the lower-level
+            error.
         """
+        #
+        # TODO: this method can easily leave the repository in an inconsistent
+        # state if unstore=True in the most common configuration, because
+        # PosixDatastore.remove isn't exception safe.  Even if we can't make
+        # file deletion and database deletion truly atomic, we should refactor
+        # the Datastore deletion interface to make it possible to only try to
+        # delete files after we've checked for all of errors we can.  I imagine
+        # that would look something like
+        #
+        #     with self.datastore.removing(refs):
+        #         self.registry.<do some deleting>
+        #
+        # where starting the context manager:
+        #  - starts a registry transaction;
+        #  - checks that the given refs are known to the datastore;
+        #  - computes a list of files (or whatever) to delete later;
+        #  - does what it can to predict whether it will have trouble deleting
+        #    any of them;
+        #  - removes DatasetLocation records from registry, freeing up other
+        #    Registry records to be removed without violating FK constraints.
+        #
+        # When the context manager ends, it:
+        #  - closes the transaction (aborting and doing nothing if that
+        #    raises);
+        #  - attempts to actually delete all of the files, maybe retrying on
+        #    failure, and raising really scary exceptions if it can't.
+        #
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        ref = self._findDatasetRef(datasetRefOrType, dataId, collection=collection, **kwds)
-        if delete:
-            # There is a difference between a concrete composite and virtual
-            # composite. In a virtual composite the datastore is never
-            # given the top level DatasetRef. In the concrete composite
-            # the datastore knows all the refs and will clean up itself
-            # if asked to remove the parent ref.
-            # We can not check configuration for this since we can not trust
-            # that the configuration is the same. We therefore have to ask
-            # if the ref exists or not
-            if self.datastore.exists(ref):
-                self.datastore.remove(ref)
-            elif ref.isComposite():
-                datastoreNames = set(self.datastore.names)
-                for r in ref.components.values():
-                    # If a dataset was removed previously but remembered
-                    # in registry, skip the removal in the datastore.
-                    datastoreLocations = self.registry.getDatasetLocations(r)
-                    if datastoreLocations & datastoreNames:
-                        self.datastore.remove(r)
-            else:
-                raise FileNotFoundError(f"Dataset {ref} not known to datastore")
-        elif not remember:
-            raise ValueError("Cannot retain dataset in Datastore without keeping Registry dataset record.")
-        if remember:
-            self.registry.disassociate(self.collection, [ref])
-        else:
-            # This also implicitly disassociates.
-            self.registry.removeDataset(ref)
+        if disassociate:
+            if collection is None:
+                collection = self.collection
+                if collection is None:
+                    raise TypeError("No collection provided.")
+        if purge:
+            if not disassociate:
+                raise TypeError("Cannot pass purge=True without disassociate=True.")
+            if not unstore:
+                raise TypeError("Cannot pass purge=True without unstore=True.")
+            refs = list(refs)
+            for ref in refs:
+                # isComponent isn't actually reliable, because the dataset type
+                # name isn't the whole story, and that's mildly concerning
+                # because the repo can be corrupted if we try to delete a
+                # component from the Registry before its parent, but this
+                # should be good enough for now.
+                if ref.isComponent():
+                    raise TypeError("Cannot pass purge=True with component DatasetRefs.")
+        if recursive:
+            refs = list(DatasetRef.flatten(refs))
+        with self.transaction():
+            if purge:
+                # For now, just do some checks; we can't actually remove
+                # datasets from registry until their datastore-managed registry
+                # entries are gone.  But we want to catch as many problems as
+                # we can before the point of no return.
+                for ref in refs:
+                    if ref.run != collection:
+                        raise ValueError(f"Cannot purge '{ref}' because it is not in '{collection}'.")
+            elif disassociate:
+                # If we're disassociating but not purging, we can do that
+                # before we try to delete, and it will roll back if deletion
+                # fails.  That will at least do the right thing if deletion
+                # fails because the files couldn't actually be delete (e.g.
+                # due to lack of permissions).
+                self.registry.disassociate(collection, refs)
+            if unstore:
+                try:
+                    # Point of no return: if Datastore.remove ever succeeds
+                    # or fails in a way that nevertheless changes repository
+                    # state, and then we get an exception (either in Datastore
+                    # or Registry) the repo might be corrupted.
+                    for ref in refs:
+                        # There is a difference between a concrete composite
+                        # and virtual composite. In a virtual composite the
+                        # datastore is never given the top level DatasetRef. In
+                        # the concrete composite the datastore knows all the
+                        # refs and will clean up itself if asked to remove the
+                        # parent ref.  We can not check configuration for this
+                        # since we can not trust that the configuration is the
+                        # same. We therefore have to ask if the ref exists or
+                        # not.  This is consistent with the fact that we want
+                        # to ignore already-removed-from-datastore datasets
+                        # anyway.
+                        if self.datastore.exists(ref):
+                            self.datastore.remove(ref)
+                        if purge:
+                            self.registry.removeDataset(ref)
+                except BaseException as err:
+                    raise IOError("WARNING: an incomplete deletion may have put "
+                                  "the repository in a corrupted state.") from err
 
     @transactional
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None, run: Optional[str] = None):
