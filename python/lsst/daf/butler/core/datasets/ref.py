@@ -132,7 +132,7 @@ class DatasetRef:
             return NotImplemented
 
     def __hash__(self) -> int:
-        return hash(self.datasetType, self.dataId, self.id)
+        return hash((self.datasetType, self.dataId, self.id))
 
     @property
     def hash(self) -> bytes:
