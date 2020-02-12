@@ -511,8 +511,8 @@ class Datastore(metaclass=ABCMeta):
                 ref = refs[datasetId]
                 byDatasetType[ref.datasetType].append(ref)
             raise DatasetTypeNotSupportedError(
-                "DatasetType(s) not supported in ingest: " +
-                ", ".join(f"{k.name} ({len(v)} dataset(s))" for k, v in byDatasetType.items())
+                "DatasetType(s) not supported in ingest: "
+                + ", ".join(f"{k.name} ({len(v)} dataset(s))" for k, v in byDatasetType.items())
             )
         self._finishIngest(prepData, transfer=transfer)
 

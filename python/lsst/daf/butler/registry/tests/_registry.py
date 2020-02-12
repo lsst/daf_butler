@@ -714,8 +714,8 @@ class RegistryTests(ABC):
 
         dimensions = DimensionGraph(
             registry.dimensions,
-            dimensions=(calexpType.dimensions.required | mergeType.dimensions.required |
-                        measType.dimensions.required)
+            dimensions=(calexpType.dimensions.required | mergeType.dimensions.required
+                        | measType.dimensions.required)
         )
 
         # add pre-existing datasets
