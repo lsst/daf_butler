@@ -1014,6 +1014,8 @@ class Butler:
         """
         if directory is None and transfer is not None:
             raise TypeError("Cannot transfer without providing a directory.")
+        if transfer == "move":
+            raise TypeError("Transfer may not be 'move': export is read-only")
         if format is None:
             if filename is None:
                 raise TypeError("At least one of 'filename' or 'format' must be provided.")
@@ -1026,15 +1028,14 @@ class Butler:
         BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["export"])
         with open(filename, 'w') as stream:
             backend = BackendClass(stream)
-            with self.transaction():
-                try:
-                    helper = RepoExport(self.registry, self.datastore, backend=backend,
-                                        directory=directory, transfer=transfer)
-                    yield helper
-                except BaseException:
-                    raise
-                else:
-                    helper._finish()
+            try:
+                helper = RepoExport(self.registry, self.datastore, backend=backend,
+                                    directory=directory, transfer=transfer)
+                yield helper
+            except BaseException:
+                raise
+            else:
+                helper._finish()
 
     def import_(self, *, directory: Optional[str] = None,
                 filename: Optional[str] = None,
