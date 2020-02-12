@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["DatasetRef"]
 
 import hashlib
-from typing import Any, Dict, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
 
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
@@ -299,6 +299,40 @@ class DatasetRef:
                           for n in names) + names
 
         return names
+
+    @staticmethod
+    def flatten(refs: Iterable[DatasetRef], *, parents: bool = True) -> Iterator[DatasetRef]:
+        """Recursively transform an iterable over `DatasetRef` to include
+        nested component `DatasetRef` instances.
+
+        Parameters
+        ----------
+        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
+            Input iterable to process.  Must contain only resolved `DatasetRef`
+            instances (i.e. with `DatasetRef.components` not `None`).
+        parents : `bool`, optional
+            If `True` (default) include the given datasets in the output
+            iterable.  If `False`, include only their components.  This does
+            not propagate recursively - only the outermost level of parents
+            is ignored if ``parents`` is `False`.
+
+        Yields
+        ------
+        ref : `DatasetRef`
+            Either one of the given `DatasetRef` instances (only if ``parent``
+            is `True`) or on of its (recursive) children.
+
+        Notes
+        -----
+        If ``parents`` is `True`, components are guaranteed to be yielded
+        before their parents.
+        """
+        for ref in refs:
+            if ref.components is None:
+                raise TypeError(f"Unresolved ref '{ref} passed to 'flatten'.")
+            yield from DatasetRef.flatten(ref.components.values(), parents=True)
+            if parents:
+                yield ref
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).

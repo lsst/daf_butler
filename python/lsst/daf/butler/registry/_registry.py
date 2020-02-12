@@ -97,24 +97,6 @@ class OrphanedRecordError(Exception):
     """
 
 
-def _expandComponents(refs: Iterable[DatasetRef]) -> Iterator[DatasetRef]:
-    """Expand an iterable of datasets to include its components.
-
-    Parameters
-    ----------
-    refs : iterable of `DatasetRef`
-        An iterable of `DatasetRef` instances.
-
-    Yields
-    ------
-    refs : `DatasetRef`
-        Recursively expanded datasets.
-    """
-    for ref in refs:
-        yield ref
-        yield from _expandComponents(ref.components.values())
-
-
 def _checkAndGetId(ref: DatasetRef) -> int:
     """Return the ID of the given `DatasetRef`, or raise if it is `None`.
 
@@ -881,7 +863,7 @@ class Registry:
         parent._components[name] = component
 
     @transactional
-    def associate(self, collection: str, refs: List[DatasetRef]):
+    def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
         """Add existing Datasets to a collection, implicitly creating the
         collection if it does not already exist.
 
@@ -895,9 +877,14 @@ class Registry:
         collection : `str`
             Indicates the collection the Datasets should be associated with.
         refs : iterable of `DatasetRef`
-            An iterable of `DatasetRef` instances that already exist in this
-            `Registry`.  All component datasets will be associated with the
-            collection as well.
+            An iterable of resolved `DatasetRef` instances that already exist
+            in this `Registry`.
+        recursive : `bool`, optional
+            If `True`, associate all component datasets as well.  Note that
+            this only associates components that are actually included in the
+            given `DatasetRef` instances, which may not be the same as those in
+            the database (especially if they were obtained from
+            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -907,10 +894,12 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
         """
+        if recursive:
+            refs = DatasetRef.flatten(refs)
         rows = [{"dataset_id": _checkAndGetId(ref),
                  "dataset_ref_hash": ref.hash,
                  "collection": collection}
-                for ref in _expandComponents(refs)]
+                for ref in refs]
         try:
             self._db.replace(self._tables.dataset_collection, *rows)
         except sqlalchemy.exc.IntegrityError as err:
@@ -921,7 +910,7 @@ class Registry:
             ) from err
 
     @transactional
-    def disassociate(self, collection: str, refs: List[DatasetRef]):
+    def disassociate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
         """Remove existing Datasets from a collection.
 
         ``collection`` and ``ref`` combinations that are not currently
@@ -931,17 +920,24 @@ class Registry:
         ----------
         collection : `str`
             The collection the Datasets should no longer be associated with.
-        refs : `list` of `DatasetRef`
-            A `list` of `DatasetRef` instances that already exist in this
-            `Registry`.  All component datasets will also be removed.
+        refs : iterable of `DatasetRef`
+            An iterable of resolved `DatasetRef` instances that already exist
+            in this `Registry`.
+        recursive : `bool`, optional
+            If `True`, disassociate all component datasets as well.  Note that
+            this only disassociates components that are actually included in
+            the given `DatasetRef` instances, which may not be the same as
+            those in the database (especially if they were obtained from
+            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
         """
-        rows = [{"dataset_id": _checkAndGetId(ref), "collection": collection}
-                for ref in _expandComponents(refs)]
+        if recursive:
+            refs = DatasetRef.flatten(refs)
+        rows = [{"dataset_id": _checkAndGetId(ref), "collection": collection} for ref in refs]
         self._db.delete(self._tables.dataset_collection, ["dataset_id", "collection"], *rows)
 
     @transactional
