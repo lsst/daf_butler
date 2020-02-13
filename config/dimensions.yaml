@@ -52,7 +52,6 @@ dimensions:
         type: string
         length: 16
       view_of: physical_filter
-      cached: true
 
     physical_filter:
       doc: >

@@ -96,9 +96,7 @@ class DimensionRecord:
 
     The field attributes are defined via the ``__slots__`` mechanism, and the
     ``__slots__`` tuple itself is considered the public interface for obtaining
-    the list of fields.  It is guaranteed to be equal to
-    ``DimensionElement.makeTableSpec().fields.names`` when ``makeTableSpec``
-    does not return `None`.
+    the list of fields.
 
     Instances are usually obtained from a `Registry`, but in the rare cases
     where they are constructed directly in Python (usually for insertion into

@@ -31,7 +31,6 @@ from lsst.sphgeom import Pixelization
 from ..utils import NamedValueSet, immutable
 from .. import ddl
 from .records import _subclassDimensionRecord
-from .schema import makeElementTableSpec
 from .graph import DimensionGraph
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
@@ -202,22 +201,6 @@ class DimensionElement:
         associated with tables.
         """
         return True
-
-    def makeTableSpec(self) -> Optional[ddl.TableSpec]:
-        """Return a specification of the schema for the table corresponding
-        to this element.
-
-        This programmatically generates the primary and foreign key fields from
-        the element's dependencies and then appends any metadata fields.
-
-        Returns
-        -------
-        spec : `TableSpec` or `None`
-            Database-agnostic specification of the fields in this table.
-        """
-        if not self.hasTable():
-            return None
-        return makeElementTableSpec(self)
 
     @classmethod
     def _unpickle(cls, universe: DimensionUniverse, name: str) -> DimensionElement:

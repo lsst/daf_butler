@@ -82,9 +82,7 @@ class DbAuth:
             with open(secretPath) as secretFile:
                 self.authList = yaml.safe_load(secretFile)
         except Exception as exc:
-            raise DbAuthError(
-                "Unable to load DbAuth configuration file: " +
-                secretPath) from exc
+            raise DbAuthError(f"Unable to load DbAuth configuration file: {secretPath}.") from exc
 
     def getAuth(self, drivername, username, host, port, database):
         """Retrieve a username and password for a database connection.

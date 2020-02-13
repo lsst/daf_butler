@@ -7,3 +7,4 @@ registry:
     oracle: lsst.daf.butler.registry.databases.oracle.OracleDatabase
   managers:
     opaque: lsst.daf.butler.registry.opaque.ByNameOpaqueTableStorageManager
+    dimensions: lsst.daf.butler.registry.dimensions.static.StaticDimensionRecordStorageManager

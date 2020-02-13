@@ -23,10 +23,10 @@ import unittest
 import copy
 import pickle
 import itertools
-import re
 
+from lsst.daf.butler.core.utils import NamedKeyDict
 from lsst.daf.butler.core.dimensions import DimensionUniverse, DimensionGraph, Dimension
-from lsst.daf.butler.core.dimensions.schema import OVERLAP_TABLE_NAME_PATTERN
+from lsst.daf.butler.core.dimensions.schema import makeElementTableSpec
 
 
 class DimensionTestCase(unittest.TestCase):
@@ -141,62 +141,49 @@ class DimensionTestCase(unittest.TestCase):
                               ("visit", "calibration_label"))
 
     def testSchemaGeneration(self):
-        overlapTableRegex = re.compile(
-            OVERLAP_TABLE_NAME_PATTERN.format("(.+)", self.universe.commonSkyPix.name)
-        )
-        tableSpecs = self.universe.makeSchemaSpec()
-        for tableName, tableSpec in tableSpecs.items():
-            element = self.universe.get(tableName)
-            if element is None:
-                elementName = overlapTableRegex.match(tableName)[1]
-                element = self.universe[elementName]
-                for dep in list(element.graph.required) + [self.universe.commonSkyPix]:
-                    with self.subTest(element=element.name, dep=dep.name):
+        tableSpecs = NamedKeyDict({})
+        for element in self.universe.elements:
+            if element.hasTable and element.viewOf is None:
+                tableSpecs[element] = makeElementTableSpec(element)
+        for element, tableSpec in tableSpecs.items():
+            for dep in element.graph.required:
+                with self.subTest(element=element.name, dep=dep.name):
+                    if dep != element:
                         self.assertIn(dep.name, tableSpec.fields)
                         self.assertEqual(tableSpec.fields[dep.name].dtype, dep.primaryKey.dtype)
                         self.assertEqual(tableSpec.fields[dep.name].length, dep.primaryKey.length)
                         self.assertEqual(tableSpec.fields[dep.name].nbytes, dep.primaryKey.nbytes)
                         self.assertFalse(tableSpec.fields[dep.name].nullable)
                         self.assertTrue(tableSpec.fields[dep.name].primaryKey)
-            else:
-                for dep in element.graph.required:
-                    with self.subTest(element=element.name, dep=dep.name):
-                        if dep != element:
-                            self.assertIn(dep.name, tableSpec.fields)
-                            self.assertEqual(tableSpec.fields[dep.name].dtype, dep.primaryKey.dtype)
-                            self.assertEqual(tableSpec.fields[dep.name].length, dep.primaryKey.length)
-                            self.assertEqual(tableSpec.fields[dep.name].nbytes, dep.primaryKey.nbytes)
-                            self.assertFalse(tableSpec.fields[dep.name].nullable)
-                            self.assertTrue(tableSpec.fields[dep.name].primaryKey)
-                        else:
-                            self.assertIn(element.primaryKey.name, tableSpec.fields)
-                            self.assertEqual(tableSpec.fields[element.primaryKey.name].dtype,
-                                             dep.primaryKey.dtype)
-                            self.assertEqual(tableSpec.fields[element.primaryKey.name].length,
-                                             dep.primaryKey.length)
-                            self.assertEqual(tableSpec.fields[element.primaryKey.name].nbytes,
-                                             dep.primaryKey.nbytes)
-                            self.assertFalse(tableSpec.fields[element.primaryKey.name].nullable)
-                            self.assertTrue(tableSpec.fields[element.primaryKey.name].primaryKey)
-                for dep in element.implied:
-                    with self.subTest(element=element.name, dep=dep.name):
-                        self.assertIn(dep.name, tableSpec.fields)
-                        self.assertEqual(tableSpec.fields[dep.name].dtype, dep.primaryKey.dtype)
-                        self.assertFalse(tableSpec.fields[dep.name].primaryKey)
-                for foreignKey in tableSpec.foreignKeys:
-                    self.assertIn(foreignKey.table, tableSpecs)
-                    self.assertIn(foreignKey.table, element.graph.dimensions.names)
-                    self.assertEqual(len(foreignKey.source), len(foreignKey.target))
-                    for source, target in zip(foreignKey.source, foreignKey.target):
-                        self.assertIn(source, tableSpec.fields.names)
-                        self.assertIn(target, tableSpecs[foreignKey.table].fields.names)
-                        self.assertEqual(tableSpec.fields[source].dtype,
-                                         tableSpecs[foreignKey.table].fields[target].dtype)
-                        self.assertEqual(tableSpec.fields[source].length,
-                                         tableSpecs[foreignKey.table].fields[target].length)
-                        self.assertEqual(tableSpec.fields[source].nbytes,
-                                         tableSpecs[foreignKey.table].fields[target].nbytes)
-                self.assertEqual(tuple(tableSpec.fields.names), element.RecordClass.__slots__)
+                    else:
+                        self.assertIn(element.primaryKey.name, tableSpec.fields)
+                        self.assertEqual(tableSpec.fields[element.primaryKey.name].dtype,
+                                         dep.primaryKey.dtype)
+                        self.assertEqual(tableSpec.fields[element.primaryKey.name].length,
+                                         dep.primaryKey.length)
+                        self.assertEqual(tableSpec.fields[element.primaryKey.name].nbytes,
+                                         dep.primaryKey.nbytes)
+                        self.assertFalse(tableSpec.fields[element.primaryKey.name].nullable)
+                        self.assertTrue(tableSpec.fields[element.primaryKey.name].primaryKey)
+            for dep in element.implied:
+                with self.subTest(element=element.name, dep=dep.name):
+                    self.assertIn(dep.name, tableSpec.fields)
+                    self.assertEqual(tableSpec.fields[dep.name].dtype, dep.primaryKey.dtype)
+                    self.assertFalse(tableSpec.fields[dep.name].primaryKey)
+            for foreignKey in tableSpec.foreignKeys:
+                self.assertIn(foreignKey.table, tableSpecs)
+                self.assertIn(foreignKey.table, element.graph.dimensions.names)
+                self.assertEqual(len(foreignKey.source), len(foreignKey.target))
+                for source, target in zip(foreignKey.source, foreignKey.target):
+                    self.assertIn(source, tableSpec.fields.names)
+                    self.assertIn(target, tableSpecs[foreignKey.table].fields.names)
+                    self.assertEqual(tableSpec.fields[source].dtype,
+                                     tableSpecs[foreignKey.table].fields[target].dtype)
+                    self.assertEqual(tableSpec.fields[source].length,
+                                     tableSpecs[foreignKey.table].fields[target].length)
+                    self.assertEqual(tableSpec.fields[source].nbytes,
+                                     tableSpecs[foreignKey.table].fields[target].nbytes)
+            self.assertEqual(tuple(tableSpec.fields.names), element.RecordClass.__slots__)
 
     def testPickling(self):
         # Pickling and copying should always yield the exact same object within
