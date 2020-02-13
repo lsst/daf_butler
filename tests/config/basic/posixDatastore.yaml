@@ -2,16 +2,16 @@ datastore:
   cls: lsst.daf.butler.datastores.posixDatastore.PosixDatastore
   root: <butlerRoot>/butler_test_repository
   templates:
-    default: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
-    calexp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
-    metric: "{collection}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_d{detector:?}_{component:?}"
-    test_metric_comp: "{collection}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
-    metric2: "{collection}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit.name:?}"
-    metric3: "{collection}/{datasetType}/{instrument}"
-    metric4: "{collection}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
-    physical_filter+: "{collection}/{instrument}_{physical_filter}"
+    default: "{run}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
+    calexp: "{run}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
+    metric: "{run}/{datasetType}.{component:?}/{instrument:?}_{datasetType}_v{visit:08d}_f{physical_filter}_d{detector:?}_{component:?}"
+    test_metric_comp: "{run}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{instrument}_{component:?}"
+    metric2: "{run}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit.name:?}"
+    metric3: "{run}/{datasetType}/{instrument}"
+    metric4: "{run}/{component:?}_{instrument}_{physical_filter}_{visit:08d}"
+    physical_filter+: "{run}/{instrument}_{physical_filter}"
     instrument<DummyCamComp>:
-      metric33: "{collection}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
+      metric33: "{run}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
   formatters:
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter

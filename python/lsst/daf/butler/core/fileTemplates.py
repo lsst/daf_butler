@@ -289,10 +289,8 @@ class FileTemplate:
      - datasetType: `str`, `DatasetType.name`
      - component: `str`, name of the StorageClass component
      - run: `str`, name of the run this dataset was added with
-     - collection: synonoym for ``run``
 
-    At least one of `run` or `collection` must be provided to ensure unique
-    filenames.
+    `run` must always be provided to ensure unique paths.
 
     More detailed information can be requested from dimensions by using a dot
     notation, so ``visit.name`` would use the name of the visit and
@@ -310,7 +308,7 @@ class FileTemplate:
     template.
     """
 
-    mandatoryFields = {"collection", "run"}
+    mandatoryFields = {"run"}
     """A set of fields, one of which must be present in a template."""
 
     datasetFields = {"datasetType", "component"}
@@ -435,8 +433,7 @@ class FileTemplate:
         if component is not None:
             fields["component"] = component
 
-        usedRunOrCollection = False
-        fields["collection"] = ref.run
+        usedRun = False
         fields["run"] = ref.run
 
         fmt = string.Formatter()
@@ -459,8 +456,12 @@ class FileTemplate:
             else:
                 optional = False
 
-            if field_name in ("run", "collection"):
-                usedRunOrCollection = True
+            if field_name == "run":
+                usedRun = True
+
+            if field_name == "collection":
+                raise KeyError("'collection' is no longer supported as a "
+                               "file template placeholder; use 'run' instead.")
 
             # Check for request for additional information from the dataId
             if "." in field_name:
@@ -511,9 +512,9 @@ class FileTemplate:
             raise KeyError("Component '{}' specified but template {} did not use it".format(component,
                                                                                             self.template))
 
-        # Complain if there's no run or collection
-        if not usedRunOrCollection:
-            raise KeyError("Template does not include 'run' or 'collection'.")
+        # Complain if there's no run
+        if not usedRun:
+            raise KeyError("Template does not include 'run'.")
 
         # Since this is known to be a path, normalize it in case some double
         # slashes have crept in
@@ -548,7 +549,7 @@ class FileTemplate:
         template.
         """
 
-        # Check that the template has run or collection
+        # Check that the template has run
         withSpecials = self.fields(specials=True, optionals=True)
         if not withSpecials & self.mandatoryFields:
             raise FileTemplateValidationError(f"Template '{self}' is missing a mandatory field"
