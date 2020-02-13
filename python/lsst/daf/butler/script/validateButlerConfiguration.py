@@ -64,8 +64,6 @@ def build_argparser():
                                      "Gen3 Butler repository.")
     parser.add_argument("root",
                         help="Filesystem path for an existing Butler repository.")
-    parser.add_argument("--collection", "-c", default="validate", type=str,
-                        help="Collection to refer to in this repository.")
     parser.add_argument("--quiet", "-q", action="store_true",
                         help="Do not report individual failures.")
     parser.add_argument("--datasettype", "-d", action="append", type=str,
@@ -76,7 +74,7 @@ def build_argparser():
     return parser
 
 
-def validateButlerConfiguration(root, datasetTypes=None, ignore=None, quiet=False, collection="validate"):
+def validateButlerConfiguration(root, datasetTypes=None, ignore=None, quiet=False):
     """Validate a bulter configuration.
 
     Parameters
@@ -89,9 +87,6 @@ def validateButlerConfiguration(root, datasetTypes=None, ignore=None, quiet=Fals
         Dataset types to ignore.
     quiet : `bool`, optional
         If `True` report pass/fail but not details.
-    collection : `str`, optional
-        Collection to use. Sometimes this is needed to ensure that butler
-        can be instantiated properly.
 
     Returns
     -------
@@ -99,10 +94,7 @@ def validateButlerConfiguration(root, datasetTypes=None, ignore=None, quiet=Fals
         `True` if everything looks okay, `False` if there is a problem.
     """
     logFailures = not quiet
-
-    # The collection does not matter for validation but if a run is specified
-    # in the configuration then it must be consistent with this collection
-    butler = Butler(config=root, collection=collection)
+    butler = Butler(config=root)
     try:
         butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasetTypes,
                                      ignore=ignore)
@@ -119,7 +111,7 @@ def main():
     ignore = processCommas(args.ignore)
     datasetTypes = processCommas(args.datasettype)
 
-    valid = validateButlerConfiguration(args.root, datasetTypes, ignore, args.quiet, args.collection)
+    valid = validateButlerConfiguration(args.root, datasetTypes, ignore, args.quiet)
 
     if valid:
         print("No problems encountered with configuration.")
