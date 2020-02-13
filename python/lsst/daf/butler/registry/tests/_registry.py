@@ -36,7 +36,7 @@ from ...core import (
     ddl,
     YamlRepoImportBackend
 )
-from .._registry import Registry, ConflictingDefinitionError, OrphanedRecordError
+from .._registry import Registry, CollectionType, ConflictingDefinitionError, OrphanedRecordError
 
 
 class RegistryTests(ABC):
@@ -284,6 +284,7 @@ class RegistryTests(ABC):
         self.assertIsNotNone(ref2)
         # Associate those into a new collection,then look for them there.
         tag1 = "tag1"
+        registry.registerCollection(tag1, type=CollectionType.TAGGED)
         registry.associate(tag1, [ref1, ref2])
         self.assertEqual(registry.find(tag1, datasetType, dataId1), ref1)
         self.assertEqual(registry.find(tag1, datasetType, dataId2), ref2)
@@ -469,10 +470,12 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", id=201, name="201", visit=20, physical_filter="dummy_r"),
         )
         # dataset types
-        run1 = "test"
-        run2 = "test2"
+        run1 = "test1_r"
+        run2 = "test2_r"
+        tagged2 = "test2_t"
         registry.registerRun(run1)
         registry.registerRun(run2)
+        registry.registerCollection(tagged2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         rawType = DatasetType(name="RAW",
@@ -490,19 +493,20 @@ class RegistryTests(ABC):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
                 ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run1)
-                # exposures 100 and 101 appear in both collections, 100 has
-                # different dataset_id in different collections, for 101 only
-                # single dataset_id exists
+                # exposures 100 and 101 appear in both run1 and tagged2.
+                # 100 has different datasets in the different collections
+                # 101 has the same dataset in both collections.
                 if exposure == 100:
-                    registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
-                if exposure == 101:
-                    registry.associate(run2, [ref])
-        # Add pre-existing datasets to second collection.
+                    ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                if exposure in (100, 101):
+                    registry.associate(tagged2, [ref])
+        # Add pre-existing datasets to tagged2.
         for exposure in (200, 201):
             for detector in (3, 4, 5):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                registry.associate(tagged2, [ref])
 
         dimensions = DimensionGraph(
             registry.dimensions,
@@ -530,7 +534,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run2]}))
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [tagged2]}))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -540,7 +544,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1, run2]}))
+        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1, tagged2]}))
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -782,11 +786,11 @@ class RegistryTests(ABC):
         for exposure in (100, 101):
             for detector in (1, 2, 3):
                 with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[run1],
-                                                  instrument="DummyCam",
-                                                  exposure=exposure,
-                                                  detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
+                    rows = list(registry.queryDatasets("flat", collections=[run1],
+                                                       instrument="DummyCam",
+                                                       exposure=exposure,
+                                                       detector=detector))
+                    self.assertEqual(len(rows), 1)
             for detector in (3, 4, 5):
                 with self.subTest(exposure=exposure, detector=detector):
                     rows = registry.queryDatasets("flat", collections=[run2],

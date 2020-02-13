@@ -31,6 +31,8 @@ from ...core import (
     DimensionGraph,
     DimensionUniverse,
 )
+from .._collectionType import CollectionType
+from ..interfaces import CollectionManager, CollectionRecord
 from ..wildcards import WildcardExpression, CategorizedWildcard
 
 
@@ -63,9 +65,11 @@ class DatasetRegistryStorage:
     forward-looking.
     """
     def __init__(self, connection: sqlalchemy.engine.Connection, universe: DimensionUniverse,
-                 tables: Mapping[str, sqlalchemy.sql.FromClause]):
+                 tables: Mapping[str, sqlalchemy.sql.FromClause], *,
+                 collections: CollectionManager):
         self._connection = connection
         self._universe = universe
+        self._collections = collections
         self._datasetTypeTable = tables["dataset_type"]
         self._datasetTypeDimensionsTable = tables["dataset_type_dimensions"]
         self._datasetTable = tables["dataset"]
@@ -152,33 +156,62 @@ class DatasetRegistryStorage:
         # Always include dimension columns, because that's what we use to
         # join against other tables.
         columns = [self._datasetTable.columns[dimension.name] for dimension in datasetType.dimensions]
+
+        def finishSubquery(select: sqlalchemy.sql.Select, collectionRecord: CollectionRecord):
+            if collectionRecord.type is CollectionType.TAGGED:
+                collectionColumn = \
+                    self._datasetCollectionTable.columns[self._collections.getCollectionForeignKeyName()]
+                fromClause = self._datasetTable.join(self._datasetCollectionTable)
+            elif collectionRecord.type is CollectionType.RUN:
+                collectionColumn = self._datasetTable.columns[self._collections.getRunForeignKeyName()]
+                fromClause = self._datasetTable
+            else:
+                raise NotImplementedError(f"Unrecognized CollectionType: '{collectionRecord.type}'.")
+            return select.select_from(
+                fromClause
+            ).where(
+                sqlalchemy.sql.and_(self._datasetTable.columns.dataset_type_name == datasetType.name,
+                                    collectionColumn == collectionRecord.key)
+            )
+
+        wildcard = CategorizedWildcard.categorize(collections)
+        if wildcard is not None and wildcard.other:
+            raise TypeError(f"Unsupported objects in collections expression: '{wildcard.other}'.")
+
+        # A list of single-collection queries that we'll UNION together.
+        subsubqueries = []
+
         # Only include dataset_id and the rank of the collection in the given
         # list if caller has indicated that they're going to be actually
         # selecting columns from this subquery in the larger query.
         if isResult:
             columns.append(self._datasetTable.columns.dataset_id)
             if addRank:
+                # If we're adding ranks, we need explicit collection names in
+                # the list, so we can't use self._collections.query.
+                # This is one code path for the rest of this function.
                 if wildcard is None or wildcard.patterns:
-                    raise TypeError("Cannot rank collections that include wildcards.")
-                ranks = {}
-                for n, collection in enumerate(wildcard.strings):
-                    ranks[collection] = n
-                columns.append(
-                    sqlalchemy.sql.case(
-                        ranks,
-                        value=self._datasetCollectionTable.columns.collection
-                    ).label("rank")
-                )
-        whereTerms = [self._datasetTable.columns.dataset_type_name == datasetType.name]
-        if wildcard is not None:
-            collectionsTerm = wildcard.makeWhereExpression(self._datasetCollectionTable.columns.collection)
-            if collectionsTerm is None:
-                raise ValueError(f"No collections given in query for dataset type {datasetType.name}.")
-            whereTerms.append(collectionsTerm)
-        return sqlalchemy.sql.select(
-            columns
-        ).select_from(
-            self._datasetTable.join(self._datasetCollectionTable)
-        ).where(
-            sqlalchemy.sql.and_(*whereTerms)
-        ).alias(datasetType.name)
+                    raise TypeError("Cannot rank collections when expression includes wildcards.")
+                for n, name in enumerate(wildcard.strings):
+                    record = self._collections.find(name)
+                    if record is None:
+                        # This collection doesn't exist at all.  Arguable
+                        # whether we should raise here instead of just taking
+                        # advantage of the fact that we know there are no
+                        # datasets with this collection, but this preserves the
+                        # old behavior.
+                        continue
+                    subsubqueries.append(
+                        finishSubquery(
+                            sqlalchemy.sql.select(columns + [sqlalchemy.sql.literal(n).label("rank")]),
+                            record
+                        )
+                    )
+                return sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)
+
+        # The code path for not adding ranks is similar, but we can get the
+        # records from self._collections.query, and we don't need to add the
+        # literal rank column.
+        for record in self._collections.query(wildcard):
+            subsubqueries.append(finishSubquery(sqlalchemy.sql.select(columns), record))
+        return sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)

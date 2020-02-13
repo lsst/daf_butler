@@ -70,7 +70,7 @@ from .core.safeFileIo import safeMakeDir
 from .core.utils import transactional, getClassOf
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
-from .registry import Registry, RegistryConfig
+from .registry import Registry, RegistryConfig, CollectionType, MissingCollectionError
 
 log = logging.getLogger(__name__)
 
@@ -107,15 +107,16 @@ class Butler:
         Incompatible with the ``config``, ``searchPaths``, and ``writeable``
         arguments.
     collection : `str`, optional
-        Collection to use for all input lookups.  May be `None` to either use
-        the value passed to ``run``, or to defer passing a collection until
-        the methods that require one are called.
+        Collection to use for all input lookups and (if a
+        `~CollectionType.TAGGED` collection) that new datasets should be
+        associated with in `put` and `ingest`.  May be `None` to either use the
+        value passed to ``run`` for lookups, or to defer passing a collection
+        until the methods that require one are called.  If the collection does
+        not exist, a `~CollectionType.TAGGED` collection will be created.
     run : `str`, optional
-        Name of the run datasets should be output to; also used as a tagged
-        collection name these dataset will be associated with.  If the run
-        does not exist, it will be created.  If ``collection`` is `None`, this
-        collection will be used for input lookups as well; if not, it must have
-        the same value as ``run``.
+        Name of the `~CollectionType.RUN` collection datasets should be output
+        to in `put` and `ingest`.  If ``collection`` is `None`, this collection
+        will be used by default for input lookups as well.
     searchPaths : `list` of `str`, optional
         Directory paths to search when calculating the full Butler
         configuration.  Not used if the supplied config is already a
@@ -166,13 +167,18 @@ class Butler:
         self.run = run
         if collection is None and run is not None:
             collection = run
-        if self.run is not None and collection != self.run:
-            raise ValueError(
-                "Run ({}) and collection ({}) are inconsistent.".format(self.run, collection)
-            )
         self.collection = collection
         if self.run is not None:
             self.registry.registerRun(self.run)
+        if self.collection is not None:
+            try:
+                self._collectionType = self.registry.getCollectionType(self.collection)
+            except MissingCollectionError:
+                # Collection does not exist; create a new one.
+                self.registry.registerCollection(self.collection, CollectionType.TAGGED)
+                self._collectionType = CollectionType.TAGGED
+        else:
+            self._collectionType = None
 
     GENERATION: ClassVar[int] = 3
     """This is a Generation 3 Butler.
@@ -500,6 +506,7 @@ class Butler:
             dataId: Optional[DataId] = None, *,
             producer: Optional[Quantum] = None,
             run: Optional[str] = None,
+            collection: Optional[str] = None,
             **kwds: Any) -> DatasetRef:
         """Store and register a dataset.
 
@@ -519,6 +526,12 @@ class Butler:
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
             ``self.run``.
+        collection : `str` or `False`, optional
+            The name of a `~CollectionType.TAGGED` collection to associate the
+            dataset with, overriding ``self.collection``.  This collection
+            must have already been added to the `Registry`.  May also be
+            `False` to skip association with ``self.collection`` even when that
+            is a `~CollectionType.TAGGED` collection.
         kwds
             Additional keyword arguments used to augment or construct a
             `DataCoordinate`.  See `DataCoordinate.standardize`
@@ -547,6 +560,14 @@ class Butler:
                 raise TypeError("No run provided.")
             run = self.run
 
+        if collection is None:
+            collection = self.collection
+            collectionType = self._collectionType
+        elif collection is False:
+            collectionType = None
+        else:
+            collectionType = self.registry.getCollectionType(collection)
+
         isVirtualComposite = self._composites.shouldBeDisassembled(datasetType)
 
         # Add Registry Dataset entry.  If not a virtual composite, add
@@ -560,11 +581,15 @@ class Butler:
             components = datasetType.storageClass.assembler().disassemble(obj)
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)
-                compRef = self.put(info.component, compTypeName, dataId, producer=producer, run=run)
+                compRef = self.put(info.component, compTypeName, dataId, producer=producer, run=run,
+                                   collection=False)  # We don't need to recursively associate.
                 self.registry.attachComponent(component, ref, compRef)
         else:
             # This is an entity without a disassembler.
             self.datastore.put(obj, ref)
+
+        if collectionType is CollectionType.TAGGED:
+            self.registry.associate(collection, [ref])  # this is already recursive by default
 
         return ref
 
@@ -832,13 +857,18 @@ class Butler:
         collection : `str`, optional
             Collection to remove the datasets from, overriding
             ``self.collection``.  Ignored if ``disassociate`` is `False`.
+            Must be a `~CollectionType.TAGGED` collection, unless ``purge``
+            is `True`, in which case it must be a `~CollectionType.RUN`.
         purge : `bool`, optional
             If `True` (`False` is default), completely remove the dataset from
             the `Registry`.  To prevent accidental deletions, ``purge`` may
             only be `True` if all of the following conditions are met:
 
-             - ``disassociate`` is `True`
-             - ``unstore`` is `True`
+             - Either ``collection`` is a `~CollectionType.RUN`, or
+               ``collection`` is `None` and ``self.run`` is not `None`,
+               and all given datasets are in that run;
+             - ``disassociate`` is `True`;
+             - ``unstore`` is `True`;
              - none of the given datasets are components of some other dataset.
 
             This mode may remove provenance information from datasets other
@@ -891,11 +921,26 @@ class Butler:
         #
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
-        if disassociate:
+        if purge:
+            if collection is None:
+                collection = self.run
+                if collection is None:
+                    raise TypeError("No run provided but purge=True.")
+            collectionType = self.registry.getCollectionType(collection)
+            if collectionType is not CollectionType.RUN:
+                raise TypeError(f"Cannot purge from collection '{collection}' "
+                                f"of non-RUN type {collectionType.name}.")
+        elif disassociate:
             if collection is None:
                 collection = self.collection
                 if collection is None:
-                    raise TypeError("No collection provided.")
+                    raise TypeError("No collection provided but disassociate=True.")
+                collectionType = self._collectionType
+            else:
+                collectionType = self.registry.getCollectionType(collection)
+            if collectionType is not CollectionType.TAGGED:
+                raise TypeError(f"Cannot disassociated from collection '{collection}' "
+                                f"of non-TAGGED type {collectionType.name}.")
         if purge:
             if not disassociate:
                 raise TypeError("Cannot pass purge=True without disassociate=True.")
@@ -955,7 +1000,8 @@ class Butler:
                                   "the repository in a corrupted state.") from err
 
     @transactional
-    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None, run: Optional[str] = None):
+    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None, run: Optional[str] = None,
+               collection: Optional[str] = None,):
         """Store and register one or more datasets that already exist on disk.
 
         Parameters
@@ -978,6 +1024,12 @@ class Butler:
         run : `str`, optional
             The name of the run ingested datasets should be added to,
             overriding ``self.run``.
+        collection : `str` or `False`, optional
+            The name of a `~CollectionType.TAGGED` collection to associate the
+            dataset(s) with, overriding ``self.collection``.  This collection
+            must have already been added to the `Registry`.  May also be
+            `False` to skip association with ``self.collection`` even when that
+            is a `~CollectionType.TAGGED` collection.
 
         Raises
         ------
@@ -1012,6 +1064,14 @@ class Butler:
                 raise TypeError("No run provided.")
             run = self.run
 
+        if collection is None:
+            collection = self.collection
+            collectionType = self._collectionType
+        elif collection is False:
+            collectionType = None
+        else:
+            collectionType = self.registry.getCollectionType(collection)
+
         # Reorganize the inputs so they're grouped by DatasetType and then
         # data ID.  We also include a list of DatasetRefs for each FileDataset
         # to hold the resolved DatasetRefs returned by the Registry, before
@@ -1041,10 +1101,16 @@ class Butler:
                 resolvedRefs.append(ref)
 
         # Go back to the original FileDatasets to replace their refs with the
-        # new resolved ones.
+        # new resolved ones, and also build a big list of all refs.
+        allResolvedRefs = []
         for groupForType in groupedData.values():
             for dataset, resolvedRefs in groupForType.values():
                 dataset.refs = resolvedRefs
+                allResolvedRefs.extend(resolvedRefs)
+
+        # Bulk-associate everything with a tagged collection, if we have one.
+        if collectionType is CollectionType.TAGGED:
+            self.registry.associate(collection, allResolvedRefs)
 
         # Bulk-insert everything into Datastore.
         self.datastore.ingest(*datasets, transfer=transfer)

@@ -66,6 +66,7 @@ from .queries import (
     QuerySummary,
 )
 from .tables import makeRegistryTableSpecs
+from ._collectionType import CollectionType
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -73,6 +74,7 @@ if TYPE_CHECKING:
         Quantum
     )
     from .interfaces import (
+        CollectionManager,
         Database,
         OpaqueTableStorageManager,
         DimensionRecordStorageManager,
@@ -173,28 +175,32 @@ class Registry:
         universe = DimensionUniverse(config)
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
-        return cls(database, universe, dimensions=dimensions, opaque=opaque, create=create)
+        collections = doImport(config["managers", "collections"])
+        return cls(database, universe, dimensions=dimensions, opaque=opaque, collections=collections,
+                   create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
+                 collections: Type[CollectionManager],
                  create: bool = False):
         self._db = database
         self.storageClasses = StorageClassFactory()
         with self._db.declareStaticTables(create=create) as context:
             self._dimensions = dimensions.initialize(self._db, context, universe=universe)
-            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions))
+            self._collections = collections.initialize(self._db, context)
+            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions, self._collections))
             self._opaque = opaque.initialize(self._db, context)
+        self._collections.refresh()
         # TODO: we shouldn't be grabbing the private connection from the
         # Database instance like this, but it's a reasonable way to proceed
         # while we transition to using the Database API more.
         self._connection = self._db._connection
         self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
                                                       universe=self.dimensions,
-                                                      tables=self._tables._asdict())
+                                                      tables=self._tables._asdict(),
+                                                      collections=self._collections)
         self._datasetTypes = {}
-        self._runIdsByName = {}   # key = name, value = id
-        self._runNamesById = {}   # key = id, value = name
 
     def __str__(self) -> str:
         return str(self._db)
@@ -307,11 +313,45 @@ class Registry:
         collections : `set` of `str`
             The collections.
         """
-        table = self._tables.dataset_collection
-        result = self._db.query(sqlalchemy.sql.select([table.c.collection]).distinct()).fetchall()
-        if result is None:
-            return set()
-        return {r[0] for r in result}
+        return set(record.name for record in self._collections.query())
+
+    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED):
+        """Add a new collection if one with the given name does not exist.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to create.
+        type : `CollectionType`
+            Enum value indicating the type of collection to create.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
+        """
+        self._collections.register(name, type)
+
+    def getCollectionType(self, name: str) -> CollectionType:
+        """Return an enumeration value indicating the type of the given
+        collection.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection.
+
+        Returns
+        -------
+        type : `CollectionType`
+            Enum value indicating the type of this collection.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if no collection with the given name exists.
+        """
+        return self._collections.find(name).type
 
     def registerRun(self, name: str):
         """Add a new run if one with the given name does not exist.
@@ -326,54 +366,7 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        id = self._runIdsByName.get(name)
-        if id is None:
-            row, _ = self._db.sync(self._tables.run, keys={"name": name}, returning=["id"])
-            id = row["id"]
-            self._runIdsByName[name] = id
-            self._runNamesById[id] = name
-        # Assume that if the run is in the cache, it's in the database, because
-        # right now there's no way to delete them.
-
-    def _getRunNameFromId(self, id: int) -> str:
-        """Return the name of the run associated with the given integer ID.
-        """
-        assert isinstance(id, int)
-        name = self._runNamesById.get(id)
-        if name is None:
-            table = self._tables.run
-            name = self._db.query(
-                sqlalchemy.sql.select(
-                    [table.columns.name]
-                ).select_from(
-                    table
-                ).where(
-                    table.columns.id == id
-                )
-            ).scalar()
-            self._runNamesById[id] = name
-            self._runIdsByName[name] = id
-        return name
-
-    def _getRunIdFromName(self, name: str) -> id:
-        """Return the integer ID of the run associated with the given name.
-        """
-        assert isinstance(name, str)
-        id = self._runIdsByName.get(name)
-        if id is None:
-            table = self._tables.run
-            id = self._db.query(
-                sqlalchemy.sql.select(
-                    [table.columns.id]
-                ).select_from(
-                    table
-                ).where(
-                    table.columns.name == name
-                )
-            ).scalar()
-            self._runNamesById[id] = name
-            self._runIdsByName[name] = id
-        return id
+        self._collections.register(name, CollectionType.RUN)
 
     @transactional
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
@@ -553,7 +546,9 @@ class Registry:
         """
         if datasetType is None:
             datasetType = self.getDatasetType(row["dataset_type_name"])
-        run = self._getRunNameFromId(row["run_id"])
+        runRecord = self._collections[row[self._collections.getRunForeignKeyName()]]
+        assert runRecord is not None, "Should be guaranteed by foreign key constraints."
+        run = runRecord.name
         datasetRefHash = row["dataset_ref_hash"]
         if dataId is None:
             # TODO: should we expand here?
@@ -629,24 +624,35 @@ class Registry:
         Raises
         ------
         LookupError
-            If one or more data ID keys are missing.
+            Raised if one or more data ID keys are missing.
+        MissingCollectionError
+            Raised if ``collection`` does not exist in the registry.
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
                                             universe=self.dimensions, **kwds)
+        collectionRecord = self._collections.find(collection)
+        if collectionRecord.type is CollectionType.TAGGED:
+            collectionColumn = \
+                self._tables.dataset_collection.columns[self._collections.getCollectionForeignKeyName()]
+            fromClause = self._tables.dataset.join(self._tables.dataset_collection)
+        elif collectionRecord.type is CollectionType.RUN:
+            collectionColumn = self._tables.dataset.columns[self._collections.getRunForeignKeyName()]
+            fromClause = self._tables.dataset
+        else:
+            raise NotImplementedError(f"Unrecognized CollectionType: '{collectionRecord.type}'.")
         whereTerms = [
             self._tables.dataset.columns.dataset_type_name == datasetType.name,
-            self._tables.dataset_collection.columns.collection == collection,
+            collectionColumn == collectionRecord.key,
         ]
         whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
-        result = self._db.query(
-            self._tables.dataset.select().select_from(
-                self._tables.dataset.join(self._tables.dataset_collection)
-            ).where(
-                sqlalchemy.sql.and_(*whereTerms)
-            )
-        ).fetchone()
+        query = self._tables.dataset.select().select_from(
+            fromClause
+        ).where(
+            sqlalchemy.sql.and_(*whereTerms)
+        )
+        result = self._db.query(query).fetchone()
         if result is None:
             return None
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
@@ -681,17 +687,23 @@ class Registry:
         refs : `list` of `DatasetRef`
             Resolved `DatasetRef` instances for all given data IDs (in the same
             order).
+
+        Raises
+        ------
         ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
             given already exists in the given collection.
+        MissingCollectionError
+            Raised if ``run`` does not exist in the registry.
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         rows = []
         refs = []
+        runRecord = self._collections.find(run)
         base = {
             "dataset_type_name": datasetType.name,
-            "run_id": self._getRunIdFromName(run),
+            self._collections.getRunForeignKeyName(): runRecord.key,
             "quantum_id": producer.id if producer is not None else None,
         }
         # Expand data IDs and build both a list of unresolved DatasetRefs
@@ -704,13 +716,16 @@ class Registry:
                 row[dimension.name] = value
             rows.append(row)
         # Actually insert into the dataset table.
-        datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+        try:
+            datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+        except sqlalchemy.exc.IntegrityError as err:
+            raise ConflictingDefinitionError(
+                f"Constraint violation while inserting datasets into run {run}. "
+                f"This usually means that one or more datasets with the same dataset type and data ID "
+                f"already exist in the collection, but it may be a foreign key violation."
+            ) from err
         # Resolve the DatasetRefs with the autoincrement IDs we generated.
         refs = [ref.resolved(id=datasetId, run=run) for datasetId, ref in zip(datasetIds, refs)]
-        # Associate the datasets with the run as a collection.  Note that we
-        # do this before inserting component datasets so recursing doesn't try
-        # to associate those twice.
-        self.associate(run, refs)
         if recursive and datasetType.isComposite():
             # Insert component rows by recursing, and gather a single big list
             # of rows to insert into the dataset_composition table.
@@ -893,12 +908,20 @@ class Registry:
             given collection.
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
+        MissingCollectionError
+            Raised if ``collection`` does not exist in the registry.
+        TypeError
+            Raise adding new datasets to the given ``collection`` is not
+            allowed.
         """
+        collectionRecord = self._collections.find(collection)
+        if collectionRecord.type is not CollectionType.TAGGED:
+            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
         if recursive:
             refs = DatasetRef.flatten(refs)
         rows = [{"dataset_id": _checkAndGetId(ref),
                  "dataset_ref_hash": ref.hash,
-                 "collection": collection}
+                 self._collections.getCollectionForeignKeyName(): collectionRecord.key}
                 for ref in refs]
         try:
             self._db.replace(self._tables.dataset_collection, *rows)
@@ -934,11 +957,22 @@ class Registry:
         ------
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
+        MissingCollectionError
+            Raised if ``collection`` does not exist in the registry.
+        TypeError
+            Raise adding new datasets to the given ``collection`` is not
+            allowed.
         """
+        collectionFieldName = self._collections.getCollectionForeignKeyName()
+        collectionRecord = self._collections.find(collection)
+        if collectionRecord.type is not CollectionType.TAGGED:
+            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
+                            "expected TAGGED.")
         if recursive:
             refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": _checkAndGetId(ref), "collection": collection} for ref in refs]
-        self._db.delete(self._tables.dataset_collection, ["dataset_id", "collection"], *rows)
+        rows = [{"dataset_id": _checkAndGetId(ref), collectionFieldName: collectionRecord.key}
+                for ref in refs]
+        self._db.delete(self._tables.dataset_collection, ["dataset_id", collectionFieldName], *rows)
 
     @transactional
     def insertDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
