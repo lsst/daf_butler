@@ -299,6 +299,7 @@ class ButlerPutGetTests:
 
         return butler
 
+    def testDeferredCollectionPassing(self):
         # Construct a butler with no run or collection, but make it writeable.
         butler = Butler(self.tmpConfigFile, writeable=True)
         # Create and register a DatasetType
@@ -339,7 +340,7 @@ class ButlerPutGetTests:
         # Deleting the dataset from the new collection should make it findable
         # in the original collection.
         butler.prune([ref], collection="tagged")
-        self.assertFalse(butler.datasetExists(datasetType, dataId, collection=run))
+        self.assertTrue(butler.datasetExists(datasetType, dataId, collection=run))
 
 
 class ButlerTests(ButlerPutGetTests):
