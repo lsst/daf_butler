@@ -1,3 +1,5 @@
+# This file gives the mapping between DatasetType and the
+# `lsst.daf.butler.Formatter` that handles it.
 TablePersistable: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
 Wcs: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
 Psf: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
@@ -38,3 +40,5 @@ NumpyArray: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 Plot: lsst.daf.butler.formatters.matplotlibFormatter.MatplotlibFormatter
 MetricValue: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
 BrighterFatterKernel: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+cpBias: lsst.obs.decam.DarkEnergyCameraCPCalibFormatter
+cpFlat: lsst.obs.decam.DarkEnergyCameraCPCalibFormatter
