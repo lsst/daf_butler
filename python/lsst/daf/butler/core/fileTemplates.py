@@ -303,6 +303,11 @@ class FileTemplate:
     specification. This indicates that a field is optional. If that
     Dimension is missing the field, along with the text before the field,
     unless it is a path separator, will be removed from the output path.
+
+    By default any "/" in a dataId value will be replaced by "_" to prevent
+    unexpected directories being created in the path. If the "/" should be
+    retained then a special "/" format specifier can be included in the
+    template.
     """
 
     mandatoryFields = {"collection", "run"}
@@ -480,6 +485,18 @@ class FileTemplate:
             else:
                 raise KeyError(f"'{field_name}' requested in template via '{self.template}' "
                                "but not defined and not optional")
+
+            # Handle "/" in values since we do not want to be surprised by
+            # unexpected directories turning up
+            replace_slash = True
+            if "/" in format_spec:
+                # Remove the non-standard character from the spec
+                format_spec = format_spec.replace("/", "")
+                replace_slash = False
+
+            if isinstance(value, str):
+                if replace_slash:
+                    value = value.replace("/", "_")
 
             # Now use standard formatting
             output = output + literal + format(value, format_spec)

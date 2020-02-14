@@ -35,13 +35,13 @@ class TestFileTemplates(unittest.TestCase):
     """Test creation of paths from templates."""
 
     def makeDatasetRef(self, datasetTypeName, dataId=None, storageClassName="DefaultStorageClass",
-                       conform=True):
+                       run="run2", conform=True):
         """Make a simple DatasetRef"""
         if dataId is None:
             dataId = self.dataId
         datasetType = DatasetType(datasetTypeName, DimensionGraph(self.universe, names=dataId.keys()),
                                   StorageClass(storageClassName))
-        return DatasetRef(datasetType, dataId, id=1, run="run2", conform=conform)
+        return DatasetRef(datasetType, dataId, id=1, run=run, conform=conform)
 
     def setUp(self):
         self.universe = DimensionUniverse()
@@ -61,6 +61,20 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(tmplstr,
                             "run2/calexp/00052/U-trail",
                             self.makeDatasetRef("calexp", conform=False))
+
+        tmplstr = "{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
+        self.assertTemplate(tmplstr,
+                            "run2/calexp/00052/U-trail-run2",
+                            self.makeDatasetRef("calexp", conform=False))
+        self.assertTemplate(tmplstr,
+                            "run_2/calexp/00052/U-trail-run_2",
+                            self.makeDatasetRef("calexp", run="run/2", conform=False))
+
+        # Retain any "/" in collection
+        tmplstr = "{collection:/}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
+        self.assertTemplate(tmplstr,
+                            "run/2/calexp/00052/U-trail-run_2",
+                            self.makeDatasetRef("calexp", run="run/2", conform=False))
 
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("no fields at all")
