@@ -64,7 +64,7 @@ from .queries import (
 )
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
-from .wildcards import CollectionQuery
+from .wildcards import CollectionQuery, CollectionSearch
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -564,8 +564,8 @@ class Registry:
                           hash=datasetRefHash, components=components)
 
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
-                    collection: str, **kwds: Any) -> Optional[DatasetRef]:
-        """Lookup a dataset.
+                    collections: Any, **kwds: Any) -> Optional[DatasetRef]:
+        """Find a dataset given its `DatasetType` and data ID.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
         be read from a `Datastore`.
@@ -577,8 +577,11 @@ class Registry:
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
-        collection : `str`
-            Identifies the collection to search.
+        collections
+            An expression that fully or partially identifies the collections
+            to search for the dataset, such as a `str`, `re.Pattern`, or
+            iterable  thereof.  `...` can be used to return all collections.
+            See :ref:`daf_butler_collection_expressions` for more information.
         **kwds
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
@@ -587,7 +590,7 @@ class Registry:
         Returns
         -------
         ref : `DatasetRef`
-            A ref to the Dataset, or `None` if no matching Dataset
+            A reference to the dataset, or `None` if no matching Dataset
             was found.
 
         Raises
@@ -595,36 +598,37 @@ class Registry:
         LookupError
             Raised if one or more data ID keys are missing.
         MissingCollectionError
-            Raised if ``collection`` does not exist in the registry.
+            Raised if any of ``collections`` does not exist in the registry.
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
                                             universe=self.dimensions, **kwds)
-        collectionRecord = self._collections.find(collection)
-        if collectionRecord.type is CollectionType.TAGGED:
-            collectionColumn = \
-                self._tables.dataset_collection.columns[self._collections.getCollectionForeignKeyName()]
-            fromClause = self._tables.dataset.join(self._tables.dataset_collection)
-        elif collectionRecord.type is CollectionType.RUN:
-            collectionColumn = self._tables.dataset.columns[self._collections.getRunForeignKeyName()]
-            fromClause = self._tables.dataset
-        else:
-            raise NotImplementedError(f"Unrecognized CollectionType: '{collectionRecord.type}'.")
-        whereTerms = [
-            self._tables.dataset.columns.dataset_type_name == datasetType.name,
-            collectionColumn == collectionRecord.key,
-        ]
-        whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
-        query = self._tables.dataset.select().select_from(
-            fromClause
-        ).where(
-            sqlalchemy.sql.and_(*whereTerms)
-        )
-        result = self._db.query(query).fetchone()
-        if result is None:
-            return None
-        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+        collections = CollectionSearch.fromExpression(collections)
+        for collectionRecord in collections.iter(self._collections, datasetType=datasetType):
+            if collectionRecord.type is CollectionType.TAGGED:
+                collectionColumn = \
+                    self._tables.dataset_collection.columns[self._collections.getCollectionForeignKeyName()]
+                fromClause = self._tables.dataset.join(self._tables.dataset_collection)
+            elif collectionRecord.type is CollectionType.RUN:
+                collectionColumn = self._tables.dataset.columns[self._collections.getRunForeignKeyName()]
+                fromClause = self._tables.dataset
+            else:
+                raise NotImplementedError(f"Unrecognized CollectionType: '{collectionRecord.type}'.")
+            whereTerms = [
+                self._tables.dataset.columns.dataset_type_name == datasetType.name,
+                collectionColumn == collectionRecord.key,
+            ]
+            whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
+            query = self._tables.dataset.select().select_from(
+                fromClause
+            ).where(
+                sqlalchemy.sql.and_(*whereTerms)
+            )
+            result = self._db.query(query).fetchone()
+            if result is not None:
+                return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+        return None
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],

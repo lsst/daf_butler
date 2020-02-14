@@ -253,7 +253,7 @@ class ButlerPutGetTests:
             self.assertEqual(summary, metric.summary)
             self.assertTrue(butler.datastore.exists(ref.components["summary"]))
 
-            compRef = butler.registry.findDataset(compNameS, dataId, collection=butler.collection)
+            compRef = butler.registry.findDataset(compNameS, dataId, collections=[butler.collection])
             butler.prune([compRef], unstore=True)
             with self.assertRaises(LookupError):
                 butler.datasetExists(compNameS, dataId)
@@ -570,7 +570,7 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(KeyError):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collection=butler.collection))
+        self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=[butler.collection]))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError):
             butler.getDirect(ref)

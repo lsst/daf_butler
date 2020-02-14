@@ -489,7 +489,7 @@ class Butler:
                 raise TypeError("No collection provided.")
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.findDataset(datasetType, dataId, collection=collection)
+        ref = self.registry.findDataset(datasetType, dataId, collections=[collection])
         if ref is None:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)

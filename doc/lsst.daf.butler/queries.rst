@@ -48,7 +48,7 @@ User code will rarely need to interact with these directly, but they can be pass
 Ordered collection searches
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found, such as `~Registy.queryDatasets` when ``deduplicate`` is `True`.
+A *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found, such as `~Registry.findDataset` or `~Registy.queryDatasets` (when ``deduplicate`` is `True`).
 In these contexts, regular expressions and `...` are not allowed, because they make it impossible to unambiguously define the order in which to search the matching collections.
 
 Ordered collection searches are processed by the `~registry.wildcards.CollectionSearch` class.

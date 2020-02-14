@@ -209,7 +209,7 @@ class RegistryTests(ABC):
         with self.assertRaises(ConflictingDefinitionError):
             registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         registry.removeDataset(ref)
-        self.assertIsNone(registry.findDataset(datasetType, dataId, collection=run))
+        self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testComponents(self):
         """Tests for `Registry.attachComponent` and other dataset operations
@@ -233,9 +233,9 @@ class RegistryTests(ABC):
         self.assertEqual(outParent.components, children)
         # Remove the parent; this should remove all children.
         registry.removeDataset(parent)
-        self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collection=run))
-        self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collection=run))
-        self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collection=run))
+        self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collections=[run]))
+        self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collections=[run]))
+        self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collections=[run]))
 
     def testFindDataset(self):
         """Tests for `Registry.findDataset`.
@@ -247,24 +247,24 @@ class RegistryTests(ABC):
         dataId = {"instrument": "Cam1", "detector": 4}
         registry.registerRun(run)
         inputRef, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
-        outputRef = registry.findDataset(datasetType, dataId, collection=run)
+        outputRef = registry.findDataset(datasetType, dataId, collections=[run])
         self.assertEqual(outputRef, inputRef)
         # Check that retrieval with invalid dataId raises
         with self.assertRaises(LookupError):
             dataId = {"instrument": "Cam1"}  # no detector
-            registry.findDataset(datasetType, dataId, collection=run)
+            registry.findDataset(datasetType, dataId, collections=run)
         # Check that different dataIds match to different datasets
         dataId1 = {"instrument": "Cam1", "detector": 1}
         inputRef1, = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
         dataId2 = {"instrument": "Cam1", "detector": 2}
         inputRef2, = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
-        self.assertEqual(registry.findDataset(datasetType, dataId1, collection=run), inputRef1)
-        self.assertEqual(registry.findDataset(datasetType, dataId2, collection=run), inputRef2)
-        self.assertNotEqual(registry.findDataset(datasetType, dataId1, collection=run), inputRef2)
-        self.assertNotEqual(registry.findDataset(datasetType, dataId2, collection=run), inputRef1)
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=run), inputRef1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=run), inputRef2)
+        self.assertNotEqual(registry.findDataset(datasetType, dataId1, collections=run), inputRef2)
+        self.assertNotEqual(registry.findDataset(datasetType, dataId2, collections=run), inputRef1)
         # Check that requesting a non-existing dataId returns None
         nonExistingDataId = {"instrument": "Cam1", "detector": 3}
-        self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collection=run))
+        self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collections=run))
 
     def testCollections(self):
         """Tests for registry methods that manage collections.
@@ -277,50 +277,50 @@ class RegistryTests(ABC):
         datasetType = "permabias"
         # Find some datasets via their run's collection.
         dataId1 = {"instrument": "Cam1", "detector": 1}
-        ref1 = registry.findDataset(datasetType, dataId1, collection=run1)
+        ref1 = registry.findDataset(datasetType, dataId1, collections=run1)
         self.assertIsNotNone(ref1)
         dataId2 = {"instrument": "Cam1", "detector": 2}
-        ref2 = registry.findDataset(datasetType, dataId2, collection=run1)
+        ref2 = registry.findDataset(datasetType, dataId2, collections=run1)
         self.assertIsNotNone(ref2)
         # Associate those into a new collection,then look for them there.
         tag1 = "tag1"
         registry.registerCollection(tag1, type=CollectionType.TAGGED)
         registry.associate(tag1, [ref1, ref2])
-        self.assertEqual(registry.findDataset(datasetType, dataId1, collection=tag1), ref1)
-        self.assertEqual(registry.findDataset(datasetType, dataId2, collection=tag1), ref2)
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         # Disassociate one and verify that we can't it there anymore...
         registry.disassociate(tag1, [ref1])
-        self.assertIsNone(registry.findDataset(datasetType, dataId1, collection=tag1))
+        self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=tag1))
         # ...but we can still find ref2 in tag1, and ref1 in the run.
-        self.assertEqual(registry.findDataset(datasetType, dataId1, collection=run1), ref1)
-        self.assertEqual(registry.findDataset(datasetType, dataId2, collection=tag1), ref2)
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=run1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         collections = set(registry.queryCollections())
         self.assertEqual(collections, {run1, run2, tag1})
         # Associate both refs into tag1 again; ref2 is already there, but that
         # should be a harmless no-op.
         registry.associate(tag1, [ref1, ref2])
-        self.assertEqual(registry.findDataset(datasetType, dataId1, collection=tag1), ref1)
-        self.assertEqual(registry.findDataset(datasetType, dataId2, collection=tag1), ref2)
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         # Get a different dataset (from a different run) that has the same
         # dataset type and data ID as ref2.
-        ref2b = registry.findDataset(datasetType, dataId2, collection=run2)
+        ref2b = registry.findDataset(datasetType, dataId2, collections=run2)
         self.assertNotEqual(ref2, ref2b)
         # Attempting to associate that into tag1 should be an error.
         with self.assertRaises(ConflictingDefinitionError):
             registry.associate(tag1, [ref2b])
         # That error shouldn't have messed up what we had before.
-        self.assertEqual(registry.findDataset(datasetType, dataId1, collection=tag1), ref1)
-        self.assertEqual(registry.findDataset(datasetType, dataId2, collection=tag1), ref2)
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         # Attempt to associate the conflicting dataset again, this time with
         # a dataset that isn't in the collection and won't cause a conflict.
         # Should also fail without modifying anything.
         dataId3 = {"instrument": "Cam1", "detector": 3}
-        ref3 = registry.findDataset(datasetType, dataId3, collection=run1)
+        ref3 = registry.findDataset(datasetType, dataId3, collections=run1)
         with self.assertRaises(ConflictingDefinitionError):
             registry.associate(tag1, [ref3, ref2b])
-        self.assertEqual(registry.findDataset(datasetType, dataId1, collection=tag1), ref1)
-        self.assertEqual(registry.findDataset(datasetType, dataId2, collection=tag1), ref2)
-        self.assertIsNone(registry.findDataset(datasetType, dataId3, collection=tag1))
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
+        self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
 
     def testDatasetLocations(self):
         """Tests for `Registry.insertDatasetLocations`,
@@ -330,10 +330,10 @@ class RegistryTests(ABC):
         self.loadData(registry, "base.yaml")
         self.loadData(registry, "datasets.yaml")
         run = "imported_g"
-        ref = registry.findDataset("permabias", dataId={"instrument": "Cam1", "detector": 1}, collection=run)
+        ref = registry.findDataset("permabias", dataId={"instrument": "Cam1", "detector": 1}, collections=run)
         ref2 = registry.findDataset("permaflat",
                                     dataId={"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-G"},
-                                    collection=run)
+                                    collections=run)
         datastoreName = "dummystore"
         datastoreName2 = "dummystore2"
         # Test adding information about a new dataset
