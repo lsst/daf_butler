@@ -594,8 +594,8 @@ class Registry:
         return DatasetRef(datasetType=datasetType, dataId=dataId, id=row["dataset_id"], run=run,
                           hash=datasetRefHash, components=components)
 
-    def find(self, collection: str, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None,
-             **kwds: Any) -> Optional[DatasetRef]:
+    def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
+                    collection: str, **kwds: Any) -> Optional[DatasetRef]:
         """Lookup a dataset.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
@@ -603,13 +603,13 @@ class Registry:
 
         Parameters
         ----------
-        collection : `str`
-            Identifies the collection to search.
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
+        collection : `str`
+            Identifies the collection to search.
         **kwds
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true

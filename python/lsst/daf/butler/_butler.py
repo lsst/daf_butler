@@ -480,8 +480,8 @@ class Butler:
             idNumber = datasetRefOrType.id
         else:
             idNumber = None
-        # Expand the data ID first instead of letting registry.find do it, so
-        # we get the result even if it returns None.
+        # Expand the data ID first instead of letting registry.findDataset do
+        # it, so we get the result even if it returns None.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         if collection is None:
             collection = self.collection
@@ -489,7 +489,7 @@ class Butler:
                 raise TypeError("No collection provided.")
         # Always lookup the DatasetRef, even if one is given, to ensure it is
         # present in the current collection.
-        ref = self.registry.find(collection, datasetType, dataId)
+        ref = self.registry.findDataset(datasetType, dataId, collection=collection)
         if ref is None:
             if allowUnresolved:
                 return DatasetRef(datasetType, dataId)
