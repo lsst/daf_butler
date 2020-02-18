@@ -83,17 +83,6 @@ class ButlerValidationError(ValidationError):
 class Butler:
     """Main entry point for the data access system.
 
-    Attributes
-    ----------
-    config : `str`, `ButlerConfig` or `Config`, optional
-        (filename to) configuration. If this is not a `ButlerConfig`, defaults
-        will be read.  If a `str`, may be the path to a directory containing
-        a "butler.yaml" file.
-    datastore : `Datastore`
-        Datastore to use for storage.
-    registry : `Registry`
-        Registry to use for lookups.
-
     Parameters
     ----------
     config : `ButlerConfig`, `Config` or `str`, optional.
