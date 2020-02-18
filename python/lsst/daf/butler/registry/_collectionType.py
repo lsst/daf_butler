@@ -46,3 +46,8 @@ class CollectionType(enum.IntEnum):
     Within a particular tagged collection, there may only be one dataset with
     a particular dataset type and data ID.
     """
+
+    CHAINED = 3
+    """A ``CHAINED`` collection is simply an ordered list of other collections
+    to be searched.  These may include other ``CHAINED`` collections.
+    """

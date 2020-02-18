@@ -179,7 +179,9 @@ class DatasetRegistryStorage:
                 for n, record in enumerate(collections.iter(self._collections, datasetType=datasetType)):
                     subsubqueries.append(
                         finishSubquery(
-                            sqlalchemy.sql.select(columns + [sqlalchemy.sql.literal(n).label("rank")]),
+                            sqlalchemy.sql.select(
+                                columns + [sqlalchemy.sql.literal(n).label("rank")]
+                            ),
                             record
                         )
                     )

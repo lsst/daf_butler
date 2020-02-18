@@ -37,17 +37,19 @@ from ...core import ddl
 from ...core.timespan import Timespan, TIMESPAN_FIELD_SPECS
 from .._collectionType import CollectionType
 from ..interfaces import (
+    ChainedCollectionRecord,
     CollectionManager,
     CollectionRecord,
     MissingCollectionError,
     RunRecord,
 )
+from ..wildcards import CollectionSearch
 
 if TYPE_CHECKING:
     from .database import Database, StaticTablesContext
 
 
-_TablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run"])
+_TablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
 
 _TABLES_SPEC = _TablesTuple(
     collection=ddl.TableSpec(
@@ -65,6 +67,18 @@ _TABLES_SPEC = _TablesTuple(
         ],
         foreignKeys=[
             ddl.ForeignKeySpec("collection", source=("name",), target=("name",), onDelete="CASCADE"),
+        ],
+    ),
+    collection_chain=ddl.TableSpec(
+        fields=[
+            ddl.FieldSpec("parent", dtype=sqlalchemy.String, length=64, primaryKey=True),
+            ddl.FieldSpec("index", dtype=sqlalchemy.SmallInteger, primaryKey=True),
+            ddl.FieldSpec("child", dtype=sqlalchemy.String, length=64, nullable=False),
+            ddl.FieldSpec("dataset_type_name", dtype=sqlalchemy.String, length=128, nullable=True),
+        ],
+        foreignKeys=[
+            ddl.ForeignKeySpec("collection", source=("parent",), target=("name",), onDelete="CASCADE"),
+            ddl.ForeignKeySpec("collection", source=("child",), target=("name",)),
         ],
     ),
 )
@@ -125,6 +139,63 @@ class NameKeyRunRecord(RunRecord):
     def timespan(self) -> Timespan[Optional[datetime]]:
         # Docstring inherited from RunRecord.
         return self._timespan
+
+
+class NameKeyChainedCollectionRecord(ChainedCollectionRecord):
+    """A `ChainedCollectionRecord` implementation that just uses the string
+    name as the primary/foreign key for collections.
+    """
+    def __init__(self, db: Database, name: str, *, table: sqlalchemy.schema.Table):
+        super().__init__(name=name)
+        self._db = db
+        self._table = table
+
+    @property
+    def key(self) -> str:
+        # Docstring inherited from CollectionRecord.
+        return self.name
+
+    def _update(self, manager: CollectionManager, children: CollectionSearch):
+        # Docstring inherited from ChainedCollectionRecord.
+        rows = []
+        i = 0
+        for child, restriction in children.iter(manager, withRestrictions=True, flattenChains=False):
+            if restriction.names is ...:
+                rows.append({"parent": self.key, "child": child.key, "index": i,
+                             "dataset_type_name": ""})
+                i += 1
+            else:
+                for name in restriction.names:
+                    rows.append({"parent": self.key, "child": child.key, "index": i,
+                                 "dataset_type_name": name})
+                    i += 1
+        with self._db.transaction():
+            self._db.delete(self._table, ["parent"], {"parent": self.key})
+            self._db.insert(self._table, *rows)
+
+    def _load(self, manager: CollectionManager) -> CollectionSearch:
+        # Docstring inherited from ChainedCollectionRecord.
+        sql = sqlalchemy.sql.select(
+            [self._table.columns.child, self._table.columns.dataset_type_name]
+        ).select_from(
+            self._table
+        ).where(
+            self._table.columns.parent == self.key
+        ).order_by(
+            self._table.columns.index
+        )
+        # It's fine to have consecutive rows with the same collection name
+        # and different dataset type names - CollectionSearch will group those
+        # up for us.
+        children = []
+        for row in self._db.query(sql):
+            key = row[self._table.columns.child]
+            restriction = row[self._table.columns.dataset_type_name]
+            if not restriction:
+                restriction = ...  # we store ... as "" in the database
+            record = manager[key]
+            children.append((record.name, restriction))
+        return CollectionSearch.fromExpression(children)
 
 
 class AggressiveNameKeyCollectionManager(CollectionManager):
@@ -193,6 +264,7 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
         # Put found records into a temporary instead of updating self._records
         # in place, for exception safety.
         records = {}
+        chains = []
         for row in self._db.query(sql).fetchall():
             name = row[self._tables.collection.columns.name]
             type = CollectionType(row["type"])
@@ -207,10 +279,16 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
                         end=row[self._tables.run.columns[TIMESPAN_FIELD_SPECS.end.name]],
                     )
                 )
+            elif type is CollectionType.CHAINED:
+                record = NameKeyChainedCollectionRecord(db=self._db, table=self._tables.collection_chain,
+                                                        name=name)
+                chains.append(record)
             else:
                 record = NameKeyCollectionRecord(type=type, name=name)
             records[record.name] = record
         self._records = records
+        for chain in chains:
+            chain.refresh(self)
 
     def register(self, name: str, type: CollectionType) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
@@ -238,6 +316,9 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
                     ),
                     **kwds
                 )
+            elif type is CollectionType.CHAINED:
+                record = NameKeyChainedCollectionRecord(db=self._db, table=self._tables.collection_chain,
+                                                        **kwds)
             else:
                 record = NameKeyCollectionRecord(type=type, **kwds)
             self._records[record.name] = record

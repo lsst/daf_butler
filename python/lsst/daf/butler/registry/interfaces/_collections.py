@@ -21,6 +21,7 @@
 from __future__ import annotations
 
 __all__ = [
+    "ChainedCollectionRecord",
     "CollectionManager",
     "CollectionRecord",
     "MissingCollectionError",
@@ -37,6 +38,7 @@ from typing import (
 )
 
 from ...core import ddl, Timespan
+from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
 
 if TYPE_CHECKING:
@@ -121,6 +123,111 @@ class RunRecord(CollectionRecord):
         """Begin and end timestamps for the period over which the run was
         produced.  `None`/``NULL`` values are interpreted as infinite
         bounds.
+        """
+        raise NotImplementedError()
+
+
+class ChainedCollectionRecord(CollectionRecord):
+    """A subclass of `CollectionRecord` that adds the list of child collections
+    in a ``CHAINED`` collection.
+
+    Parameters
+    ----------
+    name : `str`
+        Name of the collection.
+    """
+
+    def __init__(self, name: str):
+        super().__init__(name=name, type=CollectionType.CHAINED)
+        self._children = CollectionSearch.fromExpression([])
+
+    @property
+    def children(self) -> CollectionSearch:
+        """The ordered search path of child collections that define this chain
+        (`CollectionSearch`).
+        """
+        return self._children
+
+    def update(self, manager: CollectionManager, children: CollectionSearch):
+        """Redefine this chain to search the given child collections.
+
+        This method should be used by all external code to set children.  It
+        delegates to `_update`, which is what should be overridden by
+        subclasses.
+
+        Parameters
+        ----------
+        manager : `CollectionManager`
+            The object that manages this records instance and all records
+            instances that may appear as its children.
+        children : `CollectionSearch`
+            A collection search path that should be resolved to set the child
+            collections of this chain.
+
+        Raises
+        ------
+        ValueError
+            Raised when the child collections contain a cycle.
+        """
+        for record in children.iter(manager, flattenChains=True, includeChains=True,
+                                    collectionType=CollectionType.CHAINED):
+            if record == self:
+                raise ValueError(f"Cycle in collection chaining when defining '{self.name}'.")
+        self._update(manager, children)
+        self._children = children
+
+    def refresh(self, manager: CollectionManager):
+        """Load children from the database, using the given manager to resolve
+        collection primary key values into records.
+
+        This method exists to ensure that all collections that may appear in a
+        chain are known to the manager before any particular chain tries to
+        retrieve their records from it.  `ChainedCollectionRecord` subclasses
+        can rely on it being called sometime after their own ``__init__`` to
+        finish construction.
+
+        Parameters
+        ----------
+        manager : `CollectionManager`
+            The object that manages this records instance and all records
+            instances that may appear as its children.
+        """
+        self._children = self._load(manager)
+
+    @abstractmethod
+    def _update(self, manager: CollectionManager, children: CollectionSearch):
+        """Protected implementation hook for setting the `children` property.
+
+        This method should be implemented by subclasses to update the database
+        to reflect the children given.  It should never be called by anything
+        other than the `children` setter, which should be used by all external
+        code.
+
+        Parameters
+        ----------
+        manager : `CollectionManager`
+            The object that manages this records instance and all records
+            instances that may appear as its children.
+        children : `CollectionSearch`
+            A collection search path that should be resolved to set the child
+            collections of this chain.  Guaranteed not to contain cycles.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _load(self, manager: CollectionManager) -> CollectionSearch:
+        """Protected implementation hook for `refresh`.
+
+        This method should be implemented by subclasses to retrieve the chain's
+        child collections from the database and return them.  It should never
+        be called by anything other than `refresh`, which should be used by all
+        external code.
+
+        Parameters
+        ----------
+        manager : `CollectionManager`
+            The object that manages this records instance and all records
+            instances that may appear as its children.
         """
         raise NotImplementedError()
 
@@ -284,7 +391,8 @@ class CollectionManager(ABC):
         record : `CollectionRecord`
             Object representing the collection, including its type and ID.
             If ``type is CollectionType.RUN``, this will be a `RunRecord`
-            instance.
+            instance.  If ``type is CollectionType.CHAIN``, this will be a
+            `ChainedCollectionRecord` instance.
 
         Raises
         ------
@@ -317,7 +425,8 @@ class CollectionManager(ABC):
         record : `CollectionRecord`
             Object representing the collection, including its type and ID.
             If ``record.type is CollectionType.RUN``, this will be a
-            `RunRecord` instance.
+            `RunRecord` instance.  If ``record.type is CollectionType.CHAIN``,
+            this will be a `ChainedCollectionRecord` instance.
 
         Raises
         ------
@@ -346,7 +455,8 @@ class CollectionManager(ABC):
         record : `CollectionRecord`
             Object representing the collection, including its type and name.
             If ``record.type is CollectionType.RUN``, this will be a
-            `RunRecord` instance.
+            `RunRecord` instance.  If ``record.type is CollectionType.CHAIN``,
+            this will be a `ChainedCollectionRecord` instance.
 
         Raises
         ------

@@ -37,6 +37,7 @@ from ...core import (
     YamlRepoImportBackend
 )
 from .._registry import Registry, CollectionType, ConflictingDefinitionError, OrphanedRecordError
+from ..wildcards import DatasetTypeRestriction
 
 
 class RegistryTests(ABC):
@@ -321,6 +322,62 @@ class RegistryTests(ABC):
         self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
         self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
         self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
+        # Register a chained collection that searches:
+        # 1. 'tag1'
+        # 2. 'run1', but only for the permaflat dataset
+        # 3. 'run2'
+        chain1 = "chain1"
+        registry.registerCollection(chain1, type=CollectionType.CHAINED)
+        self.assertIs(registry.getCollectionType(chain1), CollectionType.CHAINED)
+        # Chained collection exists, but has no collections in it.
+        self.assertFalse(registry.getCollectionChain(chain1))
+        # Attempt to set its child collections to something circular; that
+        # should fail.
+        with self.assertRaises(ValueError):
+            registry.setCollectionChain(chain1, [tag1, chain1])
+        # Add the child collections.
+        registry.setCollectionChain(chain1, [tag1, (run1, "permaflat"), run2])
+        self.assertEqual(
+            list(registry.getCollectionChain(chain1)),
+            [(tag1, DatasetTypeRestriction.any),
+             (run1, DatasetTypeRestriction.fromExpression("permaflat")),
+             (run2, DatasetTypeRestriction.any)]
+        )
+        # Searching for dataId1 or dataId2 in the chain should return ref1 and
+        # ref2, because both are in tag1.
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain1), ref2)
+        # Now disassociate ref2 from tag1.  The search (for permabias) with
+        # dataId2 in chain1 should then:
+        # 1. not find it in tag1
+        # 2. not look in tag2, because it's restricted to permaflat here
+        # 3. find a different dataset in run2
+        registry.disassociate(tag1, [ref2])
+        ref2b = registry.findDataset(datasetType, dataId2, collections=chain1)
+        self.assertNotEqual(ref2b, ref2)
+        self.assertEqual(ref2b, registry.findDataset(datasetType, dataId2, collections=run2))
+        # Look in the chain for a permaflat that is in run1; should get the
+        # same ref as if we'd searched run1 directly.
+        dataId3 = {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}
+        self.assertEqual(registry.findDataset("permaflat", dataId3, collections=chain1),
+                         registry.findDataset("permaflat", dataId3, collections=run1),)
+        # Define a new chain so we can test recursive chains.
+        chain2 = "chain2"
+        registry.registerCollection(chain2, type=CollectionType.CHAINED)
+        registry.setCollectionChain(chain2, [(run2, "permabias"), chain1])
+        # Search for permabias with dataId1 should find it via tag1 in chain2,
+        # recursing, because is not in run1.
+        self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=run2))
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain2), ref1)
+        # Search for permabias with dataId2 should find it in run2 (ref2b).
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain2), ref2b)
+        # Search for a permaflat that is in run2.  That should not be found
+        # at the front of chain2, because of the restriction to permabias
+        # on run2 there, but it should be found in at the end of chain1.
+        dataId4 = {"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-R2"}
+        ref4 = registry.findDataset("permaflat", dataId4, collections=run2)
+        self.assertIsNotNone(ref4)
+        self.assertEqual(ref4, registry.findDataset("permaflat", dataId4, collections=chain2))
 
     def testDatasetLocations(self):
         """Tests for `Registry.insertDatasetLocations`,

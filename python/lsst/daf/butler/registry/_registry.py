@@ -356,6 +356,68 @@ class Registry:
         """
         self._collections.register(name, CollectionType.RUN)
 
+    def getCollectionChain(self, parent: str) -> CollectionSearch:
+        """Return the child collections in a `~CollectionType.CHAINED`
+        collection.
+
+        Parameters
+        ----------
+        parent : `str`
+            Name of the chained collection.  Must have already been added via
+            a call to `Registry.registerCollection`.
+
+        Returns
+        -------
+        children : `CollectionSearch`
+            An object that defines the search path of the collection.
+            See :ref:`daf_butler_collection_expressions` for more information.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if ``parent`` does not exist in the `Registry`.
+        TypeError
+            Raised if ``parent`` does not correspond to a
+            `~CollectionType.CHAINED` collection.
+        """
+        record = self._collections.find(parent)
+        if record.type is not CollectionType.CHAINED:
+            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+        return record.children
+
+    def setCollectionChain(self, parent: str, children: Any):
+        """Define or redefine a `~CollectionType.CHAINED` collection.
+
+        Parameters
+        ----------
+        parent : `str`
+            Name of the chained collection.  Must have already been added via
+            a call to `Registry.registerCollection`.
+        children : `Any`
+            An expression defining an ordered search of child collections,
+            generally an iterable of `str`.  Restrictions on the dataset types
+            to be searched can also be included, by passing mapping or an
+            iterable containing tuples; see
+            :ref:`daf_butler_collection_expressions` for more information.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised when any of the given collections do not exist in the
+            `Registry`.
+        TypeError
+            Raised if ``parent`` does not correspond to a
+            `~CollectionType.CHAINED` collection.
+        ValueError
+            Raised if the given collections contains a cycle.
+        """
+        record = self._collections.find(parent)
+        if record.type is not CollectionType.CHAINED:
+            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+        children = CollectionSearch.fromExpression(children)
+        if children != record.children:
+            record.update(self._collections, children)
+
     @transactional
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """
@@ -1126,7 +1188,9 @@ class Registry:
 
     def queryCollections(self, expression: Any = ...,
                          datasetType: Optional[DatasetType] = None,
-                         collectionType: Optional[CollectionType] = None) -> Iterator[str]:
+                         collectionType: Optional[CollectionType] = None,
+                         flattenChains: bool = False,
+                         includeChains: Optional[bool] = None) -> Iterator[str]:
         """Iterate over the collections whose names match an expression.
 
         Parameters
@@ -1144,6 +1208,13 @@ class Registry:
             ignored.
         collectionType : `CollectionType`, optional
             If provided, only yield collections of this type.
+        flattenChains : `bool`, optional
+            If `True` (`False` is default), recursively yield the child
+            collections of matching `~CollectionType.CHAINED` collections.
+        includeChains : `bool`, optional
+            If `True`, yield records for matching `~CollectionType.CHAINED`
+            collections.  Default is the opposite of ``flattenChains``: include
+            either CHAINED collections or their children, but not both.
 
         Yields
         ------
@@ -1151,7 +1222,8 @@ class Registry:
             The name of a collection that matches ``expression``.
         """
         query = CollectionQuery.fromExpression(expression)
-        for record in query.iter(self._collections, datasetType=datasetType, collectionType=collectionType):
+        for record in query.iter(self._collections, datasetType=datasetType, collectionType=collectionType,
+                                 flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
     def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
