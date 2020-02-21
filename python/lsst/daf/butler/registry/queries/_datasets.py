@@ -20,9 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("DatasetRegistryStorage", "DatasetTypeExpression")
+__all__ = ["DatasetRegistryStorage"]
 
-from typing import Mapping, Iterator, Sequence, Union
+from typing import Any, Mapping, Iterator
 
 import sqlalchemy
 
@@ -33,10 +33,7 @@ from ...core import (
 )
 from .._collectionType import CollectionType
 from ..interfaces import CollectionManager, CollectionRecord
-from ..wildcards import WildcardExpression, CategorizedWildcard
-
-
-DatasetTypeExpression = Union[DatasetType, Sequence[DatasetType], WildcardExpression]
+from ..wildcards import CategorizedWildcard, CollectionSearch, CollectionQuery
 
 
 class DatasetRegistryStorage:
@@ -75,15 +72,16 @@ class DatasetRegistryStorage:
         self._datasetTable = tables["dataset"]
         self._datasetCollectionTable = tables["dataset_collection"]
 
-    def fetchDatasetTypes(self, datasetType: DatasetTypeExpression = ...) -> Iterator[DatasetType]:
+    def fetchDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
         """Retrieve `DatasetType` instances from the database matching an
         expression.
 
         Parameters
         ----------
-        datasetType : `DatasetType`, `str`, `Like`, sequence thereof, or `...`
-            An expression indicating the dataset type(s) to fetch.  See
-            `WildcardExpression` for more information.
+        expression
+            An expression indicating the dataset type(s) to fetch.
+            See :ref:`daf_butler_dataset_type_expressions` for more
+            information.
 
         Yields
         -------
@@ -97,13 +95,8 @@ class DatasetRegistryStorage:
         ]).select_from(
             self._datasetTypeTable.join(self._datasetTypeDimensionsTable)
         )
-        wildcard = CategorizedWildcard.categorize(datasetType)
-        if wildcard is not None:
-            for item in wildcard.other:
-                if isinstance(item, DatasetType):
-                    yield item
-                else:
-                    raise TypeError(f"Object of unsupported type in dataset type expression: '{item}'.")
+        wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
+        if wildcard is not ...:
             where = wildcard.makeWhereExpression(self._datasetTypeTable.columns.dataset_type_name)
             if where is None:
                 return
@@ -120,7 +113,7 @@ class DatasetRegistryStorage:
                               storageClass=storageClassName)
 
     def getDatasetSubquery(self, datasetType: DatasetType, *,
-                           collections: WildcardExpression,
+                           collections: Any,
                            isResult: bool = True,
                            addRank: bool = False) -> sqlalchemy.sql.FromClause:
         """Return a SQL expression that searches for a dataset of a particular
@@ -131,18 +124,18 @@ class DatasetRegistryStorage:
         datasetType : `DatasetType`
             Type of dataset to search for.  Must be a true `DatasetType`;
             call `fetchDatasetTypes` first to expand an expression if desired.
-        collections : `str`, `Like`, `list` thereof, or `...`
-            An expression describing the collections in which to search for
-            the datasets.  See `WildcardExpression` for more information.
+        collections
+            An expression describing the collections to search and any
+            restrictions on the dataset types to search within them.
+            See :ref:`daf_butler_collection_expressions` for more information.
         isResult : `bool`, optional
             If `True` (default), include the ``dataset_id`` column in the
             result columns of the query.
         addRank : `bool`, optional
             If `True` (`False` is default), also include a calculated column
             that ranks the collection in which the dataset was found (lower
-            is better).  Requires that ``collections`` be a `list` of `str`
-            regular strings, so there is a clear search order.  Ignored if
-            ``isResult`` is `False`.
+            is better).  Requires that ``collections`` must be an *ordered*
+            expression (regular expressions and `...` are not allowed).
 
         Returns
         -------
@@ -152,7 +145,6 @@ class DatasetRegistryStorage:
             ``datasetType.dimensions``; may have additional columns depending
             on the values of ``isResult`` and ``addRank``.
         """
-        wildcard = CategorizedWildcard.categorize(collections)
         # Always include dimension columns, because that's what we use to
         # join against other tables.
         columns = [self._datasetTable.columns[dimension.name] for dimension in datasetType.dimensions]
@@ -174,10 +166,6 @@ class DatasetRegistryStorage:
                                     collectionColumn == collectionRecord.key)
             )
 
-        wildcard = CategorizedWildcard.categorize(collections)
-        if wildcard is not None and wildcard.other:
-            raise TypeError(f"Unsupported objects in collections expression: '{wildcard.other}'.")
-
         # A list of single-collection queries that we'll UNION together.
         subsubqueries = []
 
@@ -187,20 +175,8 @@ class DatasetRegistryStorage:
         if isResult:
             columns.append(self._datasetTable.columns.dataset_id)
             if addRank:
-                # If we're adding ranks, we need explicit collection names in
-                # the list, so we can't use self._collections.query.
-                # This is one code path for the rest of this function.
-                if wildcard is None or wildcard.patterns:
-                    raise TypeError("Cannot rank collections when expression includes wildcards.")
-                for n, name in enumerate(wildcard.strings):
-                    record = self._collections.find(name)
-                    if record is None:
-                        # This collection doesn't exist at all.  Arguable
-                        # whether we should raise here instead of just taking
-                        # advantage of the fact that we know there are no
-                        # datasets with this collection, but this preserves the
-                        # old behavior.
-                        continue
+                collections = CollectionSearch.fromExpression(collections)
+                for n, record in enumerate(collections.iter(self._collections, datasetType=datasetType)):
                     subsubqueries.append(
                         finishSubquery(
                             sqlalchemy.sql.select(columns + [sqlalchemy.sql.literal(n).label("rank")]),
@@ -209,9 +185,10 @@ class DatasetRegistryStorage:
                     )
                 return sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)
 
-        # The code path for not adding ranks is similar, but we can get the
-        # records from self._collections.query, and we don't need to add the
-        # literal rank column.
-        for record in self._collections.query(wildcard):
+        # The code path for not adding ranks is similar, but we don't need to
+        # add the literal rank column, and we transform the collections
+        # expression into a CollectionQuery instead of a CollectionSearch.
+        collections = CollectionQuery.fromExpression(collections)
+        for record in collections.iter(self._collections, datasetType=datasetType):
             subsubqueries.append(finishSubquery(sqlalchemy.sql.select(columns), record))
         return sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)

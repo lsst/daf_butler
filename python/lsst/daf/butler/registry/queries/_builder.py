@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import List, Iterable, TYPE_CHECKING
+from typing import Any, List, Iterable, TYPE_CHECKING
 
 from sqlalchemy.sql import ColumnElement, and_, literal, bindparam, select, FromClause
 import sqlalchemy.sql
@@ -37,7 +37,6 @@ from ...core import (
 )
 from ...core.utils import NamedValueSet
 
-from ..wildcards import WildcardExpression
 from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
 from ._datasets import DatasetRegistryStorage
 from .expressions import ClauseVisitor
@@ -109,7 +108,7 @@ class QueryBuilder:
         )
         self._elements.add(element)
 
-    def joinDataset(self, datasetType: DatasetType, collections: WildcardExpression, *,
+    def joinDataset(self, datasetType: DatasetType, collections: Any, *,
                     isResult: bool = True, addRank: bool = False):
         """Add a dataset search or constraint to the query.
 
@@ -125,8 +124,12 @@ class QueryBuilder:
             The type of datasets to search for.
         collections : sequence of `str` or `Like`, or ``...``
             An expression describing the collections in which to search for
-            the datasets.  ``...`` indicates that all collections should be
-            searched.
+            the datasets.  This may be a single instance of or an iterable of
+            any of the following:
+
+             - a `str` collection name;
+             - a `Like` pattern to match against collection names;
+             - `...`, indicating all collections.
         isResult : `bool`, optional
             If `True` (default), include the ``dataset_id`` column in the
             result columns of the query, allowing complete `DatasetRef`

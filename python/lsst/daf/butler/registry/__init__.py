@@ -25,7 +25,7 @@ from ._dbAuth import *
 from ._collectionType import *
 
 from . import wildcards
-from .wildcards import Like  # other symbols are mostly internal
+from .wildcards import CollectionSearch, DatasetTypeRestriction
 from . import interfaces
 from .interfaces import MissingCollectionError
 from . import queries

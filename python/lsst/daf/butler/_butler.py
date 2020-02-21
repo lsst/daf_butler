@@ -1265,7 +1265,7 @@ class Butler:
         if datasetTypeNames:
             entities = [self.registry.getDatasetType(name) for name in datasetTypeNames]
         else:
-            entities = list(self.registry.getAllDatasetTypes())
+            entities = list(self.registry.queryDatasetTypes())
 
         # filter out anything from the ignore list
         if ignore:

@@ -130,7 +130,7 @@ class ButlerPutGetTests:
         butler = Butler(self.tmpConfigFile, run="ingest/run", collection="ingest")
 
         # There will not be a collection yet
-        collections = butler.registry.getAllCollections()
+        collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, set(["ingest", "ingest/run"]))
 
         # Create and register a DatasetType
@@ -282,7 +282,7 @@ class ButlerPutGetTests:
             butler.get(ref, parameters={"unsupported": True})
 
         # Check we have a collection
-        collections = butler.registry.getAllCollections()
+        collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {"ingest", "ingest/run"})
 
         # Clean up to check that we can remove something that may have
@@ -361,7 +361,7 @@ class ButlerTests(ButlerPutGetTests):
         butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
-        collections = butler.registry.getAllCollections()
+        collections = set(butler.registry.queryCollections())
         self.assertEqual(collections, {"ingest"})
 
         butler2 = Butler(butler=butler, collection="other")
@@ -509,7 +509,7 @@ class ButlerTests(ButlerPutGetTests):
             for componentName in storageClass.components:
                 components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
 
-        fromRegistry = butler.registry.getAllDatasetTypes()
+        fromRegistry = set(butler.registry.queryDatasetTypes())
         self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
 
         # Now that we have some dataset types registered, validate them
@@ -606,9 +606,9 @@ class ButlerTests(ButlerPutGetTests):
         self.assertNotIn(self.fullConfigKey, limited)
 
         # Collections don't appear until something is put in them
-        collections1 = butler1.registry.getAllCollections()
+        collections1 = set(butler1.registry.queryCollections())
         self.assertEqual(collections1, set())
-        self.assertEqual(butler2.registry.getAllCollections(), collections1)
+        self.assertEqual(set(butler2.registry.queryCollections()), collections1)
 
         # Check that a config with no associated file name will not
         # work properly with relocatable Butler repo

@@ -36,7 +36,6 @@ import sqlalchemy
 from ...core import ddl
 from ...core.timespan import Timespan, TIMESPAN_FIELD_SPECS
 from .._collectionType import CollectionType
-from ..wildcards import CategorizedWildcard
 from ..interfaces import (
     CollectionManager,
     CollectionRecord,
@@ -258,21 +257,5 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
         except KeyError as err:
             raise MissingCollectionError(f"Collection with key '{err}' not found.") from err
 
-    def query(self, wildcard: Optional[CategorizedWildcard] = None) -> Iterator[CollectionRecord]:
-        # Docstring inherited from CollectionManager.
-        if wildcard is None:
-            yield from self._records.values()
-        else:
-            if wildcard.patterns:
-                sql = sqlalchemy.sql.select(
-                    [self._tables.collection.columns.name]
-                ).select_from(
-                    self._tables.collection
-                ).where(
-                    wildcard.makeWhereExpression(self._tables.collection.columns.name)
-                )
-                for row in self._db.query(sql).fetchall():
-                    yield self._records[row["name"]]
-            else:
-                for name in wildcard.strings:
-                    yield self._records[name]
+    def __iter__(self) -> Iterator[CollectionRecord]:
+        yield from self._records.values()

@@ -27,7 +27,6 @@ import contextlib
 import sys
 from typing import (
     Any,
-    FrozenSet,
     Iterable,
     Iterator,
     List,
@@ -56,17 +55,16 @@ from ..core import (
     StorageClassFactory,
 )
 from ..core import ddl
-from ..core.utils import doImport, iterable, transactional, NamedKeyDict
+from ..core.utils import doImport, iterable, transactional
 from ._config import RegistryConfig
-from .wildcards import WildcardExpression
 from .queries import (
     DatasetRegistryStorage,
-    DatasetTypeExpression,
     QueryBuilder,
     QuerySummary,
 )
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
+from .wildcards import CollectionQuery
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -305,16 +303,6 @@ class Registry:
         """
         self._opaque[tableName].delete(**where)
 
-    def getAllCollections(self):
-        """Get names of all the collections found in this repository.
-
-        Returns
-        -------
-        collections : `set` of `str`
-            The collections.
-        """
-        return set(record.name for record in self._collections.query())
-
     def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED):
         """Add a new collection if one with the given name does not exist.
 
@@ -498,25 +486,6 @@ class Registry:
                                       dimensions=dimensions)
             self._datasetTypes[name] = datasetType
         return datasetType
-
-    def getAllDatasetTypes(self) -> FrozenSet[DatasetType]:
-        """Get every registered `DatasetType`.
-
-        Returns
-        -------
-        types : `frozenset` of `DatasetType`
-            Every `DatasetType` in the registry.
-        """
-        # Get all the registered names
-        result = self._db.query(
-            sqlalchemy.sql.select(
-                [self._tables.dataset_type.columns.dataset_type_name]
-            )
-        ).fetchall()
-        if result is None:
-            return frozenset()
-        datasetTypeNames = [r[0] for r in result]
-        return frozenset(self.getDatasetType(name) for name in datasetTypeNames)
 
     def _makeDatasetRefFromRow(self, row: sqlalchemy.engine.RowProxy,
                                datasetType: Optional[DatasetType] = None,
@@ -1132,6 +1101,55 @@ class Registry:
         storage = self._dimensions[element]
         storage.insert(*records)
 
+    def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
+        """Iterate over the dataset types whose names match an expression.
+
+        Parameters
+        ----------
+        expression : `Any`, optional
+            An expression that fully or partially identifies the dataset types
+            to return, such as a `str`, `re.Pattern`, or iterable thereof.
+            `...` can be used to return all dataset types, and is the default.
+            See :ref:`daf_butler_dataset_type_expressions` for more
+            information.
+
+        Yields
+        ------
+        datasetType : `DatasetType`
+            A `DatasetType` instance whose name matches ``expression``.
+        """
+        yield from self._datasetStorage.fetchDatasetTypes(expression)
+
+    def queryCollections(self, expression: Any = ...,
+                         datasetType: Optional[DatasetType] = None,
+                         collectionType: Optional[CollectionType] = None) -> Iterator[str]:
+        """Iterate over the collections whose names match an expression.
+
+        Parameters
+        ----------
+        expression : `Any`, optional
+            An expression that fully or partially identifies the collections
+            to return, such as a `str`, `re.Pattern`, or iterable thereof.
+            `...` can be used to return all collections, and is the default.
+            See :ref:`daf_butler_collection_expressions` for more
+            information.
+        datasetType : `DatasetType`, optional
+            If provided, only yield collections that should be searched for
+            this dataset type according to ``expression``.  If this is
+            not provided, any dataset type restrictions in ``expression`` are
+            ignored.
+        collectionType : `CollectionType`, optional
+            If provided, only yield collections of this type.
+
+        Yields
+        ------
+        collection : `str`
+            The name of a collection that matches ``expression``.
+        """
+        query = CollectionQuery.fromExpression(expression)
+        for record in query.iter(self._collections, datasetType=datasetType, collectionType=collectionType):
+            yield record.name
+
     def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
@@ -1158,7 +1176,8 @@ class Registry:
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
-                        datasets: Optional[Mapping[DatasetTypeExpression, WildcardExpression]] = None,
+                        datasets: Any = None,
+                        collections: Any = None,
                         where: Optional[str] = None,
                         expand: bool = True,
                         **kwds) -> Iterator[DataCoordinate]:
@@ -1173,17 +1192,29 @@ class Registry:
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
-        datasets : `~collections.abc.Mapping`, optional
-            Datasets whose existence in the registry constrain the set of data
-            IDs returned.  This is a mapping from a dataset type expression
-            (a `str` name, a true `DatasetType` instance, a `Like` pattern
-            for the name, or ``...`` for all DatasetTypes) to a collections
-            expression (a sequence of `str` or `Like` patterns, or `...` for
-            all collections).
+        datasets : `Any`, optional
+            An expression that fully or partially identifies dataset types
+            that should constrain the yielded data IDs.  For example, including
+            "raw" here would constrain the yielded ``instrument``,
+            ``exposure``, ``detector``, and ``physical_filter`` values to only
+            those for which at least one "raw" dataset exists in
+            ``collections``.  Allowed types include `DatasetType`, `str`,
+            `re.Pattern`, and iterables thereof.  Unlike other dataset type
+            expressions, `...` is not permitted - it doesn't make sense to
+            constrain data IDs on the existence of *all* datasets.
+            See :ref:`daf_butler_dataset_type_expressions` for more
+            information.
+        collections: `Any`, optional
+            An expression that fully or partially identifies the collections
+            to search for datasets, such as a `str`, `re.Pattern`, or iterable
+            thereof.  `...` can be used to return all collections.  Must be
+            provided if ``datasets`` is, and is ignored if it is not.  See
+            :ref:`daf_butler_collection_expressions` for more information.
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.
+            key column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
         expand : `bool`, optional
             If `True` (default) yield `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
@@ -1201,20 +1232,26 @@ class Registry:
         """
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwds)
-        standardizedDatasets = NamedKeyDict()
+        standardizedDatasetTypes = []
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
         if datasets is not None:
-            for datasetTypeExpr, collectionsExpr in datasets.items():
-                for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetTypeExpr):
-                    requestedDimensionNames.update(trueDatasetType.dimensions.names)
-                    standardizedDatasets[trueDatasetType] = collectionsExpr
+            if collections is None:
+                raise TypeError("Cannot pass 'datasets' without 'collections'.")
+            for datasetType in self._datasetStorage.fetchDatasetTypes(datasets):
+                requestedDimensionNames.update(datasetType.dimensions.names)
+                standardizedDatasetTypes.append(datasetType)
+            # Preprocess collections expression in case the original included
+            # single-pass iterators (we'll want to use it multiple times
+            # below).
+            collections = CollectionQuery.fromExpression(collections)
+
         summary = QuerySummary(
             requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
             dataId=standardizedDataId,
             expression=where,
         )
         builder = self.makeQueryBuilder(summary)
-        for datasetType, collections in standardizedDatasets.items():
+        for datasetType in standardizedDatasetTypes:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()
         predicate = query.predicate()
@@ -1226,8 +1263,8 @@ class Registry:
                 else:
                     yield result
 
-    def queryDatasets(self, datasetType: DatasetTypeExpression, *,
-                      collections: WildcardExpression,
+    def queryDatasets(self, datasetType: Any, *,
+                      collections: Any,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,
@@ -1239,16 +1276,17 @@ class Registry:
 
         Parameters
         ----------
-        datasetType : `DatasetType`, `str`, `Like`, or ``...``
-            An expression indicating type(s) of datasets to query for.
-            ``...`` may be used to query for all known DatasetTypes.
-            Multiple explicitly-provided dataset types cannot be queried in a
-            single call to `queryDatasets` even though wildcard expressions
-            can, because the results would be identical to chaining the
-            iterators produced by multiple calls to `queryDatasets`.
-        collections: `~collections.abc.Sequence` of `str` or `Like`, or ``...``
-            An expression indicating the collections to be searched for
-            datasets.  ``...`` may be passed to search all collections.
+        datasetType
+            An expression that fully or partially identifies the dataset types
+            to be queried.  Allowed types include `DatasetType`, `str`,
+            `re.Pattern`, and iterables thereof.  The special value `...` can
+            be used to query all dataset types.  See
+            :ref:`daf_butler_dataset_type_expressions` for more information.
+        collections
+            An expression that fully or partially identifies the collections
+            to search for datasets, such as a `str`, `re.Pattern`, or iterable
+            thereof.  `...` can be used to return all collections.  See
+            :ref:`daf_butler_collection_expressions` for more information.
         dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
             Dimensions to include in the query (in addition to those used
             to identify the queried dataset type(s)), either to constrain
@@ -1261,13 +1299,15 @@ class Registry:
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.
+            key column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
         deduplicate : `bool`, optional
             If `True` (`False` is default), for each result data ID, only
             yield one `DatasetRef` of each `DatasetType`, from the first
             collection in which a dataset of that dataset type appears
-            (according to the order of ``collections`` passed in).  Cannot be
-            used if any element in ``collections`` is an expression.
+            (according to the order of ``collections`` passed in).  If `True`,
+            ``collections`` must not contain regular expressions and may not
+            be `...`.
         expand : `bool`, optional
             If `True` (default) attach `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
@@ -1288,11 +1328,11 @@ class Registry:
         ------
         TypeError
             Raised when the arguments are incompatible, such as when a
-            collection wildcard is pass when ``deduplicate`` is `True`.
+            collection wildcard is passed when ``deduplicate`` is `True`.
 
         Notes
         -----
-        When multiple dataset types are queried via a wildcard expression, the
+        When multiple dataset types are queried in a single call, the
         results of this operation are equivalent to querying for each dataset
         type separately in turn, and no information about the relationships
         between datasets of different types is included.  In contexts where

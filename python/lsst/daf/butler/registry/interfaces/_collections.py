@@ -36,12 +36,10 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from ...core import ddl
-from ...core.timespan import Timespan
+from ...core import ddl, Timespan
 from .._collectionType import CollectionType
 
 if TYPE_CHECKING:
-    from ..wildcards import CategorizedWildcard
     from .database import Database, StaticTablesContext
 
 
@@ -363,18 +361,12 @@ class CollectionManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def query(self, wildcard: Optional[CategorizedWildcard] = None) -> Iterator[CollectionRecord]:
-        """Iterate over the collections whose names match an expression.
-
-        Parameters
-        ----------
-        wildcard : `CategorizedWildcard`, optional
-            Preprocessed version of a wildcard expression.  If `None`, all
-            collections are returned.
+    def __iter__(self) -> Iterator[CollectionRecord]:
+        """Iterate over all collections.
 
         Yields
         ------
         record : `CollectionRecord`
-            A collection matching the given expression.
+            The record for a managed collection.
         """
         raise NotImplementedError()
