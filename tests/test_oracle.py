@@ -157,6 +157,10 @@ class OracleRegistryTestCase(unittest.TestCase, RegistryTests):
     def tearDownClass(cls):
         cleanUpPrefixes(cls._connection, cls._prefixes)
 
+    @classmethod
+    def getDataDir(cls) -> str:
+        return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
+
     def makeRegistry(self) -> Registry:
         prefix = f"test_{secrets.token_hex(8).lower()}_"
         self._prefixes.append(prefix)
