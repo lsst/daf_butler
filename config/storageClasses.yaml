@@ -89,7 +89,7 @@ storageClasses:
     pytype: lsst.daf.base.PropertyList
   PropertySet:
     pytype: lsst.daf.base.PropertySet
-  DefectsList:
+  Defects:
     pytype: lsst.meas.algorithms.Defects
   Exposure:
     pytype: lsst.afw.image.Exposure
