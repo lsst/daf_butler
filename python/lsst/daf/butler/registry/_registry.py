@@ -1106,13 +1106,13 @@ class Registry:
         managing more complex queries than those obtainable via `Registry`
         interfaces.
 
-        This is an advanced `SqlRegistry`-only interface; downstream code
-        should prefer `Registry.queryDimensions` and `Registry.queryDatasets`
-        whenever those are sufficient.
+        This is an advanced interface; downstream code should prefer
+        `Registry.queryDimensions` and `Registry.queryDatasets` whenever those
+        are sufficient.
 
         Parameters
         ----------
-        summary: `QuerySummary`
+        summary : `QuerySummary`
             Object describing and categorizing the full set of dimensions that
             will be included in the query.
 

@@ -307,8 +307,8 @@ class DimensionRecordStorageManager(ABC):
             layer, or `None` if there are no records for that element in this
             layer.
 
-        Note
-        ----
+        Notes
+        -----
         Dimension elements registered by another client of the same layer since
         the last call to `initialize` or `refresh` may not be found.
         """
