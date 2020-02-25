@@ -1,5 +1,7 @@
 .. _lsst.daf.butler-dimensions_overview:
 
+.. py:currentmodule:: lsst.daf.butler
+
 Overview
 --------
 Dimensions are astronomical concepts that are used to label and organize datasets.

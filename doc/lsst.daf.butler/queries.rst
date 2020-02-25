@@ -2,6 +2,8 @@
 
 .. _daf_butler_queries:
 
+.. py:currentmodule:: lsst.daf.butler
+
 Querying datasets
 =================
 
@@ -48,8 +50,11 @@ User code will rarely need to interact with these directly, but they can be pass
 Ordered collection searches
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-A *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found, such as `~Registry.findDataset` or `~Registy.queryDatasets` (when ``deduplicate`` is `True`).
-In these contexts, regular expressions and `...` are not allowed, because they make it impossible to unambiguously define the order in which to search the matching collections.
+An *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found.
+These include all direct `Butler` operations, the definitions of `~CollectionType.CHAINED` collections, `Registry.findDataset`, and the ``deduplicate=True`` mode of `Registry.queryDatasets`.
+In these contexts, regular expressions and `...` are not allowed for collection names, because they make it impossible to unambiguously define the order in which to search.
+Dataset type restrictions are allowed in these contexts, and those
+may be (and usually are) `...`.
 
 Ordered collection searches are processed by the `~registry.wildcards.CollectionSearch` class.
 
