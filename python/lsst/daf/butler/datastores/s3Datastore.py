@@ -179,6 +179,9 @@ class S3Datastore(FileLikeDatastore):
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
                 tmpFile.file.write(serializedDataset)
+                # Flush the write. Do not close the file because that
+                # will delete it.
+                tmpFile.file.flush()
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 result = formatter.read(component=getInfo.component)
         except Exception as e:
