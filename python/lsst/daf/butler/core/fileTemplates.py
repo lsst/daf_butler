@@ -501,6 +501,11 @@ class FileTemplate:
             # Now use standard formatting
             output = output + literal + format(value, format_spec)
 
+        # Replace periods with underscores in the non-directory part to
+        # prevent file extension confusion.
+        head, tail = os.path.split(output)
+        output = os.path.join(head, tail.replace(".", "_"))
+
         # Complain if we were meant to use a component
         if component is not None and not usedComponent:
             raise KeyError("Component '{}' specified but template {} did not use it".format(component,
