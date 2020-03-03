@@ -361,6 +361,7 @@ class ConfigSubsetTestCase(unittest.TestCase):
         self.testDir = os.path.abspath(os.path.dirname(__file__))
         self.configDir = os.path.join(self.testDir, "config", "testConfigs")
         self.configDir2 = os.path.join(self.testDir, "config", "testConfigs", "test2")
+        self.configDir3 = os.path.join(self.testDir, "config", "testConfigs", "test3")
 
     def testEmpty(self):
         """Ensure that we can read an empty file."""
@@ -522,6 +523,24 @@ class ConfigSubsetTestCase(unittest.TestCase):
         self.assertEqual(c["addon", "comp", "item1"], "posix")
         self.assertEqual(c["addon", "comp", "item11"], -1)
         self.assertEqual(c["addon", "comp", "item50"], 500)
+
+        # Now test with an environment variable in includeConfigs
+        with modified_environment(SPECIAL_BUTLER_DIR=self.configDir3):
+            c = Config(os.path.join(self.configDir, "configIncludesEnv.yaml"))
+            self.assertEqual(c["comp", "item2"], "hello")
+            self.assertEqual(c["comp", "item50"], 5000)
+            self.assertEqual(c["comp", "item1"], "first")
+            self.assertEqual(c["comp", "item10"], "tenth")
+            self.assertEqual(c["comp", "item11"], "eleventh")
+            self.assertEqual(c["unrelated"], 1)
+            self.assertEqual(c["addon", "comp", "item1"], "envvar")
+            self.assertEqual(c["addon", "comp", "item11"], -1)
+            self.assertEqual(c["addon", "comp", "item50"], 501)
+
+        # This will fail
+        with modified_environment(SPECIAL_BUTLER_DIR=self.configDir2):
+            with self.assertRaises(FileNotFoundError):
+                Config(os.path.join(self.configDir, "configIncludesEnv.yaml"))
 
 
 if __name__ == "__main__":

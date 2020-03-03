@@ -343,6 +343,8 @@ class Config(collections.abc.MutableMapping):
                 # assume resolve explicitly
                 subConfigs = []
                 for fileName in includes:
+                    # Expand any shell variables
+                    fileName = os.path.expandvars(fileName)
                     found = None
                     if os.path.isabs(fileName):
                         found = fileName

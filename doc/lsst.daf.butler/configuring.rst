@@ -19,6 +19,7 @@ To construct a Butler configuration object (`~lsst.daf.butler.ButlerConfig`) fro
 * The supplied config is read in.
 * If any leaf nodes in the configuration end in ``includeConfigs`` the values (either a scalar or list) will be treated as the names of other config files.
   These files will be located either as an absolute path or relative to the current working directory, or the directory in which the original configuration file was found.
+  Shell variables will be expanded.
   The contents of these files will then be inserted into the configuration at the same hierarchy as the ``includeConfigs`` directive, with priority given to the values defined explicitly in the parent configuration (for lists of include files later files overwrite content from earlier ones).
 * Each sub configuration class is constructed by supplying the relevant subset of the global config to the component Config constructor.
 * A search path is constructed by concatenating the supplied search path, the environment variable path (``$DAF_BUTLER_CONFIG_PATH``), and the daf_butler config directory (``$DAF_BUTLER_DIR/config``).

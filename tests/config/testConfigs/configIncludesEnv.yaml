@@ -1,0 +1,11 @@
+includeConfigs:
+  - viacls.yaml
+  - abspath.yaml
+comp:
+  item2: "hello"
+  item50: 5000
+unrelated: 1
+addon:
+  includeConfigs: ${SPECIAL_BUTLER_DIR}/viacls2.yaml
+  comp:
+    item11: -1
