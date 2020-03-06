@@ -692,8 +692,8 @@ class Database(ABC):
 
         Raises
         ------
-        DatabaseConflictErrorError
-            Raised if the values in ``compared`` do match the values in the
+        DatabaseConflictError
+            Raised if the values in ``compared`` do not match the values in the
             database.
         ReadOnlyDatabaseError
             Raised if `isWriteable` returns `False`, and no matching record
@@ -963,16 +963,16 @@ class Database(ABC):
             value in the ``where`` dictionary or the name of a column to be
             updated.
 
-        Raises
-        ------
-        ReadOnlyDatabaseError
-            Raised if `isWriteable` returns `False` when this method is called.
-
         Returns
         -------
         count : `int`
             Number of rows matched (regardless of whether the update actually
             modified them).
+
+        Raises
+        ------
+        ReadOnlyDatabaseError
+            Raised if `isWriteable` returns `False` when this method is called.
 
         Notes
         -----

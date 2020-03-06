@@ -928,7 +928,7 @@ class Butler:
             Datasets to prune.  These must be "resolved" references (not just
             a `DatasetType` and data ID).
         disassociate : bool`, optional
-            Disassociate pruned datasets from ``self.collection`` (or the
+            Disassociate pruned datasets from ``self.collections`` (or the
             collection given as the ``collection`` argument).  Dataset that are
             not in this collection are ignored, unless ``purge`` is `True`.
         unstore : `bool`, optional
@@ -960,7 +960,7 @@ class Butler:
             composite datasets.  This will only prune components that are
             actually attached to the given `DatasetRef` objects, which may
             not reflect what is in the database (especially if they were
-            obtained from `Registry.queryDatasets`, which by does not include
+            obtained from `Registry.queryDatasets`, which does not include
             components in its results).
 
         Raises
@@ -1053,7 +1053,7 @@ class Butler:
                 # If we're disassociating but not purging, we can do that
                 # before we try to delete, and it will roll back if deletion
                 # fails.  That will at least do the right thing if deletion
-                # fails because the files couldn't actually be delete (e.g.
+                # fails because the files couldn't actually be deleted (e.g.
                 # due to lack of permissions).
                 for tag in tags:
                     # recursive=False here because refs is already recursive

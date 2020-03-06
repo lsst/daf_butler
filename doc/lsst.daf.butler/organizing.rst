@@ -16,9 +16,9 @@ Most of the time, however, users identify a dataset using a combination of three
  - a data ID;
  - a collection.
 
-Most collections are constrained to contain only on dataset with a particular dataset type and data ID, so this combination is usually enough to resolve a dataset (see :ref:`daf_butler_collections` for exceptions).
+Most collections are constrained to contain only one dataset with a particular dataset type and data ID, so this combination is usually enough to resolve a dataset (see :ref:`daf_butler_collections` for exceptions).
 
-A dataset's type and data ID are intrinsic to it - while there may be many datasets with a particular dataset type and/or data ID, the dataset type and data ID associated with a dataset are set and fixed when it is created.
+A dataset's type and data ID are intrinsic to it --- while there may be many datasets with a particular dataset type and/or data ID, the dataset type and data ID associated with a dataset are set and fixed when it is created.
 A `DatasetRef` always has both a dataset type attribute and a data ID, though the latter may be empty.
 Dataset types are discussed below in :ref:`daf_butler_dataset_types`, while data IDs are one aspect of the larger :ref:`Dimensions <lsst.daf.butler-dimensions_overview>` system and are discussed in :ref:`lsst.daf.butler-dimensions_data_ids`.
 
@@ -31,14 +31,14 @@ Collections are discussed further below in :ref:`daf_butler_collections`.
 Dataset types
 -------------
 
-The names "dataset" and "dataset type" (which `lsst.daf.butler` inherits from its `lsst.daf.persistence` predecessor) are intended to evoke the relationship between an instance and its class in object-oriented programming, but this is a metaphor, *not* a relationship that maps to any particular Python objects: we don't have any Python class that fully represents the *dataset* concept (`DatasetRef` is the closest), and the `DatasetType` class is a regular class, not a metaclass.
+The names "dataset" and "dataset type" (which ``daf_butler`` inherits from its ``daf_persistence`` predecessor) are intended to evoke the relationship between an instance and its class in object-oriented programming, but this is a metaphor, *not* a relationship that maps to any particular Python objects: we don't have any Python class that fully represents the *dataset* concept (`DatasetRef` is the closest), and the `DatasetType` class is a regular class, not a metaclass.
 So a *dataset type* is represented in Python as a `DatasetType` *instance*.
 
 A dataset type defines both the dimensions used in a dataset's data ID (so all data IDs for a particular dataset type have the same keys, at least when put in standard form) and the storage class that corresponds to its in-memory Python type and maps to the file format (or generalization thereof) used by a `Datastore` to store it.
 These are associated with an arbitrary string name.
 
-Beyond that definition, what a dataset type *means* isn't really specififed by the butler itself, but we expect higher-level code that *uses* butler to make that clear, and one anticipates case is worth calling out here: a dataset type roughly corresponds to the role its datasets play in a processing pipeline.
-In other words, a particular pipeline will typically accept particular dataset types as inputs and produce particular dataset types as outputs (and may produce and consumed other dataset types as intermediates).
+Beyond that definition, what a dataset type *means* isn't really specified by the butler itself, but we expect higher-level code that *uses* butler to make that clear, and one anticipated case is worth calling out here: a dataset type roughly corresponds to the role its datasets play in a processing pipeline.
+In other words, a particular pipeline will typically accept particular dataset types as inputs and produce particular dataset types as outputs (and may produce and consume other dataset types as intermediates).
 And while the exact dataset types used may be configurable, changing a dataset type will generally involve substituting one dataset type for a very similar one (most of the time with the same dimensions and storage class).
 
 .. _daf_butler_collections:
@@ -73,7 +73,7 @@ Tagged Collections
 `CollectionType.TAGGED` collections are the most flexible type of collection; datasets can be `associated <Registry.associate>` with or `disassociated <Registry.disassociate>` from a ``TAGGED`` collection at any time, as long as the usual contraint on a collection having only one dataset with a particular dataset type and data ID is maintained.
 Membership in a ``TAGGED`` collection is implemented in the `Registry` database as a single row in a many-to-many join table (a "tag") and is completely decoupled from the actual storage of the dataset.
 
-Tags are thus both extremely lightweight relative to copies or re-ingests of files or other `Datastore` content, and *slightly** more expensive to store and possibly query than than the ``RUN`` or ``CHAINED`` collection representations (which have no per-dataset costs).
+Tags are thus both extremely lightweight relative to copies or re-ingests of files or other `Datastore` content, and *slightly* more expensive to store and possibly query than the ``RUN`` or ``CHAINED`` collection representations (which have no per-dataset costs).
 The latter is rarely important, but higher-level code should avoid  automatically creating ``TAGGED`` collections that may not ever be used.
 
 Chained Collection

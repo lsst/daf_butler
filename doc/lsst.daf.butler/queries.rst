@@ -21,7 +21,7 @@ Arguments that specify one or more dataset types can generally take any of the f
  - `str` values (corresponding to `DatasetType.name`);
  - `re.Pattern` values (matched to `DatasetType.name` strings, via `~re.Pattern.fullmatch`);
  - iterables of any of the above;
- - the special value `...`, which matches all dataset types.
+ - the special value "``...``", which matches all dataset types.
 
 Some of these are not allowed in certain contexts (as documented there).
 
@@ -36,11 +36,11 @@ Arguments that specify one or more collections are similar to those for dataset 
  - `re.Pattern` values (matched to the collection name, via `~re.Pattern.fullmatch`);
  - a `tuple` of (`str`, *dataset-type-restriction*) - see below;
  - iterables of any of the above;
- - the special value `...`, which matches all collections;
+ - the special value "``...``", which matches all collections;
  - a mapping from `str` to *dataset-type-restriction*.
 
 A *dataset-type-restriction* is a :ref:`DatasetType expression <daf_butler_dataset_type_expressions>` that limits a search for datasets in the associated collection to just the specified dataset types.
-Unlike most other DatasetType expressions, it may not contain regular expressions (but it may be `...`, which is the implied value when no
+Unlike most other DatasetType expressions, it may not contain regular expressions (but it may be "``...``", which is the implied value when no
 restriction is given, as it means "no restriction").
 In contexts where restrictions are meaningless (e.g. `~Registry.queryCollections` when the ``datasetType`` argument is `None`) they are allowed but ignored.
 
@@ -52,9 +52,9 @@ Ordered collection searches
 
 An *ordered* collection expression is required in contexts where we want to search collections only until a dataset with a particular dataset type and data ID is found.
 These include all direct `Butler` operations, the definitions of `~CollectionType.CHAINED` collections, `Registry.findDataset`, and the ``deduplicate=True`` mode of `Registry.queryDatasets`.
-In these contexts, regular expressions and `...` are not allowed for collection names, because they make it impossible to unambiguously define the order in which to search.
+In these contexts, regular expressions and "``...``" are not allowed for collection names, because they make it impossible to unambiguously define the order in which to search.
 Dataset type restrictions are allowed in these contexts, and those
-may be (and usually are) `...`.
+may be (and usually are) "``...``".
 
 Ordered collection searches are processed by the `~registry.wildcards.CollectionSearch` class.
 
@@ -94,7 +94,7 @@ Language operator precedence rules are the same as for the other languages
 like C++ or Python. When in doubt use grouping operators (parentheses) for
 sub-expressions.
 
-General note - the parser itself does not evaluate any expressions even if
+General note --- the parser itself does not evaluate any expressions even if
 they consist of literals only, all evaluation happens in the SQL engine when
 registry runs the resulting SQL query.
 
@@ -162,7 +162,7 @@ expressions which should evaluate to a numeric value.
 Binary arithmetic operators
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Language supports five arithmetic operators - ``+`` (add), ``-`` (subtract),
+Language supports five arithmetic operators: ``+`` (add), ``-`` (subtract),
 ``*`` (multiply), ``/`` (divide), and ``%`` (modulo). Usual precedence rules
 apply to these operators. Operands for them can be anything that evaluates to
 a numeric value.
@@ -170,7 +170,7 @@ a numeric value.
 Comparison operators
 ^^^^^^^^^^^^^^^^^^^^
 
-Language supports set of regular comparison operators - ``=``, ``!=``, ``<``,
+Language supports set of regular comparison operators: ``=``, ``!=``, ``<``,
 ``<=``, ``>``, ``>=``. This can be used on operands that evaluate to a numeric
 values, for (in)equality operators operands can also be boolean expressions.
 
@@ -182,7 +182,9 @@ IN operator
 ^^^^^^^^^^^
 
 The ``IN`` operator (and ``NOT IN``) are an expanded version of a regular SQL
-IN operator. Its general syntax looks like::
+IN operator. Its general syntax looks like:
+
+.. code-block:: sql
 
     <expression> IN ( <literal1>[, <literal2>, ... ])
     <expression> NOT IN ( <literal1>[, <literal2>, ... ])
@@ -194,15 +196,19 @@ literals as defined above. It can also be a mixture of integer literals and
 range literals (language allows mixing of string literals and ranges but it
 may not make sense when translated to SQL).
 
-For an example of range usage, these two expressions are equivalent::
+For an example of range usage, these two expressions are equivalent:
 
-    visit IN (100, 110, 130..145:5)
-    visit in (100, 110, 130, 135, 140, 145)
+.. code-block:: sql
 
-as are these::
+   visit IN (100, 110, 130..145:5)
+   visit in (100, 110, 130, 135, 140, 145)
 
-    visit NOT IN (100, 110, 130..145:5)
-    visit Not In (100, 110, 130, 135, 140, 145)
+as are these:
+
+.. code-block:: sql
+
+   visit NOT IN (100, 110, 130..145:5)
+   visit Not In (100, 110, 130, 135, 140, 145)
 
 Boolean operators
 ^^^^^^^^^^^^^^^^^
@@ -223,7 +229,9 @@ sub-expressions in the full expression.
 Examples
 ^^^^^^^^
 
-Few examples of valid expressions using some of the constructs::
+Few examples of valid expressions using some of the constructs:
+
+.. code-block:: sql
 
     visit > 100 AND visit < 200
 
