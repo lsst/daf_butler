@@ -76,6 +76,12 @@ class TestFileTemplates(unittest.TestCase):
                             "run/2/calexp/00052/U-trail-run_2",
                             self.makeDatasetRef("calexp", run="run/2", conform=False))
 
+        # Check that "." are replaced in the file basename, but not directory.
+        dataId = {"instrument": "dummy", "visit": 52, "physical_filter": "g.10"}
+        self.assertTemplate(tmplstr,
+                            "run.2/calexp/00052/g_10-trail-run_2",
+                            self.makeDatasetRef("calexp", run="run.2", dataId=dataId, conform=False))
+
         with self.assertRaises(FileTemplateValidationError):
             FileTemplate("no fields at all")
 
@@ -128,11 +134,13 @@ class TestFileTemplates(unittest.TestCase):
         tmplstr = "{run}_c_{component}_v{visit}"
         self.assertTemplate(tmplstr, "run2_c_output_v52", refMetricOutput)
 
-        tmplstr = "{run}_{component:?}_{visit}"
+        # We want this template to have both a directory and basename, to
+        # test that the right parts of the output are replaced.
+        tmplstr = "{component:?}/{run}_{component:?}_{visit}"
         self.assertTemplate(tmplstr, "run2_52", refMetric)
-        self.assertTemplate(tmplstr, "run2_output_52", refMetricOutput)
-        self.assertTemplate(tmplstr, "run2_maskedimage.variance_52", refMaskedImage)
-        self.assertTemplate(tmplstr, "run2_output_52", refMetricOutput)
+        self.assertTemplate(tmplstr, "output/run2_output_52", refMetricOutput)
+        self.assertTemplate(tmplstr, "maskedimage.variance/run2_maskedimage_variance_52", refMaskedImage)
+        self.assertTemplate(tmplstr, "output/run2_output_52", refMetricOutput)
 
         # Providing a component but not using it
         tmplstr = "{collection}/{datasetType}/v{visit:05d}"
