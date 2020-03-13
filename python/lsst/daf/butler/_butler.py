@@ -396,19 +396,29 @@ class Butler:
         returned ``dataId`` (and ``kwds``) to `Registry` APIs, which are
         generally similarly flexible.
         """
+        externalDatasetType = None
+        internalDatasetType = None
         if isinstance(datasetRefOrType, DatasetRef):
             if dataId is not None or kwds:
                 raise ValueError("DatasetRef given, cannot use dataId as well")
-            datasetType = datasetRefOrType.datasetType
+            externalDatasetType = datasetRefOrType.datasetType
             dataId = datasetRefOrType.dataId
         else:
             # Don't check whether DataId is provided, because Registry APIs
             # can usually construct a better error message when it wasn't.
             if isinstance(datasetRefOrType, DatasetType):
-                datasetType = datasetRefOrType
+                externalDatasetType = datasetRefOrType
             else:
-                datasetType = self.registry.getDatasetType(datasetRefOrType)
-        return datasetType, dataId
+                internalDatasetType = self.registry.getDatasetType(datasetRefOrType)
+
+        # Check that they are self-consistent
+        if externalDatasetType is not None:
+            internalDatasetType = self.registry.getDatasetType(externalDatasetType.name)
+            if externalDatasetType != internalDatasetType:
+                raise ValueError(f"Supplied dataset type ({externalDatasetType}) inconsistent with "
+                                 f"registry definition ({internalDatasetType})")
+
+        return internalDatasetType, dataId
 
     def _findDatasetRef(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                         dataId: Optional[DataId] = None, *,
