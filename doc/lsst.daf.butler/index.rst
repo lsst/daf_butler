@@ -27,6 +27,7 @@ Using the Butler
 
   configuring.rst
   exprParser.rst
+  use-in-tests.rst
 
 .. _lsst.daf.butler-scripts:
 
