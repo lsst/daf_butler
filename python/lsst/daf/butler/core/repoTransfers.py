@@ -28,7 +28,7 @@ __all__ = ["FileDataset", "RepoExport",
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Optional, IO, List, Mapping, Tuple, Callable, Union, Type
+from typing import TYPE_CHECKING, Iterable, Optional, IO, List, Mapping, Tuple, Callable, Union
 from collections import defaultdict
 
 import yaml
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
     from .dimensions import DimensionElement, DimensionRecord, ExpandedDataCoordinate
     from ..registry import Registry
     from .datastore import Datastore
-    from .formatters import Formatter
+    from .formatter import FormatterParameter
 
 
 class RepoTransferFormatConfig(ConfigSubset):
@@ -73,12 +73,12 @@ class FileDataset:
     to `Datastore.export`.
     """
 
-    formatter: Union[None, str, Type[Formatter]]
+    formatter: FormatterParameter
     """A `Formatter` class or fully-qualified name.
     """
 
     def __init__(self, path: str, refs: Union[DatasetRef, List[DatasetRef]], *,
-                 formatter: Union[None, str, Type[Formatter]] = None):
+                 formatter: FormatterParameter = None):
         self.path = path
         if isinstance(refs, DatasetRef):
             refs = [refs]

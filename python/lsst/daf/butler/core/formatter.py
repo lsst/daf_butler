@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Formatter", "FormatterFactory")
+__all__ = ("Formatter", "FormatterFactory", "FormatterParameter")
 
 from abc import ABCMeta, abstractmethod
 import logging
@@ -465,3 +465,7 @@ class FormatterFactory:
             ``overwrite`` is `False`.
         """
         self._mappingFactory.placeInRegistry(type_, formatter, overwrite=overwrite)
+
+
+# Type to use when allowing a Formatter or its class name
+FormatterParameter = Union[None, str, Type[Formatter]]
