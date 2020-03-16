@@ -263,6 +263,14 @@ class ButlerPutGetTests:
             data = butler.get(compNameD, dataId)
             self.assertEqual(data, metric.data)
 
+        # Create a Dataset type that has the same name but is inconsistent.
+        inconsistentDatasetType = DatasetType(datasetTypeName, dimensions,
+                                              self.storageClassFactory.getStorageClass("Config"))
+
+        # Getting with a dataset type that does not match registry fails
+        with self.assertRaises(ValueError):
+            butler.get(inconsistentDatasetType, dataId)
+
         # Combining a DatasetRef with a dataId should fail
         with self.assertRaises(ValueError):
             butler.get(ref, dataId)
