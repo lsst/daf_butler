@@ -148,7 +148,3 @@ storageClasses:
     pytype: matplotlib.figure.Figure
   MetricValue:
     pytype: lsst.verify.Measurement
-  cpBias:
-    pytype: lsst.afw.image.ExposureF
-  cpFlat:
-    pytype: lsst.afw.image.ExposureF
