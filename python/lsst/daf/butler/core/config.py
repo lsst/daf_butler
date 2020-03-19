@@ -779,7 +779,8 @@ class Config(collections.abc.MutableMapping):
         if data:
             yaml.safe_dump(data, output, default_flow_style=False)
 
-    def dumpToUri(self, uri, updateFile=True, defaultFileName="butler.yaml"):
+    def dumpToUri(self, uri, updateFile=True, defaultFileName="butler.yaml",
+                  overwrite=True):
         """Writes the config to location pointed to by given URI.
 
         Currently supports 's3' and 'file' URI schemes.
@@ -794,6 +795,9 @@ class Config(collections.abc.MutableMapping):
         defaultFileName : bool, optional
             The file name that will be appended to target uri if updateFile is
             True and uri does not end on a file with an extension.
+        overwrite : bool, optional
+            If True the configuration will be written even if it already
+            exists at that location.
         """
         if isinstance(uri, str):
             uri = ButlerURI(uri)
@@ -801,46 +805,76 @@ class Config(collections.abc.MutableMapping):
         if not uri.scheme or uri.scheme == "file":
             if os.path.isdir(uri.path) and updateFile:
                 uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
-            self.dumpToFile(uri.ospath)
+            self.dumpToFile(uri.ospath, overwrite=overwrite)
         elif uri.scheme == "s3":
             head, filename = posixpath.split(uri.path)
             if "." not in filename:
                 uri.updateFile(defaultFileName)
-            self.dumpToS3File(uri.netloc, uri.relativeToPathRoot)
+            self.dumpToS3File(uri, overwrite=overwrite)
         else:
             raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
 
-    def dumpToFile(self, path):
+    def dumpToFile(self, path, *, overwrite=True):
         """Writes the config to a file.
 
         Parameters
         ----------
         path : `str`
             Path to the file to use for output.
+        overwrite : `bool`, optional
+            If True any existing file will be over written.
 
         Notes
         -----
         The name of the config file is stored in the Config object.
+
+        Raises
+        ------
+        FileExistsError
+            Raised if the file already exists but overwrite is False.
         """
-        with open(path, "w") as f:
+        if overwrite:
+            mode = "w"
+        else:
+            mode = "x"
+        with open(path, mode) as f:
             self.dump(f)
         self.configFile = path
 
-    def dumpToS3File(self, bucket, key):
+    def dumpToS3File(self, uri, *, overwrite=True):
         """Writes the config to a file in S3 Bucket.
 
         Parameters
         ----------
-        bucketname: `str`
-            Name of the Bucket into which config will be written.
-        key : `str`
-            Path to the file to use for output, relative to the bucket.
+        uri : `ButlerURI`
+            S3 URI where the configuration should be stored.
+        overwrite : `bool`, optional
+            If False, a check will be made to see if the key already
+            exists.
+
+        Raises
+        ------
+        FileExistsError
+            Raised if the configuration already exists at this location
+            and overwrite is set to `False`.
         """
         if boto3 is None:
             raise ModuleNotFoundError("Could not find boto3. "
                                       "Are you sure it is installed?")
 
+        if uri.scheme != "s3":
+            raise ValueError(f"Must provide S3 URI not {uri}")
+
         s3 = boto3.client("s3")
+
+        if not overwrite:
+            from .s3utils import s3CheckFileExists
+            if s3CheckFileExists(uri, client=s3)[0]:
+                raise FileExistsError(f"Config already exists at {uri}")
+
+        bucket = uri.netloc
+        key = uri.relativeToPathRoot
+
         with io.StringIO() as stream:
             self.dump(stream)
             stream.seek(0)

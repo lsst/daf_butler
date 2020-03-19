@@ -594,7 +594,7 @@ class ButlerTests(ButlerPutGetTests):
         limited = Config(self.configFile)
         butler1 = Butler(butlerConfig)
         butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
-                                       config=Config(self.configFile))
+                                       config=Config(self.configFile), overwrite=True)
         full = Config(self.tmpConfigFile)
         butler2 = Butler(butlerConfig)
         # Butlers should have the same configuration regardless of whether
@@ -617,6 +617,10 @@ class ButlerTests(ButlerPutGetTests):
         butlerConfig.configFile = None
         with self.assertRaises(ValueError):
             Butler(butlerConfig)
+
+        with self.assertRaises(FileExistsError):
+            Butler.makeRepo(self.root, standalone=True, createRegistry=False,
+                            config=Config(self.configFile), overwrite=False)
 
     def testStringification(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
