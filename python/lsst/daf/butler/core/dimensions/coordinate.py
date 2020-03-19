@@ -154,7 +154,7 @@ class DataCoordinate(IndexedTupleDict):
         try:
             values = tuple(d[name] for name in graph.required.names)
         except KeyError as err:
-            raise KeyError(f"No value in data ID for required dimension {err}.") from err
+            raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
         return DataCoordinate(graph, values)
 
     def byName(self) -> Dict[str, Any]:
