@@ -91,6 +91,8 @@ storageClasses:
     pytype: lsst.daf.base.PropertySet
   Defects:
     pytype: lsst.meas.algorithms.Defects
+  QECurve:
+    pytype: lsst.meas.algorithms.Curve
   Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler

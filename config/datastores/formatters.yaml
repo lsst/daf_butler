@@ -22,6 +22,7 @@ SourceCatalog: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormat
 ObjectMaskCatalog: lsst.pipe.tasks.objectMasks.RegionFileFormatter
 DataFrame: lsst.daf.butler.formatters.parquetFormatter.ParquetFormatter
 Defects: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
+QECurve: lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter
 ImageF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
 ImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
 DecoratedImageU: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
