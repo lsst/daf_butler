@@ -185,7 +185,8 @@ class Butler:
     @staticmethod
     def makeRepo(root: str, config: Union[Config, str, None] = None, standalone: bool = False,
                  createRegistry: bool = True, searchPaths: Optional[List[str]] = None,
-                 forceConfigRoot: bool = True, outfile: Optional[str] = None) -> Config:
+                 forceConfigRoot: bool = True, outfile: Optional[str] = None,
+                 overwrite: bool = False) -> Config:
         """Create an empty data repository by adding a butler.yaml config
         to a repository root directory.
 
@@ -226,6 +227,10 @@ class Butler:
             location rather than into the repository itself. Can be a URI
             string.  Can refer to a directory that will be used to write
             ``butler.yaml``.
+        overwrite : `bool`, optional
+            Create a new configuration file even if one already exists
+            in the specified output location. Default is to raise
+            an exception.
 
         Returns
         -------
@@ -238,6 +243,8 @@ class Butler:
             Raised if a ButlerConfig or ConfigSubset is passed instead of a
             regular Config (as these subclasses would make it impossible to
             support ``standalone=False``).
+        FileExistsError
+            Raised if the output config file already exists.
         os.error
             Raised if the directory does not exist, exists but is not a
             directory, or cannot be created.
@@ -301,7 +308,7 @@ class Butler:
             configURI = outfile
         else:
             configURI = uri
-        config.dumpToUri(configURI)
+        config.dumpToUri(configURI, overwrite=overwrite)
 
         # Create Registry and populate tables
         Registry.fromConfig(config, create=createRegistry, butlerRoot=root)

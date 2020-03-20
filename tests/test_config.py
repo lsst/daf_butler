@@ -24,6 +24,8 @@ import os
 import contextlib
 import collections
 import itertools
+import shutil
+import tempfile
 
 from lsst.daf.butler import ConfigSubset, Config
 
@@ -541,6 +543,31 @@ class ConfigSubsetTestCase(unittest.TestCase):
         with modified_environment(SPECIAL_BUTLER_DIR=self.configDir2):
             with self.assertRaises(FileNotFoundError):
                 Config(os.path.join(self.configDir, "configIncludesEnv.yaml"))
+
+
+class FileWriteConfigTestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        if os.path.exists(self.tmpdir):
+            shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def testDump(self):
+        """Test that we can write and read a configuration."""
+
+        c = Config({"1": 2, "3": 4, "key3": 6, "dict": {"a": 1, "b": 2}})
+
+        outpath = os.path.join(self.tmpdir, "test.yaml")
+        c.dumpToUri(outpath)
+
+        c2 = Config(outpath)
+        self.assertEqual(c2, c)
+
+        c.dumpToUri(outpath, overwrite=True)
+        with self.assertRaises(FileExistsError):
+            c.dumpToUri(outpath, overwrite=False)
 
 
 if __name__ == "__main__":
