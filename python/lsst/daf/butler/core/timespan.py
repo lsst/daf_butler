@@ -20,15 +20,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("Timespan", "TIMESPAN_FIELD_SPECS")
+__all__ = ("Timespan", "TIMESPAN_FIELD_SPECS", "TIMESPAN_MIN", "TIMESPAN_MAX")
 
 import operator
 from typing import Generic, Optional, TypeVar
 
-from sqlalchemy import DateTime
-
 from . import ddl
 
+
+TIMESPAN_MIN = ddl.EPOCH
+TIMESPAN_MAX = ddl.MAX_TIME
 
 T = TypeVar("T")
 
@@ -65,7 +66,9 @@ class Timespan(Generic[T], tuple):
         return (self.begin, self.end)
 
 
+# For timestamps we use Unix time in nanoseconds in TAI scale which need
+# 64-bit integer,
 TIMESPAN_FIELD_SPECS = Timespan(
-    begin=ddl.FieldSpec(name="datetime_begin", dtype=DateTime),
-    end=ddl.FieldSpec(name="datetime_end", dtype=DateTime),
+    begin=ddl.FieldSpec(name="datetime_begin", dtype=ddl.AstropyTimeNsecTai),
+    end=ddl.FieldSpec(name="datetime_end", dtype=ddl.AstropyTimeNsecTai),
 )

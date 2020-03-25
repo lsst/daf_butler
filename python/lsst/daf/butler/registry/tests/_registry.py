@@ -23,9 +23,9 @@ from __future__ import annotations
 __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
-from datetime import datetime
 import os
 
+import astropy.time
 import sqlalchemy
 
 from ...core import (
@@ -784,6 +784,10 @@ class RegistryTests(ABC):
         """Test that we can look up datasets with calibration_label dimensions
         from a data ID with exposure dimensions.
         """
+
+        def _dt(iso_string):
+            return astropy.time.Time(iso_string, format="iso", scale="utc")
+
         registry = self.makeRegistry()
 
         flat = DatasetType(
@@ -811,18 +815,18 @@ class RegistryTests(ABC):
         registry.insertDimensionData(
             "exposure",
             dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i",
-                 datetime_begin=datetime(2005, 12, 15, 2), datetime_end=datetime(2005, 12, 15, 3)),
+                 datetime_begin=_dt("2005-12-15 02:00:00"), datetime_end=_dt("2005-12-15 03:00:00")),
             dict(instrument="DummyCam", id=101, name="101", visit=11, physical_filter="dummy_i",
-                 datetime_begin=datetime(2005, 12, 16, 2), datetime_end=datetime(2005, 12, 16, 3)),
+                 datetime_begin=_dt("2005-12-16 02:00:00"), datetime_end=_dt("2005-12-16 03:00:00")),
         )
         registry.insertDimensionData(
             "calibration_label",
             dict(instrument="DummyCam", name="first_night",
-                 datetime_begin=datetime(2005, 12, 15, 1), datetime_end=datetime(2005, 12, 15, 4)),
+                 datetime_begin=_dt("2005-12-15 01:00:00"), datetime_end=_dt("2005-12-15 04:00:00")),
             dict(instrument="DummyCam", name="second_night",
-                 datetime_begin=datetime(2005, 12, 16, 1), datetime_end=datetime(2005, 12, 16, 4)),
+                 datetime_begin=_dt("2005-12-16 01:00:00"), datetime_end=_dt("2005-12-16 04:00:00")),
             dict(instrument="DummyCam", name="both_nights",
-                 datetime_begin=datetime(2005, 12, 15, 1), datetime_end=datetime(2005, 12, 16, 4)),
+                 datetime_begin=_dt("2005-12-15 01:00:00"), datetime_end=_dt("2005-12-16 04:00:00")),
         )
         # Different flats for different nights for detectors 1-3 in first
         # collection.

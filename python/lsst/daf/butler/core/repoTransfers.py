@@ -28,10 +28,12 @@ __all__ = ["FileDataset", "RepoExport",
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from datetime import datetime
 from typing import TYPE_CHECKING, Iterable, Optional, IO, List, Mapping, Tuple, Callable, Union
 from collections import defaultdict
 
 import yaml
+import astropy.time
 
 from lsst.utils import doImport
 from .config import ConfigSubset
@@ -309,10 +311,18 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord):
         # Docstring inherited from RepoExportBackend.saveDimensionData.
+        # Convert astropy time in TAI to datetime in UTC for YAML
+        data_dicts = []
+        for record in data:
+            rec_dict = record.toDict()
+            for key in rec_dict:
+                if isinstance(rec_dict[key], astropy.time.Time):
+                    rec_dict[key] = rec_dict[key].utc.to_datetime()
+            data_dicts += [rec_dict]
         self.data.append({
             "type": "dimension",
             "element": element.name,
-            "records": [d.toDict() for d in data],  # TODO: encode regions
+            "records": data_dicts,  # TODO: encode regions
         })
 
     def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset):
@@ -384,6 +394,11 @@ class YamlRepoImportBackend(RepoImportBackend):
         datasetData = []
         for data in wrapper["data"]:
             if data["type"] == "dimension":
+                # convert all datetiem values to astropy
+                for record in data["records"]:
+                    for key in record:
+                        if isinstance(record[key], datetime):
+                            record[key] = astropy.time.Time(record[key], scale="utc")
                 element = self.registry.dimensions[data["element"]]
                 self.dimensions[element].extend(element.RecordClass.fromDict(r) for r in data["records"])
             elif data["type"] == "run":
