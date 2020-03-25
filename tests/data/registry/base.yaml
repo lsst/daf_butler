@@ -1,0 +1,75 @@
+# Lowest-level reusable test data for registry tests; this includes
+# a single instrument with a few filters and detectors, and a pair
+# of dataset types.
+# More interesting test data can be layered on top of this in other
+# files.
+description: Butler Data Repository Export
+version: 0
+data:
+  -
+    type: dimension
+    element: instrument
+    records:
+      -
+        name: Cam1
+        visit_max: 1024
+        exposure_max: 512
+        detector_max: 4
+  -
+    type: dimension
+    element: physical_filter
+    records:
+      -
+        instrument: Cam1
+        name: Cam1-G
+        abstract_filter: g
+      -
+        instrument: Cam1
+        name: Cam1-R1
+        abstract_filter: r
+      -
+        instrument: Cam1
+        name: Cam1-R2
+        abstract_filter: r
+  -
+    type: dimension
+    element: detector
+    records:
+      -
+        instrument: Cam1
+        id: 1
+        raft: "A"
+        name_in_raft: "a"
+        full_name: "Aa"
+        purpose: "SCIENCE"
+      -
+        instrument: Cam1
+        id: 2
+        raft: "A"
+        name_in_raft: "b"
+        full_name: "Ab"
+        purpose: "SCIENCE"
+      -
+        instrument: Cam1
+        id: 3
+        raft: "B"
+        name_in_raft: "a"
+        full_name: "Ba"
+        purpose: "SCIENCE"
+      -
+        instrument: Cam1
+        id: 4
+        raft: "B"
+        name_in_raft: "b"
+        full_name: "Bb"
+        purpose: "WAVEFRONT"
+  -
+    type: dataset_type
+    name: permaflat
+    dimensions: [instrument, detector, physical_filter, abstract_filter]
+    storage_class: Exposure
+  -
+    type: dataset_type
+    name: permabias
+    dimensions: [instrument, detector]
+    storage_class: Exposure

@@ -57,12 +57,12 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(tmplstr,
                             "run2/calexp/00052/U",
                             self.makeDatasetRef("calexp", conform=False))
-        tmplstr = "{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail"
+        tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail"
         self.assertTemplate(tmplstr,
                             "run2/calexp/00052/U-trail",
                             self.makeDatasetRef("calexp", conform=False))
 
-        tmplstr = "{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
+        tmplstr = "{run}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
         self.assertTemplate(tmplstr,
                             "run2/calexp/00052/U-trail-run2",
                             self.makeDatasetRef("calexp", conform=False))
@@ -70,8 +70,8 @@ class TestFileTemplates(unittest.TestCase):
                             "run_2/calexp/00052/U-trail-run_2",
                             self.makeDatasetRef("calexp", run="run/2", conform=False))
 
-        # Retain any "/" in collection
-        tmplstr = "{collection:/}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
+        # Retain any "/" in run
+        tmplstr = "{run:/}/{datasetType}/{visit:05d}/{physical_filter}-trail-{run}"
         self.assertTemplate(tmplstr,
                             "run/2/calexp/00052/U-trail-run_2",
                             self.makeDatasetRef("calexp", run="run/2", conform=False))
@@ -143,22 +143,22 @@ class TestFileTemplates(unittest.TestCase):
         self.assertTemplate(tmplstr, "output/run2_output_52", refMetricOutput)
 
         # Providing a component but not using it
-        tmplstr = "{collection}/{datasetType}/v{visit:05d}"
+        tmplstr = "{run}/{datasetType}/v{visit:05d}"
         with self.assertRaises(KeyError):
             self.assertTemplate(tmplstr, "", refWcs)
 
     def testFields(self):
         # Template, mandatory fields, optional non-special fields,
         # special fields, optional special fields
-        testData = (("{collection}/{datasetType}/{visit:05d}/{physical_filter}-trail",
+        testData = (("{run}/{datasetType}/{visit:05d}/{physical_filter}-trail",
                      set(["visit", "physical_filter"]),
                      set(),
-                     set(["collection", "datasetType"]),
+                     set(["run", "datasetType"]),
                      set()),
-                    ("{collection}/{component:?}_{visit}",
+                    ("{run}/{component:?}_{visit}",
                      set(["visit"]),
                      set(),
-                     set(["collection"]),
+                     set(["run"]),
                      set(["component"]),),
                     ("{run}/{component:?}_{visit:?}_{physical_filter}_{instrument}_{datasetType}",
                      set(["physical_filter", "instrument"]),

@@ -24,6 +24,7 @@ __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
 from datetime import datetime
+import os
 
 import sqlalchemy
 
@@ -33,8 +34,10 @@ from ...core import (
     DimensionGraph,
     StorageClass,
     ddl,
+    YamlRepoImportBackend
 )
-from .._registry import Registry, ConflictingDefinitionError, OrphanedRecordError
+from .._registry import Registry, CollectionType, ConflictingDefinitionError, OrphanedRecordError
+from ..wildcards import DatasetTypeRestriction
 
 
 class RegistryTests(ABC):
@@ -42,9 +45,27 @@ class RegistryTests(ABC):
     generate tests for different configurations.
     """
 
+    @classmethod
+    @abstractmethod
+    def getDataDir(cls) -> str:
+        """Return the root directory containing test data YAML files.
+        """
+        raise NotImplementedError()
+
     @abstractmethod
     def makeRegistry(self) -> Registry:
+        """Return the Registry instance to be tested.
+        """
         raise NotImplementedError()
+
+    def loadData(self, registry: Registry, filename: str):
+        """Load registry test data from ``getDataDir/<filename>``,
+        which should be a YAML import/export file.
+        """
+        with open(os.path.join(self.getDataDir(), filename), 'r') as stream:
+            backend = YamlRepoImportBackend(stream, registry)
+        backend.register()
+        backend.load(datastore=None)
 
     def assertRowCount(self, registry: Registry, table: str, count: int):
         """Check the number of rows in table.
@@ -125,7 +146,7 @@ class RegistryTests(ABC):
         outDatasetType2 = registry.getDatasetType(datasetTypeName)
         self.assertEqual(outDatasetType2, inDatasetType)
 
-        allTypes = registry.getAllDatasetTypes()
+        allTypes = set(registry.queryDatasetTypes())
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
     def testDimensions(self):
@@ -177,15 +198,11 @@ class RegistryTests(ABC):
         and `Registry.removeDataset`.
         """
         registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
         run = "test"
         registry.registerRun(run)
-        storageClass = StorageClass("testDataset")
-        registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="testtype", dimensions=registry.dimensions.extract(("instrument",)),
-                                  storageClass=storageClass)
-        registry.registerDatasetType(datasetType)
-        dataId = {"instrument": "DummyCam"}
-        registry.insertDimensionData("instrument", dataId)
+        datasetType = registry.getDatasetType("permabias")
+        dataId = {"instrument": "Cam1", "detector": 2}
         ref, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         outRef = registry.getDataset(ref.id)
         self.assertIsNotNone(ref.id)
@@ -193,230 +210,187 @@ class RegistryTests(ABC):
         with self.assertRaises(ConflictingDefinitionError):
             registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
         registry.removeDataset(ref)
-        self.assertIsNone(registry.find(run, datasetType, dataId))
+        self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testComponents(self):
         """Tests for `Registry.attachComponent` and other dataset operations
         on composite datasets.
         """
         registry = self.makeRegistry()
-        childStorageClass = StorageClass("testComponentsChild")
-        registry.storageClasses.registerStorageClass(childStorageClass)
-        parentStorageClass = StorageClass("testComponentsParent",
-                                          components={"child1": childStorageClass,
-                                                      "child2": childStorageClass})
-        registry.storageClasses.registerStorageClass(parentStorageClass)
-        parentDatasetType = DatasetType(name="parent",
-                                        dimensions=registry.dimensions.extract(("instrument",)),
-                                        storageClass=parentStorageClass)
-        childDatasetType1 = DatasetType(name="parent.child1",
-                                        dimensions=registry.dimensions.extract(("instrument",)),
-                                        storageClass=childStorageClass)
-        childDatasetType2 = DatasetType(name="parent.child2",
-                                        dimensions=registry.dimensions.extract(("instrument",)),
-                                        storageClass=childStorageClass)
-        registry.registerDatasetType(parentDatasetType)
-        registry.registerDatasetType(childDatasetType1)
-        registry.registerDatasetType(childDatasetType2)
-        dataId = {"instrument": "DummyCam"}
-        registry.insertDimensionData("instrument", dataId)
+        self.loadData(registry, "base.yaml")
         run = "test"
         registry.registerRun(run)
+        parentDatasetType = registry.getDatasetType("permabias")
+        childDatasetType1 = registry.getDatasetType("permabias.image")
+        childDatasetType2 = registry.getDatasetType("permabias.mask")
+        dataId = {"instrument": "Cam1", "detector": 2}
         parent, = registry.insertDatasets(parentDatasetType, dataIds=[dataId], run=run)
-        children = {"child1": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
-                    "child2": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
+        children = {"image": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
+                    "mask": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
         for name, child in children.items():
             registry.attachComponent(name, parent, child)
         self.assertEqual(parent.components, children)
         outParent = registry.getDataset(parent.id)
         self.assertEqual(outParent.components, children)
-        # Remove the parent; this should remove both children.
+        # Remove the parent; this should remove all children.
         registry.removeDataset(parent)
-        self.assertIsNone(registry.find(run, parentDatasetType, dataId))
-        self.assertIsNone(registry.find(run, childDatasetType1, dataId))
-        self.assertIsNone(registry.find(run, childDatasetType2, dataId))
+        self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collections=[run]))
+        self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collections=[run]))
+        self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collections=[run]))
 
-    def testFind(self):
-        """Tests for `Registry.find`.
+    def testFindDataset(self):
+        """Tests for `Registry.findDataset`.
         """
         registry = self.makeRegistry()
-        storageClass = StorageClass("testFind")
-        registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="dummytype",
-                                  dimensions=registry.dimensions.extract(("instrument", "visit")),
-                                  storageClass=storageClass)
-        registry.registerDatasetType(datasetType)
-        registry.insertDimensionData("instrument",
-                                     {"instrument": "DummyCam"},
-                                     {"instrument": "MyCam"})
-        registry.insertDimensionData("physical_filter",
-                                     {"instrument": "DummyCam", "physical_filter": "d-r",
-                                      "abstract_filter": "r"},
-                                     {"instrument": "MyCam", "physical_filter": "m-r",
-                                      "abstract_filter": "r"})
-        registry.insertDimensionData("visit",
-                                     {"instrument": "DummyCam", "id": 0, "name": "zero",
-                                      "physical_filter": "d-r"},
-                                     {"instrument": "DummyCam", "id": 1, "name": "one",
-                                      "physical_filter": "d-r"},
-                                     {"instrument": "DummyCam", "id": 2, "name": "two",
-                                      "physical_filter": "d-r"},
-                                     {"instrument": "MyCam", "id": 2, "name": "two",
-                                      "physical_filter": "m-r"})
+        self.loadData(registry, "base.yaml")
         run = "test"
-        dataId = {"instrument": "DummyCam", "visit": 0, "physical_filter": "d-r", "abstract_filter": None}
+        datasetType = registry.getDatasetType("permabias")
+        dataId = {"instrument": "Cam1", "detector": 4}
         registry.registerRun(run)
         inputRef, = registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
-        outputRef = registry.find(run, datasetType, dataId)
+        outputRef = registry.findDataset(datasetType, dataId, collections=[run])
         self.assertEqual(outputRef, inputRef)
         # Check that retrieval with invalid dataId raises
         with self.assertRaises(LookupError):
-            dataId = {"instrument": "DummyCam", "abstract_filter": "g"}  # should be visit
-            registry.find(run, datasetType, dataId)
+            dataId = {"instrument": "Cam1"}  # no detector
+            registry.findDataset(datasetType, dataId, collections=run)
         # Check that different dataIds match to different datasets
-        dataId1 = {"instrument": "DummyCam", "visit": 1, "physical_filter": "d-r", "abstract_filter": None}
+        dataId1 = {"instrument": "Cam1", "detector": 1}
         inputRef1, = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
-        dataId2 = {"instrument": "DummyCam", "visit": 2, "physical_filter": "d-r", "abstract_filter": None}
+        dataId2 = {"instrument": "Cam1", "detector": 2}
         inputRef2, = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
-        dataId3 = {"instrument": "MyCam", "visit": 2, "physical_filter": "m-r", "abstract_filter": None}
-        inputRef3, = registry.insertDatasets(datasetType, dataIds=[dataId3], run=run)
-        self.assertEqual(registry.find(run, datasetType, dataId1), inputRef1)
-        self.assertEqual(registry.find(run, datasetType, dataId2), inputRef2)
-        self.assertEqual(registry.find(run, datasetType, dataId3), inputRef3)
-        self.assertNotEqual(registry.find(run, datasetType, dataId1), inputRef2)
-        self.assertNotEqual(registry.find(run, datasetType, dataId2), inputRef1)
-        self.assertNotEqual(registry.find(run, datasetType, dataId3), inputRef1)
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=run), inputRef1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=run), inputRef2)
+        self.assertNotEqual(registry.findDataset(datasetType, dataId1, collections=run), inputRef2)
+        self.assertNotEqual(registry.findDataset(datasetType, dataId2, collections=run), inputRef1)
         # Check that requesting a non-existing dataId returns None
-        nonExistingDataId = {"instrument": "DummyCam", "visit": 42}
-        self.assertIsNone(registry.find(run, datasetType, nonExistingDataId))
+        nonExistingDataId = {"instrument": "Cam1", "detector": 3}
+        self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collections=run))
 
     def testCollections(self):
-        """Tests for `Registry.getAllCollections`, `Registry.registerRun`,
-        `Registry.disassociate`, and interactions between collections and
-        `Registry.find`.
+        """Tests for registry methods that manage collections.
         """
         registry = self.makeRegistry()
-        storageClass = StorageClass("testCollections")
-        registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="dummytype",
-                                  dimensions=registry.dimensions.extract(("instrument", "visit")),
-                                  storageClass=storageClass)
-        registry.registerDatasetType(datasetType)
-        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
-        registry.insertDimensionData("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r",
-                                                         "abstract_filter": "R"})
-        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 0, "name": "zero",
-                                               "physical_filter": "d-r"})
-        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 1, "name": "one",
-                                               "physical_filter": "d-r"})
-        run = "ingest"
-        registry.registerRun(run)
-        # Dataset.physical_filter should be populated as well here from the
-        # visit Dimension values.
-        dataId1 = {"instrument": "DummyCam", "visit": 0}
-        inputRef1, = registry.insertDatasets(datasetType, dataIds=[dataId1], run=run)
-        dataId2 = {"instrument": "DummyCam", "visit": 1}
-        inputRef2, = registry.insertDatasets(datasetType, dataIds=[dataId2], run=run)
-        # We should be able to find both datasets in their run
-        outputRef = registry.find(run, datasetType, dataId1)
-        self.assertEqual(outputRef, inputRef1)
-        outputRef = registry.find(run, datasetType, dataId2)
-        self.assertEqual(outputRef, inputRef2)
-        # and with the associated collection
-        newCollection = "something"
-        registry.associate(newCollection, [inputRef1, inputRef2])
-        outputRef = registry.find(newCollection, datasetType, dataId1)
-        self.assertEqual(outputRef, inputRef1)
-        outputRef = registry.find(newCollection, datasetType, dataId2)
-        self.assertEqual(outputRef, inputRef2)
-        # but no more after disassociation
-        registry.disassociate(newCollection, [inputRef1, ])
-        self.assertIsNone(registry.find(newCollection, datasetType, dataId1))
-        outputRef = registry.find(newCollection, datasetType, dataId2)
-        self.assertEqual(outputRef, inputRef2)
-        collections = registry.getAllCollections()
-        self.assertEqual(collections, {"something", "ingest"})
-
-    def testAssociate(self):
-        """Tests for `Registry.associate`.
-        """
-        registry = self.makeRegistry()
-        storageClass = StorageClass("testAssociate")
-        registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = registry.dimensions.extract(("instrument", "visit"))
-        datasetType1 = DatasetType(name="dummytype", dimensions=dimensions, storageClass=storageClass)
-        registry.registerDatasetType(datasetType1)
-        datasetType2 = DatasetType(name="smartytype", dimensions=dimensions, storageClass=storageClass)
-        registry.registerDatasetType(datasetType2)
-        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
-        registry.insertDimensionData("physical_filter", {"instrument": "DummyCam", "physical_filter": "d-r",
-                                                         "abstract_filter": "R"})
-        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 0, "name": "zero",
-                                               "physical_filter": "d-r"})
-        registry.insertDimensionData("visit", {"instrument": "DummyCam", "id": 1, "name": "one",
-                                               "physical_filter": "d-r"})
-        run1 = "ingest1"
-        registry.registerRun(run1)
-        run2 = "ingest2"
-        registry.registerRun(run2)
-        run3 = "ingest3"
-        registry.registerRun(run3)
-        # Dataset.physical_filter should be populated as well here
-        # from the visit Dimension values.
-        dataId1 = {"instrument": "DummyCam", "visit": 0}
-        dataId2 = {"instrument": "DummyCam", "visit": 1}
-        ref1_run1, ref2_run1 = registry.insertDatasets(datasetType1, dataIds=[dataId1, dataId2], run=run1)
-        ref1_run2, ref2_run2 = registry.insertDatasets(datasetType2, dataIds=[dataId1, dataId2], run=run2)
-        ref1_run3, ref2_run3 = registry.insertDatasets(datasetType2, dataIds=[dataId1, dataId2], run=run3)
-        for ref in (ref1_run1, ref2_run1, ref1_run2, ref2_run2, ref1_run3, ref2_run3):
-            self.assertEqual(ref.dataId.records["visit"].physical_filter, "d-r")
-            self.assertEqual(ref.dataId.records["physical_filter"].abstract_filter, "R")
-        # should have exactly 4 rows in Dataset
-        self.assertRowCount(registry, "dataset", 6)
-        self.assertRowCount(registry, "dataset_collection", 6)
-        # adding same DatasetRef to the same run is an error
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        run1 = "imported_g"
+        run2 = "imported_r"
+        datasetType = "permabias"
+        # Find some datasets via their run's collection.
+        dataId1 = {"instrument": "Cam1", "detector": 1}
+        ref1 = registry.findDataset(datasetType, dataId1, collections=run1)
+        self.assertIsNotNone(ref1)
+        dataId2 = {"instrument": "Cam1", "detector": 2}
+        ref2 = registry.findDataset(datasetType, dataId2, collections=run1)
+        self.assertIsNotNone(ref2)
+        # Associate those into a new collection,then look for them there.
+        tag1 = "tag1"
+        registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        registry.associate(tag1, [ref1, ref2])
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
+        # Disassociate one and verify that we can't it there anymore...
+        registry.disassociate(tag1, [ref1])
+        self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=tag1))
+        # ...but we can still find ref2 in tag1, and ref1 in the run.
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=run1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
+        collections = set(registry.queryCollections())
+        self.assertEqual(collections, {run1, run2, tag1})
+        # Associate both refs into tag1 again; ref2 is already there, but that
+        # should be a harmless no-op.
+        registry.associate(tag1, [ref1, ref2])
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
+        # Get a different dataset (from a different run) that has the same
+        # dataset type and data ID as ref2.
+        ref2b = registry.findDataset(datasetType, dataId2, collections=run2)
+        self.assertNotEqual(ref2, ref2b)
+        # Attempting to associate that into tag1 should be an error.
         with self.assertRaises(ConflictingDefinitionError):
-            registry.insertDatasets(datasetType1, dataIds=[dataId2], run=run1)
-        # above exception must rollback and not add anything to Dataset
-        self.assertRowCount(registry, "dataset", 6)
-        self.assertRowCount(registry, "dataset_collection", 6)
-        # associated refs from run1 with some other collection
-        newCollection = "something"
-        registry.associate(newCollection, [ref1_run1, ref2_run1])
-        self.assertRowCount(registry, "dataset_collection", 8)
-        # associating same exact DatasetRef is OK (not doing anything),
-        # two cases to test - single-ref and many-refs
-        registry.associate(newCollection, [ref1_run1])
-        registry.associate(newCollection, [ref1_run1, ref2_run1])
-        self.assertRowCount(registry, "dataset_collection", 8)
-        # associated refs from run2 with same other collection, this should
-        # be OK because thy have different dataset type
-        registry.associate(newCollection, [ref1_run2, ref2_run2])
-        self.assertRowCount(registry, "dataset_collection", 10)
-        # associating DatasetRef with the same units but different ID is not OK
+            registry.associate(tag1, [ref2b])
+        # That error shouldn't have messed up what we had before.
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
+        # Attempt to associate the conflicting dataset again, this time with
+        # a dataset that isn't in the collection and won't cause a conflict.
+        # Should also fail without modifying anything.
+        dataId3 = {"instrument": "Cam1", "detector": 3}
+        ref3 = registry.findDataset(datasetType, dataId3, collections=run1)
         with self.assertRaises(ConflictingDefinitionError):
-            registry.associate(newCollection, [ref1_run3])
-        with self.assertRaises(ConflictingDefinitionError):
-            registry.associate(newCollection, [ref1_run3, ref2_run3])
+            registry.associate(tag1, [ref3, ref2b])
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=tag1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=tag1), ref2)
+        self.assertIsNone(registry.findDataset(datasetType, dataId3, collections=tag1))
+        # Register a chained collection that searches:
+        # 1. 'tag1'
+        # 2. 'run1', but only for the permaflat dataset
+        # 3. 'run2'
+        chain1 = "chain1"
+        registry.registerCollection(chain1, type=CollectionType.CHAINED)
+        self.assertIs(registry.getCollectionType(chain1), CollectionType.CHAINED)
+        # Chained collection exists, but has no collections in it.
+        self.assertFalse(registry.getCollectionChain(chain1))
+        # Attempt to set its child collections to something circular; that
+        # should fail.
+        with self.assertRaises(ValueError):
+            registry.setCollectionChain(chain1, [tag1, chain1])
+        # Add the child collections.
+        registry.setCollectionChain(chain1, [tag1, (run1, "permaflat"), run2])
+        self.assertEqual(
+            list(registry.getCollectionChain(chain1)),
+            [(tag1, DatasetTypeRestriction.any),
+             (run1, DatasetTypeRestriction.fromExpression("permaflat")),
+             (run2, DatasetTypeRestriction.any)]
+        )
+        # Searching for dataId1 or dataId2 in the chain should return ref1 and
+        # ref2, because both are in tag1.
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain1), ref1)
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain1), ref2)
+        # Now disassociate ref2 from tag1.  The search (for permabias) with
+        # dataId2 in chain1 should then:
+        # 1. not find it in tag1
+        # 2. not look in tag2, because it's restricted to permaflat here
+        # 3. find a different dataset in run2
+        registry.disassociate(tag1, [ref2])
+        ref2b = registry.findDataset(datasetType, dataId2, collections=chain1)
+        self.assertNotEqual(ref2b, ref2)
+        self.assertEqual(ref2b, registry.findDataset(datasetType, dataId2, collections=run2))
+        # Look in the chain for a permaflat that is in run1; should get the
+        # same ref as if we'd searched run1 directly.
+        dataId3 = {"instrument": "Cam1", "detector": 2, "physical_filter": "Cam1-G"}
+        self.assertEqual(registry.findDataset("permaflat", dataId3, collections=chain1),
+                         registry.findDataset("permaflat", dataId3, collections=run1),)
+        # Define a new chain so we can test recursive chains.
+        chain2 = "chain2"
+        registry.registerCollection(chain2, type=CollectionType.CHAINED)
+        registry.setCollectionChain(chain2, [(run2, "permabias"), chain1])
+        # Search for permabias with dataId1 should find it via tag1 in chain2,
+        # recursing, because is not in run1.
+        self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=run2))
+        self.assertEqual(registry.findDataset(datasetType, dataId1, collections=chain2), ref1)
+        # Search for permabias with dataId2 should find it in run2 (ref2b).
+        self.assertEqual(registry.findDataset(datasetType, dataId2, collections=chain2), ref2b)
+        # Search for a permaflat that is in run2.  That should not be found
+        # at the front of chain2, because of the restriction to permabias
+        # on run2 there, but it should be found in at the end of chain1.
+        dataId4 = {"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-R2"}
+        ref4 = registry.findDataset("permaflat", dataId4, collections=run2)
+        self.assertIsNotNone(ref4)
+        self.assertEqual(ref4, registry.findDataset("permaflat", dataId4, collections=chain2))
 
     def testDatasetLocations(self):
         """Tests for `Registry.insertDatasetLocations`,
         `Registry.getDatasetLocations`, and `Registry.removeDatasetLocations`.
         """
         registry = self.makeRegistry()
-        storageClass = StorageClass("testStorageInfo")
-        registry.storageClasses.registerStorageClass(storageClass)
-        datasetType = DatasetType(name="test", dimensions=registry.dimensions.extract(("instrument",)),
-                                  storageClass=storageClass)
-        datasetType2 = DatasetType(name="test2", dimensions=registry.dimensions.extract(("instrument",)),
-                                   storageClass=storageClass)
-        registry.registerDatasetType(datasetType)
-        registry.registerDatasetType(datasetType2)
-        registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
-        run = "test"
-        registry.registerRun(run)
-        ref, = registry.insertDatasets(datasetType, dataIds=[{"instrument": "DummyCam"}], run=run)
-        ref2, = registry.insertDatasets(datasetType2, dataIds=[{"instrument": "DummyCam"}], run=run)
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        run = "imported_g"
+        ref = registry.findDataset("permabias", dataId={"instrument": "Cam1", "detector": 1}, collections=run)
+        ref2 = registry.findDataset("permaflat",
+                                    dataId={"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-G"},
+                                    collections=run)
         datastoreName = "dummystore"
         datastoreName2 = "dummystore2"
         # Test adding information about a new dataset
@@ -554,10 +528,12 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", id=201, name="201", visit=20, physical_filter="dummy_r"),
         )
         # dataset types
-        run1 = "test"
-        run2 = "test2"
+        run1 = "test1_r"
+        run2 = "test2_r"
+        tagged2 = "test2_t"
         registry.registerRun(run1)
         registry.registerRun(run2)
+        registry.registerCollection(tagged2)
         storageClass = StorageClass("testDataset")
         registry.storageClasses.registerStorageClass(storageClass)
         rawType = DatasetType(name="RAW",
@@ -575,30 +551,31 @@ class RegistryTests(ABC):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
                 ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run1)
-                # exposures 100 and 101 appear in both collections, 100 has
-                # different dataset_id in different collections, for 101 only
-                # single dataset_id exists
+                # exposures 100 and 101 appear in both run1 and tagged2.
+                # 100 has different datasets in the different collections
+                # 101 has the same dataset in both collections.
                 if exposure == 100:
-                    registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
-                if exposure == 101:
-                    registry.associate(run2, [ref])
-        # Add pre-existing datasets to second collection.
+                    ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                if exposure in (100, 101):
+                    registry.associate(tagged2, [ref])
+        # Add pre-existing datasets to tagged2.
         for exposure in (200, 201):
             for detector in (3, 4, 5):
                 # note that only 3 of 5 detectors have datasets
                 dataId = dict(instrument="DummyCam", exposure=exposure, detector=detector)
-                registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                ref, = registry.insertDatasets(rawType, dataIds=[dataId], run=run2)
+                registry.associate(tagged2, [ref])
 
         dimensions = DimensionGraph(
             registry.dimensions,
             dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
         )
         # Test that single dim string works as well as list of str
-        rows = list(registry.queryDimensions("visit", datasets={rawType: [run1]}, expand=True))
-        rowsI = list(registry.queryDimensions(["visit"], datasets={rawType: [run1]}, expand=True))
+        rows = list(registry.queryDimensions("visit", datasets=rawType, collections=run1, expand=True))
+        rowsI = list(registry.queryDimensions(["visit"], datasets=rawType, collections=run1, expand=True))
         self.assertEqual(rows, rowsI)
         # with empty expression
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]}, expand=True))
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1, expand=True))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -615,7 +592,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run2]}))
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=tagged2))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -625,7 +602,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1, run2]}))
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=[run1, tagged2]))
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
@@ -635,7 +612,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
                                              where="visit = 10"))
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
@@ -643,7 +620,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
                                              where="visit = 10 and detector > 1"))
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
@@ -651,13 +628,13 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
         # expression excludes everything
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
                                              where="visit > 1000"))
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
-        rows = list(registry.queryDimensions(dimensions, datasets={rawType: [run1]},
+        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
                                              where="physical_filter = 'dummy_r'"))
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
@@ -729,7 +706,7 @@ class RegistryTests(ABC):
 
         # with empty expression
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [run], mergeType: [run]}))
+                                             datasets=[calexpType, mergeType], collections=run))
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -739,7 +716,7 @@ class RegistryTests(ABC):
 
         # limit to 2 tracts and 2 patches
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [run], mergeType: [run]},
+                                             datasets=[calexpType, mergeType], collections=run,
                                              where="tract IN (1, 5) AND patch IN (2, 7)"))
         self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
@@ -748,7 +725,7 @@ class RegistryTests(ABC):
 
         # limit to single filter
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [run], mergeType: [run]},
+                                             datasets=[calexpType, mergeType], collections=run,
                                              where="abstract_filter = 'i'"))
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
@@ -758,7 +735,7 @@ class RegistryTests(ABC):
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
         rows = list(registry.queryDimensions(dimensions,
-                                             datasets={calexpType: [run], mergeType: [run]},
+                                             datasets=[calexpType, mergeType], collections=run,
                                              where="skymap = 'Mars'"))
         self.assertEqual(len(rows), 0)
 
@@ -796,7 +773,7 @@ class RegistryTests(ABC):
         )
 
         # without data this should run OK but return empty set
-        rows = list(registry.queryDimensions(dimensions, datasets={calexpType: [collection]}))
+        rows = list(registry.queryDimensions(dimensions, datasets=calexpType, collections=collection))
         self.assertEqual(len(rows), 0)
 
     def testCalibrationLabelIndirection(self):
@@ -867,11 +844,11 @@ class RegistryTests(ABC):
         for exposure in (100, 101):
             for detector in (1, 2, 3):
                 with self.subTest(exposure=exposure, detector=detector):
-                    rows = registry.queryDatasets("flat", collections=[run1],
-                                                  instrument="DummyCam",
-                                                  exposure=exposure,
-                                                  detector=detector)
-                    self.assertEqual(len(list(rows)), 1)
+                    rows = list(registry.queryDatasets("flat", collections=[run1],
+                                                       instrument="DummyCam",
+                                                       exposure=exposure,
+                                                       detector=detector))
+                    self.assertEqual(len(rows), 1)
             for detector in (3, 4, 5):
                 with self.subTest(exposure=exposure, detector=detector):
                     rows = registry.queryDatasets("flat", collections=[run2],

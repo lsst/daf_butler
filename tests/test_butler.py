@@ -50,6 +50,7 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from lsst.daf.butler import FileDataset
+from lsst.daf.butler import CollectionSearch
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
@@ -127,11 +128,15 @@ class ButlerPutGetTests:
             shutil.rmtree(self.root, ignore_errors=True)
 
     def runPutGetTest(self, storageClass, datasetTypeName):
-        butler = Butler(self.tmpConfigFile, run="ingest")
+        # New datasets will be added to run and tag, but we will only look in
+        # tag when looking up datasets.
+        run = "ingest/run"
+        tag = "ingest"
+        butler = Butler(self.tmpConfigFile, run=run, collections=[tag], tags=[tag])
 
         # There will not be a collection yet
-        collections = butler.registry.getAllCollections()
-        self.assertEqual(collections, set())
+        collections = set(butler.registry.queryCollections())
+        self.assertEqual(collections, set([run, tag]))
 
         # Create and register a DatasetType
         dimensions = butler.registry.dimensions.extract(["instrument", "visit"])
@@ -185,19 +190,21 @@ class ButlerPutGetTests:
                     self.assertGetComponents(butler, ref,
                                              ("summary", "data", "output"), metric)
 
-                # Remove from collection only; after that we shouldn't be able
-                # to find it unless we use the dataset_id.
-                butler.remove(*args, delete=False)
+                # Remove from the tagged collection only; after that we
+                # shouldn't be able to find it unless we use the dataset_id.
+                butler.prune([ref])
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
+                # Registry still knows about it, if we use the dataset_id.
+                self.assertEqual(butler.registry.getDataset(ref.id), ref)
                 # If we use the output ref with the dataset_id, we should
                 # still be able to load it with getDirect().
                 self.assertEqual(metric, butler.getDirect(ref))
 
                 # Reinsert into collection, then delete from Datastore *and*
                 # remove from collection.
-                butler.registry.associate(butler.collection, [ref])
-                butler.remove(*args)
+                butler.registry.associate(tag, [ref])
+                butler.prune([ref], unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
@@ -207,12 +214,8 @@ class ButlerPutGetTests:
                 # Registry still knows about it, if we use the dataset_id.
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
 
-                # Put again, then remove completely (this generates a new
-                # dataset record in registry, with a new ID - the old one
-                # still exists but it is not in any collection so we don't
-                # care).
-                ref = butler.put(metric, *args)
-                butler.remove(*args, remember=False)
+                # Now remove the dataset completely.
+                butler.prune([ref], purge=True, unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
@@ -255,7 +258,8 @@ class ButlerPutGetTests:
             self.assertEqual(summary, metric.summary)
             self.assertTrue(butler.datastore.exists(ref.components["summary"]))
 
-            butler.remove(compNameS, dataId, remember=True)
+            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
+            butler.prune([compRef], unstore=True)
             with self.assertRaises(LookupError):
                 butler.datasetExists(compNameS, dataId)
             self.assertFalse(butler.datastore.exists(ref.components["summary"]))
@@ -283,12 +287,12 @@ class ButlerPutGetTests:
             butler.get(ref, parameters={"unsupported": True})
 
         # Check we have a collection
-        collections = butler.registry.getAllCollections()
-        self.assertEqual(collections, {"ingest", })
+        collections = set(butler.registry.queryCollections())
+        self.assertEqual(collections, {run, tag})
 
         # Clean up to check that we can remove something that may have
         # already had a component removed
-        butler.remove(ref.datasetType.name, dataId)
+        butler.prune([ref], unstore=True, purge=True)
 
         # Add a dataset back in since some downstream tests require
         # something to be present
@@ -296,6 +300,7 @@ class ButlerPutGetTests:
 
         return butler
 
+    def testDeferredCollectionPassing(self):
         # Construct a butler with no run or collection, but make it writeable.
         butler = Butler(self.tmpConfigFile, writeable=True)
         # Create and register a DatasetType
@@ -321,24 +326,23 @@ class ButlerPutGetTests:
         with self.assertRaises(TypeError):
             butler.put(metric, datasetType, dataId)
         # Dataset should exist.
-        self.assertTrue(butler.datasetExists(datasetType, dataId, collection=run))
+        self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
         # We should be able to get the dataset back, but with and without
         # a deferred dataset handle.
-        self.assertEqual(metric, butler.get(datasetType, dataId, collection=run))
-        self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collection=run).get())
+        self.assertEqual(metric, butler.get(datasetType, dataId, collections=[run]))
+        self.assertEqual(metric, butler.getDeferred(datasetType, dataId, collections=[run]).get())
         # Trying to find the dataset without any collection is a TypeError.
         with self.assertRaises(TypeError):
             butler.datasetExists(datasetType, dataId)
         with self.assertRaises(TypeError):
             butler.get(datasetType, dataId)
-        with self.assertRaises(TypeError):
-            butler.remove(datasetType, dataId)
         # Associate the dataset with a different collection.
+        butler.registry.registerCollection("tagged")
         butler.registry.associate("tagged", [ref])
         # Deleting the dataset from the new collection should make it findable
-        # in the original collection but without a Datastore entry.
-        butler.remove(datasetType, dataId, collection="tagged")
-        self.assertFalse(butler.datasetExists(datasetType, dataId, collection=run))
+        # in the original collection.
+        butler.prune([ref], tags=["tagged"])
+        self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
 
 
 class ButlerTests(ButlerPutGetTests):
@@ -362,11 +366,11 @@ class ButlerTests(ButlerPutGetTests):
         butler = Butler(self.tmpConfigFile, run="ingest")
         self.assertIsInstance(butler, Butler)
 
-        collections = butler.registry.getAllCollections()
-        self.assertEqual(collections, set())
+        collections = set(butler.registry.queryCollections())
+        self.assertEqual(collections, {"ingest"})
 
-        butler2 = Butler(butler=butler, collection="other")
-        self.assertEqual(butler2.collection, "other")
+        butler2 = Butler(butler=butler, collections=["other"])
+        self.assertEqual(butler2.collections, CollectionSearch.fromExpression(["other"]))
         self.assertIsNone(butler2.run)
         self.assertIs(butler.registry, butler2.registry)
         self.assertIs(butler.datastore, butler2.datastore)
@@ -467,9 +471,8 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(uri1, uri2)
 
         # Test that removing one does not break the second
-        butler.remove(datasetTypeName, dataId1)
-        with self.assertRaises(LookupError):
-            butler.datasetExists(datasetTypeName, dataId1)
+        butler.prune([datasets[0].refs[0]], unstore=True, disassociate=False)
+        self.assertFalse(butler.datasetExists(datasetTypeName, dataId1))
         self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
         multi2b = butler.get(datasetTypeName, dataId2)
         self.assertEqual(multi2, multi2b)
@@ -481,7 +484,7 @@ class ButlerTests(ButlerPutGetTests):
         butlerOut = pickle.loads(pickle.dumps(butler))
         self.assertIsInstance(butlerOut, Butler)
         self.assertEqual(butlerOut._config, butler._config)
-        self.assertEqual(butlerOut.collection, butler.collection)
+        self.assertEqual(butlerOut.collections, butler.collections)
         self.assertEqual(butlerOut.run, butler.run)
 
     def testGetDatasetTypes(self):
@@ -511,7 +514,7 @@ class ButlerTests(ButlerPutGetTests):
             for componentName in storageClass.components:
                 components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
 
-        fromRegistry = butler.registry.getAllDatasetTypes()
+        fromRegistry = set(butler.registry.queryDatasetTypes())
         self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
 
         # Now that we have some dataset types registered, validate them
@@ -572,7 +575,7 @@ class ButlerTests(ButlerPutGetTests):
         with self.assertRaises(KeyError):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
-        self.assertIsNone(butler.registry.find(butler.collection, datasetType, dataId))
+        self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=butler.collections))
         # Direct retrieval should not find the file in the Datastore
         with self.assertRaises(FileNotFoundError):
             butler.getDirect(ref)
@@ -608,9 +611,9 @@ class ButlerTests(ButlerPutGetTests):
         self.assertNotIn(self.fullConfigKey, limited)
 
         # Collections don't appear until something is put in them
-        collections1 = butler1.registry.getAllCollections()
+        collections1 = set(butler1.registry.queryCollections())
         self.assertEqual(collections1, set())
-        self.assertEqual(butler2.registry.getAllCollections(), collections1)
+        self.assertEqual(set(butler2.registry.queryCollections()), collections1)
 
         # Check that a config with no associated file name will not
         # work properly with relocatable Butler repo
@@ -728,7 +731,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
                 Butler.makeRepo(importDir, config=Config(self.configFile))
-                importButler = Butler(importDir, run="ingest")
+                importButler = Butler(importDir, run="ingest/run")
                 importButler.import_(filename=exportFile, directory=exportButler.datastore.root,
                                      transfer="symlink")
                 for ref in datasets:

@@ -273,7 +273,7 @@ class RepoImportBackend(ABC):
         """
 
     @abstractmethod
-    def load(self, datastore: Datastore, *,
+    def load(self, datastore: Optional[Datastore], *,
              directory: Optional[str] = None, transfer: Optional[str] = None):
         """Import information associated with the backend into the given
         registry and datastore.
@@ -283,10 +283,9 @@ class RepoImportBackend(ABC):
 
         Parameters
         ----------
-        registry : `Registry`
-            Registry to import into.
         datastore : `Datastore`
-            Datastore to import into.
+            Datastore to import into.  If `None`, datasets will only be
+            inserted into the `Registry` (primarily intended for tests).
         directory : `str`, optional
             File all dataset paths are relative to.
         transfer : `str`, optional
@@ -409,10 +408,10 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.datasets[data["dataset_type"], data["run"]].extend(
                 (
                     FileDataset(
-                        d["path"],
+                        d.get("path"),
                         [DatasetRef(datasetType, dataId, run=data["run"], id=refid)
                          for dataId, refid in zip(iterable(d["data_id"]), iterable(d["dataset_id"]))],
-                        formatter=doImport(d["formatter"])
+                        formatter=doImport(d.get("formatter")) if "formatter" in d else None
                     ),
                     d.get("collections", [])
                 )
@@ -426,7 +425,7 @@ class YamlRepoImportBackend(RepoImportBackend):
         for datasetType in self.datasetTypes:
             self.registry.registerDatasetType(datasetType)
 
-    def load(self, datastore: Datastore, *,
+    def load(self, datastore: Optional[Datastore], *,
              directory: Optional[str] = None, transfer: Optional[str] = None):
         # Docstring inherited from RepoImportBackend.load.
         for element, records in self.dimensions.items():
@@ -468,7 +467,8 @@ class YamlRepoImportBackend(RepoImportBackend):
                 for collection in collectionsForDataset:
                     collections[collection].extend(fileDataset.refs)
         # Ingest everything into the datastore at once.
-        datastore.ingest(*fileDatasets, transfer=transfer)
+        if datastore is not None:
+            datastore.ingest(*fileDatasets, transfer=transfer)
         # Associate with collections, one collection at a time.
         for collection, refs in collections.items():
             self.registry.associate(collection, refs)

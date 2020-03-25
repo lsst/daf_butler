@@ -322,32 +322,32 @@ class DatabaseTests(ABC):
         # Insert a row with sync, because it doesn't exist yet.
         values, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10}, returning=["id"])
         self.assertTrue(inserted)
-        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+        self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
                          [dict(r) for r in db.query(tables.b.select()).fetchall()])
         # Repeat that operation, which should do nothing but return the
         # requested values.
         values, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 10}, returning=["id"])
         self.assertFalse(inserted)
-        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+        self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
                          [dict(r) for r in db.query(tables.b.select()).fetchall()])
         # Repeat the operation without the 'extra' arg, which should also just
         # return the existing row.
         values, inserted = db.sync(tables.b, keys={"name": "b1"}, returning=["id"])
         self.assertFalse(inserted)
-        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+        self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
                          [dict(r) for r in db.query(tables.b.select()).fetchall()])
         # Repeat the operation with a different value in 'extra'.  That still
         # shouldn't be an error, because 'extra' is only used if we really do
         # insert.  Also drop the 'returning' argument.
         _, inserted = db.sync(tables.b, keys={"name": "b1"}, extra={"value": 20})
         self.assertFalse(inserted)
-        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+        self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
                          [dict(r) for r in db.query(tables.b.select()).fetchall()])
         # Repeat the operation with the correct value in 'compared' instead of
         # 'extra'.
         _, inserted = db.sync(tables.b, keys={"name": "b1"}, compared={"value": 10})
         self.assertFalse(inserted)
-        self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+        self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
                          [dict(r) for r in db.query(tables.b.select()).fetchall()])
         # Repeat the operation with an incorrect value in 'compared'; this
         # should raise.
@@ -368,7 +368,7 @@ class DatabaseTests(ABC):
                 tables = context.addTableTuple(STATIC_TABLE_SPECS)
             _, inserted = rodb.sync(tables.b, keys={"name": "b1"})
             self.assertFalse(inserted)
-            self.assertEqual([{"id": values[0], "name": "b1", "value": 10}],
+            self.assertEqual([{"id": values["id"], "name": "b1", "value": 10}],
                              [dict(r) for r in rodb.query(tables.b.select()).fetchall()])
             with self.assertRaises(ReadOnlyDatabaseError):
                 rodb.sync(tables.b, keys={"name": "b2"}, extra={"value": 20})

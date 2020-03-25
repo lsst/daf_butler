@@ -184,6 +184,10 @@ class SqliteFileRegistryTestCase(unittest.TestCase, RegistryTests):
         if self.root is not None and os.path.exists(self.root):
             shutil.rmtree(self.root, ignore_errors=True)
 
+    @classmethod
+    def getDataDir(cls) -> str:
+        return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
+
     def makeRegistry(self) -> Registry:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
         config = RegistryConfig()
@@ -194,6 +198,10 @@ class SqliteFileRegistryTestCase(unittest.TestCase, RegistryTests):
 class SqliteMemoryRegistryTestCase(unittest.TestCase, RegistryTests):
     """Tests for `Registry` backed by a SQLite in-memory database.
     """
+
+    @classmethod
+    def getDataDir(cls) -> str:
+        return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
     def makeRegistry(self) -> Registry:
         config = RegistryConfig()

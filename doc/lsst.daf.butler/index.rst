@@ -26,7 +26,8 @@ Using the Butler
   :maxdepth: 1
 
   configuring.rst
-  exprParser.rst
+  organizing.rst
+  queries.rst
   use-in-tests.rst
 
 .. _lsst.daf.butler-scripts:
@@ -80,6 +81,9 @@ Python API reference
    :no-main-docstr:
 
 .. automodapi:: lsst.daf.butler.registry.queries
+   :no-main-docstr:
+
+.. automodapi:: lsst.daf.butler.registry.wildcards
    :no-main-docstr:
 
 Example datastores

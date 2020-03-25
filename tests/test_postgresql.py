@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 from contextlib import contextmanager
 import secrets
 import unittest
@@ -134,6 +135,10 @@ class PostgresqlRegistryTestCase(unittest.TestCase, RegistryTests):
     @classmethod
     def tearDownClass(cls):
         cls.server.stop()
+
+    @classmethod
+    def getDataDir(cls) -> str:
+        return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
     def makeRegistry(self) -> Registry:
         namespace = f"namespace_{secrets.token_hex(8).lower()}"

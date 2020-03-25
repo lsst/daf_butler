@@ -27,7 +27,6 @@ import contextlib
 import sys
 from typing import (
     Any,
-    FrozenSet,
     Iterable,
     Iterator,
     List,
@@ -56,16 +55,16 @@ from ..core import (
     StorageClassFactory,
 )
 from ..core import ddl
-from ..core.utils import doImport, iterable, transactional, NamedKeyDict
+from ..core.utils import doImport, iterable, transactional
 from ._config import RegistryConfig
 from .queries import (
-    CollectionsExpression,
     DatasetRegistryStorage,
-    DatasetTypeExpression,
     QueryBuilder,
     QuerySummary,
 )
 from .tables import makeRegistryTableSpecs
+from ._collectionType import CollectionType
+from .wildcards import CollectionQuery, CollectionSearch
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -73,6 +72,7 @@ if TYPE_CHECKING:
         Quantum
     )
     from .interfaces import (
+        CollectionManager,
         Database,
         OpaqueTableStorageManager,
         DimensionRecordStorageManager,
@@ -95,24 +95,6 @@ class OrphanedRecordError(Exception):
     """Exception raised when trying to remove or modify a database record
     that is still being used in some other table.
     """
-
-
-def _expandComponents(refs: Iterable[DatasetRef]) -> Iterator[DatasetRef]:
-    """Expand an iterable of datasets to include its components.
-
-    Parameters
-    ----------
-    refs : iterable of `DatasetRef`
-        An iterable of `DatasetRef` instances.
-
-    Yields
-    ------
-    refs : `DatasetRef`
-        Recursively expanded datasets.
-    """
-    for ref in refs:
-        yield ref
-        yield from _expandComponents(ref.components.values())
 
 
 def _checkAndGetId(ref: DatasetRef) -> int:
@@ -191,28 +173,32 @@ class Registry:
         universe = DimensionUniverse(config)
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
-        return cls(database, universe, dimensions=dimensions, opaque=opaque, create=create)
+        collections = doImport(config["managers", "collections"])
+        return cls(database, universe, dimensions=dimensions, opaque=opaque, collections=collections,
+                   create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
+                 collections: Type[CollectionManager],
                  create: bool = False):
         self._db = database
         self.storageClasses = StorageClassFactory()
         with self._db.declareStaticTables(create=create) as context:
             self._dimensions = dimensions.initialize(self._db, context, universe=universe)
-            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions))
+            self._collections = collections.initialize(self._db, context)
+            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions, self._collections))
             self._opaque = opaque.initialize(self._db, context)
+        self._collections.refresh()
         # TODO: we shouldn't be grabbing the private connection from the
         # Database instance like this, but it's a reasonable way to proceed
         # while we transition to using the Database API more.
         self._connection = self._db._connection
         self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
                                                       universe=self.dimensions,
-                                                      tables=self._tables._asdict())
+                                                      tables=self._tables._asdict(),
+                                                      collections=self._collections)
         self._datasetTypes = {}
-        self._runIdsByName = {}   # key = name, value = id
-        self._runNamesById = {}   # key = id, value = name
 
     def __str__(self) -> str:
         return str(self._db)
@@ -317,19 +303,43 @@ class Registry:
         """
         self._opaque[tableName].delete(**where)
 
-    def getAllCollections(self):
-        """Get names of all the collections found in this repository.
+    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED):
+        """Add a new collection if one with the given name does not exist.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to create.
+        type : `CollectionType`
+            Enum value indicating the type of collection to create.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
+        """
+        self._collections.register(name, type)
+
+    def getCollectionType(self, name: str) -> CollectionType:
+        """Return an enumeration value indicating the type of the given
+        collection.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection.
 
         Returns
         -------
-        collections : `set` of `str`
-            The collections.
+        type : `CollectionType`
+            Enum value indicating the type of this collection.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if no collection with the given name exists.
         """
-        table = self._tables.dataset_collection
-        result = self._db.query(sqlalchemy.sql.select([table.c.collection]).distinct()).fetchall()
-        if result is None:
-            return set()
-        return {r[0] for r in result}
+        return self._collections.find(name).type
 
     def registerRun(self, name: str):
         """Add a new run if one with the given name does not exist.
@@ -344,53 +354,69 @@ class Registry:
         This method cannot be called within transactions, as it needs to be
         able to perform its own transaction to be concurrent.
         """
-        id = self._runIdsByName.get(name)
-        if id is None:
-            (id,), _ = self._db.sync(self._tables.run, keys={"name": name}, returning=["id"])
-            self._runIdsByName[name] = id
-            self._runNamesById[id] = name
-        # Assume that if the run is in the cache, it's in the database, because
-        # right now there's no way to delete them.
+        self._collections.register(name, CollectionType.RUN)
 
-    def _getRunNameFromId(self, id: int) -> str:
-        """Return the name of the run associated with the given integer ID.
-        """
-        assert isinstance(id, int)
-        name = self._runNamesById.get(id)
-        if name is None:
-            table = self._tables.run
-            name = self._db.query(
-                sqlalchemy.sql.select(
-                    [table.columns.name]
-                ).select_from(
-                    table
-                ).where(
-                    table.columns.id == id
-                )
-            ).scalar()
-            self._runNamesById[id] = name
-            self._runIdsByName[name] = id
-        return name
+    def getCollectionChain(self, parent: str) -> CollectionSearch:
+        """Return the child collections in a `~CollectionType.CHAINED`
+        collection.
 
-    def _getRunIdFromName(self, name: str) -> id:
-        """Return the integer ID of the run associated with the given name.
+        Parameters
+        ----------
+        parent : `str`
+            Name of the chained collection.  Must have already been added via
+            a call to `Registry.registerCollection`.
+
+        Returns
+        -------
+        children : `CollectionSearch`
+            An object that defines the search path of the collection.
+            See :ref:`daf_butler_collection_expressions` for more information.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if ``parent`` does not exist in the `Registry`.
+        TypeError
+            Raised if ``parent`` does not correspond to a
+            `~CollectionType.CHAINED` collection.
         """
-        assert isinstance(name, str)
-        id = self._runIdsByName.get(name)
-        if id is None:
-            table = self._tables.run
-            id = self._db.query(
-                sqlalchemy.sql.select(
-                    [table.columns.id]
-                ).select_from(
-                    table
-                ).where(
-                    table.columns.name == name
-                )
-            ).scalar()
-            self._runNamesById[id] = name
-            self._runIdsByName[name] = id
-        return id
+        record = self._collections.find(parent)
+        if record.type is not CollectionType.CHAINED:
+            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+        return record.children
+
+    def setCollectionChain(self, parent: str, children: Any):
+        """Define or redefine a `~CollectionType.CHAINED` collection.
+
+        Parameters
+        ----------
+        parent : `str`
+            Name of the chained collection.  Must have already been added via
+            a call to `Registry.registerCollection`.
+        children : `Any`
+            An expression defining an ordered search of child collections,
+            generally an iterable of `str`.  Restrictions on the dataset types
+            to be searched can also be included, by passing mapping or an
+            iterable containing tuples; see
+            :ref:`daf_butler_collection_expressions` for more information.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised when any of the given collections do not exist in the
+            `Registry`.
+        TypeError
+            Raised if ``parent`` does not correspond to a
+            `~CollectionType.CHAINED` collection.
+        ValueError
+            Raised if the given collections contains a cycle.
+        """
+        record = self._collections.find(parent)
+        if record.type is not CollectionType.CHAINED:
+            raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+        children = CollectionSearch.fromExpression(children)
+        if children != record.children:
+            record.update(self._collections, children)
 
     @transactional
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
@@ -523,25 +549,6 @@ class Registry:
             self._datasetTypes[name] = datasetType
         return datasetType
 
-    def getAllDatasetTypes(self) -> FrozenSet[DatasetType]:
-        """Get every registered `DatasetType`.
-
-        Returns
-        -------
-        types : `frozenset` of `DatasetType`
-            Every `DatasetType` in the registry.
-        """
-        # Get all the registered names
-        result = self._db.query(
-            sqlalchemy.sql.select(
-                [self._tables.dataset_type.columns.dataset_type_name]
-            )
-        ).fetchall()
-        if result is None:
-            return frozenset()
-        datasetTypeNames = [r[0] for r in result]
-        return frozenset(self.getDatasetType(name) for name in datasetTypeNames)
-
     def _makeDatasetRefFromRow(self, row: sqlalchemy.engine.RowProxy,
                                datasetType: Optional[DatasetType] = None,
                                dataId: Optional[DataCoordinate] = None):
@@ -570,7 +577,9 @@ class Registry:
         """
         if datasetType is None:
             datasetType = self.getDatasetType(row["dataset_type_name"])
-        run = self._getRunNameFromId(row["run_id"])
+        runRecord = self._collections[row[self._collections.getRunForeignKeyName()]]
+        assert runRecord is not None, "Should be guaranteed by foreign key constraints."
+        run = runRecord.name
         datasetRefHash = row["dataset_ref_hash"]
         if dataId is None:
             # TODO: should we expand here?
@@ -616,22 +625,25 @@ class Registry:
         return DatasetRef(datasetType=datasetType, dataId=dataId, id=row["dataset_id"], run=run,
                           hash=datasetRefHash, components=components)
 
-    def find(self, collection: str, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None,
-             **kwds: Any) -> Optional[DatasetRef]:
-        """Lookup a dataset.
+    def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
+                    collections: Any, **kwds: Any) -> Optional[DatasetRef]:
+        """Find a dataset given its `DatasetType` and data ID.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
         be read from a `Datastore`.
 
         Parameters
         ----------
-        collection : `str`
-            Identifies the collection to search.
         datasetType : `DatasetType` or `str`
             A `DatasetType` or the name of one.
         dataId : `dict` or `DataCoordinate`, optional
             A `dict`-like object containing the `Dimension` links that identify
             the dataset within a collection.
+        collections
+            An expression that fully or partially identifies the collections
+            to search for the dataset, such as a `str`, `re.Pattern`, or
+            iterable  thereof.  `...` can be used to return all collections.
+            See :ref:`daf_butler_collection_expressions` for more information.
         **kwds
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
@@ -640,33 +652,45 @@ class Registry:
         Returns
         -------
         ref : `DatasetRef`
-            A ref to the Dataset, or `None` if no matching Dataset
+            A reference to the dataset, or `None` if no matching Dataset
             was found.
 
         Raises
         ------
         LookupError
-            If one or more data ID keys are missing.
+            Raised if one or more data ID keys are missing.
+        MissingCollectionError
+            Raised if any of ``collections`` does not exist in the registry.
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
                                             universe=self.dimensions, **kwds)
-        whereTerms = [
-            self._tables.dataset.columns.dataset_type_name == datasetType.name,
-            self._tables.dataset_collection.columns.collection == collection,
-        ]
-        whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
-        result = self._db.query(
-            self._tables.dataset.select().select_from(
-                self._tables.dataset.join(self._tables.dataset_collection)
+        collections = CollectionSearch.fromExpression(collections)
+        for collectionRecord in collections.iter(self._collections, datasetType=datasetType):
+            if collectionRecord.type is CollectionType.TAGGED:
+                collectionColumn = \
+                    self._tables.dataset_collection.columns[self._collections.getCollectionForeignKeyName()]
+                fromClause = self._tables.dataset.join(self._tables.dataset_collection)
+            elif collectionRecord.type is CollectionType.RUN:
+                collectionColumn = self._tables.dataset.columns[self._collections.getRunForeignKeyName()]
+                fromClause = self._tables.dataset
+            else:
+                raise NotImplementedError(f"Unrecognized CollectionType: '{collectionRecord.type}'.")
+            whereTerms = [
+                self._tables.dataset.columns.dataset_type_name == datasetType.name,
+                collectionColumn == collectionRecord.key,
+            ]
+            whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
+            query = self._tables.dataset.select().select_from(
+                fromClause
             ).where(
                 sqlalchemy.sql.and_(*whereTerms)
             )
-        ).fetchone()
-        if result is None:
-            return None
-        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+            result = self._db.query(query).fetchone()
+            if result is not None:
+                return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+        return None
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
@@ -698,17 +722,23 @@ class Registry:
         refs : `list` of `DatasetRef`
             Resolved `DatasetRef` instances for all given data IDs (in the same
             order).
+
+        Raises
+        ------
         ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
             given already exists in the given collection.
+        MissingCollectionError
+            Raised if ``run`` does not exist in the registry.
         """
         if not isinstance(datasetType, DatasetType):
             datasetType = self.getDatasetType(datasetType)
         rows = []
         refs = []
+        runRecord = self._collections.find(run)
         base = {
             "dataset_type_name": datasetType.name,
-            "run_id": self._getRunIdFromName(run),
+            self._collections.getRunForeignKeyName(): runRecord.key,
             "quantum_id": producer.id if producer is not None else None,
         }
         # Expand data IDs and build both a list of unresolved DatasetRefs
@@ -721,13 +751,16 @@ class Registry:
                 row[dimension.name] = value
             rows.append(row)
         # Actually insert into the dataset table.
-        datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+        try:
+            datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+        except sqlalchemy.exc.IntegrityError as err:
+            raise ConflictingDefinitionError(
+                f"Constraint violation while inserting datasets into run {run}. "
+                f"This usually means that one or more datasets with the same dataset type and data ID "
+                f"already exist in the collection, but it may be a foreign key violation."
+            ) from err
         # Resolve the DatasetRefs with the autoincrement IDs we generated.
         refs = [ref.resolved(id=datasetId, run=run) for datasetId, ref in zip(datasetIds, refs)]
-        # Associate the datasets with the run as a collection.  Note that we
-        # do this before inserting component datasets so recursing doesn't try
-        # to associate those twice.
-        self.associate(run, refs)
         if recursive and datasetType.isComposite():
             # Insert component rows by recursing, and gather a single big list
             # of rows to insert into the dataset_composition table.
@@ -880,7 +913,7 @@ class Registry:
         parent._components[name] = component
 
     @transactional
-    def associate(self, collection: str, refs: List[DatasetRef]):
+    def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
         """Add existing Datasets to a collection, implicitly creating the
         collection if it does not already exist.
 
@@ -894,9 +927,14 @@ class Registry:
         collection : `str`
             Indicates the collection the Datasets should be associated with.
         refs : iterable of `DatasetRef`
-            An iterable of `DatasetRef` instances that already exist in this
-            `Registry`.  All component datasets will be associated with the
-            collection as well.
+            An iterable of resolved `DatasetRef` instances that already exist
+            in this `Registry`.
+        recursive : `bool`, optional
+            If `True`, associate all component datasets as well.  Note that
+            this only associates components that are actually included in the
+            given `DatasetRef` instances, which may not be the same as those in
+            the database (especially if they were obtained from
+            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -905,11 +943,21 @@ class Registry:
             given collection.
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
+        MissingCollectionError
+            Raised if ``collection`` does not exist in the registry.
+        TypeError
+            Raise adding new datasets to the given ``collection`` is not
+            allowed.
         """
+        collectionRecord = self._collections.find(collection)
+        if collectionRecord.type is not CollectionType.TAGGED:
+            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
+        if recursive:
+            refs = DatasetRef.flatten(refs)
         rows = [{"dataset_id": _checkAndGetId(ref),
                  "dataset_ref_hash": ref.hash,
-                 "collection": collection}
-                for ref in _expandComponents(refs)]
+                 self._collections.getCollectionForeignKeyName(): collectionRecord.key}
+                for ref in refs]
         try:
             self._db.replace(self._tables.dataset_collection, *rows)
         except sqlalchemy.exc.IntegrityError as err:
@@ -920,7 +968,7 @@ class Registry:
             ) from err
 
     @transactional
-    def disassociate(self, collection: str, refs: List[DatasetRef]):
+    def disassociate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
         """Remove existing Datasets from a collection.
 
         ``collection`` and ``ref`` combinations that are not currently
@@ -930,18 +978,36 @@ class Registry:
         ----------
         collection : `str`
             The collection the Datasets should no longer be associated with.
-        refs : `list` of `DatasetRef`
-            A `list` of `DatasetRef` instances that already exist in this
-            `Registry`.  All component datasets will also be removed.
+        refs : iterable of `DatasetRef`
+            An iterable of resolved `DatasetRef` instances that already exist
+            in this `Registry`.
+        recursive : `bool`, optional
+            If `True`, disassociate all component datasets as well.  Note that
+            this only disassociates components that are actually included in
+            the given `DatasetRef` instances, which may not be the same as
+            those in the database (especially if they were obtained from
+            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
         AmbiguousDatasetError
             Raised if ``any(ref.id is None for ref in refs)``.
+        MissingCollectionError
+            Raised if ``collection`` does not exist in the registry.
+        TypeError
+            Raise adding new datasets to the given ``collection`` is not
+            allowed.
         """
-        rows = [{"dataset_id": _checkAndGetId(ref), "collection": collection}
-                for ref in _expandComponents(refs)]
-        self._db.delete(self._tables.dataset_collection, ["dataset_id", "collection"], *rows)
+        collectionFieldName = self._collections.getCollectionForeignKeyName()
+        collectionRecord = self._collections.find(collection)
+        if collectionRecord.type is not CollectionType.TAGGED:
+            raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
+                            "expected TAGGED.")
+        if recursive:
+            refs = DatasetRef.flatten(refs)
+        rows = [{"dataset_id": _checkAndGetId(ref), collectionFieldName: collectionRecord.key}
+                for ref in refs]
+        self._db.delete(self._tables.dataset_collection, ["dataset_id", collectionFieldName], *rows)
 
     @transactional
     def insertDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
@@ -1101,18 +1167,77 @@ class Registry:
         storage = self._dimensions[element]
         storage.insert(*records)
 
+    def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
+        """Iterate over the dataset types whose names match an expression.
+
+        Parameters
+        ----------
+        expression : `Any`, optional
+            An expression that fully or partially identifies the dataset types
+            to return, such as a `str`, `re.Pattern`, or iterable thereof.
+            `...` can be used to return all dataset types, and is the default.
+            See :ref:`daf_butler_dataset_type_expressions` for more
+            information.
+
+        Yields
+        ------
+        datasetType : `DatasetType`
+            A `DatasetType` instance whose name matches ``expression``.
+        """
+        yield from self._datasetStorage.fetchDatasetTypes(expression)
+
+    def queryCollections(self, expression: Any = ...,
+                         datasetType: Optional[DatasetType] = None,
+                         collectionType: Optional[CollectionType] = None,
+                         flattenChains: bool = False,
+                         includeChains: Optional[bool] = None) -> Iterator[str]:
+        """Iterate over the collections whose names match an expression.
+
+        Parameters
+        ----------
+        expression : `Any`, optional
+            An expression that fully or partially identifies the collections
+            to return, such as a `str`, `re.Pattern`, or iterable thereof.
+            `...` can be used to return all collections, and is the default.
+            See :ref:`daf_butler_collection_expressions` for more
+            information.
+        datasetType : `DatasetType`, optional
+            If provided, only yield collections that should be searched for
+            this dataset type according to ``expression``.  If this is
+            not provided, any dataset type restrictions in ``expression`` are
+            ignored.
+        collectionType : `CollectionType`, optional
+            If provided, only yield collections of this type.
+        flattenChains : `bool`, optional
+            If `True` (`False` is default), recursively yield the child
+            collections of matching `~CollectionType.CHAINED` collections.
+        includeChains : `bool`, optional
+            If `True`, yield records for matching `~CollectionType.CHAINED`
+            collections.  Default is the opposite of ``flattenChains``: include
+            either CHAINED collections or their children, but not both.
+
+        Yields
+        ------
+        collection : `str`
+            The name of a collection that matches ``expression``.
+        """
+        query = CollectionQuery.fromExpression(expression)
+        for record in query.iter(self._collections, datasetType=datasetType, collectionType=collectionType,
+                                 flattenChains=flattenChains, includeChains=includeChains):
+            yield record.name
+
     def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
         interfaces.
 
-        This is an advanced `SqlRegistry`-only interface; downstream code
-        should prefer `Registry.queryDimensions` and `Registry.queryDatasets`
-        whenever those are sufficient.
+        This is an advanced interface; downstream code should prefer
+        `Registry.queryDimensions` and `Registry.queryDatasets` whenever those
+        are sufficient.
 
         Parameters
         ----------
-        summary: `QuerySummary`
+        summary : `QuerySummary`
             Object describing and categorizing the full set of dimensions that
             will be included in the query.
 
@@ -1127,7 +1252,8 @@ class Registry:
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
-                        datasets: Optional[Mapping[DatasetTypeExpression, CollectionsExpression]] = None,
+                        datasets: Any = None,
+                        collections: Any = None,
                         where: Optional[str] = None,
                         expand: bool = True,
                         **kwds) -> Iterator[DataCoordinate]:
@@ -1142,17 +1268,29 @@ class Registry:
         dataId : `dict` or `DataCoordinate`, optional
             A data ID whose key-value pairs are used as equality constraints
             in the query.
-        datasets : `~collections.abc.Mapping`, optional
-            Datasets whose existence in the registry constrain the set of data
-            IDs returned.  This is a mapping from a dataset type expression
-            (a `str` name, a true `DatasetType` instance, a `Like` pattern
-            for the name, or ``...`` for all DatasetTypes) to a collections
-            expression (a sequence of `str` or `Like` patterns, or `...` for
-            all collections).
+        datasets : `Any`, optional
+            An expression that fully or partially identifies dataset types
+            that should constrain the yielded data IDs.  For example, including
+            "raw" here would constrain the yielded ``instrument``,
+            ``exposure``, ``detector``, and ``physical_filter`` values to only
+            those for which at least one "raw" dataset exists in
+            ``collections``.  Allowed types include `DatasetType`, `str`,
+            `re.Pattern`, and iterables thereof.  Unlike other dataset type
+            expressions, `...` is not permitted - it doesn't make sense to
+            constrain data IDs on the existence of *all* datasets.
+            See :ref:`daf_butler_dataset_type_expressions` for more
+            information.
+        collections: `Any`, optional
+            An expression that fully or partially identifies the collections
+            to search for datasets, such as a `str`, `re.Pattern`, or iterable
+            thereof.  `...` can be used to return all collections.  Must be
+            provided if ``datasets`` is, and is ignored if it is not.  See
+            :ref:`daf_butler_collection_expressions` for more information.
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.
+            key column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
         expand : `bool`, optional
             If `True` (default) yield `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
@@ -1170,22 +1308,26 @@ class Registry:
         """
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwds)
-        standardizedDatasets = NamedKeyDict()
+        standardizedDatasetTypes = []
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
         if datasets is not None:
-            for datasetTypeExpr, collectionsExpr in datasets.items():
-                for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetTypeExpr,
-                                                                              collections=collectionsExpr,
-                                                                              dataId=standardizedDataId):
-                    requestedDimensionNames.update(trueDatasetType.dimensions.names)
-                    standardizedDatasets[trueDatasetType] = collectionsExpr
+            if collections is None:
+                raise TypeError("Cannot pass 'datasets' without 'collections'.")
+            for datasetType in self._datasetStorage.fetchDatasetTypes(datasets):
+                requestedDimensionNames.update(datasetType.dimensions.names)
+                standardizedDatasetTypes.append(datasetType)
+            # Preprocess collections expression in case the original included
+            # single-pass iterators (we'll want to use it multiple times
+            # below).
+            collections = CollectionQuery.fromExpression(collections)
+
         summary = QuerySummary(
             requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
             dataId=standardizedDataId,
             expression=where,
         )
         builder = self.makeQueryBuilder(summary)
-        for datasetType, collections in standardizedDatasets.items():
+        for datasetType in standardizedDatasetTypes:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()
         predicate = query.predicate()
@@ -1197,8 +1339,8 @@ class Registry:
                 else:
                     yield result
 
-    def queryDatasets(self, datasetType: DatasetTypeExpression, *,
-                      collections: CollectionsExpression,
+    def queryDatasets(self, datasetType: Any, *,
+                      collections: Any,
                       dimensions: Optional[Iterable[Union[Dimension, str]]] = None,
                       dataId: Optional[DataId] = None,
                       where: Optional[str] = None,
@@ -1210,16 +1352,17 @@ class Registry:
 
         Parameters
         ----------
-        datasetType : `DatasetType`, `str`, `Like`, or ``...``
-            An expression indicating type(s) of datasets to query for.
-            ``...`` may be used to query for all known DatasetTypes.
-            Multiple explicitly-provided dataset types cannot be queried in a
-            single call to `queryDatasets` even though wildcard expressions
-            can, because the results would be identical to chaining the
-            iterators produced by multiple calls to `queryDatasets`.
-        collections: `~collections.abc.Sequence` of `str` or `Like`, or ``...``
-            An expression indicating the collections to be searched for
-            datasets.  ``...`` may be passed to search all collections.
+        datasetType
+            An expression that fully or partially identifies the dataset types
+            to be queried.  Allowed types include `DatasetType`, `str`,
+            `re.Pattern`, and iterables thereof.  The special value `...` can
+            be used to query all dataset types.  See
+            :ref:`daf_butler_dataset_type_expressions` for more information.
+        collections
+            An expression that fully or partially identifies the collections
+            to search for datasets, such as a `str`, `re.Pattern`, or iterable
+            thereof.  `...` can be used to return all collections.  See
+            :ref:`daf_butler_collection_expressions` for more information.
         dimensions : `~collections.abc.Iterable` of `Dimension` or `str`
             Dimensions to include in the query (in addition to those used
             to identify the queried dataset type(s)), either to constrain
@@ -1232,13 +1375,15 @@ class Registry:
         where : `str`, optional
             A string expression similar to a SQL WHERE clause.  May involve
             any column of a dimension table or (as a shortcut for the primary
-            key column of a dimension table) dimension name.
+            key column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
         deduplicate : `bool`, optional
             If `True` (`False` is default), for each result data ID, only
             yield one `DatasetRef` of each `DatasetType`, from the first
             collection in which a dataset of that dataset type appears
-            (according to the order of ``collections`` passed in).  Cannot be
-            used if any element in ``collections`` is an expression.
+            (according to the order of ``collections`` passed in).  If `True`,
+            ``collections`` must not contain regular expressions and may not
+            be `...`.
         expand : `bool`, optional
             If `True` (default) attach `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
@@ -1259,11 +1404,11 @@ class Registry:
         ------
         TypeError
             Raised when the arguments are incompatible, such as when a
-            collection wildcard is pass when ``deduplicate`` is `True`.
+            collection wildcard is passed when ``deduplicate`` is `True`.
 
         Notes
         -----
-        When multiple dataset types are queried via a wildcard expression, the
+        When multiple dataset types are queried in a single call, the
         results of this operation are equivalent to querying for each dataset
         type separately in turn, and no information about the relationships
         between datasets of different types is included.  In contexts where
@@ -1279,9 +1424,7 @@ class Registry:
         # (it could be an expression that yields multiple DatasetTypes) and
         # recurse.
         if not isinstance(datasetType, DatasetType):
-            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType,
-                                                                          collections=collections,
-                                                                          dataId=standardizedDataId):
+            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType):
                 yield from self.queryDatasets(trueDatasetType, collections=collections,
                                               dimensions=dimensions, dataId=standardizedDataId,
                                               where=where, deduplicate=deduplicate)

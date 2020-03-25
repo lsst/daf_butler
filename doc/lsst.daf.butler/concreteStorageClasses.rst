@@ -21,19 +21,23 @@ The loaded columns are the product of the values for all levels.
 Levels not included in the dict are included in their entirety.
 
 For example, the ``deepCoadd_obj`` dataset is typically defined as a hierarchical table with levels ``dataset``, ``filter``, and ``column``, which take values such as ``("meas", "HSC-R", "base_SdssShape_xx")``.
-Retrieving this dataset via::
+Retrieving this dataset via:
 
-    butler.get(
-        "deepCoadd_obj", ...,
-        parameters={
-            "columns": {"dataset": "meas",
-                        "filter": ["HSC-R", "HSC-I"],
-                        "column": ["base_SdssShape_xx", "base_SdssShape_yy"]}
-        }
-    )
+.. code-block:: python
 
-is equivalent to (but potentially much more efficient than)::
+   butler.get(
+       "deepCoadd_obj", ...,
+       parameters={
+           "columns": {"dataset": "meas",
+                       "filter": ["HSC-R", "HSC-I"],
+                       "column": ["base_SdssShape_xx", "base_SdssShape_yy"]}
+       }
+   )
 
-  full = butler.get("deepCoadd_obj", ...)
-  full.loc[:, ["meas", ["HSC-R", "HSC-I"],
-               ["base_SdssShape_xx", "base_SdssShape_yy"]]]
+is equivalent to (but potentially much more efficient than):
+
+.. code-block:: python
+
+   full = butler.get("deepCoadd_obj", ...)
+   full.loc[:, ["meas", ["HSC-R", "HSC-I"],
+                ["base_SdssShape_xx", "base_SdssShape_yy"]]]

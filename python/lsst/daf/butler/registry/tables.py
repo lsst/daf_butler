@@ -31,6 +31,8 @@ from ..core.dimensions.schema import addDimensionForeignKey
 
 from ..core import ddl
 
+from .interfaces import CollectionManager
+
 
 RegistryTablesTuple = namedtuple(
     "RegistryTablesTuple",
@@ -40,7 +42,6 @@ RegistryTablesTuple = namedtuple(
         "dataset_type",
         "dataset_type_dimensions",
         "dataset_collection",
-        "run",
         "quantum",
         "dataset_consumers",
         "dataset_storage",
@@ -48,14 +49,18 @@ RegistryTablesTuple = namedtuple(
 )
 
 
-def makeRegistryTableSpecs(universe: DimensionUniverse) -> RegistryTablesTuple:
+def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionManager
+                           ) -> RegistryTablesTuple:
     """Construct descriptions of all tables in the Registry, aside from those
     that correspond to `DimensionElement` instances.
 
     Parameters
     ----------
-    universe: `DimensionUniverse`
+    universe : `DimensionUniverse`
         All dimensions known to the `Registry`.
+    collections : `Collection`
+        The `CollectionManager` that will be used for this `Registry`; used to
+        create foreign keys to the run and collection tables.
 
     Returns
     -------
@@ -63,7 +68,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse) -> RegistryTablesTuple:
         A named tuple containing `ddl.TableSpec` instances.
     """
     # The 'dataset' table is special: we need to add foreign key fields for
-    # each dimension in the universe.
+    # each dimension in the universe, as well as a foreign key field for run.
     dataset = ddl.TableSpec(
         fields=[
             ddl.FieldSpec(
@@ -81,15 +86,6 @@ def makeRegistryTableSpecs(universe: DimensionUniverse) -> RegistryTablesTuple:
                 doc=(
                     "The name of the DatasetType associated with this dataset; a "
                     "reference to the dataset_type table."
-                ),
-            ),
-            ddl.FieldSpec(
-                name="run_id",
-                dtype=sqlalchemy.BigInteger,
-                nullable=False,
-                doc=(
-                    "The Id of the run that produced this dataset, providing access to "
-                    "coarse provenance information."
                 ),
             ),
             ddl.FieldSpec(
@@ -116,9 +112,6 @@ def makeRegistryTableSpecs(universe: DimensionUniverse) -> RegistryTablesTuple:
                 target=("dataset_type_name",),
             ),
             ddl.ForeignKeySpec(
-                table="run", source=("run_id",), target=("id",), onDelete="CASCADE"
-            ),
-            ddl.ForeignKeySpec(
                 table="quantum",
                 source=("quantum_id",),
                 target=("id",),
@@ -126,8 +119,85 @@ def makeRegistryTableSpecs(universe: DimensionUniverse) -> RegistryTablesTuple:
             ),
         ],
     )
+    field = collections.addRunForeignKey(dataset, onDelete="CASCADE", nullable=False)
+    dataset.unique.add(("dataset_ref_hash", field.name))
     for dimension in universe.dimensions:
         addDimensionForeignKey(dataset, dimension, primaryKey=False, nullable=True)
+
+    # The dataset_collection table needs a foreign key to collection.
+    dataset_collection = ddl.TableSpec(
+        doc=(
+            "A table that associates Dataset records with Collections, "
+            "which are implemented simply as string tags."
+        ),
+        fields=[
+            ddl.FieldSpec(
+                name="dataset_id",
+                dtype=sqlalchemy.BigInteger,
+                primaryKey=True,
+                nullable=False,
+                doc="Link to a unique record in the dataset table.",
+            ),
+            ddl.FieldSpec(
+                name="dataset_ref_hash",
+                dtype=ddl.Base64Bytes,
+                nbytes=32,
+                nullable=False,
+                doc="Secure hash of the data ID (i.e. dimension link values) and dataset_type_name.",
+            ),
+        ],
+        foreignKeys=[
+            ddl.ForeignKeySpec(
+                table="dataset",
+                source=("dataset_id",),
+                target=("dataset_id",),
+                onDelete="CASCADE",
+            )
+        ],
+    )
+    field = collections.addCollectionForeignKey(dataset_collection, onDelete="CASCADE", nullable=False)
+    dataset_collection.unique.add(("dataset_ref_hash", field.name))
+
+    # The quantum table needs a foreign key to run.
+    quantum = ddl.TableSpec(
+        doc="A table used to capture fine-grained provenance for datasets produced by PipelineTasks.",
+        fields=[
+            ddl.FieldSpec(
+                name="id",
+                dtype=sqlalchemy.BigInteger,
+                primaryKey=True,
+                autoincrement=True,
+                doc="A unique autoincrement integer identifier for this quantum.",
+            ),
+            ddl.FieldSpec(
+                name="task",
+                dtype=sqlalchemy.String,
+                length=256,
+                doc="Fully qualified name of the SuperTask that executed this quantum.",
+            ),
+            ddl.FieldSpec(
+                name="start_time",
+                dtype=sqlalchemy.DateTime,
+                nullable=True,
+                doc="The start time for the quantum.",
+            ),
+            ddl.FieldSpec(
+                name="end_time",
+                dtype=sqlalchemy.DateTime,
+                nullable=True,
+                doc="The end time for the quantum.",
+            ),
+            ddl.FieldSpec(
+                name="host",
+                dtype=sqlalchemy.String,
+                length=64,
+                nullable=True,
+                doc="The system on which the quantum was executed.",
+            ),
+        ],
+    )
+    collections.addRunForeignKey(quantum, onDelete="CASCADE", nullable=False)
+
     # All other table specs are fully static and do not depend on
     # configuration.
     return RegistryTablesTuple(
@@ -224,128 +294,8 @@ def makeRegistryTableSpecs(universe: DimensionUniverse) -> RegistryTablesTuple:
                 )
             ],
         ),
-        dataset_collection=ddl.TableSpec(
-            doc=(
-                "A table that associates Dataset records with Collections, "
-                "which are implemented simply as string tags."
-            ),
-            fields=[
-                ddl.FieldSpec(
-                    name="dataset_id",
-                    dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
-                    nullable=False,
-                    doc="Link to a unique record in the dataset table.",
-                ),
-                ddl.FieldSpec(
-                    name="dataset_ref_hash",
-                    dtype=ddl.Base64Bytes,
-                    nbytes=32,
-                    nullable=False,
-                    doc="Secure hash of the data ID (i.e. dimension link values) and dataset_type_name.",
-                ),
-                ddl.FieldSpec(
-                    name="collection",
-                    dtype=sqlalchemy.String,
-                    length=128,
-                    primaryKey=True,
-                    nullable=False,
-                    doc="Name of a Collection with which this Dataset is associated.",
-                ),
-            ],
-            foreignKeys=[
-                ddl.ForeignKeySpec(
-                    table="dataset",
-                    source=("dataset_id",),
-                    target=("dataset_id",),
-                    onDelete="CASCADE",
-                )
-            ],
-            unique=[("dataset_ref_hash", "collection")],
-        ),
-        run=ddl.TableSpec(
-            doc="A table used to capture coarse provenance for all datasets.",
-            fields=[
-                ddl.FieldSpec(
-                    name="id",
-                    dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
-                    autoincrement=True,
-                    doc="A unique autoincrement integer identifier for this run.",
-                ),
-                ddl.FieldSpec(
-                    name="name",
-                    dtype=sqlalchemy.String,
-                    length=128,
-                    doc="The name of the run.",
-                ),
-                ddl.FieldSpec(
-                    name="start_time",
-                    dtype=sqlalchemy.DateTime,
-                    nullable=True,
-                    doc="The start time for the run.",
-                ),
-                ddl.FieldSpec(
-                    name="end_time",
-                    dtype=sqlalchemy.DateTime,
-                    nullable=True,
-                    doc="The end time for the run.",
-                ),
-                ddl.FieldSpec(
-                    name="host",
-                    dtype=sqlalchemy.String,
-                    length=64,
-                    nullable=True,
-                    doc="The system on which the run was executed.",
-                ),
-            ],
-            unique=[("name",)],
-        ),
-        quantum=ddl.TableSpec(
-            doc="A table used to capture fine-grained provenance for datasets produced by PipelineTasks.",
-            fields=[
-                ddl.FieldSpec(
-                    name="id",
-                    dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
-                    autoincrement=True,
-                    doc="A unique autoincrement integer identifier for this quantum.",
-                ),
-                ddl.FieldSpec(
-                    name="task",
-                    dtype=sqlalchemy.String,
-                    length=256,
-                    doc="Fully qualified name of the SuperTask that executed this quantum.",
-                ),
-                ddl.FieldSpec(
-                    name="run_id",
-                    dtype=sqlalchemy.BigInteger,
-                    doc="Link to the run this quantum is a part of.",
-                ),
-                ddl.FieldSpec(
-                    name="start_time",
-                    dtype=sqlalchemy.DateTime,
-                    nullable=True,
-                    doc="The start time for the quantum.",
-                ),
-                ddl.FieldSpec(
-                    name="end_time",
-                    dtype=sqlalchemy.DateTime,
-                    nullable=True,
-                    doc="The end time for the quantum.",
-                ),
-                ddl.FieldSpec(
-                    name="host",
-                    dtype=sqlalchemy.String,
-                    length=64,
-                    nullable=True,
-                    doc="The system on which the quantum was executed.",
-                ),
-            ],
-            foreignKeys=[
-                ddl.ForeignKeySpec(table="run", source=("run_id",), target=("id",), onDelete="CASCADE")
-            ],
-        ),
+        dataset_collection=dataset_collection,
+        quantum=quantum,
         dataset_consumers=ddl.TableSpec(
             doc="A table relating Quantum records to the Datasets they used as inputs.",
             fields=[

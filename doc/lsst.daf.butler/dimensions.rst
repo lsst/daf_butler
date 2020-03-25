@@ -1,5 +1,7 @@
 .. _lsst.daf.butler-dimensions_overview:
 
+.. py:currentmodule:: lsst.daf.butler
+
 Overview
 --------
 Dimensions are astronomical concepts that are used to label and organize datasets.
@@ -7,7 +9,7 @@ In the `Registry` database, most dimensions are associated with a table that con
 Examples of dimensions include instruments, detectors, visits, and tracts.
 
 Instances of the `Dimension` class represent one of these concepts, not values of the type of one of those concepts (e.g. "detector", not a particular detector).
-In fact, a dimension "value" can mean different things in different contexts: it could mean the value of the primary key or other unique identifier for particular entity (the integer ID or string name for a particular detector), or it could represent a complete record in the table for that dimension.
+In fact, a dimension "value" can mean different things in different contexts: it could mean the value of the primary key or other unique identifier for a particular entity (the integer ID or string name for a particular detector), or it could represent a complete record in the table for that dimension.
 
 The dimensions schema also has some tables that do not map directly to `Dimension` instances.
 Some of these provide extra metadata fields for combinations of dimensions, and are represented by the `DimensionElement` class in Python (this is also the base class of the `Dimension` class, and provides much of its functionality).
@@ -34,7 +36,7 @@ It also categorizes those dimensions into `~DimensionGraph.required` and `~Dimen
 `DimensionGraph` also guarantees a deterministic and topological sort order for its elements.
 
 Because `Dimension` instances have a `~Dimension.name` attribute, we typically
-use `NamedValueSet` and `NamedKeyDict` as containers when immutability is needed or the guarantees of `DimensionGraph`.
+use `~lsst.daf.butler.core.utils.NamedValueSet` and `~lsst.daf.butler.core.utils.NamedKeyDict` as containers when immutability is needed or the guarantees of `DimensionGraph`.
 This allows the string names of dimensions to be used as well in most places where `Dimension` instances are expected.
 
 The complete set of all compatible dimensions is held by a special subclass of `DimensionGraph`, `DimensionUniverse`.
@@ -55,7 +57,7 @@ Most `Butler` and `Registry` APIs that accept data IDs as input accept both dict
 
 The data IDs returned by the `Butler` or `Registry` (and most of those used internally) are usually instances of the `DataCoordinate` class or its subclass, `ExpandedDataCoordinate`.
 `DataCoordinate` itself is complete but minimal.
-It contains only the keys that correspond to its `DimensionGraph`'s `~DimensionGraph.required` subset - that is, the minimal set of keys needed to fully identify all other dimensions in the graph.
+It contains only the keys that correspond to its `DimensionGraph`'s `~DimensionGraph.required` subset --- that is, the minimal set of keys needed to fully identify all other dimensions in the graph.
 Informal dictionary data IDs can be transformed into `DataCoordinate` instances by calling `DataCoordinate.standardize` (which is what most `Butler` and `Registry` APIs that accept data IDs do under the hood).
 
 `ExpandedDataCoordinate` is its maximal counterpart.
@@ -68,7 +70,7 @@ Spatial and Temporal Dimensions
 -------------------------------
 
 Dimensions can be *spatial* or *temporal* (or both, or neither), meaning that each record is associated with a region on the sky or a timespan (respectively).
-The overlaps between regions and timespans define many-to-many relationships between dimensions that -- along with the one-to-many ID-based dependencies -- generally provide a way to fully relate any set of dimensions.
+The overlaps between regions and timespans define many-to-many relationships between dimensions that --- along with the one-to-many ID-based dependencies --- generally provide a way to fully relate any set of dimensions.
 This produces a natural, concise query system; dimension relationships can be used to construct the full ``JOIN`` clause of a SQL ``SELECT`` with no input from the user, allowing them to specify just the ``WHERE`` clause (see `Registry.queryDimensions` and `Registry.queryDatasets`).
 It is also possible to associate a region or timespan with a combination of dimensions (such as the region for a visit and a detector), by defining a `DimensionElement` for that combination.
 
