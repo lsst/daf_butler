@@ -331,6 +331,10 @@ class RegistryTests(ABC):
         self.assertIs(registry.getCollectionType(chain1), CollectionType.CHAINED)
         # Chained collection exists, but has no collections in it.
         self.assertFalse(registry.getCollectionChain(chain1))
+        # If we query for all collections, we should get the chained collection
+        # only if we don't ask to flatten it (i.e. yield only its children).
+        self.assertEqual(set(registry.queryCollections(flattenChains=False)), {tag1, run1, run2, chain1})
+        self.assertEqual(set(registry.queryCollections(flattenChains=True)), {tag1, run1, run2})
         # Attempt to set its child collections to something circular; that
         # should fail.
         with self.assertRaises(ValueError):
