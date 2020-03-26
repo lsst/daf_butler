@@ -21,7 +21,7 @@
 
 __all__ = ("Quantum",)
 
-from datetime import datetime
+import astropy.time
 
 from lsst.utils import doImport
 
@@ -65,9 +65,9 @@ class Quantum:
     outputs : `~collections.abc.Mapping`, optional
         Outputs from executing this quantum of work, organized as a mapping
         from `DatasetType` to a list of `DatasetRef`.
-    startTime : `datetime`
+    startTime : `astropy.time.Time`
         The start time for the quantum.
-    endTime : `datetime`
+    endTime : `astropy.time.Time`
         The end time for the quantum.
     host : `str`
         The system on this quantum was executed.
@@ -225,14 +225,16 @@ class Quantum:
         return self._id
 
     @property
-    def startTime(self) -> datetime:
-        """Begin timestamp for the execution of this quantum (`datetime`).
+    def startTime(self) -> astropy.time.Time:
+        """Begin timestamp for the execution of this quantum
+        (`astropy.time.Time`).
         """
         return self._startTime
 
     @property
-    def endTime(self) -> datetime:
-        """End timestamp for the execution of this quantum (`datetime`).
+    def endTime(self) -> astropy.time.Time:
+        """End timestamp for the execution of this quantum
+        (`astropy.time.Time`).
         """
         return self._endTime
 

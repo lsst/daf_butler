@@ -1,3 +1,4 @@
+setupRequired(astropy)
 setupRequired(sphgeom)
 setupRequired(sqlalchemy)
 setupRequired(numpy)

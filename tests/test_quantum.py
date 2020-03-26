@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import unittest
-from datetime import datetime
+import astropy.time
 
 from lsst.daf.butler import Quantum, DimensionUniverse, StorageClass, DatasetType, DatasetRef
 from lsst.daf.butler.core.utils import NamedKeyDict
@@ -40,8 +40,8 @@ class QuantumTestCase(unittest.TestCase):
         run = None  # TODO add Run
         taskName = "some.task.object"  # can't use a real PipelineTask due to inverted package dependency
         # Base class arguments
-        startTime = datetime(2018, 1, 1)
-        endTime = datetime(2018, 1, 2)
+        startTime = astropy.time.Time("2018-01-01", format="iso", scale="utc")
+        endTime = astropy.time.Time("2018-01-02", format="iso", scale="utc")
         host = "localhost"
         quantum = Quantum(taskName=taskName, run=run, startTime=startTime, endTime=endTime, host=host)
         self.assertEqual(quantum.taskName, taskName)

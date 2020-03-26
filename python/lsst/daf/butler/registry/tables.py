@@ -177,13 +177,13 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
             ),
             ddl.FieldSpec(
                 name="start_time",
-                dtype=sqlalchemy.DateTime,
+                dtype=ddl.AstropyTimeNsecTai,
                 nullable=True,
                 doc="The start time for the quantum.",
             ),
             ddl.FieldSpec(
                 name="end_time",
-                dtype=sqlalchemy.DateTime,
+                dtype=ddl.AstropyTimeNsecTai,
                 nullable=True,
                 doc="The end time for the quantum.",
             ),

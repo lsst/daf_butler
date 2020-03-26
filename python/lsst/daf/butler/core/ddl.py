@@ -31,19 +31,39 @@ databases, a "schema" is also another term for a namespace.
 """
 from __future__ import annotations
 
-__all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Region")
+__all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Region",
+           "AstropyTimeNsecTai")
 
 from base64 import b64encode, b64decode
+import logging
 from math import ceil
 from dataclasses import dataclass
 from typing import Optional, Tuple, Sequence, Set
 
 import sqlalchemy
+import astropy.time
 
 from lsst.sphgeom import ConvexPolygon
 from .config import Config
 from .exceptions import ValidationError
 from .utils import iterable, stripIfNotNone, NamedValueSet
+
+
+_LOG = logging.getLogger(__name__)
+
+# These constants can be used by client code
+EPOCH = astropy.time.Time("1970-01-01 00:00:00", format="iso", scale="tai")
+"""Epoch for calculating time delta, this is the minimum time that can be
+stored in the database.
+"""
+
+MAX_TIME = astropy.time.Time("2100-01-01 00:00:00", format="iso", scale="tai")
+"""Maximum time value that we can store. Assuming 64-bit integer field we
+can actually store higher values but we intentionally limit it to arbitrary
+but reasonably high value. Note that this value will be stored in registry
+database for eternity, so it should not be changed without proper
+consideration.
+"""
 
 
 class SchemaValidationError(ValidationError):
@@ -125,6 +145,42 @@ class Base64Region(Base64Bytes):
         return ConvexPolygon.decode(super().process_result_value(value, dialect))
 
 
+class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
+    """A SQLAlchemy custom type that maps Python `astropy.time.Time` to a
+    number of nanoseconds sunce Unix epoch in TAI scale.
+    """
+
+    impl = sqlalchemy.BigInteger
+
+    def process_bind_param(self, value, dialect):
+        # value is astropy.time.Time or None
+        if value is None:
+            return None
+        if not isinstance(value, astropy.time.Time):
+            raise TypeError(f"Unsupported type: {type(value)}, expected astropy.time.Time")
+        # sometimes comparison produces warnings if input value is in UTC
+        # scale, transform it to TAI before doing anyhting
+        value = value.tai
+        # anything before epoch or after MAX_TIME is truncated
+        if value < EPOCH:
+            _LOG.warning("%s is earlier than epoch time %s, epoch time will be used instead",
+                         value, EPOCH)
+            value = EPOCH
+        elif value > MAX_TIME:
+            _LOG.warning("%s is later than max. time %s, max. time time will be used instead",
+                         value, MAX_TIME)
+            value = MAX_TIME
+        value = round((value - EPOCH).to_value("sec") * 1e9)
+        return int(value)
+
+    def process_result_value(self, value, dialect):
+        # value is nanoseconds since epoch, or None
+        if value is None:
+            return None
+        delta = astropy.time.TimeDelta(value * 1e-9, format="sec")
+        return EPOCH + delta
+
+
 VALID_CONFIG_COLUMN_TYPES = {
     "string": sqlalchemy.String,
     "int": sqlalchemy.Integer,
@@ -132,7 +188,7 @@ VALID_CONFIG_COLUMN_TYPES = {
     "region": Base64Region,
     "bool": sqlalchemy.Boolean,
     "blob": sqlalchemy.LargeBinary,
-    "datetime": sqlalchemy.DateTime,
+    "datetime": AstropyTimeNsecTai,
     "hash": Base64Bytes
 }
 
