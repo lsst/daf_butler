@@ -35,10 +35,10 @@ __all__ = ("TableSpec", "FieldSpec", "ForeignKeySpec", "Base64Bytes", "Base64Reg
            "AstropyTimeNsecTai")
 
 from base64 import b64encode, b64decode
+import logging
 from math import ceil
 from dataclasses import dataclass
 from typing import Optional, Tuple, Sequence, Set
-import warnings
 
 import sqlalchemy
 import astropy.time
@@ -47,6 +47,9 @@ from lsst.sphgeom import ConvexPolygon
 from .config import Config
 from .exceptions import ValidationError
 from .utils import iterable, stripIfNotNone, NamedValueSet
+
+
+_LOG = logging.getLogger(__name__)
 
 # These constants can be used by client code
 EPOCH = astropy.time.Time("1970-01-01 00:00:00", format="iso", scale="tai")
@@ -151,14 +154,19 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         # value is astropy.time.Time or None
         if value is None:
             return None
-        # anyhting before epoch or after MAX_TIME is truncated
+        if not isinstance(value, astropy.time.Time):
+            raise TypeError(f"Unsupported type: {type(value)}, expected astropy.time.Time")
+        # sometimes comparison produces warnings if input value is in UTC
+        # scale, transform it to TAI before doing anyhting
+        value = value.tai
+        # anything before epoch or after MAX_TIME is truncated
         if value < EPOCH:
-            warnings.warn(f"{value} is earlier than epoch time {EPOCH}, "
-                          f"epoch time will be used instead")
+            _LOG.warning("%s is earlier than epoch time %s, epoch time will be used instead",
+                         value, EPOCH)
             value = EPOCH
         elif value > MAX_TIME:
-            warnings.warn(f"{value} is later than max. time {MAX_TIME}, "
-                          f"max. time time will be used instead")
+            _LOG.warning("%s is later than max. time %s, max. time time will be used instead",
+                         value, MAX_TIME)
             value = MAX_TIME
         value = round((value - EPOCH).to_value("sec") * 1e9)
         return int(value)
