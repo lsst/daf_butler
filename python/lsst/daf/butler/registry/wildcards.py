@@ -421,6 +421,8 @@ def _yieldCollectionRecords(
         The given dataset type restriction; yielded only if
         ``withRestrictions`` is `True`.
     """
+    if done is None:
+        done = set()
     includeChains = includeChains if includeChains is not None else not flattenChains
     if collectionType is None or record.type is collectionType:
         done.add(record.name)
@@ -722,7 +724,17 @@ class CollectionQuery:
             their children, but not both.
         """
         if self._search is ...:
-            yield from manager
+            for record in manager:
+                yield from _yieldCollectionRecords(
+                    manager,
+                    record,
+                    DatasetTypeRestriction.any,
+                    datasetType=datasetType,
+                    collectionType=collectionType,
+                    withRestrictions=withRestrictions,
+                    flattenChains=flattenChains,
+                    includeChains=includeChains,
+                )
         else:
             done = set()
             yield from self._search.iter(
