@@ -57,10 +57,12 @@ EPOCH = astropy.time.Time("1970-01-01 00:00:00", format="iso", scale="tai")
 stored in the database.
 """
 
-MAX_TIME = astropy.time.Time("2038-01-19 03:14:07", format="iso", scale="tai")
+MAX_TIME = astropy.time.Time("2100-01-01 00:00:00", format="iso", scale="tai")
 """Maximum time value that we can store. Assuming 64-bit integer field we
-can actuially store higher values but we intentionally limit it to 2**31-1
-seconds since epoch.
+can actually store higher values but we intentionally limit it to arbitrary
+but reasonably high value. Note that this value will be stored in registry
+database for eternity, so it should not be changed without proper
+consideration.
 """
 
 
