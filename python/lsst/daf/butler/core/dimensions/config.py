@@ -122,8 +122,8 @@ def processElementsConfig(config: Config) -> Dict[str, DimensionElement]:
         kwargs["directDependencyNames"] = \
             kwargs["impliedDependencyNames"].union(subconfig.get("requires", ()))
         kwargs["metadata"] = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
-        kwargs["spatial"] = subconfig.get("spatial", False)
-        kwargs["temporal"] = subconfig.get("temporal", False)
+        kwargs["spatialName"] = subconfig.get("spatial")
+        kwargs["temporalName"] = subconfig.get("temporal")
         kwargs["cached"] = subconfig.get("cached", False)
         kwargs["viewOf"] = subconfig.get("view_of", None)
         keys = subconfig.get("keys")

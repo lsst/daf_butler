@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ["DimensionElement", "Dimension", "SkyPixDimension"]
 
-from typing import Optional, Iterable, AbstractSet, TYPE_CHECKING
+from typing import Dict, Optional, Iterable, AbstractSet, TYPE_CHECKING
 
 from sqlalchemy import Integer
 
@@ -61,11 +61,16 @@ class DimensionElement:
     impliedDependencyNames : iterable of `str`
         The names of all dimensions that are identified by records of this
         element, but are not needed to identify it.
-    spatial : `bool`
-        Whether records of this element are associated with a region on the
-        sky.
-    temporal : `bool`
-        Whether records of this element are associated with a timespan.
+    spatial : `str`, optional
+        The name of a `DimensionElement` whose spatial regions this element's
+        region aggregates, or the name of this element if it has a region
+        that is not an aggregate.  `None` (default) if this element is not
+        associated with region.
+    temporal : `str`, optional
+        The name of a `DimensionElement` whose timespans this element's
+        timespan aggregates, or the name of this element if it has a timespan
+        that is not an aggregate.  `None` (default) if this element is not
+        associated with timespan.
     metadata : iterable of `FieldSpec`
         Additional metadata fields included in this element's table.
     cached : `bool`
@@ -90,25 +95,34 @@ class DimensionElement:
     def __init__(self, name: str, *,
                  directDependencyNames: Iterable[str] = (),
                  impliedDependencyNames: Iterable[str] = (),
-                 spatial: bool = False,
-                 temporal: bool = False,
+                 spatialName: Optional[str] = None,
+                 temporalName: Optional[str] = None,
                  metadata: Iterable[ddl.FieldSpec] = (),
                  cached: bool = False,
                  viewOf: Optional[str] = None):
         self.name = name
         self._directDependencyNames = frozenset(directDependencyNames)
         self._impliedDependencyNames = frozenset(impliedDependencyNames)
-        self.spatial = spatial
-        self.temporal = temporal
+        self._spatialName = spatialName
+        self._temporalName = temporalName
         self.metadata = NamedValueSet(metadata)
         self.metadata.freeze()
         self.cached = cached
         self.viewOf = viewOf
 
-    def _finish(self, universe: DimensionUniverse):
+    def _finish(self, universe: DimensionUniverse, elementsToDo: Dict[str, DimensionElement]):
         """Finish construction of the element and add it to the given universe.
 
         For internal use by `DimensionUniverse` only.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            The under-construction dimension universe.  It can be relied upon
+            to contain all dimensions that this element requires or implies.
+        elementsToDo : `dict` [ `str`, `DimensionElement` ]
+            A dictionary containing all dimension elements that have not yet
+            been added to ``universe``, keyed by name.
         """
         # Attach set self.universe and add self to universe attributes;
         # let subclasses override which attributes by calling a separate
@@ -123,6 +137,21 @@ class DimensionElement:
         # self._impliedDependencyNames.
         self.implied = NamedValueSet(universe.sorted(self._impliedDependencyNames))
         self.implied.freeze()
+        # Set self.spatial and self.temporal to DimensionElement instances from
+        # the private *Name versions of those.
+        for s in ("spatial", "temporal"):
+            targetName = getattr(self, f"_{s}Name", None)
+            if targetName is None:
+                target = None
+            elif targetName == self.name:
+                target = self
+            else:
+                try:
+                    target = elementsToDo[targetName]
+                except KeyError as err:
+                    raise LookupError(f"Could not find {s} provider for {self.name}; either it is missing "
+                                      f"or the required dependency relationship is inverted.") from err
+            setattr(self, s, target)
         # Attach a DimensionGraph that provides the public API for getting
         # at requirements.  Again delegate to subclasses.
         self._attachGraph()
@@ -241,13 +270,16 @@ class DimensionElement:
     Unlike ``self.graph.implied``, this set is not expanded recursively.
     """
 
-    spatial: bool
-    """Whether records of this element are associated with a region on the sky
-    (`bool`).
+    spatial: Optional[DimensionElement]
+    """A `DimensionElement` whose spatial regions this element's region
+    aggregates, or ``self`` if it has a region that is not an aggregate
+    (`DimensionElement` or `None`).
     """
 
-    temporal: bool
-    """Whether records of this element are associated with a timespan (`bool`).
+    temporal: Optional[DimensionElement]
+    """A `DimensionElement` whose timespans this element's timespan
+    aggregates, or ``self`` if it has a timespan that is not an aggregate
+    (`DimensionElement` or `None`).
     """
 
     metadata: NamedValueSet[ddl.FieldSpec]
@@ -365,7 +397,7 @@ class SkyPixDimension(Dimension):
 
     def __init__(self, name: str, pixelization: Pixelization):
         uniqueKeys = [ddl.FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
-        super().__init__(name, uniqueKeys=uniqueKeys, spatial=True)
+        super().__init__(name, uniqueKeys=uniqueKeys, spatialName=name)
         self.pixelization = pixelization
 
     def hasTable(self) -> bool:

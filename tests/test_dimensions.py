@@ -115,12 +115,7 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.implied.names, ("physical_filter", "abstract_filter", "visit"))
         self.assertCountEqual(graph.elements.names - graph.dimensions.names, ("visit_detector_region",))
         self.assertCountEqual(graph.spatial.names, ("visit_detector_region",))
-        self.assertCountEqual(graph.getSpatial(independent=False).names,
-                              ("visit", "visit_detector_region",))
-        self.assertCountEqual(graph.getSpatial(prefer=("visit",)).names, ("visit",))
-        self.assertCountEqual(graph.getTemporal(independent=False).names, ("visit", "exposure"))
         self.assertCountEqual(graph.temporal.names, ("exposure",))
-        self.assertCountEqual(graph.getTemporal(prefer=("visit",)).names, ("visit",))
 
     def testSkyMapDimensions(self):
         graph = DimensionGraph(self.universe, names=("patch",))
@@ -129,8 +124,6 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.implied.names, ())
         self.assertCountEqual(graph.elements.names, graph.dimensions.names)
         self.assertCountEqual(graph.spatial.names, ("patch",))
-        self.assertCountEqual(graph.getSpatial(independent=False).names, ("patch", "tract"))
-        self.assertCountEqual(graph.getSpatial(prefer=("tract",)).names, ("tract",))
 
     def testSubsetCalculation(self):
         """Test that independent spatial and temporal options are computed
@@ -140,16 +133,8 @@ class DimensionTestCase(unittest.TestCase):
                                                      "exposure", "calibration_label"))
         self.assertCountEqual(graph.spatial.names,
                               ("visit_detector_region", "patch", "htm7"))
-        self.assertCountEqual(graph.getSpatial(independent=False).names,
-                              ("visit_detector_region", "patch", "htm7", "visit", "tract"))
-        self.assertCountEqual(graph.getSpatial(prefer=["tract"]).names,
-                              ("visit_detector_region", "tract", "htm7"))
         self.assertCountEqual(graph.temporal.names,
                               ("exposure", "calibration_label"))
-        self.assertCountEqual(graph.getTemporal(independent=False).names,
-                              ("visit", "exposure", "calibration_label"))
-        self.assertCountEqual(graph.getTemporal(prefer=["visit"]).names,
-                              ("visit", "calibration_label"))
 
     def testSchemaGeneration(self):
         tableSpecs = NamedKeyDict({})

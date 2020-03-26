@@ -64,9 +64,9 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             raise NotImplementedError("Cannot use query to back dimension with implied dependencies.")
         if element.alternateKeys:
             raise NotImplementedError("Cannot use query to back dimension with alternate unique keys.")
-        if element.spatial:
+        if element.spatial is not None:
             raise NotImplementedError("Cannot use query to back spatial dimension.")
-        if element.temporal:
+        if element.temporal is not None:
             raise NotImplementedError("Cannot use query to back temporal dimension.")
 
     @classmethod

@@ -110,11 +110,11 @@ class DimensionRecordStorage(ABC):
             return CachingDimensionRecordStorage
         elif element.hasTable():
             if element.viewOf is not None:
-                if element.spatial:
+                if element.spatial is not None:
                     raise NotImplementedError("Spatial view dimension storage is not supported.")
                 from ..dimensions.query import QueryDimensionRecordStorage
                 return QueryDimensionRecordStorage
-            elif element.spatial:
+            elif element.spatial is not None:
                 from ..dimensions.spatial import SpatialDimensionRecordStorage
                 return SpatialDimensionRecordStorage
             else:

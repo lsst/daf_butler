@@ -141,8 +141,8 @@ dimensions:
         length: 64
       requires: [instrument]
       implies: [physical_filter]
-      spatial: true
-      temporal: true
+      spatial: visit_detector_region
+      temporal: exposure
       metadata:
       -
         name: exposure_time
@@ -183,7 +183,7 @@ dimensions:
         length: 64
       requires: [instrument]
       implies: [visit, physical_filter]
-      temporal: true
+      temporal: exposure
       metadata:
       -
         name: exposure_time
@@ -243,7 +243,7 @@ dimensions:
         name: id
         type: int
       requires: [skymap]
-      spatial: true
+      spatial: patch
 
     patch:
       doc: >
@@ -253,7 +253,7 @@ dimensions:
         name: id
         type: int
       requires: [skymap, tract]
-      spatial: true
+      spatial: patch
       metadata:
       -
         name: cell_x
@@ -278,14 +278,14 @@ dimensions:
         type: string
         length: 128
       requires: [instrument]
-      temporal: true
+      temporal: calibration_label
 
     visit_detector_region:
       doc: >
         A many-to-many join table that provides region information for
         visit-detector combinations.
       requires: [visit, detector]
-      spatial: true
+      spatial: visit_detector_region
 
   packers:
     visit_detector:

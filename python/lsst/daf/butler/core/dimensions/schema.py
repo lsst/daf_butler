@@ -160,9 +160,9 @@ def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
     # Add metadata fields, temporal timespans, and spatial regions.
     for fieldSpec in element.metadata:
         tableSpec.fields.add(fieldSpec)
-    if element.spatial:
+    if element.spatial is not None:
         tableSpec.fields.add(REGION_FIELD_SPEC)
-    if element.temporal:
+    if element.temporal is not None:
         for fieldSpec in TIMESPAN_FIELD_SPECS:
             tableSpec.fields.add(fieldSpec)
     return tableSpec

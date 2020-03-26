@@ -86,7 +86,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
                  commonSkyPixOverlapTable: sqlalchemy.schema.Table):
         super().__init__(db, element, table=table)
         self._commonSkyPixOverlapTable = commonSkyPixOverlapTable
-        assert element.spatial
+        assert element.spatial is not None
 
     @classmethod
     def initialize(cls, db: Database, element: DimensionElement, *,

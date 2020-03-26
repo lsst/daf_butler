@@ -128,26 +128,17 @@ class QuerySummary:
         if not necessarily provided (in ``dataId``) now.  If provided, must be
         a superset of ``dataId.graph``; if not provided, will be set to
         ``dataId.graph``.
-    entire : `NamedValueSet` of `DimensionElement`, optional
-        Dimension elements that should be fully included in any spatial or
-        temporal join, including child elements that would not otherwise be
-        included in that join.  For example, passing "visit" here in a query
-        constrained to a single tract would include all visit+detector
-        combinations in any visit that overlaps that tract, not just the
-        visit+detector combinations that directly overlap the tract.
     """
     def __init__(self, requested: DimensionGraph, *,
                  dataId: Optional[ExpandedDataCoordinate] = None,
                  expression: Optional[Union[str, QueryWhereExpression]] = None,
-                 given: Optional[DimensionGraph] = None,
-                 entire: Optional[NamedValueSet[DimensionElement]] = None):
+                 given: Optional[DimensionGraph] = None):
         self.requested = requested
         self.dataId = dataId if dataId is not None else ExpandedDataCoordinate(requested.universe.empty, ())
         self.given = given if given is not None else self.dataId.graph
         assert self.given.issuperset(self.dataId.graph)
         self.expression = (expression if isinstance(expression, QueryWhereExpression)
                            else QueryWhereExpression(requested.universe, expression))
-        self.entire = entire if entire is not None else NamedValueSet()
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -167,17 +158,6 @@ class QuerySummary:
     given: DimensionGraph
     """All dimensions whose primary keys are fully identified before query
     execution (`DimensionGraph`).
-    """
-
-    entire: NamedValueSet[DimensionElement]
-    """Dimension elements that should be fully included when they overlap other
-    elements spatially or temporally (`NamedValueSet` of `DimensionElement`).
-
-    For example, including the visit dimension here in a query that also
-    requests the detector dimension and has a user expression on tract will
-    result in all visit+detector combinations being returned for any visits
-    that overlap the tract, rather than just the visit+detector combinations
-    that directly overlap the tract.
     """
 
     def whenIsDimensionGiven(self, dimension: Dimension) -> GivenTime:
@@ -245,7 +225,7 @@ class QuerySummary:
         # - it's the most precise spatial element for its system in the
         #   requested dimensions (i.e. in `self.requested.spatial`);
         # - it isn't also given at query construction or execution time.
-        result = self.mustHaveKeysJoined.getSpatial(prefer=self.entire) - self.given.elements
+        result = self.mustHaveKeysJoined.spatial - self.given.elements
         if len(result) == 1:
             # There's no spatial join, but there might be a WHERE filter based
             # on a given region.
@@ -276,8 +256,8 @@ class QuerySummary:
         # - it's the most precise temporal element for its system in the
         #   requested dimensions (i.e. in `self.requested.temporal`);
         # - it isn't also given at query construction or execution time.
-        result = self.mustHaveKeysJoined.getTemporal(prefer=self.entire) - self.given.elements
-        if len(result) == 1 and not self.given.getTemporal():
+        result = self.mustHaveKeysJoined.temporal - self.given.elements
+        if len(result) == 1 and not self.given.temporal:
             # No temporal join or filter.  Even if this element might be
             # associated with temporal information, we don't need it for this
             # query.
