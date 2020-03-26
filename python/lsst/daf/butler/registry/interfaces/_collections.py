@@ -66,6 +66,7 @@ class CollectionRecord(ABC):
     def __init__(self, name: str, type: CollectionType):
         self.name = name
         self.type = type
+        assert isinstance(self.type, CollectionType)
 
     @property
     @abstractmethod
