@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ["DimensionGraph"]
 
-from typing import Optional, Iterable, Iterator, KeysView, Union, Any, TYPE_CHECKING
+from typing import Optional, Iterable, Iterator, KeysView, Union, Any, Tuple, TYPE_CHECKING
 
 from ..utils import NamedValueSet, NamedKeyDict, immutable
 
@@ -191,28 +191,6 @@ class DimensionGraph:
         self._requiredIndices = NamedKeyDict({dimension: i for i, dimension in enumerate(self.required)})
         self._dimensionIndices = NamedKeyDict({dimension: i for i, dimension in enumerate(self.dimensions)})
         self._elementIndices = NamedKeyDict({element: i for i, element in enumerate(self.elements)})
-
-        # Compute an element traversal order that allows element records to be
-        # found given their primary keys, starting from only the primary keys
-        # of required dimensions.  Unlike the table definition/topological
-        # order (which is what DimensionUniverse.sorted gives you), when
-        # dimension A implies dimension B, dimension A appears first.
-        # This is really for DimensionDatabase/ExpandedDataCoordinate, but
-        # is stored here so we don't have to recompute it for every coordinate.
-        todo = set(self.elements)
-        self._primaryKeyTraversalOrder = []
-
-        def addToPrimaryKeyTraversalOrder(element):
-            if element in todo:
-                self._primaryKeyTraversalOrder.append(element)
-                todo.remove(element)
-                for other in element.implied:
-                    addToPrimaryKeyTraversalOrder(other)
-
-        for dimension in self.required:
-            addToPrimaryKeyTraversalOrder(dimension)
-
-        self._primaryKeyTraversalOrder.extend(todo)
 
     def __getnewargs__(self) -> tuple:
         return (self.universe, None, tuple(self.dimensions.names), False)
@@ -414,6 +392,42 @@ class DimensionGraph:
         else:
             return _filterDependentElements(self._allTemporal,
                                             prefer=NamedValueSet(self.elements[p] for p in prefer))
+
+    @property
+    def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement]:
+        """Return a tuple of all elements in an order allows records to be
+        found given their primary keys, starting from only the primary keys of
+        required dimensions (`tuple` [ `DimensionRecord` ]).
+
+        Unlike the table definition/topological order (which is what
+        DimensionUniverse.sorted gives you), when dimension A implies
+        dimension B, dimension A appears first.
+        """
+        order = getattr(self, "_primaryKeyTraversalOrder", None)
+        if order is None:
+            done = set()
+            order = []
+
+            def addToOrder(element) -> bool:
+                if element.name in done:
+                    return
+                predecessors = set(element.graph.required.names)
+                predecessors.discard(element.name)
+                if not done.issuperset(predecessors):
+                    return
+                order.append(element)
+                done.add(element)
+                for other in element.implied:
+                    addToOrder(other)
+
+            while not done.issuperset(self.required):
+                for dimension in self.required:
+                    addToOrder(dimension)
+
+            order.extend(element for element in self.elements if element.name not in done)
+            order = tuple(order)
+            self._primaryKeyTraversalOrder = order
+        return order
 
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.

@@ -24,7 +24,7 @@ import copy
 import pickle
 import itertools
 
-from lsst.daf.butler.core.utils import NamedKeyDict
+from lsst.daf.butler.core.utils import NamedKeyDict, NamedValueSet
 from lsst.daf.butler.core.dimensions import DimensionUniverse, DimensionGraph, Dimension
 from lsst.daf.butler.core.dimensions.schema import makeElementTableSpec
 
@@ -63,6 +63,17 @@ class DimensionTestCase(unittest.TestCase):
                               [element for element in graph.elements
                                if isinstance(element, Dimension)])
         self.assertCountEqual(graph.dimensions, itertools.chain(graph.required, graph.implied))
+        # Check primary key traversal order: each element should follow any it
+        # requires, and element that is implied by any other in the graph
+        # follow at least one of those.
+        seen = NamedValueSet()
+        for element in graph.primaryKeyTraversalOrder:
+            with self.subTest(required=graph.required, implied=graph.implied, element=element):
+                seen.add(element)
+                self.assertLessEqual(element.graph.required, seen)
+                if element in graph.implied:
+                    self.assertTrue(any(element in s.implied for s in seen))
+        self.assertCountEqual(seen, graph.elements)
 
     def testConfigRead(self):
         self.assertEqual(self.universe.dimensions.names,
