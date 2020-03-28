@@ -76,10 +76,9 @@ dimensions:
         refraction.
       keys:
       -
-        name: name
-        type: string
-        length: 18
-      implies:
+        name: id
+        type: int
+      requires:
       - abstract_filter
       cached: true
 

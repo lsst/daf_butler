@@ -1124,7 +1124,7 @@ class Registry:
         else:
             records = dict(records) if records is not None else {}
         keys = dict(standardized)
-        for element in standardized.graph._primaryKeyTraversalOrder:
+        for element in standardized.graph.primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
                 storage = self._dimensions[element]
