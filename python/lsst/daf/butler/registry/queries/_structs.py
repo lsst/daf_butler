@@ -22,11 +22,10 @@ from __future__ import annotations
 
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
-import enum
 from dataclasses import dataclass
 from typing import Optional, Tuple, List, Set, Union
 
-from sqlalchemy.sql import ColumnElement, bindparam
+from sqlalchemy.sql import ColumnElement
 
 from ...core import (
     DatasetType,
@@ -40,26 +39,6 @@ from ...core import (
 )
 from ...core.utils import NamedValueSet, NamedKeyDict
 from .exprParser import Node, ParserYacc
-
-
-class GivenTime(enum.Enum):
-    """Enumeration specifying when (and if) a data ID value is provided as
-    a constraint on a query.
-    """
-
-    NOT_GIVEN = 0
-    """This value is never provided as a constraint on the query.
-    """
-
-    AT_CONSTRUCTION = 1
-    """This value is provided at query construction, can hence be obtained from
-    `QuerySummary.dataId`.
-    """
-
-    AT_EXECUTION = 2
-    """This value is provided only at query execution, and must be included in
-    the data ID passed to `Query.execute` or `Query.bind`.
-    """
 
 
 @dataclass
@@ -123,20 +102,12 @@ class QuerySummary:
         not provided, will be set to an empty data ID.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
-    given : `DimensionGraph`, optional
-        Dimensions that will be fully identified before the query is executed,
-        if not necessarily provided (in ``dataId``) now.  If provided, must be
-        a superset of ``dataId.graph``; if not provided, will be set to
-        ``dataId.graph``.
     """
     def __init__(self, requested: DimensionGraph, *,
                  dataId: Optional[ExpandedDataCoordinate] = None,
-                 expression: Optional[Union[str, QueryWhereExpression]] = None,
-                 given: Optional[DimensionGraph] = None):
+                 expression: Optional[Union[str, QueryWhereExpression]] = None):
         self.requested = requested
         self.dataId = dataId if dataId is not None else ExpandedDataCoordinate(requested.universe.empty, ())
-        self.given = given if given is not None else self.dataId.graph
-        assert self.given.issuperset(self.dataId.graph)
         self.expression = (expression if isinstance(expression, QueryWhereExpression)
                            else QueryWhereExpression(requested.universe, expression))
 
@@ -155,61 +126,6 @@ class QuerySummary:
     (`QueryWhereExpression`).
     """
 
-    given: DimensionGraph
-    """All dimensions whose primary keys are fully identified before query
-    execution (`DimensionGraph`).
-    """
-
-    def whenIsDimensionGiven(self, dimension: Dimension) -> GivenTime:
-        """Return an enumeration value indicating when the given dimension
-        is identified in the WHERE clause.
-
-        Returns
-        -------
-        when : `GivenTime`
-            Enumeration indicating when the dimension is identified.
-        """
-        if dimension in self.dataId.graph:
-            return GivenTime.AT_CONSTRUCTION
-        elif dimension in self.given:
-            return GivenTime.AT_EXECUTION
-        else:
-            return GivenTime.NOT_GIVEN
-
-    def whenIsRegionGiven(self) -> GivenTime:
-        """Return an enumeration value indicating when a region is provided
-        in the WHERE clause.
-
-        Returns
-        -------
-        when : `GivenTime`
-            Enumeration indicating when a region is provided.
-        """
-        if self.given.spatial:
-            if self.given.spatial == self.dataId.graph.spatial:
-                return GivenTime.AT_CONSTRUCTION
-            else:
-                return GivenTime.AT_EXECUTION
-        else:
-            return GivenTime.NOT_GIVEN
-
-    def whenIsTimespanGiven(self) -> GivenTime:
-        """Return an enumeration value indicating when a timespan is provided
-        in the WHERE clause.
-
-        Returns
-        -------
-        when : `GivenTime`
-            Enumeration indicating when a timespan is provided.
-        """
-        if self.given.temporal:
-            if self.given.temporal == self.dataId.graph.temporal:
-                return GivenTime.AT_CONSTRUCTION
-            else:
-                return GivenTime.AT_EXECUTION
-        else:
-            return GivenTime.NOT_GIVEN
-
     @property
     def universe(self) -> DimensionUniverse:
         """All known dimensions (`DimensionUniverse`).
@@ -224,12 +140,12 @@ class QuerySummary:
         # An element may participate spatially in the query if:
         # - it's the most precise spatial element for its system in the
         #   requested dimensions (i.e. in `self.requested.spatial`);
-        # - it isn't also given at query construction or execution time.
-        result = self.mustHaveKeysJoined.spatial - self.given.elements
+        # - it isn't also given at query construction time.
+        result = self.mustHaveKeysJoined.spatial - self.dataId.graph.elements
         if len(result) == 1:
             # There's no spatial join, but there might be a WHERE filter based
             # on a given region.
-            if self.given.spatial:
+            if self.dataId.graph.spatial:
                 # We can only perform those filters against SkyPix dimensions,
                 # so if what we have isn't one, add the common SkyPix dimension
                 # to the query; the element we have will be joined to that.
@@ -255,9 +171,9 @@ class QuerySummary:
         # An element may participate temporally in the query if:
         # - it's the most precise temporal element for its system in the
         #   requested dimensions (i.e. in `self.requested.temporal`);
-        # - it isn't also given at query construction or execution time.
-        result = self.mustHaveKeysJoined.temporal - self.given.elements
-        if len(result) == 1 and not self.given.temporal:
+        # - it isn't also given at query construction time.
+        result = self.mustHaveKeysJoined.temporal - self.dataId.graph.elements
+        if len(result) == 1 and not self.dataId.graph.temporal:
             # No temporal join or filter.  Even if this element might be
             # associated with temporal information, we don't need it for this
             # query.
@@ -311,7 +227,7 @@ class QueryColumns:
     to be the same.
 
     In a `Query`, the keys of this dictionary must include at least the
-    dimensions in `QuerySummary.requested` and `QuerySummary.given`.
+    dimensions in `QuerySummary.requested` and `QuerySummary.dataId.graph`.
     """
 
     timespans: NamedKeyDict[DimensionElement, Timespan[ColumnElement]]
@@ -366,41 +282,3 @@ class QueryColumns:
         # database's perspective this is entirely arbitrary, cause the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
-
-
-@dataclass
-class QueryParameters:
-    """A struct managing deferred bind parameters in a query.
-
-    Takes no parameters at construction, as expected usage is to add elements
-    to its container attributes incrementally.
-    """
-    def __init__(self):
-        self.keys = NamedKeyDict()
-        self.timespan = None
-        self.skypix = NamedKeyDict()
-
-    keys: NamedKeyDict[Dimension, bindparam]
-    """Bind parameters that correspond to dimension primary key values
-    (`NamedKeyDict` mapping `Dimension` to `sqlalchemy.sql.bindparam`).
-
-    In a `Query`, the keys of this dictionary are the subset of
-    `QuerySummary.given` for which `QuerySummary.whenIsDimensionGiven`
-    returns `False`.
-    """
-
-    timespan: Optional[Timespan[bindparam]]
-    """Bind parameters that correspond to timespans (`Timespan` of
-    `sqlalchemy.sql.bindparam`).
-
-    In a `Query`, this is not `None` if and only if
-    `QuerySummary.whenIsTimespanGiven` returns `GivenTime.AT_EXECUTION`.
-    """
-
-    skypix: NamedKeyDict[SkyPixDimension, bindparam]
-    """Bind parameters that correspond to skypix IDs (`NamedKeyDict` mapping
-    `SkyPixDimension` to to`sqlalchemy.sql.bindparam`).
-
-    In a `Query`, this is not `None` if and only if
-    `QuerySummary.whenIsRegionGiven` returns `GivenTime.AT_EXECUTION`.
-    """

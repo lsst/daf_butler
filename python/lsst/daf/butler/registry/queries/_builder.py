@@ -24,7 +24,7 @@ __all__ = ("QueryBuilder",)
 
 from typing import Any, List, Iterable, TYPE_CHECKING
 
-from sqlalchemy.sql import ColumnElement, and_, literal, bindparam, select, FromClause
+from sqlalchemy.sql import ColumnElement, and_, literal, select, FromClause
 import sqlalchemy.sql
 from sqlalchemy.engine import Connection
 
@@ -33,11 +33,10 @@ from ...core import (
     SkyPixDimension,
     Dimension,
     DatasetType,
-    Timespan,
 )
 from ...core.utils import NamedKeyDict
 
-from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
+from ._structs import QuerySummary, QueryColumns
 from ._datasets import DatasetRegistryStorage
 from .expressions import ClauseVisitor
 from ._query import Query
@@ -258,24 +257,19 @@ class QueryBuilder:
 
     def _addWhereClause(self):
         """Add a WHERE clause to the query under construction, connecting all
-        joined dimensions to the expression and given dimensions from
+        joined dimensions to the expression and data ID dimensions from
         `QuerySummary`.
 
         For internal use by `QueryBuilder` only; will be called (and should
         only by called) by `finish`.
         """
-        parameters = QueryParameters()
         whereTerms = []
         if self.summary.expression.tree is not None:
             visitor = ClauseVisitor(self.summary.universe, self._columns, self._elements)
             whereTerms.append(self.summary.expression.tree.visit(visitor))
         for dimension, columnsInQuery in self._columns.keys.items():
-            if dimension in self.summary.given:
-                if self.summary.whenIsDimensionGiven(dimension) == GivenTime.AT_EXECUTION:
-                    givenKey = bindparam(f"_given_later_{dimension.name}")
-                    parameters.keys[dimension] = givenKey
-                else:
-                    givenKey = self.summary.dataId[dimension]
+            if dimension in self.summary.dataId.graph:
+                givenKey = self.summary.dataId[dimension]
                 # Add a WHERE term for each column that corresponds to each
                 # key.  This is redundant with the JOIN ON clauses that make
                 # them equal to each other, but more constraints have a chance
@@ -285,42 +279,25 @@ class QueryBuilder:
             else:
                 # Dimension is not fully identified, but it might be a skypix
                 # dimension that's constrained by a given region.
-                if self.summary.given.spatial and isinstance(dimension, SkyPixDimension):
-                    if self.summary.whenIsRegionGiven() == GivenTime.AT_CONSTRUCTION:
-                        # We know the region now.
-                        givenSkyPixIds = []
-                        for begin, end in dimension.pixelization.envelope(self.summary.dataId.region):
-                            givenSkyPixIds.extend(range(begin, end))
-                    else:
-                        # We'll know the region later (there might be a region
-                        # now, too, but we'll know a more precise one later,
-                        # and hence we'll ignore the one we know now).
-                        givenSkyPixIds = bindparam(f"_given_later_{dimension.name}")
-                        parameters.skypix[dimension] = givenSkyPixIds
+                if self.summary.dataId.graph.spatial and isinstance(dimension, SkyPixDimension):
+                    # We know the region now.
+                    givenSkyPixIds = []
+                    for begin, end in dimension.pixelization.envelope(self.summary.dataId.region):
+                        givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
                         whereTerms.append(columnInQuery.in_(givenSkyPixIds))
-        # If we are [to be] given an dataId with a timespan, and there are
-        # one or more timespans in the query that aren't given, add a WHERE
-        # expression for each of them.
-        if self.summary.given.temporal and self.summary.temporal:
-            if self.summary.whenIsTimespanGiven() == GivenTime.AT_CONSTRUCTION:
-                # Timespan is known now.
-                givenInterval = self.summary.dataId.timespan
-            else:
-                # We'll know the timespan later (there might be a timespan now,
-                # too, but we'll know a more precise one later, and hence we'll
-                # ignore the one we know now).
-                givenInterval = Timespan(
-                    begin=bindparam(f"_given_later_timespan_begin"),
-                    end=bindparam(f"_given_later_timespan_end"),
-                )
+        # If we are given an dataId with a timespan, and there are one or more
+        # timespans in the query that aren't given, add a WHERE expression for
+        # each of them.
+        if self.summary.dataId.graph.temporal and self.summary.temporal:
+            # Timespan is known now.
+            givenInterval = self.summary.dataId.timespan
             for element, intervalInQuery in self._columns.timespans.items():
-                assert element not in self.summary.given.elements
+                assert element not in self.summary.dataId.graph.elements
                 whereTerms.append(intervalInQuery.overlaps(givenInterval, ops=sqlalchemy.sql))
         # AND-together the full WHERE clause, and combine it with the FROM
         # clause.
         self._sql = self._sql.where(and_(*whereTerms))
-        return parameters
 
     def _addSelectClause(self):
         """Add a SELECT clause to the query under construction containing all
@@ -358,6 +335,6 @@ class QueryBuilder:
         """
         self._joinMissingDimensionElements()
         self._addSelectClause()
-        parameters = self._addWhereClause()
+        self._addWhereClause()
         return Query(summary=self.summary, connection=self._connection,
-                     sql=self._sql, columns=self._columns, parameters=parameters)
+                     sql=self._sql, columns=self._columns)
