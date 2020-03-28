@@ -29,13 +29,14 @@ __all__ = [
 ]
 
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import (
     Any,
     Iterator,
     Optional,
     TYPE_CHECKING,
 )
+
+import astropy.time
 
 from ...core import ddl, Timespan
 from ..wildcards import CollectionSearch
@@ -91,7 +92,7 @@ class RunRecord(CollectionRecord):
     """
 
     @abstractmethod
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[datetime]] = None):
+    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[astropy.time.Time]] = None):
         """Update the database record for this run with new execution
         information.
 
@@ -120,7 +121,7 @@ class RunRecord(CollectionRecord):
 
     @property
     @abstractmethod
-    def timespan(self) -> Timespan[datetime]:
+    def timespan(self) -> Timespan[astropy.time.Time]:
         """Begin and end timestamps for the period over which the run was
         produced.  `None`/``NULL`` values are interpreted as infinite
         bounds.

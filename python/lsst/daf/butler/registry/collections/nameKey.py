@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["AggressiveNameKeyCollectionManager"]
 
 from collections import namedtuple
-from datetime import datetime
+import astropy.time
 from typing import (
     Any,
     Iterator,
@@ -100,7 +100,7 @@ class NameKeyRunRecord(RunRecord):
     primary/foreign key for collections.
     """
     def __init__(self, db: Database, name: str, *, table: sqlalchemy.schema.Table,
-                 host: Optional[str] = None, timespan: Optional[Timespan[datetime]] = None):
+                 host: Optional[str] = None, timespan: Optional[Timespan[astropy.time.Time]] = None):
         super().__init__(name=name, type=CollectionType.RUN)
         self._db = db
         self._table = table
@@ -109,7 +109,7 @@ class NameKeyRunRecord(RunRecord):
             timespan = Timespan(begin=None, end=None)
         self._timespan = timespan
 
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[datetime]] = None):
+    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[astropy.time.Time]] = None):
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
@@ -136,7 +136,7 @@ class NameKeyRunRecord(RunRecord):
         return self._host
 
     @property
-    def timespan(self) -> Timespan[datetime]:
+    def timespan(self) -> Timespan[astropy.time.Time]:
         # Docstring inherited from RunRecord.
         return self._timespan
 
