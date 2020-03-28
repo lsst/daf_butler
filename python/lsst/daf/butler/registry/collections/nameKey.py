@@ -100,7 +100,7 @@ class NameKeyRunRecord(RunRecord):
     primary/foreign key for collections.
     """
     def __init__(self, db: Database, name: str, *, table: sqlalchemy.schema.Table,
-                 host: Optional[str] = None, timespan: Optional[Timespan[Optional[datetime]]] = None):
+                 host: Optional[str] = None, timespan: Optional[Timespan[datetime]] = None):
         super().__init__(name=name, type=CollectionType.RUN)
         self._db = db
         self._table = table
@@ -109,7 +109,7 @@ class NameKeyRunRecord(RunRecord):
             timespan = Timespan(begin=None, end=None)
         self._timespan = timespan
 
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[Optional[datetime]]] = None):
+    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[datetime]] = None):
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
@@ -136,7 +136,7 @@ class NameKeyRunRecord(RunRecord):
         return self._host
 
     @property
-    def timespan(self) -> Timespan[Optional[datetime]]:
+    def timespan(self) -> Timespan[datetime]:
         # Docstring inherited from RunRecord.
         return self._timespan
 
