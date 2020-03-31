@@ -172,6 +172,11 @@ class DimensionRecordStorage(ABC):
             If `None`, ``self.element`` is not being included in the query via
             a temporal join.
 
+        Returns
+        -------
+        fromClause : `sqlalchemy.sql.FromClause`
+            Table or clause for the element which is joined.
+
         Notes
         -----
         Elements are only included in queries via spatial and/or temporal joins

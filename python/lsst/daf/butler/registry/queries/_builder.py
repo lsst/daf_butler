@@ -35,7 +35,7 @@ from ...core import (
     DatasetType,
     Timespan,
 )
-from ...core.utils import NamedValueSet
+from ...core.utils import NamedKeyDict
 
 from ._structs import QuerySummary, QueryColumns, QueryParameters, GivenTime
 from ._datasets import DatasetRegistryStorage
@@ -72,7 +72,7 @@ class QueryBuilder:
         self._dimensionStorage = dimensionStorage
         self._datasetStorage = datasetStorage
         self._sql = None
-        self._elements: NamedValueSet[DimensionElement] = NamedValueSet()
+        self._elements: NamedKeyDict[DimensionElement, FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
 
     def hasDimensionKey(self, dimension: Dimension) -> bool:
@@ -101,12 +101,12 @@ class QueryBuilder:
         """
         assert element not in self._elements, "Element already included in query."
         storage = self._dimensionStorage[element]
-        storage.join(
+        fromClause = storage.join(
             self,
             regions=self._columns.regions if element in self.summary.spatial else None,
             timespans=self._columns.timespans if element in self.summary.temporal else None,
         )
-        self._elements.add(element)
+        self._elements[element] = fromClause
 
     def joinDataset(self, datasetType: DatasetType, collections: Any, *,
                     isResult: bool = True, addRank: bool = False):

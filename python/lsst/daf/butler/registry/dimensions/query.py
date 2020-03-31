@@ -127,6 +127,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         joinOn = builder.startJoin(self._query, list(self.element.graph.required),
                                    self.element.RecordClass.__slots__)
         builder.finishJoin(self._query, joinOn)
+        return self._query
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.

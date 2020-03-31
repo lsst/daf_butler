@@ -118,7 +118,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
             dimensions.add(self.element.universe.universe.commonSkyPix)
             builder.joinTable(self._commonSkyPixOverlapTable, dimensions)
             regions[self.element] = self._table.columns[REGION_FIELD_SPEC.name]
-        super().join(builder, regions=None, timespans=timespans)
+        return super().join(builder, regions=None, timespans=timespans)
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.
