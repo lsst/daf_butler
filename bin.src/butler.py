@@ -2,7 +2,6 @@
 
 import click
 import logging
-import sys
 
 from lsst.daf.butler import Butler, ButlerConfig, Config, ValidationError
 
@@ -19,8 +18,11 @@ def cli():
               'the hierarchy.')
 @click.option('--searchpath', '-p', type=str, multiple=True,
               help='Additional search paths to use for configuration overrides')
+@click.option('--file', 'outfile', type=click.File('w'), default='-',
+              help='Print the (possibly-expanded) configuration for a repository to a file, or to stdout '
+              'by default.')
 @click.option('--verbose', '-v', is_flag=True, help='Turn on debug reporting.')
-def dump_config(repo, subset, searchpath, verbose):
+def dump_config(repo, subset, searchpath, verbose, outfile):
     '''Dump either a subset or full Butler configuration to standard output.
 
     REPO is the filesystem path for an existing Butler repository or path to
@@ -34,7 +36,6 @@ def dump_config(repo, subset, searchpath, verbose):
     if subset is not None:
         config = config[subset]
 
-    outfile = sys.stdout
     try:
         config.dump(outfile)
     except AttributeError:
