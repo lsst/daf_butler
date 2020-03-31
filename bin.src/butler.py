@@ -4,7 +4,7 @@ import click
 import logging
 import sys
 
-from lsst.daf.butler import ButlerConfig
+from lsst.daf.butler import Butler, ButlerConfig, Config
 
 
 @click.group()
@@ -41,8 +41,28 @@ def dump_config(root, subset, searchpath, verbose):
         print(config, file=outfile)
 
 
-cli.add_command(dump_config)
+@click.command()
+@click.argument('root')
+@click.option('--config', '-c', help='Path to an existing YAML config file to apply (on top of defaults).')
+@click.option('--standalone', is_flag=True, help='Include all defaults in the config file in the repo, '
+              'insulating the repo from changes in package defaults.')
+@click.option('--override', '-o', is_flag=True, help='Allow values in the supplied config to override any '
+              'root settings.')
+@click.option('--outfile', '-f', default=None, type=str, help='Name of output file to receive repository '
+              'configuration. Default is to write butler.yaml into the specified root.')
+@click.option('--verbose', '-v', is_flag=True, help='Turn on debug reporting.')
+def create(root, config, standalone, override, outfile, verbose):
+    '''Create an empty Gen3 Butler repository.
 
+    ROOT is the filesystem path for the new repository. Will be created if it
+    does not exist.'''
+    config = Config(config) if config is not None else None
+    Butler.makeRepo(root, config=config, standalone=standalone, forceConfigRoot=not override,
+                    outfile=outfile)
+
+
+cli.add_command(dump_config)
+cli.add_command(create)
 
 if __name__ == '__main__':
     cli()
