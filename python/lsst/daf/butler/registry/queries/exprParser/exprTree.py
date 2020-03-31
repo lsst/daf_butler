@@ -30,7 +30,8 @@ to database directly.
 """
 
 __all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
-           'Parens', 'StringLiteral', 'UnaryOp']
+           'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral',
+           'UnaryOp']
 
 # -------------------------------
 #  Imports of standard modules --
@@ -150,6 +151,26 @@ class StringLiteral(Node):
     def visit(self, visitor):
         # Docstring inherited from Node.visit
         return visitor.visitStringLiteral(self.value, self)
+
+    def __str__(self):
+        return "'{value}'".format(**vars(self))
+
+
+class TimeLiteral(Node):
+    """Node representing time literal.
+
+    Attributes
+    ----------
+    value : str
+        Literal string value.
+    """
+    def __init__(self, value):
+        Node.__init__(self)
+        self.value = value
+
+    def visit(self, visitor):
+        # Docstring inherited from Node.visit
+        return visitor.visitTimeLiteral(self.value, self)
 
     def __str__(self):
         return "'{value}'".format(**vars(self))
