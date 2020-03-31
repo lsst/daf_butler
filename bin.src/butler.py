@@ -4,7 +4,7 @@ import click
 import logging
 import sys
 
-from lsst.daf.butler import Butler, ButlerConfig, Config
+from lsst.daf.butler import Butler, ButlerConfig, Config, ValidationError
 
 
 @click.group()
@@ -61,8 +61,31 @@ def create(root, config, standalone, override, outfile, verbose):
                     outfile=outfile)
 
 
+@click.command(name='validate-config')
+@click.argument('root')
+@click.option('--quiet', '-q', is_flag=True, help="Do not report individual failures.")
+@click.option('--datasettype', '-d', type=str, multiple=True,
+              help="Specific DatasetType(s) to validate (can be comma-separated)")
+@click.option('--ignore', '-i', type=str, multiple=True,
+              help="DatasetType(s) to ignore for validation (can be comma-separated)")
+def validate_config(root, quiet, datasettype, ignore):
+    '''Validate the configuration files for a Gen3 Butler repository.
+
+    ROOT is the filesystem path for an existing Butler repository.
+    '''
+    logFailures = not quiet
+    butler = Butler(config=root)
+    try:
+        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=datasettype, ignore=ignore)
+    except ValidationError:
+        return False
+    return True
+
+
 cli.add_command(dump_config)
 cli.add_command(create)
+cli.add_command(validate_config)
+
 
 if __name__ == '__main__':
     cli()
