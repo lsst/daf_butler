@@ -57,6 +57,8 @@ def create(repo, config, standalone, override, outfile, verbose):
 
     REPO is the filesystem path for the new repository. Will be created if it
     does not exist.'''
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG)
     config = Config(config) if config is not None else None
     Butler.makeRepo(repo, config=config, standalone=standalone, forceConfigRoot=not override,
                     outfile=outfile)
