@@ -90,5 +90,5 @@ cli.add_command(create)
 cli.add_command(validate_config)
 
 
-if __name__ == '__main__':
-    cli()
+def main():
+    return cli()
