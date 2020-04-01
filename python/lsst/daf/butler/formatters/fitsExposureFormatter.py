@@ -23,6 +23,7 @@ __all__ = ("FitsExposureFormatter", )
 
 from astro_metadata_translator import fix_header
 from lsst.daf.butler import Formatter
+from lsst.afw.image import ExposureFitsReader
 
 
 class FitsExposureFormatter(Formatter):
@@ -135,7 +136,12 @@ class FitsExposureFormatter(Formatter):
         if parameters is None:
             parameters = {}
         fileDescriptor.storageClass.validateParameters(parameters)
-        return fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **parameters)
+        try:
+            output = fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **parameters)
+        except TypeError:
+            reader = ExposureFitsReader(fileDescriptor.location.path)
+            output = reader.read()
+        return output
 
     def read(self, component=None):
         """Read data from a file.
