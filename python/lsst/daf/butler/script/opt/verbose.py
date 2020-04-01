@@ -19,20 +19,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 import click
 
-from lsst.daf.butler.script.cmd import create, dump_config, validate_config
+
+class Verbosity(object):
+    def __init__(self):
+        self.verbose = False
 
 
-@click.group()
-def cli():
-    pass
+pass_verbosity = click.make_pass_decorator(Verbosity, ensure=True)
 
 
-cli.add_command(dump_config.dump_config)
-cli.add_command(create.create)
-cli.add_command(validate_config.validate_config)
-
-
-def main():
-    return cli()
+def verbose_option(f):
+    def callback(ctx, param, value):
+        verbose = ctx.ensure_object(Verbosity)
+        verbose.verbose = value
+        return value
+    return click.option('-v', '--verbose', is_flag=True,
+                        expose_value=False,
+                        help='Turn on debug reporting.',
+                        callback=callback)(f)
