@@ -154,6 +154,9 @@ class DataCoordinate(IndexedTupleDict):
             graph = DimensionGraph(universe, names=d.keys())
         try:
             values = tuple(d[name] for name in graph.required.names)
+            # some backends cannot handle numpy.int64 type which is
+            # a subclass of numbers.Integral, convert that to int.
+            values = tuple(int(val) if isinstance(val, numbers.Integral) else val for val in values)
         except KeyError as err:
             raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
         return DataCoordinate(graph, values)
