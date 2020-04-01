@@ -6,6 +6,25 @@ import logging
 from lsst.daf.butler import Butler, ButlerConfig, Config, ValidationError
 
 
+class Verbosity(object):
+    def __init__(self):
+        self.verbose = False
+
+
+pass_verbosity = click.make_pass_decorator(Verbosity, ensure=True)
+
+
+def verbose_option(f):
+    def callback(ctx, param, value):
+        verbose = ctx.ensure_object(Verbosity)
+        verbose.verbose = value
+        return value
+    return click.option('-v', '--verbose', is_flag=True,
+                        expose_value=False,
+                        help='Turn on debug reporting.',
+                        callback=callback)(f)
+
+
 @click.group()
 def cli():
     pass
@@ -21,14 +40,15 @@ def cli():
 @click.option('--file', 'outfile', type=click.File('w'), default='-',
               help='Print the (possibly-expanded) configuration for a repository to a file, or to stdout '
               'by default.')
-@click.option('--verbose', '-v', is_flag=True, help='Turn on debug reporting.')
-def dump_config(repo, subset, searchpath, verbose, outfile):
+@verbose_option
+@pass_verbosity
+def dump_config(verbosity, repo, subset, searchpath, outfile):
     '''Dump either a subset or full Butler configuration to standard output.
 
     REPO is the filesystem path for an existing Butler repository or path to
     config file.
     '''
-    if verbose:
+    if verbosity.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
     config = ButlerConfig(repo, searchPaths=searchpath)
@@ -51,13 +71,14 @@ def dump_config(repo, subset, searchpath, verbose, outfile):
               'repo settings.')
 @click.option('--outfile', '-f', default=None, type=str, help='Name of output file to receive repository '
               'configuration. Default is to write butler.yaml into the specified repo.')
-@click.option('--verbose', '-v', is_flag=True, help='Turn on debug reporting.')
-def create(repo, config, standalone, override, outfile, verbose):
+@verbose_option
+@pass_verbosity
+def create(verbosity, repo, config, standalone, override, outfile):
     '''Create an empty Gen3 Butler repository.
 
     REPO is the filesystem path for the new repository. Will be created if it
     does not exist.'''
-    if verbose:
+    if verbosity.verbose:
         logging.basicConfig(level=logging.DEBUG)
     config = Config(config) if config is not None else None
     Butler.makeRepo(repo, config=config, standalone=standalone, forceConfigRoot=not override,
