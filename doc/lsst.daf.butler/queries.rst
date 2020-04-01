@@ -75,7 +75,7 @@ The rest of this section describes the latter in detail.
 The language grammar is defined in the ``exprParser.parserYacc`` module, which is responsible for transforming a string with the user expression into a syntax tree with nodes represented by various classes defined in the ``exprParser.exprTree`` module.
 Modules in the ``exprParser`` package are considered butler/registry implementation details and are not exposed at the butler package level.
 
-The grammar is based on standard SQL; it is a subset of SQL expression language that can appear in WHERE clause of standard SELECT statement with some extensions, such as range support for the ``IN`` operator.
+The grammar is based on standard SQL; it is a subset of SQL expression language that can appear in WHERE clause of standard SELECT statement with some extensions, such as range support for the ``IN`` operator and time literals.
 
 Expression structure
 ^^^^^^^^^^^^^^^^^^^^
@@ -117,6 +117,13 @@ Numbers
     point numbers use standard notation with decimal point and/or exponent.
     For numbers parser passes a string representation of a number to
     downstream registry code to avoid possible rounding issues.
+
+Time literals
+    Timestamps in a query are defined using special syntax which consists of
+    a capital letter "T" followed by quoted string: ``T'time-string'``. Time
+    string contains time information together with optional time format and
+    time scale. For detailed description of supported time specification
+    check section :ref:`time-literals-syntax`.
 
 Range literals
     This sort of literal is allowed inside ``IN`` expressions only. It consists
@@ -172,7 +179,8 @@ Comparison operators
 
 Language supports set of regular comparison operators: ``=``, ``!=``, ``<``,
 ``<=``, ``>``, ``>=``. This can be used on operands that evaluate to a numeric
-values, for (in)equality operators operands can also be boolean expressions.
+values or timestamps, for (in)equality operators operands can also be boolean
+expressions.
 
 .. note :: The equality comparison operator is a single ``=`` like in SQL, not
     double ``==`` like in Python or C++.
@@ -226,6 +234,61 @@ Grouping operator
 Parentheses should be used to change evaluation order (precedence) of
 sub-expressions in the full expression.
 
+
+.. _time-literals-syntax:
+
+Time literals
+^^^^^^^^^^^^^
+
+Timestamps in a query language are specified using syntax ``T'time-string'``.
+The content of the ``time-string`` specifies a time point in one of the
+supported time formats. For internal time representation Registry uses
+`astropy.time.Time`_ class and parser converts time string into an instance
+of that class. For string-based time formats such as ISO the conversion
+of a time string to an object is done by the ``Time`` constructor. The syntax
+of the string could be anything that is suported by ``astropy``, for details
+see `astropy.time`_ reference. For numeric time formats such as MJD the parser
+converts string to a floating point number and passes that number to ``Time``
+constructor.
+
+Parser guesses time format from the content of the time string:
+
+- If time string is a floating point number then parser assumes that time
+  is in "mjd" format.
+- If string matches ISO format then parser assumes "iso" or "isot" format
+  depending on presence of "T" separator in a string.
+- If string starts with "+" sign followed by ISO string then parser assumes
+  "fits" format.
+- If string matches ``year:day:time`` format then "yday" is used.
+
+The format can be specified explicitely by prefixing time string with a format
+name and slash, e.g. ``T'mjd/58938.515'``. Any of the formats supported by
+``astropy`` can be specified explicitely.
+
+Time scale that parser passes to ``Time`` constructor depends on time format,
+by default parser uses:
+
+- "utc" scale for "iso", "isot", "fits", "yday", and "unix" formats,
+- "tt" scale for "cxcsec" format,
+- "tai" scale for anything else.
+
+Default scale can be overriden by adding a suffix to time string consisting
+of a slash and time scale name, e.g. ``T'58938.515/tai'``. Any combination of
+explicit time format and time scale can be given at the same time, e.g.
+``T'58938.515'``, ``T'mjd/58938.515'``, ``T'58938.515/tai'``, and
+``T'mjd/58938.515/tai'`` all mean the same thing.
+
+Note that `astropy.time.Time`_ class imposes few restrictions on the format
+of the string that it accepts for iso/isot/fits/yday formats, in particular:
+
+- time zone specification is not supported
+- hour-only time is not supported, at least minutes have to be specified for
+  time (but time can be omitted entirely)
+
+.. _astropy.time: https://docs.astropy.org/en/stable/time/
+.. _astropy.time.Time: https://docs.astropy.org/en/stable/api/astropy.time.Time.html
+
+
 Examples
 ^^^^^^^^
 
@@ -240,3 +303,9 @@ Few examples of valid expressions using some of the constructs:
     visit IN (100..200) AND visit NOT IN (159, 191) AND abstract_filter = 'i'
 
     (visit = 100 OR visit = 101) AND exposure % 2 = 1
+
+    visit.datetime_begin > T'2020-03-30 12:20:33'
+
+    exposure.datetime_begin > T'58938.515'
+
+    visit.datetime_end < T'mjd/58938.515/tai'

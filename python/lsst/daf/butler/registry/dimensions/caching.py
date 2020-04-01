@@ -71,7 +71,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
     ):
         # Docstring inherited from DimensionRecordStorage.
-        self._nested.join(builder, regions=regions, timespans=timespans)
+        return self._nested.join(builder, regions=regions, timespans=timespans)
 
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.

@@ -24,7 +24,10 @@
 
 import unittest
 
+import astropy.time
+
 from lsst.daf.butler.registry.queries.exprParser import exprTree, TreeVisitor, ParserYacc, ParseError
+from lsst.daf.butler.registry.queries.exprParser.parserYacc import _parseTimeString
 
 
 class _Visitor(TreeVisitor):
@@ -35,6 +38,9 @@ class _Visitor(TreeVisitor):
 
     def visitStringLiteral(self, value, node):
         return f"S({value})"
+
+    def visitTimeLiteral(self, value, node):
+        return f"T({value})"
 
     def visitRangeLiteral(self, start, stop, stride, node):
         if stride is None:
@@ -114,6 +120,15 @@ class ParserLexTestCase(unittest.TestCase):
         self.assertEqual(tree.start, -10)
         self.assertEqual(tree.stop, 10)
         self.assertEqual(tree.stride, 5)
+
+        # more extensive tests of time parsing is below
+        tree = parser.parse("T'51544.0'")
+        self.assertIsInstance(tree, exprTree.TimeLiteral)
+        self.assertEqual(tree.value, astropy.time.Time(51544.0, format="mjd", scale="tai"))
+
+        tree = parser.parse("T'2020-03-30T12:20:33'")
+        self.assertIsInstance(tree, exprTree.TimeLiteral)
+        self.assertEqual(tree.value, astropy.time.Time("2020-03-30T12:20:33", format="isot", scale="utc"))
 
     def testParseIdentifiers(self):
         """Tests for identifiers
@@ -323,6 +338,11 @@ class ParserLexTestCase(unittest.TestCase):
             parser.parse(expression)
         _assertExc(catcher.exception, expression, ",", 4, 3, 0)
 
+        expression = "T'not-a-time'"
+        with self.assertRaises(ParseError) as catcher:
+            parser.parse(expression)
+        _assertExc(catcher.exception, expression, "not-a-time", 0, 1, 0)
+
     def testStr(self):
         """Test for formatting"""
         parser = ParserYacc()
@@ -365,6 +385,64 @@ class ParserLexTestCase(unittest.TestCase):
         tree = parser.parse("x in (1,2,5..15) AND y NOT IN (-100..100:10)")
         result = tree.visit(visitor)
         self.assertEqual(result, "B(IN(ID(x) (N(1), N(2), R(5..15))) AND !IN(ID(y) (R(-100..100:10))))")
+
+        tree = parser.parse("time > T'2020-03-30'")
+        result = tree.visit(visitor)
+        self.assertEqual(result, "B(ID(time) > T(2020-03-30 00:00:00.000))")
+
+    def testParseTimeStr(self):
+        """Test for _parseTimeString method"""
+
+        # few expected failures
+        bad_times = [
+            "",
+            " ",
+            "123.456e10",           # no exponents
+            "mjd-dj/123.456",       # format can only have word chars
+            "123.456/mai-tai",      # scale can only have word chars
+            "2020-03-01 00",        # iso needs minutes if hour is given
+            "2020-03-01T",          # isot needs hour:minute
+            "2020:100:12",          # yday needs minutes if hour is given
+            "format/123456.00",     # unknown format
+            "123456.00/unscale",    # unknown scale
+        ]
+        for bad_time in bad_times:
+            with self.assertRaises(ValueError):
+                _parseTimeString(bad_time)
+
+        # each tuple is (string, value, format, scale)
+        tests = [
+            ("51544.0", 51544.0, "mjd", "tai"),
+            ("mjd/51544.0", 51544.0, "mjd", "tai"),
+            ("51544.0/tai", 51544.0, "mjd", "tai"),
+            ("mjd/51544.0/tai", 51544.0, "mjd", "tai"),
+            ("MJd/51544.0/TAi", 51544.0, "mjd", "tai"),
+            ("jd/2451544.5", 2451544.5, "jd", "tai"),
+            ("jd/2451544.5", 2451544.5, "jd", "tai"),
+            ("51544.0/utc", 51544.0, "mjd", "utc"),
+            ("unix/946684800.0", 946684800., "unix", "utc"),
+            ("cxcsec/63072064.184", 63072064.184, "cxcsec", "tt"),
+            ("2020-03-30", "2020-03-30 00:00:00.000", "iso", "utc"),
+            ("2020-03-30 12:20", "2020-03-30 12:20:00.000", "iso", "utc"),
+            ("2020-03-30 12:20:33.456789", "2020-03-30 12:20:33.457", "iso", "utc"),
+            ("2020-03-30T12:20", "2020-03-30T12:20:00.000", "isot", "utc"),
+            ("2020-03-30T12:20:33.456789", "2020-03-30T12:20:33.457", "isot", "utc"),
+            ("isot/2020-03-30", "2020-03-30T00:00:00.000", "isot", "utc"),
+            ("2020-03-30/tai", "2020-03-30 00:00:00.000", "iso", "tai"),
+            ("+02020-03-30", "2020-03-30T00:00:00.000", "fits", "utc"),
+            ("+02020-03-30T12:20:33", "2020-03-30T12:20:33.000", "fits", "utc"),
+            ("+02020-03-30T12:20:33.456789", "2020-03-30T12:20:33.457", "fits", "utc"),
+            ("fits/2020-03-30", "2020-03-30T00:00:00.000", "fits", "utc"),
+            ("2020:123", "2020:123:00:00:00.000", "yday", "utc"),
+            ("2020:123:12:20", "2020:123:12:20:00.000", "yday", "utc"),
+            ("2020:123:12:20:33.456789", "2020:123:12:20:33.457", "yday", "utc"),
+            ("yday/2020:123:12:20/tai", "2020:123:12:20:00.000", "yday", "tai"),
+        ]
+        for time_str, value, fmt, scale in tests:
+            time = _parseTimeString(time_str)
+            self.assertEqual(time.value, value)
+            self.assertEqual(time.format, fmt)
+            self.assertEqual(time.scale, scale)
 
 
 if __name__ == "__main__":

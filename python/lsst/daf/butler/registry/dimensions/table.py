@@ -94,6 +94,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
                 joinOn.append(timespanInQuery.overlaps(timespanInTable, ops=sqlalchemy.sql))
             timespans[self.element] = timespanInTable
         builder.finishJoin(self._table, joinOn)
+        return self._table
 
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

@@ -63,6 +63,18 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
+    def visitTimeLiteral(self, value, node):
+        """Visit TimeLiteral node.
+
+        Parameters
+        ----------
+        value : `TimeLiteral`
+            The value associated with the visited node.
+        node : `Node`
+            Corresponding tree node, mostly useful for diagnostics.
+        """
+
+    @abstractmethod
     def visitRangeLiteral(self, start, stop, stride, node):
         """Visit RangeLiteral node.
 

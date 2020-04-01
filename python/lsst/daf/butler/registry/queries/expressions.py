@@ -120,6 +120,10 @@ class InspectionVisitor(TreeVisitor):
         # Docstring inherited from TreeVisitor.visitStringLiteral
         pass
 
+    def visitTimeLiteral(self, value, node):
+        # Docstring inherited from TreeVisitor.visitTimeLiteral
+        pass
+
     def visitIdentifier(self, name, node):
         # Docstring inherited from TreeVisitor.visitIdentifier
         element, column = categorizeIdentifier(self.universe, name)
@@ -201,6 +205,10 @@ class ClauseVisitor(TreeVisitor):
 
     def visitStringLiteral(self, value, node):
         # Docstring inherited from TreeVisitor.visitStringLiteral
+        return literal(value)
+
+    def visitTimeLiteral(self, value, node):
+        # Docstring inherited from TreeVisitor.visitTimeLiteral
         return literal(value)
 
     def visitIdentifier(self, name, node):

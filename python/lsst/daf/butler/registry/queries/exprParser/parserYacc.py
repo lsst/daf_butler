@@ -27,18 +27,106 @@ __all__ = ["ParserYacc", "ParserYaccError", "ParseError", "ParserEOFError"]
 # -------------------------------
 #  Imports of standard modules --
 # -------------------------------
+import re
 
 # -----------------------------
 #  Imports for other modules --
 # -----------------------------
-from .exprTree import (BinaryOp, Identifier, IsIn, NumericLiteral,
-                       Parens, StringLiteral, RangeLiteral, UnaryOp)
+import astropy.time
+from .exprTree import (BinaryOp, Identifier, IsIn, NumericLiteral, Parens,
+                       RangeLiteral, StringLiteral, TimeLiteral, UnaryOp)
 from .ply import yacc
 from .parserLex import ParserLex
 
 # ----------------------------------
 #  Local non-exported definitions --
 # ----------------------------------
+
+# The purpose of this regex is to guess time format if it is not explicitly
+# provided in the string itself
+_re_time_str = re.compile(r"""
+    ((?P<format>\w+)/)?             # optionally prefixed by "format/"
+    (?P<value>
+        (?P<number>-?(\d+(\.\d*)|(\.\d+)))   # floating point number
+        |
+        (?P<iso>\d+-\d+-\d+([ T]\d+:\d+(:\d+([.]\d*)?)?)?)   # iso(t)
+        |
+        (?P<fits>[+]\d+-\d+-\d+(T\d+:\d+:\d+([.]\d*)?)?)   # fits
+        |
+        (?P<yday>\d+:\d+(:\d+:\d+(:\d+([.]\d*)?)?)?)         # yday
+    )
+    (/(?P<scale>\w+))?              # optionally followed by "/scale"
+    $
+""", re.VERBOSE | re.IGNORECASE)
+
+
+def _parseTimeString(time_str):
+    """Try to convert time string into astropy.Time.
+
+    Parameters
+    ----------
+    time_str : `str`
+        Input string.
+
+    Returns
+    -------
+    time : `astropy.time.Time`
+
+    Raises
+    ------
+    ValueError
+        Raised if input string has unexpected format
+    """
+    match = _re_time_str.match(time_str)
+    if not match:
+        raise ValueError(f"Time string \"{time_str}\" does not match known formats")
+
+    value, fmt, scale = match.group("value", "format", "scale")
+    if fmt is not None:
+        fmt = fmt.lower()
+        if fmt not in astropy.time.Time.FORMATS:
+            raise ValueError(f"Time string \"{time_str}\" specifies unknown time format \"{fmt}\"")
+    if scale is not None:
+        scale = scale.lower()
+        if scale not in astropy.time.Time.SCALES:
+            raise ValueError(f"Time string \"{time_str}\" specifies unknown time scale \"{scale}\"")
+
+    # convert number string to floating point
+    if match.group("number") is not None:
+        value = float(value)
+
+    # guess format if not given
+    if fmt is None:
+        if match.group("number") is not None:
+            fmt = "mjd"
+        elif match.group("iso") is not None:
+            if "T" in value or "t" in value:
+                fmt = "isot"
+            else:
+                fmt = "iso"
+        elif match.group("fits") is not None:
+            fmt = "fits"
+        elif match.group("yday") is not None:
+            fmt = "yday"
+    assert fmt is not None
+
+    # guess scale if not given
+    if scale is None:
+        if fmt in ("iso", "isot", "fits", "yday", "unix"):
+            scale = "utc"
+        elif fmt == "cxcsec":
+            scale = "tt"
+        else:
+            scale = "tai"
+
+    try:
+        value = astropy.time.Time(value, format=fmt, scale=scale)
+    except ValueError:
+        # astropy makes very verbose exception that is not super-useful in
+        # many context, just say we don't like it.
+        raise ValueError(f"Time string \"{time_str}\" does not match format \"{fmt}\"") from None
+
+    return value
 
 # ------------------------
 #  Exported definitions --
@@ -255,6 +343,15 @@ class ParserYacc:
         """ literal : STRING_LITERAL
         """
         p[0] = StringLiteral(p[1])
+
+    def p_literal_time(self, p):
+        """ literal : TIME_LITERAL
+        """
+        try:
+            value = _parseTimeString(p[1])
+        except ValueError:
+            raise ParseError(p.lexer.lexdata, p[1], p.lexpos(1), p.lineno(1))
+        p[0] = TimeLiteral(value)
 
     def p_literal_range(self, p):
         """ literal : RANGE_LITERAL

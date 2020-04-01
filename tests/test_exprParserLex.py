@@ -155,6 +155,19 @@ class ParserLexTestCase(unittest.TestCase):
         self._assertToken(lexer.token(), "RANGE_LITERAL", (0, 10, 2))
         self.assertIsNone(lexer.token())
 
+    def testTimeLiteral(self):
+        """Test for time literals"""
+        lexer = ParserLex.make_lexer()
+
+        # string can contain anything, lexer does not check it
+        lexer.input("T'2020-03-30' T'2020-03-30 00:00:00' T'2020-03-30T00:00:00' T'123.456' T'time'")
+        self._assertToken(lexer.token(), "TIME_LITERAL", "2020-03-30")
+        self._assertToken(lexer.token(), "TIME_LITERAL", "2020-03-30 00:00:00")
+        self._assertToken(lexer.token(), "TIME_LITERAL", "2020-03-30T00:00:00")
+        self._assertToken(lexer.token(), "TIME_LITERAL", "123.456")
+        self._assertToken(lexer.token(), "TIME_LITERAL", "time")
+        self.assertIsNone(lexer.token())
+
     def testIdentifier(self):
         """Test for numeric literals"""
         lexer = ParserLex.make_lexer()

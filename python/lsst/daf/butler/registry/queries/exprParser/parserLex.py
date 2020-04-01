@@ -112,6 +112,7 @@ class ParserLex:
     # List of token names.
     tokens = (
         'NUMERIC_LITERAL',
+        'TIME_LITERAL',
         'STRING_LITERAL',
         'RANGE_LITERAL',
         # 'TIME_LITERAL',
@@ -146,6 +147,13 @@ class ParserLex:
     def t_newline(self, t):
         r'\n+'
         t.lexer.lineno += len(t.value)
+
+    # quoted string prefixed with 'T'
+    def t_TIME_LITERAL(self, t):
+        r"T'.*?'"
+        # strip quotes
+        t.value = t.value[2:-1]
+        return t
 
     # quoted string
     def t_STRING_LITERAL(self, t):
