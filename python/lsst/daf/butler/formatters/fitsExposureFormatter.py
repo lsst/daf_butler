@@ -42,27 +42,6 @@ class FitsExposureFormatter(Formatter):
             self._metadata = self.readMetadata()
         return self._metadata
 
-    def readImageComponent(self, component):
-        """Read the image, mask, or variance component of an Exposure.
-
-        Parameters
-        ----------
-        fileDescriptor : `FileDescriptor`
-            Identifies the file to read and parameters to be used for reading.
-        component : `str`, optional
-            Component to read from the file.  Always one of "image",
-            "variance", or "mask".
-
-        Returns
-        -------
-        image : `~lsst.afw.image.Image` or `~lsst.afw.image.Mask`
-            In-memory image, variance, or mask component.
-        """
-        # TODO: could be made more efficient *if* Exposure type objects
-        # held the class objects of their components.
-        full = self.readFull()
-        return self.fileDescriptor.storageClass.assembler().getComponent(full, component)
-
     def readMetadata(self):
         """Read all header metadata directly into a PropertyList.
 
@@ -97,24 +76,53 @@ class FitsExposureFormatter(Formatter):
         bboxFromMetadata(self.metadata)  # always strips
         makeSkyWcs(self.metadata, strip=True)
 
-    def readInfoComponent(self, component):
-        """Read a component held by ExposureInfo.
+    def readComponent(self, component, parameters=None):
+        """Read a component held by the Exposure.
 
         Parameters
         ----------
         component : `str`, optional
             Component to read from the file.
+        parameters : `dict`, optional
+            If specified, a dictionary of slicing parameters that
+            overrides those in ``fileDescriptor``.
 
         Returns
         -------
         obj : component-dependent
             In-memory component object.
+
+        Raises
+        ------
+        KeyError
+            Raised if the requested component cannot be handled.
         """
-        from lsst.afw.image import LOCAL
-        from lsst.geom import Box2I, Point2I
-        parameters = dict(bbox=Box2I(minimum=Point2I(0, 0), maximum=Point2I(0, 0)), origin=LOCAL)
-        tiny = self.readFull(parameters)
-        return self.fileDescriptor.storageClass.assembler().getComponent(tiny, component)
+        componentMap = {'wcs': ('readWcs', False),
+                        'coaddInputs': ('readCoaddInputs', False),
+                        'psf': ('readPsf', False),
+                        'image': ('readImage', True),
+                        'mask': ('readMask', True),
+                        'variance': ('readVariance', True),
+                        }
+        method, hasParams = componentMap.get(component, None)
+
+        if method:
+            reader = ExposureFitsReader(self.fileDescriptor.location.path)
+            caller = getattr(reader, method, None)
+
+            if caller:
+                if parameters is None:
+                    parameters = self.fileDescriptor.parameters
+                if parameters is None:
+                    parameters = {}
+                self.fileDescriptor.storageClass.validateParameters(parameters)
+
+                if hasParams and parameters:
+                    return caller(**parameters)
+                else:
+                    return caller()
+        else:
+            raise KeyError(f"Unknown component requested: {component}")
 
     def readFull(self, parameters=None):
         """Read the full Exposure object.
@@ -140,10 +148,10 @@ class FitsExposureFormatter(Formatter):
             output = fileDescriptor.storageClass.pytype(fileDescriptor.location.path, **parameters)
         except TypeError:
             reader = ExposureFitsReader(fileDescriptor.location.path)
-            output = reader.read()
+            output = reader.read(**parameters)
         return output
 
-    def read(self, component=None):
+    def read(self, component=None, parameters=None):
         """Read data from a file.
 
         Parameters
@@ -152,6 +160,9 @@ class FitsExposureFormatter(Formatter):
             Component to read from the file. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
             file.
+        parameters : `dict`, optional
+            If specified, a dictionary of slicing parameters that
+            overrides those in ``fileDescriptor``.
 
         Returns
         -------
@@ -173,10 +184,8 @@ class FitsExposureFormatter(Formatter):
             if component == "metadata":
                 self.stripMetadata()
                 return self.metadata
-            elif component in ("image", "variance", "mask"):
-                return self.readImageComponent(component)
             elif component is not None:
-                return self.readInfoComponent(component)
+                return self.readComponent(component, parameters)
             else:
                 raise ValueError("Storage class inconsistency ({} vs {}) but no"
                                  " component requested".format(fileDescriptor.readStorageClass.name,
