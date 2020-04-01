@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("DataCoordinate", "ExpandedDataCoordinate", "DataId")
 
+import numbers
 from typing import Any, Tuple, Mapping, Optional, Dict, Union, TYPE_CHECKING
 
 from lsst.sphgeom import Region
@@ -198,8 +199,8 @@ class DataCoordinate(IndexedTupleDict):
         """
         for k, v in self.items():
             update(k.name.encode("utf8"))
-            if isinstance(v, int):
-                update(v.to_bytes(64, "big", signed=False))
+            if isinstance(v, numbers.Integral):
+                update(int(v).to_bytes(64, "big", signed=False))
             elif isinstance(v, str):
                 update(v.encode("utf8"))
             else:
