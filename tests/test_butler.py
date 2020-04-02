@@ -815,6 +815,7 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # dependency); should not change template (at least the way we're
         # defining them  to behave now; the important thing is that they
         # must be consistent).
+
         ref = butler.put(metric, "metric2", dataId2)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
                                              "ingest/metric2/d-r/DummyCamComp_v423.pickle"))
@@ -1096,8 +1097,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
         """
         uri = ButlerURI(root)
-        client = boto3.client("s3")
-        return s3CheckFileExists(uri, client=client)[0]
+        uri.updateFile(relpath)
+        return s3CheckFileExists(uri)[0]
 
     @unittest.expectedFailure
     def testImportExport(self):

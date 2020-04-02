@@ -260,9 +260,9 @@ class Butler:
 
         Parameters
         ----------
-        root : `str`
-            Filesystem path to the root of the new repository.  Will be created
-            if it does not exist.
+        root : `str` or `ButlerURI`
+            Path or URI to the root location of the new repository. Will be
+            created if it does not exist.
         config : `Config` or `str`, optional
             Configuration to write to the repository, after setting any
             root-dependent Registry or Datastore config options.  Can not
@@ -334,10 +334,13 @@ class Butler:
             if not os.path.isdir(uri.ospath):
                 safeMakeDir(uri.ospath)
         elif uri.scheme == "s3":
-            s3 = boto3.resource("s3")
-            # implies bucket exists, if not another level of checks
-            bucket = s3.Bucket(uri.netloc)
-            bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
+            # implies bucket already exists
+            s3 = boto3.client("s3")
+            if uri.relativeToPathRoot != ".":
+                # to be dir-equivalent, S3 this requires URIs ending on '/'
+                if not uri.geturl().endswith('/'):
+                    uri.updateFile(uri.relativeToPathRoot+'/')
+                s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot+'/')
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)
