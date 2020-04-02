@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ("DataCoordinate", "ExpandedDataCoordinate", "DataId")
 
+import numbers
 from typing import Any, Tuple, Mapping, Optional, Dict, Union, TYPE_CHECKING
 
 from lsst.sphgeom import Region
@@ -153,6 +154,9 @@ class DataCoordinate(IndexedTupleDict):
             graph = DimensionGraph(universe, names=d.keys())
         try:
             values = tuple(d[name] for name in graph.required.names)
+            # some backends cannot handle numpy.int64 type which is
+            # a subclass of numbers.Integral, convert that to int.
+            values = tuple(int(val) if isinstance(val, numbers.Integral) else val for val in values)
         except KeyError as err:
             raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
         return DataCoordinate(graph, values)
@@ -198,8 +202,8 @@ class DataCoordinate(IndexedTupleDict):
         """
         for k, v in self.items():
             update(k.name.encode("utf8"))
-            if isinstance(v, int):
-                update(v.to_bytes(64, "big", signed=False))
+            if isinstance(v, numbers.Integral):
+                update(int(v).to_bytes(64, "big", signed=False))
             elif isinstance(v, str):
                 update(v.encode("utf8"))
             else:
