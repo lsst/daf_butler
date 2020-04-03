@@ -178,13 +178,15 @@ class DimensionElement:
                  related: RelatedDimensions,
                  metadata: Iterable[ddl.FieldSpec] = (),
                  cached: bool = False,
-                 viewOf: Optional[str] = None):
+                 viewOf: Optional[str] = None,
+                 alwaysJoin: bool = False):
         self.name = name
         self._related = related
         self.metadata = NamedValueSet(metadata)
         self.metadata.freeze()
         self.cached = cached
         self.viewOf = viewOf
+        self.alwaysJoin = alwaysJoin
 
     def _finish(self, universe: DimensionUniverse, elementsToDo: Dict[str, DimensionElement]):
         """Finish construction of the element and add it to the given universe.

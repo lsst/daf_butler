@@ -127,6 +127,7 @@ def processElementsConfig(config: Config) -> Dict[str, DimensionElement]:
         kwargs["metadata"] = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
         kwargs["cached"] = subconfig.get("cached", False)
         kwargs["viewOf"] = subconfig.get("view_of", None)
+        kwargs["alwaysJoin"] = subconfig.get("always_join", False)
         keys = subconfig.get("keys")
         if keys is not None:
             uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in keys]

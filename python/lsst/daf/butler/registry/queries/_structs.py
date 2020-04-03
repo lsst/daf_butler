@@ -201,6 +201,9 @@ class QuerySummary:
         for dimension in self.mustHaveKeysJoined:
             if dimension.implied:
                 result.add(dimension)
+        for element in self.mustHaveKeysJoined.union(self.dataId.graph).elements:
+            if element.alwaysJoin:
+                result.add(element)
         return result
 
 
