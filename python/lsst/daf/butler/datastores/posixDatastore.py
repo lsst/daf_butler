@@ -264,7 +264,8 @@ class PosixDatastore(FileLikeDatastore):
                     os.link(fullPath, newFullPath)
             elif transfer == "symlink":
                 with self._transaction.undoWith("symlink", os.unlink, newFullPath):
-                    os.symlink(fullPath, newFullPath)
+                    # Read through existing symlinks
+                    os.symlink(os.path.realpath(fullPath), newFullPath)
             else:
                 raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
             path = newPath

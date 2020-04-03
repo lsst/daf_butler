@@ -362,12 +362,16 @@ class DatastoreTests(DatastoreTestsBase):
         with self.assertRaises(FileNotFoundError):
             datastore.get(refInner)
 
-    def runIngestTest(self, func, expectOutput=True):
+    def _prepareIngestTest(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         dimensions = self.universe.extract(("visit", "physical_filter"))
         metrics = makeExampleMetrics()
         dataId = {"instrument": "dummy", "visit": 0, "physical_filter": "V"}
         ref = self.makeDatasetRef("metric", dimensions, storageClass, dataId, conform=False)
+        return metrics, ref
+
+    def runIngestTest(self, func, expectOutput=True):
+        metrics, ref = self._prepareIngestTest()
         with lsst.utils.tests.getTempFilePath(".yaml", expectOutput=expectOutput) as path:
             with open(path, 'w') as fd:
                 yaml.dump(metrics._asdict(), stream=fd)
@@ -446,6 +450,29 @@ class DatastoreTests(DatastoreTestsBase):
                     self.runIngestTest(failOutputExists)
                 else:
                     self.runIngestTest(failNotImplemented)
+
+    def testIngestSymlinkOfSymlink(self):
+        """Special test for symlink to a symlink ingest"""
+        mode = "symlink"
+        if mode not in self.ingestTransferModes:
+            return
+        metrics, ref = self._prepareIngestTest()
+        # The aim of this test is to create a dataset on disk, then
+        # create a symlink to it and finally ingest the symlink such that
+        # the symlink in the datastore points to the original dataset.
+        with lsst.utils.tests.getTempFilePath(".yaml") as realpath:
+            with open(realpath, 'w') as fd:
+                yaml.dump(metrics._asdict(), stream=fd)
+            with lsst.utils.tests.getTempFilePath(".yaml") as sympath:
+                os.symlink(os.path.abspath(realpath), sympath)
+
+                datastore = self.makeDatastore()
+                datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
+
+                uri = ButlerURI(datastore.getUri(ref))
+                self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
+                self.assertTrue(os.path.islink(uri.path))
+                self.assertEqual(os.readlink(uri.path), os.path.abspath(realpath))
 
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
