@@ -192,7 +192,7 @@ dimensions:
         length: 16
         doc: The observation type of this exposure (e.g. dark, bias, science).
       -
-        name: group
+        name: group_name
         type: string
         length: 64
         doc: Group identifier associated with this exposure by the acquisition system.
