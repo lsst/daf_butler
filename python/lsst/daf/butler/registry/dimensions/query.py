@@ -91,7 +91,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # The only columns for this dimension are ones for its required
             # dependencies and its own primary key (guaranteed by the checks in
             # the ctor).
-            for dimension in self.element.graph.required:
+            for dimension in self.element.required:
                 if dimension == self.element:
                     columns.append(targetTable.columns[dimension.name].label(dimension.primaryKey.name))
                 else:
@@ -124,7 +124,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # results.
             return
         self._ensureQuery()
-        joinOn = builder.startJoin(self._query, list(self.element.graph.required),
+        joinOn = builder.startJoin(self._query, list(self.element.required),
                                    self.element.RecordClass.__slots__)
         builder.finishJoin(self._query, joinOn)
         return self._query

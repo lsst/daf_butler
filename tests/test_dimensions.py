@@ -54,6 +54,8 @@ class DimensionTestCase(unittest.TestCase):
             for other in elements[n + 1:]:
                 self.assertGreater(other, element)
                 self.assertGreaterEqual(other, element)
+            if isinstance(element, Dimension):
+                self.assertEqual(element.graph.required, element.required)
         self.assertEqual(DimensionGraph(self.universe, graph.required), graph)
         self.assertCountEqual(graph.required,
                               [dimension for dimension in graph.dimensions
@@ -142,7 +144,7 @@ class DimensionTestCase(unittest.TestCase):
             if element.hasTable and element.viewOf is None:
                 tableSpecs[element] = makeElementTableSpec(element)
         for element, tableSpec in tableSpecs.items():
-            for dep in element.graph.required:
+            for dep in element.required:
                 with self.subTest(element=element.name, dep=dep.name):
                     if dep != element:
                         self.assertIn(dep.name, tableSpec.fields)

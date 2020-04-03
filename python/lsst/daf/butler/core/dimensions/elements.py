@@ -98,8 +98,12 @@ class RelatedDimensions:
             self.dependencies.update(other.dependencies)
 
     required: Set[str]
-    """The names of other dimensions that are used to form the (compound)
-    primary key for this element, as well as foreign keys.
+    """The names of dimensions that are used to form the (compound) primary key
+    for this element, as well as foreign keys.
+
+    For true `Dimension` instances, this should be constructed without the
+    dimension's own name, with the `Dimension` itself adding it later (after
+    `dependencies` is defined).
     """
 
     implied: Set[str]
@@ -114,6 +118,9 @@ class RelatedDimensions:
     `implied`.  After `expand` is called, this may not be true, as this will
     include the required and implied dependencies (recursively) of implied
     dependencies, while `implied` is not expanded recursively.
+
+    For true `Dimension` instances, this never includes the dimension's own
+    name.
     """
 
     spatial: Optional[str]
@@ -199,8 +206,10 @@ class DimensionElement:
         self._attachToUniverse(universe)
         # Expand dependencies.
         self._related.expand(universe)
-        # Define self.implied, a public, sorted version of
-        # self._related.implied.
+        # Define public DimensionElement versions of some of the name sets
+        # in self._related.
+        self.required = NamedValueSet(universe.sorted(self._related.required))
+        self.required.freeze()
         self.implied = NamedValueSet(universe.sorted(self._related.implied))
         self.implied.freeze()
         # Set self.spatial and self.temporal to DimensionElement instances from
@@ -324,14 +333,34 @@ class DimensionElement:
     """Minimal graph that includes this element (`DimensionGraph`).
 
     ``self.graph.required`` includes all dimensions whose primary key values
-    must be provided in order to uniquely identify ``self`` (including ``self``
-    if ``isinstance(self, Dimension)`.  ``self.graph.implied`` includes all
-    dimensions also identified (possibly recursively) by this set.
+    are sufficient (often necessary) to uniquely identify ``self``
+    (including ``self` if ``isinstance(self, Dimension)``.
+    ``self.graph.implied`` includes all dimensions also identified (possibly
+    recursively) by this set.
+    """
+
+    required: NamedValueSet[Dimension]
+    """Dimensions that are sufficient (often necessary) to uniquely identify
+    a record of this dimension element.
+
+    For elements with a database representation, these dimension are exactly
+    those used to form the (possibly compound) primary key, and all dimensions
+    here that are not ``self`` are also used to form foreign keys.
+
+    For `Dimension` instances, this should be exactly the same as
+    ``graph.required``, but that may not be true for `DimensionElement`
+    instances in general.  When they differ, there are multiple combinations
+    of dimensions that uniquely identify this element, but this one is more
+    direct.
     """
 
     implied: NamedValueSet[Dimension]
     """Other dimensions that are uniquely identified directly by a record of
-    this dimension.
+    this dimension element.
+
+    For elements with a database representation, these are exactly the
+    dimensions used to form foreign key constraints whose fields are not
+    (wholly) also part of the primary key.
 
     Unlike ``self.graph.implied``, this set is not expanded recursively.
     """
@@ -384,6 +413,8 @@ class Dimension(DimensionElement):
         Name of the dimension.  Used as at least part of the table name, if
         the dimension in associated with a database table, and as an alternate
         key (instead of the instance itself) in data IDs.
+    related : `RelatedDimensions`
+        Struct containing the names of related dimensions.
     uniqueKeys : iterable of `FieldSpec`
         Fields that can *each* be used to uniquely identify this dimension
         (once all required dependencies are also identified).  The first entry
@@ -394,8 +425,9 @@ class Dimension(DimensionElement):
         constructor.
     """
 
-    def __init__(self, name: str, *, uniqueKeys: Iterable[ddl.FieldSpec], **kwds):
-        super().__init__(name, **kwds)
+    def __init__(self, name: str, *, related: RelatedDimensions, uniqueKeys: Iterable[ddl.FieldSpec], **kwds):
+        related.required.add(name)
+        super().__init__(name, related=related, **kwds)
         self.uniqueKeys = NamedValueSet(uniqueKeys)
         self.uniqueKeys.freeze()
         self.primaryKey, *alternateKeys = uniqueKeys

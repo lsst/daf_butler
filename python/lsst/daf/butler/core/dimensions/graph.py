@@ -323,7 +323,7 @@ class DimensionGraph:
             def addToOrder(element) -> bool:
                 if element.name in done:
                     return
-                predecessors = set(element.graph.required.names)
+                predecessors = set(element.required.names)
                 predecessors.discard(element.name)
                 if not done.issuperset(predecessors):
                     return

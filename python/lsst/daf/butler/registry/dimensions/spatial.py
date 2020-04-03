@@ -58,9 +58,9 @@ def _makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> ddl.Table
         unique=set(),
         foreignKeys=[],
     )
-    for dimension in a.graph.required:
+    for dimension in a.required:
         addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
-    for dimension in b.graph.required:
+    for dimension in b.required:
         addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
     return tableSpec
 
@@ -114,7 +114,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
     ):
         # Docstring inherited from DimensionRecordStorage.
         if regions is not None:
-            dimensions = NamedValueSet(self.element.graph.required)
+            dimensions = NamedValueSet(self.element.required)
             dimensions.add(self.element.universe.universe.commonSkyPix)
             builder.joinTable(self._commonSkyPixOverlapTable, dimensions)
             regions[self.element] = self._table.columns[REGION_FIELD_SPEC.name]
