@@ -106,6 +106,7 @@ class StaticTablesContext:
         to be declared in any order even in the presence of foreign key
         relationships.
         """
+        name = self._db._mangleTableName(name)
         if name in self._tableNames:
             _checkExistingTableDefinition(name, spec, self._inspector.get_columns(name,
                                                                                   schema=self._db.namespace))
@@ -438,6 +439,30 @@ class Database(ABC):
         """
         return shrunk
 
+    def _mangleTableName(self, name: str) -> str:
+        """Map a logical, user-visible table name to the true table name used
+        in the database.
+
+        The default implementation returns the given name unchanged.
+
+        Parameters
+        ----------
+        name : `str`
+            Input table name.  Should not include a namespace (i.e. schema)
+            prefix.
+
+        Returns
+        -------
+        mangled : `str`
+            Mangled version of the table name (still with no namespace prefix).
+
+        Notes
+        -----
+        Reimplementations of this method must be idempotent - mangling an
+        already-mangled name must have no effect.
+        """
+        return name
+
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
                           **kwds) -> sqlalchemy.schema.Column:
         """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
@@ -499,11 +524,12 @@ class Database(ABC):
             SQLAlchemy representation of the constraint.
         """
         name = self.shrinkDatabaseEntityName(
-            "_".join(["fkey", table, spec.table] + list(spec.target) + list(spec.source))
+            "_".join(["fkey", table, self._mangleTableName(spec.table)]
+                     + list(spec.target) + list(spec.source))
         )
         return sqlalchemy.schema.ForeignKeyConstraint(
             spec.source,
-            [f"{spec.table}.{col}" for col in spec.target],
+            [f"{self._mangleTableName(spec.table)}.{col}" for col in spec.target],
             name=name,
             ondelete=spec.onDelete
         )
@@ -536,6 +562,7 @@ class Database(ABC):
         avoid circular dependencies.  These are added by higher-level logic in
         `ensureTableExists`, `getExistingTable`, and `declareStaticTables`.
         """
+        name = self._mangleTableName(name)
         args = [self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields]
         args.extend(
             sqlalchemy.schema.UniqueConstraint(
@@ -638,6 +665,7 @@ class Database(ABC):
         Subclasses may override this method, but usually should not need to.
         """
         assert self._metadata is not None, "Static tables must be declared before dynamic tables."
+        name = self._mangleTableName(name)
         table = self._metadata.tables.get(name if self.namespace is None else f"{self.namespace}.{name}")
         if table is not None:
             if spec.fields.names != set(table.columns.keys()):

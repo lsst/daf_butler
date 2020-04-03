@@ -23,14 +23,12 @@ from __future__ import annotations
 __all__ = ["OracleDatabase"]
 
 from contextlib import closing, contextmanager
-import copy
 from typing import Optional
 
 import sqlalchemy
 import sqlalchemy.ext.compiler
 
 from ..interfaces import Database, ReadOnlyDatabaseError
-from ...core import ddl
 from ..nameShrinker import NameShrinker
 
 
@@ -183,23 +181,10 @@ class OracleDatabase(Database):
     def expandDatabaseEntityName(self, shrunk: str) -> str:
         return self._shrinker.expand(shrunk)
 
-    def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
-                               **kwds) -> sqlalchemy.schema.ForeignKeyConstraint:
-        if self.prefix is not None:
-            spec = copy.copy(spec)
-            spec.table = self.prefix + spec.table
-        return super()._convertForeignKeySpec(table, spec, metadata, **kwds)
-
-    def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
-                          **kwds) -> sqlalchemy.schema.Table:
+    def _mangleTableName(self, name: str) -> str:
         if self.prefix is not None and not name.startswith(self.prefix):
             name = self.prefix + name
-        return super()._convertTableSpec(name, spec, metadata, **kwds)
-
-    def getExistingTable(self, name: str, spec: ddl.TableSpec) -> Optional[sqlalchemy.schema.Table]:
-        if self.prefix is not None and not name.startswith(self.prefix):
-            name = self.prefix + name
-        return super().getExistingTable(name, spec)
+        return name
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
         if not self.isWriteable():
