@@ -99,7 +99,7 @@ class DimensionUniverse(DimensionGraph):
         # dependencies added.
         while elementsToDo:
             unblocked = [name for name, element in elementsToDo.items()
-                         if element._directDependencyNames.isdisjoint(elementsToDo.keys())]
+                         if element._related.dependencies.isdisjoint(elementsToDo.keys())]
             unblocked.sort()  # Break ties lexicographically.
             if not unblocked:
                 raise RuntimeError(f"Cycle detected in dimension elements: {elementsToDo.keys()}.")

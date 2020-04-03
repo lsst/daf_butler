@@ -94,7 +94,7 @@ class DimensionGraph:
         if conform:
             # Expand given dimensions to include all dependencies.
             for name in tuple(names):  # iterate over a temporary copy so we can modify the original
-                names.update(universe[name]._recursiveDependencyNames)
+                names.update(universe[name]._related.dependencies)
         # Look in the cache of existing graphs, with the expanded set of names.
         cacheKey = frozenset(names)
         self = universe._cache.get(cacheKey, None)
@@ -131,7 +131,7 @@ class DimensionGraph:
         self.implied = NamedValueSet()
         for i1, dim1 in enumerate(self.dimensions):
             for i2, dim2 in enumerate(self.dimensions):
-                if dim1.name in dim2._impliedDependencyNames:
+                if dim1.name in dim2._related.implied:
                     self.implied.add(dim1)
                     break
             else:

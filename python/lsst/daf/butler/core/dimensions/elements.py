@@ -23,7 +23,14 @@ from __future__ import annotations
 
 __all__ = ["DimensionElement", "Dimension", "SkyPixDimension"]
 
-from typing import Dict, Optional, Iterable, AbstractSet, TYPE_CHECKING
+from typing import (
+    AbstractSet,
+    Dict,
+    Iterable,
+    Optional,
+    Set,
+    TYPE_CHECKING,
+)
 
 from sqlalchemy import Integer
 
@@ -35,6 +42,89 @@ from .graph import DimensionGraph
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .universe import DimensionUniverse
+
+
+class RelatedDimensions:
+    """A semi-internal struct containing the names of the dimension elements
+    related to the one holding the instance of this struct.
+
+    This object is used as the type of `DimensionElement._related`, which is
+    considered private _to the dimensions subpackage_, rather that private or
+    protected within `DimensionElement` itself.
+
+    Parameters
+    ----------
+    required : `set` [ `str` ]
+        The names of other dimensions that are used to form the (compound)
+        primary key for this element, as well as foreign keys.
+    implied : `set` [ `str` ]
+        The names of other dimensions that are used to define foreign keys
+        for this element, but not primary keys.
+    spatial : `str`, optional
+        The name of a `DimensionElement` whose spatial regions this element's
+        region aggregates, or the name of this element if it has a region
+        that is not an aggregate.  `None` (default) if this element is not
+        associated with region.
+    temporal : `str`, optional
+        The name of a `DimensionElement` whose timespans this element's
+        timespan aggregates, or the name of this element if it has a timespan
+        that is not an aggregate.  `None` (default) if this element is not
+        associated with timespan.
+    """
+    def __init__(self, required: Set[str], implied: Set[str],
+                 spatial: Optional[str] = None, temporal: Optional[str] = None):
+        self.required = required
+        self.implied = implied
+        self.spatial = spatial
+        self.temporal = temporal
+        self.dependencies = set(self.required | self.implied)
+
+    __slots__ = ("required", "implied", "spatial", "temporal", "dependencies")
+
+    def expand(self, universe: DimensionUniverse):
+        """Expand ``required`` and ``dependencies`` recursively.
+
+        Parameters
+        ----------
+        universe : `DimensionUniverse`
+            Object containing all other dimension elements.
+        """
+        for req in tuple(self.required):
+            other = universe.elements[req]._related
+            self.required.update(other.required)
+            self.dependencies.update(other.dependencies)
+        for dep in self.implied:
+            other = universe.elements[dep]._related
+            self.dependencies.update(other.dependencies)
+
+    required: Set[str]
+    """The names of other dimensions that are used to form the (compound)
+    primary key for this element, as well as foreign keys.
+    """
+
+    implied: Set[str]
+    """The names of other dimensions that are used to define foreign keys for
+    this element, but not primary keys.
+    """
+
+    dependencies: Set[str]
+    """The names of all dimensions in `required` or `implied`.
+
+    Immediately after construction, this is equal to the union of `required`
+    `implied`.  After `expand` is called, this may not be true, as this will
+    include the required and implied dependencies (recursively) of implied
+    dependencies, while `implied` is not expanded recursively.
+    """
+
+    spatial: Optional[str]
+    """The name of a dimension element to which this element delegates spatial
+    region handling, if any (see `DimensionElement.spatial`).
+    """
+
+    temporal: Optional[str]
+    """The name of a dimension element to which this element delegates
+    timespan handling, if any (see `DimensionElement.temporal`).
+    """
 
 
 @immutable
@@ -54,23 +144,8 @@ class DimensionElement:
     name : `str`
         Name of the element.  Used as at least part of the table name, if
         the dimension in associated with a database table.
-    directDependencyNames : iterable of `str`
-        The names of all dimensions this elements depends on directly,
-        including both required dimensions (those needed to identify a
-        record of this element) an implied dimensions.
-    impliedDependencyNames : iterable of `str`
-        The names of all dimensions that are identified by records of this
-        element, but are not needed to identify it.
-    spatial : `str`, optional
-        The name of a `DimensionElement` whose spatial regions this element's
-        region aggregates, or the name of this element if it has a region
-        that is not an aggregate.  `None` (default) if this element is not
-        associated with region.
-    temporal : `str`, optional
-        The name of a `DimensionElement` whose timespans this element's
-        timespan aggregates, or the name of this element if it has a timespan
-        that is not an aggregate.  `None` (default) if this element is not
-        associated with timespan.
+    related : `RelatedDimensions`
+        Struct containing the names of related dimensions.
     metadata : iterable of `FieldSpec`
         Additional metadata fields included in this element's table.
     cached : `bool`
@@ -93,18 +168,12 @@ class DimensionElement:
     """
 
     def __init__(self, name: str, *,
-                 directDependencyNames: Iterable[str] = (),
-                 impliedDependencyNames: Iterable[str] = (),
-                 spatialName: Optional[str] = None,
-                 temporalName: Optional[str] = None,
+                 related: RelatedDimensions,
                  metadata: Iterable[ddl.FieldSpec] = (),
                  cached: bool = False,
                  viewOf: Optional[str] = None):
         self.name = name
-        self._directDependencyNames = frozenset(directDependencyNames)
-        self._impliedDependencyNames = frozenset(impliedDependencyNames)
-        self._spatialName = spatialName
-        self._temporalName = temporalName
+        self._related = related
         self.metadata = NamedValueSet(metadata)
         self.metadata.freeze()
         self.cached = cached
@@ -128,19 +197,16 @@ class DimensionElement:
         # let subclasses override which attributes by calling a separate
         # method.
         self._attachToUniverse(universe)
-        # Expand direct dependencies into recursive dependencies.
-        expanded = set(self._directDependencyNames)
-        for name in self._directDependencyNames:
-            expanded.update(universe[name]._recursiveDependencyNames)
-        self._recursiveDependencyNames = frozenset(expanded)
+        # Expand dependencies.
+        self._related.expand(universe)
         # Define self.implied, a public, sorted version of
-        # self._impliedDependencyNames.
-        self.implied = NamedValueSet(universe.sorted(self._impliedDependencyNames))
+        # self._related.implied.
+        self.implied = NamedValueSet(universe.sorted(self._related.implied))
         self.implied.freeze()
         # Set self.spatial and self.temporal to DimensionElement instances from
-        # the private *Name versions of those.
+        # the private _related versions of those.
         for s in ("spatial", "temporal"):
-            targetName = getattr(self, f"_{s}Name", None)
+            targetName = getattr(self._related, s, None)
             if targetName is None:
                 target = None
             elif targetName == self.name:
@@ -173,7 +239,7 @@ class DimensionElement:
         Called only by `_finish`, but may be overridden by subclasses.
         """
         from .graph import DimensionGraph
-        self.graph = DimensionGraph(self.universe, names=self._recursiveDependencyNames, conform=False)
+        self.graph = DimensionGraph(self.universe, names=self._related.dependencies, conform=False)
 
     def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]):
         """Return `True` if this element should be included in `DimensionGraph`
@@ -181,7 +247,7 @@ class DimensionElement:
 
         For internal use by `DimensionGraph` only.
         """
-        return self._directDependencyNames.issubset(dimensionNames)
+        return self._related.required.issubset(dimensionNames)
 
     def __str__(self) -> str:
         return self.name
@@ -344,7 +410,7 @@ class Dimension(DimensionElement):
     def _attachGraph(self):
         # Docstring inherited from DimensionElement._attachGraph.
         self.graph = DimensionGraph(self.universe,
-                                    names=self._recursiveDependencyNames.union([self.name]),
+                                    names=self._related.dependencies.union([self.name]),
                                     conform=False)
 
     def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]):
@@ -396,8 +462,9 @@ class SkyPixDimension(Dimension):
     """
 
     def __init__(self, name: str, pixelization: Pixelization):
+        related = RelatedDimensions(required=set(), implied=set(), spatial=self)
         uniqueKeys = [ddl.FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
-        super().__init__(name, uniqueKeys=uniqueKeys, spatialName=name)
+        super().__init__(name, related=related, uniqueKeys=uniqueKeys)
         self.pixelization = pixelization
 
     def hasTable(self) -> bool:
