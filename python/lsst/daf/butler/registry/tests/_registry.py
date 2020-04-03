@@ -150,8 +150,8 @@ class RegistryTests(ABC):
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
     def testDimensions(self):
-        """Tests for `Registry.insertDimensionData` and
-        `Registry.expandDataId`.
+        """Tests for `Registry.insertDimensionData`,
+        `Registry.syncDimensionData`, and `Registry.expandDataId`.
         """
         registry = self.makeRegistry()
         dimensionName = "instrument"
@@ -193,6 +193,22 @@ class RegistryTests(ABC):
             ).records[dimensionName2].toDict(),
             dimensionValue2
         )
+        # Use syncDimensionData to insert a new record successfully.
+        dimensionName3 = "detector"
+        dimensionValue3 = {"instrument": "DummyCam", "id": 1, "full_name": "one",
+                           "name_in_raft": "zero", "purpose": "SCIENCE"}
+        self.assertTrue(registry.syncDimensionData(dimensionName3, dimensionValue3))
+        # Sync that again.  Note that one field ("raft") is NULL, and that
+        # should be okay.
+        self.assertFalse(registry.syncDimensionData(dimensionName3, dimensionValue3))
+        # Now try that sync with the same primary key but a different value.
+        # This should fail.
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.syncDimensionData(
+                dimensionName3,
+                {"instrument": "DummyCam", "id": 1, "full_name": "one",
+                 "name_in_raft": "four", "purpose": "SCIENCE"}
+            )
 
     def testDataset(self):
         """Basic tests for `Registry.insertDatasets`, `Registry.getDataset`,

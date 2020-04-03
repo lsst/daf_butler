@@ -66,6 +66,7 @@ from .queries import (
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
 from .wildcards import CollectionQuery, CollectionSearch
+from .interfaces import DatabaseConflictError
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -1287,6 +1288,52 @@ class Registry:
             records = data
         storage = self._dimensions[element]
         storage.insert(*records)
+
+    def syncDimensionData(self, element: Union[DimensionElement, str],
+                          row: Union[dict, DimensionRecord],
+                          conform: bool = True) -> bool:
+        """Synchronize the given dimension record with the database, inserting
+        if it does not already exist and comparing values if it does.
+
+        Parameters
+        ----------
+        element : `DimensionElement` or `str`
+            The `DimensionElement` or name thereof that identifies the table
+            records will be inserted into.
+        row : `dict` or `DimensionRecord`
+           The record to insert.
+        conform : `bool`, optional
+            If `False` (`True` is default) perform no checking or conversions,
+            and assume that ``element`` is a `DimensionElement` instance and
+            ``data`` is a one or more `DimensionRecord` instances of the
+            appropriate subclass.
+
+        Returns
+        -------
+        inserted : `bool`
+            `True` if a new row was inserted, `False` otherwise.
+
+        Raises
+        ------
+        ConflictingDefinitionError
+            Raised if the record exists in the database (according to primary
+            key lookup) but is inconsistent with the given one.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
+        """
+        if conform:
+            element = self.dimensions[element]  # if this is a name, convert it to a true DimensionElement.
+            record = element.RecordClass.fromDict(row) if not type(row) is element.RecordClass else row
+        else:
+            record = row
+        storage = self._dimensions[element]
+        try:
+            return storage.sync(record)
+        except DatabaseConflictError as err:
+            raise ConflictingDefinitionError(str(err)) from err
 
     def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.

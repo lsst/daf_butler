@@ -133,6 +133,10 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert {self.element.name} records.")
 
+    def sync(self, record: DimensionRecord):
+        # Docstring inherited from DimensionRecordStorage.sync.
+        raise TypeError(f"Cannot sync {self.element.name} records.")
+
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass

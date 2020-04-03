@@ -79,6 +79,13 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         for record in records:
             self._cache[record.dataId] = record
 
+    def sync(self, record: DimensionRecord):
+        # Docstring inherited from DimensionRecordStorage.sync.
+        inserted = self._nested.sync(record)
+        if inserted:
+            self._cache[record.dataId] = record
+        return inserted
+
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         dataId = DataCoordinate.standardize(dataId, graph=self.element.graph)

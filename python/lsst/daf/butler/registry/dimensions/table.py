@@ -119,3 +119,13 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         elementRows = [record.toDict() for record in records]
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
+
+    def sync(self, record: DimensionRecord) -> bool:
+        # Docstring inherited from DimensionRecordStorage.sync.
+        n = len(self.element.required)
+        _, inserted = self._db.sync(
+            self._table,
+            keys={k: getattr(record, k) for k in record.__slots__[:n]},
+            compared={k: getattr(record, k) for k in record.__slots__[n:]},
+        )
+        return inserted
