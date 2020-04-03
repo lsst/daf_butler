@@ -223,11 +223,14 @@ class DimensionElement:
             elif targetName == self.name:
                 target = self
             else:
-                try:
-                    target = elementsToDo[targetName]
-                except KeyError as err:
-                    raise LookupError(f"Could not find {s} provider for {self.name}; either it is missing "
-                                      f"or the required dependency relationship is inverted.") from err
+                target = universe.elements.get(targetName)
+                if target is None:
+                    try:
+                        target = elementsToDo[targetName]
+                    except KeyError as err:
+                        raise LookupError(
+                            f"Could not find {s} provider {targetName} for {self.name}."
+                        ) from err
             setattr(self, s, target)
         # Attach a DimensionGraph that provides the public API for getting
         # at requirements.  Again delegate to subclasses.

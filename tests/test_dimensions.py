@@ -79,8 +79,8 @@ class DimensionTestCase(unittest.TestCase):
 
     def testConfigRead(self):
         self.assertEqual(self.universe.dimensions.names,
-                         {"instrument", "visit", "exposure", "detector", "physical_filter",
-                          "abstract_filter", "subfilter", "calibration_label",
+                         {"instrument", "visit", "visit_system", "exposure", "detector",
+                          "physical_filter", "abstract_filter", "subfilter", "calibration_label",
                           "skymap", "tract", "patch", "htm7", "htm9"})
 
     def testGraphs(self):
@@ -90,14 +90,15 @@ class DimensionTestCase(unittest.TestCase):
             self.checkGraphInvariants(element.graph)
 
     def testInstrumentDimensions(self):
-        graph = DimensionGraph(self.universe, names=("exposure", "detector", "calibration_label"))
+        graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit", "calibration_label"))
         self.assertCountEqual(graph.dimensions.names,
                               ("instrument", "exposure", "detector", "calibration_label",
-                               "visit", "physical_filter", "abstract_filter"))
+                               "visit", "physical_filter", "abstract_filter", "visit_system"))
         self.assertCountEqual(graph.required.names, ("instrument", "exposure", "detector",
-                                                     "calibration_label"))
-        self.assertCountEqual(graph.implied.names, ("visit", "physical_filter", "abstract_filter"))
-        self.assertCountEqual(graph.elements.names - graph.dimensions.names, ("visit_detector_region",))
+                                                     "calibration_label", "visit"))
+        self.assertCountEqual(graph.implied.names, ("physical_filter", "abstract_filter", "visit_system"))
+        self.assertCountEqual(graph.elements.names - graph.dimensions.names,
+                              ("visit_detector_region", "visit_definition"))
 
     def testCalibrationDimensions(self):
         graph = DimensionGraph(self.universe, names=("calibration_label", "physical_filter", "detector"))
@@ -110,12 +111,13 @@ class DimensionTestCase(unittest.TestCase):
         self.assertCountEqual(graph.elements.names, graph.dimensions.names)
 
     def testObservationDimensions(self):
-        graph = DimensionGraph(self.universe, names=("exposure", "detector"))
+        graph = DimensionGraph(self.universe, names=("exposure", "detector", "visit"))
         self.assertCountEqual(graph.dimensions.names, ("instrument", "detector", "visit", "exposure",
-                                                       "physical_filter", "abstract_filter"))
-        self.assertCountEqual(graph.required.names, ("instrument", "detector", "exposure"))
-        self.assertCountEqual(graph.implied.names, ("physical_filter", "abstract_filter", "visit"))
-        self.assertCountEqual(graph.elements.names - graph.dimensions.names, ("visit_detector_region",))
+                                                       "physical_filter", "abstract_filter", "visit_system"))
+        self.assertCountEqual(graph.required.names, ("instrument", "detector", "exposure", "visit"))
+        self.assertCountEqual(graph.implied.names, ("physical_filter", "abstract_filter", "visit_system"))
+        self.assertCountEqual(graph.elements.names - graph.dimensions.names,
+                              ("visit_detector_region", "visit_definition"))
         self.assertCountEqual(graph.spatial.names, ("visit_detector_region",))
         self.assertCountEqual(graph.temporal.names, ("exposure",))
 

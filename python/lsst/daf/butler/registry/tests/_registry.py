@@ -518,19 +518,32 @@ class RegistryTests(ABC):
             *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in range(1, 6)]
         )
         registry.insertDimensionData(
+            "visit_system",
+            dict(instrument="DummyCam", id=1, name="default"),
+        )
+        registry.insertDimensionData(
             "visit",
-            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i", visit_system=1),
+            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r", visit_system=1),
+            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r", visit_system=1),
         )
         registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=101, name="101", visit=10, physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=110, name="110", visit=11, physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=111, name="111", visit=11, physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=200, name="200", visit=20, physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=201, name="201", visit=20, physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=110, name="110", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=111, name="111", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=200, name="200", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=201, name="201", physical_filter="dummy_r"),
+        )
+        registry.insertDimensionData(
+            "visit_definition",
+            dict(instrument="DummyCam", exposure=100, visit_system=1, visit=10),
+            dict(instrument="DummyCam", exposure=101, visit_system=1, visit=10),
+            dict(instrument="DummyCam", exposure=110, visit_system=1, visit=11),
+            dict(instrument="DummyCam", exposure=111, visit_system=1, visit=11),
+            dict(instrument="DummyCam", exposure=200, visit_system=1, visit=20),
+            dict(instrument="DummyCam", exposure=201, visit_system=1, visit=20),
         )
         # dataset types
         run1 = "test1_r"
@@ -583,7 +596,7 @@ class RegistryTests(ABC):
         rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1, expand=True))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
             packer1 = registry.dimensions.makePacker("visit_detector", dataId)
             packer2 = registry.dimensions.makePacker("exposure_detector", dataId)
             self.assertEqual(packer1.unpack(packer1.pack(dataId)),
@@ -600,7 +613,7 @@ class RegistryTests(ABC):
         rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=tagged2))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 20))
@@ -610,7 +623,7 @@ class RegistryTests(ABC):
         rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=[run1, tagged2]))
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 110, 111, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11, 20))
@@ -809,15 +822,10 @@ class RegistryTests(ABC):
             *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in (1, 2, 3, 4, 5)]
         )
         registry.insertDimensionData(
-            "visit",
-            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_i"),
-        )
-        registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i",
+            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i",
                  datetime_begin=_dt("2005-12-15 02:00:00"), datetime_end=_dt("2005-12-15 03:00:00")),
-            dict(instrument="DummyCam", id=101, name="101", visit=11, physical_filter="dummy_i",
+            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i",
                  datetime_begin=_dt("2005-12-16 02:00:00"), datetime_end=_dt("2005-12-16 03:00:00")),
         )
         registry.insertDimensionData(

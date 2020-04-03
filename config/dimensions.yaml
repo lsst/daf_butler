@@ -140,7 +140,7 @@ dimensions:
         type: string
         length: 64
       requires: [instrument]
-      implies: [physical_filter]
+      implies: [physical_filter, visit_system]
       spatial: visit_detector_region
       temporal: exposure
       metadata:
@@ -182,7 +182,7 @@ dimensions:
         type: string
         length: 64
       requires: [instrument]
-      implies: [visit, physical_filter]
+      implies: [physical_filter]
       temporal: exposure
       metadata:
       -
@@ -286,6 +286,28 @@ dimensions:
         visit-detector combinations.
       requires: [visit, detector]
       spatial: visit_detector_region
+
+    visit_system:
+      doc: >
+        A system of self-consistent visit definitions, within which each
+        exposure should appear at most once.
+      keys:
+      -
+        name: id
+        type: int
+      -
+        name: name
+        type: string
+        length: 32
+      requires: [instrument]
+
+    visit_definition:
+      doc: >
+        A many-to-many join table that relates exposures to the visits they
+        belong to.
+      requires: [exposure, visit_system]
+      implies: [visit]
+      always_join: true
 
   packers:
     visit_detector:
