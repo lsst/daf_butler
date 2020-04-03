@@ -23,6 +23,7 @@ import os
 from contextlib import contextmanager
 import secrets
 import unittest
+import gc
 
 try:
     # It's possible but silly to have testing.postgresql installed without
@@ -51,6 +52,9 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
     @classmethod
     def tearDownClass(cls):
+        # Clean up any lingering SQLAlchemy engines/connections
+        # so they're closed before we shut down the server.
+        gc.collect()
         cls.server.stop()
 
     def makeEmptyDatabase(self, origin: int = 0) -> PostgresqlDatabase:

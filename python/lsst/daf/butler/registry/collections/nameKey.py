@@ -72,7 +72,7 @@ _TABLES_SPEC = _TablesTuple(
     collection_chain=ddl.TableSpec(
         fields=[
             ddl.FieldSpec("parent", dtype=sqlalchemy.String, length=64, primaryKey=True),
-            ddl.FieldSpec("index", dtype=sqlalchemy.SmallInteger, primaryKey=True),
+            ddl.FieldSpec("position", dtype=sqlalchemy.SmallInteger, primaryKey=True),
             ddl.FieldSpec("child", dtype=sqlalchemy.String, length=64, nullable=False),
             ddl.FieldSpec("dataset_type_name", dtype=sqlalchemy.String, length=128, nullable=True),
         ],
@@ -161,12 +161,12 @@ class NameKeyChainedCollectionRecord(ChainedCollectionRecord):
         i = 0
         for child, restriction in children.iter(manager, withRestrictions=True, flattenChains=False):
             if restriction.names is ...:
-                rows.append({"parent": self.key, "child": child.key, "index": i,
+                rows.append({"parent": self.key, "child": child.key, "position": i,
                              "dataset_type_name": ""})
                 i += 1
             else:
                 for name in restriction.names:
-                    rows.append({"parent": self.key, "child": child.key, "index": i,
+                    rows.append({"parent": self.key, "child": child.key, "position": i,
                                  "dataset_type_name": name})
                     i += 1
         with self._db.transaction():
@@ -182,7 +182,7 @@ class NameKeyChainedCollectionRecord(ChainedCollectionRecord):
         ).where(
             self._table.columns.parent == self.key
         ).order_by(
-            self._table.columns.index
+            self._table.columns.position
         )
         # It's fine to have consecutive rows with the same collection name
         # and different dataset type names - CollectionSearch will group those
@@ -227,7 +227,8 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
         if prefix is None:
             prefix = "collection"
         original = _TABLES_SPEC.collection.fields["name"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwds)
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
+                             length=original.length, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
@@ -240,7 +241,8 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
         if prefix is None:
             prefix = "run"
         original = _TABLES_SPEC.run.fields["name"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwds)
+        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
+                             length=original.length, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
