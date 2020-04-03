@@ -227,7 +227,8 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
         if prefix is None:
             prefix = "collection"
         original = _TABLES_SPEC.collection.fields["name"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwds)
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
+                             length=original.length, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
@@ -240,7 +241,8 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
         if prefix is None:
             prefix = "run"
         original = _TABLES_SPEC.run.fields["name"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwds)
+        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
+                             length=original.length, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
