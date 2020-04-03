@@ -28,6 +28,7 @@ import unittest
 
 import sqlalchemy
 
+from lsst.utils import doImport
 from lsst.daf.butler import DimensionUniverse, ddl
 from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.databases.oracle import OracleDatabase
@@ -171,7 +172,14 @@ class OracleRegistryTestCase(unittest.TestCase, RegistryTests):
         # we can try to pass a prefix through via "+" in a namespace.
         database = OracleDatabase.fromConnection(connection=self._connection, origin=0,
                                                  namespace=f"+{prefix}")
-        return Registry(database=database, dimensions=DimensionUniverse(config), create=True)
+        opaque = doImport(config["managers", "opaque"])
+        dimensions = doImport(config["managers", "dimensions"])
+        collections = doImport(config["managers", "collections"])
+        return Registry(database=database,
+                        opaque=opaque,
+                        dimensions=dimensions,
+                        collections=collections,
+                        universe=DimensionUniverse(config), create=True)
 
 
 if __name__ == "__main__":
