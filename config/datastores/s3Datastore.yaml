@@ -2,7 +2,7 @@ datastore:
   cls: lsst.daf.butler.datastores.s3Datastore.S3Datastore
   root: <butlerRoot>/datastore
   records:
-    table: s3datastorerecords
+    table: s3_datastore_records
   create: true
   templates:
     # valid_first and valid_last here are YYYYMMDD; we assume we'll switch to
