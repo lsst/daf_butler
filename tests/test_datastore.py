@@ -430,7 +430,7 @@ class DatastoreTests(DatastoreTestsBase):
     def testIngestTransfer(self):
         """Test ingesting existing files after transferring them.
         """
-        for mode in ("copy", "move", "hardlink", "symlink", "auto"):
+        for mode in ("copy", "move", "link", "hardlink", "symlink", "auto"):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
 
@@ -496,7 +496,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
     canIngestNoTransferAuto = True
-    ingestTransferModes = (None, "copy", "move", "hardlink", "symlink", "auto")
+    ingestTransferModes = (None, "copy", "move", "link", "hardlink", "symlink", "auto")
     isEphemeral = False
     rootKeys = ("root",)
     validationCanFail = True
@@ -612,7 +612,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
     canIngestNoTransferAuto = False
-    ingestTransferModes = ("copy", "hardlink", "symlink", "auto")
+    ingestTransferModes = ("copy", "hardlink", "symlink", "link", "auto")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
     validationCanFail = True
@@ -651,7 +651,7 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
 
                     # Try ingest
                     if self.canIngest:
-                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="symlink")
+                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
                         self.assertTrue(datastore.exists(ref))
                         datastore.remove(ref)
                 else:
@@ -662,7 +662,7 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
                     # Again with ingest
                     if self.canIngest:
                         with self.assertRaises(DatasetTypeNotSupportedError):
-                            datastore.ingest(FileDataset(testfile.name, [ref]), transfer="symlink")
+                            datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
                         self.assertFalse(datastore.exists(ref))
 
 
@@ -746,7 +746,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
                     # Check that ingest works
                     if ingest:
-                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="symlink")
+                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
                         self.assertTrue(datastore.exists(ref))
 
                         # Check each datastore inside the chained datastore
@@ -762,7 +762,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
                         datastore.remove(ref)
                     else:
                         with self.assertRaises(DatasetTypeNotSupportedError):
-                            datastore.ingest(FileDataset(testfile.name, [ref]), transfer="symlink")
+                            datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
 
                 else:
                     with self.assertRaises(DatasetTypeNotSupportedError):
@@ -771,7 +771,7 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
 
                     # Again with ingest
                     with self.assertRaises(DatasetTypeNotSupportedError):
-                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="symlink")
+                        datastore.ingest(FileDataset(testfile.name, [ref]), transfer="link")
                     self.assertFalse(datastore.exists(ref))
 
 

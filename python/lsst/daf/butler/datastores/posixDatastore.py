@@ -230,7 +230,7 @@ class PosixDatastore(FileLikeDatastore):
             # Assume first dataset is representative
             self._pathInStore(datasets[0].path)
         except RuntimeError:
-            transfer = "symlink"
+            transfer = "link"
         else:
             transfer = None
         return transfer
@@ -294,6 +294,14 @@ class PosixDatastore(FileLikeDatastore):
             elif transfer == "copy":
                 with self._transaction.undoWith("copy", os.remove, newFullPath):
                     shutil.copy(fullPath, newFullPath)
+            elif transfer == "link":
+                with self._transaction.undoWith("link", os.unlink, newFullPath):
+                    # Try hard link and if that fails use a symlink
+                    try:
+                        os.link(fullPath, newFullPath)
+                    except OSError:
+                        # Read through existing symlinks
+                        os.symlink(os.path.realpath(fullPath), newFullPath)
             elif transfer == "hardlink":
                 with self._transaction.undoWith("hardlink", os.unlink, newFullPath):
                     os.link(fullPath, newFullPath)

@@ -495,7 +495,9 @@ class Datastore(metaclass=ABCMeta):
             If `None` (default), the file must already be in a location
             appropriate for the datastore (e.g. within its root directory),
             and will not be modified.  Other choices include "move", "copy",
-            "symlink", and "hardlink".  Most datastores do not support all
+            "link", "symlink", and "hardlink". "link" is a special transfer
+            mode that will first try to make a hardlink and if that fails
+            a symlink will be used instead.  Most datastores do not support all
             transfer modes. "auto" is a special option that will let the
             data store choose the most natural option for itself.
 
