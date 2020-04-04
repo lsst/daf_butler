@@ -442,10 +442,8 @@ class FileLikeDatastore(GenericBaseDatastore):
             Path of a file to be ingested.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
-            If `None` (default), the file must already be in a location
-            appropriate for the datastore (e.g. within its root directory),
-            and will not be moved.  Other choices include "move", "copy",
-            "symlink", and "hardlink".  This is provided only so
+            See `ingest` for details of transfer modes.
+            This implementation is provided only so
             `NotImplementedError` can be raised if the mode is not supported;
             actual transfers are deferred to `_extractIngestInfo`.
 
@@ -487,10 +485,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             `Formatter` subclass to use for this dataset.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
-            If `None` (default), the file must already be in a location
-            appropriate for the datastore (e.g. within its root directory),
-            and will not be modified.  Other choices include "move", "copy",
-            "symlink", and "hardlink".
+            See `ingest` for details of transfer modes.
 
         Returns
         -------

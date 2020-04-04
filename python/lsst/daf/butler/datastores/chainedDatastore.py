@@ -27,7 +27,7 @@ import time
 import logging
 import warnings
 import itertools
-from typing import List, Sequence, Optional, Tuple
+from typing import List, Sequence, Optional, Tuple, Any
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
@@ -330,6 +330,25 @@ class ChainedDatastore(Datastore):
 
         if self._transaction is not None:
             self._transaction.registerUndo('put', self.remove, ref)
+
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
+        # Docstring inherited from base class.
+        if transfer != "auto":
+            return transfer
+        # Ask each datastore what they think auto means
+        transfers = {d._overrideTransferMode(*datasets, transfer=transfer) for d in self.datastores}
+
+        # Remove any untranslated "auto" values
+        transfers.discard(transfer)
+
+        if len(transfers) == 1:
+            return transfers.pop()
+        if not transfers:
+            # Everything reported "auto"
+            return transfer
+
+        raise RuntimeError("Chained datastore does not yet support different transfer modes"
+                           f" from 'auto' in each child datastore (wanted {transfers})")
 
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> _IngestPrepData:
         # Docstring inherited from Datastore._prepIngest.

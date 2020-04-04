@@ -380,43 +380,57 @@ class DatastoreTests(DatastoreTestsBase):
     def testIngestNoTransfer(self):
         """Test ingesting existing files with no transfer.
         """
-        datastore = self.makeDatastore()
+        for mode in (None, "auto"):
 
-        def succeed(obj, path, ref):
-            """Ingest a file already in the datastore root."""
-            # first move it into the root, and adjust the path accordingly
-            path = shutil.copy(path, datastore.root)
-            path = os.path.relpath(path, start=datastore.root)
-            datastore.ingest(FileDataset(path=path, refs=ref), transfer=None)
-            self.assertEqual(obj, datastore.get(ref))
+            # Some datastores have auto but can't do in place transfer
+            if mode == "auto" and "auto" in self.ingestTransferModes and not self.canIngestNoTransferAuto:
+                continue
 
-        def failInputDoesNotExist(obj, path, ref):
-            """Can't ingest files if we're given a bad path."""
-            with self.assertRaises(FileNotFoundError):
-                datastore.ingest(FileDataset(path="this-file-does-not-exist.yaml", refs=ref), transfer=None)
-            self.assertFalse(datastore.exists(ref))
+            with self.subTest(mode=mode):
+                datastore = self.makeDatastore()
 
-        def failOutsideRoot(obj, path, ref):
-            """Can't ingest files outside of datastore root."""
-            with self.assertRaises(RuntimeError):
-                datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=None)
-            self.assertFalse(datastore.exists(ref))
+                def succeed(obj, path, ref):
+                    """Ingest a file already in the datastore root."""
+                    # first move it into the root, and adjust the path
+                    # accordingly
+                    path = shutil.copy(path, datastore.root)
+                    path = os.path.relpath(path, start=datastore.root)
+                    datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
+                    self.assertEqual(obj, datastore.get(ref))
 
-        def failNotImplemented(obj, path, ref):
-            with self.assertRaises(NotImplementedError):
-                datastore.ingest(FileDataset(path=path, refs=ref), transfer=None)
+                def failInputDoesNotExist(obj, path, ref):
+                    """Can't ingest files if we're given a bad path."""
+                    with self.assertRaises(FileNotFoundError):
+                        datastore.ingest(FileDataset(path="this-file-does-not-exist.yaml", refs=ref),
+                                         transfer=mode)
+                    self.assertFalse(datastore.exists(ref))
 
-        if None in self.ingestTransferModes:
-            self.runIngestTest(failOutsideRoot)
-            self.runIngestTest(failInputDoesNotExist)
-            self.runIngestTest(succeed)
-        else:
-            self.runIngestTest(failNotImplemented)
+                def failOutsideRoot(obj, path, ref):
+                    """Can't ingest files outside of datastore root unless
+                    auto."""
+                    if mode == "auto":
+                        datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
+                        self.assertTrue(datastore.exists(ref))
+                    else:
+                        with self.assertRaises(RuntimeError):
+                            datastore.ingest(FileDataset(path=os.path.abspath(path), refs=ref), transfer=mode)
+                        self.assertFalse(datastore.exists(ref))
+
+                def failNotImplemented(obj, path, ref):
+                    with self.assertRaises(NotImplementedError):
+                        datastore.ingest(FileDataset(path=path, refs=ref), transfer=mode)
+
+                if mode in self.ingestTransferModes:
+                    self.runIngestTest(failOutsideRoot)
+                    self.runIngestTest(failInputDoesNotExist)
+                    self.runIngestTest(succeed)
+                else:
+                    self.runIngestTest(failNotImplemented)
 
     def testIngestTransfer(self):
         """Test ingesting existing files after transferring them.
         """
-        for mode in ("copy", "move", "hardlink", "symlink"):
+        for mode in ("copy", "move", "hardlink", "symlink", "auto"):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
 
@@ -429,7 +443,9 @@ class DatastoreTests(DatastoreTestsBase):
                 def failInputDoesNotExist(obj, path, ref):
                     """Can't ingest files if we're given a bad path."""
                     with self.assertRaises(FileNotFoundError):
-                        datastore.ingest(FileDataset(path="this-file-does-not-exist.yaml", refs=ref),
+                        # Ensure the file does not look like it is in
+                        # datastore for auto mode
+                        datastore.ingest(FileDataset(path="../this-file-does-not-exist.yaml", refs=ref),
                                          transfer=mode)
                     self.assertFalse(datastore.exists(ref))
 
@@ -479,7 +495,8 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
-    ingestTransferModes = (None, "copy", "move", "hardlink", "symlink")
+    canIngestNoTransferAuto = True
+    ingestTransferModes = (None, "copy", "move", "hardlink", "symlink", "auto")
     isEphemeral = False
     rootKeys = ("root",)
     validationCanFail = True
@@ -594,7 +611,8 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     """ChainedDatastore specialization using a POSIXDatastore"""
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
-    ingestTransferModes = ("copy", "hardlink", "symlink")
+    canIngestNoTransferAuto = False
+    ingestTransferModes = ("copy", "hardlink", "symlink", "auto")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
     validationCanFail = True

@@ -401,6 +401,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         return
 
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
+        # Docstring is inherited from base class
+        return transfer
+
     def validateKey(self, lookupKey, entity):
         # Docstring is inherited from base class
         return

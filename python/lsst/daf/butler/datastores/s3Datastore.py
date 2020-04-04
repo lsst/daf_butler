@@ -29,7 +29,7 @@ import os
 import pathlib
 import tempfile
 
-from typing import Optional, Type
+from typing import Optional, Type, Any
 
 from lsst.daf.butler import (
     ButlerURI,
@@ -249,6 +249,12 @@ class S3Datastore(FileLikeDatastore):
         # URI is needed to resolve what ingest case are we dealing with
         info = self._extractIngestInfo(location.uri, ref, formatter=formatter)
         self._register_datasets([(ref, info)])
+
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
+        # Docstring inherited from base class
+        if transfer != "auto":
+            return transfer
+        return "copy"
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
