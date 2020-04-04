@@ -24,18 +24,18 @@ import click
 from lsst.daf.butler import Butler, ValidationError
 
 
-@click.command(name='validate-config')
-@click.argument('repo')
-@click.option('--quiet', '-q', is_flag=True, help="Do not report individual failures.")
-@click.option('--datasettype', '-d', type=str, multiple=True,
+@click.command(name="validate-config")
+@click.argument("repo")
+@click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
+@click.option("--datasettype", "-d", type=str, multiple=True,
               help="Specific DatasetType(s) to validate (can be comma-separated)")
-@click.option('--ignore', '-i', type=str, multiple=True,
+@click.option("--ignore", "-i", type=str, multiple=True,
               help="DatasetType(s) to ignore for validation (can be comma-separated)")
 def validate_config(repo, quiet, datasettype, ignore):
-    '''Validate the configuration files for a Gen3 Butler repository.
+    """Validate the configuration files for a Gen3 Butler repository.
 
     REPO is the filesystem path for an existing Butler repository.
-    '''
+    """
     logFailures = not quiet
     butler = Butler(config=repo)
     try:

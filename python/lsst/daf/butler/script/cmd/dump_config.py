@@ -26,24 +26,24 @@ from lsst.daf.butler import ButlerConfig
 from lsst.daf.butler.script.opt import verbose
 
 
-@click.command(name='dump-config')
-@click.argument('repo')
-@click.option('--subset', '-s', type=str, help='Subset of a configuration to report. This can be any key in '
+@click.command(name="dump-config")
+@click.argument("repo")
+@click.option("--subset", "-s", type=str, help="Subset of a configuration to report. This can be any key in "
               "the hierarchy such as '.datastore.root' where the leading '.' specified the delimiter for "
-              'the hierarchy.')
-@click.option('--searchpath', '-p', type=str, multiple=True,
-              help='Additional search paths to use for configuration overrides')
-@click.option('--file', 'outfile', type=click.File('w'), default='-',
-              help='Print the (possibly-expanded) configuration for a repository to a file, or to stdout '
-              'by default.')
+              "the hierarchy.")
+@click.option("--searchpath", "-p", type=str, multiple=True,
+              help="Additional search paths to use for configuration overrides")
+@click.option("--file", "outfile", type=click.File("w"), default="-",
+              help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
+              "by default.")
 @verbose.verbose_option
 @verbose.pass_verbosity
 def dump_config(verbosity, repo, subset, searchpath, outfile):
-    '''Dump either a subset or full Butler configuration to standard output.
+    """Dump either a subset or full Butler configuration to standard output.
 
     REPO is the filesystem path for an existing Butler repository or path to
     config file.
-    '''
+    """
     if verbosity.verbose:
         logging.basicConfig(level=logging.DEBUG)
 
