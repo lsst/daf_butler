@@ -359,6 +359,35 @@ class Datastore(metaclass=ABCMeta):
         """
         raise NotImplementedError("Must be implemented by subclass")
 
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> str:
+        """Allow ingest transfer mode to be defaulted based on datasets.
+
+        Parameters
+        ----------
+        datasets : `FileDataset`
+            Each positional argument is a struct containing information about
+            a file to be ingested, including its path (either absolute or
+            relative to the datastore root, if applicable), a complete
+            `DatasetRef` (with ``dataset_id not None``), and optionally a
+            formatter class or its fully-qualified string name.  If a formatter
+            is not provided, this method should populate that attribute with
+            the formatter the datastore would use for `put`.  Subclasses are
+            also permitted to modify the path attribute (typically to put it
+            in what the datastore considers its standard form).
+        transfer : `str`, optional
+            How (and whether) the dataset should be added to the datastore.
+            See `ingest` for details of transfer modes.
+
+        Returns
+        -------
+        newTransfer : `str`
+            Transfer mode to use. Will be identical to the supplied transfer
+            mode unless "auto" is used.
+        """
+        if transfer != "auto":
+            return transfer
+        raise RuntimeError(f"{transfer} is not allowed without specialization.")
+
     def _prepIngest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> IngestPrepData:
         """Process datasets to identify which ones can be ingested into this
         Datastore.
@@ -377,11 +406,7 @@ class Datastore(metaclass=ABCMeta):
             in what the datastore considers its standard form).
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
-            If `None` (default), the file must already be in a location
-            appropriate for the datastore (e.g. within its root directory),
-            and will not be modified.  Other choices include "move", "copy",
-            "symlink", and "hardlink".  Most datastores do not support all
-            transfer modes.
+            See `ingest` for details of transfer modes.
 
         Returns
         -------
@@ -432,11 +457,7 @@ class Datastore(metaclass=ABCMeta):
             the direct result of a call to `_prepIngest` on this datastore.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
-            If `None` (default), the file must already be in a location
-            appropriate for the datastore (e.g. within its root directory),
-            and will not be modified.  Other choices include "move", "copy",
-            "symlink", and "hardlink".  Most datastores do not support all
-            transfer modes.
+            See `ingest` for details of transfer modes.
 
         Raises
         ------
@@ -474,8 +495,11 @@ class Datastore(metaclass=ABCMeta):
             If `None` (default), the file must already be in a location
             appropriate for the datastore (e.g. within its root directory),
             and will not be modified.  Other choices include "move", "copy",
-            "symlink", and "hardlink".  Most datastores do not support all
-            transfer modes.
+            "link", "symlink", and "hardlink". "link" is a special transfer
+            mode that will first try to make a hardlink and if that fails
+            a symlink will be used instead.  Most datastores do not support all
+            transfer modes. "auto" is a special option that will let the
+            data store choose the most natural option for itself.
 
         Raises
         ------
@@ -500,6 +524,8 @@ class Datastore(metaclass=ABCMeta):
         Subclasses are encouraged to document their supported transfer modes
         in their class documentation.
         """
+        # Allow a datastore to select a default transfer mode
+        transfer = self._overrideTransferMode(*datasets, transfer=transfer)
         prepData = self._prepIngest(*datasets, transfer=transfer)
         refs = {ref.id: ref for dataset in datasets for ref in dataset.refs}
         if refs.keys() != prepData.refs.keys():

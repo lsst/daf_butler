@@ -222,6 +222,48 @@ class PosixDatastore(FileLikeDatastore):
         info = self._extractIngestInfo(path, ref, formatter=formatter)
         self._register_datasets([(ref, info)])
 
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> str:
+        # Docstring inherited from base class
+        if transfer != "auto":
+            return transfer
+
+        # See if the paths are within the datastore or not
+        inside = [self._pathInStore(d.path) is not None for d in datasets]
+
+        if all(inside):
+            transfer = None
+        elif not any(inside):
+            transfer = "link"
+        else:
+            raise ValueError("Some datasets are inside the datastore and some are outside."
+                             " Please use an explicit transfer mode and not 'auto'.")
+
+        return transfer
+
+    def _pathInStore(self, path: str) -> str:
+        """Return path relative to datastore root
+
+        Parameters
+        ----------
+        path : `str`
+            Path to dataset. Can be absolute path. Returns path in datastore
+            or raises an exception if the path it outside.
+
+        Returns
+        -------
+        inStore : `str`
+            Path relative to datastore root. Returns `None` if the file is
+            outside the root.
+        """
+        if os.path.isabs(path):
+            absRoot = os.path.abspath(self.root)
+            if os.path.commonpath([absRoot, path]) != absRoot:
+                return None
+            return os.path.relpath(path, absRoot)
+        elif path.startswith(os.path.pardir):
+            return None
+        return path
+
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
         # Docstring inherited from FileLikeDatastore._standardizeIngestPath.
         fullPath = os.path.normpath(os.path.join(self.root, path))
@@ -229,13 +271,9 @@ class PosixDatastore(FileLikeDatastore):
             raise FileNotFoundError(f"File at '{fullPath}' does not exist; note that paths to ingest "
                                     f"are assumed to be relative to self.root unless they are absolute.")
         if transfer is None:
-            if os.path.isabs(path):
-                absRoot = os.path.abspath(self.root)
-                if os.path.commonpath([absRoot, path]) != absRoot:
-                    raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
-                return os.path.relpath(path, absRoot)
-            elif path.startswith(os.path.pardir):
-                raise RuntimeError(f"'{path}' is outside repository root '{self.root}.'")
+            path = self._pathInStore(path)
+            if path is None:
+                raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
         return path
 
     def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
@@ -259,6 +297,14 @@ class PosixDatastore(FileLikeDatastore):
             elif transfer == "copy":
                 with self._transaction.undoWith("copy", os.remove, newFullPath):
                     shutil.copy(fullPath, newFullPath)
+            elif transfer == "link":
+                with self._transaction.undoWith("link", os.unlink, newFullPath):
+                    # Try hard link and if that fails use a symlink
+                    try:
+                        os.link(fullPath, newFullPath)
+                    except OSError:
+                        # Read through existing symlinks
+                        os.symlink(os.path.realpath(fullPath), newFullPath)
             elif transfer == "hardlink":
                 with self._transaction.undoWith("hardlink", os.unlink, newFullPath):
                     os.link(fullPath, newFullPath)
