@@ -226,13 +226,18 @@ class PosixDatastore(FileLikeDatastore):
         # Docstring inherited from base class
         if transfer != "auto":
             return transfer
-        try:
-            # Assume first dataset is representative
-            self._pathInStore(datasets[0].path)
-        except RuntimeError:
+
+        # See if the paths are within the datastore or not
+        inside = [self._pathInStore(d.path) is not None for d in datasets]
+
+        if all(inside):
+            transfer = None
+        elif not any(inside):
             transfer = "link"
         else:
-            transfer = None
+            raise ValueError("Some datasets are inside the datastore and some are outside."
+                             " Please use an explicit transfer mode and not 'auto'.")
+
         return transfer
 
     def _pathInStore(self, path: str) -> str:
@@ -247,20 +252,16 @@ class PosixDatastore(FileLikeDatastore):
         Returns
         -------
         inStore : `str`
-            Path relative to datastore root.
-
-        Raises
-        ------
-        RuntimeError
-            Raised if the supplied path is outside the datastore.
+            Path relative to datastore root. Returns `None` if the file is
+            outside the root.
         """
         if os.path.isabs(path):
             absRoot = os.path.abspath(self.root)
             if os.path.commonpath([absRoot, path]) != absRoot:
-                raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
+                return None
             return os.path.relpath(path, absRoot)
         elif path.startswith(os.path.pardir):
-            raise RuntimeError(f"'{path}' is outside repository root '{self.root}.'")
+            return None
         return path
 
     def _standardizeIngestPath(self, path: str, *, transfer: Optional[str] = None) -> str:
@@ -271,6 +272,8 @@ class PosixDatastore(FileLikeDatastore):
                                     f"are assumed to be relative to self.root unless they are absolute.")
         if transfer is None:
             path = self._pathInStore(path)
+            if path is None:
+                raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
         return path
 
     def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
