@@ -289,8 +289,10 @@ class PosixDatastore(FileLikeDatastore):
                 raise FileExistsError(f"File '{newFullPath}' already exists.")
             storageDir = os.path.dirname(newFullPath)
             if not os.path.isdir(storageDir):
-                with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
-                    safeMakeDir(storageDir)
+                # Do not attempt to reverse directory creation
+                # because of race conditions with other processes running
+                # ingest in parallel.
+                safeMakeDir(storageDir)
             if transfer == "move":
                 with self._transaction.undoWith("move", shutil.move, newFullPath, fullPath):
                     shutil.move(fullPath, newFullPath)
