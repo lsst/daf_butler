@@ -170,15 +170,25 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
             _LOG.warning("%s is later than max. time %s, max. time time will be used instead",
                          value, MAX_TIME)
             value = MAX_TIME
-        value = round((value - EPOCH).to_value("sec") * 1e9)
-        return int(value)
+
+        delta = value - EPOCH
+        # Special care needed to preserve nanosecond precision.
+        # Usually jd1 has no fractional part but just in case.
+        jd1, extra_jd2 = divmod(delta.jd1, 1)
+        nsec_per_day = 1_000_000_000 * 24 * 3600
+        value = int(jd1) * nsec_per_day + int(round((delta.jd2 + extra_jd2)*nsec_per_day))
+        return value
 
     def process_result_value(self, value, dialect):
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
-        delta = astropy.time.TimeDelta(value * 1e-9, format="sec")
-        return EPOCH + delta
+        # Again special care needed to preserve precision
+        nsec_per_day = 1_000_000_000 * 24 * 3600
+        jd1, jd2 = divmod(value, nsec_per_day)
+        delta = astropy.time.TimeDelta(float(jd1), float(jd2)/nsec_per_day, format="jd", scale="tai")
+        value = EPOCH + delta
+        return value
 
 
 VALID_CONFIG_COLUMN_TYPES = {
