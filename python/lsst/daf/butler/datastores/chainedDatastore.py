@@ -72,8 +72,8 @@ class ChainedDatastore(Datastore):
     Notes
     -----
     ChainedDatastore never supports `None` or `"move"` as an `ingest` transfer
-    mode.  It supports `"copy"`, `"symlink"`, and `"hardlink"` if and only if
-    its child datastores do.
+    mode.  It supports `"copy"`, `"symlink"`, `"relsymlink"`
+    and `"hardlink"` if and only if all its child datastores do.
     """
 
     defaultConfigFile = "datastores/chainedDatastore.yaml"

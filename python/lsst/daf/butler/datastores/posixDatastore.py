@@ -63,7 +63,8 @@ class PosixDatastore(FileLikeDatastore):
     Notes
     -----
     PosixDatastore supports all transfer modes for file-based ingest:
-    `"move"`, `"copy"`, `"symlink"`, `"hardlink"`, and `None` (no transfer).
+    `"move"`, `"copy"`, `"symlink"`, `"hardlink"`, `"relsymlink"`
+    and `None` (no transfer).
     """
 
     defaultConfigFile = "datastores/posixDatastore.yaml"
@@ -289,8 +290,10 @@ class PosixDatastore(FileLikeDatastore):
                 raise FileExistsError(f"File '{newFullPath}' already exists.")
             storageDir = os.path.dirname(newFullPath)
             if not os.path.isdir(storageDir):
-                with self._transaction.undoWith("mkdir", os.rmdir, storageDir):
-                    safeMakeDir(storageDir)
+                # Do not attempt to reverse directory creation
+                # because of race conditions with other processes running
+                # ingest in parallel.
+                safeMakeDir(storageDir)
             if transfer == "move":
                 with self._transaction.undoWith("move", shutil.move, newFullPath, fullPath):
                     shutil.move(fullPath, newFullPath)
@@ -312,6 +315,16 @@ class PosixDatastore(FileLikeDatastore):
                 with self._transaction.undoWith("symlink", os.unlink, newFullPath):
                     # Read through existing symlinks
                     os.symlink(os.path.realpath(fullPath), newFullPath)
+            elif transfer == "relsymlink":
+                # This is a standard symlink but using a relative path
+                fullPath = os.path.realpath(fullPath)
+
+                # Need the directory name to give to relative root
+                # A full file path confuses it into an extra ../
+                newFullPathRoot, _ = os.path.split(newFullPath)
+                relPath = os.path.relpath(fullPath, newFullPathRoot)
+                with self._transaction.undoWith("relsymlink", os.unlink, newFullPath):
+                    os.symlink(relPath, newFullPath)
             else:
                 raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
             path = newPath

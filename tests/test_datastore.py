@@ -430,7 +430,7 @@ class DatastoreTests(DatastoreTestsBase):
     def testIngestTransfer(self):
         """Test ingesting existing files after transferring them.
         """
-        for mode in ("copy", "move", "link", "hardlink", "symlink", "auto"):
+        for mode in ("copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto"):
             with self.subTest(mode=mode):
                 datastore = self.makeDatastore(mode)
 
@@ -469,26 +469,41 @@ class DatastoreTests(DatastoreTestsBase):
 
     def testIngestSymlinkOfSymlink(self):
         """Special test for symlink to a symlink ingest"""
-        mode = "symlink"
-        if mode not in self.ingestTransferModes:
-            return
         metrics, ref = self._prepareIngestTest()
         # The aim of this test is to create a dataset on disk, then
         # create a symlink to it and finally ingest the symlink such that
         # the symlink in the datastore points to the original dataset.
-        with lsst.utils.tests.getTempFilePath(".yaml") as realpath:
-            with open(realpath, 'w') as fd:
-                yaml.dump(metrics._asdict(), stream=fd)
-            with lsst.utils.tests.getTempFilePath(".yaml") as sympath:
-                os.symlink(os.path.abspath(realpath), sympath)
+        for mode in ("symlink", "relsymlink"):
+            if mode not in self.ingestTransferModes:
+                continue
 
-                datastore = self.makeDatastore()
-                datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
+            print(f"Trying mode {mode}")
+            with lsst.utils.tests.getTempFilePath(".yaml") as realpath:
+                with open(realpath, 'w') as fd:
+                    yaml.dump(metrics._asdict(), stream=fd)
+                with lsst.utils.tests.getTempFilePath(".yaml") as sympath:
+                    os.symlink(os.path.abspath(realpath), sympath)
 
-                uri = ButlerURI(datastore.getUri(ref))
-                self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
-                self.assertTrue(os.path.islink(uri.path))
-                self.assertEqual(os.readlink(uri.path), os.path.abspath(realpath))
+                    datastore = self.makeDatastore()
+                    datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
+
+                    uri = ButlerURI(datastore.getUri(ref))
+                    self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
+                    self.assertTrue(os.path.islink(uri.path))
+
+                    linkTarget = os.readlink(uri.path)
+                    if mode == "relsymlink":
+                        self.assertFalse(os.path.isabs(linkTarget))
+                    else:
+                        self.assertEqual(linkTarget, os.path.abspath(realpath))
+
+                    # Check that we can get the dataset back regardless of mode
+                    metric2 = datastore.get(ref)
+                    self.assertEqual(metric2, metrics)
+
+                    # Cleanup the file for next time round loop
+                    # since it will get the same file name in store
+                    datastore.remove(ref)
 
 
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
@@ -496,7 +511,7 @@ class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
     uriScheme = "file:"
     canIngestNoTransferAuto = True
-    ingestTransferModes = (None, "copy", "move", "link", "hardlink", "symlink", "auto")
+    ingestTransferModes = (None, "copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
     isEphemeral = False
     rootKeys = ("root",)
     validationCanFail = True
@@ -612,7 +627,7 @@ class ChainedDatastoreTestCase(PosixDatastoreTestCase):
     configFile = os.path.join(TESTDIR, "config/basic/chainedDatastore.yaml")
     hasUnsupportedPut = False
     canIngestNoTransferAuto = False
-    ingestTransferModes = ("copy", "hardlink", "symlink", "link", "auto")
+    ingestTransferModes = ("copy", "hardlink", "symlink", "relsymlink", "link", "auto")
     isEphemeral = False
     rootKeys = (".datastores.1.root", ".datastores.2.root")
     validationCanFail = True

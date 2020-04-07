@@ -1105,8 +1105,8 @@ class Butler:
             may be modified to put paths in whatever the datastore considers a
             standardized form.
         transfer : `str`, optional
-            If not `None`, must be one of 'move', 'copy', 'hardlink', or
-            'symlink', indicating how to transfer the file.
+            If not `None`, must be one of 'auto', 'move', 'copy', 'hardlink',
+            'relsymlink' or 'symlink', indicating how to transfer the file.
         run : `str`, optional
             The name of the run ingested datasets should be added to,
             overriding ``self.run``.
