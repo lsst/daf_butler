@@ -40,9 +40,10 @@ from typing import (
 )
 import warnings
 
+import astropy.time
 import sqlalchemy
 
-from ...core import ddl
+from ...core import ddl, time_utils
 
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Dict[str, Any]):
@@ -772,7 +773,15 @@ class Database(ABC):
                 return len(fetched), None, None
             existing = fetched[0]
             if compared is not None:
-                inconsistencies = [k for k, v in compared.items() if existing[k] != v]
+
+                def safeNotEqual(a, b):
+                    if isinstance(a, astropy.time.Time):
+                        return not time_utils.times_equal(a, b)
+                    return a != b
+
+                inconsistencies = [f"{k}: {existing[k]!r} != {v!r}"
+                                   for k, v in compared.items()
+                                   if safeNotEqual(existing[k], v)]
             else:
                 inconsistencies = []
             if returning is not None:
