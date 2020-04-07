@@ -805,9 +805,12 @@ class Database(ABC):
                         raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
                                            f"unique constraint for table {table.name}.")
                     elif bad:
-                        raise RuntimeError("Conflict in sync after successful insert; this should only be "
-                                           "possible if the same table is being updated by a concurrent "
-                                           "process that isn't using sync.")
+                        raise RuntimeError(
+                            f"Conflict ({bad}) in sync after successful insert; this is "
+                            f"possible if the same table is being updated by a concurrent "
+                            f"process that isn't using sync, but it may also be a bug in "
+                            f"daf_butler."
+                        )
                 # No exceptions, so it looks like we inserted the requested row
                 # successfully.
                 inserted = True
