@@ -15,6 +15,7 @@ data:
         visit_max: 1024
         exposure_max: 512
         detector_max: 4
+        class_name: lsst.obs.base.Instrument
   -
     type: dimension
     element: physical_filter

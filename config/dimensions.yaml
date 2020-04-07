@@ -39,6 +39,13 @@ dimensions:
         doc: >
           Maximum value for the 'detector' field for detectors associated with
           this instrument (exclusive).
+      -
+        name: class_name
+        type: string
+        length: 64
+        doc: >
+          Full class name of the Instrument class associated with this
+          instrument.
       cached: true
 
     abstract_filter:
