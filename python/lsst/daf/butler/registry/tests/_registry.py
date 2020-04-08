@@ -156,7 +156,8 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         dimensionName = "instrument"
         dimension = registry.dimensions[dimensionName]
-        dimensionValue = {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2}
+        dimensionValue = {"name": "DummyCam", "visit_max": 10, "exposure_max": 10, "detector_max": 2,
+                          "class_name": "lsst.obs.base.Instrument"}
         registry.insertDimensionData(dimensionName, dimensionValue)
         # Inserting the same value twice should fail
         with self.assertRaises(sqlalchemy.exc.IntegrityError):
