@@ -1028,7 +1028,7 @@ class Registry:
             Raised if ``any(ref.id is None for ref in refs)``.
         """
         self._db.insert(
-            self._tables.dataset_storage,
+            self._tables.dataset_location,
             *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
         )
 
@@ -1054,7 +1054,7 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
-        table = self._tables.dataset_storage
+        table = self._tables.dataset_location
         result = self._db.query(
             sqlalchemy.sql.select(
                 [table.columns.datastore_name]
@@ -1083,7 +1083,7 @@ class Registry:
             Raised if ``ref.id`` is `None`.
         """
         self._db.delete(
-            self._tables.dataset_storage,
+            self._tables.dataset_location,
             ["dataset_id", "datastore_name"],
             {"dataset_id": _checkAndGetId(ref), "datastore_name": datastoreName}
         )

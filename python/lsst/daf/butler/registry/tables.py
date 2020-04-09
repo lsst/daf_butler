@@ -44,7 +44,7 @@ RegistryTablesTuple = namedtuple(
         "dataset_collection",
         "quantum",
         "dataset_consumers",
-        "dataset_storage",
+        "dataset_location",
     ]
 )
 
@@ -336,7 +336,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 ),
             ],
         ),
-        dataset_storage=ddl.TableSpec(
+        dataset_location=ddl.TableSpec(
             doc=(
                 "A table that provides information on whether a Dataset is stored in "
                 "one or more Datastores.  The presence or absence of a record in this "
