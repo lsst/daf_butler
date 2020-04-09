@@ -202,7 +202,11 @@ dimensions:
         name: group_name
         type: string
         length: 64
-        doc: Group identifier associated with this exposure by the acquisition system.
+        doc: String group identifier associated with this exposure by the acquisition system.
+      -
+        name: group_id
+        type: int
+        doc: Integer group identifier associated with this exposure by the acquisition system.
 
     skymap:
       doc: >
