@@ -25,11 +25,11 @@ __all__ = ("Timespan", "TIMESPAN_FIELD_SPECS", "TIMESPAN_MIN", "TIMESPAN_MAX")
 import operator
 from typing import Generic, Optional, TypeVar
 
-from . import ddl
+from . import ddl, time_utils
 
 
-TIMESPAN_MIN = ddl.EPOCH
-TIMESPAN_MAX = ddl.MAX_TIME
+TIMESPAN_MIN = time_utils.EPOCH
+TIMESPAN_MAX = time_utils.MAX_TIME
 
 T = TypeVar("T")
 

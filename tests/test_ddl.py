@@ -24,8 +24,8 @@
 
 import unittest
 
-from astropy.time import Time, TimeDelta
-from lsst.daf.butler import ddl
+from astropy.time import Time
+from lsst.daf.butler import ddl, time_utils
 
 
 class AstropyTimeNsecTaiTestCase(unittest.TestCase):
@@ -54,7 +54,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         self.assertEqual(value, 0)
 
         value = self.decor.process_result_value(value, self.dialect)
-        self.assertEqual(value, ddl.EPOCH)
+        self.assertEqual(value, time_utils.EPOCH)
 
     def test_max_time(self):
         """Tests for converting None in bound parameters.
@@ -63,7 +63,7 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         time = Time("2101-01-01T00:00:00", format="isot", scale="tai")
         value = self.decor.process_bind_param(time, self.dialect)
 
-        value_max = self.decor.process_bind_param(ddl.MAX_TIME, self.dialect)
+        value_max = self.decor.process_bind_param(time_utils.MAX_TIME, self.dialect)
         self.assertEqual(value, value_max)
 
     def test_round_trip(self):
@@ -72,27 +72,17 @@ class AstropyTimeNsecTaiTestCase(unittest.TestCase):
         # do tests at random points between epoch and max. time
         times = [
             "1970-01-01T12:00:00.123",
-            "2000-01-01T12:00:00.123456",
-            "2030-01-01T12:00:00.123456",
+            "1999-12-31T23:59:59.999999999",
+            "2000-01-01T12:00:00.000000001",
+            "2030-01-01T12:00:00.123456789",
             "2075-08-17T00:03:45",
             "2099-12-31T23:00:50",
         ]
         for time in times:
             atime = Time(time, format="isot", scale="tai")
-            for sec in range(7):
-                # loop over few seconds to add to each time
-                for i in range(100):
-                    # loop over additional fractions of seconds
-                    delta = sec + 0.3e-9 * i
-                    in_time = atime + TimeDelta(delta, format="sec")
-                    # do round-trip conversion to nsec and back
-                    value = self.decor.process_bind_param(in_time, self.dialect)
-                    value = self.decor.process_result_value(value, self.dialect)
-                    delta2 = value - in_time
-                    delta2_sec = delta2.to_value("sec")
-                    # absolute precision should be better than half
-                    # nanosecond, but there are rounding errors too
-                    self.assertLess(abs(delta2_sec), 0.51e-9)
+            value = self.decor.process_bind_param(atime, self.dialect)
+            value = self.decor.process_result_value(value, self.dialect)
+            self.assertTrue(time_utils.times_equal(atime, value))
 
 
 if __name__ == "__main__":

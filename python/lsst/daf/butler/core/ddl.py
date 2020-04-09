@@ -46,24 +46,11 @@ import astropy.time
 from lsst.sphgeom import ConvexPolygon
 from .config import Config
 from .exceptions import ValidationError
+from . import time_utils
 from .utils import iterable, stripIfNotNone, NamedValueSet
 
 
 _LOG = logging.getLogger(__name__)
-
-# These constants can be used by client code
-EPOCH = astropy.time.Time("1970-01-01 00:00:00", format="iso", scale="tai")
-"""Epoch for calculating time delta, this is the minimum time that can be
-stored in the database.
-"""
-
-MAX_TIME = astropy.time.Time("2100-01-01 00:00:00", format="iso", scale="tai")
-"""Maximum time value that we can store. Assuming 64-bit integer field we
-can actually store higher values but we intentionally limit it to arbitrary
-but reasonably high value. Note that this value will be stored in registry
-database for eternity, so it should not be changed without proper
-consideration.
-"""
 
 
 class SchemaValidationError(ValidationError):
@@ -158,36 +145,14 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
             return None
         if not isinstance(value, astropy.time.Time):
             raise TypeError(f"Unsupported type: {type(value)}, expected astropy.time.Time")
-        # sometimes comparison produces warnings if input value is in UTC
-        # scale, transform it to TAI before doing anyhting
-        value = value.tai
-        # anything before epoch or after MAX_TIME is truncated
-        if value < EPOCH:
-            _LOG.warning("%s is earlier than epoch time %s, epoch time will be used instead",
-                         value, EPOCH)
-            value = EPOCH
-        elif value > MAX_TIME:
-            _LOG.warning("%s is later than max. time %s, max. time time will be used instead",
-                         value, MAX_TIME)
-            value = MAX_TIME
-
-        delta = value - EPOCH
-        # Special care needed to preserve nanosecond precision.
-        # Usually jd1 has no fractional part but just in case.
-        jd1, extra_jd2 = divmod(delta.jd1, 1)
-        nsec_per_day = 1_000_000_000 * 24 * 3600
-        value = int(jd1) * nsec_per_day + int(round((delta.jd2 + extra_jd2)*nsec_per_day))
+        value = time_utils.astropy_to_nsec(value)
         return value
 
     def process_result_value(self, value, dialect):
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
-        # Again special care needed to preserve precision
-        nsec_per_day = 1_000_000_000 * 24 * 3600
-        jd1, jd2 = divmod(value, nsec_per_day)
-        delta = astropy.time.TimeDelta(float(jd1), float(jd2)/nsec_per_day, format="jd", scale="tai")
-        value = EPOCH + delta
+        value = time_utils.nsec_to_astropy(value)
         return value
 
 
