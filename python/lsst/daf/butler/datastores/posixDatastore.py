@@ -302,15 +302,16 @@ class PosixDatastore(FileLikeDatastore):
                     shutil.copy(fullPath, newFullPath)
             elif transfer == "link":
                 with self._transaction.undoWith("link", os.unlink, newFullPath):
+                    realPath = os.path.realpath(fullPath)
                     # Try hard link and if that fails use a symlink
                     try:
-                        os.link(fullPath, newFullPath)
+                        os.link(realPath, newFullPath)
                     except OSError:
                         # Read through existing symlinks
-                        os.symlink(os.path.realpath(fullPath), newFullPath)
+                        os.symlink(realPath, newFullPath)
             elif transfer == "hardlink":
                 with self._transaction.undoWith("hardlink", os.unlink, newFullPath):
-                    os.link(fullPath, newFullPath)
+                    os.link(os.path.realpath(fullPath), newFullPath)
             elif transfer == "symlink":
                 with self._transaction.undoWith("symlink", os.unlink, newFullPath):
                     # Read through existing symlinks
