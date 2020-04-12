@@ -180,9 +180,16 @@ class DataCoordinate(IndexedTupleDict):
             # Optimized code path for DataCoordinate comparisons.
             return self.graph == other.graph and self.values() == other.values()
         except AttributeError:
-            # Also support comparison with informal data ID dictionaries that
-            # map dimension name to value.
-            return self.byName() == other
+            # We can't reliably compare to informal data ID dictionaries
+            # we don't know if any extra keys they might have are consistent
+            # with an `ExpandedDataCoordinate` version of ``self`` (which
+            # should compare as equal) or something else (which should
+            # compare as not equal).
+            # We don't even want to return `NotImplemented` and tell Python
+            # to delegate to ``other.__eq__``, because that could also be
+            # misleading.  We raise TypeError instead.
+            raise TypeError("Cannot compare DataCoordinate instances to other objects without potentially "
+                            "misleading results.") from None
 
     def __str__(self):
         return f"{self.byName()}"

@@ -218,7 +218,8 @@ class DatasetRefTestCase(unittest.TestCase):
         # Construct an unresolved ref.
         ref = DatasetRef(self.datasetType, self.dataId)
         self.assertEqual(ref.datasetType, self.datasetType)
-        self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
+        self.assertEqual(ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe),
+                         msg=ref.dataId)
         self.assertIsInstance(ref.dataId, DataCoordinate)
         self.assertIsNone(ref.components)
         # Constructing an unresolved ref with run and/or components should
@@ -238,7 +239,8 @@ class DatasetRefTestCase(unittest.TestCase):
         # as well as everything else.
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run, components=components)
         self.assertEqual(ref.datasetType, self.datasetType)
-        self.assertEqual(ref.dataId, self.dataId, msg=ref.dataId)
+        self.assertEqual(ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe),
+                         msg=ref.dataId)
         self.assertIsInstance(ref.dataId, DataCoordinate)
         self.assertEqual(ref.id, 1)
         self.assertEqual(ref.run, run)
