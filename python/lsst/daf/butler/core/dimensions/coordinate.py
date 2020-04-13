@@ -216,24 +216,6 @@ class DataCoordinate(IndexedTupleDict):
             else:
                 raise TypeError(f"Only `int` and `str` are allowed as dimension keys, not {v} ({type(v)}).")
 
-    def matches(self, other: DataCoordinate) -> bool:
-        """Test whether the values of all keys in both coordinates are equal.
-
-        Parameters
-        ----------
-        other : `DataCoordinate`
-            The other coordinate to compare to.
-
-        Returns
-        -------
-        consistent : `bool`
-            `True` if all keys that are in in both ``other`` and ``self``
-            are associated with the same values, and `False` otherwise.
-            `True` if there are no keys in common.
-        """
-        d = getattr(other, "full", other)
-        return all(self[k] == d[k] for k in (self.keys() & d.keys()))
-
     def subset(self, graph: DimensionGraph) -> DataCoordinate:
         """Return a new `DataCoordinate` whose graph is a subset of
         ``self.graph``.

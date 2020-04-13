@@ -36,7 +36,13 @@ from ...core import (
     ddl,
     YamlRepoImportBackend
 )
-from .._registry import Registry, CollectionType, ConflictingDefinitionError, OrphanedRecordError
+from .._registry import (
+    CollectionType,
+    ConflictingDefinitionError,
+    ConsistentDataIds,
+    OrphanedRecordError,
+    Registry,
+)
 from ..wildcards import DatasetTypeRestriction
 
 
@@ -209,6 +215,125 @@ class RegistryTests(ABC):
                 {"instrument": "DummyCam", "id": 1, "full_name": "one",
                  "name_in_raft": "four", "purpose": "SCIENCE"}
             )
+
+    def testDataIdRelationships(self):
+        """Test `Registry.relateDataId`.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        # Simple cases where the dimension key-value pairs tell us everything.
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1"},
+                {"instrument": "Cam1"},
+            ),
+            ConsistentDataIds(contains=True, within=True, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds({}, {}),
+            ConsistentDataIds(contains=True, within=True, overlaps=False)
+        )
+        self.assertEqual(
+            registry.relateDataIds({"instrument": "Cam1"}, {}),
+            ConsistentDataIds(contains=True, within=False, overlaps=False)
+        )
+        self.assertEqual(
+            registry.relateDataIds({}, {"instrument": "Cam1"}),
+            ConsistentDataIds(contains=False, within=True, overlaps=False)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+                {"instrument": "Cam1"},
+            ),
+            ConsistentDataIds(contains=True, within=False, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+            ),
+            ConsistentDataIds(contains=False, within=True, overlaps=True)
+        )
+        self.assertIsNone(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-R1"},
+            )
+        )
+        # Trickier cases where we need to expand data IDs, but it's still just
+        # required and implied dimension relationships.
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+                {"instrument": "Cam1", "abstract_filter": "g"},
+            ),
+            ConsistentDataIds(contains=True, within=False, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "abstract_filter": "g"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+            ),
+            ConsistentDataIds(contains=False, within=True, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1"},
+                {"htm7": 131073},
+            ),
+            ConsistentDataIds(contains=False, within=False, overlaps=False)
+        )
+        # Trickiest cases involve spatial or temporal overlaps or non-dimension
+        # elements that relate things (of which visit_definition is our only
+        # current example).
+        #
+        # These two HTM IDs at different levels have a "contains" relationship
+        # spatially, but there is no overlap of dimension keys.  The exact
+        # result of relateDataIds is unspecified for this case, but it's
+        # guaranteed to be truthy (see relateDataIds docs.).
+        self.assertTrue(
+            registry.relateDataIds({"htm7": 131073}, {"htm9": 2097169})
+        )
+        # These two HTM IDs at different levels are disjoint spatially, which
+        # means the data IDs are inconsistent.
+        self.assertIsNone(
+            registry.relateDataIds({"htm7": 131073}, {"htm9": 2097391})
+        )
+        # Insert a few more dimension records for the next test.
+        registry.insertDimensionData(
+            "exposure",
+            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G"},
+        )
+        registry.insertDimensionData(
+            "exposure",
+            {"instrument": "Cam1", "id": 2, "name": "two", "physical_filter": "Cam1-G"},
+        )
+        registry.insertDimensionData(
+            "visit_system",
+            {"instrument": "Cam1", "id": 0, "name": "one-to-one"},
+        )
+        registry.insertDimensionData(
+            "visit",
+            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G", "visit_system": 0},
+        )
+        registry.insertDimensionData(
+            "visit_definition",
+            {"instrument": "Cam1", "visit": 1, "exposure": 1, "visit_system": 0},
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "visit": 1},
+                {"instrument": "Cam1", "exposure": 1},
+            ),
+            ConsistentDataIds(contains=False, within=False, overlaps=True)
+        )
+        self.assertIsNone(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "visit": 1},
+                {"instrument": "Cam1", "exposure": 2},
+            )
+        )
 
     def testDataset(self):
         """Basic tests for `Registry.insertDatasets`, `Registry.getDataset`,
