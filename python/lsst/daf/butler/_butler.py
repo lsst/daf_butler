@@ -329,18 +329,19 @@ class Butler:
 
         # for "file" schemes we are assuming POSIX semantics for paths, for
         # schemeless URIs we are assuming os.path semantics.
-        uri = ButlerURI(root)
+        uri = ButlerURI(root, forceDirectory=True)
         if uri.scheme == "file" or not uri.scheme:
             if not os.path.isdir(uri.ospath):
                 safeMakeDir(uri.ospath)
         elif uri.scheme == "s3":
-            # implies bucket already exists
-            s3 = boto3.client("s3")
+            # bucket must already exist
+            s3 = boto3.resource("s3")
+            bucket = s3.Bucket(uri.netloc)
+            if bucket.creation_date is None:
+                raise ValueError(f"Bucket {uri.netloc} does not exist!")
+            # don't create root Key if root is at top-level of an Bucket
             if uri.relativeToPathRoot != ".":
-                # to be dir-equivalent, S3 this requires URIs ending on '/'
-                if not uri.geturl().endswith('/'):
-                    uri.updateFile(uri.relativeToPathRoot+'/')
-                s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot+'/')
+                bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)

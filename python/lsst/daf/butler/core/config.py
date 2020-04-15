@@ -251,6 +251,7 @@ class Config(collections.abc.MutableMapping):
                 self.__initFromYamlFile(uri.ospath)
         else:
             raise RuntimeError("Unhandled config file type:%s" % uri)
+        self.configFile = str(path)
 
     def __initFromS3YamlFile(self, url):
         """Load a file at a given S3 Bucket uri and attempts to load it from
@@ -290,7 +291,6 @@ class Config(collections.abc.MutableMapping):
         log.debug("Opening YAML config file: %s", path)
         with open(path, "r") as f:
             self.__initFromYaml(f)
-        self.configFile = path
 
     def __initFromYaml(self, stream):
         """Loads a YAML config from any readable stream that contains one.

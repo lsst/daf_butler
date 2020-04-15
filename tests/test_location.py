@@ -32,46 +32,80 @@ class LocationTestCase(unittest.TestCase):
     """
 
     def testButlerUri(self):
-
+        """Tests whether ButlerURI instantiates correctly given different
+        arguments.
+        """
         # Root to use for relative paths
         testRoot = "/tmp/"
 
+        # uriStrings is a list of tuples containing test string, forceAbsolute,
+        # forceDirectory as arguments to ButlerURI and scheme, netloc and path
+        # as expected attributes. Test asserts constructed equals to expected.
+        # 1) no determinable schemes (ensures schema and netloc are not set)
+        osRelFilePath = os.path.join(testRoot, "relative/file.ext")
+        uriStrings = [
+            ("relative/file.ext", True, False, "", "", osRelFilePath),
+            ("relative/file.ext", False, False, "", "", "relative/file.ext"),
+            ("test/../relative/file.ext", True, False, "", "", osRelFilePath),
+            ("test/../relative/file.ext", False, False, "", "", "relative/file.ext"),
+            ("relative/dir", False, True, "", "", "relative/dir/")
+        ]
+        # 2) implicit file scheme, tests absolute file and directory paths
+        uriStrings.extend((
+            ("/rootDir/absolute/file.ext", True, False, "file", "", '/rootDir/absolute/file.ext'),
+            ("~/relative/file.ext", True, False, "file", "", os.path.expanduser("~/relative/file.ext")),
+            ("~/relative/file.ext", False, False, "file", "", os.path.expanduser("~/relative/file.ext")),
+            ("/rootDir/absolute/", True, False, "file", "", "/rootDir/absolute/"),
+            ("/rootDir/absolute", True, True, "file", "", "/rootDir/absolute/"),
+            ("~/rootDir/absolute", True, True, "file", "", os.path.expanduser("~/rootDir/absolute/"))
+        ))
+        # 3) explicit file scheme, absolute and relative file and directory URI
+        posixRelFilePath = posixpath.join(testRoot, "relative/file.ext")
+        uriStrings.extend((
+            ("file:///rootDir/absolute/file.ext", True, False, "file", "", "/rootDir/absolute/file.ext"),
+            ("file:relative/file.ext", True, False, "file", "", posixRelFilePath),
+            ("file:///absolute/directory/", True, False, "file", "", "/absolute/directory/"),
+            ("file:///absolute/directory", True, True, "file", "", "/absolute/directory/")
+        ))
+        # 4) S3 scheme (ensured Keys as dirs and fully specified URIs work)
+        uriStrings.extend((
+            ("s3://bucketname/rootDir/", True, False, "s3", "bucketname", "/rootDir/"),
+            ("s3://bucketname/rootDir", True, True, "s3", "bucketname", "/rootDir/"),
+            ("s3://bucketname/rootDir/relative/file.ext", True, False, "s3",
+             "bucketname", "/rootDir/relative/file.ext")
+        ))
+
+        for uriInfo in uriStrings:
+            uri = ButlerURI(uriInfo[0], root=testRoot, forceAbsolute=uriInfo[1],
+                            forceDirectory=uriInfo[2])
+            with self.subTest(uri=uriInfo[0]):
+                self.assertEqual(uri.scheme, uriInfo[3], "test scheme")
+                self.assertEqual(uri.netloc, uriInfo[4], "test netloc")
+                self.assertEqual(uri.path, uriInfo[5], "test path")
+
+        # test root becomes abspath(".") when not specified, note specific
+        # file:// scheme case
         uriStrings = (
-            # Test string, forceAbsolute, scheme, netloc, path
-            # These are being tested with forceAbsolute=True
-            ("file:///rootDir/absolute/file.ext", True, "file", "", "/rootDir/absolute/file.ext"),
-            ("/rootDir/absolute/file.ext", True, "file", "", "/rootDir/absolute/file.ext"),
-            ("/rootDir/absolute/file.ext", False, "file", "", "/rootDir/absolute/file.ext"),
-            ("/rootDir/absolute/", True, "file", "", "/rootDir/absolute/"),
-            ("file:relative/file.ext", True, "file", "", posixpath.join(testRoot, "relative/file.ext")),
-            ("file:relative/directory/", True, "file", "", posixpath.join(testRoot, "relative/directory/")),
-            ("file://relative/file.ext", True, "file", "relative", "/file.ext"),
-            ("file:///absolute/directory/", True, "file", "", "/absolute/directory/"),
-            ("relative/file.ext", True, "", "", os.path.join(testRoot, "relative/file.ext")),
-            ("relative/file.ext", False, "", "", "relative/file.ext"),
-            ("s3://bucketname/rootDir/relative/file.ext", True, "s3", "bucketname",
-             "/rootDir/relative/file.ext"),
-            ("~/relative/file.ext", True, "file", "", os.path.expanduser("~/relative/file.ext")),
-            ("~/relative/file.ext", False, "file", "", os.path.expanduser("~/relative/file.ext")),
-            ("test/../relative/file.ext", True, "", "", os.path.join(testRoot, "relative/file.ext")),
-            ("test/../relative/file.ext", False, "", "", "relative/file.ext"),
+            ("file://relative/file.ext", True, False, "file", "relative", "/file.ext"),
+            ("file:relative/file.ext", False, False, "file", "", os.path.abspath("relative/file.ext")),
+            ("file:relative/dir/", True, True, "file", "", os.path.abspath("relative/dir")+"/"),
+            ("relative/file.ext", True, False, "", "", os.path.abspath("relative/file.ext"))
         )
 
         for uriInfo in uriStrings:
-            uri = ButlerURI(uriInfo[0], root=testRoot, forceAbsolute=uriInfo[1])
+            uri = ButlerURI(uriInfo[0], forceAbsolute=uriInfo[1], forceDirectory=uriInfo[2])
             with self.subTest(uri=uriInfo[0]):
-                self.assertEqual(uri.scheme, uriInfo[2], "test scheme")
-                self.assertEqual(uri.netloc, uriInfo[3], "test netloc")
-                self.assertEqual(uri.path, uriInfo[4], "test path")
+                self.assertEqual(uri.scheme, uriInfo[3], "test scheme")
+                self.assertEqual(uri.netloc, uriInfo[4], "test netloc")
+                self.assertEqual(uri.path, uriInfo[5], "test path")
 
         # File replacement
         uriStrings = (
             ("relative/file.ext", "newfile.fits", "relative/newfile.fits"),
             ("relative/", "newfile.fits", "relative/newfile.fits"),
-            ("isThisADirOrFile", "aFile.fits", "aFile.fits"),
             ("https://www.lsst.org/butler/", "butler.yaml", "/butler/butler.yaml"),
             ("s3://amazon/datastore/", "butler.yaml", "/datastore/butler.yaml"),
-            ("s3://amazon/datastore/mybutler.yaml", "butler.yaml", "/datastore/butler.yaml"),
+            ("s3://amazon/datastore/mybutler.yaml", "butler.yaml", "/datastore/butler.yaml")
         )
 
         for uriInfo in uriStrings:
@@ -106,7 +140,6 @@ class LocationTestCase(unittest.TestCase):
 
         pathInStore = "relative/path/file.ext"
         loc1 = factory.fromPath(pathInStore)
-
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
         self.assertTrue(loc1.uri.startswith("file:///"))
