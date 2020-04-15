@@ -1,2 +1,2 @@
 # This file disables defaulting without specifying any value for default
-calexp: "{run}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"
+calexp: "{run:/}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"

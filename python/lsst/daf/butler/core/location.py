@@ -130,9 +130,6 @@ class ButlerURI:
                                              forceAbsolute=forceAbsolute,
                                              forceDirectory=forceDirectory)
 
-        # relativeToPathRoot indiscriminately strips trailing separators.
-        # Record whether we have trailing separator (dir-like) or not. Note:
-        # updated on ButlerURI.updateFile call
         self.dirLike = dirLike
         self._uri = parsed
 
@@ -169,10 +166,9 @@ class ButlerURI:
             p = PurePath(self.path)
         else:
             p = PurePosixPath(self.path)
-        if self.dirLike:
-            relToRoot = str(p.relative_to(p.root)) + '/'
-        else:
-            relToRoot = str(p.relative_to(p.root))
+        relToRoot = str(p.relative_to(p.root))
+        if self.dirLike and not relToRoot.endswith("/"):
+            relToRoot += "/"
         return relToRoot
 
     @property

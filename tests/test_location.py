@@ -140,6 +140,7 @@ class LocationTestCase(unittest.TestCase):
 
         pathInStore = "relative/path/file.ext"
         loc1 = factory.fromPath(pathInStore)
+
         self.assertEqual(loc1.path, os.path.join(root, pathInStore))
         self.assertEqual(loc1.pathInStore, pathInStore)
         self.assertTrue(loc1.uri.startswith("file:///"))

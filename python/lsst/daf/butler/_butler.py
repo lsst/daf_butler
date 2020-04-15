@@ -69,6 +69,7 @@ from .core import (
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.utils import transactional, getClassOf
+from .core.s3utils import bucketExists
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig, CollectionType
@@ -335,13 +336,12 @@ class Butler:
                 safeMakeDir(uri.ospath)
         elif uri.scheme == "s3":
             # bucket must already exist
-            s3 = boto3.resource("s3")
-            bucket = s3.Bucket(uri.netloc)
-            if bucket.creation_date is None:
+            if not bucketExists(uri.netloc):
                 raise ValueError(f"Bucket {uri.netloc} does not exist!")
+            s3 = boto3.client("s3")
             # don't create root Key if root is at top-level of an Bucket
             if uri.relativeToPathRoot != ".":
-                bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
+                s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)

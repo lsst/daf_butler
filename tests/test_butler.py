@@ -815,7 +815,6 @@ class FileLikeDatastoreButlerTests(ButlerTests):
         # dependency); should not change template (at least the way we're
         # defining them  to behave now; the important thing is that they
         # must be consistent).
-
         ref = butler.put(metric, "metric2", dataId2)
         self.assertTrue(self.checkFileExists(butler.datastore.root,
                                              "ingest/metric2/d-r/DummyCamComp_v423.pickle"))
