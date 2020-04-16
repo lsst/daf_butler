@@ -52,6 +52,7 @@ from ..core import (
     DimensionRecord,
     DimensionUniverse,
     ExpandedDataCoordinate,
+    FakeDatasetRef,
     StorageClassFactory,
 )
 from ..core import ddl
@@ -1032,6 +1033,72 @@ class Registry:
             *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
         )
 
+    @transactional
+    def moveDatasetLocationToTrash(self, datastoreName: str, refs: Iterable[DatasetRef]):
+        """Move the dataset location information to trash.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of the datastore holding these datasets.
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            References to the datasets.
+        """
+        # We only want to move rows that already exist in the main table
+        filtered = self.checkDatasetLocations(datastoreName, refs)
+        self.canDeleteDatasetLocations(datastoreName, filtered)
+        self.removeDatasetLocation(datastoreName, filtered)
+
+    @transactional
+    def canDeleteDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
+        """Record that a datastore can delete this dataset
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of the datastore holding these datasets.
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            References to the datasets.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``any(ref.id is None for ref in refs)``.
+        """
+        self._db.insert(
+            self._tables.dataset_location_trash,
+            *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
+        )
+
+    def checkDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]) -> List[DatasetRef]:
+        """Check which refs are listed for this datastore.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of the datastore holding these datasets.
+        refs : `~collections.abc.Iterable` of `DatasetRef`
+            References to the datasets.
+
+        Returns
+        -------
+        present : `list` of `DatasetRef`
+            All the `DatasetRef` that are listed.
+        """
+
+        table = self._tables.dataset_location
+        result = self._db.query(
+            sqlalchemy.sql.select(
+                [table.columns.datastore_name, table.columns.dataset_id]
+            ).where(
+                sqlalchemy.sql.and_(table.columns.dataset_id.in_([ref.id for ref in refs]),
+                                    table.columns.datastore_name == datastoreName)
+            )
+        ).fetchall()
+
+        matched_ids = {r["dataset_id"] for r in result}
+        return [ref for ref in refs if ref.id in matched_ids]
+
     def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
         """Retrieve datastore locations for a given dataset.
 
@@ -1065,7 +1132,59 @@ class Registry:
         return {r["datastore_name"] for r in result}
 
     @transactional
-    def removeDatasetLocation(self, datastoreName, ref):
+    def getTrashedDatasets(self, datastoreName: str) -> Set[FakeDatasetRef]:
+        """Retrieve all the dataset ref IDs that are in the trash
+        associated with the specified datastore.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            The relevant datastore name to use.
+
+        Returns
+        -------
+        ids : `set` of `FakeDatasetRef`
+            The IDs of datasets that can be safely removed from this datastore.
+            Can be empty.
+        """
+        table = self._tables.dataset_location_trash
+        result = self._db.query(
+            sqlalchemy.sql.select(
+                [table.columns.dataset_id]
+            ).where(
+                table.columns.datastore_name == datastoreName
+            )
+        ).fetchall()
+        return {FakeDatasetRef(r["dataset_id"]) for r in result}
+
+    @transactional
+    def emptyDatasetLocationsTrash(self, datastoreName: str, refs: Iterable[FakeDatasetRef]) -> None:
+        """Remove datastore location associated with these datasets from trash.
+
+        Typically used by `Datastore` when a dataset is removed.
+
+        Parameters
+        ----------
+        datastoreName : `str`
+            Name of this `Datastore`.
+        refs : iterable of `FakeDatasetRef`
+            The dataset IDs to be removed.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
+        """
+        if not refs:
+            return
+        self._db.delete(
+            self._tables.dataset_location_trash,
+            ["dataset_id", "datastore_name"],
+            *[{"dataset_id": ref.id, "datastore_name": datastoreName} for ref in refs]
+        )
+
+    @transactional
+    def removeDatasetLocation(self, datastoreName: str, refs: Iterable[DatasetRef]) -> None:
         """Remove datastore location associated with this dataset.
 
         Typically used by `Datastore` when a dataset is removed.
@@ -1074,7 +1193,7 @@ class Registry:
         ----------
         datastoreName : `str`
             Name of this `Datastore`.
-        ref : `DatasetRef`
+        refs : iterable of `DatasetRef`
             A reference to the dataset for which information is to be removed.
 
         Raises
@@ -1082,10 +1201,12 @@ class Registry:
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
+        if not refs:
+            return
         self._db.delete(
             self._tables.dataset_location,
             ["dataset_id", "datastore_name"],
-            {"dataset_id": _checkAndGetId(ref), "datastore_name": datastoreName}
+            *[{"dataset_id": _checkAndGetId(ref), "datastore_name": datastoreName} for ref in refs]
         )
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,

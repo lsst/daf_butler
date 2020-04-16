@@ -25,7 +25,7 @@ __all__ = ("DummyRegistry", )
 from contextlib import contextmanager
 from typing import Any, Iterator
 
-from lsst.daf.butler import DimensionUniverse, ddl
+from lsst.daf.butler import DimensionUniverse, ddl, FakeDatasetRef
 
 
 class DummyRegistry:
@@ -34,6 +34,7 @@ class DummyRegistry:
     def __init__(self):
         self._counter = 0
         self._entries = {}
+        self._trashedEntries = {}
         self._externalTableRows = {}
         self._externalTableSpecs = {}
         self.dimensions = DimensionUniverse()
@@ -78,11 +79,30 @@ class DummyRegistry:
             if incrementCounter:
                 self._counter += 1
 
+    def moveDatasetLocationToTrash(self, datastoreName, refs):
+        for ref in refs:
+            if ref.id not in self._trashedEntries:
+                self._trashedEntries[ref.id] = set()
+            self._trashedEntries[ref.id].add(datastoreName)
+            self._entries[ref.id].remove(datastoreName)
+
+    def getTrashedDatasets(self, datastoreName):
+        refs = set()
+        for ref, stores in self._trashedEntries.items():
+            if datastoreName in stores:
+                refs.add(FakeDatasetRef(ref))
+        return refs
+
+    def emptyDatasetLocationsTrash(self, datastoreName, refs):
+        for ref in refs:
+            self._trashedEntries[ref.id].remove(datastoreName)
+
     def getDatasetLocations(self, ref):
         return self._entries[ref.id].copy()
 
-    def removeDatasetLocation(self, datastoreName, ref):
-        self._entries[ref.id].remove(datastoreName)
+    def removeDatasetLocation(self, datastoreName, refs):
+        for ref in refs:
+            self._entries[ref.id].remove(datastoreName)
 
     def makeDatabaseDict(self, table, key, value):
         return dict()

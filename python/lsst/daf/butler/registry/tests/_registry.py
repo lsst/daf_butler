@@ -386,7 +386,7 @@ class RegistryTests(ABC):
 
     def testDatasetLocations(self):
         """Tests for `Registry.insertDatasetLocations`,
-        `Registry.getDatasetLocations`, and `Registry.removeDatasetLocations`.
+        `Registry.getDatasetLocations`, and `Registry.removeDatasetLocation`.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -408,14 +408,14 @@ class RegistryTests(ABC):
         self.assertEqual(len(addresses), 2)
         self.assertIn(datastoreName, addresses)
         self.assertIn(datastoreName2, addresses)
-        registry.removeDatasetLocation(datastoreName, ref)
+        registry.removeDatasetLocation(datastoreName, [ref])
         addresses = registry.getDatasetLocations(ref)
         self.assertEqual(len(addresses), 1)
         self.assertNotIn(datastoreName, addresses)
         self.assertIn(datastoreName2, addresses)
         with self.assertRaises(OrphanedRecordError):
             registry.removeDataset(ref)
-        registry.removeDatasetLocation(datastoreName2, ref)
+        registry.removeDatasetLocation(datastoreName2, [ref])
         addresses = registry.getDatasetLocations(ref)
         self.assertEqual(len(addresses), 0)
         self.assertNotIn(datastoreName2, addresses)
