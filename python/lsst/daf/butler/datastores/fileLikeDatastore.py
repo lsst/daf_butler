@@ -24,7 +24,6 @@
 __all__ = ("FileLikeDatastore", )
 
 import logging
-import itertools
 from abc import abstractmethod
 
 from sqlalchemy import Integer, String
@@ -357,7 +356,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             raise RuntimeError(f"Datastore inconsistency error. {storedFileInfo.path} not in registry")
 
         # Get all the refs associated with this dataset if it is a composite
-        theseRefs = {r.id for r in itertools.chain([ref], ref.components.values())}
+        theseRefs = {r.id for r in ref.flatten([ref])}
 
         # Remove these refs from all the refs and if there is nothing left
         # then we can delete

@@ -25,7 +25,6 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 
 import time
 import logging
-import itertools
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
@@ -403,7 +402,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             realID, _ = self._get_dataset_info(ref)
 
             allRefs = self.related[realID]
-            theseRefs = {r.id for r in itertools.chain([ref], ref.components.values())}
+            theseRefs = {r.id for r in ref.flatten([ref])}
             remainingRefs = allRefs - theseRefs
             if not remainingRefs:
                 artifactsToRemove.add(realID)

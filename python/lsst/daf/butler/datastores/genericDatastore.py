@@ -98,12 +98,11 @@ class GenericBaseDatastore(Datastore):
         expandedItemInfos = []
 
         for ref, itemInfo in refsAndInfos:
-            # Main dataset.
-            expandedRefs.append(ref)
-            expandedItemInfos.append(itemInfo)
-            # Conmponents (using the same item info).
-            expandedRefs.extend(ref.components.values())
-            expandedItemInfos.extend([itemInfo] * len(ref.components))
+            # Need the main dataset and the components
+            expandedRefs.extend(ref.flatten([ref]))
+
+            # Need one for the main ref and then one for each component
+            expandedItemInfos.extend([itemInfo] * (len(ref.components) + 1))
 
         self.registry.insertDatasetLocations(self.name, expandedRefs)
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
@@ -125,8 +124,7 @@ class GenericBaseDatastore(Datastore):
         # Note that a ref can point to component dataset refs that
         # have been deleted already from registry but are still in
         # the python object. moveDatasetLocationToTrash will deal with that.
-        allRefs = [ref] + [compRef for compRef in ref.components.values()]
-        self.registry.moveDatasetLocationToTrash(self.name, allRefs)
+        self.registry.moveDatasetLocationToTrash(self.name, list(ref.flatten([ref])))
 
     def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None):
         """Given the Python object read from the datastore, manipulate

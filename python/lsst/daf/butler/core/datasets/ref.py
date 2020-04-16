@@ -403,3 +403,7 @@ class FakeDatasetRef:
     @property
     def components(self):
         return {}
+
+    @staticmethod
+    def flatten(refs: Iterable[FakeDatasetRef], *, parents: bool = True) -> Iterator[DatasetRef]:
+        return DatasetRef.flatten(refs, parents=parents)
