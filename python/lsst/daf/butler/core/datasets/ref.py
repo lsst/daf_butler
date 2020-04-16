@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DatasetRef"]
+__all__ = ["DatasetRef", "FakeDatasetRef"]
 
 import hashlib
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
@@ -362,3 +362,44 @@ class DatasetRef:
     `unresolved` to add or remove this information when creating a new
     `DatasetRef`.
     """
+
+
+@immutable
+class FakeDatasetRef:
+    """A fake `DatasetRef` that can be used internally by butler where
+    only the dataset ID is available.
+
+    Should only be used when registry can not be used to create a full
+    `DatasetRef` from the ID.  A particular use case is during dataset
+    deletion when solely the ID is available.
+
+    Parameters
+    ----------
+    id : `int`
+        The dataset ID.
+    """
+    __slots__ = ("id",)
+
+    def __new__(cls, id: int):
+        self = super().__new__(cls)
+        self.id = id
+        return self
+
+    def __str__(self):
+        return f"dataset_id={self.id}"
+
+    def __repr__(self):
+        return f"FakeDatasetRef({self.id})"
+
+    def __eq__(self, other: FakeDatasetRef):
+        try:
+            return self.id == other.id
+        except AttributeError:
+            return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    @property
+    def components(self):
+        return {}
