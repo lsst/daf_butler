@@ -181,8 +181,6 @@ class FileLikeDatastore(GenericBaseDatastore):
                 ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),
             ]),
             unique=frozenset(),
-            foreignKeys=[ddl.ForeignKeySpec(table="dataset", source=("dataset_id",), target=("dataset_id",),
-                                            onDelete="CASCADE")]
         )
 
     def __init__(self, config, registry, butlerRoot=None):
@@ -233,6 +231,34 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     def __str__(self):
         return self.root
+
+    @abstractmethod
+    def _artifact_exists(self, location):
+        """Check that an artifact exists in this datastore at the specified
+        location.
+
+        Parameters
+        ----------
+        location : `Location`
+            Expected location of the artifact associated with this datastore.
+
+        Returns
+        -------
+        exists : `bool`
+            True if the location can be found, false otherwise.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _delete_artifact(self, location):
+        """Delete the artifact from the datastore.
+
+        Parameters
+        ----------
+        location : `Location`
+            Location of the artifact associated with this datastore.
+        """
+        raise NotImplementedError()
 
     def addStoredItemInfo(self, refs, infos):
         # Docstring inherited from GenericBaseDatastore
@@ -532,6 +558,24 @@ class FileLikeDatastore(GenericBaseDatastore):
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)
 
+    def exists(self, ref):
+        """Check if the dataset exists in the datastore.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+
+        Returns
+        -------
+        exists : `bool`
+            `True` if the entity exists in the `Datastore`.
+        """
+        location, _ = self._get_dataset_location_info(ref)
+        if location is None:
+            return False
+        return self._artifact_exists(location)
+
     def getUri(self, ref, predict=False):
         """URI to the Dataset.
 
@@ -594,6 +638,69 @@ class FileLikeDatastore(GenericBaseDatastore):
         location = self.locationFactory.fromPath(storedFileInfo.path)
 
         return location.uri
+
+    @transactional
+    def trash(self, ref):
+        """Indicate to the Datastore that a Dataset can be removed.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+
+        Raises
+        ------
+        FileNotFoundError
+            Attempt to remove a dataset that does not exist.
+        """
+        # Get file metadata and internal metadata
+        log.debug("Trashing %s in datastore %s", ref, self.name)
+        location, _ = self._get_dataset_location_info(ref)
+        if location is None:
+            raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
+
+        if not self._artifact_exists(location):
+            raise FileNotFoundError(f"No such artifact: {location.uri}")
+
+        # Mark dataset as trashed
+        self._move_to_trash_in_registry(ref)
+
+    @transactional
+    def emptyTrash(self):
+        """Remove all datasets from the trash.
+        """
+        log.debug("Emptying trash in datastore %s", self.name)
+        trashed = self.registry.getTrashedDatasets(self.name)
+        artifactsToRemove = set()
+
+        for ref in trashed:
+            location, _ = self._get_dataset_location_info(ref)
+
+            if location is None:
+                raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
+
+            if not self._artifact_exists(location):
+                raise FileNotFoundError(f"No such file: {location.uri}")
+
+            # Can only delete the file if there are no references
+            # to the file from untrashed dataset refs.
+            if self._can_remove_dataset_artifact(ref):
+                # Add it to the list of files to be removed
+                artifactsToRemove.add(location)
+
+            # Now must remove the entry from the internal registry
+            # otherwise the removal check above will never be true
+            self.removeStoredItemInfo(ref)
+
+        # Inform registry that we have removed items from datastore
+        self.registry.emptyDatasetLocationsTrash(self.name, trashed)
+
+        # Point of no return removal of files. If we were paranoid we
+        # could rename at this point and have an asynchronous job
+        # clean out the trash directory in datastore.
+        for location in artifactsToRemove:
+            log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
+            self._delete_artifact(location)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

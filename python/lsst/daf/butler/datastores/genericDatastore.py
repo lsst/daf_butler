@@ -108,19 +108,25 @@ class GenericBaseDatastore(Datastore):
         self.registry.insertDatasetLocations(self.name, expandedRefs)
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
-    def _remove_from_registry(self, ref):
-        """Remove rows from registry.
+    def _move_to_trash_in_registry(self, ref):
+        """Tell registry that this dataset and associated components
+        are to be trashed.
 
         Parameters
         ----------
         ref : `DatasetRef`
-            Dataset to remove from registry.
+            Dataset to mark for removal from registry.
+
+        Notes
+        -----
+        Dataset is not removed from internal stored item info table.
         """
-        self.removeStoredItemInfo(ref)
-        self.registry.removeDatasetLocation(self.name, ref)
-        for compRef in ref.components.values():
-            self.registry.removeDatasetLocation(self.name, compRef)
-            self.removeStoredItemInfo(compRef)
+
+        # Note that a ref can point to component dataset refs that
+        # have been deleted already from registry but are still in
+        # the python object. moveDatasetLocationToTrash will deal with that.
+        allRefs = [ref] + [compRef for compRef in ref.components.values()]
+        self.registry.moveDatasetLocationToTrash(self.name, allRefs)
 
     def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None):
         """Given the Python object read from the datastore, manipulate
@@ -174,6 +180,34 @@ class GenericBaseDatastore(Datastore):
                                                " configuration.")
 
         return
+
+    def remove(self, ref):
+        """Indicate to the Datastore that a Dataset can be removed.
+
+        .. warning::
+
+            This method deletes the artifact associated with this
+            dataset and can not be reversed.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+
+        Raises
+        ------
+        FileNotFoundError
+            Attempt to remove a dataset that does not exist.
+
+        Notes
+        -----
+        This method is used for immediate removal of a dataset and is
+        generally reserved for internal testing of datastore APIs.
+        It is implemented by calling `trash()` and then immediately calling
+        `emptyTrash()`.
+        """
+        self.trash(ref)
+        self.emptyTrash()
 
     def transfer(self, inputDatastore, ref):
         """Retrieve a Dataset from an input `Datastore`,
