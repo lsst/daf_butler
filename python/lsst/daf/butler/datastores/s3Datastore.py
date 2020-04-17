@@ -122,12 +122,12 @@ class S3Datastore(FileLikeDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -193,7 +193,7 @@ class S3Datastore(FileLikeDatastore):
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 result = formatter.read(component=getInfo.component)
         except Exception as e:
-            raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
+            raise ValueError(f"Failure from formatter for dataset {ref.id}: {e}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
 
@@ -204,7 +204,7 @@ class S3Datastore(FileLikeDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 

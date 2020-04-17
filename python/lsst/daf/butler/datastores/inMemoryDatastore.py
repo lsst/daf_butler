@@ -227,12 +227,12 @@ class InMemoryDatastore(GenericBaseDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -281,7 +281,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -336,8 +336,8 @@ class InMemoryDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
-            Dataset does not exist in the datastore, and if ``predict`` is
+            URI string pointing to the dataset within the datastore. If the
+            dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
             If the datastore does not have entities that relate well
@@ -363,7 +363,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         return "mem://{}".format(name)
 
     def trash(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
+        """Indicate to the Datastore that a dataset can be removed.
 
         Parameters
         ----------

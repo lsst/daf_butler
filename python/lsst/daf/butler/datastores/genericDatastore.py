@@ -59,7 +59,7 @@ class GenericBaseDatastore(Datastore):
         Parameters
         ----------
         ref : `DatasetRef`
-            The Dataset that is to be queried.
+            The dataset that is to be queried.
 
         Returns
         -------
@@ -80,7 +80,7 @@ class GenericBaseDatastore(Datastore):
         Parameters
         ----------
         ref : `DatasetRef`
-            The Dataset that has been removed.
+            The dataset that has been removed.
         """
         raise NotImplementedError()
 
@@ -159,7 +159,7 @@ class GenericBaseDatastore(Datastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
         """
@@ -180,7 +180,7 @@ class GenericBaseDatastore(Datastore):
         return
 
     def remove(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
+        """Indicate to the Datastore that a dataset can be removed.
 
         .. warning::
 
@@ -208,7 +208,7 @@ class GenericBaseDatastore(Datastore):
         self.emptyTrash()
 
     def transfer(self, inputDatastore, ref):
-        """Retrieve a Dataset from an input `Datastore`,
+        """Retrieve a dataset from an input `Datastore`,
         and store the result in this `Datastore`.
 
         Parameters
@@ -216,7 +216,7 @@ class GenericBaseDatastore(Datastore):
         inputDatastore : `Datastore`
             The external `Datastore` from which to retreive the Dataset.
         ref : `DatasetRef`
-            Reference to the required Dataset in the input data store.
+            Reference to the required dataset in the input data store.
 
         """
         assert inputDatastore is not self  # unless we want it for renames?

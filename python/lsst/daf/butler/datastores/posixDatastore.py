@@ -121,12 +121,12 @@ class PosixDatastore(FileLikeDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -157,7 +157,7 @@ class PosixDatastore(FileLikeDatastore):
         try:
             result = formatter.read(component=getInfo.component)
         except Exception as e:
-            raise ValueError(f"Failure from formatter '{formatter.name()}' for Dataset {ref.id}") from e
+            raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
 
@@ -168,7 +168,7 @@ class PosixDatastore(FileLikeDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -383,7 +383,7 @@ class PosixDatastore(FileLikeDatastore):
         for ref in refs:
             location, storedFileInfo = self._get_dataset_location_info(ref)
             if location is None:
-                raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
+                raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)

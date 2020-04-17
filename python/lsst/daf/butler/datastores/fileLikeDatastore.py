@@ -274,7 +274,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore
         records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
         if len(records) == 0:
-            raise KeyError(f"Unable to retrieve location associated with Dataset {ref}.")
+            raise KeyError(f"Unable to retrieve location associated with dataset {ref}.")
         assert len(records) == 1, "Primary key constraint should make more than one result impossible."
         record = records[0]
         # Convert name of StorageClass to instance
@@ -376,7 +376,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
@@ -388,7 +388,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Get file metadata and internal metadata
         location, storedFileInfo = self._get_dataset_location_info(ref)
         if location is None:
-            raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
+            raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites.
@@ -417,7 +417,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -589,8 +589,8 @@ class FileLikeDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
-            Dataset does not exist in the datastore, and if ``predict`` is
+            URI string pointing to the dataset within the datastore. If the
+            dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
             If the datastore does not have entities that relate well
@@ -640,7 +640,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     @transactional
     def trash(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
+        """Indicate to the datastore that a dataset can be removed.
 
         Parameters
         ----------
