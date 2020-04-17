@@ -639,13 +639,17 @@ class FileLikeDatastore(GenericBaseDatastore):
         return location.uri
 
     @transactional
-    def trash(self, ref):
+    def trash(self, ref, ignore_errors=True):
         """Indicate to the datastore that a dataset can be removed.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Reference to the required Dataset.
+        ignore_errors : `bool`
+            If `True` return without error even if something went wrong.
+            Problems could occur if another process is simultaneously trying
+            to delete.
 
         Raises
         ------
@@ -656,50 +660,96 @@ class FileLikeDatastore(GenericBaseDatastore):
         log.debug("Trashing %s in datastore %s", ref, self.name)
         location, _ = self._get_dataset_location_info(ref)
         if location is None:
-            raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
+            err_msg = f"Requested dataset to trash ({ref}) is not known to datastore {self.name}"
+            if ignore_errors:
+                log.warning(err_msg)
+                return
+            else:
+                raise FileNotFoundError(err_msg)
 
         if not self._artifact_exists(location):
-            raise FileNotFoundError(f"No such artifact: {location.uri}")
+            err_msg = f"Dataset is known to datastore {self.name} but " \
+                      f"associated artifact ({location.uri}) is missing"
+            if ignore_errors:
+                log.warning(err_msg)
+                return
+            else:
+                raise FileNotFoundError(err_msg)
 
         # Mark dataset as trashed
-        self._move_to_trash_in_registry(ref)
+        try:
+            self._move_to_trash_in_registry(ref)
+        except Exception as e:
+            if ignore_errors:
+                log.warning(f"Attempted to mark dataset ({ref}) to be trashed in datastore {self.name} "
+                            f"but encountered an error: {e}")
+                pass
+            else:
+                raise
 
     @transactional
-    def emptyTrash(self):
+    def emptyTrash(self, ignore_errors=True):
         """Remove all datasets from the trash.
+
+        Parameters
+        ----------
+        ignore_errors : `bool`
+            If `True` return without error even if something went wrong.
+            Problems could occur if another process is simultaneously trying
+            to delete.
         """
         log.debug("Emptying trash in datastore %s", self.name)
         trashed = self.registry.getTrashedDatasets(self.name)
-        artifactsToRemove = set()
 
         for ref in trashed:
             location, _ = self._get_dataset_location_info(ref)
 
             if location is None:
-                raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
+                err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
+                if ignore_errors:
+                    log.warning(err_msg)
+                    continue
+                else:
+                    raise FileNotFoundError(err_msg)
 
             if not self._artifact_exists(location):
-                raise FileNotFoundError(f"No such file: {location.uri}")
+                err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
+                if ignore_errors:
+                    log.warning(err_msg)
+                    continue
+                else:
+                    raise FileNotFoundError(err_msg)
 
-            # Can only delete the file if there are no references
+            # Can only delete the artifact if there are no references
             # to the file from untrashed dataset refs.
             if self._can_remove_dataset_artifact(ref):
-                # Add it to the list of files to be removed
-                artifactsToRemove.add(location)
+                # Point of no return for this artifact
+                log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
+                try:
+                    self._delete_artifact(location)
+                except Exception as e:
+                    if ignore_errors:
+                        log.critical("Encountered error removing artifact %s from datastore %s: %s",
+                                     location.uri, self.name, e)
+                    else:
+                        raise
 
-            # Now must remove the entry from the internal registry
+            # Now must remove the entry from the internal registry even if the
+            # artifact removal failed and was ignored,
             # otherwise the removal check above will never be true
-            self.removeStoredItemInfo(ref)
+            try:
+                self.removeStoredItemInfo(ref)
+            except Exception as e:
+                if ignore_errors:
+                    log.warning(f"Error removing dataset %s (%s) from internal registry of %s: %s",
+                                ref.id, location.uri, self.name, e)
+                    continue
+                else:
+                    raise
 
         # Inform registry that we have removed items from datastore
+        # This should work even if another process is clearing out those rows
         self.registry.emptyDatasetLocationsTrash(self.name, trashed)
-
-        # Point of no return removal of files. If we were paranoid we
-        # could rename at this point and have an asynchronous job
-        # clean out the trash directory in datastore.
-        for location in artifactsToRemove:
-            log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
-            self._delete_artifact(location)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

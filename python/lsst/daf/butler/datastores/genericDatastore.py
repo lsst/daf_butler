@@ -202,10 +202,11 @@ class GenericBaseDatastore(Datastore):
         This method is used for immediate removal of a dataset and is
         generally reserved for internal testing of datastore APIs.
         It is implemented by calling `trash()` and then immediately calling
-        `emptyTrash()`.
+        `emptyTrash()`.  This call is meant to be immediate so errors
+        encountered during removal are not ignored.
         """
-        self.trash(ref)
-        self.emptyTrash()
+        self.trash(ref, ignore_errors=False)
+        self.emptyTrash(ignore_errors=False)
 
     def transfer(self, inputDatastore, ref):
         """Retrieve a dataset from an input `Datastore`,

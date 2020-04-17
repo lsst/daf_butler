@@ -362,59 +362,90 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         return "mem://{}".format(name)
 
-    def trash(self, ref):
+    def trash(self, ref, ignore_errors=False):
         """Indicate to the Datastore that a dataset can be removed.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Reference to the required Dataset.
+        ignore_errors: `bool`, optional
+            Indicate that errors should be ignored.
 
         Raises
         ------
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
+
+        Notes
+        -----
+        Concurrency should not normally be an issue for the in memory datastore
+        since all internal changes are isolated to solely this process and
+        the registry only changes rows associated with this process.
         """
 
         log.debug("Trash %s in datastore %s", ref, self.name)
 
         # Check that this dataset is known to datastore
-        self._get_dataset_info(ref)
+        try:
+            self._get_dataset_info(ref)
 
-        # Move datasets to trash table
-        self._move_to_trash_in_registry(ref)
+            # Move datasets to trash table
+            self._move_to_trash_in_registry(ref)
+        except Exception as e:
+            if ignore_errors:
+                log.warning("Error encountered moving dataset %s to trash in datastore %s: %s",
+                            ref, self.name, e)
+            else:
+                raise
 
-    def emptyTrash(self):
+    def emptyTrash(self, ignore_errors=False):
         """Remove all datasets from the trash.
+
+        Parameters
+        ----------
+        ignore_errors : `bool`, optional
+            Ignore errors.
 
         Notes
         -----
         The internal tracking of datasets is affected by this method and
         transaction handling is not supported if there is a problem before
         the datasets themselves are deleted.
+
+        Concurrency should not normally be an issue for the in memory datastore
+        since all internal changes are isolated to solely this process and
+        the registry only changes rows associated with this process.
         """
         log.debug("Emptying trash in datastore %s", self.name)
         trashed = self.registry.getTrashedDatasets(self.name)
 
-        artifactsToRemove = set()
-
         for ref in trashed:
-            realID, _ = self._get_dataset_info(ref)
+            try:
+                realID, _ = self._get_dataset_info(ref)
+            except Exception as e:
+                if ignore_errors:
+                    log.warning("Emptying trash in datastore %s but encountered an error with dataset %s: %s",
+                                self.name, ref.id, e)
+                    continue
+                else:
+                    raise
 
+            # Determine whether all references to this dataset have been
+            # removed and we can delete the dataset itself
             allRefs = self.related[realID]
             theseRefs = {r.id for r in ref.flatten([ref])}
             remainingRefs = allRefs - theseRefs
             if not remainingRefs:
-                artifactsToRemove.add(realID)
+                log.debug("Removing artifact %s from datastore %s", realID, self.name)
+                del self.datasets[realID]
 
             # Remove this entry
             self.removeStoredItemInfo(ref)
 
+        # Inform registry that we have handled these items
+        # This should work even if another process is clearing out those rows
         self.registry.emptyDatasetLocationsTrash(self.name, trashed)
-
-        for refId in artifactsToRemove:
-            log.debug("Removing artifact %s from datastore %s", realID, ref)
-            del self.datasets[refId]
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

@@ -586,13 +586,15 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def trash(self, datasetRef):
+    def trash(self, datasetRef, ignore_errors=True):
         """Indicate to the Datastore that a Dataset can be moved to the trash.
 
         Parameters
         ----------
         datasetRef : `DatasetRef`
             Reference to the required Dataset.
+        ignore_errors : `bool`, optional
+            Determine whether errors should be ignored.
 
         Raises
         ------
@@ -607,8 +609,13 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def emptyTrash(self):
+    def emptyTrash(self, ignore_errors=True):
         """Remove all datasets from the trash.
+
+        Parameters
+        ----------
+        ignore_errors : `bool`, optional
+            Determine whether errors should be ignored.
 
         Notes
         -----

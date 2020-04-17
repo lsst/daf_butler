@@ -487,26 +487,30 @@ class ChainedDatastore(Datastore):
             of the child datastores removed the dataset.
         """
         log.debug(f"Removing {ref}")
-        self.trash(ref)
-        self.emptyTrash()
+        self.trash(ref, ignore_errors=False)
+        self.emptyTrash(ignore_errors=False)
 
-    def trash(self, ref):
+    def trash(self, ref, ignore_errors=True):
         log.debug("Trashing %s", ref)
 
         counter = 0
         for datastore in self.datastores:
             try:
-                datastore.trash(ref)
+                datastore.trash(ref, ignore_errors=ignore_errors)
                 counter += 1
             except FileNotFoundError:
                 pass
 
         if counter == 0:
-            raise FileNotFoundError(f"Could not remove from any child datastore: {ref}")
+            err_msg = f"Could not mark for removal from any child datastore: {ref}"
+            if ignore_errors:
+                log.warning(err_msg)
+            else:
+                raise FileNotFoundError(err_msg)
 
-    def emptyTrash(self):
+    def emptyTrash(self, ignore_errors=True):
         for datastore in self.datastores:
-            datastore.emptyTrash()
+            datastore.emptyTrash(ignore_errors=ignore_errors)
 
     def transfer(self, inputDatastore, ref):
         """Retrieve a dataset from an input `Datastore`,
