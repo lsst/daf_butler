@@ -242,12 +242,12 @@ class ChainedDatastore(Datastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -262,7 +262,7 @@ class ChainedDatastore(Datastore):
         for datastore in self.datastores:
             try:
                 inMemoryObject = datastore.get(ref, parameters)
-                log.debug("Found Dataset %s in datastore %s", ref, datastore.name)
+                log.debug("Found dataset %s in datastore %s", ref, datastore.name)
                 return inMemoryObject
             except FileNotFoundError:
                 pass
@@ -281,7 +281,7 @@ class ChainedDatastore(Datastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -420,8 +420,8 @@ class ChainedDatastore(Datastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
-            Dataset does not exist in the datastore, and if ``predict`` is
+            URI string pointing to the dataset within the datastore. If the
+            dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
 
@@ -470,7 +470,7 @@ class ChainedDatastore(Datastore):
         raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
 
     def remove(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
+        """Indicate to the datastore that a dataset can be removed.
 
         The dataset will be removed from each datastore.  The dataset is
         not required to exist in every child datastore.
@@ -478,7 +478,7 @@ class ChainedDatastore(Datastore):
         Parameters
         ----------
         ref : `DatasetRef`
-            Reference to the required Dataset.
+            Reference to the required dataset.
 
         Raises
         ------
@@ -487,20 +487,33 @@ class ChainedDatastore(Datastore):
             of the child datastores removed the dataset.
         """
         log.debug(f"Removing {ref}")
+        self.trash(ref, ignore_errors=False)
+        self.emptyTrash(ignore_errors=False)
+
+    def trash(self, ref, ignore_errors=True):
+        log.debug("Trashing %s", ref)
 
         counter = 0
         for datastore in self.datastores:
             try:
-                datastore.remove(ref)
+                datastore.trash(ref, ignore_errors=ignore_errors)
                 counter += 1
             except FileNotFoundError:
                 pass
 
         if counter == 0:
-            raise FileNotFoundError(f"Could not remove from any child datastore: {ref}")
+            err_msg = f"Could not mark for removal from any child datastore: {ref}"
+            if ignore_errors:
+                log.warning(err_msg)
+            else:
+                raise FileNotFoundError(err_msg)
+
+    def emptyTrash(self, ignore_errors=True):
+        for datastore in self.datastores:
+            datastore.emptyTrash(ignore_errors=ignore_errors)
 
     def transfer(self, inputDatastore, ref):
-        """Retrieve a Dataset from an input `Datastore`,
+        """Retrieve a dataset from an input `Datastore`,
         and store the result in this `Datastore`.
 
         Parameters
@@ -508,7 +521,7 @@ class ChainedDatastore(Datastore):
         inputDatastore : `Datastore`
             The external `Datastore` from which to retreive the Dataset.
         ref : `DatasetRef`
-            Reference to the required Dataset in the input data store.
+            Reference to the required dataset in the input data store.
 
         Returns
         -------

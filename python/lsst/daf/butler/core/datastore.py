@@ -586,6 +586,45 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
+    def trash(self, datasetRef, ignore_errors=True):
+        """Indicate to the Datastore that a Dataset can be moved to the trash.
+
+        Parameters
+        ----------
+        datasetRef : `DatasetRef`
+            Reference to the required Dataset.
+        ignore_errors : `bool`, optional
+            Determine whether errors should be ignored.
+
+        Raises
+        ------
+        FileNotFoundError
+            When Dataset does not exist.
+
+        Notes
+        -----
+        Some Datastores may implement this method as a silent no-op to
+        disable Dataset deletion through standard interfaces.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
+    def emptyTrash(self, ignore_errors=True):
+        """Remove all datasets from the trash.
+
+        Parameters
+        ----------
+        ignore_errors : `bool`, optional
+            Determine whether errors should be ignored.
+
+        Notes
+        -----
+        Some Datastores may implement this method as a silent no-op to
+        disable Dataset deletion through standard interfaces.
+        """
+        raise NotImplementedError("Must be implemented by subclass")
+
+    @abstractmethod
     def transfer(self, inputDatastore, datasetRef):
         """Retrieve a Dataset from an input `Datastore`, and store the result
         in this `Datastore`.

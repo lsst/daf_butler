@@ -1061,10 +1061,6 @@ class Butler:
                     self.registry.disassociate(tag, refs, recursive=False)
             if unstore:
                 try:
-                    # Point of no return: if Datastore.remove ever succeeds
-                    # or fails in a way that nevertheless changes repository
-                    # state, and then we get an exception (either in Datastore
-                    # or Registry) the repo might be corrupted.
                     for ref in refs:
                         # There is a difference between a concrete composite
                         # and virtual composite. In a virtual composite the
@@ -1078,12 +1074,15 @@ class Butler:
                         # to ignore already-removed-from-datastore datasets
                         # anyway.
                         if self.datastore.exists(ref):
-                            self.datastore.remove(ref)
+                            self.datastore.trash(ref)
                         if purge:
                             self.registry.removeDataset(ref)
+
+                    # Point of no return for removing artifacts
+                    self.datastore.emptyTrash()
                 except BaseException as err:
                     raise IOError("WARNING: an incomplete deletion may have put "
-                                  "the repository in a corrupted state.") from err
+                                  f"the repository in a corrupted state: {err}") from err
 
     @transactional
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None, run: Optional[str] = None,

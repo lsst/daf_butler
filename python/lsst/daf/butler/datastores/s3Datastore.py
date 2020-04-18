@@ -87,23 +87,31 @@ class S3Datastore(FileLikeDatastore):
             # missing. Further discussion can make this happen though.
             raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")
 
-    def exists(self, ref):
-        """Check if the dataset exists in the datastore.
+    def _artifact_exists(self, location):
+        """Check that an artifact exists in this datastore at the specified
+        location.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Reference to the required dataset.
+        location : `Location`
+            Expected location of the artifact associated with this datastore.
 
         Returns
         -------
         exists : `bool`
-            `True` if the entity exists in the `Datastore`.
+            True if the location can be found, false otherwise.
         """
-        location, _ = self._get_dataset_location_info(ref)
-        if location is None:
-            return False
-        return s3CheckFileExists(location, client=self.client)[0]
+        return s3CheckFileExists(location, client=self.client)
+
+    def _delete_artifact(self, location):
+        """Delete the artifact from the datastore.
+
+        Parameters
+        ----------
+        location : `Location`
+            Location of the artifact associated with this datastore.
+        """
+        self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
 
     def get(self, ref, parameters=None):
         """Load an InMemoryDataset from the store.
@@ -114,12 +122,12 @@ class S3Datastore(FileLikeDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -185,7 +193,7 @@ class S3Datastore(FileLikeDatastore):
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 result = formatter.read(component=getInfo.component)
         except Exception as e:
-            raise ValueError(f"Failure from formatter for Dataset {ref.id}: {e}") from e
+            raise ValueError(f"Failure from formatter for dataset {ref.id}: {e}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
 
@@ -196,7 +204,7 @@ class S3Datastore(FileLikeDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -329,38 +337,3 @@ class S3Datastore(FileLikeDatastore):
         return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
                               storageClass=ref.datasetType.storageClass,
                               file_size=size, checksum=None)
-
-    def remove(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
-
-        .. warning::
-
-            This method does not support transactions; removals are
-            immediate, cannot be undone, and are not guaranteed to
-            be atomic if deleting either the file or the internal
-            database records fails.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
-
-        Raises
-        ------
-        FileNotFoundError
-            Attempt to remove a dataset that does not exist.
-        """
-        location, _ = self._get_dataset_location_info(ref)
-        if location is None:
-            raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
-
-        if not s3CheckFileExists(location, client=self.client):
-            raise FileNotFoundError(f"No such file: {location.uri}")
-
-        if self._can_remove_dataset_artifact(ref):
-            # https://github.com/boto/boto3/issues/507 - there is no way of
-            # knowing if the file was actually deleted
-            self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
-
-        # Remove rows from registries
-        self._remove_from_registry(ref)

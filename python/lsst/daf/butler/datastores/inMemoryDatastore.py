@@ -25,7 +25,6 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 
 import time
 import logging
-import itertools
 from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
@@ -165,6 +164,41 @@ class InMemoryDatastore(GenericBaseDatastore):
         del self.records[ref.id]
         self.related[record.parentID].remove(ref.id)
 
+    def _get_dataset_info(self, ref):
+        """Check that the dataset is present and return the real ID and
+        associated information.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Target `DatasetRef`
+
+        Returns
+        -------
+        realID : `int`
+            The dataset ID associated with this ref that shoul be used. This
+            could either be the ID of the supplied `DatasetRef` or the parent.
+        storageInfo : `StoredMemoryItemInfo`
+            Associated storage information.
+
+        Raises
+        ------
+        FileNotFoundError
+            Raised if the dataset is not present in this datastore.
+        """
+        try:
+            storedItemInfo = self.getStoredItemInfo(ref)
+        except KeyError:
+            raise FileNotFoundError(f"No such file dataset in memory: {ref}") from None
+        realID = ref.id
+        if storedItemInfo.parentID is not None:
+            realID = storedItemInfo.parentID
+
+        if realID not in self.datasets:
+            raise FileNotFoundError(f"No such file dataset in memory: {ref}")
+
+        return realID, storedItemInfo
+
     def exists(self, ref):
         """Check if the dataset exists in the datastore.
 
@@ -178,18 +212,11 @@ class InMemoryDatastore(GenericBaseDatastore):
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
         """
-        # Get the stored information (this will fail if no dataset)
         try:
-            storedItemInfo = self.getStoredItemInfo(ref)
-        except KeyError:
+            self._get_dataset_info(ref)
+        except FileNotFoundError:
             return False
-
-        # The actual ID for the requested dataset might be that of a parent
-        # if this is a composite
-        thisref = ref.id
-        if storedItemInfo.parentID is not None:
-            thisref = storedItemInfo.parentID
-        return thisref in self.datasets
+        return True
 
     def get(self, ref, parameters=None):
         """Load an InMemoryDataset from the store.
@@ -200,12 +227,12 @@ class InMemoryDatastore(GenericBaseDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -219,24 +246,17 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
-        if not self.exists(ref):
-            raise FileNotFoundError(f"Could not retrieve Dataset {ref}")
+        realID, storedItemInfo = self._get_dataset_info(ref)
 
         # We have a write storage class and a read storage class and they
         # can be different for concrete composites.
         readStorageClass = ref.datasetType.storageClass
-        storedItemInfo = self.getStoredItemInfo(ref)
         writeStorageClass = storedItemInfo.storageClass
 
         # Check that the supplied parameters are suitable for the type read
         readStorageClass.validateParameters(parameters)
 
-        # We might need a parent if we are being asked for a component
-        # of a concrete composite
-        thisID = ref.id
-        if storedItemInfo.parentID is not None:
-            thisID = storedItemInfo.parentID
-        inMemoryDataset = self.datasets[thisID]
+        inMemoryDataset = self.datasets[realID]
 
         # Different storage classes implies a component request
         if readStorageClass != writeStorageClass:
@@ -261,7 +281,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -316,8 +336,8 @@ class InMemoryDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
-            Dataset does not exist in the datastore, and if ``predict`` is
+            URI string pointing to the dataset within the datastore. If the
+            dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
             If the datastore does not have entities that relate well
@@ -342,40 +362,90 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         return "mem://{}".format(name)
 
-    def remove(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
+    def trash(self, ref, ignore_errors=False):
+        """Indicate to the Datastore that a dataset can be removed.
 
         Parameters
         ----------
         ref : `DatasetRef`
             Reference to the required Dataset.
+        ignore_errors: `bool`, optional
+            Indicate that errors should be ignored.
 
         Raises
         ------
         FileNotFoundError
             Attempt to remove a dataset that does not exist.
 
+        Notes
+        -----
+        Concurrency should not normally be an issue for the in memory datastore
+        since all internal changes are isolated to solely this process and
+        the registry only changes rows associated with this process.
         """
+
+        log.debug("Trash %s in datastore %s", ref, self.name)
+
+        # Check that this dataset is known to datastore
         try:
-            storedItemInfo = self.getStoredItemInfo(ref)
-        except KeyError:
-            raise FileNotFoundError(f"No such file dataset in memory: {ref}") from None
-        thisID = ref.id
-        if storedItemInfo.parentID is not None:
-            thisID = storedItemInfo.parentID
+            self._get_dataset_info(ref)
 
-        if thisID not in self.datasets:
-            raise FileNotFoundError("No such file dataset in memory: {}".format(ref))
+            # Move datasets to trash table
+            self._move_to_trash_in_registry(ref)
+        except Exception as e:
+            if ignore_errors:
+                log.warning("Error encountered moving dataset %s to trash in datastore %s: %s",
+                            ref, self.name, e)
+            else:
+                raise
 
-        # Only delete if this is the only dataset associated with this data
-        allRefs = self.related[thisID]
-        theseRefs = {r.id for r in itertools.chain([ref], ref.components.values())}
-        remainingRefs = allRefs - theseRefs
-        if not remainingRefs:
-            del self.datasets[thisID]
+    def emptyTrash(self, ignore_errors=False):
+        """Remove all datasets from the trash.
 
-        # Remove rows from registries
-        self._remove_from_registry(ref)
+        Parameters
+        ----------
+        ignore_errors : `bool`, optional
+            Ignore errors.
+
+        Notes
+        -----
+        The internal tracking of datasets is affected by this method and
+        transaction handling is not supported if there is a problem before
+        the datasets themselves are deleted.
+
+        Concurrency should not normally be an issue for the in memory datastore
+        since all internal changes are isolated to solely this process and
+        the registry only changes rows associated with this process.
+        """
+        log.debug("Emptying trash in datastore %s", self.name)
+        trashed = self.registry.getTrashedDatasets(self.name)
+
+        for ref in trashed:
+            try:
+                realID, _ = self._get_dataset_info(ref)
+            except Exception as e:
+                if ignore_errors:
+                    log.warning("Emptying trash in datastore %s but encountered an error with dataset %s: %s",
+                                self.name, ref.id, e)
+                    continue
+                else:
+                    raise
+
+            # Determine whether all references to this dataset have been
+            # removed and we can delete the dataset itself
+            allRefs = self.related[realID]
+            theseRefs = {r.id for r in ref.flatten([ref])}
+            remainingRefs = allRefs - theseRefs
+            if not remainingRefs:
+                log.debug("Removing artifact %s from datastore %s", realID, self.name)
+                del self.datasets[realID]
+
+            # Remove this entry
+            self.removeStoredItemInfo(ref)
+
+        # Inform registry that we have handled these items
+        # This should work even if another process is clearing out those rows
+        self.registry.emptyDatasetLocationsTrash(self.name, trashed)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

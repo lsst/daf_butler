@@ -59,7 +59,7 @@ class GenericBaseDatastore(Datastore):
         Parameters
         ----------
         ref : `DatasetRef`
-            The Dataset that is to be queried.
+            The dataset that is to be queried.
 
         Returns
         -------
@@ -80,7 +80,7 @@ class GenericBaseDatastore(Datastore):
         Parameters
         ----------
         ref : `DatasetRef`
-            The Dataset that has been removed.
+            The dataset that has been removed.
         """
         raise NotImplementedError()
 
@@ -98,29 +98,33 @@ class GenericBaseDatastore(Datastore):
         expandedItemInfos = []
 
         for ref, itemInfo in refsAndInfos:
-            # Main dataset.
-            expandedRefs.append(ref)
-            expandedItemInfos.append(itemInfo)
-            # Conmponents (using the same item info).
-            expandedRefs.extend(ref.components.values())
-            expandedItemInfos.extend([itemInfo] * len(ref.components))
+            # Need the main dataset and the components
+            expandedRefs.extend(ref.flatten([ref]))
+
+            # Need one for the main ref and then one for each component
+            expandedItemInfos.extend([itemInfo] * (len(ref.components) + 1))
 
         self.registry.insertDatasetLocations(self.name, expandedRefs)
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
-    def _remove_from_registry(self, ref):
-        """Remove rows from registry.
+    def _move_to_trash_in_registry(self, ref):
+        """Tell registry that this dataset and associated components
+        are to be trashed.
 
         Parameters
         ----------
         ref : `DatasetRef`
-            Dataset to remove from registry.
+            Dataset to mark for removal from registry.
+
+        Notes
+        -----
+        Dataset is not removed from internal stored item info table.
         """
-        self.removeStoredItemInfo(ref)
-        self.registry.removeDatasetLocation(self.name, ref)
-        for compRef in ref.components.values():
-            self.registry.removeDatasetLocation(self.name, compRef)
-            self.removeStoredItemInfo(compRef)
+
+        # Note that a ref can point to component dataset refs that
+        # have been deleted already from registry but are still in
+        # the python object. moveDatasetLocationToTrash will deal with that.
+        self.registry.moveDatasetLocationToTrash(self.name, list(ref.flatten([ref])))
 
     def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None):
         """Given the Python object read from the datastore, manipulate
@@ -155,7 +159,7 @@ class GenericBaseDatastore(Datastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
         """
@@ -175,8 +179,37 @@ class GenericBaseDatastore(Datastore):
 
         return
 
+    def remove(self, ref):
+        """Indicate to the Datastore that a dataset can be removed.
+
+        .. warning::
+
+            This method deletes the artifact associated with this
+            dataset and can not be reversed.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+
+        Raises
+        ------
+        FileNotFoundError
+            Attempt to remove a dataset that does not exist.
+
+        Notes
+        -----
+        This method is used for immediate removal of a dataset and is
+        generally reserved for internal testing of datastore APIs.
+        It is implemented by calling `trash()` and then immediately calling
+        `emptyTrash()`.  This call is meant to be immediate so errors
+        encountered during removal are not ignored.
+        """
+        self.trash(ref, ignore_errors=False)
+        self.emptyTrash(ignore_errors=False)
+
     def transfer(self, inputDatastore, ref):
-        """Retrieve a Dataset from an input `Datastore`,
+        """Retrieve a dataset from an input `Datastore`,
         and store the result in this `Datastore`.
 
         Parameters
@@ -184,7 +217,7 @@ class GenericBaseDatastore(Datastore):
         inputDatastore : `Datastore`
             The external `Datastore` from which to retreive the Dataset.
         ref : `DatasetRef`
-            Reference to the required Dataset in the input data store.
+            Reference to the required dataset in the input data store.
 
         """
         assert inputDatastore is not self  # unless we want it for renames?

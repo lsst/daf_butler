@@ -44,7 +44,8 @@ RegistryTablesTuple = namedtuple(
         "dataset_collection",
         "quantum",
         "dataset_consumers",
-        "dataset_storage",
+        "dataset_location",
+        "dataset_location_trash",
     ]
 )
 
@@ -198,6 +199,43 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
     )
     collections.addRunForeignKey(quantum, onDelete="CASCADE", nullable=False)
 
+    # We want the dataset_location and dataset_location_trash tables
+    # to have the same definition
+    dataset_location_spec = dict(
+        doc=(
+            "A table that provides information on whether a Dataset is stored in "
+            "one or more Datastores.  The presence or absence of a record in this "
+            "table itself indicates whether the Dataset is present in that "
+            "Datastore. "
+        ),
+        fields=[
+            ddl.FieldSpec(
+                name="dataset_id",
+                dtype=sqlalchemy.BigInteger,
+                primaryKey=True,
+                nullable=False,
+                doc="Link to the dataset table.",
+            ),
+            ddl.FieldSpec(
+                name="datastore_name",
+                dtype=sqlalchemy.String,
+                length=256,
+                primaryKey=True,
+                nullable=False,
+                doc="Name of the Datastore this entry corresponds to.",
+            ),
+        ],
+    )
+
+    dataset_location = ddl.TableSpec(**dataset_location_spec,
+                                     foreignKeys=[
+                                         ddl.ForeignKeySpec(
+                                             table="dataset", source=("dataset_id",), target=("dataset_id",)
+                                         )
+                                     ])
+
+    dataset_location_trash = ddl.TableSpec(**dataset_location_spec)
+
     # All other table specs are fully static and do not depend on
     # configuration.
     return RegistryTablesTuple(
@@ -336,34 +374,6 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 ),
             ],
         ),
-        dataset_storage=ddl.TableSpec(
-            doc=(
-                "A table that provides information on whether a Dataset is stored in "
-                "one or more Datastores.  The presence or absence of a record in this "
-                "table itself indicates whether the Dataset is present in that "
-                "Datastore. "
-            ),
-            fields=[
-                ddl.FieldSpec(
-                    name="dataset_id",
-                    dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
-                    nullable=False,
-                    doc="Link to the dataset table.",
-                ),
-                ddl.FieldSpec(
-                    name="datastore_name",
-                    dtype=sqlalchemy.String,
-                    length=256,
-                    primaryKey=True,
-                    nullable=False,
-                    doc="Name of the Datastore this entry corresponds to.",
-                ),
-            ],
-            foreignKeys=[
-                ddl.ForeignKeySpec(
-                    table="dataset", source=("dataset_id",), target=("dataset_id",)
-                )
-            ],
-        ),
+        dataset_location=dataset_location,
+        dataset_location_trash=dataset_location_trash,
     )

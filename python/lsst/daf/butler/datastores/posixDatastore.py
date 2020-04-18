@@ -86,23 +86,31 @@ class PosixDatastore(FileLikeDatastore):
                 raise ValueError(f"No valid root at: {self.root}")
             safeMakeDir(self.root)
 
-    def exists(self, ref):
-        """Check if the dataset exists in the datastore.
+    def _artifact_exists(self, location):
+        """Check that an artifact exists in this datastore at the specified
+        location.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Reference to the required dataset.
+        location : `Location`
+            Expected location of the artifact associated with this datastore.
 
         Returns
         -------
         exists : `bool`
-            `True` if the entity exists in the `Datastore`.
+            True if the location can be found, false otherwise.
         """
-        location, _ = self._get_dataset_location_info(ref)
-        if location is None:
-            return False
         return os.path.exists(location.path)
+
+    def _delete_artifact(self, location):
+        """Delete the artifact from the datastore.
+
+        Parameters
+        ----------
+        location : `Location`
+            Location of the artifact associated with this datastore.
+        """
+        os.remove(location.path)
 
     def get(self, ref, parameters=None):
         """Load an InMemoryDataset from the store.
@@ -113,12 +121,12 @@ class PosixDatastore(FileLikeDatastore):
             Reference to the required Dataset.
         parameters : `dict`
             `StorageClass`-specific parameters that specify, for example,
-            a slice of the Dataset to be loaded.
+            a slice of the dataset to be loaded.
 
         Returns
         -------
         inMemoryDataset : `object`
-            Requested Dataset or slice thereof as an InMemoryDataset.
+            Requested dataset or slice thereof as an InMemoryDataset.
 
         Raises
         ------
@@ -149,7 +157,7 @@ class PosixDatastore(FileLikeDatastore):
         try:
             result = formatter.read(component=getInfo.component)
         except Exception as e:
-            raise ValueError(f"Failure from formatter '{formatter.name()}' for Dataset {ref.id}") from e
+            raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
 
@@ -160,7 +168,7 @@ class PosixDatastore(FileLikeDatastore):
         Parameters
         ----------
         inMemoryDataset : `object`
-            The Dataset to store.
+            The dataset to store.
         ref : `DatasetRef`
             Reference to the associated Dataset.
 
@@ -339,41 +347,6 @@ class PosixDatastore(FileLikeDatastore):
         return StoredFileInfo(formatter=formatter, path=path, storageClass=ref.datasetType.storageClass,
                               file_size=size, checksum=checksum)
 
-    def remove(self, ref):
-        """Indicate to the Datastore that a Dataset can be removed.
-
-        .. warning::
-
-            This method does not support transactions; removals are
-            immediate, cannot be undone, and are not guaranteed to
-            be atomic if deleting either the file or the internal
-            database records fails.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
-
-        Raises
-        ------
-        FileNotFoundError
-            Attempt to remove a dataset that does not exist.
-        """
-        # Get file metadata and internal metadata
-        location, _ = self._get_dataset_location_info(ref)
-        if location is None:
-            raise FileNotFoundError(f"Requested dataset ({ref}) does not exist")
-
-        if not os.path.exists(location.path):
-            raise FileNotFoundError(f"No such file: {location.uri}")
-
-        if self._can_remove_dataset_artifact(ref):
-            # Only reference to this path so we can remove it
-            os.remove(location.path)
-
-        # Remove rows from registries
-        self._remove_from_registry(ref)
-
     @staticmethod
     def computeChecksum(filename, algorithm="blake2b", block_size=8192):
         """Compute the checksum of the supplied file.
@@ -410,7 +383,7 @@ class PosixDatastore(FileLikeDatastore):
         for ref in refs:
             location, storedFileInfo = self._get_dataset_location_info(ref)
             if location is None:
-                raise FileNotFoundError(f"Could not retrieve Dataset {ref}.")
+                raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
