@@ -129,21 +129,7 @@ def _makeRecords(dataIds, universe):
         expandedIds[name] = []
         dimension = universe[name]
         for value in values:
-            expandedValue = {}
-            for key in dimension.uniqueKeys:
-                if key.nbytes:
-                    castType = bytes
-                else:
-                    castType = key.dtype().python_type
-                try:
-                    castValue = castType(value)
-                except TypeError:
-                    castValue = castType()
-                expandedValue[key.name] = castValue
-            for key in dimension.metadata:
-                if not key.nullable:
-                    expandedValue[key.name] = key.dtype().python_type(value)
-            expandedIds[name].append(expandedValue)
+            expandedIds[name].append(_fudgeMetadata(dimension, value))
 
     # Pick cross-relationships arbitrarily
     for name, values in expandedIds.items():
@@ -162,6 +148,50 @@ def _makeRecords(dataIds, universe):
 
     return {dimension: [universe[dimension].RecordClass.fromDict(value) for value in values]
             for dimension, values in expandedIds.items()}
+
+
+def _fudgeMetadata(dimension, value):
+    """Expand a dimension value to include all secondary keys and metadata.
+
+    No guarantee is made for the values of the added keys, except that they
+    have the correct type.
+
+    Parameters
+    ----------
+    dimension : `lsst.daf.butler.Dimension`
+        The dimension whose value must be expanded.
+    value
+        The value to expand. For best results, should be of a broadly
+        convertible type such as `str` or `int`.
+
+    Returns
+    -------
+    expandedValue : `~collections.abc.Mapping` [`str`]
+        A mapping from key names to values.
+
+    Examples
+    --------
+    .. code-block:: py
+
+       >>> _fudgeMetadata(dimensionUniverse["instrument"], "FancyCam")
+       {'name': 'FancyCam', 'visit_max': 42, 'exposure_max': 42,
+           'detector_max': 42, 'class_name': 'FancyCam'}
+    """
+    expandedValue = {}
+    for key in dimension.uniqueKeys:
+        if key.nbytes:
+            castType = bytes
+        else:
+            castType = key.dtype().python_type
+        try:
+            castValue = castType(value)
+        except TypeError:
+            castValue = castType()
+        expandedValue[key.name] = castValue
+    for key in dimension.metadata:
+        if not key.nullable:
+            expandedValue[key.name] = key.dtype().python_type(value)
+    return expandedValue
 
 
 def expandUniqueId(butler, partialId):
