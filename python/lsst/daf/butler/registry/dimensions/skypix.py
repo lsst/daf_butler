@@ -85,6 +85,10 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert into SkyPix dimension {self._dimension.name}.")
 
+    def sync(self, record: DimensionRecord):
+        # Docstring inherited from DimensionRecordStorage.sync.
+        raise TypeError(f"Cannot sync SkyPixdimension {self._dimension.name}.")
+
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         return self._dimension.RecordClass(dataId[self._dimension.name],

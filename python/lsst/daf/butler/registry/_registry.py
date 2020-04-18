@@ -21,9 +21,17 @@
 
 from __future__ import annotations
 
-__all__ = ("Registry", "AmbiguousDatasetError", "ConflictingDefinitionError", "OrphanedRecordError")
+__all__ = (
+    "AmbiguousDatasetError",
+    "ConflictingDefinitionError",
+    "ConsistentDataIds",
+    "InconsistentDataIdError",
+    "OrphanedRecordError",
+    "Registry",
+)
 
 import contextlib
+from dataclasses import dataclass
 import sys
 from typing import (
     Any,
@@ -40,6 +48,7 @@ from typing import (
 
 import sqlalchemy
 
+import lsst.sphgeom
 from ..core import (
     Config,
     DataCoordinate,
@@ -66,6 +75,7 @@ from .queries import (
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
 from .wildcards import CollectionQuery, CollectionSearch
+from .interfaces import DatabaseConflictError
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -78,6 +88,76 @@ if TYPE_CHECKING:
         OpaqueTableStorageManager,
         DimensionRecordStorageManager,
     )
+
+
+@dataclass
+class ConsistentDataIds:
+    """A struct used to report relationships between data IDs by
+    `Registry.relateDataIds`.
+
+    If an instance of this class is returned (instead of `None`), the data IDs
+    are "not inconsistent" - any keys they have in common have the same value,
+    and any spatial or temporal relationships they have at least might involve
+    an overlap.  To capture this, any instance of `ConsistentDataIds` coerces
+    to `True` in boolean contexts.
+    """
+
+    overlaps: bool
+    """If `True`, the data IDs have at least one key in common, associated with
+    the same value.
+
+    Note that data IDs are not inconsistent even if overlaps is `False` - they
+    may simply have no keys in common, which means they cannot have
+    inconsistent values for any keys.  They may even be equal, in the case that
+    both data IDs are empty.
+
+    This field does _not_ indicate whether a spatial or temporal overlap
+    relationship exists.
+    """
+
+    contains: bool
+    """If `True`, all keys in the first data ID are in the second, and are
+    associated with the same values.
+
+    This includes case where the first data ID is empty.
+    """
+
+    within: bool
+    """If `True`, all keys in the second data ID are in the first, and are
+    associated with the same values.
+
+    This includes case where the second data ID is empty.
+    """
+
+    @property
+    def equal(self) -> bool:
+        """If `True`, the two data IDs are the same.
+
+        Data IDs are equal if they have both a `contains` and a `within`
+        relationship.
+        """
+        return self.contains and self.within
+
+    @property
+    def disjoint(self) -> bool:
+        """If `True`, the two data IDs have no keys in common.
+
+        This is simply the oppose of `overlaps`.  Disjoint datasets are by
+        definition not inconsistent.
+        """
+        return not self.overlaps
+
+    def __bool__(self) -> bool:
+        return True
+
+
+class InconsistentDataIdError(ValueError):
+    """Exception raised when a data ID contains contradictory key-value pairs,
+    according to dimension relationships.
+
+    This can include the case where the data ID identifies mulitple spatial
+    regions or timspans that are disjoint.
+    """
 
 
 class AmbiguousDatasetError(Exception):
@@ -1245,6 +1325,8 @@ class Registry:
         else:
             records = dict(records) if records is not None else {}
         keys = dict(standardized)
+        regions = []
+        timespans = []
         for element in standardized.graph.primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
@@ -1252,14 +1334,87 @@ class Registry:
                 record = storage.fetch(keys)
                 records[element] = record
             if record is not None:
-                keys.update((d, getattr(record, d.name)) for d in element.implied)
+                for d in element.implied:
+                    value = getattr(record, d.name)
+                    if keys.setdefault(d, value) != value:
+                        raise InconsistentDataIdError(f"Data ID {standardized} has {d.name}={keys[d]!r}, "
+                                                      f"but {element.name} implies {d.name}={value!r}.")
+                if element in standardized.graph.spatial and record.region is not None:
+                    if any(record.region.relate(r) & lsst.sphgeom.DISJOINT for r in regions):
+                        raise InconsistentDataIdError(f"Data ID {standardized}'s region for {element.name} "
+                                                      f"is disjoint with those for other elements.")
+                    regions.append(record.region)
+                if element in standardized.graph.temporal:
+                    if any(not record.timespan.overlaps(t) for t in timespans):
+                        raise InconsistentDataIdError(f"Data ID {standardized}'s timespan for {element.name}"
+                                                      f" is disjoint with those for other elements.")
+                    timespans.append(record.timespan)
             else:
                 if element in standardized.graph.required:
                     raise LookupError(
                         f"Could not fetch record for required dimension {element.name} via keys {keys}."
                     )
+                if element.alwaysJoin:
+                    raise InconsistentDataIdError(
+                        f"Could not fetch record for element {element.name} via keys {keys}, ",
+                        f"but it is marked alwaysJoin=True; this means one or more dimensions are not "
+                        f"related."
+                    )
                 records.update((d, None) for d in element.implied)
         return ExpandedDataCoordinate(standardized.graph, standardized.values(), records=records)
+
+    def relateDataIds(self, a: DataId, b: DataId) -> Optional[ConsistentDataIds]:
+        """Compare the keys and values of a pair of data IDs for consistency.
+
+        See `ConsistentDataIds` for more information.
+
+        Parameters
+        ----------
+        a : `dict` or `DataCoordinate`
+            First data ID to be compared.
+        b : `dict` or `DataCoordinate`
+            Second data ID to be compared.
+
+        Returns
+        -------
+        relationship : `ConsistentDataIds` or `None`
+            Relationship information.  This is not `None` and coerces to
+            `True` in boolean contexts if and only if the data IDs are
+            consistent in terms of all common key-value pairs, all many-to-many
+            join tables, and all spatial andtemporal relationships.
+        """
+        a = DataCoordinate.standardize(a, universe=self.dimensions)
+        b = DataCoordinate.standardize(b, universe=self.dimensions)
+        aFull = getattr(a, "full", None)
+        bFull = getattr(b, "full", None)
+        aBest = aFull if aFull is not None else a
+        bBest = bFull if bFull is not None else b
+        jointKeys = aBest.keys() & bBest.keys()
+        # If any common values are not equal, we know they are inconsistent.
+        if any(aBest[k] != bBest[k] for k in jointKeys):
+            return None
+        # If the graphs are equal, we know the data IDs are.
+        if a.graph == b.graph:
+            return ConsistentDataIds(contains=True, within=True, overlaps=bool(jointKeys))
+        # Result is still inconclusive.  Try to expand a data ID containing
+        # keys from both; that will fail if they are inconsistent.
+        # First, if either input was already an ExpandedDataCoordinate, extract
+        # its records so we don't have to query for them.
+        records = {}
+        if hasattr(a, "records"):
+            records.update(a.records)
+        if hasattr(b, "records"):
+            records.update(b.records)
+        try:
+            self.expandDataId({**a, **b}, graph=(a.graph | b.graph), records=records)
+        except InconsistentDataIdError:
+            return None
+        # We know the answer is not `None`; time to figure out what it is.
+        return ConsistentDataIds(
+            contains=(a.graph >= b.graph),
+            within=(a.graph <= b.graph),
+            overlaps=bool(a.graph & b.graph),
+        )
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
                             *data: Union[dict, DimensionRecord],
@@ -1287,6 +1442,52 @@ class Registry:
             records = data
         storage = self._dimensions[element]
         storage.insert(*records)
+
+    def syncDimensionData(self, element: Union[DimensionElement, str],
+                          row: Union[dict, DimensionRecord],
+                          conform: bool = True) -> bool:
+        """Synchronize the given dimension record with the database, inserting
+        if it does not already exist and comparing values if it does.
+
+        Parameters
+        ----------
+        element : `DimensionElement` or `str`
+            The `DimensionElement` or name thereof that identifies the table
+            records will be inserted into.
+        row : `dict` or `DimensionRecord`
+           The record to insert.
+        conform : `bool`, optional
+            If `False` (`True` is default) perform no checking or conversions,
+            and assume that ``element`` is a `DimensionElement` instance and
+            ``data`` is a one or more `DimensionRecord` instances of the
+            appropriate subclass.
+
+        Returns
+        -------
+        inserted : `bool`
+            `True` if a new row was inserted, `False` otherwise.
+
+        Raises
+        ------
+        ConflictingDefinitionError
+            Raised if the record exists in the database (according to primary
+            key lookup) but is inconsistent with the given one.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
+        """
+        if conform:
+            element = self.dimensions[element]  # if this is a name, convert it to a true DimensionElement.
+            record = element.RecordClass.fromDict(row) if not type(row) is element.RecordClass else row
+        else:
+            record = row
+        storage = self._dimensions[element]
+        try:
+            return storage.sync(record)
+        except DatabaseConflictError as err:
+            raise ConflictingDefinitionError(str(err)) from err
 
     def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.

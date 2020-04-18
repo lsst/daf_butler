@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 import itertools
-from typing import Optional, Dict, Any, Tuple, Callable
+from typing import Optional, Tuple, Callable
 
 from sqlalchemy.sql import FromClause
 from sqlalchemy.engine import RowProxy, ResultProxy, Connection
@@ -35,19 +35,18 @@ from ...core import (
     DatasetRef,
     DatasetType,
     DimensionGraph,
-    ExpandedDataCoordinate,
 )
-from ._structs import QuerySummary, QueryColumns, QueryParameters
+from ._structs import QuerySummary, QueryColumns
 
 
 class Query:
-    """A wrapper for a SQLAlchemy query that knows how to re-bind parameters
-    and transform result rows into data IDs and dataset references.
+    """A wrapper for a SQLAlchemy query that knows how to transform result rows
+    into data IDs and dataset references.
 
     A `Query` should almost always be constructed directly by a call to
     `QueryBuilder.finish`; direct construction will make it difficult to be
     able to maintain invariants between arguments (see the documentation for
-    `QueryColumns` and `QueryParameters` for more information).
+    `QueryColumns` for more information).
 
     Parameters
     ----------
@@ -60,8 +59,6 @@ class Query:
         Struct that organizes the dimensions involved in the query.
     columns : `QueryColumns`
         Columns that are referenced in the query in any clause.
-    parameters : `QueryParameters`
-        Bind parameters for the query.
 
     Notes
     -----
@@ -75,11 +72,10 @@ class Query:
     """
 
     def __init__(self, *, connection: Connection, sql: FromClause,
-                 summary: QuerySummary, columns: QueryColumns, parameters: QueryParameters):
+                 summary: QuerySummary, columns: QueryColumns):
         self.summary = summary
         self.sql = sql
         self._columns = columns
-        self._parameters = parameters
         self._connection = connection
 
     def predicate(self, region: Optional[Region] = None) -> Callable[[RowProxy], bool]:
@@ -113,45 +109,6 @@ class Query:
             return not any(a.isDisjointFrom(b) for a, b in itertools.combinations(rowRegions, 2))
 
         return closure
-
-    def bind(self, dataId: ExpandedDataCoordinate) -> Dict[str, Any]:
-        """Return a dictionary that can be passed to a SQLAlchemy execute
-        method to provide WHERE clause information at execution time rather
-        than construction time.
-
-        Most callers should call `Query.execute` directly instead; when called
-        with a data ID, that calls `bind` internally.
-
-        Parameters
-        ----------
-        dataId : `ExpandedDataCoordinate`
-            Data ID to transform into bind parameters.  This must identify
-            all dimensions in `QuerySummary.given`, and must have the same
-            primary key values for all dimensions also identified by
-            `QuerySummary.dataId`.
-
-        Returns
-        -------
-        parameters : `dict`
-            Dictionary that can be passed as the second argument (with
-            ``self.sql`` this first argument) to SQLAlchemy execute methods.
-
-        Notes
-        -----
-        Calling `bind` does not automatically update the callable returned by
-        `predicate` with the given data ID's region (if it has one).  That
-        must be done manually by passing the region when calling `predicate`.
-        """
-        assert dataId.graph == self.summary.given
-        result = {}
-        for dimension, parameter in self._parameters.keys.items():
-            result[parameter] = dataId.full[dimension]
-        if self._parameters.timespan:
-            result[self._parameters.timespan.begin] = dataId.timespan.begin
-            result[self._parameters.timespan.end] = dataId.timespan.end
-        for dimension, parameter in self._parameters.skypix.items():
-            result[parameter] = dimension.pixelization.envelope(dataId.region)
-        return result
 
     def extractDataId(self, row: RowProxy, *, graph: Optional[DimensionGraph] = None) -> DataCoordinate:
         """Extract a data ID from a result row.
@@ -209,21 +166,8 @@ class Query:
         return (DatasetRef(datasetType, dataId, id=row[datasetIdColumn]),
                 row[datasetRankColumn] if datasetRankColumn is not None else None)
 
-    def execute(self, dataId: Optional[ExpandedDataCoordinate] = None) -> ResultProxy:
+    def execute(self) -> ResultProxy:
         """Execute the query.
-
-        This may be called multiple times with different arguments to apply
-        different bind parameter values without repeating the work of
-        constructing the query.
-
-        Parameters
-        ----------
-        dataId : `ExpandedDataCoordinate`, optional
-            Data ID to transform into bind parameters.  This must identify
-            all dimensions in `QuerySummary.given`, and must have the same
-            primary key values for all dimensions also identified by
-            `QuerySummary.dataId`.  If not provided, `QuerySummary.dataId`
-            must identify all dimensions in `QuerySummary.given`.
 
         Returns
         -------
@@ -231,8 +175,4 @@ class Query:
             Object representing the query results; see SQLAlchemy documentation
             for more information.
         """
-        if dataId is not None:
-            params = self.bind(dataId)
-            return self._connection.execute(self.sql, params)
-        else:
-            return self._connection.execute(self.sql)
+        return self._connection.execute(self.sql)

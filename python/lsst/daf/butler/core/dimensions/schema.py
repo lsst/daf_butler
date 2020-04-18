@@ -64,7 +64,7 @@ def makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
     """
     source = []
     target = []
-    for other in dimension.graph.required:
+    for other in dimension.required:
         if other == dimension:
             target.append(dimension.primaryKey.name)
         else:
@@ -137,7 +137,7 @@ def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
     # Add the primary key fields of required dimensions.  These continue to be
     # primary keys in the table for this dimension.
     dependencies = []
-    for dimension in element.graph.required:
+    for dimension in element.required:
         if dimension != element:
             addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
             dependencies.append(dimension.name)
@@ -160,9 +160,9 @@ def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
     # Add metadata fields, temporal timespans, and spatial regions.
     for fieldSpec in element.metadata:
         tableSpec.fields.add(fieldSpec)
-    if element.spatial:
+    if element.spatial is not None:
         tableSpec.fields.add(REGION_FIELD_SPEC)
-    if element.temporal:
+    if element.temporal is not None:
         for fieldSpec in TIMESPAN_FIELD_SPECS:
             tableSpec.fields.add(fieldSpec)
     return tableSpec

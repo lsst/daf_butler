@@ -32,35 +32,6 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .elements import DimensionElement, Dimension
 
 
-def _filterDependentElements(elements: NamedValueSet[DimensionElement],
-                             prefer: NamedValueSet[DimensionElement]
-                             ) -> NamedValueSet[DimensionElement]:
-    """Return a subset of the given set with only independent elements.
-
-    Parameters
-    ----------
-    elements : `NamedValueSet` of `DimensionElement`
-        The elements to be filtered.
-    prefer : `NamedValueSet` of `DimensionElement`
-        Elements to be included in the result in preference to others with
-        which they have a dependency relationship.  When no preferred element
-        is given for a pair of related elements, the dependent is included
-        rather than the dependency.
-
-    Returns
-    -------
-    filtered : `NamedValueSet` of `DimensionElement`
-        The filtered set of elements.  Order is unspecified.
-    """
-    resultNames = set()
-    for element in elements:
-        includedDependencyNames = frozenset(element._recursiveDependencyNames & resultNames)
-        if includedDependencyNames.isdisjoint(prefer.names):
-            resultNames.difference_update(includedDependencyNames)
-            resultNames.add(element.name)
-    return NamedValueSet(elements[name] for name in resultNames)
-
-
 @immutable
 class DimensionGraph:
     """An immutable, dependency-complete collection of dimensions.
@@ -123,7 +94,7 @@ class DimensionGraph:
         if conform:
             # Expand given dimensions to include all dependencies.
             for name in tuple(names):  # iterate over a temporary copy so we can modify the original
-                names.update(universe[name]._recursiveDependencyNames)
+                names.update(universe[name]._related.dependencies)
         # Look in the cache of existing graphs, with the expanded set of names.
         cacheKey = frozenset(names)
         self = universe._cache.get(cacheKey, None)
@@ -160,7 +131,7 @@ class DimensionGraph:
         self.implied = NamedValueSet()
         for i1, dim1 in enumerate(self.dimensions):
             for i2, dim2 in enumerate(self.dimensions):
-                if dim1.name in dim2._impliedDependencyNames:
+                if dim1.name in dim2._related.implied:
                     self.implied.add(dim1)
                     break
             else:
@@ -170,18 +141,26 @@ class DimensionGraph:
         self.implied.freeze()
 
         # Compute sets of spatial and temporal elements.
-        # We keep the both sets with no redundancy resolution and those with
-        # KEEP_CHILD redundancy resolution for all elements.  The latter is
-        # what is usually wanted (by e.g. ExpandedDataCoordinate), but the
-        # former is what we need to compute any other redundancy resolution
-        # on the fly.
-        self._allSpatial = NamedValueSet(element for element in self.elements if element.spatial)
-        self._allSpatial.freeze()
-        self._allTemporal = NamedValueSet(element for element in self.elements if element.temporal)
-        self._allTemporal.freeze()
-        self.spatial = _filterDependentElements(self._allSpatial, prefer=NamedValueSet())
+        # This contain the values of the `.spatial` and `.temporal` attributes
+        # of all elements, unless those attributes are not in the graph.
+        # In that case, the element whose attribute is not in the graph is
+        # added instead.  This ensures that these sets contain the
+        # most-specific spatial and temporal elements, not the summary elements
+        # that aggregate them, unless the summaries are all that we have.
+        self.spatial = NamedValueSet()
+        self.temporal = NamedValueSet()
+        for element in self.elements:
+            if element.spatial is not None:
+                if element.spatial in self.elements:
+                    self.spatial.add(element.spatial)
+                else:
+                    self.spatial.add(element)
+            if element.temporal is not None:
+                if element.temporal in self.elements:
+                    self.temporal.add(element.temporal)
+                else:
+                    self.temporal.add(element)
         self.spatial.freeze()
-        self.temporal = _filterDependentElements(self._allTemporal, prefer=NamedValueSet())
         self.temporal.freeze()
 
         # Build mappings from dimension to index; this is really for
@@ -326,73 +305,6 @@ class DimensionGraph:
         """
         return self.intersection(other)
 
-    def getSpatial(self, *, independent: bool = True,
-                   prefer: Optional[Iterable[DimensionElement]] = None
-                   ) -> NamedValueSet[DimensionElement]:
-        """Return the elements that are associated with spatial regions,
-        possibly with some filtering.
-
-        Parameters
-        ----------
-        independent : `bool`
-            If `True` (default) ensure that all returned elements are
-            independent of each other, by resolving any dependencies between
-            spatial elements in favor of the dependent one (which is the one
-            with the smaller, more precise region).  A graph that includes both
-            "tract" and "patch", for example, would have only "patch" returned
-            here if ``independent`` is `True`.  If `False`, all spatial
-            elements are returned.
-        prefer : iterable of `DimensionElement`
-            Elements that should be returned instead of their dependents when
-            ``independent`` is `True` (ignored if ``independent`` is `False`).
-            For example, passing ``prefer=[tract]`` to a graph with both
-            "tract" and "patch" would result in only "tract" being returned.
-
-        Returns
-        -------
-        spatial : `NamedValueSet` of `DimensionElement`
-            Elements that have `DimensionElement.spatial` `True`, filtered
-            as specified by the arguments.
-        """
-        if not independent:
-            return self._allSpatial
-        elif prefer is None:
-            return self.spatial
-        else:
-            return _filterDependentElements(self._allSpatial,
-                                            prefer=NamedValueSet(self.elements[p] for p in prefer))
-
-    def getTemporal(self, *, independent: bool = True,
-                    prefer: Optional[Iterable[DimensionElement]] = None
-                    ) -> NamedValueSet[DimensionElement]:
-        """Return the elements that are associated with a timespan,
-        possibly with some filtering.
-
-        Parameters
-        ----------
-        independent : `bool`
-            If `True` (default) ensure that all returned elements are
-            independent of each other, by resolving any dependencies between
-            spatial elements in favor of the dependent one (which is the one
-            with the smaller, more precise timespans).
-        prefer : iterable of `DimensionElement`
-            Elements that should be returned instead of their dependents when
-            ``independent`` is `True` (ignored if ``independent`` is `False`).
-
-        Returns
-        -------
-        temporal : `NamedValueSet` of `DimensionElement`
-            Elements that have `DimensionElement.temporal` `True`, filtered
-            as specified by the arguments.
-        """
-        if not independent:
-            return self._allTemporal
-        elif prefer is None:
-            return self.temporal
-        else:
-            return _filterDependentElements(self._allTemporal,
-                                            prefer=NamedValueSet(self.elements[p] for p in prefer))
-
     @property
     def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement]:
         """Return a tuple of all elements in an order allows records to be
@@ -411,7 +323,7 @@ class DimensionGraph:
             def addToOrder(element) -> bool:
                 if element.name in done:
                     return
-                predecessors = set(element.graph.required.names)
+                predecessors = set(element.required.names)
                 predecessors.discard(element.name)
                 if not done.issuperset(predecessors):
                     return
@@ -468,13 +380,9 @@ class DimensionGraph:
     spatial: NamedValueSet[DimensionElement]
     """Elements that are associated with independent spatial regions
     (`NamedValueSet` of `DimensionElement`).
-
-    The default filtering described in `getSpatial` is applied.
     """
 
     temporal: NamedValueSet[DimensionElement]
     """Elements that are associated with independent spatial regions
     (`NamedValueSet` of `DimensionElement`).
-
-    The default filtering described in `getTemporal` is applied.
     """

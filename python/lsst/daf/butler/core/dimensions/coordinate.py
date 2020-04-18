@@ -180,9 +180,16 @@ class DataCoordinate(IndexedTupleDict):
             # Optimized code path for DataCoordinate comparisons.
             return self.graph == other.graph and self.values() == other.values()
         except AttributeError:
-            # Also support comparison with informal data ID dictionaries that
-            # map dimension name to value.
-            return self.byName() == other
+            # We can't reliably compare to informal data ID dictionaries
+            # we don't know if any extra keys they might have are consistent
+            # with an `ExpandedDataCoordinate` version of ``self`` (which
+            # should compare as equal) or something else (which should
+            # compare as not equal).
+            # We don't even want to return `NotImplemented` and tell Python
+            # to delegate to ``other.__eq__``, because that could also be
+            # misleading.  We raise TypeError instead.
+            raise TypeError("Cannot compare DataCoordinate instances to other objects without potentially "
+                            "misleading results.") from None
 
     def __str__(self):
         return f"{self.byName()}"
@@ -208,24 +215,6 @@ class DataCoordinate(IndexedTupleDict):
                 update(v.encode("utf8"))
             else:
                 raise TypeError(f"Only `int` and `str` are allowed as dimension keys, not {v} ({type(v)}).")
-
-    def matches(self, other: DataCoordinate) -> bool:
-        """Test whether the values of all keys in both coordinates are equal.
-
-        Parameters
-        ----------
-        other : `DataCoordinate`
-            The other coordinate to compare to.
-
-        Returns
-        -------
-        consistent : `bool`
-            `True` if all keys that are in in both ``other`` and ``self``
-            are associated with the same values, and `False` otherwise.
-            `True` if there are no keys in common.
-        """
-        d = getattr(other, "full", other)
-        return all(self[k] == d[k] for k in (self.keys() & d.keys()))
 
     def subset(self, graph: DimensionGraph) -> DataCoordinate:
         """Return a new `DataCoordinate` whose graph is a subset of

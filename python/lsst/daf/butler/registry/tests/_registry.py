@@ -36,7 +36,13 @@ from ...core import (
     ddl,
     YamlRepoImportBackend
 )
-from .._registry import Registry, CollectionType, ConflictingDefinitionError, OrphanedRecordError
+from .._registry import (
+    CollectionType,
+    ConflictingDefinitionError,
+    ConsistentDataIds,
+    OrphanedRecordError,
+    Registry,
+)
 from ..wildcards import DatasetTypeRestriction
 
 
@@ -150,8 +156,8 @@ class RegistryTests(ABC):
         self.assertEqual(allTypes, {outDatasetType1, outDatasetType2})
 
     def testDimensions(self):
-        """Tests for `Registry.insertDimensionData` and
-        `Registry.expandDataId`.
+        """Tests for `Registry.insertDimensionData`,
+        `Registry.syncDimensionData`, and `Registry.expandDataId`.
         """
         registry = self.makeRegistry()
         dimensionName = "instrument"
@@ -192,6 +198,141 @@ class RegistryTests(ABC):
                 graph=dimension2.graph
             ).records[dimensionName2].toDict(),
             dimensionValue2
+        )
+        # Use syncDimensionData to insert a new record successfully.
+        dimensionName3 = "detector"
+        dimensionValue3 = {"instrument": "DummyCam", "id": 1, "full_name": "one",
+                           "name_in_raft": "zero", "purpose": "SCIENCE"}
+        self.assertTrue(registry.syncDimensionData(dimensionName3, dimensionValue3))
+        # Sync that again.  Note that one field ("raft") is NULL, and that
+        # should be okay.
+        self.assertFalse(registry.syncDimensionData(dimensionName3, dimensionValue3))
+        # Now try that sync with the same primary key but a different value.
+        # This should fail.
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.syncDimensionData(
+                dimensionName3,
+                {"instrument": "DummyCam", "id": 1, "full_name": "one",
+                 "name_in_raft": "four", "purpose": "SCIENCE"}
+            )
+
+    def testDataIdRelationships(self):
+        """Test `Registry.relateDataId`.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        # Simple cases where the dimension key-value pairs tell us everything.
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1"},
+                {"instrument": "Cam1"},
+            ),
+            ConsistentDataIds(contains=True, within=True, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds({}, {}),
+            ConsistentDataIds(contains=True, within=True, overlaps=False)
+        )
+        self.assertEqual(
+            registry.relateDataIds({"instrument": "Cam1"}, {}),
+            ConsistentDataIds(contains=True, within=False, overlaps=False)
+        )
+        self.assertEqual(
+            registry.relateDataIds({}, {"instrument": "Cam1"}),
+            ConsistentDataIds(contains=False, within=True, overlaps=False)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+                {"instrument": "Cam1"},
+            ),
+            ConsistentDataIds(contains=True, within=False, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+            ),
+            ConsistentDataIds(contains=False, within=True, overlaps=True)
+        )
+        self.assertIsNone(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-R1"},
+            )
+        )
+        # Trickier cases where we need to expand data IDs, but it's still just
+        # required and implied dimension relationships.
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+                {"instrument": "Cam1", "abstract_filter": "g"},
+            ),
+            ConsistentDataIds(contains=True, within=False, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "abstract_filter": "g"},
+                {"instrument": "Cam1", "physical_filter": "Cam1-G"},
+            ),
+            ConsistentDataIds(contains=False, within=True, overlaps=True)
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1"},
+                {"htm7": 131073},
+            ),
+            ConsistentDataIds(contains=False, within=False, overlaps=False)
+        )
+        # Trickiest cases involve spatial or temporal overlaps or non-dimension
+        # elements that relate things (of which visit_definition is our only
+        # current example).
+        #
+        # These two HTM IDs at different levels have a "contains" relationship
+        # spatially, but there is no overlap of dimension keys.  The exact
+        # result of relateDataIds is unspecified for this case, but it's
+        # guaranteed to be truthy (see relateDataIds docs.).
+        self.assertTrue(
+            registry.relateDataIds({"htm7": 131073}, {"htm9": 2097169})
+        )
+        # These two HTM IDs at different levels are disjoint spatially, which
+        # means the data IDs are inconsistent.
+        self.assertIsNone(
+            registry.relateDataIds({"htm7": 131073}, {"htm9": 2097391})
+        )
+        # Insert a few more dimension records for the next test.
+        registry.insertDimensionData(
+            "exposure",
+            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G"},
+        )
+        registry.insertDimensionData(
+            "exposure",
+            {"instrument": "Cam1", "id": 2, "name": "two", "physical_filter": "Cam1-G"},
+        )
+        registry.insertDimensionData(
+            "visit_system",
+            {"instrument": "Cam1", "id": 0, "name": "one-to-one"},
+        )
+        registry.insertDimensionData(
+            "visit",
+            {"instrument": "Cam1", "id": 1, "name": "one", "physical_filter": "Cam1-G", "visit_system": 0},
+        )
+        registry.insertDimensionData(
+            "visit_definition",
+            {"instrument": "Cam1", "visit": 1, "exposure": 1, "visit_system": 0},
+        )
+        self.assertEqual(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "visit": 1},
+                {"instrument": "Cam1", "exposure": 1},
+            ),
+            ConsistentDataIds(contains=False, within=False, overlaps=True)
+        )
+        self.assertIsNone(
+            registry.relateDataIds(
+                {"instrument": "Cam1", "visit": 1},
+                {"instrument": "Cam1", "exposure": 2},
+            )
         )
 
     def testDataset(self):
@@ -518,19 +659,32 @@ class RegistryTests(ABC):
             *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in range(1, 6)]
         )
         registry.insertDimensionData(
+            "visit_system",
+            dict(instrument="DummyCam", id=1, name="default"),
+        )
+        registry.insertDimensionData(
             "visit",
-            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i", visit_system=1),
+            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_r", visit_system=1),
+            dict(instrument="DummyCam", id=20, name="twelve", physical_filter="dummy_r", visit_system=1),
         )
         registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=101, name="101", visit=10, physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=110, name="110", visit=11, physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=111, name="111", visit=11, physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=200, name="200", visit=20, physical_filter="dummy_r"),
-            dict(instrument="DummyCam", id=201, name="201", visit=20, physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i"),
+            dict(instrument="DummyCam", id=110, name="110", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=111, name="111", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=200, name="200", physical_filter="dummy_r"),
+            dict(instrument="DummyCam", id=201, name="201", physical_filter="dummy_r"),
+        )
+        registry.insertDimensionData(
+            "visit_definition",
+            dict(instrument="DummyCam", exposure=100, visit_system=1, visit=10),
+            dict(instrument="DummyCam", exposure=101, visit_system=1, visit=10),
+            dict(instrument="DummyCam", exposure=110, visit_system=1, visit=11),
+            dict(instrument="DummyCam", exposure=111, visit_system=1, visit=11),
+            dict(instrument="DummyCam", exposure=200, visit_system=1, visit=20),
+            dict(instrument="DummyCam", exposure=201, visit_system=1, visit=20),
         )
         # dataset types
         run1 = "test1_r"
@@ -583,7 +737,7 @@ class RegistryTests(ABC):
         rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1, expand=True))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
             packer1 = registry.dimensions.makePacker("visit_detector", dataId)
             packer2 = registry.dimensions.makePacker("exposure_detector", dataId)
             self.assertEqual(packer1.unpack(packer1.pack(dataId)),
@@ -600,7 +754,7 @@ class RegistryTests(ABC):
         rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=tagged2))
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 20))
@@ -610,7 +764,7 @@ class RegistryTests(ABC):
         rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=[run1, tagged2]))
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
-            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure"))
+            self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows),
                               (100, 101, 110, 111, 200, 201))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10, 11, 20))
@@ -809,15 +963,10 @@ class RegistryTests(ABC):
             *[dict(instrument="DummyCam", id=i, full_name=str(i)) for i in (1, 2, 3, 4, 5)]
         )
         registry.insertDimensionData(
-            "visit",
-            dict(instrument="DummyCam", id=10, name="ten", physical_filter="dummy_i"),
-            dict(instrument="DummyCam", id=11, name="eleven", physical_filter="dummy_i"),
-        )
-        registry.insertDimensionData(
             "exposure",
-            dict(instrument="DummyCam", id=100, name="100", visit=10, physical_filter="dummy_i",
+            dict(instrument="DummyCam", id=100, name="100", physical_filter="dummy_i",
                  datetime_begin=_dt("2005-12-15 02:00:00"), datetime_end=_dt("2005-12-15 03:00:00")),
-            dict(instrument="DummyCam", id=101, name="101", visit=11, physical_filter="dummy_i",
+            dict(instrument="DummyCam", id=101, name="101", physical_filter="dummy_i",
                  datetime_begin=_dt("2005-12-16 02:00:00"), datetime_end=_dt("2005-12-16 03:00:00")),
         )
         registry.insertDimensionData(

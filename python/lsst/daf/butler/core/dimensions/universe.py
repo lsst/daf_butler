@@ -90,7 +90,7 @@ class DimensionUniverse(DimensionGraph):
         # lexicographically (no topological sort because skypix dimensions
         # never have any dependencies).
         for name in sorted(skyPixDimensions):
-            skyPixDimensions[name]._finish(self)
+            skyPixDimensions[name]._finish(self, {})
 
         # Read the other dimension elements from config.
         elementsToDo = processElementsConfig(config["elements"])
@@ -99,7 +99,7 @@ class DimensionUniverse(DimensionGraph):
         # dependencies added.
         while elementsToDo:
             unblocked = [name for name, element in elementsToDo.items()
-                         if element._directDependencyNames.isdisjoint(elementsToDo.keys())]
+                         if element._related.dependencies.isdisjoint(elementsToDo.keys())]
             unblocked.sort()  # Break ties lexicographically.
             if not unblocked:
                 raise RuntimeError(f"Cycle detected in dimension elements: {elementsToDo.keys()}.")
@@ -109,7 +109,7 @@ class DimensionUniverse(DimensionGraph):
                 # dependencies.
                 # This includes adding the element to self.elements and
                 # (if appropriate) self.dimensions.
-                elementsToDo.pop(name)._finish(self)
+                elementsToDo.pop(name)._finish(self, elementsToDo)
 
         # Add attributes for special subsets of the graph.
         self.empty = DimensionGraph(self, (), conform=False)

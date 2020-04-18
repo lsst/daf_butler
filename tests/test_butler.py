@@ -149,8 +149,12 @@ class ButlerPutGetTests:
         butler.registry.insertDimensionData("physical_filter", {"instrument": "DummyCamComp",
                                                                 "name": "d-r",
                                                                 "abstract_filter": "R"})
+        butler.registry.insertDimensionData("visit_system", {"instrument": "DummyCamComp",
+                                                             "id": 1,
+                                                             "name": "default"})
         butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 423,
-                                                      "name": "fourtwentythree", "physical_filter": "d-r"})
+                                                      "name": "fourtwentythree", "physical_filter": "d-r",
+                                                      "visit_system": 1})
 
         # Create and store a dataset
         metric = makeExampleMetrics()

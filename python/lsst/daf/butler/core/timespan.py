@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("Timespan", "TIMESPAN_FIELD_SPECS", "TIMESPAN_MIN", "TIMESPAN_MAX")
 
 import operator
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 from . import ddl, time_utils
 
@@ -35,31 +35,116 @@ T = TypeVar("T")
 
 
 class Timespan(Generic[T], tuple):
+    """A generic 2-element named tuple for time intervals.
 
-    def __new__(cls, begin: T, end: T):
+    Parameters
+    ----------
+    begin : ``T``, optional
+        Minimum timestamp in the interval (inclusive).  `None` is interpreted
+        as -infinity.
+    end : ``T``, optional
+        Maximum timestamp in the interval (inclusive).  `None` is interpreted
+        as +infinity.
+
+    Notes
+    -----
+    This class is generic because it is used for both Python literals (with
+    ``T == astropy.time.Time``) and timestamps in SQLAlchemy expressions
+    (with ``T == sqlalchemy.sql.ColumnElement``), including operations between
+    those.
+
+    Python's built-in `collections.namedtuple` is not actually a type (just
+    a factory for types), and `typing.NamedTuple` doesn't support generics,
+    so neither can be used here (but also wouldn't add much even if they
+    could).
+    """
+    def __new__(cls, begin: Optional[T], end: Optional[T]):
         return tuple.__new__(cls, (begin, end))
 
-    def overlaps(self, other, ops=operator):
-        return ops.not_(ops.or_(self.end < other.begin, self.begin > other.end))
+    def overlaps(self, other, ops=operator) -> Any:
+        """Test whether this timespan overlaps another.
+
+        Parameters
+        ----------
+        other : `Timespan`
+            Another timespan whose begin and end values can be compared with
+            those of ``self`` with the ``>=`` operator, yielding values
+            that can be passed to ``ops.or_`` and/or ``ops.and_``.
+        ops : `Any`, optional
+            Any object with ``and_`` and ``or_`` boolean operators.  Defaults
+            to the Python built-in `operator` module, which is appropriate when
+            ``T`` is a Python literal like `astropy.time.Time`.  When either
+            operand contains SQLAlchemy column expressions, the
+            `sqlalchemy.sql` module should be used instead.
+
+        Returns
+        -------
+        overlaps : `Any`
+            The result of the overlap.  When ``ops`` is `operator`, this will
+            be a `bool`.  If ``ops`` is `sqlachemy.sql`, it will be a boolean
+            column expression.
+        """
+        return ops.and_(
+            ops.or_(self.end == None, other.begin == None, self.end >= other.begin),  # noqa: E711
+            ops.or_(self.begin == None, other.end == None, other.end >= self.begin),  # noqa: E711
+        )
 
     def intersection(*args) -> Optional[Timespan]:
+        """Return a new `Timespan` that is contained by all of the given ones.
+
+        Parameters
+        ----------
+        *args
+            All positional arguments are `Timespan` instances.
+
+        Returns
+        -------
+        intersection : `Timespan` or `None`
+            The intersection timespan, or `None`, if there is no intersection
+            or no arguments.
+
+        Notes
+        -----
+        Unlike `overlaps`, this method does not support SQLAlchemy column
+        expressions as operands.
+        """
         if len(args) == 0:
             return None
         elif len(args) == 1:
             return args[0]
         else:
-            begin = max(*[ts.begin for ts in args])
-            end = min(*[ts.end for ts in args])
-            if begin > end:
+            begins = [ts.begin for ts in args if ts.begin is not None]
+            ends = [ts.end for ts in args if ts.end is not None]
+            if not begins:
+                begin = None
+            elif len(begins) == 1:
+                begin = begins[0]
+            else:
+                begin = max(*begins)
+            if not ends:
+                end = None
+            elif len(ends) == 1:
+                end = ends[0]
+            else:
+                end = min(*ends) if ends else None
+            if begin is not None and end is not None and begin > end:
                 return None
             return Timespan(begin=begin, end=end)
 
     @property
-    def begin(self) -> T:
+    def begin(self) -> Optional[T]:
+        """Minimum timestamp in the interval (inclusive).
+
+        `None` should be interpreted as -infinity.
+        """
         return self[0]
 
     @property
     def end(self) -> T:
+        """Maximum timestamp in the interval (inclusive).
+
+        `None` should be interpreted as +infinity.
+        """
         return self[1]
 
     def __getnewargs__(self) -> tuple:

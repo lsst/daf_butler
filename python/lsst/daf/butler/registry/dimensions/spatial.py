@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["SpatialDimensionRecordStorage"]
 
-from typing import Optional
+from typing import List, Optional
 
 import sqlalchemy
 
@@ -58,9 +58,9 @@ def _makeOverlapTableSpec(a: DimensionElement, b: DimensionElement) -> ddl.Table
         unique=set(),
         foreignKeys=[],
     )
-    for dimension in a.graph.required:
+    for dimension in a.required:
         addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
-    for dimension in b.graph.required:
+    for dimension in b.required:
         addDimensionForeignKey(tableSpec, dimension, primaryKey=True)
     return tableSpec
 
@@ -86,7 +86,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
                  commonSkyPixOverlapTable: sqlalchemy.schema.Table):
         super().__init__(db, element, table=table)
         self._commonSkyPixOverlapTable = commonSkyPixOverlapTable
-        assert element.spatial
+        assert element.spatial is not None
 
     @classmethod
     def initialize(cls, db: Database, element: DimensionElement, *,
@@ -114,14 +114,13 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
     ):
         # Docstring inherited from DimensionRecordStorage.
         if regions is not None:
-            dimensions = NamedValueSet(self.element.graph.required)
+            dimensions = NamedValueSet(self.element.required)
             dimensions.add(self.element.universe.universe.commonSkyPix)
             builder.joinTable(self._commonSkyPixOverlapTable, dimensions)
             regions[self.element] = self._table.columns[REGION_FIELD_SPEC.name]
         return super().join(builder, regions=None, timespans=timespans)
 
-    def insert(self, *records: DimensionRecord):
-        # Docstring inherited from DimensionRecordStorage.insert.
+    def _computeCommonSkyPixRows(self, *records: DimensionRecord) -> List[dict]:
         commonSkyPixRows = []
         commonSkyPix = self.element.universe.commonSkyPix
         for record in records:
@@ -134,7 +133,36 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
                     row = base.copy()
                     row[commonSkyPix.name] = skypix
                     commonSkyPixRows.append(row)
+        return commonSkyPixRows
+
+    def insert(self, *records: DimensionRecord):
+        # Docstring inherited from DimensionRecordStorage.insert.
+        commonSkyPixRows = self._computeCommonSkyPixRows(*records)
         with self._db.transaction():
             super().insert(*records)
             if commonSkyPixRows:
                 self._db.insert(self._commonSkyPixOverlapTable, *commonSkyPixRows)
+
+    def sync(self, record: DimensionRecord) -> bool:
+        # Docstring inherited from DimensionRecordStorage.sync.
+        inserted = super().sync(record)
+        if inserted:
+            try:
+                commonSkyPixRows = self._computeCommonSkyPixRows(record)
+                self._db.insert(self._commonSkyPixOverlapTable, *commonSkyPixRows)
+            except Exception as err:
+                # EEK.  We've just failed to insert the overlap table rows
+                # after succesfully inserting the main dimension element table
+                # row, which means the database is now in a slightly
+                # inconsistent state.
+                # Note that we can't use transactions to solve this, because
+                # Database.sync needs to begin and commit its own transation;
+                # see also DM-24355.
+                raise RuntimeError(
+                    f"Failed to add overlap records for {self.element} after "
+                    f"successfully inserting the main row.  This means the "
+                    f"database is in an inconsistent state; please manually "
+                    f"remove the row corresponding to data ID "
+                    f"{record.dataId.byName()}."
+                ) from err
+        return inserted

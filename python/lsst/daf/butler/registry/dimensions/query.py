@@ -64,9 +64,9 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             raise NotImplementedError("Cannot use query to back dimension with implied dependencies.")
         if element.alternateKeys:
             raise NotImplementedError("Cannot use query to back dimension with alternate unique keys.")
-        if element.spatial:
+        if element.spatial is not None:
             raise NotImplementedError("Cannot use query to back spatial dimension.")
-        if element.temporal:
+        if element.temporal is not None:
             raise NotImplementedError("Cannot use query to back temporal dimension.")
 
     @classmethod
@@ -91,7 +91,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # The only columns for this dimension are ones for its required
             # dependencies and its own primary key (guaranteed by the checks in
             # the ctor).
-            for dimension in self.element.graph.required:
+            for dimension in self.element.required:
                 if dimension == self.element:
                     columns.append(targetTable.columns[dimension.name].label(dimension.primaryKey.name))
                 else:
@@ -124,7 +124,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
             # results.
             return
         self._ensureQuery()
-        joinOn = builder.startJoin(self._query, list(self.element.graph.required),
+        joinOn = builder.startJoin(self._query, list(self.element.required),
                                    self.element.RecordClass.__slots__)
         builder.finishJoin(self._query, joinOn)
         return self._query
@@ -132,6 +132,10 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
     def insert(self, *records: DimensionRecord):
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert {self.element.name} records.")
+
+    def sync(self, record: DimensionRecord):
+        # Docstring inherited from DimensionRecordStorage.sync.
+        raise TypeError(f"Cannot sync {self.element.name} records.")
 
     def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.

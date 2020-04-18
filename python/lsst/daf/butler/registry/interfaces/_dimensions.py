@@ -110,11 +110,11 @@ class DimensionRecordStorage(ABC):
             return CachingDimensionRecordStorage
         elif element.hasTable():
             if element.viewOf is not None:
-                if element.spatial:
+                if element.spatial is not None:
                     raise NotImplementedError("Spatial view dimension storage is not supported.")
                 from ..dimensions.query import QueryDimensionRecordStorage
                 return QueryDimensionRecordStorage
-            elif element.spatial:
+            elif element.spatial is not None:
                 from ..dimensions.spatial import SpatialDimensionRecordStorage
                 return SpatialDimensionRecordStorage
             else:
@@ -210,6 +210,40 @@ class DimensionRecordStorage(ABC):
         on `Registry` to provide transactionality, both by using a SQLALchemy
         connection shared with the `Registry` and by relying on it to call
         `clearCaches` when rolling back transactions.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def sync(self, record: DimensionRecord) -> bool:
+        """Synchronize a record with the database, inserting it only if it does
+        not exist and comparing values if it does.
+
+        Parameters
+        ----------
+        record : `DimensionRecord`.
+            An instance of the `DimensionRecord` subclass for the
+            element this storage is associated with.
+
+        Returns
+        -------
+        inserted : `bool`
+            `True` if a new row was inserted, `False` otherwise.
+
+        Raises
+        ------
+        DatabaseConflictError
+            Raised if the record exists in the database (according to primary
+            key lookup) but is inconsistent with the given one.
+        TypeError
+            Raised if the element does not support record synchronization.
+        sqlalchemy.exc.IntegrityError
+            Raised if one or more records violate database integrity
+            constraints.
+
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
         """
         raise NotImplementedError()
 

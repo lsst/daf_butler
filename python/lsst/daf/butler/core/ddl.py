@@ -134,7 +134,7 @@ class Base64Region(Base64Bytes):
 
 class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
     """A SQLAlchemy custom type that maps Python `astropy.time.Time` to a
-    number of nanoseconds sunce Unix epoch in TAI scale.
+    number of nanoseconds since Unix epoch in TAI scale.
     """
 
     impl = sqlalchemy.BigInteger

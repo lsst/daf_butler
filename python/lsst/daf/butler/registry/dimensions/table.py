@@ -82,7 +82,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
     ):
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "This implementation does not handle spatial joins."
-        joinDimensions = list(self.element.graph.required)
+        joinDimensions = list(self.element.required)
         joinDimensions.extend(self.element.implied)
         joinOn = builder.startJoin(self._table, joinDimensions, self.element.RecordClass.__slots__)
         if timespans is not None:
@@ -103,7 +103,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         # hence how much gain there might be to caching it, so I'm going to
         # wait for it to appear as a hotspot in a profile before trying that.
         whereTerms = [self._table.columns[fieldName] == dataId[dimension.name]
-                      for fieldName, dimension in zip(RecordClass.__slots__, self.element.graph.required)]
+                      for fieldName, dimension in zip(RecordClass.__slots__, self.element.required)]
         query = sqlalchemy.sql.select(
             [self._table.columns[name] for name in RecordClass.__slots__]
         ).select_from(
@@ -119,3 +119,13 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         elementRows = [record.toDict() for record in records]
         with self._db.transaction():
             self._db.insert(self._table, *elementRows)
+
+    def sync(self, record: DimensionRecord) -> bool:
+        # Docstring inherited from DimensionRecordStorage.sync.
+        n = len(self.element.required)
+        _, inserted = self._db.sync(
+            self._table,
+            keys={k: getattr(record, k) for k in record.__slots__[:n]},
+            compared={k: getattr(record, k) for k in record.__slots__[n:]},
+        )
+        return inserted

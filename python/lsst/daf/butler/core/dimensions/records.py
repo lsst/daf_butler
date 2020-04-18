@@ -115,7 +115,7 @@ class DimensionRecord:
             object.__setattr__(self, attrName, value)
         dataId = DataCoordinate(
             self.definition.graph,
-            args[:len(self.definition.graph.required.names)]
+            args[:len(self.definition.required.names)]
         )
         object.__setattr__(self, "dataId", dataId)
 

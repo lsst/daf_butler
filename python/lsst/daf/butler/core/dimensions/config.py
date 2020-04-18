@@ -28,7 +28,7 @@ from typing import Tuple, Dict
 from ..config import Config, ConfigSubset
 from ..utils import doImport
 from .. import ddl
-from .elements import DimensionElement, Dimension, SkyPixDimension
+from .elements import DimensionElement, Dimension, SkyPixDimension, RelatedDimensions
 
 
 class DimensionConfig(ConfigSubset):
@@ -118,14 +118,16 @@ def processElementsConfig(config: Config) -> Dict[str, DimensionElement]:
     elements = dict()
     for name, subconfig in config.items():
         kwargs = {}
-        kwargs["impliedDependencyNames"] = frozenset(subconfig.get("implies", ()))
-        kwargs["directDependencyNames"] = \
-            kwargs["impliedDependencyNames"].union(subconfig.get("requires", ()))
+        kwargs["related"] = RelatedDimensions(
+            required=set(subconfig.get("requires", ())),
+            implied=set(subconfig.get("implies", ())),
+            spatial=subconfig.get("spatial"),
+            temporal=subconfig.get("temporal"),
+        )
         kwargs["metadata"] = [ddl.FieldSpec.fromConfig(c) for c in subconfig.get("metadata", ())]
-        kwargs["spatial"] = subconfig.get("spatial", False)
-        kwargs["temporal"] = subconfig.get("temporal", False)
         kwargs["cached"] = subconfig.get("cached", False)
         kwargs["viewOf"] = subconfig.get("view_of", None)
+        kwargs["alwaysJoin"] = subconfig.get("always_join", False)
         keys = subconfig.get("keys")
         if keys is not None:
             uniqueKeys = [ddl.FieldSpec.fromConfig(c, nullable=False) for c in keys]

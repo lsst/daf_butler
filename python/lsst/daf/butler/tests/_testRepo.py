@@ -149,7 +149,7 @@ def _makeRecords(dataIds, universe):
     for name, values in expandedIds.items():
         dimension = universe[name]
         for value in values:
-            for other in dimension.graph.required:
+            for other in dimension.required:
                 if other != dimension:
                     relation = expandedIds[other.name][0]
                     value[other.name] = relation[other.primaryKey.name]
