@@ -35,18 +35,9 @@ Using the Butler
 Command Line Scripts
 ====================
 
-.. autoprogram:: lsst.daf.butler.script.makeButlerRepo:build_argparser()
-   :prog: makeButlerRepo.py
-   :groups:
-
-.. autoprogram:: lsst.daf.butler.script.dumpButlerConfig:build_argparser()
-   :prog: dumpButlerConfig.py
-   :groups:
-
-.. autoprogram:: lsst.daf.butler.script.validateButlerConfiguration:build_argparser()
-   :prog: validateButlerConfiguration.py
-   :groups:
-
+.. click:: lsst.daf.butler.cli.butler:cli
+   :prog: butler
+   :show-nested:
 
 .. _lsst.daf.butler-dimensions:
 
