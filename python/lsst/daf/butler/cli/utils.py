@@ -19,6 +19,35 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from ..core.utils import iterable
+
+
+def split_commas(context, param, values):
+    """Process a tuple of values, where each value may contain comma-separated
+    values, and return a single list of all the passed-in values.
+
+    This function can be passed to the 'callback' argument of a click.option to
+    allow it to process comma-separated values (e.g. "--my-opt a,b,c").
+
+    Parameters
+    ----------
+    context : click.Context
+
+    values : tuple of string
+        All the values passed for this option. Strings may contain commas,
+        which will be treated as delimiters for separate values.
+
+    Returns
+    -------
+    list of string
+        The passed in values separated by commas and combined into a single
+        list.
+    """
+    valueList = []
+    for value in iterable(values):
+        valueList.extend(value.split(","))
+    return valueList
+
 
 def to_upper(context, param, value):
     """Convert a value to upper case.
