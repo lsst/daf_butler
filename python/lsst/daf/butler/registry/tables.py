@@ -252,14 +252,13 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 ddl.FieldSpec(
                     name="component_dataset_id",
                     dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
                     doc="Link to the dataset entry for a child/component dataset.",
                 ),
                 ddl.FieldSpec(
                     name="component_name",
                     dtype=sqlalchemy.String,
                     length=32,
-                    nullable=False,
+                    primaryKey=True,
                     doc="Name of this component within this composite.",
                 ),
             ],
