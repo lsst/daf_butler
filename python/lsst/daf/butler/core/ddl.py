@@ -333,6 +333,12 @@ class TableSpec:
     foreignKeys: Sequence[ForeignKeySpec] = tuple()
     """Foreign key constraints for the table."""
 
+    recycleIds: bool = True
+    """If `True`, allow databases that might normally recycle autoincrement IDs
+    to do so (usually better for performance) on any autoincrement field in
+    this table.
+    """
+
     doc: Optional[str] = None
     """Documentation for the table."""
 

@@ -119,6 +119,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 onDelete="SET NULL",
             ),
         ],
+        recycleIds=False
     )
     field = collections.addRunForeignKey(dataset, onDelete="CASCADE", nullable=False)
     dataset.unique.add(("dataset_ref_hash", field.name))
