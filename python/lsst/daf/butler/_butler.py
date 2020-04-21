@@ -914,6 +914,56 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.datastore.exists(ref)
 
+    def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False):
+        """Remove a collection and possibly prune datasets within it.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection to remove.  If this is a
+            `~CollectionType.TAGGED` or `~CollectionType.CHAINED` collection,
+            datasets within the collection are not modified unless ``unstore``
+            is `True`.  If this is a `~CollectionType.RUN` collection,
+            ``purge`` and ``unstore`` must be `True`, and all datasets in it
+            are fully removed from the data repository.
+        purge : `bool`, optional
+            If `True`, permit `~CollectionType.RUN` collections to be removed,
+            fully removing datasets within them.  Requires ``unstore=True`` as
+            well as an added precaution against accidental deletion.  Must be
+            `False` (default) if the collection is not a ``RUN``.
+        unstore: `bool`, optional
+            If `True`, remove all datasets in the collection from all
+            datastores in which they appear.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler is read-only or arguments are mutually
+            inconsistent.
+        """
+        # See pruneDatasets comments for more information about the logic here;
+        # the cases are almost the same, but here we can rely on Registry to
+        # take care everything but Datastore deletion when we remove the
+        # collection.
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+        if purge and not unstore:
+            raise TypeError("Cannot pass purge=True without unstore=True.")
+        collectionType = self.registry.getCollectionType(name)
+        if collectionType is CollectionType.RUN and not purge:
+            raise TypeError(f"Cannot prune RUN collection {name} without purge=True.")
+        if collectionType is not CollectionType.RUN and purge:
+            raise TypeError(f"Cannot prune {collectionType.name} collection {name} with purge=True.")
+        with self.registry.transaction():
+            if unstore:
+                for ref in self.registry.queryDatasets(..., collections=name, deduplicate=True):
+                    if self.datastore.exists(ref):
+                        self.datastore.trash(ref)
+            self.registry.removeCollection(name)
+        if unstore:
+            # Point of no return for removing artifacts
+            self.datastore.emptyTrash()
+
     def pruneDatasets(self, refs: Iterable[DatasetRef], *,
                       disassociate: bool = True,
                       unstore: bool = False,
