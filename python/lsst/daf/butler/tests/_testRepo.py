@@ -134,7 +134,7 @@ def _makeRecords(dataIds, universe):
     for name, values in expandedIds.items():
         dimension = universe[name]
         for value in values:
-            _addDimensionLinks(dimension, value, expandedIds)
+            value.update(_addDimensionLinks(dimension, expandedIds))
 
     return {dimension: [universe[dimension].RecordClass.fromDict(value) for value in values]
             for dimension, values in expandedIds.items()}
@@ -184,7 +184,7 @@ def _fudgeMetadata(dimension, value):
     return expandedValue
 
 
-def _addDimensionLinks(dimension, value, knownIds):
+def _addDimensionLinks(dimension, knownIds):
     """Add to a dimension value links to other known dimensions.
 
     The ``value`` argument is updated with links to arbitrarily
@@ -194,39 +194,49 @@ def _addDimensionLinks(dimension, value, knownIds):
     ----------
     dimension : `lsst.daf.butler.Dimension`
         The dimension whose value is to be linked.
-    value : `~collections.abc.Mapping` [`str`]
-        A mapping of related key names to values for ``dimension``.
     knownIds : `~collections.abc.Mapping` [`str`, `iterable`]
         A mapping keyed by available dimensions, with each value an iterable
         of mappings in the same format as ``value``. May include ``value``.
+
+    Returns
+    -------
+    links : `~collections.abc.Mapping` [`str`]
+        A mapping of links to arbitrarily chosen dimension values
+        from ``knownIds``.
     """
+    links = {}
     for other in dimension.graph.required:
         if other != dimension:
-            _makeLink(value, other, knownIds[other.name])
+            links.update(_makeLink(other, knownIds[other.name]))
     # Do not recurse, to keep the user from having to provide
     # irrelevant dimensions
     for other in dimension.implied:
         if other != dimension and other.name in knownIds and other.viewOf is None:
-            _makeLink(value, other, knownIds[other.name])
+            links.update(_makeLink(other, knownIds[other.name]))
+    return links
 
 
-def _makeLink(value, targetDimension, targets):
+def _makeLink(targetDimension, targets):
     """Add to a dimension value a link to another dimension value.
 
     Parameters
     ----------
-    value : `~collections.abc.Mapping` [`str`]
-        A mapping of related key names to values representing a
-        dimension value.
     targetDimension : `lsst.daf.butler.Dimension`
         The type of dimension to link to.
     targets : `iterable` [`~collections.abc.Mapping`]
-        An iterable of mappings in the same format as ``value``, representing
-        known values of ``targetDimension``.
+        An iterable of mappings representing known values of
+        ``targetDimension``. Each mapping is from keys for ``targetDimension``
+        to values for a specific dimension.
+
+    Returns
+    -------
+    link : `~collections.abc.Mapping` [`str`]
+        A mapping from the name of ``targetDimension`` to the chosen
+        dimension value.
     """
     # Pick cross-relationships arbitrarily
     relation = targets[0]
-    value[targetDimension.name] = relation[targetDimension.primaryKey.name]
+    return {targetDimension.name: relation[targetDimension.primaryKey.name]}
 
 
 def expandUniqueId(butler, partialId):
