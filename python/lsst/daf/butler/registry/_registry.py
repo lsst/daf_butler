@@ -437,6 +437,39 @@ class Registry:
         """
         self._collections.register(name, CollectionType.RUN)
 
+    @transactional
+    def removeCollection(self, name: str):
+        """Completely remove the given collection.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to remove.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if no collection with the given name exists.
+
+        Notes
+        -----
+        If this is a `~CollectionType.RUN` collection, all datasets and quanta
+        in it are also fully removed.  This requires that those datasets be
+        removed (or at least trashed) from any datastores that hold them first.
+
+        A collection may not be deleted as long as it is referenced by a
+        `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
+        be deleted or redefined first.
+        """
+        # Explicit deletion of datasets here could be removed if we could
+        # switch to handling provenance deletion via ON DELETE CASCADE; that
+        # already covers deleting datasets when their run is deleted, but it
+        # doesn't cover deleting the quanta that reference those datasets.
+        if self.getCollectionType(name) is CollectionType.RUN:
+            for ref in self.queryDatasets(..., collections=[name], deduplicate=True):
+                self.removeDataset(ref)
+        self._collections.remove(name)
+
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         """Return the child collections in a `~CollectionType.CHAINED`
         collection.
@@ -466,6 +499,7 @@ class Registry:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         return record.children
 
+    @transactional
     def setCollectionChain(self, parent: str, children: Any):
         """Define or redefine a `~CollectionType.CHAINED` collection.
 
