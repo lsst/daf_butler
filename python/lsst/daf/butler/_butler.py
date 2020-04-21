@@ -117,8 +117,9 @@ class Butler:
         not set either), a read-only butler will be created.
     tags : `Iterable` [ `str` ], optional
         A list of `~CollectionType.TAGGED` collections that datasets should be
-        associated with in `put` or `ingest` and disassociated from in `prune`.
-        If any of these collections does not exist, it will be created.
+        associated with in `put` or `ingest` and disassociated from in
+        `pruneDatasets`.  If any of these collections does not exist, it will
+        be created.
     chains : `Mapping` [ `str`, `Iterable` [ `str` ] ], optional
         A mapping from the names of new `~CollectionType.CHAINED` collections
         to an expression identifying their child collections (which takes the
@@ -913,13 +914,13 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.datastore.exists(ref)
 
-    def prune(self, refs: Iterable[DatasetRef], *,
-              disassociate: bool = True,
-              unstore: bool = False,
-              tags: Optional[Iterable[str]] = None,
-              purge: bool = False,
-              run: Optional[str] = None,
-              recursive: bool = True):
+    def pruneDatasets(self, refs: Iterable[DatasetRef], *,
+                      disassociate: bool = True,
+                      unstore: bool = False,
+                      tags: Optional[Iterable[str]] = None,
+                      purge: bool = False,
+                      run: Optional[str] = None,
+                      recursive: bool = True):
         """Remove one or more datasets from a collection and/or storage.
 
         Parameters
@@ -1430,6 +1431,6 @@ class Butler:
 
     tags: Tuple[str, ...]
     """Names of `~CollectionType.TAGGED` collections this butler associates
-    with in `put` and `ingest`, and disassociates from in `prune` (`tuple` of
-    `str`).
+    with in `put` and `ingest`, and disassociates from in `pruneDatasets`
+    (`tuple` [ `str` ]).
     """

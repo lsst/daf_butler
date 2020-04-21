@@ -197,7 +197,7 @@ class ButlerPutGetTests:
 
                 # Remove from the tagged collection only; after that we
                 # shouldn't be able to find it unless we use the dataset_id.
-                butler.prune([ref])
+                butler.pruneDatasets([ref])
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
                 # Registry still knows about it, if we use the dataset_id.
@@ -209,7 +209,7 @@ class ButlerPutGetTests:
                 # Reinsert into collection, then delete from Datastore *and*
                 # remove from collection.
                 butler.registry.associate(tag, [ref])
-                butler.prune([ref], unstore=True)
+                butler.pruneDatasets([ref], unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
@@ -220,7 +220,7 @@ class ButlerPutGetTests:
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
 
                 # Now remove the dataset completely.
-                butler.prune([ref], purge=True, unstore=True)
+                butler.pruneDatasets([ref], purge=True, unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
@@ -264,7 +264,7 @@ class ButlerPutGetTests:
             self.assertTrue(butler.datastore.exists(ref.components["summary"]))
 
             compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            butler.prune([compRef], unstore=True)
+            butler.pruneDatasets([compRef], unstore=True)
             with self.assertRaises(LookupError):
                 butler.datasetExists(compNameS, dataId)
             self.assertFalse(butler.datastore.exists(ref.components["summary"]))
@@ -297,7 +297,7 @@ class ButlerPutGetTests:
 
         # Clean up to check that we can remove something that may have
         # already had a component removed
-        butler.prune([ref], unstore=True, purge=True)
+        butler.pruneDatasets([ref], unstore=True, purge=True)
 
         # Add a dataset back in since some downstream tests require
         # something to be present
@@ -346,7 +346,7 @@ class ButlerPutGetTests:
         butler.registry.associate("tagged", [ref])
         # Deleting the dataset from the new collection should make it findable
         # in the original collection.
-        butler.prune([ref], tags=["tagged"])
+        butler.pruneDatasets([ref], tags=["tagged"])
         self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
 
 
@@ -479,7 +479,7 @@ class ButlerTests(ButlerPutGetTests):
         # This line will issue a warning log message for a ChainedDatastore
         # that uses an InMemoryDatastore since in-memory can not ingest
         # files.
-        butler.prune([datasets[0].refs[0]], unstore=True, disassociate=False)
+        butler.pruneDatasets([datasets[0].refs[0]], unstore=True, disassociate=False)
         self.assertFalse(butler.datasetExists(datasetTypeName, dataId1))
         self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
         multi2b = butler.get(datasetTypeName, dataId2)

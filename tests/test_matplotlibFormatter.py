@@ -76,7 +76,7 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         self.assertTrue(butler.datasetExists(ref))
         with self.assertRaises(ValueError):
             butler.get(ref)
-        butler.prune([ref], unstore=True, purge=True)
+        butler.pruneDatasets([ref], unstore=True, purge=True)
         with self.assertRaises(LookupError):
             butler.datasetExists(ref)
 
