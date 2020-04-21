@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ["create"]
+__all__ = ["create", "config_dump"]
 
 from .create import create
+from .dump_config import config_dump
