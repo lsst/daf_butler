@@ -1,10 +1,8 @@
-#!/usr/bin/env python
-
-# This file is part of daf_butler.
+# This file is part of obs_base.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (http://www.lsst.org).
+# (https://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -21,8 +19,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys
-from lsst.daf.butler.script.makeButlerRepo import main
-
-if __name__ == '__main__':
-    sys.exit(main())
+from .dataset_type import dataset_type_option
+from .repo import repo_option
+from .run import run_option

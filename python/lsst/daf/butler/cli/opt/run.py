@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 # This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
@@ -21,8 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys
-from lsst.daf.butler.script.dumpButlerConfig import main
 
-if __name__ == '__main__':
-    sys.exit(main())
+import click
+
+
+class run_option:  # noqa: N801
+    def __init__(self, required=False):
+        self.required = required
+
+    def __call__(self, f):
+        return click.option('--output-run',
+                            required=self.required,
+                            help='The name of the run datasets should be output to.')(f)
