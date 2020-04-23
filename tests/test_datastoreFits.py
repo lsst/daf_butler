@@ -177,16 +177,27 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
         # Get some components
         # Could not test the following components as they were not known:
-        # bbox, xy0, filter, polygon, appCorrMap, detector,
-        # extras, and exposureInfo
-        # transmissionCurve returned None and which is fixed in DM-24347
-        for compName in ("wcs", "image", "mask", "coaddInputs", "psf",
-                         "variance", "photoCalib", "metadata", "visitInfo"):
-            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
-                                          storageClass.components[compName], dataId, id=ref.id)
-            component = datastore.get(compRef)
-            # This check is done also inside datastore
-            self.assertIsInstance(component, (compRef.datasetType.storageClass.pytype, type(None)))
+        # bbox, xy0, filter, polygon, detector, extras, and exposureInfo
+        for compName, isNone in (("wcs", False),
+                                 ("image", False),
+                                 ("mask", False),
+                                 ("coaddInputs", False),
+                                 ("psf", False),
+                                 ("variance", False),
+                                 ("photoCalib", False),
+                                 ("metadata", False),
+                                 ("visitInfo", False),
+                                 ("apCorrMap", True),
+                                 ("transmissionCurve", True),
+                                 ("metadata", False)):
+            with self.subTest(component=compName):
+                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
+                                              storageClass.components[compName], dataId, id=ref.id)
+                component = datastore.get(compRef)
+                if isNone:
+                    self.assertIsNone(component)
+                else:
+                    self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
 
         # Get the WCS component to check it
         wcsRef = self.makeDatasetRef(ref.datasetType.componentTypeName("wcs"), dimensions,
@@ -197,6 +208,12 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
                                lsst.geom.Extent2I(9, 9))
         self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
+
+        # Check basic metadata
+        metadataRef = self.makeDatasetRef(ref.datasetType.componentTypeName("metadata"), dimensions,
+                                          storageClass.components["metadata"], dataId, id=ref.id)
+        metadata = datastore.get(metadataRef)
+        self.assertEqual(metadata["WCS_ID"], 3)
 
     def testExposureCompositePutGet(self):
         example = os.path.join(self.testDir, "data", "basic", "small.fits")
