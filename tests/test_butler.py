@@ -476,6 +476,9 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(uri1, uri2)
 
         # Test that removing one does not break the second
+        # This line will issue a warning log message for a ChainedDatastore
+        # that uses an InMemoryDatastore since in-memory can not ingest
+        # files.
         butler.prune([datasets[0].refs[0]], unstore=True, disassociate=False)
         self.assertFalse(butler.datasetExists(datasetTypeName, dataId1))
         self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
