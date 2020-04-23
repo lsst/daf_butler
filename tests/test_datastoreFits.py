@@ -176,7 +176,12 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         self.assertEqual(type(exposure), type(exposureOut))
 
         # Get some components
-        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+        # Could not test the following components as they were not known:
+        # bbox, xy0, filter, polygon, appCorrMap, detector,
+        # extras, and exposureInfo
+        # transmissionCurve returned None and which is fixed in DM-24347
+        for compName in ("wcs", "image", "mask", "coaddInputs", "psf",
+                         "variance", "photoCalib", "metadata", "visitInfo"):
             compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
                                           storageClass.components[compName], dataId, id=ref.id)
             component = datastore.get(compRef)
