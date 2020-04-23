@@ -33,8 +33,6 @@ from lsst.daf.butler.cli import butler
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
-os.environ["DAF_BUTLER_PLUGINS"] = "lsst.daf.butler.cli.cmd"
-
 
 class Suite(unittest.TestCase):
 

@@ -34,8 +34,6 @@ from lsst.daf.butler.cli import butler
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
-os.environ["DAF_BUTLER_PLUGINS"] = "lsst.daf.butler.cli.cmd"
-
 
 class Suite(unittest.TestCase):
 
@@ -44,11 +42,11 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
 
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             # check for some expected keywords:
             cfg = yaml.safe_load(result.stdout)
             self.assertIn("composites", cfg)
@@ -60,9 +58,9 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--file=there"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             # check for some expected keywords:
             with open("there", "r") as f:
                 cfg = yaml.safe_load(f)
@@ -75,9 +73,9 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--subset", "datastore"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             cfg = yaml.safe_load(result.stdout)
             # the datastore cfg is expected to have exactly six keys:
             self.assertIs(len(cfg.keys()), 6)
@@ -93,7 +91,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)
