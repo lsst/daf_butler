@@ -25,7 +25,7 @@ from ... import ButlerConfig
 from ..opt import repo_option
 
 
-@click.command(name="config-dump")
+@click.command()
 @repo_option(required=True, help="filesystem path for an existing Butler repository or path to config "
              "file.")
 @click.option("--subset", "-s", type=str,
