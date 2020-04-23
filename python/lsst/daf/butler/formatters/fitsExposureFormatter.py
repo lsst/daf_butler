@@ -103,6 +103,18 @@ class FitsExposureFormatter(Formatter):
                         'image': ('readImage', True),
                         'mask': ('readMask', True),
                         'variance': ('readVariance', True),
+                        'photoCalib': ('readPhotoCalib', False),
+                        'bbox': ('readBBox', True),
+                        'xy0': ('readXY0', True),
+                        'metadata': ('readMetadata', False),
+                        'filter': ('readFilter', False),
+                        'polygon': ('readValidPolygon', False),
+                        'appCorrMap': ('readApCorrMap', False),
+                        'visitInfo': ('readVisitInfo', False),
+                        'transmissionCurve': ('readTransmissionCurve', False),
+                        'detector': ('readDetector', False),
+                        'extras': ('readExtraComponents', False),
+                        'exposureInfo': ('readExposureInfo', False),
                         }
         method, hasParams = componentMap.get(component, None)
 
