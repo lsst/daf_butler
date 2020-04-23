@@ -159,7 +159,8 @@ class PosixDatastore(FileLikeDatastore):
         except Exception as e:
             raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}") from e
 
-        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
+        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
+                                      isComponent=getInfo.component is not None)
 
     @transactional
     def put(self, inMemoryDataset, ref):

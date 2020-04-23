@@ -185,7 +185,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
             compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
                                           storageClass.components[compName], dataId, id=ref.id)
             component = datastore.get(compRef)
-            self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
+            # This check is done also inside datastore
+            self.assertIsInstance(component, (compRef.datasetType.storageClass.pytype, type(None)))
 
         # Get the WCS component to check it
         wcsRef = self.makeDatasetRef(ref.datasetType.componentTypeName("wcs"), dimensions,

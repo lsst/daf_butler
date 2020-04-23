@@ -126,7 +126,8 @@ class GenericBaseDatastore(Datastore):
         # the python object. moveDatasetLocationToTrash will deal with that.
         self.registry.moveDatasetLocationToTrash(self.name, list(ref.flatten([ref])))
 
-    def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None):
+    def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None,
+                          isComponent=False):
         """Given the Python object read from the datastore, manipulate
         it based on the supplied parameters and ensure the Python
         type is correct.
@@ -138,8 +139,10 @@ class GenericBaseDatastore(Datastore):
         readStorageClass: `StorageClass`
             The `StorageClass` used to obtain the assembler and to
             check the python type.
-        assemblerParams : `dict`
+        assemblerParams : `dict`, optional
             Parameters to pass to the assembler.  Can be `None`.
+        isComponent : `bool`, optional
+            If this is a component, allow the inMemoryDataset to be `None`.
         """
         # Process any left over parameters
         if assemblerParams:
@@ -147,7 +150,16 @@ class GenericBaseDatastore(Datastore):
 
         # Validate the returned data type matches the expected data type
         pytype = readStorageClass.pytype
-        if pytype and not isinstance(inMemoryDataset, pytype):
+
+        allowedTypes = []
+        if pytype:
+            allowedTypes.append(pytype)
+
+        # Special case components to allow them to be None
+        if isComponent:
+            allowedTypes.append(type(None))
+
+        if allowedTypes and not isinstance(inMemoryDataset, tuple(allowedTypes)):
             raise TypeError("Got Python type {} from datastore but expected {}".format(type(inMemoryDataset),
                                                                                        pytype))
 

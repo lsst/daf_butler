@@ -195,7 +195,8 @@ class S3Datastore(FileLikeDatastore):
         except Exception as e:
             raise ValueError(f"Failure from formatter for dataset {ref.id}: {e}") from e
 
-        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams)
+        return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
+                                      isComponent=getInfo.component is not None)
 
     @transactional
     def put(self, inMemoryDataset, ref):

@@ -258,10 +258,10 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         inMemoryDataset = self.datasets[realID]
 
+        component = ref.datasetType.component()
+
         # Different storage classes implies a component request
         if readStorageClass != writeStorageClass:
-
-            component = ref.datasetType.component()
 
             if component is None:
                 raise ValueError("Storage class inconsistency ({} vs {}) but no"
@@ -273,7 +273,8 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # Since there is no formatter to process parameters, they all must be
         # passed to the assembler.
-        return self._post_process_get(inMemoryDataset, readStorageClass, parameters)
+        return self._post_process_get(inMemoryDataset, readStorageClass, parameters,
+                                      isComponent=component is not None)
 
     def put(self, inMemoryDataset, ref):
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
