@@ -193,7 +193,8 @@ class S3Datastore(FileLikeDatastore):
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 result = formatter.read(component=getInfo.component)
         except Exception as e:
-            raise ValueError(f"Failure from formatter for dataset {ref.id}: {e}") from e
+            raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
+                             f" ({ref.datasetType.name} from {location.uri}): {e}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=getInfo.component is not None)
