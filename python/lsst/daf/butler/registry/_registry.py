@@ -1740,6 +1740,11 @@ class Registry:
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.
         """
+        # Standardize the collections expression.
+        if deduplicate:
+            collections = CollectionSearch.fromExpression(collections)
+        else:
+            collections = CollectionQuery.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwds)
         # If the datasetType passed isn't actually a DatasetType, expand it
@@ -1772,7 +1777,7 @@ class Registry:
             return
         query = builder.finish()
         predicate = query.predicate()
-        if not deduplicate or len(collections) == 1:
+        if not deduplicate:
             # No need to de-duplicate across collections.
             for row in query.execute():
                 if predicate(row):
