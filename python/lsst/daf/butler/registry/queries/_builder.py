@@ -108,7 +108,7 @@ class QueryBuilder:
         self._elements[element] = fromClause
 
     def joinDataset(self, datasetType: DatasetType, collections: Any, *,
-                    isResult: bool = True, addRank: bool = False):
+                    isResult: bool = True, addRank: bool = False) -> bool:
         """Add a dataset search or constraint to the query.
 
         Unlike other `QueryBuilder` join methods, this *must* be called
@@ -141,14 +141,27 @@ class QueryBuilder:
             is better).  Requires that all entries in ``collections`` be
             regular strings, so there is a clear search order.  Ignored if
             ``isResult`` is `False`.
+
+        Returns
+        -------
+        anyRecords : `bool`
+            If `True`, joining the dataset table was successful and the query
+            should proceed.  If `False`, we were able to determine (from the
+            combination of ``datasetType`` and ``collections``) that there
+            would be no results joined in from this dataset, and hence (due to
+            the inner join that would normally be present), the full query will
+            return no results.
         """
         assert datasetType.dimensions.issubset(self.summary.requested)
         table = self._datasetStorage.getDatasetSubquery(datasetType, collections=collections,
                                                         isResult=isResult, addRank=addRank)
+        if table is None:
+            return False
         self.joinTable(table, datasetType.dimensions)
         if isResult:
             self._columns.datasets[datasetType] = (table.columns["dataset_id"],
                                                    table.columns["rank"] if addRank else None)
+        return True
 
     def joinTable(self, table: FromClause, dimensions: Iterable[Dimension]):
         """Join an arbitrary table to the query via dimension relationships.

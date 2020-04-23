@@ -1768,7 +1768,8 @@ class Registry:
         # need to deduplicate.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate)
+        if not builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate):
+            return
         query = builder.finish()
         predicate = query.predicate()
         if not deduplicate or len(collections) == 1:
