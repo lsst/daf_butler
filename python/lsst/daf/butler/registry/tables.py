@@ -346,8 +346,8 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 ddl.FieldSpec(
                     name="dataset_id",
                     dtype=sqlalchemy.BigInteger,
-                    nullable=False,
-                    doc="A link to the associated Dataset.",
+                    nullable=True,
+                    doc="A link to the associated dataset; null if the dataset has been deleted.",
                 ),
                 ddl.FieldSpec(
                     name="actual",
@@ -370,7 +370,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                     table="dataset",
                     source=("dataset_id",),
                     target=("dataset_id",),
-                    onDelete="CASCADE",
+                    onDelete="SET NULL",
                 ),
             ],
         ),

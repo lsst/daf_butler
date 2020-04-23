@@ -461,13 +461,6 @@ class Registry:
         `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
         be deleted or redefined first.
         """
-        # Explicit deletion of datasets here could be removed if we could
-        # switch to handling provenance deletion via ON DELETE CASCADE; that
-        # already covers deleting datasets when their run is deleted, but it
-        # doesn't cover deleting the quanta that reference those datasets.
-        if self.getCollectionType(name) is CollectionType.RUN:
-            for ref in self.queryDatasets(..., collections=[name], deduplicate=True):
-                self.removeDataset(ref)
         self._collections.remove(name)
 
     def getCollectionChain(self, parent: str) -> CollectionSearch:
@@ -936,10 +929,10 @@ class Registry:
         """Remove a dataset from the Registry.
 
         The dataset and all components will be removed unconditionally from
-        all collections, and any associated `Quantum` records will also be
-        removed.  `Datastore` records will *not* be deleted; the caller is
-        responsible for ensuring that the dataset has already been removed
-        from all Datastores.
+        all collections, and any `Quantum` that consumed this dataset will
+        instead be marked with having a NULL input.  `Datastore` records will
+        *not* be deleted; the caller is responsible for ensuring that the
+        dataset has already been removed from all Datastores.
 
         Parameters
         ----------
@@ -958,40 +951,19 @@ class Registry:
             raise AmbiguousDatasetError(f"Cannot remove dataset {ref} without ID.")
         # Remove component datasets.  We assume ``ref.components`` is already
         # correctly populated, and rely on ON DELETE CASCADE to remove entries
-        # from DatasetComposition.
+        # from dataset_composition.
         for componentRef in ref.components.values():
             self.removeDataset(componentRef)
-
-        # Remove related quanta.  We rely on ON DELETE CASCADE to remove any
-        # related records in dataset_consumers.  Note that we permit a Quantum
-        # to be deleted without removing the datasets it refers to, but do not
-        # allow a dataset to be deleted without removing the Quanta that refer
-        # to them.  A dataset is still quite usable without provenance, but
-        # provenance is worthless if it's inaccurate.
-        t = self._tables
-        selectProducer = sqlalchemy.sql.select(
-            [t.dataset.columns.quantum_id]
-        ).where(
-            t.dataset.columns.dataset_id == ref.id
-        )
-        selectConsumers = sqlalchemy.sql.select(
-            [t.dataset_consumers.columns.quantum_id]
-        ).where(
-            t.dataset_consumers.columns.dataset_id == ref.id
-        )
-        # TODO: we'd like to use Database.delete here, but it doesn't general
-        # queries yet.
-        self._connection.execute(
-            t.quantum.delete().where(
-                t.quantum.columns.id.in_(sqlalchemy.sql.union(selectProducer, selectConsumers))
-            )
-        )
-        # Remove the Dataset record itself.  We rely on ON DELETE CASCADE to
-        # remove from DatasetCollection, and assume foreign key violations
-        # come from DatasetLocation (everything else should have an ON DELETE).
+        # Remove the dataset record itself.  We rely on ON DELETE clauses to
+        # take care of other dependencies:
+        #  - ON DELETE CASCADE will remove dataset_composition rows.
+        #  - ON DELETE CASCADE will remove dataset_collection rows.
+        #  - ON DELETE SET NULL will apply to dataset_consumer rows, making it
+        #    clear that the provenance of any quanta that used this dataset as
+        #    an input is now incomplete.
         try:
             self._connection.execute(
-                t.dataset.delete().where(t.dataset.c.dataset_id == ref.id)
+                self._tables.dataset.delete().where(self._tables.dataset.columns.dataset_id == ref.id)
             )
         except sqlalchemy.exc.IntegrityError as err:
             raise OrphanedRecordError(f"Dataset {ref} is still present in one or more Datastores.") from err
