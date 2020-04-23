@@ -1069,8 +1069,7 @@ class Butler:
                     if self.datastore.exists(ref):
                         self.datastore.trash(ref)
             if purge:
-                for ref in refs:
-                    self.registry.removeDataset(ref)
+                self.registry.removeDatasets(refs, recursive=False)  # refs is already recursiveley expanded
             elif disassociate:
                 for tag in tags:
                     # recursive=False here because refs is already recursive

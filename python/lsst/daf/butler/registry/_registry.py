@@ -925,36 +925,38 @@ class Registry:
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
-    def removeDataset(self, ref: DatasetRef):
-        """Remove a dataset from the Registry.
+    def removeDatasets(self, refs: Iterable[DatasetRef], *, recursive: bool = True):
+        """Remove datasets from the Registry.
 
-        The dataset and all components will be removed unconditionally from
-        all collections, and any `Quantum` that consumed this dataset will
-        instead be marked with having a NULL input.  `Datastore` records will
-        *not* be deleted; the caller is responsible for ensuring that the
-        dataset has already been removed from all Datastores.
+        The datasets will be removed unconditionally from all collections, and
+        any `Quantum` that consumed this dataset will instead be marked with
+        having a NULL input.  `Datastore` records will *not* be deleted; the
+        caller is responsible for ensuring that the dataset has already been
+        removed from all Datastores.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Reference to the dataset to be removed.  Must include a valid
+        refs : `Iterable` of `DatasetRef`
+            References to the datasets to be removed.  Must include a valid
             ``id`` attribute, and should be considered invalidated upon return.
+        recursive : `bool`, optional
+            If `True`, remove all component datasets as well.  Note that
+            this only removes components that are actually included in the
+            given `DatasetRef` instances, which may not be the same as those in
+            the database (especially if they were obtained from
+            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
         AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
+            Raised if any ``ref.id`` is `None`.
         OrphanedRecordError
-            Raised if the dataset is still present in any `Datastore`.
+            Raised if any dataset is still present in any `Datastore`.
         """
-        if not ref.id:
-            raise AmbiguousDatasetError(f"Cannot remove dataset {ref} without ID.")
-        # Remove component datasets.  We assume ``ref.components`` is already
-        # correctly populated, and rely on ON DELETE CASCADE to remove entries
-        # from dataset_composition.
-        for componentRef in ref.components.values():
-            self.removeDataset(componentRef)
-        # Remove the dataset record itself.  We rely on ON DELETE clauses to
+        if recursive:
+            refs = DatasetRef.flatten(refs)
+        rows = [{"dataset_id": _checkAndGetId(ref)} for ref in refs]
+        # Remove the dataset records.  We rely on ON DELETE clauses to
         # take care of other dependencies:
         #  - ON DELETE CASCADE will remove dataset_composition rows.
         #  - ON DELETE CASCADE will remove dataset_collection rows.
@@ -962,11 +964,10 @@ class Registry:
         #    clear that the provenance of any quanta that used this dataset as
         #    an input is now incomplete.
         try:
-            self._connection.execute(
-                self._tables.dataset.delete().where(self._tables.dataset.columns.dataset_id == ref.id)
-            )
+            self._db.delete(self._tables.dataset, ["dataset_id"], *rows)
         except sqlalchemy.exc.IntegrityError as err:
-            raise OrphanedRecordError(f"Dataset {ref} is still present in one or more Datastores.") from err
+            raise OrphanedRecordError("One or more datasets is still "
+                                      "present in one or more Datastores.") from err
 
     @transactional
     def attachComponent(self, name: str, parent: DatasetRef, component: DatasetRef):

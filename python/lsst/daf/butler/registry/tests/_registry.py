@@ -338,7 +338,7 @@ class RegistryTests(ABC):
 
     def testDataset(self):
         """Basic tests for `Registry.insertDatasets`, `Registry.getDataset`,
-        and `Registry.removeDataset`.
+        and `Registry.removeDatasets`.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -352,7 +352,7 @@ class RegistryTests(ABC):
         self.assertEqual(ref, outRef)
         with self.assertRaises(ConflictingDefinitionError):
             registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
-        registry.removeDataset(ref)
+        registry.removeDatasets([ref])
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testComponents(self):
@@ -376,7 +376,7 @@ class RegistryTests(ABC):
         outParent = registry.getDataset(parent.id)
         self.assertEqual(outParent.components, children)
         # Remove the parent; this should remove all children.
-        registry.removeDataset(parent)
+        registry.removeDatasets([parent])
         self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collections=[run]))
         self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collections=[run]))
         self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collections=[run]))
@@ -580,12 +580,12 @@ class RegistryTests(ABC):
         self.assertNotIn(datastoreName, addresses)
         self.assertIn(datastoreName2, addresses)
         with self.assertRaises(OrphanedRecordError):
-            registry.removeDataset(ref)
+            registry.removeDatasets([ref])
         registry.removeDatasetLocation(datastoreName2, [ref])
         addresses = registry.getDatasetLocations(ref)
         self.assertEqual(len(addresses), 0)
         self.assertNotIn(datastoreName2, addresses)
-        registry.removeDataset(ref)  # should not raise
+        registry.removeDatasets([ref])  # should not raise
         addresses = registry.getDatasetLocations(ref2)
         self.assertEqual(len(addresses), 1)
         self.assertIn(datastoreName2, addresses)
