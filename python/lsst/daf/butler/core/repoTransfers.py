@@ -482,7 +482,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                 for collection in collectionsForDataset:
                     collections[collection].extend(fileDataset.refs)
         # Ingest everything into the datastore at once.
-        if datastore is not None:
+        if datastore is not None and fileDatasets:
             datastore.ingest(*fileDatasets, transfer=transfer)
         # Associate with collections, one collection at a time.
         for collection, refs in collections.items():
