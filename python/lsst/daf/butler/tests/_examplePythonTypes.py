@@ -184,12 +184,20 @@ class MetricsExample:
     def __eq__(self, other):
         return self.summary == other.summary and self.output == other.output and self.data == other.data
 
+    def __str__(self):
+        return str(self.exportAsDict())
+
+    def __repr__(self):
+        return f"MetricsExample({self.exportAsDict()})"
+
     def exportAsDict(self):
         """Convert object contents to a single python dict."""
         exportDict = {"summary": self.summary,
                       "output": self.output}
         if self.data is not None:
             exportDict["data"] = list(self.data)
+        else:
+            exportDict["data"] = None
         return exportDict
 
     def _asdict(self):

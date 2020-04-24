@@ -177,7 +177,9 @@ class FileFormatter(Formatter):
         # component coercing it to its appropriate pytype
         data = self._assembleDataset(data, component)
 
-        if data is None:
+        # Special case components by allowing a formatter to return None
+        # to indicate that the component was understood but is missing
+        if data is None and component is None:
             raise ValueError(f"Unable to read data with URI {self.fileDescriptor.location.uri}")
 
         return data

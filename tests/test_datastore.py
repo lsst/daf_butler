@@ -40,11 +40,15 @@ from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWr
 TESTDIR = os.path.dirname(__file__)
 
 
-def makeExampleMetrics():
+def makeExampleMetrics(use_none=False):
+    if use_none:
+        array = None
+    else:
+        array = [563, 234, 456.7]
     return MetricsExample({"AM1": 5.2, "AM2": 30.6},
                           {"a": [1, 2, 3],
                            "b": {"blue": 5, "red": "green"}},
-                          [563, 234, 456.7]
+                          array,
                           )
 
 
@@ -159,16 +163,30 @@ class DatastoreTests(DatastoreTestsBase):
 
             # Get a component -- we need to construct new refs for them
             # with derived storage classes but with parent ID
-            comp = "output"
-            compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(comp), dimensions,
-                                          sc.components[comp], dataId, id=ref.id)
-            output = datastore.get(compRef)
-            self.assertEqual(output, metricsOut.output)
+            for comp in ("data", "output"):
+                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(comp), dimensions,
+                                              sc.components[comp], dataId, id=ref.id)
+                output = datastore.get(compRef)
+                self.assertEqual(output, getattr(metricsOut, comp))
 
-            uri = datastore.getUri(compRef)
-            self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
+                uri = datastore.getUri(compRef)
+                self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
 
         storageClass = sc
+
+        # Check that we can put a metric with None in a component and
+        # get it back as None
+        metricsNone = makeExampleMetrics(use_none=True)
+        dataIdNone = {"instrument": "dummy", "visit": 54, "physical_filter": "V"}
+        refNone = self.makeDatasetRef("metric", dimensions, sc, dataIdNone, conform=False)
+        datastore.put(metricsNone, refNone)
+
+        comp = "data"
+        for comp in ("data", "output"):
+            compRef = self.makeDatasetRef(refNone.datasetType.componentTypeName(comp), dimensions,
+                                          sc.components[comp], dataIdNone, id=refNone.id)
+            output = datastore.get(compRef)
+            self.assertEqual(output, getattr(metricsNone, comp))
 
         # Check that a put fails if the dataset type is not supported
         if self.hasUnsupportedPut:

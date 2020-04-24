@@ -109,7 +109,7 @@ class FitsExposureFormatter(Formatter):
                         'metadata': ('readMetadata', False),
                         'filter': ('readFilter', False),
                         'polygon': ('readValidPolygon', False),
-                        'appCorrMap': ('readApCorrMap', False),
+                        'apCorrMap': ('readApCorrMap', False),
                         'visitInfo': ('readVisitInfo', False),
                         'transmissionCurve': ('readTransmissionCurve', False),
                         'detector': ('readDetector', False),
