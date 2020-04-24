@@ -1002,19 +1002,18 @@ class Registry:
 
     @transactional
     def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
-        """Add existing Datasets to a collection, implicitly creating the
-        collection if it does not already exist.
+        """Add existing datasets to a `~CollectionType.TAGGED` collection.
 
-        If a DatasetRef with the same exact ``dataset_id`` is already in a
+        If a DatasetRef with the same exact integer ID is already in a
         collection nothing is changed. If a `DatasetRef` with the same
-        `DatasetType1` and dimension values but with different ``dataset_id``
-        exists in the collection, `ValueError` is raised.
+        `DatasetType` and data ID but with different integer ID
+        exists in the collection, `ConflictingDefinitionError` is raised.
 
         Parameters
         ----------
         collection : `str`
-            Indicates the collection the Datasets should be associated with.
-        refs : iterable of `DatasetRef`
+            Indicates the collection the datasets should be associated with.
+        refs : `Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
         recursive : `bool`, optional
@@ -1057,7 +1056,7 @@ class Registry:
 
     @transactional
     def disassociate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
-        """Remove existing Datasets from a collection.
+        """Remove existing datasets from a `~CollectionType.TAGGED` collection.
 
         ``collection`` and ``ref`` combinations that are not currently
         associated are silently ignored.
@@ -1065,8 +1064,8 @@ class Registry:
         Parameters
         ----------
         collection : `str`
-            The collection the Datasets should no longer be associated with.
-        refs : iterable of `DatasetRef`
+            The collection the datasets should no longer be associated with.
+        refs : `Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
         recursive : `bool`, optional
