@@ -22,7 +22,6 @@
 from __future__ import annotations
 
 __all__ = (
-    "AmbiguousDatasetError",
     "ConflictingDefinitionError",
     "ConsistentDataIds",
     "InconsistentDataIdError",
@@ -160,12 +159,6 @@ class InconsistentDataIdError(ValueError):
     """
 
 
-class AmbiguousDatasetError(Exception):
-    """Exception raised when a `DatasetRef` has no ID and a `Registry`
-    operation requires one.
-    """
-
-
 class ConflictingDefinitionError(Exception):
     """Exception raised when trying to insert a database record when a
     conflicting record already exists.
@@ -176,32 +169,6 @@ class OrphanedRecordError(Exception):
     """Exception raised when trying to remove or modify a database record
     that is still being used in some other table.
     """
-
-
-def _checkAndGetId(ref: DatasetRef) -> int:
-    """Return the ID of the given `DatasetRef`, or raise if it is `None`.
-
-    This trivial function exists to allow operations that would otherwise be
-    natural list comprehensions to check that the ID is not `None` as well.
-
-    Parameters
-    ----------
-    ref : `DatasetRef`
-        Dataset reference.
-
-    Returns
-    -------
-    id : `int`
-        ``ref.id``
-
-    Raises
-    ------
-    AmbiguousDatasetError
-        Raised if ``ref.id`` is `None`.
-    """
-    if ref.id is None:
-        raise AmbiguousDatasetError("Dataset ID must not be `None`.")
-    return ref.id
 
 
 class Registry:
@@ -955,7 +922,7 @@ class Registry:
         """
         if recursive:
             refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": _checkAndGetId(ref)} for ref in refs]
+        rows = [{"dataset_id": ref.getCheckedId()} for ref in refs]
         # Remove the dataset records.  We rely on ON DELETE clauses to
         # take care of other dependencies:
         #  - ON DELETE CASCADE will remove dataset_composition rows.
@@ -990,13 +957,9 @@ class Registry:
         """
         # TODO Insert check for component name and type against
         # parent.storageClass specified components
-        if parent.id is None:
-            raise AmbiguousDatasetError(f"Cannot attach component to dataset {parent} without ID.")
-        if component.id is None:
-            raise AmbiguousDatasetError(f"Cannot attach component {component} without ID.")
         values = dict(component_name=name,
-                      parent_dataset_id=parent.id,
-                      component_dataset_id=component.id)
+                      parent_dataset_id=parent.getCheckedId(),
+                      component_dataset_id=component.getCheckedId())
         self._db.insert(self._tables.dataset_composition, values)
         parent._components[name] = component
 
@@ -1041,7 +1004,7 @@ class Registry:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
         if recursive:
             refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": _checkAndGetId(ref),
+        rows = [{"dataset_id": ref.getCheckedId(),
                  "dataset_ref_hash": ref.hash,
                  self._collections.getCollectionForeignKeyName(): collectionRecord.key}
                 for ref in refs]
@@ -1092,7 +1055,7 @@ class Registry:
                             "expected TAGGED.")
         if recursive:
             refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": _checkAndGetId(ref), collectionFieldName: collectionRecord.key}
+        rows = [{"dataset_id": ref.getCheckedId(), collectionFieldName: collectionRecord.key}
                 for ref in refs]
         self._db.delete(self._tables.dataset_collection, ["dataset_id", collectionFieldName], *rows)
 
@@ -1116,7 +1079,7 @@ class Registry:
         """
         self._db.insert(
             self._tables.dataset_location,
-            *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
+            *[{"datastore_name": datastoreName, "dataset_id": ref.getCheckedId()} for ref in refs]
         )
 
     @transactional
@@ -1153,7 +1116,7 @@ class Registry:
         """
         self._db.insert(
             self._tables.dataset_location_trash,
-            *[{"datastore_name": datastoreName, "dataset_id": _checkAndGetId(ref)} for ref in refs]
+            *[{"datastore_name": datastoreName, "dataset_id": ref.getCheckedId()} for ref in refs]
         )
 
     def checkDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]) -> List[DatasetRef]:
@@ -1292,7 +1255,7 @@ class Registry:
         self._db.delete(
             self._tables.dataset_location,
             ["dataset_id", "datastore_name"],
-            *[{"dataset_id": _checkAndGetId(ref), "datastore_name": datastoreName} for ref in refs]
+            *[{"dataset_id": ref.getCheckedId(), "datastore_name": datastoreName} for ref in refs]
         )
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,

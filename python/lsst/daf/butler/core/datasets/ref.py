@@ -20,7 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DatasetRef", "FakeDatasetRef"]
+__all__ = ["AmbiguousDatasetError", "DatasetRef", "FakeDatasetRef"]
 
 import hashlib
 from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
@@ -30,6 +30,12 @@ from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
 from ..configSupport import LookupKey
 from ..utils import immutable
 from .type import DatasetType
+
+
+class AmbiguousDatasetError(Exception):
+    """Exception raised when a `DatasetRef` is not resolved (has no ID, run, or
+    components), but the requested operation requires one of them.
+    """
 
 
 @immutable
@@ -329,10 +335,31 @@ class DatasetRef:
         """
         for ref in refs:
             if ref.components is None:
-                raise TypeError(f"Unresolved ref '{ref} passed to 'flatten'.")
+                raise AmbiguousDatasetError(f"Unresolved ref {ref} passed to 'flatten'.")
             yield from DatasetRef.flatten(ref.components.values(), parents=True)
             if parents:
                 yield ref
+
+    def getCheckedId(self) -> int:
+        """Return ``self.id``, or raise if it is `None`.
+
+        This trivial method exists to allow operations that would otherwise be
+        natural list comprehensions to check that the ID is not `None` as well.
+
+        Returns
+        -------
+        id : `int`
+            ``self.id`` if it is not `None`.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
+        """
+        if self.id is None:
+            raise AmbiguousDatasetError(f"ID for dataset {self} is `None`; "
+                                        f"a resolved reference is required.")
+        return self.id
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).
