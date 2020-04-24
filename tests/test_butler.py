@@ -51,7 +51,8 @@ from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from lsst.daf.butler import FileDataset
-from lsst.daf.butler import CollectionSearch
+from lsst.daf.butler import CollectionSearch, CollectionType
+from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
@@ -197,7 +198,7 @@ class ButlerPutGetTests:
 
                 # Remove from the tagged collection only; after that we
                 # shouldn't be able to find it unless we use the dataset_id.
-                butler.prune([ref])
+                butler.pruneDatasets([ref])
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
                 # Registry still knows about it, if we use the dataset_id.
@@ -209,7 +210,7 @@ class ButlerPutGetTests:
                 # Reinsert into collection, then delete from Datastore *and*
                 # remove from collection.
                 butler.registry.associate(tag, [ref])
-                butler.prune([ref], unstore=True)
+                butler.pruneDatasets([ref], unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
@@ -220,7 +221,7 @@ class ButlerPutGetTests:
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
 
                 # Now remove the dataset completely.
-                butler.prune([ref], purge=True, unstore=True)
+                butler.pruneDatasets([ref], purge=True, unstore=True)
                 # Lookup with original args should still fail.
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
@@ -264,7 +265,7 @@ class ButlerPutGetTests:
             self.assertTrue(butler.datastore.exists(ref.components["summary"]))
 
             compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            butler.prune([compRef], unstore=True)
+            butler.pruneDatasets([compRef], unstore=True)
             with self.assertRaises(LookupError):
                 butler.datasetExists(compNameS, dataId)
             self.assertFalse(butler.datastore.exists(ref.components["summary"]))
@@ -297,7 +298,7 @@ class ButlerPutGetTests:
 
         # Clean up to check that we can remove something that may have
         # already had a component removed
-        butler.prune([ref], unstore=True, purge=True)
+        butler.pruneDatasets([ref], unstore=True, purge=True)
 
         # Add a dataset back in since some downstream tests require
         # something to be present
@@ -346,7 +347,7 @@ class ButlerPutGetTests:
         butler.registry.associate("tagged", [ref])
         # Deleting the dataset from the new collection should make it findable
         # in the original collection.
-        butler.prune([ref], tags=["tagged"])
+        butler.pruneDatasets([ref], tags=["tagged"])
         self.assertTrue(butler.datasetExists(datasetType, dataId, collections=[run]))
 
 
@@ -479,11 +480,125 @@ class ButlerTests(ButlerPutGetTests):
         # This line will issue a warning log message for a ChainedDatastore
         # that uses an InMemoryDatastore since in-memory can not ingest
         # files.
-        butler.prune([datasets[0].refs[0]], unstore=True, disassociate=False)
+        butler.pruneDatasets([datasets[0].refs[0]], unstore=True, disassociate=False)
         self.assertFalse(butler.datasetExists(datasetTypeName, dataId1))
         self.assertTrue(butler.datasetExists(datasetTypeName, dataId2))
         multi2b = butler.get(datasetTypeName, dataId2)
         self.assertEqual(multi2, multi2b)
+
+    def testPruneCollections(self):
+        storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        butler = Butler(self.tmpConfigFile, writeable=True)
+        # Load registry data with dimensions to hang datasets off of.
+        registryDataDir = os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
+        butler.import_(filename=os.path.join(registryDataDir, "base.yaml"))
+        # Add some RUN-type collections.
+        run1 = "run1"
+        butler.registry.registerRun(run1)
+        run2 = "run2"
+        butler.registry.registerRun(run2)
+        # put some datasets.  ref1 and ref2 have the same data ID, and are in
+        # different runs.  ref3 has a different data ID.
+        metric = makeExampleMetrics()
+        dimensions = butler.registry.dimensions.extract(["instrument", "physical_filter"])
+        datasetType = self.addDatasetType("prune_collections_test_dataset", dimensions, storageClass,
+                                          butler.registry)
+        ref1 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run1)
+        ref2 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-G"}, run=run2)
+        ref3 = butler.put(metric, datasetType, {"instrument": "Cam1", "physical_filter": "Cam1-R1"}, run=run1)
+        # Try to delete a RUN collection without purge, or with purge and not
+        # unstore.
+        with self.assertRaises(TypeError):
+            butler.pruneCollection(run1)
+        with self.assertRaises(TypeError):
+            butler.pruneCollection(run2, purge=True)
+        # Add a TAGGED collection and associate ref3 only into it.
+        tag1 = "tag1"
+        butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        butler.registry.associate(tag1, [ref3])
+        # Add a CHAINED collection that searches run1 and then run2.  It
+        # logically contains only ref1, because ref2 is shadowed due to them
+        # having the same data ID and dataset type.
+        chain1 = "chain1"
+        butler.registry.registerCollection(chain1, type=CollectionType.CHAINED)
+        butler.registry.setCollectionChain(chain1, [run1, run2])
+        # Try to delete RUN collections, which should fail with complete
+        # rollback because they're still referenced by the CHAINED
+        # collection.
+        with self.assertRaises(Exception):
+            butler.pruneCollection(run1, pruge=True, unstore=True)
+        with self.assertRaises(Exception):
+            butler.pruneCollection(run2, pruge=True, unstore=True)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [ref1, ref2, ref3])
+        self.assertTrue(butler.datastore.exists(ref1))
+        self.assertTrue(butler.datastore.exists(ref2))
+        self.assertTrue(butler.datastore.exists(ref3))
+        # Try to delete CHAINED and TAGGED collections with purge; should not
+        # work.
+        with self.assertRaises(TypeError):
+            butler.pruneCollection(tag1, purge=True, unstore=True)
+        with self.assertRaises(TypeError):
+            butler.pruneCollection(chain1, purge=True, unstore=True)
+        # Remove the tagged collection with unstore=False.  This should not
+        # affect the datasets.
+        butler.pruneCollection(tag1)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(tag1)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [ref1, ref2, ref3])
+        self.assertTrue(butler.datastore.exists(ref1))
+        self.assertTrue(butler.datastore.exists(ref2))
+        self.assertTrue(butler.datastore.exists(ref3))
+        # Add the tagged collection back in, and remove it with unstore=True.
+        # This should remove ref3 only from the datastore.
+        butler.registry.registerCollection(tag1, type=CollectionType.TAGGED)
+        butler.registry.associate(tag1, [ref3])
+        butler.pruneCollection(tag1, unstore=True)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(tag1)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [ref1, ref2, ref3])
+        self.assertTrue(butler.datastore.exists(ref1))
+        self.assertTrue(butler.datastore.exists(ref2))
+        self.assertFalse(butler.datastore.exists(ref3))
+        # Delete the chain with unstore=False.  The datasets should not be
+        # affected at all.
+        butler.pruneCollection(chain1)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(chain1)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [ref1, ref2, ref3])
+        self.assertTrue(butler.datastore.exists(ref1))
+        self.assertTrue(butler.datastore.exists(ref2))
+        self.assertFalse(butler.datastore.exists(ref3))
+        # Redefine and then delete the chain with unstore=True.  Only ref1
+        # should be unstored (ref3 has already been unstored, but otherwise
+        # would be now).
+        butler.registry.registerCollection(chain1, type=CollectionType.CHAINED)
+        butler.registry.setCollectionChain(chain1, [run1, run2])
+        butler.pruneCollection(chain1, unstore=True)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(chain1)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [ref1, ref2, ref3])
+        self.assertFalse(butler.datastore.exists(ref1))
+        self.assertTrue(butler.datastore.exists(ref2))
+        self.assertFalse(butler.datastore.exists(ref3))
+        # Remove run1.  This removes ref1 and ref3 from the registry (they're
+        # already gone from the datastore, which is fine).
+        butler.pruneCollection(run1, purge=True, unstore=True)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(run1)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [ref2])
+        self.assertTrue(butler.datastore.exists(ref2))
+        # Remove run2.  This removes ref2 from the registry and the datastore.
+        butler.pruneCollection(run2, purge=True, unstore=True)
+        with self.assertRaises(MissingCollectionError):
+            butler.registry.getCollectionType(run2)
+        self.assertCountEqual(set(butler.registry.queryDatasets(..., collections=...)),
+                              [])
 
     def testPickle(self):
         """Test pickle support.

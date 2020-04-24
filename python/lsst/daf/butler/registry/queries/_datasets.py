@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ["DatasetRegistryStorage"]
 
-from typing import Any, Mapping, Iterator
+from typing import Any, Mapping, Iterator, Optional
 
 import sqlalchemy
 
@@ -115,7 +115,7 @@ class DatasetRegistryStorage:
     def getDatasetSubquery(self, datasetType: DatasetType, *,
                            collections: Any,
                            isResult: bool = True,
-                           addRank: bool = False) -> sqlalchemy.sql.FromClause:
+                           addRank: bool = False) -> Optional[sqlalchemy.sql.FromClause]:
         """Return a SQL expression that searches for a dataset of a particular
         type in one or more collections.
 
@@ -139,11 +139,12 @@ class DatasetRegistryStorage:
 
         Returns
         -------
-        subquery : `sqlalchemy.sql.FromClause`
+        subquery : `sqlalchemy.sql.FromClause` or `None`
             Named subquery or table that can be used in the FROM clause of
             a SELECT query.  Has at least columns for all dimensions in
             ``datasetType.dimensions``; may have additional columns depending
-            on the values of ``isResult`` and ``addRank``.
+            on the values of ``isResult`` and ``addRank``.  May be `None` if
+            it is known that the query would return no results.
         """
         # Always include dimension columns, because that's what we use to
         # join against other tables.
@@ -193,4 +194,6 @@ class DatasetRegistryStorage:
         collections = CollectionQuery.fromExpression(collections)
         for record in collections.iter(self._collections, datasetType=datasetType):
             subsubqueries.append(finishSubquery(sqlalchemy.sql.select(columns), record))
+        if not subsubqueries:
+            return None
         return sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)

@@ -44,6 +44,7 @@ from .._registry import (
     Registry,
 )
 from ..wildcards import DatasetTypeRestriction
+from ..interfaces import MissingCollectionError
 
 
 class RegistryTests(ABC):
@@ -337,7 +338,7 @@ class RegistryTests(ABC):
 
     def testDataset(self):
         """Basic tests for `Registry.insertDatasets`, `Registry.getDataset`,
-        and `Registry.removeDataset`.
+        and `Registry.removeDatasets`.
         """
         registry = self.makeRegistry()
         self.loadData(registry, "base.yaml")
@@ -351,7 +352,7 @@ class RegistryTests(ABC):
         self.assertEqual(ref, outRef)
         with self.assertRaises(ConflictingDefinitionError):
             registry.insertDatasets(datasetType, dataIds=[dataId], run=run)
-        registry.removeDataset(ref)
+        registry.removeDatasets([ref])
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testComponents(self):
@@ -375,7 +376,7 @@ class RegistryTests(ABC):
         outParent = registry.getDataset(parent.id)
         self.assertEqual(outParent.components, children)
         # Remove the parent; this should remove all children.
-        registry.removeDataset(parent)
+        registry.removeDatasets([parent])
         self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collections=[run]))
         self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collections=[run]))
         self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collections=[run]))
@@ -524,6 +525,30 @@ class RegistryTests(ABC):
         ref4 = registry.findDataset("permaflat", dataId4, collections=run2)
         self.assertIsNotNone(ref4)
         self.assertEqual(ref4, registry.findDataset("permaflat", dataId4, collections=chain2))
+        # Deleting a collection that's part of a CHAINED collection is not
+        # allowed, and is exception-safe.
+        with self.assertRaises(Exception):
+            registry.removeCollection(run2)
+        self.assertEqual(registry.getCollectionType(run2), CollectionType.RUN)
+        with self.assertRaises(Exception):
+            registry.removeCollection(chain1)
+        self.assertEqual(registry.getCollectionType(chain1), CollectionType.CHAINED)
+        # Actually remove chain2, test that it's gone by asking for its type.
+        registry.removeCollection(chain2)
+        with self.assertRaises(MissingCollectionError):
+            registry.getCollectionType(chain2)
+        # Actually remove run2 and chain1, which should work now.
+        registry.removeCollection(chain1)
+        registry.removeCollection(run2)
+        with self.assertRaises(MissingCollectionError):
+            registry.getCollectionType(run2)
+        with self.assertRaises(MissingCollectionError):
+            registry.getCollectionType(chain1)
+        # Remove tag1 as well, just to test that we can remove TAGGED
+        # collections.
+        registry.removeCollection(tag1)
+        with self.assertRaises(MissingCollectionError):
+            registry.getCollectionType(tag1)
 
     def testDatasetLocations(self):
         """Tests for `Registry.insertDatasetLocations`,
@@ -555,12 +580,12 @@ class RegistryTests(ABC):
         self.assertNotIn(datastoreName, addresses)
         self.assertIn(datastoreName2, addresses)
         with self.assertRaises(OrphanedRecordError):
-            registry.removeDataset(ref)
+            registry.removeDatasets([ref])
         registry.removeDatasetLocation(datastoreName2, [ref])
         addresses = registry.getDatasetLocations(ref)
         self.assertEqual(len(addresses), 0)
         self.assertNotIn(datastoreName2, addresses)
-        registry.removeDataset(ref)  # should not raise
+        registry.removeDatasets([ref])  # should not raise
         addresses = registry.getDatasetLocations(ref2)
         self.assertEqual(len(addresses), 1)
         self.assertIn(datastoreName2, addresses)

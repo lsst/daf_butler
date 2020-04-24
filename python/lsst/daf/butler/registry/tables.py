@@ -119,6 +119,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 onDelete="SET NULL",
             ),
         ],
+        recycleIds=False
     )
     field = collections.addRunForeignKey(dataset, onDelete="CASCADE", nullable=False)
     dataset.unique.add(("dataset_ref_hash", field.name))
@@ -252,14 +253,13 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 ddl.FieldSpec(
                     name="component_dataset_id",
                     dtype=sqlalchemy.BigInteger,
-                    primaryKey=True,
                     doc="Link to the dataset entry for a child/component dataset.",
                 ),
                 ddl.FieldSpec(
                     name="component_name",
                     dtype=sqlalchemy.String,
                     length=32,
-                    nullable=False,
+                    primaryKey=True,
                     doc="Name of this component within this composite.",
                 ),
             ],
@@ -346,8 +346,8 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                 ddl.FieldSpec(
                     name="dataset_id",
                     dtype=sqlalchemy.BigInteger,
-                    nullable=False,
-                    doc="A link to the associated Dataset.",
+                    nullable=True,
+                    doc="A link to the associated dataset; null if the dataset has been deleted.",
                 ),
                 ddl.FieldSpec(
                     name="actual",
@@ -370,7 +370,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse, collections: CollectionM
                     table="dataset",
                     source=("dataset_id",),
                     target=("dataset_id",),
-                    onDelete="CASCADE",
+                    onDelete="SET NULL",
                 ),
             ],
         ),

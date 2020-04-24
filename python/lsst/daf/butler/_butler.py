@@ -117,8 +117,9 @@ class Butler:
         not set either), a read-only butler will be created.
     tags : `Iterable` [ `str` ], optional
         A list of `~CollectionType.TAGGED` collections that datasets should be
-        associated with in `put` or `ingest` and disassociated from in `prune`.
-        If any of these collections does not exist, it will be created.
+        associated with in `put` or `ingest` and disassociated from in
+        `pruneDatasets`.  If any of these collections does not exist, it will
+        be created.
     chains : `Mapping` [ `str`, `Iterable` [ `str` ] ], optional
         A mapping from the names of new `~CollectionType.CHAINED` collections
         to an expression identifying their child collections (which takes the
@@ -913,13 +914,63 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.datastore.exists(ref)
 
-    def prune(self, refs: Iterable[DatasetRef], *,
-              disassociate: bool = True,
-              unstore: bool = False,
-              tags: Optional[Iterable[str]] = None,
-              purge: bool = False,
-              run: Optional[str] = None,
-              recursive: bool = True):
+    def pruneCollection(self, name: str, purge: bool = False, unstore: bool = False):
+        """Remove a collection and possibly prune datasets within it.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection to remove.  If this is a
+            `~CollectionType.TAGGED` or `~CollectionType.CHAINED` collection,
+            datasets within the collection are not modified unless ``unstore``
+            is `True`.  If this is a `~CollectionType.RUN` collection,
+            ``purge`` and ``unstore`` must be `True`, and all datasets in it
+            are fully removed from the data repository.
+        purge : `bool`, optional
+            If `True`, permit `~CollectionType.RUN` collections to be removed,
+            fully removing datasets within them.  Requires ``unstore=True`` as
+            well as an added precaution against accidental deletion.  Must be
+            `False` (default) if the collection is not a ``RUN``.
+        unstore: `bool`, optional
+            If `True`, remove all datasets in the collection from all
+            datastores in which they appear.
+
+        Raises
+        ------
+        TypeError
+            Raised if the butler is read-only or arguments are mutually
+            inconsistent.
+        """
+        # See pruneDatasets comments for more information about the logic here;
+        # the cases are almost the same, but here we can rely on Registry to
+        # take care everything but Datastore deletion when we remove the
+        # collection.
+        if not self.isWriteable():
+            raise TypeError("Butler is read-only.")
+        if purge and not unstore:
+            raise TypeError("Cannot pass purge=True without unstore=True.")
+        collectionType = self.registry.getCollectionType(name)
+        if collectionType is CollectionType.RUN and not purge:
+            raise TypeError(f"Cannot prune RUN collection {name} without purge=True.")
+        if collectionType is not CollectionType.RUN and purge:
+            raise TypeError(f"Cannot prune {collectionType.name} collection {name} with purge=True.")
+        with self.registry.transaction():
+            if unstore:
+                for ref in self.registry.queryDatasets(..., collections=name, deduplicate=True):
+                    if self.datastore.exists(ref):
+                        self.datastore.trash(ref)
+            self.registry.removeCollection(name)
+        if unstore:
+            # Point of no return for removing artifacts
+            self.datastore.emptyTrash()
+
+    def pruneDatasets(self, refs: Iterable[DatasetRef], *,
+                      disassociate: bool = True,
+                      unstore: bool = False,
+                      tags: Optional[Iterable[str]] = None,
+                      purge: bool = False,
+                      run: Optional[str] = None,
+                      recursive: bool = True):
         """Remove one or more datasets from a collection and/or storage.
 
         Parameters
@@ -928,9 +979,8 @@ class Butler:
             Datasets to prune.  These must be "resolved" references (not just
             a `DatasetType` and data ID).
         disassociate : bool`, optional
-            Disassociate pruned datasets from ``self.collections`` (or the
-            collection given as the ``collection`` argument).  Dataset that are
-            not in this collection are ignored, unless ``purge`` is `True`.
+            Disassociate pruned datasets from ``self.tags`` (or the collections
+            given via the ``tags`` argument).  Ignored if ``refs`` is ``...``.
         unstore : `bool`, optional
             If `True` (`False` is default) remove these datasets from all
             datastores known to this butler.  Note that this will make it
@@ -947,8 +997,7 @@ class Butler:
 
              - All given datasets are in the given run.
              - ``disassociate`` is `True`;
-             - ``unstore`` is `True`;
-             - none of the given datasets are components of some other dataset.
+             - ``unstore`` is `True`.
 
             This mode may remove provenance information from datasets other
             than those provided, and should be used with extreme care.
@@ -968,42 +1017,14 @@ class Butler:
         TypeError
             Raised if the butler is read-only, if no collection was provided,
             or the conditions for ``purge=True`` were not met.
-        IOError
-            Raised an incomplete deletion may have left the repository in an
-            inconsistent state.  Only possible if ``unstore=True``, and always
-            accompanied by a chained exception describing the lower-level
-            error.
         """
-        #
-        # TODO: this method can easily leave the repository in an inconsistent
-        # state if unstore=True in the most common configuration, because
-        # PosixDatastore.remove isn't exception safe.  Even if we can't make
-        # file deletion and database deletion truly atomic, we should refactor
-        # the Datastore deletion interface to make it possible to only try to
-        # delete files after we've checked for all of errors we can.  I imagine
-        # that would look something like
-        #
-        #     with self.datastore.removing(refs):
-        #         self.registry.<do some deleting>
-        #
-        # where starting the context manager:
-        #  - starts a registry transaction;
-        #  - checks that the given refs are known to the datastore;
-        #  - computes a list of files (or whatever) to delete later;
-        #  - does what it can to predict whether it will have trouble deleting
-        #    any of them;
-        #  - removes DatasetLocation records from registry, freeing up other
-        #    Registry records to be removed without violating FK constraints.
-        #
-        # When the context manager ends, it:
-        #  - closes the transaction (aborting and doing nothing if that
-        #    raises);
-        #  - attempts to actually delete all of the files, maybe retrying on
-        #    failure, and raising really scary exceptions if it can't.
-        #
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         if purge:
+            if not disassociate:
+                raise TypeError("Cannot pass purge=True without disassociate=True.")
+            if not unstore:
+                raise TypeError("Cannot pass purge=True without unstore=True.")
             if run is None:
                 run = self.run
                 if run is None:
@@ -1024,65 +1045,48 @@ class Butler:
                 if collectionType is not CollectionType.TAGGED:
                     raise TypeError(f"Cannot disassociate from collection '{tag}' "
                                     f"of non-TAGGED type {collectionType.name}.")
-        if purge:
-            if not disassociate:
-                raise TypeError("Cannot pass purge=True without disassociate=True.")
-            if not unstore:
-                raise TypeError("Cannot pass purge=True without unstore=True.")
-            refs = list(refs)
-            for ref in refs:
-                # isComponent isn't actually reliable, because the dataset type
-                # name isn't the whole story, and that's mildly concerning
-                # because the repo can be corrupted if we try to delete a
-                # component from the Registry before its parent, but this
-                # should be good enough for now.
-                if ref.isComponent():
-                    raise TypeError("Cannot pass purge=True with component DatasetRefs.")
         if recursive:
             refs = list(DatasetRef.flatten(refs))
-        with self.transaction():
-            if purge:
-                # For now, just do some checks; we can't actually remove
-                # datasets from registry until their datastore-managed registry
-                # entries are gone.  But we want to catch as many problems as
-                # we can before the point of no return.
+        # We don't need an unreliable Datastore transaction for this, because
+        # we've been extra careful to ensure that Datastore.trash only involves
+        # mutating the Registry (it can _look_ at Datastore-specific things,
+        # but shouldn't change them), and hence all operations here are
+        # Registry operations.
+        with self.registry.transaction():
+            if unstore:
                 for ref in refs:
-                    if ref.run != run:
-                        raise ValueError(f"Cannot purge '{ref}' because it is not in '{run}'.")
+                    # There is a difference between a concrete composite
+                    # and virtual composite. In a virtual composite the
+                    # datastore is never given the top level DatasetRef. In
+                    # the concrete composite the datastore knows all the
+                    # refs and will clean up itself if asked to remove the
+                    # parent ref.  We can not check configuration for this
+                    # since we can not trust that the configuration is the
+                    # same. We therefore have to ask if the ref exists or
+                    # not.  This is consistent with the fact that we want
+                    # to ignore already-removed-from-datastore datasets
+                    # anyway.
+                    if self.datastore.exists(ref):
+                        self.datastore.trash(ref)
+            if purge:
+                self.registry.removeDatasets(refs, recursive=False)  # refs is already recursiveley expanded
             elif disassociate:
-                # If we're disassociating but not purging, we can do that
-                # before we try to delete, and it will roll back if deletion
-                # fails.  That will at least do the right thing if deletion
-                # fails because the files couldn't actually be deleted (e.g.
-                # due to lack of permissions).
                 for tag in tags:
                     # recursive=False here because refs is already recursive
                     # if we want it to be.
                     self.registry.disassociate(tag, refs, recursive=False)
-            if unstore:
-                try:
-                    for ref in refs:
-                        # There is a difference between a concrete composite
-                        # and virtual composite. In a virtual composite the
-                        # datastore is never given the top level DatasetRef. In
-                        # the concrete composite the datastore knows all the
-                        # refs and will clean up itself if asked to remove the
-                        # parent ref.  We can not check configuration for this
-                        # since we can not trust that the configuration is the
-                        # same. We therefore have to ask if the ref exists or
-                        # not.  This is consistent with the fact that we want
-                        # to ignore already-removed-from-datastore datasets
-                        # anyway.
-                        if self.datastore.exists(ref):
-                            self.datastore.trash(ref)
-                        if purge:
-                            self.registry.removeDataset(ref)
-
-                    # Point of no return for removing artifacts
-                    self.datastore.emptyTrash()
-                except BaseException as err:
-                    raise IOError("WARNING: an incomplete deletion may have put "
-                                  f"the repository in a corrupted state: {err}") from err
+        # We've exited the Registry transaction, and apparently committed.
+        # (if there was an exception, everything rolled back, and it's as if
+        # nothing happened - and we never get here).
+        # Datastore artifacts are not yet gone, but they're clearly marked
+        # as trash, so if we fail to delete now because of (e.g.) filesystem
+        # problems we can try again later, and if manual administrative
+        # intervention is required, it's pretty clear what that should entail:
+        # deleting everything on disk and in private Datastore tables that is
+        # in the dataset_location_trash table.
+        if unstore:
+            # Point of no return for removing artifacts
+            self.datastore.emptyTrash()
 
     @transactional
     def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None, run: Optional[str] = None,
@@ -1476,6 +1480,6 @@ class Butler:
 
     tags: Tuple[str, ...]
     """Names of `~CollectionType.TAGGED` collections this butler associates
-    with in `put` and `ingest`, and disassociates from in `prune` (`tuple` of
-    `str`).
+    with in `put` and `ingest`, and disassociates from in `pruneDatasets`
+    (`tuple` [ `str` ]).
     """

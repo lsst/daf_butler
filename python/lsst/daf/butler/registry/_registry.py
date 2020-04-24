@@ -437,6 +437,32 @@ class Registry:
         """
         self._collections.register(name, CollectionType.RUN)
 
+    @transactional
+    def removeCollection(self, name: str):
+        """Completely remove the given collection.
+
+        Parameters
+        ----------
+        name : `str`
+            The name of the collection to remove.
+
+        Raises
+        ------
+        MissingCollectionError
+            Raised if no collection with the given name exists.
+
+        Notes
+        -----
+        If this is a `~CollectionType.RUN` collection, all datasets and quanta
+        in it are also fully removed.  This requires that those datasets be
+        removed (or at least trashed) from any datastores that hold them first.
+
+        A collection may not be deleted as long as it is referenced by a
+        `~CollectionType.CHAINED` collection; the ``CHAINED`` collection must
+        be deleted or redefined first.
+        """
+        self._collections.remove(name)
+
     def getCollectionChain(self, parent: str) -> CollectionSearch:
         """Return the child collections in a `~CollectionType.CHAINED`
         collection.
@@ -466,6 +492,7 @@ class Registry:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
         return record.children
 
+    @transactional
     def setCollectionChain(self, parent: str, children: Any):
         """Define or redefine a `~CollectionType.CHAINED` collection.
 
@@ -898,69 +925,49 @@ class Registry:
         return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
 
     @transactional
-    def removeDataset(self, ref: DatasetRef):
-        """Remove a dataset from the Registry.
+    def removeDatasets(self, refs: Iterable[DatasetRef], *, recursive: bool = True):
+        """Remove datasets from the Registry.
 
-        The dataset and all components will be removed unconditionally from
-        all collections, and any associated `Quantum` records will also be
-        removed.  `Datastore` records will *not* be deleted; the caller is
-        responsible for ensuring that the dataset has already been removed
-        from all Datastores.
+        The datasets will be removed unconditionally from all collections, and
+        any `Quantum` that consumed this dataset will instead be marked with
+        having a NULL input.  `Datastore` records will *not* be deleted; the
+        caller is responsible for ensuring that the dataset has already been
+        removed from all Datastores.
 
         Parameters
         ----------
-        ref : `DatasetRef`
-            Reference to the dataset to be removed.  Must include a valid
+        refs : `Iterable` of `DatasetRef`
+            References to the datasets to be removed.  Must include a valid
             ``id`` attribute, and should be considered invalidated upon return.
+        recursive : `bool`, optional
+            If `True`, remove all component datasets as well.  Note that
+            this only removes components that are actually included in the
+            given `DatasetRef` instances, which may not be the same as those in
+            the database (especially if they were obtained from
+            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
         AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
+            Raised if any ``ref.id`` is `None`.
         OrphanedRecordError
-            Raised if the dataset is still present in any `Datastore`.
+            Raised if any dataset is still present in any `Datastore`.
         """
-        if not ref.id:
-            raise AmbiguousDatasetError(f"Cannot remove dataset {ref} without ID.")
-        # Remove component datasets.  We assume ``ref.components`` is already
-        # correctly populated, and rely on ON DELETE CASCADE to remove entries
-        # from DatasetComposition.
-        for componentRef in ref.components.values():
-            self.removeDataset(componentRef)
-
-        # Remove related quanta.  We rely on ON DELETE CASCADE to remove any
-        # related records in dataset_consumers.  Note that we permit a Quantum
-        # to be deleted without removing the datasets it refers to, but do not
-        # allow a dataset to be deleted without removing the Quanta that refer
-        # to them.  A dataset is still quite usable without provenance, but
-        # provenance is worthless if it's inaccurate.
-        t = self._tables
-        selectProducer = sqlalchemy.sql.select(
-            [t.dataset.columns.quantum_id]
-        ).where(
-            t.dataset.columns.dataset_id == ref.id
-        )
-        selectConsumers = sqlalchemy.sql.select(
-            [t.dataset_consumers.columns.quantum_id]
-        ).where(
-            t.dataset_consumers.columns.dataset_id == ref.id
-        )
-        # TODO: we'd like to use Database.delete here, but it doesn't general
-        # queries yet.
-        self._connection.execute(
-            t.quantum.delete().where(
-                t.quantum.columns.id.in_(sqlalchemy.sql.union(selectProducer, selectConsumers))
-            )
-        )
-        # Remove the Dataset record itself.  We rely on ON DELETE CASCADE to
-        # remove from DatasetCollection, and assume foreign key violations
-        # come from DatasetLocation (everything else should have an ON DELETE).
+        if recursive:
+            refs = DatasetRef.flatten(refs)
+        rows = [{"dataset_id": _checkAndGetId(ref)} for ref in refs]
+        # Remove the dataset records.  We rely on ON DELETE clauses to
+        # take care of other dependencies:
+        #  - ON DELETE CASCADE will remove dataset_composition rows.
+        #  - ON DELETE CASCADE will remove dataset_collection rows.
+        #  - ON DELETE SET NULL will apply to dataset_consumer rows, making it
+        #    clear that the provenance of any quanta that used this dataset as
+        #    an input is now incomplete.
         try:
-            self._connection.execute(
-                t.dataset.delete().where(t.dataset.c.dataset_id == ref.id)
-            )
+            self._db.delete(self._tables.dataset, ["dataset_id"], *rows)
         except sqlalchemy.exc.IntegrityError as err:
-            raise OrphanedRecordError(f"Dataset {ref} is still present in one or more Datastores.") from err
+            raise OrphanedRecordError("One or more datasets is still "
+                                      "present in one or more Datastores.") from err
 
     @transactional
     def attachComponent(self, name: str, parent: DatasetRef, component: DatasetRef):
@@ -1740,6 +1747,11 @@ class Registry:
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.
         """
+        # Standardize the collections expression.
+        if deduplicate:
+            collections = CollectionSearch.fromExpression(collections)
+        else:
+            collections = CollectionQuery.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwds)
         # If the datasetType passed isn't actually a DatasetType, expand it
@@ -1768,10 +1780,11 @@ class Registry:
         # need to deduplicate.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate)
+        if not builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate):
+            return
         query = builder.finish()
         predicate = query.predicate()
-        if not deduplicate or len(collections) == 1:
+        if not deduplicate:
             # No need to de-duplicate across collections.
             for row in query.execute():
                 if predicate(row):

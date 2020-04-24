@@ -302,6 +302,8 @@ class SqliteDatabase(Database):
                 table=self._convertTableSpec(f"_autoinc_{name}", _AUTOINCR_TABLE_SPEC, metadata, **kwds),
                 column=autoincrFieldName
             )
+        if not spec.recycleIds:
+            kwds = dict(kwds, sqlite_autoincrement=True)
         return super()._convertTableSpec(name, spec, metadata, **kwds)
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,

@@ -326,6 +326,18 @@ class AggressiveNameKeyCollectionManager(CollectionManager):
             self._records[record.name] = record
         return record
 
+    def remove(self, name: str):
+        # Docstring inherited from CollectionManager.
+        try:
+            record = self._records.pop(name)
+        except KeyError:
+            raise MissingCollectionError(f"No collection with name '{name}' found.")
+        try:
+            self._db.delete(self._tables.collection, ["name"], {"name": name})
+        except Exception:
+            self._records[name] = record
+            raise
+
     def find(self, name: str) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
         result = self._records.get(name)

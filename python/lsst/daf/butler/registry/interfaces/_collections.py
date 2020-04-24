@@ -414,6 +414,29 @@ class CollectionManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def remove(self, name: str):
+        """Completely remove a collection.
+
+        Any existing `CollectionRecord` objects that correspond to the removed
+        collection are considered invalidated.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the collection to remove.
+
+        Notes
+        -----
+        If this collection is referenced by foreign keys in tables managed by
+        other objects, the ON DELETE clauses of those tables will be invoked.
+        That will frequently delete many dependent rows automatically (via
+        "CASCADE", but it may also cause this operation to fail (with rollback)
+        unless dependent rows that do not have an ON DELETE clause are removed
+        first.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def find(self, name: str) -> CollectionRecord:
         """Return the collection record associated with the given name.
 
