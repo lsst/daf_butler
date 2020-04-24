@@ -231,15 +231,17 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         self.assertTrue(uri.endswith("#predicted"))
 
         components = storageClass.assembler().disassemble(exposure)
-        self.assertTrue(components)
+        self.assertEqual(set(components),
+                         {"wcs", "variance", "visitInfo", "image", "mask", "coaddInputs", "psf",
+                          "metadata", "photoCalib"})
 
         # Get a component
         compsRead = {}
-        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+        for compName, datasetComponent in components.items():
             compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
-                                          components[compName].storageClass, dataId)
+                                          datasetComponent.storageClass, dataId)
 
-            datastore.put(components[compName].component, compRef)
+            datastore.put(datasetComponent.component, compRef)
 
             # Does it exist?
             self.assertTrue(datastore.exists(compRef))
