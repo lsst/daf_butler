@@ -115,6 +115,8 @@ class DatasetType:
         return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)
 
     def __eq__(self, other):
+        if not isinstance(other, type(self)):
+            return False
         if self._name != other._name:
             return False
         if self._dimensions != other._dimensions:

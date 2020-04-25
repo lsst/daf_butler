@@ -31,3 +31,4 @@ datastore:
       StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
       DummySC: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
       visit+physical_filter+instrument: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+  composites: !include composites.yaml

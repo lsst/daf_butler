@@ -153,6 +153,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         return self.records[ref.id]
 
+    def getStoredItemsInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore.
+        return [self.getStoredItemInfo(ref)]
+
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore.
         # If a component has been removed previously then we can sometimes
