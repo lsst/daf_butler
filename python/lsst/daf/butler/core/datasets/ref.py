@@ -23,12 +23,12 @@ from __future__ import annotations
 __all__ = ["AmbiguousDatasetError", "DatasetRef", "FakeDatasetRef"]
 
 import hashlib
-from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
 from ..configSupport import LookupKey
-from ..utils import immutable
+from ..utils import immutable, NamedKeyDict
 from .type import DatasetType
 
 
@@ -339,6 +339,39 @@ class DatasetRef:
             yield from DatasetRef.flatten(ref.components.values(), parents=True)
             if parents:
                 yield ref
+
+    @staticmethod
+    def groupByType(refs: Iterable[DatasetRef], *, recursive: bool = True
+                    ) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
+        """Group an iterable of `DatasetRef` by `DatasetType`.
+
+        Parameters
+        ----------
+        refs : `Iterable` [ `DatasetRef` ]
+            `DatasetRef` instances to group.
+        recursive : `bool`, optional
+            If `True` (default), also group any `DatasetRef` instances found in
+            the `DatasetRef.components` dictionaries of ``refs``, recursively.
+            `True` also checks that references are "resolved" (unresolved
+            references never have components).
+
+        Returns
+        -------
+        grouped : `NamedKeyDict` [ `DatasetType`, `list` [ `DatasetRef` ] ]
+            Grouped `DatasetRef` instances.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``recursive is True``, and one or more refs has
+            ``DatasetRef.components is None`` (as is always the case for
+            unresolved `DatasetRef` objects).
+        """
+        result = NamedKeyDict()
+        iter = DatasetRef.flatten(refs) if recursive else refs
+        for ref in iter:
+            result.setdefault(ref.datasetType, []).append(ref)
+        return result
 
     def getCheckedId(self) -> int:
         """Return ``self.id``, or raise if it is `None`.
