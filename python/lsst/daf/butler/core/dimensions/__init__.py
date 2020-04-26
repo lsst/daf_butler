@@ -26,7 +26,4 @@ from .elements import *
 from .config import *
 from .universe import *
 from .packer import *
-
-# Symbols from other modules are deliberately not lifted to package scope, as
-# they contain functionality that is mostly internal to the dimensions
-# subpackage, and definitely internal to lsst.daf.butler.
+from .schema import *

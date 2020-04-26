@@ -26,9 +26,16 @@ from typing import List, Optional
 
 import sqlalchemy
 
-from ...core import DimensionElement, DimensionRecord, Timespan, ddl
+from ...core import (
+    addDimensionForeignKey,
+    ddl,
+    DimensionElement,
+    DimensionRecord,
+    makeDimensionElementTableSpec,
+    REGION_FIELD_SPEC,
+    Timespan,
+)
 from ...core.utils import NamedKeyDict, NamedValueSet
-from ...core.dimensions.schema import makeElementTableSpec, REGION_FIELD_SPEC, addDimensionForeignKey
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 from .table import TableDimensionRecordStorage
@@ -99,7 +106,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         return cls(
             db,
             element,
-            table=method(element.name, makeElementTableSpec(element)),
+            table=method(element.name, makeDimensionElementTableSpec(element)),
             commonSkyPixOverlapTable=method(
                 _OVERLAP_TABLE_NAME_PATTERN.format(element.name, element.universe.commonSkyPix.name),
                 _makeOverlapTableSpec(element, element.universe.commonSkyPix)

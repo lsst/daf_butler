@@ -26,11 +26,11 @@ from collections import namedtuple
 
 import sqlalchemy
 
-from ..core.dimensions import DimensionUniverse
-from ..core.dimensions.schema import addDimensionForeignKey
-
-from ..core import ddl
-
+from ..core import (
+    addDimensionForeignKey,
+    ddl,
+    DimensionUniverse,
+)
 from .interfaces import CollectionManager
 
 
