@@ -810,7 +810,7 @@ class Database(ABC):
                     n, bad, result = check()
                     if n < 1:
                         raise RuntimeError("Insertion in sync did not seem to affect table.  This is a bug.")
-                    elif n > 2:
+                    elif n > 1:
                         raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
                                            f"unique constraint for table {table.name}.")
                     elif bad:
