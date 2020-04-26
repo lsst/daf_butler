@@ -74,7 +74,7 @@ def makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
 
 
 def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
-                           primaryKey: bool, nullable: bool = False):
+                           primaryKey: bool, nullable: bool = False) -> ddl.FieldSpec:
     """Add a field and possibly a foreign key to a table specification that
     reference the table for the given `Dimension`.
 
@@ -94,6 +94,11 @@ def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
     nullable : `bool`, optional
         If `False` (default) the new field will be added with a NOT NULL
         constraint.
+
+    Returns
+    -------
+    fieldSpec : `ddl.FieldSpec`
+        Specification for the field just added.
     """
     # Add the dependency's primary key field, but use the dimension name for
     # the field name to make it unique and more meaningful in this table.
@@ -106,6 +111,7 @@ def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
     # there actually is one.
     if dimension.hasTable() and dimension.viewOf is None:
         tableSpec.foreignKeys.append(makeForeignKeySpec(dimension))
+    return fieldSpec
 
 
 def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
