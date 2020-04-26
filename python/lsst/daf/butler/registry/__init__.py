@@ -28,6 +28,7 @@ from . import wildcards
 from .wildcards import CollectionSearch, DatasetTypeRestriction
 from . import interfaces
 from .interfaces import MissingCollectionError
+from . import simpleQuery
 from . import queries
 
 # Some modules intentionally not imported, either because they are purely
