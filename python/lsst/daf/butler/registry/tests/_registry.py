@@ -356,7 +356,7 @@ class RegistryTests(ABC):
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testComponents(self):
-        """Tests for `Registry.attachComponent` and other dataset operations
+        """Tests for `Registry.attachComponents` and other dataset operations
         on composite datasets.
         """
         registry = self.makeRegistry()
@@ -370,8 +370,7 @@ class RegistryTests(ABC):
         parent, = registry.insertDatasets(parentDatasetType, dataIds=[dataId], run=run)
         children = {"image": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
                     "mask": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
-        for name, child in children.items():
-            registry.attachComponent(name, parent, child)
+        parent = registry.attachComponents(parent, children)
         self.assertEqual(parent.components, children)
         outParent = registry.getDataset(parent.id)
         self.assertEqual(outParent.components, children)

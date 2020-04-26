@@ -937,31 +937,35 @@ class Registry:
                                       "present in one or more Datastores.") from err
 
     @transactional
-    def attachComponent(self, name: str, parent: DatasetRef, component: DatasetRef):
-        """Attach a component to a dataset.
+    def attachComponents(self, parent: DatasetRef, components: Mapping[str, DatasetRef]):
+        """Attach components to a dataset.
 
         Parameters
         ----------
-        name : `str`
-            Name of the component.
         parent : `DatasetRef`
-            A reference to the parent dataset. Will be updated to reference
-            the component.
-        component : `DatasetRef`
-            A reference to the component dataset.
+            A reference to the parent dataset.
+        components : `Mapping` [ `str`, `DatasetRef` ]
+            Mapping from component name to the `DatasetRef` for that component.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            An updated version of ``parent`` with components included.
 
         Raises
         ------
         AmbiguousDatasetError
-            Raised if ``parent.id`` or ``component.id`` is `None`.
+            Raised if ``parent.id`` or any `DatasetRef.id` in ``components``
+            is `None`.
         """
         # TODO Insert check for component name and type against
         # parent.storageClass specified components
-        values = dict(component_name=name,
-                      parent_dataset_id=parent.getCheckedId(),
-                      component_dataset_id=component.getCheckedId())
+        values = [dict(component_name=name,
+                       parent_dataset_id=parent.getCheckedId(),
+                       component_dataset_id=component.getCheckedId())
+                  for name, component in components.items()]
         self._db.insert(self._tables.dataset_composition, values)
-        parent._components[name] = component
+        return parent.resolved(parent.id, parent.run, components=components)
 
     @transactional
     def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):

@@ -156,8 +156,7 @@ class DatasetRef:
         """Named `DatasetRef` components (`~collections.abc.Mapping` or
         `None`).
 
-        For resolved `DatasetRef` instances, this is a read-only mapping that
-        can be updated in-place via `Registry.attachComponent()`.  For
+        For resolved `DatasetRef` instances, this is a read-only mapping.  For
         unresolved instances, this is always `None`.
         """
         if self._components is None:

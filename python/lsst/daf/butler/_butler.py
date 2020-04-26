@@ -655,11 +655,13 @@ class Butler:
         # Check to see if this datasetType requires disassembly
         if isVirtualComposite:
             components = datasetType.storageClass.assembler().disassemble(obj)
+            componentRefs = {}
             for component, info in components.items():
                 compTypeName = datasetType.componentTypeName(component)
                 compRef = self.put(info.component, compTypeName, dataId, producer=producer, run=run,
                                    collection=False)  # We don't need to recursively associate.
-                self.registry.attachComponent(component, ref, compRef)
+                componentRefs[component] = compRef
+            ref = self.registry.attachComponents(ref, componentRefs)
         else:
             # This is an entity without a disassembler.
             self.datastore.put(obj, ref)
