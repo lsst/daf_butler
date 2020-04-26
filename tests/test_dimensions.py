@@ -76,6 +76,10 @@ class DimensionTestCase(unittest.TestCase):
                 if element in graph.implied:
                     self.assertTrue(any(element in s.implied for s in seen))
         self.assertCountEqual(seen, graph.elements)
+        # Test encoding and decoding of DimensionGraphs to bytes.
+        encoded = graph.encode()
+        self.assertEqual(len(encoded), self.universe.getEncodeLength())
+        self.assertEqual(DimensionGraph.decode(encoded, universe=self.universe), graph)
 
     def testConfigRead(self):
         self.assertEqual(self.universe.dimensions.names,
