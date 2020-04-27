@@ -162,9 +162,9 @@ class Query:
         """
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetType.dimensions)
-        datasetIdColumn, datasetRankColumn = self._columns.datasets[datasetType]
-        return (DatasetRef(datasetType, dataId, id=row[datasetIdColumn]),
-                row[datasetRankColumn] if datasetRankColumn is not None else None)
+        datasetColumns = self._columns.datasets[datasetType]
+        return (DatasetRef(datasetType, dataId, id=row[datasetColumns.id]),
+                row[datasetColumns.rank] if datasetColumns.rank is not None else None)
 
     def execute(self) -> ResultProxy:
         """Execute the query.

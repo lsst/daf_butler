@@ -36,7 +36,7 @@ from ...core import (
 )
 from ...core.utils import NamedKeyDict
 
-from ._structs import QuerySummary, QueryColumns
+from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
 from .expressions import ClauseVisitor
 from ._query import Query
 from ..simpleQuery import Select
@@ -174,8 +174,10 @@ class QueryBuilder:
         subquery = sqlalchemy.sql.union(*subsubqueries).alias(datasetType.name)
         self.joinTable(subquery, datasetType.dimensions.required)
         if isResult:
-            self._columns.datasets[datasetType] = (subquery.columns["id"],
-                                                   subquery.columns["rank"] if addRank else None)
+            self._columns.datasets[datasetType] = DatasetQueryColumns(
+                id=subquery.columns["id"],
+                rank=subquery.columns["rank"] if addRank else None
+            )
         return True
 
     def joinTable(self, table: FromClause, dimensions: Iterable[Dimension]):
@@ -338,10 +340,10 @@ class QueryBuilder:
         columns = []
         for dimension in self.summary.requested:
             columns.append(self._columns.getKeyColumn(dimension))
-        for datasetType, columnPair in self._columns.datasets.items():
-            columns.extend(columnPair)
-        for element, column in self._columns.regions.items():
-            columns.append(column)
+        for datasetColumns in self._columns.datasets.values():
+            columns.extend(datasetColumns)
+        for regionColumn in self._columns.regions.values():
+            columns.append(regionColumn)
         self._sql = select(columns).select_from(self._sql)
 
     def finish(self) -> Query:
