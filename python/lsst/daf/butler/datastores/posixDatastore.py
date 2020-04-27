@@ -414,6 +414,15 @@ class PosixDatastore(FileLikeDatastore):
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
+            elif transfer == "copy":
+                getInfo = self._prepare_for_get(ref)
+                newPath = getInfo.formatter.predictPathFromLocation(location)
+                newFullPath = os.path.join(directory, newPath)
+                if not os.path.exists(os.path.dirname(newFullPath)):
+                    os.makedirs(os.path.dirname(newFullPath))
+                shutil.copy(location.path, newFullPath)
+                yield FileDataset(refs=[ref], path=newPath,
+                                  formatter=storedFileInfo.formatter)
             else:
                 # TODO: add support for other transfer modes.  If we support
                 # moving, this method should become transactional.
