@@ -217,6 +217,11 @@ class DatasetQueryColumns:
     """Column containing the unique integer ID for this dataset.
     """
 
+    runKey: ColumnElement
+    """Foreign key column to the `~CollectionType.RUN` collection that holds
+    this dataset.
+    """
+
     rank: Optional[ColumnElement] = None
     """Column containing the index into the ordered sequence of given
     collections for the collection in which this dataset was found.
@@ -224,6 +229,7 @@ class DatasetQueryColumns:
 
     def __iter__(self) -> Iterator[ColumnElement]:
         yield self.id
+        yield self.runKey
         if self.rank is not None:
             yield self.rank
 

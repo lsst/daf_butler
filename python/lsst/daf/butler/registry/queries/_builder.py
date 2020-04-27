@@ -160,7 +160,7 @@ class QueryBuilder:
             ssq = datasetRecordStorage.select(collection=collectionRecord,
                                               dataId=Select,
                                               id=Select if isResult else None,
-                                              run=None)
+                                              run=Select if isResult else None)
             if addRank:
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
             subsubqueries.append(ssq.combine())
@@ -171,6 +171,7 @@ class QueryBuilder:
         if isResult:
             self._columns.datasets[datasetType] = DatasetQueryColumns(
                 id=subquery.columns["id"],
+                runKey=subquery.columns[self._collections.getRunForeignKeyName()],
                 rank=subquery.columns["rank"] if addRank else None
             )
         return True
@@ -361,4 +362,5 @@ class QueryBuilder:
         self._joinMissingDimensionElements()
         self._addSelectClause()
         self._addWhereClause()
-        return Query(summary=self.summary, sql=self._sql, columns=self._columns)
+        return Query(summary=self.summary, sql=self._sql, columns=self._columns,
+                     collections=self._collections)

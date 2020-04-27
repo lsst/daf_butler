@@ -55,7 +55,7 @@ class DatasetRef:
         The unique integer identifier assigned when the dataset is created.
     run : `str`, optional
         The name of the run this dataset was associated with when it was
-        created.
+        created.  Must be provided if ``id`` is.
     hash : `bytes`, optional
         A hash of the dataset type and data ID.  Should only be provided if
         copying from another `DatasetRef` with the same dataset type and data
@@ -76,7 +76,8 @@ class DatasetRef:
     ------
     ValueError
         Raised if ``run`` or ``components`` is provided but ``id`` is not, or
-        if a component dataset is inconsistent with the storage class.
+        if a component dataset is inconsistent with the storage class, or if
+        ``id`` is provided but ``run`` is not.
     """
 
     __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components")
@@ -111,11 +112,9 @@ class DatasetRef:
                     if expectedStorageClass != v.datasetType.storageClass:
                         raise ValueError(f"Storage class mismatch for component {k}: "
                                          f"{v.datasetType.storageClass.name} != {expectedStorageClass.name}")
-            # TODO: it would be nice to guarantee that id and run should be
-            # either both None or not None together.  We can't easily do that
-            # yet because the Query infrastructure has a hard time obtaining
-            # run strings, so we allow run to be `None` here, but that will
-            # change.
+            if run is None:
+                raise ValueError(f"Cannot provide id without run for dataset with id={id}, "
+                                 f"type={datasetType}, and dataId={dataId}.")
             self.run = run
         else:
             self._components = None

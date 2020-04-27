@@ -186,11 +186,6 @@ class RepoExport:
             if ref.id in self._dataset_ids:
                 continue
             dataIds.add(ref.dataId)
-            # TODO: we need to call getDataset here because most ways of
-            # obtaining a DatasetRef (including queryDataset) don't populate
-            # the run attribute.  We should address that upstream in the
-            # future.
-            ref = self._registry.getDataset(ref.id)
             # `exports` is a single-element list here, because we anticipate
             # a future where more than just Datastore.export has a vectorized
             # API and we can pull this out of the loop.
