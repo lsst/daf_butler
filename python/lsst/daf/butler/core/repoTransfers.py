@@ -190,7 +190,7 @@ class RepoExport:
             # obtaining a DatasetRef (including queryDataset) don't populate
             # the run attribute.  We should address that upstream in the
             # future.
-            ref = self._registry.getDataset(ref.id, dataId=ref.dataId, datasetType=ref.datasetType)
+            ref = self._registry.getDataset(ref.id)
             # `exports` is a single-element list here, because we anticipate
             # a future where more than just Datastore.export has a vectorized
             # API and we can pull this out of the loop.

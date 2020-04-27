@@ -9,3 +9,4 @@ registry:
     opaque: lsst.daf.butler.registry.opaque.ByNameOpaqueTableStorageManager
     dimensions: lsst.daf.butler.registry.dimensions.static.StaticDimensionRecordStorageManager
     collections: lsst.daf.butler.registry.collections.nameKey.AggressiveNameKeyCollectionManager
+    datasets: lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager

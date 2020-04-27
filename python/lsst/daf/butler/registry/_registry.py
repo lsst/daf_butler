@@ -26,6 +26,7 @@ __all__ = (
     "Registry",
 )
 
+from collections import defaultdict
 import contextlib
 from dataclasses import dataclass
 import sys
@@ -64,14 +65,13 @@ from ..core import ddl
 from ..core.utils import doImport, iterable, transactional
 from ._config import RegistryConfig
 from .queries import (
-    DatasetRegistryStorage,
     QueryBuilder,
     QuerySummary,
 )
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
-from .wildcards import CollectionQuery, CollectionSearch
+from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -83,6 +83,7 @@ if TYPE_CHECKING:
         Database,
         OpaqueTableStorageManager,
         DimensionRecordStorageManager,
+        DatasetRecordStorageManager,
     )
 
 
@@ -198,31 +199,34 @@ class Registry:
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
         collections = doImport(config["managers", "collections"])
+        datasets = doImport(config["managers", "datasets"])
         return cls(database, universe, dimensions=dimensions, opaque=opaque, collections=collections,
-                   create=create)
+                   datasets=datasets, create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
                  collections: Type[CollectionManager],
+                 datasets: Type[DatasetRecordStorageManager],
                  create: bool = False):
         self._db = database
         self.storageClasses = StorageClassFactory()
         with self._db.declareStaticTables(create=create) as context:
             self._dimensions = dimensions.initialize(self._db, context, universe=universe)
             self._collections = collections.initialize(self._db, context)
-            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions, self._collections))
+            self._datasets = datasets.initialize(self._db, context,
+                                                 collections=self._collections,
+                                                 universe=self.dimensions)
+            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions,
+                                                                        self._collections,
+                                                                        self._datasets))
             self._opaque = opaque.initialize(self._db, context)
         self._collections.refresh()
+        self._datasets.refresh(universe=self._dimensions.universe)
         # TODO: we shouldn't be grabbing the private connection from the
         # Database instance like this, but it's a reasonable way to proceed
         # while we transition to using the Database API more.
         self._connection = self._db._connection
-        self._datasetStorage = DatasetRegistryStorage(connection=self._connection,
-                                                      universe=self.dimensions,
-                                                      tables=self._tables._asdict(),
-                                                      collections=self._collections)
-        self._datasetTypes = {}
 
     def __str__(self) -> str:
         return str(self._db)
@@ -254,7 +258,6 @@ class Registry:
             # TODO: this clears the caches sometimes when we wouldn't actually
             # need to.  Can we avoid that?
             self._dimensions.clearCaches()
-            self._datasetTypes.clear()
             raise
 
     def registerOpaqueTable(self, tableName: str, spec: ddl.TableSpec):
@@ -469,7 +472,6 @@ class Registry:
         if children != record.children:
             record.update(self._collections, children)
 
-    @transactional
     def registerDatasetType(self, datasetType: DatasetType) -> bool:
         """
         Add a new `DatasetType` to the Registry.
@@ -496,61 +498,14 @@ class Registry:
         ConflictingDefinitionError
             Raised if this DatasetType is already registered with a different
             definition.
-        """
-        # TODO: this implementation isn't concurrent, except *maybe* in SQLite
-        # with aggressive locking (where starting a transaction is essentially
-        # the same as grabbing a full-database lock).  Should be reimplemented
-        # with Database.sync to fix this, but that may require schema changes
-        # as well so we only have to synchronize one row to know if we have
-        # inconsistent definitions.
 
-        # If the DatasetType is already in the cache, we assume it's already in
-        # the DB (note that we don't actually provide a way to remove them from
-        # the DB).
-        existingDatasetType = self._datasetTypes.get(datasetType.name)
-        # If it's not in the cache, try to insert it.
-        if existingDatasetType is None:
-            try:
-                with self._db.transaction():
-                    self._db.insert(
-                        self._tables.dataset_type,
-                        {
-                            "dataset_type_name": datasetType.name,
-                            "storage_class": datasetType.storageClass.name,
-                        }
-                    )
-            except sqlalchemy.exc.IntegrityError:
-                # Insert failed on the only unique constraint on this table:
-                # dataset_type_name.  So now the question is whether the one in
-                # there is the same as the one we tried to insert.
-                existingDatasetType = self.getDatasetType(datasetType.name)
-            else:
-                # If adding the DatasetType record itself succeeded, add its
-                # dimensions (if any).  We don't guard this in a try block
-                # because a problem with this insert means the database
-                # content must be corrupted.
-                if datasetType.dimensions:
-                    self._db.insert(
-                        self._tables.dataset_type_dimensions,
-                        *[{"dataset_type_name": datasetType.name,
-                           "dimension_name": dimensionName}
-                          for dimensionName in datasetType.dimensions.names]
-                    )
-                # Update the cache.
-                self._datasetTypes[datasetType.name] = datasetType
-                # Also register component DatasetTypes (if any).
-                for compName, compStorageClass in datasetType.storageClass.components.items():
-                    compType = DatasetType(datasetType.componentTypeName(compName),
-                                           dimensions=datasetType.dimensions,
-                                           storageClass=compStorageClass)
-                    self.registerDatasetType(compType)
-                # Inserts succeeded, nothing left to do here.
-                return True
-        # A DatasetType with this name exists, check if is equal
-        if datasetType == existingDatasetType:
-            return False
-        else:
-            raise ConflictingDefinitionError(f"DatasetType: {datasetType} != existing {existingDatasetType}")
+        Notes
+        -----
+        This method cannot be called within transactions, as it needs to be
+        able to perform its own transaction to be concurrent.
+        """
+        _, inserted = self._datasets.register(datasetType)
+        return inserted
 
     def getDatasetType(self, name: str) -> DatasetType:
         """Get the `DatasetType`.
@@ -570,114 +525,13 @@ class Registry:
         KeyError
             Requested named DatasetType could not be found in registry.
         """
-        datasetType = self._datasetTypes.get(name)
-        if datasetType is None:
-            # Get StorageClass from DatasetType table
-            result = self._db.query(
-                sqlalchemy.sql.select(
-                    [self._tables.dataset_type.c.storage_class]
-                ).where(
-                    self._tables.dataset_type.columns.dataset_type_name == name
-                )
-            ).fetchone()
-
-            if result is None:
-                raise KeyError("Could not find entry for datasetType {}".format(name))
-
-            storageClass = self.storageClasses.getStorageClass(result["storage_class"])
-            # Get Dimensions (if any) from DatasetTypeDimensions table
-            result = self._db.query(
-                sqlalchemy.sql.select(
-                    [self._tables.dataset_type_dimensions.columns.dimension_name]
-                ).where(
-                    self._tables.dataset_type_dimensions.columns.dataset_type_name == name
-                )
-            ).fetchall()
-            dimensions = DimensionGraph(self.dimensions, names=(r[0] for r in result) if result else ())
-            datasetType = DatasetType(name=name,
-                                      storageClass=storageClass,
-                                      dimensions=dimensions)
-            self._datasetTypes[name] = datasetType
-        return datasetType
-
-    def _makeDatasetRefFromRow(self, row: sqlalchemy.engine.RowProxy,
-                               datasetType: Optional[DatasetType] = None,
-                               dataId: Optional[DataCoordinate] = None):
-        """Construct a DatasetRef from the result of a query on the Dataset
-        table.
-
-        Parameters
-        ----------
-        row : `sqlalchemy.engine.RowProxy`.
-            Row of a query that contains all columns from the `Dataset` table.
-            May include additional fields (which will be ignored).
-        datasetType : `DatasetType`, optional
-            `DatasetType` associated with this dataset.  Will be retrieved
-            if not provided.  If provided, the caller guarantees that it is
-            already consistent with what would have been retrieved from the
-            database.
-        dataId : `DataCoordinate`, optional
-            Dimensions associated with this dataset.  Will be retrieved if not
-            provided.  If provided, the caller guarantees that it is already
-            consistent with what would have been retrieved from the database.
-
-        Returns
-        -------
-        ref : `DatasetRef`.
-            A new `DatasetRef` instance.
-        """
-        if datasetType is None:
-            datasetType = self.getDatasetType(row["dataset_type_name"])
-        runRecord = self._collections[row[self._collections.getRunForeignKeyName()]]
-        assert runRecord is not None, "Should be guaranteed by foreign key constraints."
-        run = runRecord.name
-        datasetRefHash = row["dataset_ref_hash"]
-        if dataId is None:
-            # TODO: should we expand here?
-            dataId = DataCoordinate.standardize(
-                row,
-                graph=datasetType.dimensions,
-                universe=self.dimensions
-            )
-        # Get components (if present)
-        components = {}
-        if datasetType.storageClass.isComposite():
-            t = self._tables
-            columns = list(t.dataset.columns)
-            columns.append(t.dataset_composition.columns.component_name)
-            results = self._db.query(
-                sqlalchemy.sql.select(
-                    columns
-                ).select_from(
-                    t.dataset.join(
-                        t.dataset_composition,
-                        (t.dataset.columns.dataset_id == t.dataset_composition.columns.component_dataset_id)
-                    )
-                ).where(
-                    t.dataset_composition.columns.parent_dataset_id == row["dataset_id"]
-                )
-            ).fetchall()
-            for result in results:
-                componentName = result["component_name"]
-                componentDatasetType = DatasetType(
-                    DatasetType.nameWithComponent(datasetType.name, componentName),
-                    dimensions=datasetType.dimensions,
-                    storageClass=datasetType.storageClass.components[componentName]
-                )
-                components[componentName] = self._makeDatasetRefFromRow(result, dataId=dataId,
-                                                                        datasetType=componentDatasetType)
-            if not components.keys() <= datasetType.storageClass.components.keys():
-                raise RuntimeError(
-                    f"Inconsistency detected between dataset and storage class definitions: "
-                    f"{datasetType.storageClass.name} has components "
-                    f"{set(datasetType.storageClass.components.keys())}, "
-                    f"but dataset has components {set(components.keys())}"
-                )
-        return DatasetRef(datasetType=datasetType, dataId=dataId, id=row["dataset_id"], run=run,
-                          hash=datasetRefHash, components=components)
+        storage = self._datasets.find(name)
+        if storage is None:
+            raise KeyError(f"DatasetType '{name}' could not be found.")
+        return storage.datasetType
 
     def findDataset(self, datasetType: Union[DatasetType, str], dataId: Optional[DataId] = None, *,
-                    collections: Any, **kwds: Any) -> Optional[DatasetRef]:
+                    collections: Any, **kwargs: Any) -> Optional[DatasetRef]:
         """Find a dataset given its `DatasetType` and data ID.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
@@ -695,7 +549,7 @@ class Registry:
             to search for the dataset, such as a `str`, `re.Pattern`, or
             iterable  thereof.  `...` can be used to return all collections.
             See :ref:`daf_butler_collection_expressions` for more information.
-        **kwds
+        **kwargs
             Additional keyword arguments passed to
             `DataCoordinate.standardize` to convert ``dataId`` to a true
             `DataCoordinate` or augment an existing one.
@@ -709,38 +563,28 @@ class Registry:
         Raises
         ------
         LookupError
-            Raised if one or more data ID keys are missing.
+            Raised if one or more data ID keys are missing or the dataset type
+            does not exist.
         MissingCollectionError
             Raised if any of ``collections`` does not exist in the registry.
         """
-        if not isinstance(datasetType, DatasetType):
-            datasetType = self.getDatasetType(datasetType)
-        dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions,
-                                            universe=self.dimensions, **kwds)
+        if isinstance(datasetType, DatasetType):
+            storage = self._datasets.find(datasetType.name)
+            if storage is None:
+                raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
+        else:
+            storage = self._datasets.find(datasetType)
+            if storage is None:
+                raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
+        dataId = DataCoordinate.standardize(dataId, graph=storage.datasetType.dimensions,
+                                            universe=self.dimensions, **kwargs)
         collections = CollectionSearch.fromExpression(collections)
-        for collectionRecord in collections.iter(self._collections, datasetType=datasetType):
-            if collectionRecord.type is CollectionType.TAGGED:
-                collectionColumn = \
-                    self._tables.dataset_collection.columns[self._collections.getCollectionForeignKeyName()]
-                fromClause = self._tables.dataset.join(self._tables.dataset_collection)
-            elif collectionRecord.type is CollectionType.RUN:
-                collectionColumn = self._tables.dataset.columns[self._collections.getRunForeignKeyName()]
-                fromClause = self._tables.dataset
-            else:
-                raise NotImplementedError(f"Unrecognized CollectionType: '{collectionRecord.type}'.")
-            whereTerms = [
-                self._tables.dataset.columns.dataset_type_name == datasetType.name,
-                collectionColumn == collectionRecord.key,
-            ]
-            whereTerms.extend(self._tables.dataset.columns[name] == dataId[name] for name in dataId.keys())
-            query = self._tables.dataset.select().select_from(
-                fromClause
-            ).where(
-                sqlalchemy.sql.and_(*whereTerms)
-            )
-            result = self._db.query(query).fetchone()
+        for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
+            result = storage.find(collectionRecord, dataId)
             if result is not None:
-                return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+                if result.datasetType.isComposite():
+                    result = self._datasets.fetchComponents(result)
+                return result
         return None
 
     @transactional
@@ -778,94 +622,68 @@ class Registry:
         ------
         ConflictingDefinitionError
             If a dataset with the same dataset type and data ID as one of those
-            given already exists in the given collection.
+            given already exists in ``run``.
         MissingCollectionError
             Raised if ``run`` does not exist in the registry.
         """
-        if not isinstance(datasetType, DatasetType):
-            datasetType = self.getDatasetType(datasetType)
-        rows = []
-        refs = []
+        if isinstance(datasetType, DatasetType):
+            storage = self._datasets.find(datasetType.name)
+            if storage is None:
+                raise LookupError(f"DatasetType '{datasetType}' has not been registered.")
+        else:
+            storage = self._datasets.find(datasetType)
+            if storage is None:
+                raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
         runRecord = self._collections.find(run)
-        base = {
-            "dataset_type_name": datasetType.name,
-            self._collections.getRunForeignKeyName(): runRecord.key,
-            "quantum_id": producer.id if producer is not None else None,
-        }
-        # Expand data IDs and build both a list of unresolved DatasetRefs
-        # and a list of dictionary rows for the dataset table.
-        for dataId in dataIds:
-            ref = DatasetRef(datasetType, self.expandDataId(dataId, graph=datasetType.dimensions))
-            refs.append(ref)
-            row = dict(base, dataset_ref_hash=ref.hash)
-            for dimension, value in ref.dataId.full.items():
-                row[dimension.name] = value
-            rows.append(row)
-        # Actually insert into the dataset table.
+        dataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions) for dataId in dataIds]
         try:
-            datasetIds = self._db.insert(self._tables.dataset, *rows, returnIds=True)
+            refs = list(storage.insert(runRecord, dataIds, quantum=producer))
         except sqlalchemy.exc.IntegrityError as err:
-            raise ConflictingDefinitionError(
-                f"Constraint violation while inserting datasets into run {run}. "
-                f"This usually means that one or more datasets with the same dataset type and data ID "
-                f"already exist in the collection, but it may be a foreign key violation."
-            ) from err
-        # Resolve the DatasetRefs with the autoincrement IDs we generated.
-        refs = [ref.resolved(id=datasetId, run=run) for datasetId, ref in zip(datasetIds, refs)]
-        if recursive and datasetType.isComposite():
-            # Insert component rows by recursing, and gather a single big list
-            # of rows to insert into the dataset_composition table.
-            compositionRows = []
-            for componentName in datasetType.storageClass.components:
-                componentDatasetType = datasetType.makeComponentDatasetType(componentName)
+            raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
+                                             f"one or more datasets of type {storage.datasetType} into "
+                                             f"collection '{run}'. "
+                                             f"This probably means a dataset with the same data ID "
+                                             f"and dataset type already exists, but it may also mean a "
+                                             f"dimension row is missing.") from err
+        if recursive and storage.datasetType.isComposite():
+            # Insert component rows by recursing.
+            composites = defaultdict(dict)
+            # TODO: we really shouldn't be inserting all components defined by
+            # the storage class, because there's no guarantee all of them are
+            # actually present in these datasets.
+            for componentName in storage.datasetType.storageClass.components:
+                componentDatasetType = storage.datasetType.makeComponentDatasetType(componentName)
                 componentRefs = self.insertDatasets(componentDatasetType,
-                                                    dataIds=(ref.dataId for ref in refs),
+                                                    dataIds=dataIds,
                                                     run=run,
                                                     producer=producer,
                                                     recursive=True)
                 for parentRef, componentRef in zip(refs, componentRefs):
-                    parentRef._components[componentName] = componentRef
-                    compositionRows.append({
-                        "parent_dataset_id": parentRef.id,
-                        "component_dataset_id": componentRef.id,
-                        "component_name": componentName,
-                    })
-            if compositionRows:
-                self._db.insert(self._tables.dataset_composition, *compositionRows)
+                    composites[parentRef][componentName] = componentRef
+            if composites:
+                refs = list(self._datasets.attachComponents(composites.items()))
         return refs
 
-    def getDataset(self, id: int, datasetType: Optional[DatasetType] = None,
-                   dataId: Optional[DataCoordinate] = None) -> Optional[DatasetRef]:
+    def getDataset(self, id: int) -> Optional[DatasetRef]:
         """Retrieve a Dataset entry.
 
         Parameters
         ----------
         id : `int`
-            The unique identifier for the Dataset.
-        datasetType : `DatasetType`, optional
-            The `DatasetType` of the dataset to retrieve.  This is used to
-            short-circuit retrieving the `DatasetType`, so if provided, the
-            caller is guaranteeing that it is what would have been retrieved.
-        dataId : `DataCoordinate`, optional
-            A `Dimension`-based identifier for the dataset within a
-            collection, possibly containing additional metadata. This is used
-            to short-circuit retrieving the dataId, so if provided, the
-            caller is guaranteeing that it is what would have been retrieved.
+            The unique identifier for the dataset.
 
         Returns
         -------
-        ref : `DatasetRef`
+        ref : `DatasetRef` or `None`
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        result = self._db.query(
-            self._tables.dataset.select().where(
-                self._tables.dataset.columns.dataset_id == id
-            )
-        ).fetchone()
-        if result is None:
+        ref = self._datasets.getDatasetRef(id)
+        if ref is None:
             return None
-        return self._makeDatasetRefFromRow(result, datasetType=datasetType, dataId=dataId)
+        if ref.datasetType.isComposite():
+            return self._datasets.fetchComponents(ref)
+        return ref
 
     @transactional
     def removeDatasets(self, refs: Iterable[DatasetRef], *, recursive: bool = True):
@@ -896,21 +714,13 @@ class Registry:
         OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
-        if recursive:
-            refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": ref.getCheckedId()} for ref in refs]
-        # Remove the dataset records.  We rely on ON DELETE clauses to
-        # take care of other dependencies:
-        #  - ON DELETE CASCADE will remove dataset_composition rows.
-        #  - ON DELETE CASCADE will remove dataset_collection rows.
-        #  - ON DELETE SET NULL will apply to dataset_consumer rows, making it
-        #    clear that the provenance of any quanta that used this dataset as
-        #    an input is now incomplete.
-        try:
-            self._db.delete(self._tables.dataset, ["dataset_id"], *rows)
-        except sqlalchemy.exc.IntegrityError as err:
-            raise OrphanedRecordError("One or more datasets is still "
-                                      "present in one or more Datastores.") from err
+        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+            storage = self._datasets.find(datasetType.name)
+            try:
+                storage.delete(refsForType)
+            except sqlalchemy.exc.IntegrityError as err:
+                raise OrphanedRecordError("One or more datasets is still "
+                                          "present in one or more Datastores.") from err
 
     @transactional
     def attachComponents(self, parent: DatasetRef, components: Mapping[str, DatasetRef]):
@@ -928,20 +738,26 @@ class Registry:
         ref : `DatasetRef`
             An updated version of ``parent`` with components included.
 
+        Returns
+        -------
+        ref : `DatasetRef`
+            A version ``parent`` with ``component`` included in its components.
+
         Raises
         ------
         AmbiguousDatasetError
             Raised if ``parent.id`` or any `DatasetRef.id` in ``components``
             is `None`.
         """
-        # TODO Insert check for component name and type against
-        # parent.storageClass specified components
-        values = [dict(component_name=name,
-                       parent_dataset_id=parent.getCheckedId(),
-                       component_dataset_id=component.getCheckedId())
-                  for name, component in components.items()]
-        self._db.insert(self._tables.dataset_composition, values)
-        return parent.resolved(parent.id, parent.run, components=components)
+        for name, ref in components.items():
+            if ref.datasetType.storageClass != parent.datasetType.storageClass.components[name]:
+                raise TypeError(f"Expected storage class "
+                                f"'{parent.datasetType.storageClass.components[name].name}' "
+                                f"for component '{name}' of dataset {parent}; got "
+                                f"dataset {ref} with storage class "
+                                f"'{ref.datasetType.storageClass.name}'.")
+        ref, = self._datasets.attachComponents([(parent, components)])
+        return ref
 
     @transactional
     def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
@@ -982,20 +798,17 @@ class Registry:
         collectionRecord = self._collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
-        if recursive:
-            refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": ref.getCheckedId(),
-                 "dataset_ref_hash": ref.hash,
-                 self._collections.getCollectionForeignKeyName(): collectionRecord.key}
-                for ref in refs]
-        try:
-            self._db.replace(self._tables.dataset_collection, *rows)
-        except sqlalchemy.exc.IntegrityError as err:
-            raise ConflictingDefinitionError(
-                f"Constraint violation while associating datasets with collection {collection}. "
-                f"This probably means that one or more datasets with the same dataset type and data ID "
-                f"already exist in the collection, but it may also indicate that the datasets do not exist."
-            ) from err
+        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+            storage = self._datasets.find(datasetType.name)
+            try:
+                storage.associate(collectionRecord, refsForType)
+            except sqlalchemy.exc.IntegrityError as err:
+                raise ConflictingDefinitionError(
+                    f"Constraint violation while associating dataset of type {datasetType.name} with "
+                    f"collection {collection}.  This probably means that one or more datasets with the same "
+                    f"dataset type and data ID already exist in the collection, but it may also indicate "
+                    f"that the datasets do not exist."
+                ) from err
 
     @transactional
     def disassociate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
@@ -1021,23 +834,20 @@ class Registry:
         Raises
         ------
         AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
+            Raised if any of the given dataset references is unresolved.
         MissingCollectionError
             Raised if ``collection`` does not exist in the registry.
         TypeError
             Raise adding new datasets to the given ``collection`` is not
             allowed.
         """
-        collectionFieldName = self._collections.getCollectionForeignKeyName()
         collectionRecord = self._collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
                             "expected TAGGED.")
-        if recursive:
-            refs = DatasetRef.flatten(refs)
-        rows = [{"dataset_id": ref.getCheckedId(), collectionFieldName: collectionRecord.key}
-                for ref in refs]
-        self._db.delete(self._tables.dataset_collection, ["dataset_id", collectionFieldName], *rows)
+        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+            storage = self._datasets.find(datasetType.name)
+            storage.disassociate(collectionRecord, refsForType)
 
     @transactional
     def insertDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
@@ -1452,7 +1262,22 @@ class Registry:
         datasetType : `DatasetType`
             A `DatasetType` instance whose name matches ``expression``.
         """
-        yield from self._datasetStorage.fetchDatasetTypes(expression)
+        wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
+        if wildcard is ...:
+            yield from self._datasets
+            return
+        done = set()
+        for name in wildcard.strings:
+            storage = self._datasets.find(name)
+            if storage is not None:
+                done.add(storage.datasetType)
+                yield storage.datasetType
+        if wildcard.patterns:
+            for datasetType in self._datasets:
+                if datasetType.name in done:
+                    continue
+                if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
+                    yield datasetType
 
     def queryCollections(self, expression: Any = ...,
                          datasetType: Optional[DatasetType] = None,
@@ -1515,8 +1340,9 @@ class Registry:
             Object that can be used to construct and perform advanced queries.
         """
         return QueryBuilder(connection=self._connection, summary=summary,
-                            dimensionStorage=self._dimensions,
-                            datasetStorage=self._datasetStorage)
+                            collections=self._collections,
+                            dimensions=self._dimensions,
+                            datasets=self._datasets)
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
@@ -1581,7 +1407,7 @@ class Registry:
         if datasets is not None:
             if collections is None:
                 raise TypeError("Cannot pass 'datasets' without 'collections'.")
-            for datasetType in self._datasetStorage.fetchDatasetTypes(datasets):
+            for datasetType in self.queryDatasetTypes(datasets):
                 requestedDimensionNames.update(datasetType.dimensions.names)
                 standardizedDatasetTypes.append(datasetType)
             # Preprocess collections expression in case the original included
@@ -1697,7 +1523,7 @@ class Registry:
         # (it could be an expression that yields multiple DatasetTypes) and
         # recurse.
         if not isinstance(datasetType, DatasetType):
-            for trueDatasetType in self._datasetStorage.fetchDatasetTypes(datasetType):
+            for trueDatasetType in self.queryDatasetTypes(datasetType):
                 yield from self.queryDatasets(trueDatasetType, collections=collections,
                                               dimensions=dimensions, dataId=standardizedDataId,
                                               where=where, deduplicate=deduplicate)
