@@ -26,7 +26,7 @@ import itertools
 from typing import Optional, Tuple, Callable
 
 from sqlalchemy.sql import FromClause
-from sqlalchemy.engine import RowProxy, ResultProxy, Connection
+from sqlalchemy.engine import RowProxy
 
 from lsst.sphgeom import Region
 
@@ -50,8 +50,6 @@ class Query:
 
     Parameters
     ----------
-    connection: `sqlalchemy.engine.Connection`
-        Connection used to execute the query.
     sql : `sqlalchemy.sql.FromClause`
         A complete SELECT query, including at least SELECT, FROM, and WHERE
         clauses.
@@ -71,12 +69,11 @@ class Query:
     SQLAlchemy here in the future would be to reduce computational overheads.
     """
 
-    def __init__(self, *, connection: Connection, sql: FromClause,
+    def __init__(self, *, sql: FromClause,
                  summary: QuerySummary, columns: QueryColumns):
         self.summary = summary
         self.sql = sql
         self._columns = columns
-        self._connection = connection
 
     def predicate(self, region: Optional[Region] = None) -> Callable[[RowProxy], bool]:
         """Return a callable that can perform extra Python-side filtering of
@@ -165,14 +162,3 @@ class Query:
         datasetColumns = self._columns.datasets[datasetType]
         return (DatasetRef(datasetType, dataId, id=row[datasetColumns.id]),
                 row[datasetColumns.rank] if datasetColumns.rank is not None else None)
-
-    def execute(self) -> ResultProxy:
-        """Execute the query.
-
-        Returns
-        -------
-        results : `sqlalchemy.engine.ResultProxy`
-            Object representing the query results; see SQLAlchemy documentation
-            for more information.
-        """
-        return self._connection.execute(self.sql)

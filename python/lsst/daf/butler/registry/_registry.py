@@ -223,10 +223,6 @@ class Registry:
             self._opaque = opaque.initialize(self._db, context)
         self._collections.refresh()
         self._datasets.refresh(universe=self._dimensions.universe)
-        # TODO: we shouldn't be grabbing the private connection from the
-        # Database instance like this, but it's a reasonable way to proceed
-        # while we transition to using the Database API more.
-        self._connection = self._db._connection
 
     def __str__(self) -> str:
         return str(self._db)
@@ -1339,7 +1335,7 @@ class Registry:
         builder : `QueryBuilder`
             Object that can be used to construct and perform advanced queries.
         """
-        return QueryBuilder(connection=self._connection, summary=summary,
+        return QueryBuilder(summary=summary,
                             collections=self._collections,
                             dimensions=self._dimensions,
                             datasets=self._datasets)
@@ -1425,7 +1421,7 @@ class Registry:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()
         predicate = query.predicate()
-        for row in query.execute():
+        for row in self._db.query(query.sql):
             if predicate(row):
                 result = query.extractDataId(row)
                 if expand:
@@ -1551,7 +1547,7 @@ class Registry:
         predicate = query.predicate()
         if not deduplicate:
             # No need to de-duplicate across collections.
-            for row in query.execute():
+            for row in self._db.query(query.sql):
                 if predicate(row):
                     dataId = query.extractDataId(row, graph=datasetType.dimensions)
                     if expand:
@@ -1562,7 +1558,7 @@ class Registry:
             # collection rank.
             bestRefs = {}
             bestRanks = {}
-            for row in query.execute():
+            for row in self._db.query(query.sql):
                 if predicate(row):
                     ref, rank = query.extractDatasetRef(row, datasetType)
                     bestRank = bestRanks.get(ref.dataId, sys.maxsize)

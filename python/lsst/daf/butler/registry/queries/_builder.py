@@ -26,7 +26,6 @@ from typing import Any, List, Iterable, TYPE_CHECKING
 
 from sqlalchemy.sql import ColumnElement, and_, literal, select, FromClause
 import sqlalchemy.sql
-from sqlalchemy.engine import Connection
 
 from ...core import (
     DimensionElement,
@@ -52,9 +51,6 @@ class QueryBuilder:
 
     Parameters
     ----------
-    connection : `sqlalchemy.engine.Connection`
-        SQLAlchemy connection object.  This is only used to pass through
-        to the `Query` object returned by `finish`.
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
     collections : `CollectionsManager`
@@ -66,12 +62,11 @@ class QueryBuilder:
         Storage backend object that abstracts access to dataset tables.
     """
 
-    def __init__(self, connection: Connection, summary: QuerySummary, *,
+    def __init__(self, summary: QuerySummary, *,
                  collections: CollectionsManager,
                  dimensions: DimensionRecordStorageManager,
                  datasets: DatasetRecordStorageManager):
         self.summary = summary
-        self._connection = connection
         self._collections = collections
         self._dimensions = dimensions
         self._datasets = datasets
@@ -366,5 +361,4 @@ class QueryBuilder:
         self._joinMissingDimensionElements()
         self._addSelectClause()
         self._addWhereClause()
-        return Query(summary=self.summary, connection=self._connection,
-                     sql=self._sql, columns=self._columns)
+        return Query(summary=self.summary, sql=self._sql, columns=self._columns)
