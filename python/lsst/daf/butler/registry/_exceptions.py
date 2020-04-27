@@ -19,20 +19,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from ._config import *
-from ._exceptions import *
-from ._registry import *
-from ._dbAuth import *
-from ._collectionType import *
 
-from . import wildcards
-from .wildcards import CollectionSearch, DatasetTypeRestriction
-from . import interfaces
-from .interfaces import MissingCollectionError
-from . import simpleQuery
-from . import queries
+__all__ = ("InconsistentDataIdError", "ConflictingDefinitionError", "OrphanedRecordError")
 
-# Some modules intentionally not imported, either because they are purely
-# internal (e.g. nameShrinker.py) or they contain implementations that are
-# always loaded from configuration strings (e.g. databases subpackage,
-# opaque.py, ...).
+
+class InconsistentDataIdError(ValueError):
+    """Exception raised when a data ID contains contradictory key-value pairs,
+    according to dimension relationships.
+
+    This can include the case where the data ID identifies multiple spatial
+    regions or timespans that are disjoint.
+    """
+
+
+class ConflictingDefinitionError(Exception):
+    """Exception raised when trying to insert a database record when a
+    conflicting record already exists.
+    """
+
+
+class OrphanedRecordError(Exception):
+    """Exception raised when trying to remove or modify a database record
+    that is still being used in some other table.
+    """

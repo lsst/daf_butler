@@ -22,10 +22,7 @@
 from __future__ import annotations
 
 __all__ = (
-    "ConflictingDefinitionError",
     "ConsistentDataIds",
-    "InconsistentDataIdError",
-    "OrphanedRecordError",
     "Registry",
 )
 
@@ -73,8 +70,8 @@ from .queries import (
 )
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
+from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CollectionQuery, CollectionSearch
-from .interfaces import DatabaseConflictError
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -148,27 +145,6 @@ class ConsistentDataIds:
 
     def __bool__(self) -> bool:
         return True
-
-
-class InconsistentDataIdError(ValueError):
-    """Exception raised when a data ID contains contradictory key-value pairs,
-    according to dimension relationships.
-
-    This can include the case where the data ID identifies mulitple spatial
-    regions or timspans that are disjoint.
-    """
-
-
-class ConflictingDefinitionError(Exception):
-    """Exception raised when trying to insert a database record when a
-    conflicting record already exists.
-    """
-
-
-class OrphanedRecordError(Exception):
-    """Exception raised when trying to remove or modify a database record
-    that is still being used in some other table.
-    """
 
 
 class Registry:
@@ -1457,10 +1433,7 @@ class Registry:
         else:
             record = row
         storage = self._dimensions[element]
-        try:
-            return storage.sync(record)
-        except DatabaseConflictError as err:
-            raise ConflictingDefinitionError(str(err)) from err
+        return storage.sync(record)
 
     def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.

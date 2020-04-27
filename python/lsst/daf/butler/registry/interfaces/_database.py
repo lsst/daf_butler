@@ -44,6 +44,7 @@ import astropy.time
 import sqlalchemy
 
 from ...core import ddl, time_utils
+from .._exceptions import ConflictingDefinitionError
 
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Dict[str, Any]):
@@ -78,7 +79,7 @@ class ReadOnlyDatabaseError(RuntimeError):
     """
 
 
-class DatabaseConflictError(RuntimeError):
+class DatabaseConflictError(ConflictingDefinitionError):
     """Exception raised when database content (row values or schema entities)
     are inconsistent with what this client expects.
     """
