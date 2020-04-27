@@ -126,7 +126,7 @@ class ButlerURI:
         else:
             raise ValueError("Supplied URI must be either string or ParseResult")
 
-        parsed, dirLike = self._fixupFileUri(parsed, root=root,
+        parsed, dirLike = self._fixupPathUri(parsed, root=root,
                                              forceAbsolute=forceAbsolute,
                                              forceDirectory=forceDirectory)
 
@@ -237,8 +237,8 @@ class ButlerURI:
         return self.geturl()
 
     @staticmethod
-    def _fixupFileUri(parsed, root=None, forceAbsolute=False, forceDirectory=False):
-        """Fix up relative paths in file URI instances.
+    def _fixupPathUri(parsed, root=None, forceAbsolute=False, forceDirectory=False):
+        """Fix up relative paths in URI instances.
 
         Parameters
         ----------
@@ -261,7 +261,7 @@ class ButlerURI:
         Returns
         -------
         modified : `~urllib.parse.ParseResult`
-            Update result if a file URI is being handled.
+            Update result if a URI is being handled.
         dirLike : `bool`
             `True` if given parsed URI has a trailing separator or
             forceDirectory is True. Otherwise `False`.
@@ -349,15 +349,13 @@ class ButlerURI:
             # ParseResult is a NamedTuple so _replace is standard API
             parsed = parsed._replace(**replacements)
 
-        elif parsed.scheme == "s3":
-
-            # URI is dir-like if explicitly stated or if it ends on a separator
-            endsOnSep = parsed.path.endswith(posixpath.sep)
-            if forceDirectory or endsOnSep:
-                dirLike = True
-                # only add the separator if it's not already there
-                if not endsOnSep:
-                    parsed = parsed._replace(path=parsed.path+posixpath.sep)
+        # URI is dir-like if explicitly stated or if it ends on a separator
+        endsOnSep = parsed.path.endswith(posixpath.sep)
+        if forceDirectory or endsOnSep:
+            dirLike = True
+            # only add the separator if it's not already there
+            if not endsOnSep:
+                parsed = parsed._replace(path=parsed.path+posixpath.sep)
 
         if dirLike is None:
             raise RuntimeError("ButlerURI.dirLike attribute not set succesfully.")
