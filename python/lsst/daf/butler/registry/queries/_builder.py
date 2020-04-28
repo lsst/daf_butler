@@ -155,6 +155,11 @@ class QueryBuilder:
         else:
             collections = CollectionQuery.fromExpression(collections)
         datasetRecordStorage = self._datasets.find(datasetType.name)
+        if datasetRecordStorage is None:
+            # Unrecognized dataset type means no results.  It might be better
+            # to raise here, but this is consistent with previous behavior,
+            # which is expected by QuantumGraph generation code in pipe_base.
+            return False
         subsubqueries = []
         for rank, collectionRecord in enumerate(collections.iter(self._collections, datasetType=datasetType)):
             ssq = datasetRecordStorage.select(collection=collectionRecord,
