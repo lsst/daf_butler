@@ -34,6 +34,7 @@ You can find Jira issues for this module under the `daf_butler <https://jira.lss
    :maxdepth: 1
 
    dev/dataCoordinate.rst
+   writing-subcommands.rst
 
 =======
 .. _lsst.daf.butler-dimensions:
