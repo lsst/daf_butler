@@ -48,7 +48,7 @@ class ConnectionStringBuilderTestCase(unittest.TestCase):
         ConnectionStringModule.DB_AUTH_PATH = self.resetDbAuthPathValue
 
     def testBuilder(self):
-        """Tests ConnectionStringBuilder builds correct connection strings.
+        """Tests ConnectionStringFactory returns correct connection strings.
         """
         regConfigs = [RegistryConfig(os.path.join(self.configDir, name)) for name in self.configFiles]
 
