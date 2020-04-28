@@ -37,6 +37,14 @@ You can find Jira issues for this module under the `daf_butler <https://jira.lss
 
    dev/dataCoordinate.rst
 
+Butler Command Line Interface Development
+-----------------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   writing-subcommands.rst
+
 .. _lsst.daf.butler-dimensions:
 
 The Dimensions System

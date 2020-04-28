@@ -126,8 +126,8 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         if log_level_option.name() in ctx.params:
             CliLog.setLogLevels(ctx.params[log_level_option.name()])
 
-    @staticmethod
-    def getPluginList():
+    @classmethod
+    def getPluginList(cls):
         """Get the list of importable yaml files that contain cli data for this
         command.
 
@@ -136,6 +136,11 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         `list` [`str`]
             The list of files that contain yaml data about a cli plugin.
         """
+        if not hasattr(cls, "pluginEnvVar"):
+            return []
+        pluginModules = os.environ.get(cls.pluginEnvVar)
+        if pluginModules:
+            return [p for p in pluginModules.split(":") if p != '']
         return []
 
     @classmethod
@@ -266,6 +271,8 @@ class ButlerCLI(LoaderCLI):
 
     localCmdPkg = "lsst.daf.butler.cli.cmd"
 
+    pluginEnvVar = "DAF_BUTLER_PLUGINS"
+
     @classmethod
     def _funcNameToCmdName(cls, functionName):
         # Docstring inherited from base class.
@@ -290,14 +297,6 @@ class ButlerCLI(LoaderCLI):
         if commandName == "import":
             return "butler_import"
         return super()._cmdNameToFuncName(commandName)
-
-    @staticmethod
-    def getPluginList():
-        # Docstring inherited from base class.
-        pluginModules = os.environ.get("DAF_BUTLER_PLUGINS")
-        if pluginModules:
-            return [p for p in pluginModules.split(":") if p != '']
-        return []
 
 
 @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
