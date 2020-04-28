@@ -1,0 +1,5 @@
+# test that combinations of 'db' keys and explicit keys work (f.e. port)
+registry:
+  db: 'postgresql://host.example.com:5432'
+  database: 'my_database'
+  expected: 'postgresql://user:test3@host.example.com:5432/my_database'

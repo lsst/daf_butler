@@ -1,0 +1,7 @@
+# minimal configuration required when using explicit 'host-port',
+# also tests '/' are placed correctly when not epxlicit in dbname
+registry:
+  db: 'postgresql://host.example.com'
+  port: 5432
+  database: 'my_database'
+  expected: 'postgresql://user:test3@host.example.com:5432/my_database'

@@ -1,5 +1,0 @@
-# test that combinations of 'db' keys and explicit keys work (f.e. port)
-registry:
-  db: 'postgresql://lsst-db.ncsa.illinois.edu:3307'
-  database: 'conf3'
-  expected: 'postgresql://boris:natasha@lsst-db.ncsa.illinois.edu:3307/conf3'

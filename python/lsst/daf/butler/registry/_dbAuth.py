@@ -35,7 +35,7 @@ class DbAuthError(RuntimeError):
 
 
 class DbAuthNotFoundError(DbAuthError):
-    """Credentials file does not exist."""
+    """Credentials file does not exist or no match was found in it."""
 
 
 class DbAuthPermissionsError(DbAuthError):
