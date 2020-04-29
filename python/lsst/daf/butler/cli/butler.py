@@ -30,8 +30,8 @@ from .utils import to_upper
 from lsst.utils import doImport
 
 # localCmdPkg identifies commands that are in this package, in the dict of
-# commands used in this file.
-localCmdPkg = "localPackage"
+# commands used in this file. This string is used in error reporting.
+localCmdPkg = "lsst.daf.butler.cli.cmd"
 
 log = logging.getLogger(__name__)
 

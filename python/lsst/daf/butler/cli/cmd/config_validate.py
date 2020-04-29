@@ -26,7 +26,7 @@ from ..opt import dataset_type_option, repo_option
 from ..utils import split_commas
 
 
-@click.command(name="config-validate")
+@click.command()
 @click.pass_context
 @repo_option(required=True)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
