@@ -41,10 +41,10 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
             result = runner.invoke(butler.cli, ["config-validate", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
 
     def testConfigValidate_ignore(self):
@@ -52,11 +52,11 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "--repo", "here"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
             result = runner.invoke(butler.cli, ["config-validate", "--repo", "here",
                                    "--ignore", "storageClasses,repoTransferFormats", "-i", "dimensions"])
-            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
 
 

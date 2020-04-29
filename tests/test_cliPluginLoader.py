@@ -24,12 +24,14 @@
 
 import click
 import click.testing
+from collections import defaultdict
+from contextlib import contextmanager
+import os
 import unittest
+from unittest.mock import patch
+import yaml
 
-from lsst.daf.butler.cli import butler
-
-
-__all__ = ["command_test"]
+from lsst.daf.butler.cli import butler, cmd
 
 
 @click.command()
@@ -37,41 +39,99 @@ def command_test():
     click.echo("test command")
 
 
-class LoaderTestCLI(butler.LoaderCLI):
-    """Overrides LodaerCLI._getPluginList to return a local command instead of
-    a list of plugin modules from an environment variable."""
+@contextmanager
+def command_test_env(runner):
+    """A context manager that creates (and then cleans up) an environment that
+    provides a plugin command named 'command-test'.
 
-    @staticmethod
-    def _getPluginList():
-        # See Lodaer.CLI._getPluginList for the standard implementation that
-        # gets the plugin modules from the environment.
-        # In normal use the plugin module is a file with a command that is
-        # named in the that file's __all__ parameter, and can be imported.
-        # For this test we use the name of this file as the module, and this
-        # file's __all__ indicates the name of the test command that will be
-        # executed.
-        name = ["test_cliPluginLoader"]
-        return name
+    Parameters
+    ----------
+    runner : click.testing.CliRunner
+        The test runner to use to create the isolated filesystem.
+    """
+    with runner.isolated_filesystem():
+        with open("resources.yaml", "w") as f:
+            f.write(yaml.dump({"cmd": {"import": "test_cliPluginLoader", "commands": ["command-test"]}}))
+        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": os.path.realpath(f.name)}):
+            yield
 
 
-@click.command(cls=LoaderTestCLI)
-def cli():
-    pass
+@contextmanager
+def duplicate_command_test_env(runner):
+    """A context manager that creates (and then cleans up) an environment that
+    declares a plugin command named 'create', which will conflict with the
+    daf_butler 'create' command.
+
+    Parameters
+    ----------
+    runner : click.testing.CliRunner
+        The test runner to use to create the isolated filesystem.
+    """
+    with runner.isolated_filesystem():
+        with open("resources.yaml", "w") as f:
+            f.write(yaml.dump({"cmd": {"import": "test_cliPluginLoader", "commands": ["create"]}}))
+        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": os.path.realpath(f.name)}):
+            yield
 
 
 class Suite(unittest.TestCase):
 
-    def test_loadAndExecuteCommand(self):
+    def setUp(self):
+        butler.cli.commands = None
+
+    def test_loadAndExecutePluginCommand(self):
+        """Test that a plugin command can be loaded and executed."""
         runner = click.testing.CliRunner()
-        result = runner.invoke(cli, "command-test")
-        self.assertEqual(result.exit_code, 0, result.output)
-        self.assertEqual(result.stdout, "test command\n")
+        with command_test_env(runner):
+            result = runner.invoke(butler.cli, "command-test")
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(result.stdout, "test command\n")
+
+    def test_loadAndExecuteLocalCommand(self):
+        """Test that a command in daf_butler can be loaded and executed."""
+        runner = click.testing.CliRunner()
+        with runner.isolated_filesystem():
+            result = runner.invoke(butler.cli, ["create", "--repo", "test_repo"])
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue(os.path.exists("test_repo"))
 
     def test_loadTopHelp(self):
+        """Test that an expected command is produced by 'butler --help'"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(cli, "--help")
-        self.assertEqual(result.exit_code, 0, result.stdout)
-        self.assertIn("Commands:\n  command-test", result.stdout)
+        with command_test_env(runner):
+            result = runner.invoke(butler.cli, "--help")
+            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertIn("command-test", result.stdout)
+
+    def test_getLocalCommands(self):
+        """Test getting the daf_butler CLI commands."""
+        localCommands = butler.LoaderCLI._getLocalCommands()
+        for command in cmd.__all__:
+            command = command.replace("_", "-")
+            self.assertEqual(localCommands[command], ["lsst.daf.butler.cli.cmd"])
+
+    def test_mergeCommandLists(self):
+        """Verify dicts of command to list-of-source-package get merged
+        properly."""
+        first = defaultdict(list, {"a": [1]})
+        second = defaultdict(list, {"b": [2]})
+        self.assertEqual(butler.LoaderCLI._mergeCommandLists(first, second), {"a": [1], "b": [2]})
+        first = defaultdict(list, {"a": [1]})
+        second = defaultdict(list, {"a": [2]})
+        self.assertEqual(butler.LoaderCLI._mergeCommandLists(first, second), {"a": [1, 2]})
+
+    def test_listCommands_duplicate(self):
+        """Test executing a command in a situation where duplicate commands are
+        present and verify it fails to run.
+        """
+        self.maxDiff = None
+        runner = click.testing.CliRunner()
+        with duplicate_command_test_env(runner):
+            result = runner.invoke(butler.cli, ["create", "--repo", "test_repo"])
+            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertEqual(result.output, "Error: Command 'create' "
+                             "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "
+                             "Duplicate commands are not supported, aborting.\n")
 
 
 if __name__ == "__main__":
