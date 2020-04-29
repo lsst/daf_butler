@@ -288,6 +288,11 @@ class ForeignKeySpec:
     be raised), should be either "SET NULL" or "CASCADE".
     """
 
+    addIndex: bool = True
+    """If `True`, create an index on the columns of this foreign key in the
+    source table.
+    """
+
     @classmethod
     @SchemaValidationError.translate(KeyError, "Missing key {err} in foreignKey config '{config}'.")
     def fromConfig(cls, config: Config) -> ForeignKeySpec:
