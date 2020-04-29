@@ -26,8 +26,14 @@ from typing import Optional
 
 import sqlalchemy
 
-from ...core import DataCoordinate, DimensionElement, DimensionRecord, Timespan, TIMESPAN_FIELD_SPECS
-from ...core.dimensions.schema import makeElementTableSpec
+from ...core import (
+    DataCoordinate,
+    DimensionElement,
+    DimensionRecord,
+    makeDimensionElementTableSpec,
+    Timespan,
+    TIMESPAN_FIELD_SPECS,
+)
 from ...core.utils import NamedKeyDict
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -58,7 +64,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
     def initialize(cls, db: Database, element: DimensionElement, *,
                    context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorage.
-        spec = makeElementTableSpec(element)
+        spec = makeDimensionElementTableSpec(element)
         if context is not None:
             table = context.addTable(element.name, spec)
         else:

@@ -20,16 +20,22 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["DatasetRef", "FakeDatasetRef"]
+__all__ = ["AmbiguousDatasetError", "DatasetRef", "FakeDatasetRef"]
 
 import hashlib
-from typing import Any, Dict, Iterable, Iterator, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
 from ..configSupport import LookupKey
-from ..utils import immutable
+from ..utils import immutable, NamedKeyDict
 from .type import DatasetType
+
+
+class AmbiguousDatasetError(Exception):
+    """Exception raised when a `DatasetRef` is not resolved (has no ID, run, or
+    components), but the requested operation requires one of them.
+    """
 
 
 @immutable
@@ -49,7 +55,7 @@ class DatasetRef:
         The unique integer identifier assigned when the dataset is created.
     run : `str`, optional
         The name of the run this dataset was associated with when it was
-        created.
+        created.  Must be provided if ``id`` is.
     hash : `bytes`, optional
         A hash of the dataset type and data ID.  Should only be provided if
         copying from another `DatasetRef` with the same dataset type and data
@@ -70,7 +76,8 @@ class DatasetRef:
     ------
     ValueError
         Raised if ``run`` or ``components`` is provided but ``id`` is not, or
-        if a component dataset is inconsistent with the storage class.
+        if a component dataset is inconsistent with the storage class, or if
+        ``id`` is provided but ``run`` is not.
     """
 
     __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components")
@@ -105,11 +112,9 @@ class DatasetRef:
                     if expectedStorageClass != v.datasetType.storageClass:
                         raise ValueError(f"Storage class mismatch for component {k}: "
                                          f"{v.datasetType.storageClass.name} != {expectedStorageClass.name}")
-            # TODO: it would be nice to guarantee that id and run should be
-            # either both None or not None together.  We can't easily do that
-            # yet because the Query infrastructure has a hard time obtaining
-            # run strings, so we allow run to be `None` here, but that will
-            # change.
+            if run is None:
+                raise ValueError(f"Cannot provide id without run for dataset with id={id}, "
+                                 f"type={datasetType}, and dataId={dataId}.")
             self.run = run
         else:
             self._components = None
@@ -150,8 +155,7 @@ class DatasetRef:
         """Named `DatasetRef` components (`~collections.abc.Mapping` or
         `None`).
 
-        For resolved `DatasetRef` instances, this is a read-only mapping that
-        can be updated in-place via `Registry.attachComponent()`.  For
+        For resolved `DatasetRef` instances, this is a read-only mapping.  For
         unresolved instances, this is always `None`.
         """
         if self._components is None:
@@ -329,10 +333,64 @@ class DatasetRef:
         """
         for ref in refs:
             if ref.components is None:
-                raise TypeError(f"Unresolved ref '{ref} passed to 'flatten'.")
+                raise AmbiguousDatasetError(f"Unresolved ref {ref} passed to 'flatten'.")
             yield from DatasetRef.flatten(ref.components.values(), parents=True)
             if parents:
                 yield ref
+
+    @staticmethod
+    def groupByType(refs: Iterable[DatasetRef], *, recursive: bool = True
+                    ) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
+        """Group an iterable of `DatasetRef` by `DatasetType`.
+
+        Parameters
+        ----------
+        refs : `Iterable` [ `DatasetRef` ]
+            `DatasetRef` instances to group.
+        recursive : `bool`, optional
+            If `True` (default), also group any `DatasetRef` instances found in
+            the `DatasetRef.components` dictionaries of ``refs``, recursively.
+            `True` also checks that references are "resolved" (unresolved
+            references never have components).
+
+        Returns
+        -------
+        grouped : `NamedKeyDict` [ `DatasetType`, `list` [ `DatasetRef` ] ]
+            Grouped `DatasetRef` instances.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``recursive is True``, and one or more refs has
+            ``DatasetRef.components is None`` (as is always the case for
+            unresolved `DatasetRef` objects).
+        """
+        result = NamedKeyDict()
+        iter = DatasetRef.flatten(refs) if recursive else refs
+        for ref in iter:
+            result.setdefault(ref.datasetType, []).append(ref)
+        return result
+
+    def getCheckedId(self) -> int:
+        """Return ``self.id``, or raise if it is `None`.
+
+        This trivial method exists to allow operations that would otherwise be
+        natural list comprehensions to check that the ID is not `None` as well.
+
+        Returns
+        -------
+        id : `int`
+            ``self.id`` if it is not `None`.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if ``ref.id`` is `None`.
+        """
+        if self.id is None:
+            raise AmbiguousDatasetError(f"ID for dataset {self} is `None`; "
+                                        f"a resolved reference is required.")
+        return self.id
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).

@@ -21,9 +21,8 @@
 from __future__ import annotations
 
 __all__ = (
-    "makeForeignKeySpec",
     "addDimensionForeignKey",
-    "makeElementTableSpec",
+    "makeDimensionElementTableSpec",
     "REGION_FIELD_SPEC",
 )
 
@@ -44,7 +43,7 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
 REGION_FIELD_SPEC = ddl.FieldSpec(name="region", nbytes=2048, dtype=ddl.Base64Region)
 
 
-def makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
+def _makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
     """Make a `ddl.ForeignKeySpec` that references the table for the given
     `Dimension` table.
 
@@ -74,7 +73,7 @@ def makeForeignKeySpec(dimension: Dimension) -> ddl.ForeignKeySpec:
 
 
 def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
-                           primaryKey: bool, nullable: bool = False):
+                           primaryKey: bool, nullable: bool = False) -> ddl.FieldSpec:
     """Add a field and possibly a foreign key to a table specification that
     reference the table for the given `Dimension`.
 
@@ -94,6 +93,11 @@ def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
     nullable : `bool`, optional
         If `False` (default) the new field will be added with a NOT NULL
         constraint.
+
+    Returns
+    -------
+    fieldSpec : `ddl.FieldSpec`
+        Specification for the field just added.
     """
     # Add the dependency's primary key field, but use the dimension name for
     # the field name to make it unique and more meaningful in this table.
@@ -105,10 +109,11 @@ def addDimensionForeignKey(tableSpec: ddl.TableSpec, dimension: Dimension, *,
     # Also add a foreign key constraint on the dependency table, but only if
     # there actually is one.
     if dimension.hasTable() and dimension.viewOf is None:
-        tableSpec.foreignKeys.append(makeForeignKeySpec(dimension))
+        tableSpec.foreignKeys.append(_makeForeignKeySpec(dimension))
+    return fieldSpec
 
 
-def makeElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
+def makeDimensionElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
     """Create a complete table specification for a `DimensionElement`.
 
     This combines the foreign key fields from dependencies, unique keys

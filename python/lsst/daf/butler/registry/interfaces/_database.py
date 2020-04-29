@@ -44,6 +44,7 @@ import astropy.time
 import sqlalchemy
 
 from ...core import ddl, time_utils
+from .._exceptions import ConflictingDefinitionError
 
 
 def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Dict[str, Any]):
@@ -78,7 +79,7 @@ class ReadOnlyDatabaseError(RuntimeError):
     """
 
 
-class DatabaseConflictError(RuntimeError):
+class DatabaseConflictError(ConflictingDefinitionError):
     """Exception raised when database content (row values or schema entities)
     are inconsistent with what this client expects.
     """
@@ -810,7 +811,7 @@ class Database(ABC):
                     n, bad, result = check()
                     if n < 1:
                         raise RuntimeError("Insertion in sync did not seem to affect table.  This is a bug.")
-                    elif n > 2:
+                    elif n > 1:
                         raise RuntimeError(f"Keys passed to sync {keys.keys()} do not comprise a "
                                            f"unique constraint for table {table.name}.")
                     elif bad:

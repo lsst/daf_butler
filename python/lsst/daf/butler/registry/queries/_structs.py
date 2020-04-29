@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, List, Set, Union
+from typing import Iterator, List, Optional, Set, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -208,6 +208,33 @@ class QuerySummary:
 
 
 @dataclass
+class DatasetQueryColumns:
+    """A struct containing the columns used to reconstruct `DatasetRef`
+    instances from query results.
+    """
+
+    id: ColumnElement
+    """Column containing the unique integer ID for this dataset.
+    """
+
+    runKey: ColumnElement
+    """Foreign key column to the `~CollectionType.RUN` collection that holds
+    this dataset.
+    """
+
+    rank: Optional[ColumnElement] = None
+    """Column containing the index into the ordered sequence of given
+    collections for the collection in which this dataset was found.
+    """
+
+    def __iter__(self) -> Iterator[ColumnElement]:
+        yield self.id
+        yield self.runKey
+        if self.rank is not None:
+            yield self.rank
+
+
+@dataclass
 class QueryColumns:
     """A struct organizing the columns in an under-construction or currently-
     executing query.
@@ -251,14 +278,10 @@ class QueryColumns:
     in `QuerySummary.spatial`.
     """
 
-    datasets: NamedKeyDict[DatasetType, Tuple[ColumnElement, Optional[ColumnElement]]]
-    """Columns that correspond to the ``dataset_id`` and optionally collection
-    rank for a dataset in the query (`NamedKeyDict` mapping `DatasetType` to
-    `tuple` of `ColumnElement`).
-
-    "Collection rank" here is the index of the collection in which this dataset
-    was found in the list of collections to search; a lower rank corresponds
-    to a collection that appears earlier in the search path.
+    datasets: NamedKeyDict[DatasetType, DatasetQueryColumns]
+    """Columns that can be used to construct `DatasetRef` instances from query
+    results, for each `DatasetType` included in the query
+    (`NamedKeyDict` [ `DatasetType`, `DatasetQueryColumns` ] ).
     """
 
     def getKeyColumn(self, dimension: Dimension) -> ColumnElement:

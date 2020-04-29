@@ -23,6 +23,7 @@ from __future__ import annotations
 
 __all__ = ["DimensionUniverse"]
 
+import math
 import pickle
 from typing import Optional, Iterable, List, Union, TYPE_CHECKING
 
@@ -199,6 +200,15 @@ class DimensionUniverse(DimensionGraph):
             setting the space over which packed integer IDs are unique).
         """
         return self._packers[name](dataId)
+
+    def getEncodeLength(self) -> int:
+        """Return the size (in bytes) of the encoded size of `DimensionGraph`
+        instances in this universe.
+
+        See `DimensionGraph.encode` and `DimensionGraph.decode` for more
+        information.
+        """
+        return math.ceil(len(self.dimensions)/8)
 
     @classmethod
     def _unpickle(cls, version: bytes) -> DimensionUniverse:

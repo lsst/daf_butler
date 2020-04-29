@@ -669,10 +669,10 @@ class ButlerTests(ButlerPutGetTests):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
         metric = makeExampleMetrics()
         dataId = {"instrument": "DummyCam", "visit": 42}
+        # Create and register a DatasetType
+        datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
         with self.assertRaises(TransactionTestError):
             with butler.transaction():
-                # Create and register a DatasetType
-                datasetType = self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
                 # Add needed Dimensions
                 for args in dimensionEntries:
                     butler.registry.insertDimensionData(*args)
@@ -689,13 +689,10 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertGetComponents(butler, ref,
                                          ("summary", "data", "output"), metric)
                 raise TransactionTestError("This should roll back the entire transaction")
-
-        with self.assertRaises(KeyError):
-            butler.registry.getDatasetType(datasetTypeName)
         with self.assertRaises(LookupError):
             butler.registry.expandDataId(dataId)
-        # Should raise KeyError for missing DatasetType
-        with self.assertRaises(KeyError):
+        # Should raise LookupError for missing data ID value
+        with self.assertRaises(LookupError):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
         self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=butler.collections))

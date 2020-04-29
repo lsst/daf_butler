@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from ._config import *
+from ._exceptions import *
 from ._registry import *
 from ._dbAuth import *
 from ._collectionType import *
@@ -28,6 +29,7 @@ from . import wildcards
 from .wildcards import CollectionSearch, DatasetTypeRestriction
 from . import interfaces
 from .interfaces import MissingCollectionError
+from . import simpleQuery
 from . import queries
 
 # Some modules intentionally not imported, either because they are purely

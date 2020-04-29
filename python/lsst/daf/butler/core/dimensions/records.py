@@ -58,10 +58,10 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
 
     For internal use by `DimensionRecord`.
     """
-    from .schema import makeElementTableSpec
+    from .schema import makeDimensionElementTableSpec
     d = {
         "definition": definition,
-        "__slots__": tuple(makeElementTableSpec(definition).fields.names)
+        "__slots__": tuple(makeDimensionElementTableSpec(definition).fields.names)
     }
     if definition.temporal:
         d["timespan"] = property(_makeTimespanFromRecord)

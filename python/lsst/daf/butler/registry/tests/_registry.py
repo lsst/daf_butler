@@ -356,7 +356,7 @@ class RegistryTests(ABC):
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
     def testComponents(self):
-        """Tests for `Registry.attachComponent` and other dataset operations
+        """Tests for `Registry.attachComponents` and other dataset operations
         on composite datasets.
         """
         registry = self.makeRegistry()
@@ -370,8 +370,7 @@ class RegistryTests(ABC):
         parent, = registry.insertDatasets(parentDatasetType, dataIds=[dataId], run=run)
         children = {"image": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
                     "mask": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
-        for name, child in children.items():
-            registry.attachComponent(name, parent, child)
+        parent = registry.attachComponents(parent, children)
         self.assertEqual(parent.components, children)
         outParent = registry.getDataset(parent.id)
         self.assertEqual(outParent.components, children)
@@ -597,43 +596,19 @@ class RegistryTests(ABC):
         registry = self.makeRegistry()
         storageClass = StorageClass("testDatasetType")
         registry.storageClasses.registerStorageClass(storageClass)
-        dimensions = registry.dimensions.extract(("instrument",))
-        dataId = {"instrument": "DummyCam"}
-        datasetTypeA = DatasetType(name="A",
-                                   dimensions=dimensions,
-                                   storageClass=storageClass)
-        datasetTypeB = DatasetType(name="B",
-                                   dimensions=dimensions,
-                                   storageClass=storageClass)
-        datasetTypeC = DatasetType(name="C",
-                                   dimensions=dimensions,
-                                   storageClass=storageClass)
-        run = "test"
-        registry.registerRun(run)
-        refId = None
         with registry.transaction():
-            registry.registerDatasetType(datasetTypeA)
+            registry.insertDimensionData("instrument", {"name": "Cam1", "class_name": "A"})
         with self.assertRaises(ValueError):
             with registry.transaction():
-                registry.registerDatasetType(datasetTypeB)
-                registry.registerDatasetType(datasetTypeC)
-                registry.insertDimensionData("instrument", {"instrument": "DummyCam"})
-                ref, = registry.insertDatasets(datasetTypeA, dataIds=[dataId], run=run)
-                refId = ref.id
+                registry.insertDimensionData("instrument", {"name": "Cam2"})
                 raise ValueError("Oops, something went wrong")
-        # A should exist
-        self.assertEqual(registry.getDatasetType("A"), datasetTypeA)
-        # But B and C should both not exist
-        with self.assertRaises(KeyError):
-            registry.getDatasetType("B")
-        with self.assertRaises(KeyError):
-            registry.getDatasetType("C")
-        # And neither should the dataset
-        self.assertIsNotNone(refId)
-        self.assertIsNone(registry.getDataset(refId))
-        # Or the Dimension entries
+        # Cam1 should exist
+        self.assertEqual(registry.expandDataId(instrument="Cam1").records["instrument"].class_name, "A")
+        # But Cam2 and Cam3 should both not exist
         with self.assertRaises(LookupError):
-            registry.expandDataId({"instrument": "DummyCam"})
+            registry.expandDataId(instrument="Cam2")
+        with self.assertRaises(LookupError):
+            registry.expandDataId(instrument="Cam3")
 
     def testNestedTransaction(self):
         """Test that operations within a transaction block are not rolled back

@@ -26,7 +26,6 @@ from typing import Any, List, Iterable, TYPE_CHECKING
 
 from sqlalchemy.sql import ColumnElement, and_, literal, select, FromClause
 import sqlalchemy.sql
-from sqlalchemy.engine import Connection
 
 from ...core import (
     DimensionElement,
@@ -36,13 +35,14 @@ from ...core import (
 )
 from ...core.utils import NamedKeyDict
 
-from ._structs import QuerySummary, QueryColumns
-from ._datasets import DatasetRegistryStorage
+from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
 from .expressions import ClauseVisitor
 from ._query import Query
+from ..simpleQuery import Select
+from ..wildcards import CollectionSearch, CollectionQuery
 
 if TYPE_CHECKING:
-    from ..interfaces import DimensionRecordStorageManager
+    from ..interfaces import CollectionsManager, DimensionRecordStorageManager, DatasetRecordStorageManager
 
 
 class QueryBuilder:
@@ -51,25 +51,25 @@ class QueryBuilder:
 
     Parameters
     ----------
-    connection : `sqlalchemy.engine.Connection`
-        SQLAlchemy connection object.  This is only used to pass through
-        to the `Query` object returned by `finish`.
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    dimensionStorage : `DimensionRecordStorageManager`
+    collections : `CollectionsManager`
+        Manager object for collection tables.
+    dimensions : `DimensionRecordStorageManager`
         Manager for storage backend objects that abstract access to dimension
         tables.
-    datasetStorage : `DatasetRegistryStorage`
+    datasets : `DatasetRegistryStorage`
         Storage backend object that abstracts access to dataset tables.
     """
 
-    def __init__(self, connection: Connection, summary: QuerySummary,
-                 dimensionStorage: DimensionRecordStorageManager,
-                 datasetStorage: DatasetRegistryStorage):
+    def __init__(self, summary: QuerySummary, *,
+                 collections: CollectionsManager,
+                 dimensions: DimensionRecordStorageManager,
+                 datasets: DatasetRecordStorageManager):
         self.summary = summary
-        self._connection = connection
-        self._dimensionStorage = dimensionStorage
-        self._datasetStorage = datasetStorage
+        self._collections = collections
+        self._dimensions = dimensions
+        self._datasets = datasets
         self._sql = None
         self._elements: NamedKeyDict[DimensionElement, FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
@@ -99,7 +99,7 @@ class QueryBuilder:
             associated with a database table (see `DimensionElement.hasTable`).
         """
         assert element not in self._elements, "Element already included in query."
-        storage = self._dimensionStorage[element]
+        storage = self._dimensions[element]
         fromClause = storage.join(
             self,
             regions=self._columns.regions if element in self.summary.spatial else None,
@@ -121,16 +121,13 @@ class QueryBuilder:
         ----------
         datasetType : `DatasetType`
             The type of datasets to search for.
-        collections : sequence of `str` or `Like`, or ``...``
-            An expression describing the collections in which to search for
-            the datasets.  This may be a single instance of or an iterable of
-            any of the following:
-
-             - a `str` collection name;
-             - a `Like` pattern to match against collection names;
-             - `...`, indicating all collections.
+        collections : `Any`
+            An expression that fully or partially identifies the collections
+            to search for datasets, such as a `str`, `re.Pattern`, or iterable
+            thereof.  `...` can be used to return all collections. See
+            :ref:`daf_butler_collection_expressions` for more information.
         isResult : `bool`, optional
-            If `True` (default), include the ``dataset_id`` column in the
+            If `True` (default), include the dataset ID column in the
             result columns of the query, allowing complete `DatasetRef`
             instances to be produced from the query results for this dataset
             type.  If `False`, the existence of datasets of this type is used
@@ -153,14 +150,35 @@ class QueryBuilder:
             return no results.
         """
         assert datasetType.dimensions.issubset(self.summary.requested)
-        table = self._datasetStorage.getDatasetSubquery(datasetType, collections=collections,
-                                                        isResult=isResult, addRank=addRank)
-        if table is None:
+        if isResult and addRank:
+            collections = CollectionSearch.fromExpression(collections)
+        else:
+            collections = CollectionQuery.fromExpression(collections)
+        datasetRecordStorage = self._datasets.find(datasetType.name)
+        if datasetRecordStorage is None:
+            # Unrecognized dataset type means no results.  It might be better
+            # to raise here, but this is consistent with previous behavior,
+            # which is expected by QuantumGraph generation code in pipe_base.
             return False
-        self.joinTable(table, datasetType.dimensions)
+        subsubqueries = []
+        for rank, collectionRecord in enumerate(collections.iter(self._collections, datasetType=datasetType)):
+            ssq = datasetRecordStorage.select(collection=collectionRecord,
+                                              dataId=Select,
+                                              id=Select if isResult else None,
+                                              run=Select if isResult else None)
+            if addRank:
+                ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
+            subsubqueries.append(ssq.combine())
+        if not subsubqueries:
+            return False
+        subquery = sqlalchemy.sql.union(*subsubqueries).alias(datasetType.name)
+        self.joinTable(subquery, datasetType.dimensions.required)
         if isResult:
-            self._columns.datasets[datasetType] = (table.columns["dataset_id"],
-                                                   table.columns["rank"] if addRank else None)
+            self._columns.datasets[datasetType] = DatasetQueryColumns(
+                id=subquery.columns["id"],
+                runKey=subquery.columns[self._collections.getRunForeignKeyName()],
+                rank=subquery.columns["rank"] if addRank else None
+            )
         return True
 
     def joinTable(self, table: FromClause, dimensions: Iterable[Dimension]):
@@ -323,10 +341,10 @@ class QueryBuilder:
         columns = []
         for dimension in self.summary.requested:
             columns.append(self._columns.getKeyColumn(dimension))
-        for datasetType, columnPair in self._columns.datasets.items():
-            columns.extend(columnPair)
-        for element, column in self._columns.regions.items():
-            columns.append(column)
+        for datasetColumns in self._columns.datasets.values():
+            columns.extend(datasetColumns)
+        for regionColumn in self._columns.regions.values():
+            columns.append(regionColumn)
         self._sql = select(columns).select_from(self._sql)
 
     def finish(self) -> Query:
@@ -349,5 +367,5 @@ class QueryBuilder:
         self._joinMissingDimensionElements()
         self._addSelectClause()
         self._addWhereClause()
-        return Query(summary=self.summary, connection=self._connection,
-                     sql=self._sql, columns=self._columns)
+        return Query(summary=self.summary, sql=self._sql, columns=self._columns,
+                     collections=self._collections)

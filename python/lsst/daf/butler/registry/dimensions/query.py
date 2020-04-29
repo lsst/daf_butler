@@ -26,8 +26,14 @@ from typing import Optional
 
 import sqlalchemy
 
-from ...core import DataCoordinate, Dimension, DimensionElement, DimensionRecord, Timespan
-from ...core.dimensions.schema import makeElementTableSpec
+from ...core import (
+    DataCoordinate,
+    Dimension,
+    DimensionElement,
+    DimensionRecord,
+    makeDimensionElementTableSpec,
+    Timespan,
+)
 from ...core.utils import NamedKeyDict
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
@@ -53,7 +59,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         self._db = db
         self._element = element
         self._target = element.universe[element.viewOf]
-        self._targetSpec = makeElementTableSpec(self._target)
+        self._targetSpec = makeDimensionElementTableSpec(self._target)
         self._query = None  # Constructed on first use.
         if element not in self._target.graph.dimensions:
             raise NotImplementedError("Query-backed dimension must be a dependency of its target.")

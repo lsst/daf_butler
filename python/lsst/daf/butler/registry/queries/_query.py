@@ -26,7 +26,7 @@ import itertools
 from typing import Optional, Tuple, Callable
 
 from sqlalchemy.sql import FromClause
-from sqlalchemy.engine import RowProxy, ResultProxy, Connection
+from sqlalchemy.engine import RowProxy
 
 from lsst.sphgeom import Region
 
@@ -36,6 +36,7 @@ from ...core import (
     DatasetType,
     DimensionGraph,
 )
+from ..interfaces import CollectionManager
 from ._structs import QuerySummary, QueryColumns
 
 
@@ -50,8 +51,6 @@ class Query:
 
     Parameters
     ----------
-    connection: `sqlalchemy.engine.Connection`
-        Connection used to execute the query.
     sql : `sqlalchemy.sql.FromClause`
         A complete SELECT query, including at least SELECT, FROM, and WHERE
         clauses.
@@ -59,6 +58,8 @@ class Query:
         Struct that organizes the dimensions involved in the query.
     columns : `QueryColumns`
         Columns that are referenced in the query in any clause.
+    collections : `CollectionsManager`,
+        Manager object for collection tables.
 
     Notes
     -----
@@ -71,12 +72,14 @@ class Query:
     SQLAlchemy here in the future would be to reduce computational overheads.
     """
 
-    def __init__(self, *, connection: Connection, sql: FromClause,
-                 summary: QuerySummary, columns: QueryColumns):
+    def __init__(self, *, sql: FromClause,
+                 summary: QuerySummary,
+                 columns: QueryColumns,
+                 collections: CollectionManager):
         self.summary = summary
         self.sql = sql
         self._columns = columns
-        self._connection = connection
+        self._collections = collections
 
     def predicate(self, region: Optional[Region] = None) -> Callable[[RowProxy], bool]:
         """Return a callable that can perform extra Python-side filtering of
@@ -162,17 +165,7 @@ class Query:
         """
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetType.dimensions)
-        datasetIdColumn, datasetRankColumn = self._columns.datasets[datasetType]
-        return (DatasetRef(datasetType, dataId, id=row[datasetIdColumn]),
-                row[datasetRankColumn] if datasetRankColumn is not None else None)
-
-    def execute(self) -> ResultProxy:
-        """Execute the query.
-
-        Returns
-        -------
-        results : `sqlalchemy.engine.ResultProxy`
-            Object representing the query results; see SQLAlchemy documentation
-            for more information.
-        """
-        return self._connection.execute(self.sql)
+        datasetColumns = self._columns.datasets[datasetType]
+        runRecord = self._collections[row[datasetColumns.runKey]]
+        return (DatasetRef(datasetType, dataId, id=row[datasetColumns.id], run=runRecord.name),
+                row[datasetColumns.rank] if datasetColumns.rank is not None else None)

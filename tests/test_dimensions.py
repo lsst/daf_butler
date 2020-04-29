@@ -25,8 +25,7 @@ import pickle
 import itertools
 
 from lsst.daf.butler.core.utils import NamedKeyDict, NamedValueSet
-from lsst.daf.butler.core.dimensions import DimensionUniverse, DimensionGraph, Dimension
-from lsst.daf.butler.core.dimensions.schema import makeElementTableSpec
+from lsst.daf.butler import Dimension, DimensionGraph, DimensionUniverse, makeDimensionElementTableSpec
 
 
 class DimensionTestCase(unittest.TestCase):
@@ -76,6 +75,10 @@ class DimensionTestCase(unittest.TestCase):
                 if element in graph.implied:
                     self.assertTrue(any(element in s.implied for s in seen))
         self.assertCountEqual(seen, graph.elements)
+        # Test encoding and decoding of DimensionGraphs to bytes.
+        encoded = graph.encode()
+        self.assertEqual(len(encoded), self.universe.getEncodeLength())
+        self.assertEqual(DimensionGraph.decode(encoded, universe=self.universe), graph)
 
     def testConfigRead(self):
         self.assertEqual(self.universe.dimensions.names,
@@ -144,7 +147,7 @@ class DimensionTestCase(unittest.TestCase):
         tableSpecs = NamedKeyDict({})
         for element in self.universe.elements:
             if element.hasTable and element.viewOf is None:
-                tableSpecs[element] = makeElementTableSpec(element)
+                tableSpecs[element] = makeDimensionElementTableSpec(element)
         for element, tableSpec in tableSpecs.items():
             for dep in element.required:
                 with self.subTest(element=element.name, dep=dep.name):
