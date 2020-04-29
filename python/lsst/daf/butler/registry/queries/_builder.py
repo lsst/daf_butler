@@ -171,7 +171,7 @@ class QueryBuilder:
             subsubqueries.append(ssq.combine())
         if not subsubqueries:
             return False
-        subquery = sqlalchemy.sql.union(*subsubqueries).alias(datasetType.name)
+        subquery = sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)
         self.joinTable(subquery, datasetType.dimensions.required)
         if isResult:
             self._columns.datasets[datasetType] = DatasetQueryColumns(
