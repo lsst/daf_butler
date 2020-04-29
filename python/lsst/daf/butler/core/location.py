@@ -274,9 +274,7 @@ class ButlerURI:
         always done regardless of the ``forceAbsolute`` parameter.
 
         AWS S3 differentiates between keys with trailing POSIX separators (i.e
-        `/dir` and `/dir/`) whereas POSIX does not neccessarily. This must be
-        tracked manually if network location is to be treated interchangeably
-        with POSIX paths.
+        `/dir` and `/dir/`) whereas POSIX does not neccessarily.
 
         Scheme-less paths are normalized.
         """
@@ -358,7 +356,7 @@ class ButlerURI:
                 parsed = parsed._replace(path=parsed.path+posixpath.sep)
 
         if dirLike is None:
-            raise RuntimeError("ButlerURI.dirLike attribute not set succesfully.")
+            raise RuntimeError("ButlerURI.dirLike attribute not set successfully.")
 
         return parsed, dirLike
 
