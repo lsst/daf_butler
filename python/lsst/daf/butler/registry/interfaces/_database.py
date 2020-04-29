@@ -581,6 +581,13 @@ class Database(ABC):
             )
             for columns in spec.indexes
         )
+        args.extend(
+            sqlalchemy.schema.Index(
+                self.shrinkDatabaseEntityName("_".join((name, "fkidx") + fk.source)),
+                *fk.source,
+            )
+            for fk in spec.foreignKeys if fk.addIndex
+        )
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 
