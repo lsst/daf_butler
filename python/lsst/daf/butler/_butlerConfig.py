@@ -102,7 +102,12 @@ class ButlerConfig(Config):
 
         configFile = butlerConfig.configFile
         if configFile is not None:
-            self.configDir = os.path.dirname(os.path.abspath(configFile))
+            uri = ButlerURI(configFile)
+            if uri.scheme == "s3":
+                uri.updateFile("")
+                self.configDir = uri.geturl()
+            else:
+                self.configDir = os.path.dirname(os.path.abspath(configFile))
 
         # A Butler config contains defaults defined by each of the component
         # configuration classes. We ask each of them to apply defaults to
