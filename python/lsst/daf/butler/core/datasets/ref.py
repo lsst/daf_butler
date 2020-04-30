@@ -71,6 +71,10 @@ class DatasetRef:
         not be created in new code, but are still supported for backwards
         compatibility.  New code should only pass `False` if it can guarantee
         that the dimensions are already consistent.
+    hasParentId : `bool`, optional
+        If `True` this `DatasetRef` is a component that has the ``id``
+        of the composite parent.  This is set if the registry does not
+        know about individual components but does know about the composite.
 
     Raises
     ------
@@ -80,16 +84,18 @@ class DatasetRef:
         ``id`` is provided but ``run`` is not.
     """
 
-    __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components")
+    __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components", "hasParentId")
 
     def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, *,
                 id: Optional[int] = None,
                 run: Optional[str] = None, hash: Optional[bytes] = None,
-                components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True) -> DatasetRef:
+                components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True,
+                hasParentId: bool = False) -> DatasetRef:
         self = super().__new__(cls)
         assert isinstance(datasetType, DatasetType)
         self.id = id
         self.datasetType = datasetType
+        self.hasParentId = hasParentId
         if conform:
             self.dataId = DataCoordinate.standardize(dataId, graph=datasetType.dimensions)
         else:

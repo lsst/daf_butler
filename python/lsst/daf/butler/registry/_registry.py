@@ -591,7 +591,7 @@ class Registry:
             if parentRef is not None:
                 # Should already conform and we know no components
                 return DatasetRef(storage.datasetType, parentRef.dataId, id=parentRef.id,
-                                  run=parentRef.run, conform=False)
+                                  run=parentRef.run, conform=False, hasParentId=True)
 
         return None
 

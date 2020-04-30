@@ -254,21 +254,24 @@ class ButlerPutGetTests:
         self.assertEqual(metric.output, sliced.output)
         self.assertEqual(metric.data[:stop], sliced.data)
 
-        if storageClass.isComposite() and ref.components:
-            # Delete one component and check that the other components
-            # can still be retrieved
+        if storageClass.isComposite():
+            # Check that components can be retrieved
+            # ref.components will only be populated in certain cases
             metricOut = butler.get(ref.datasetType.name, dataId)
             compNameS = DatasetType.nameWithComponent(datasetTypeName, "summary")
             compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
             summary = butler.get(compNameS, dataId)
             self.assertEqual(summary, metric.summary)
-            self.assertTrue(butler.datastore.exists(ref.components["summary"]))
-
-            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            self.assertEqual(compRef, ref.components["summary"])
-            self.assertTrue(butler.datastore.exists(ref.components["data"]))
             data = butler.get(compNameD, dataId)
             self.assertEqual(data, metric.data)
+
+            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
+            if ref.components:
+                self.assertTrue(butler.datastore.exists(ref.components["summary"]))
+                self.assertEqual(compRef, ref.components["summary"])
+                self.assertTrue(butler.datastore.exists(ref.components["data"]))
+            else:
+                self.assertTrue(compRef.hasParentId)
 
         # Create a Dataset type that has the same name but is inconsistent.
         inconsistentDatasetType = DatasetType(datasetTypeName, dimensions,
