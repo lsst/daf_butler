@@ -1,8 +1,4 @@
-setupRequired(astropy)
 setupRequired(sphgeom)
-setupRequired(sqlalchemy)
-setupRequired(numpy)
-setupRequired(scons)
 setupRequired(sconsUtils)
 setupRequired(utils)
 setupRequired(astro_metadata_translator)
