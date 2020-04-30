@@ -832,6 +832,15 @@ class FileLikeDatastoreButlerTests(ButlerTests):
     def testImportExport(self):
         # Run put/get tests just to create and populate a repo.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        self.runImportExportTest(storageClass)
+
+    @unittest.expectedFailure
+    def testImportExportVirtualComposite(self):
+        # Run put/get tests just to create and populate a repo.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
+        self.runImportExportTest(storageClass)
+
+    def runImportExportTest(self, storageClass):
         exportButler = self.runPutGetTest(storageClass, "test_metric")
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))

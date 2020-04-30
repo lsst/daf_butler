@@ -331,9 +331,13 @@ class PosixDatastore(FileLikeDatastore):
                directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         for ref in refs:
-            location, storedFileInfo = self._get_dataset_location_info(ref)
-            if location is None:
+            fileLocations = self._get_dataset_locations_info(ref)
+            if not fileLocations:
                 raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            # For now we can not export disassembled datasets
+            if len(fileLocations) > 1:
+                raise NotImplementedError(f"Can not export disassembled datasets such as {ref}")
+            location, storedFileInfo = fileLocations[0]
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)
