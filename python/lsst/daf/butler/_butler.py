@@ -644,15 +644,17 @@ class Butler:
                 raise TypeError(f"Cannot associate into collection '{tag}' of non-TAGGED type "
                                 f"{collectionType.name}.")
 
-        isVirtualComposite = self._composites.shouldBeDisassembled(datasetType)
-
+        # Disable all disassembly at the registry level for now
         isVirtualComposite = False
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId],
-                                            producer=producer, recursive=False)  # not isVirtualComposite)
+                                            producer=producer,
+                                            # Never write components into
+                                            # registry
+                                            recursive=False)
 
         # Check to see if this datasetType requires disassembly
         if isVirtualComposite:
