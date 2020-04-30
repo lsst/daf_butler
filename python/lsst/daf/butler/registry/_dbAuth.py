@@ -75,7 +75,7 @@ class DbAuth:
         else:
             secretPath = os.path.expanduser(path)
         if not os.path.isfile(secretPath):
-            raise DbAuthError("No DbAuth configuration file: " + secretPath)
+            raise DbAuthNotFoundError(f"No DbAuth configuration file: {secretPath}")
         mode = os.stat(secretPath).st_mode
         if mode & (stat.S_IRWXG | stat.S_IRWXO) != 0:
             raise DbAuthPermissionsError(
@@ -83,8 +83,6 @@ class DbAuth:
                 "{:o}".format(secretPath, mode))
 
         try:
-            if not os.path.isfile(secretPath):
-                raise DbAuthNotFoundError(f"DbAuth file not found: {secretPath}")
             with open(secretPath) as secretFile:
                 self.authList = yaml.safe_load(secretFile)
         except Exception as exc:

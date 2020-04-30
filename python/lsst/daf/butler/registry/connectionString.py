@@ -96,9 +96,6 @@ class ConnectionStringFactory:
         except DbAuthNotFoundError:
             # credentials file doesn't exist or no matches were found
             pass
-        except Exception:
-            # re-raise everything else
-            raise
         else:
             # only assign auth when *no* errors were raised, otherwise assume
             # connection string was correct
