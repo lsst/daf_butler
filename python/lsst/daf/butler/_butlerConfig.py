@@ -26,7 +26,6 @@ Configuration classes specific to the Butler
 __all__ = ("ButlerConfig",)
 
 import os.path
-import posixpath
 
 from .core import (
     ButlerURI,
@@ -86,9 +85,9 @@ class ButlerConfig(Config):
                 if os.path.isdir(uri.ospath):
                     other = os.path.join(uri.ospath, "butler.yaml")
             elif uri.scheme == "s3":
-                head, filename = posixpath.split(uri.path)
-                if "." not in filename:
-                    uri.updateFile("butler.yaml")
+                if not uri.dirLike and "." not in uri.basename():
+                    uri = ButlerURI(other, forceDirectory=True)
+                uri.updateFile("butler.yaml")
                 other = uri.geturl()
             else:
                 raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")

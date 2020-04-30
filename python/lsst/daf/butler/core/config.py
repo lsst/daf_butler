@@ -32,7 +32,6 @@ import yaml
 import sys
 from yaml.representer import Representer
 import io
-import posixpath
 from typing import Sequence, Optional, ClassVar
 
 try:
@@ -807,9 +806,9 @@ class Config(collections.abc.MutableMapping):
                 uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
             self.dumpToFile(uri.ospath, overwrite=overwrite)
         elif uri.scheme == "s3":
-            head, filename = posixpath.split(uri.path)
-            if "." not in filename:
-                uri.updateFile(defaultFileName)
+            if not uri.dirLike and "." not in uri.basename():
+                uri = ButlerURI(uri.geturl(), forceDirectory=True)
+            uri.updateFile(defaultFileName)
             self.dumpToS3File(uri, overwrite=overwrite)
         else:
             raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")

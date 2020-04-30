@@ -339,8 +339,8 @@ class Butler:
             if not bucketExists(uri.netloc):
                 raise ValueError(f"Bucket {uri.netloc} does not exist!")
             s3 = boto3.client("s3")
-            # don't create root Key if root is at top-level of an Bucket
-            if uri.relativeToPathRoot != ".":
+            # don't create S3 key when root is at the top-level of an Bucket
+            if not uri.path != "/":
                 s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")

@@ -167,6 +167,41 @@ class LocationTestCase(unittest.TestCase):
             with self.subTest(path=p):
                 self.assertEqual(os2posix(posix2os(p)), p)
 
+    def testSplit(self):
+        """Tests split functionality."""
+        testRoot = "/tmp/"
+
+        testPaths = ("/absolute/file.ext", "/absolute/",
+                     "file:///absolute/file.ext", "file:///absolute/",
+                     "s3://bucket/root/file.ext", "s3://bucket/root/",
+                     "relative/file.ext", "relative/")
+
+        osRelExpected = os.path.join(testRoot, "relative")
+        expected = (("file:///absolute", "file.ext"), ("file:///absolute", ""),
+                    ("file:///absolute", "file.ext"), ("file:///absolute", ""),
+                    ("s3://bucket/root", "file.ext"), ("s3://bucket/root", ""),
+                    (osRelExpected, "file.ext"), (osRelExpected, ""))
+
+        for p, e in zip(testPaths, expected):
+            with self.subTest(path=p):
+                uri = ButlerURI(p, testRoot)
+                self.assertEqual(uri.split(), e)
+
+        # explicit file scheme should force posixpath, check os.path is ignored
+        posixRelFilePath = posixpath.join(testRoot, "relative")
+        uri = ButlerURI("file:relative/file.ext", testRoot)
+        self.assertEqual(uri.split(), (f"file://{posixRelFilePath}", "file.ext"))
+
+        # check head can be empty
+        uri = ButlerURI("file.ext", forceAbsolute=False)
+        self.assertEqual(uri.split(), ("", "file.ext"))
+
+        # ensure empty path is not a problem and conforms to os.path.split
+        uri = ButlerURI("", forceAbsolute=False)
+        self.assertEqual(uri.split(), (".", ""))
+        uri = ButlerURI(".", forceAbsolute=False)
+        self.assertEqual(uri.split(), ("", "."))
+
 
 if __name__ == "__main__":
     unittest.main()

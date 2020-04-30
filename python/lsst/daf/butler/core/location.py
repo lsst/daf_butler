@@ -196,6 +196,43 @@ class ButlerURI:
         """
         return self._uri.geturl()
 
+    def split(self):
+        """Splits URI into head and tail. Either head or tail can be empty.
+        Equivalent to os.path.split where head preserves the scheme and netloc.
+
+        Returns
+        -------
+        head: `str`
+            Everything leading up to tail. Trailing slashes are stripped from
+            the head. If `self.path` contains no slashes will be empty.
+        tail : `str`
+            Last `self.path` component. Tail will be empty if path ends on a
+            separator. Tail will never contain separators.
+        """
+        if self.scheme:
+            head, tail = posixpath.split(self.path)
+            return f"{self.scheme}://{self.netloc}{head}", tail
+        else:
+            return os.path.split(self.path)
+
+    def basename(self):
+        """Returns the base name, last element of path, of the URI. If URI ends
+        on a slash returns an empty string. This is the second element returned
+        by split().
+
+        Equivalent of os.path.basename().
+        """
+        return self.split()[1]
+
+    def dirname(self):
+        """Returns the directory name of URI, everything up to the last element
+        of path.
+
+        Equivalent of os.path.dirname except trailing slashes are preserved for
+        URIs with known schemes.
+        """
+        return self.split()[0]
+
     def replace(self, **kwargs):
         """Replace components in a URI with new values and return a new
         instance.
@@ -305,6 +342,9 @@ class ButlerURI:
                     # No change needed for relative local path staying relative
                     # except normalization
                     replacements["path"] = os.path.normpath(expandedPath)
+                    # normalization of empty path returns "." so we are dirLike
+                    if expandedPath == "":
+                        dirLike = True
 
                 # normpath strips trailing "/" which makes it hard to keep
                 # track of directory vs file when calling replaceFile
@@ -317,10 +357,10 @@ class ButlerURI:
                 # add the trailing separator only if explicitly required or
                 # if it was stripped by normpath. Acknowledge that trailing
                 # separator exists.
-                if forceDirectory or (expandedPath.endswith(os.sep) and not
-                                      replacements["path"].endswith(sep)):
-                    replacements["path"] += sep
+                endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep)
+                if (forceDirectory or endsOnSep or dirLike):
                     dirLike = True
+                    replacements["path"] += sep
 
             elif parsed.scheme == "file":
                 # file URI implies POSIX path separators so split as POSIX,
