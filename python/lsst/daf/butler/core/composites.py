@@ -62,7 +62,7 @@ class CompositesMap:
     """
 
     def __init__(self, config, *, universe):
-        if not isinstance(config, type(self)):
+        if not isinstance(config, CompositesConfig):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)
         self.config = config

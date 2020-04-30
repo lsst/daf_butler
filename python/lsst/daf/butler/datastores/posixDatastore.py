@@ -29,15 +29,11 @@ import hashlib
 import logging
 import os
 import shutil
-from typing import TYPE_CHECKING, Iterable, Optional, Type
+from typing import Iterable, Optional, Type
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
-from lsst.daf.butler.core.utils import transactional
-from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, Formatter
-
-if TYPE_CHECKING:
-    from lsst.daf.butler import DatasetRef
+from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, Formatter, DatasetRef
 
 log = logging.getLogger(__name__)
 
@@ -112,32 +108,7 @@ class PosixDatastore(FileLikeDatastore):
         """
         os.remove(location.path)
 
-    def get(self, ref, parameters=None):
-        """Load an InMemoryDataset from the store.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
-        parameters : `dict`
-            `StorageClass`-specific parameters that specify, for example,
-            a slice of the dataset to be loaded.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            Requested dataset or slice thereof as an InMemoryDataset.
-
-        Raises
-        ------
-        FileNotFoundError
-            Requested dataset can not be retrieved.
-        TypeError
-            Return value from formatter has unexpected type.
-        ValueError
-            Formatter failed to process the dataset.
-        """
-        getInfo = self._prepare_for_get(ref, parameters)
+    def _read_artifact_into_memory(self, getInfo, ref, isComponent=False):
         location = getInfo.location
 
         # Too expensive to recalculate the checksum on fetch
@@ -155,40 +126,17 @@ class PosixDatastore(FileLikeDatastore):
 
         formatter = getInfo.formatter
         try:
-            result = formatter.read(component=getInfo.component)
+            result = formatter.read(component=getInfo.component if isComponent else None)
         except Exception as e:
             raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                              f" ({ref.datasetType.name} from {location.path}): {e}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
-                                      isComponent=getInfo.component is not None)
+                                      isComponent=isComponent)
 
-    @transactional
-    def put(self, inMemoryDataset, ref):
-        """Write a InMemoryDataset with a given `DatasetRef` to the store.
+    def _write_in_memory_to_artifact(self, inMemoryDataset, ref):
+        # Inherit docstring
 
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            The dataset to store.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-
-        Raises
-        ------
-        TypeError
-            Supplied object and storage class are inconsistent.
-        DatasetTypeNotSupportedError
-            The associated `DatasetType` is not handled by this datastore.
-
-        Notes
-        -----
-        If the datastore is configured to reject certain dataset types it
-        is possible that the put will fail and raise a
-        `DatasetTypeNotSupportedError`.  The main use case for this is to
-        allow `ChainedDatastore` to put to multiple datastores without
-        requiring that every datastore accepts the dataset.
-        """
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
         storageDir = os.path.dirname(location.path)
@@ -230,8 +178,7 @@ class PosixDatastore(FileLikeDatastore):
 
         assert predictedFullPath == os.path.join(self.root, path)
 
-        info = self._extractIngestInfo(path, ref, formatter=formatter)
-        self._register_datasets([(ref, info)])
+        return self._extractIngestInfo(path, ref, formatter=formatter)
 
     def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> str:
         # Docstring inherited from base class
@@ -347,6 +294,7 @@ class PosixDatastore(FileLikeDatastore):
         stat = os.stat(fullPath)
         size = stat.st_size
         return StoredFileInfo(formatter=formatter, path=path, storageClass=ref.datasetType.storageClass,
+                              component=ref.datasetType.component(),
                               file_size=size, checksum=checksum)
 
     @staticmethod
@@ -383,9 +331,13 @@ class PosixDatastore(FileLikeDatastore):
                directory: Optional[str] = None, transfer: Optional[str] = None) -> Iterable[FileDataset]:
         # Docstring inherited from Datastore.export.
         for ref in refs:
-            location, storedFileInfo = self._get_dataset_location_info(ref)
-            if location is None:
+            fileLocations = self._get_dataset_locations_info(ref)
+            if not fileLocations:
                 raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
+            # For now we can not export disassembled datasets
+            if len(fileLocations) > 1:
+                raise NotImplementedError(f"Can not export disassembled datasets such as {ref}")
+            location, storedFileInfo = fileLocations[0]
             if transfer is None:
                 # TODO: do we also need to return the readStorageClass somehow?
                 yield FileDataset(refs=[ref], path=location.pathInStore, formatter=storedFileInfo.formatter)

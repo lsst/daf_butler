@@ -531,7 +531,9 @@ class Registry:
         """Find a dataset given its `DatasetType` and data ID.
 
         This can be used to obtain a `DatasetRef` that permits the dataset to
-        be read from a `Datastore`.
+        be read from a `Datastore`. If the dataset is a component and can not
+        be found using the provided dataset type, a dataset ref for the parent
+        will be returned instead but with the correct dataset type.
 
         Parameters
         ----------
@@ -581,6 +583,16 @@ class Registry:
                 if result.datasetType.isComposite():
                     result = self._datasets.fetchComponents(result)
                 return result
+
+        # fallback to the parent if we got nothing and this was a component
+        if storage.datasetType.isComponent():
+            parentType, _ = storage.datasetType.nameAndComponent()
+            parentRef = self.findDataset(parentType, dataId, collections=collections, **kwargs)
+            if parentRef is not None:
+                # Should already conform and we know no components
+                return DatasetRef(storage.datasetType, parentRef.dataId, id=parentRef.id,
+                                  run=parentRef.run, conform=False, hasParentId=True)
+
         return None
 
     @transactional

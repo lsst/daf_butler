@@ -77,8 +77,8 @@ class Suite(unittest.TestCase):
             result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--subset", "datastore"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             cfg = yaml.safe_load(result.stdout)
-            # the datastore cfg is expected to have exactly six keys:
-            self.assertIs(len(cfg.keys()), 6)
+            # count the keys in the datastore config
+            self.assertIs(len(cfg), 7)
             self.assertIn("cls", cfg)
             self.assertIn("create", cfg)
             self.assertIn("formatters", cfg)

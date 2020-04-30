@@ -215,7 +215,7 @@ class ButlerPutGetTests:
                 with self.assertRaises(LookupError):
                     butler.datasetExists(*args)
                 # Now getDirect() should fail, too.
-                with self.assertRaises(FileNotFoundError):
+                with self.assertRaises(FileNotFoundError, msg=f"Checking ref {ref} not found"):
                     butler.getDirect(ref)
                 # Registry still knows about it, if we use the dataset_id.
                 self.assertEqual(butler.registry.getDataset(ref.id), ref)
@@ -255,23 +255,23 @@ class ButlerPutGetTests:
         self.assertEqual(metric.data[:stop], sliced.data)
 
         if storageClass.isComposite():
-            # Delete one component and check that the other components
-            # can still be retrieved
+            # Check that components can be retrieved
+            # ref.components will only be populated in certain cases
             metricOut = butler.get(ref.datasetType.name, dataId)
             compNameS = DatasetType.nameWithComponent(datasetTypeName, "summary")
             compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
             summary = butler.get(compNameS, dataId)
             self.assertEqual(summary, metric.summary)
-            self.assertTrue(butler.datastore.exists(ref.components["summary"]))
-
-            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            butler.pruneDatasets([compRef], unstore=True)
-            with self.assertRaises(LookupError):
-                butler.datasetExists(compNameS, dataId)
-            self.assertFalse(butler.datastore.exists(ref.components["summary"]))
-            self.assertTrue(butler.datastore.exists(ref.components["data"]))
             data = butler.get(compNameD, dataId)
             self.assertEqual(data, metric.data)
+
+            compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
+            if ref.components:
+                self.assertTrue(butler.datastore.exists(ref.components["summary"]))
+                self.assertEqual(compRef, ref.components["summary"])
+                self.assertTrue(butler.datastore.exists(ref.components["data"]))
+            else:
+                self.assertTrue(compRef.hasParentId)
 
         # Create a Dataset type that has the same name but is inconsistent.
         inconsistentDatasetType = DatasetType(datasetTypeName, dimensions,
@@ -689,15 +689,15 @@ class ButlerTests(ButlerPutGetTests):
                 self.assertGetComponents(butler, ref,
                                          ("summary", "data", "output"), metric)
                 raise TransactionTestError("This should roll back the entire transaction")
-        with self.assertRaises(LookupError):
+        with self.assertRaises(LookupError, msg=f"Check can't expand DataId {dataId}"):
             butler.registry.expandDataId(dataId)
         # Should raise LookupError for missing data ID value
-        with self.assertRaises(LookupError):
+        with self.assertRaises(LookupError, msg=f"Check can't get by {datasetTypeName} and {dataId}"):
             butler.get(datasetTypeName, dataId)
         # Also check explicitly if Dataset entry is missing
         self.assertIsNone(butler.registry.findDataset(datasetType, dataId, collections=butler.collections))
         # Direct retrieval should not find the file in the Datastore
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises(FileNotFoundError, msg=f"Check {ref} can't be retrieved directly"):
             butler.getDirect(ref)
 
     def testMakeRepo(self):
@@ -835,6 +835,15 @@ class FileLikeDatastoreButlerTests(ButlerTests):
     def testImportExport(self):
         # Run put/get tests just to create and populate a repo.
         storageClass = self.storageClassFactory.getStorageClass("StructuredDataNoComponents")
+        self.runImportExportTest(storageClass)
+
+    @unittest.expectedFailure
+    def testImportExportVirtualComposite(self):
+        # Run put/get tests just to create and populate a repo.
+        storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
+        self.runImportExportTest(storageClass)
+
+    def runImportExportTest(self, storageClass):
         exportButler = self.runPutGetTest(storageClass, "test_metric")
         # Test that the repo actually has at least one dataset.
         datasets = list(exportButler.registry.queryDatasets(..., collections=...))

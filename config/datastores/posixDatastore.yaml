@@ -10,3 +10,4 @@ datastore:
     # Gen2 has.
     default: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{label:?}/{abstract_filter:?}/{subfilter:?}/{physical_filter:?}/{visit:?}/{datasetType}_{component:?}_{tract:?}_{patch:?}_{label:?}_{abstract_filter:?}_{physical_filter:?}_{calibration_label:?}_{visit:?}_{exposure:?}_{detector:?}_{instrument:?}_{skymap:?}_{skypix:?}_{run}"
   formatters: !include formatters.yaml
+  composites: !include ../composites.yaml

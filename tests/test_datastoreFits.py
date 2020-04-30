@@ -191,8 +191,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
                                  ("transmissionCurve", True),
                                  ("metadata", False)):
             with self.subTest(component=compName):
-                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
-                                              storageClass.components[compName], dataId, id=ref.id)
+                compRef = ref.components[compName]
                 component = datastore.get(compRef)
                 if isNone:
                     self.assertIsNone(component)
@@ -200,9 +199,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
                     self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
 
         # Get the WCS component to check it
-        wcsRef = self.makeDatasetRef(ref.datasetType.componentTypeName("wcs"), dimensions,
-                                     storageClass.components["wcs"], dataId, id=ref.id)
-        wcs = datastore.get(wcsRef)
+        wcs = datastore.get(ref.components["wcs"])
 
         # Simple check of WCS
         bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
@@ -210,9 +207,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
 
         # Check basic metadata
-        metadataRef = self.makeDatasetRef(ref.datasetType.componentTypeName("metadata"), dimensions,
-                                          storageClass.components["metadata"], dataId, id=ref.id)
-        metadata = datastore.get(metadataRef)
+        metadata = datastore.get(ref.components["metadata"])
         self.assertEqual(metadata["WCS_ID"], 3)
 
     def testExposureCompositePutGet(self):
@@ -231,15 +226,17 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         self.assertTrue(uri.endswith("#predicted"))
 
         components = storageClass.assembler().disassemble(exposure)
-        self.assertTrue(components)
+        self.assertEqual(set(components),
+                         {"wcs", "variance", "visitInfo", "image", "mask", "coaddInputs", "psf",
+                          "metadata", "photoCalib"})
 
         # Get a component
         compsRead = {}
-        for compName in ("wcs", "image", "mask", "coaddInputs", "psf"):
+        for compName, datasetComponent in components.items():
             compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(compName), dimensions,
-                                          components[compName].storageClass, dataId)
+                                          datasetComponent.storageClass, dataId)
 
-            datastore.put(components[compName].component, compRef)
+            datastore.put(datasetComponent.component, compRef)
 
             # Does it exist?
             self.assertTrue(datastore.exists(compRef))

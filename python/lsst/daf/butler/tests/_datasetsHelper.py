@@ -71,13 +71,27 @@ class DatasetTestHelper:
     def makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None,
                        conform=True):
         """Make a DatasetType and wrap it in a DatasetRef for a test"""
+        compRefs = {}
+        for compName, sc in storageClass.components.items():
+            compRefs[compName] = self._makeDatasetRef(DatasetType.nameWithComponent(datasetTypeName,
+                                                                                    compName),
+                                                      dimensions, sc, dataId, id=None, run=run,
+                                                      conform=conform)
+
+        print(compRefs)
+        return self._makeDatasetRef(datasetTypeName, dimensions, storageClass, dataId, id=id, run=run,
+                                    conform=conform, components=compRefs)
+
+    def _makeDatasetRef(self, datasetTypeName, dimensions, storageClass, dataId, *, id=None, run=None,
+                        conform=True, components=None):
+        # helper for makeDatasetRef
         datasetType = DatasetType(datasetTypeName, dimensions, storageClass)
         if id is None:
             self.id += 1
             id = self.id
         if run is None:
             run = "dummy"
-        return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform)
+        return DatasetRef(datasetType, dataId, id=id, run=run, conform=conform, components=components)
 
 
 class DatastoreTestHelper:

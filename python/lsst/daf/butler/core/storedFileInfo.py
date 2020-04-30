@@ -42,7 +42,8 @@ class StoredDatastoreItemInfo:
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a file stored in a Datastore.
     """
-    __slots__ = {"formatter", "path", "storageClass", "checksum", "file_size"}
+    __slots__ = {"formatter", "path", "storageClass", "component",
+                 "checksum", "file_size"}
 
     formatter: str
     """Fully-qualified name of Formatter."""
@@ -52,6 +53,10 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     storageClass: StorageClass
     """StorageClass associated with Dataset."""
+
+    component: Optional[str]
+    """Component associated with this file. Can be None if the file does
+    not refer to a component of a composite."""
 
     checksum: Optional[str]
     """Checksum of the serialized dataset."""

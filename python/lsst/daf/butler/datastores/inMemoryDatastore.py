@@ -153,6 +153,10 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         return self.records[ref.id]
 
+    def getStoredItemsInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore.
+        return [self.getStoredItemInfo(ref)]
+
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore.
         # If a component has been removed previously then we can sometimes
@@ -359,7 +363,8 @@ class InMemoryDatastore(GenericBaseDatastore):
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
             name = "{}#predicted".format(ref.datasetType.name)
         else:
-            name = '{}'.format(id(self.datasets[ref.id]))
+            realID, _ = self._get_dataset_info(ref)
+            name = '{}'.format(id(self.datasets[realID]))
 
         return "mem://{}".format(name)
 

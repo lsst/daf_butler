@@ -63,13 +63,33 @@ class GenericBaseDatastore(Datastore):
 
         Returns
         -------
-        info : `StoredFilenfo`
+        info : `StoredDatastoreItemInfo`
             Stored information about this file and its formatter.
 
         Raises
         ------
         KeyError
             Dataset with that id can not be found.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def getStoredItemsInfo(self, ref):
+        """Retrieve information associated with files stored in this
+        `Datastore` associated with this dataset ref.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            The dataset that is to be queried.
+
+        Returns
+        -------
+        items : `list` [`StoredDatastoreItemInfo`]
+            Stored information about the files and associated formatters
+            associated with this dataset. Only one file will be returned
+            if the dataset has not been disassembled. Can return an empty
+            list if no matching datasets can be found.
         """
         raise NotImplementedError()
 
@@ -90,7 +110,8 @@ class GenericBaseDatastore(Datastore):
 
         Parameters
         ----------
-        refsAndInfos : sequence `tuple` [`DatasetRef`, `StoredDatasetItemInfo`]
+        refsAndInfos : sequence `tuple` [`DatasetRef`,
+                                         `StoredDatastoreItemInfo`]
             Datasets to register and the internal datastore metadata associated
             with them.
         """
@@ -101,10 +122,15 @@ class GenericBaseDatastore(Datastore):
             # Need the main dataset and the components
             expandedRefs.extend(ref.flatten([ref]))
 
-            # Need one for the main ref and then one for each component
+            # Need one for the main ref and then one for each registered
+            # component
             expandedItemInfos.extend([itemInfo] * (len(ref.components) + 1))
 
-        self.registry.insertDatasetLocations(self.name, expandedRefs)
+        # Dataset location only cares about registry ID so if we have
+        # disassembled in datastore we have to deduplicate. Since they
+        # will have different datasetTypes we can't use a set
+        registryRefs = {r.id: r for r in expandedRefs}
+        self.registry.insertDatasetLocations(self.name, registryRefs.values())
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
     def _move_to_trash_in_registry(self, ref):

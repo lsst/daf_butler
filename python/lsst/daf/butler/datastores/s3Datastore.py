@@ -41,7 +41,6 @@ from lsst.daf.butler import (
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.s3utils import s3CheckFileExists, bucketExists
-from lsst.daf.butler.core.utils import transactional
 
 log = logging.getLogger(__name__)
 
@@ -113,32 +112,7 @@ class S3Datastore(FileLikeDatastore):
         """
         self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
 
-    def get(self, ref, parameters=None):
-        """Load an InMemoryDataset from the store.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required Dataset.
-        parameters : `dict`
-            `StorageClass`-specific parameters that specify, for example,
-            a slice of the dataset to be loaded.
-
-        Returns
-        -------
-        inMemoryDataset : `object`
-            Requested dataset or slice thereof as an InMemoryDataset.
-
-        Raises
-        ------
-        FileNotFoundError
-            Requested dataset can not be retrieved.
-        TypeError
-            Return value from formatter has unexpected type.
-        ValueError
-            Formatter failed to process the dataset.
-        """
-        getInfo = self._prepare_for_get(ref, parameters)
+    def _read_artifact_into_memory(self, getInfo, ref, isComponent=False):
         location = getInfo.location
 
         # since we have to make a GET request to S3 anyhow (for download) we
@@ -183,7 +157,8 @@ class S3Datastore(FileLikeDatastore):
         # equivalent of PosixDatastore formatter.read try-except block.
         formatter = getInfo.formatter
         try:
-            result = formatter.fromBytes(serializedDataset, component=getInfo.component)
+            result = formatter.fromBytes(serializedDataset,
+                                         component=getInfo.component if isComponent else None)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
                 tmpFile.file.write(serializedDataset)
@@ -191,40 +166,15 @@ class S3Datastore(FileLikeDatastore):
                 # will delete it.
                 tmpFile.file.flush()
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
-                result = formatter.read(component=getInfo.component)
+                result = formatter.read(component=getInfo.component if isComponent else None)
         except Exception as e:
             raise ValueError(f"Failure from formatter '{formatter.name()}' for dataset {ref.id}"
                              f" ({ref.datasetType.name} from {location.uri}): {e}") from e
 
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
-                                      isComponent=getInfo.component is not None)
+                                      isComponent=isComponent)
 
-    @transactional
-    def put(self, inMemoryDataset, ref):
-        """Write a InMemoryDataset with a given `DatasetRef` to the store.
-
-        Parameters
-        ----------
-        inMemoryDataset : `object`
-            The dataset to store.
-        ref : `DatasetRef`
-            Reference to the associated Dataset.
-
-        Raises
-        ------
-        TypeError
-            Supplied object and storage class are inconsistent.
-        DatasetTypeNotSupportedError
-            The associated `DatasetType` is not handled by this datastore.
-
-        Notes
-        -----
-        If the datastore is configured to reject certain dataset types it
-        is possible that the put will fail and raise a
-        `DatasetTypeNotSupportedError`.  The main use case for this is to
-        allow `ChainedDatastore` to put to multiple datastores without
-        requiring that every datastore accepts the dataset.
-        """
+    def _write_in_memory_to_artifact(self, inMemoryDataset, ref):
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
         # in PosixDatastore a directory can be created by `safeMakeDir`. In S3
@@ -257,8 +207,7 @@ class S3Datastore(FileLikeDatastore):
                                        Bucket=location.netloc, Key=location.relativeToPathRoot)
 
         # URI is needed to resolve what ingest case are we dealing with
-        info = self._extractIngestInfo(location.uri, ref, formatter=formatter)
-        self._register_datasets([(ref, info)])
+        return self._extractIngestInfo(location.uri, ref, formatter=formatter)
 
     def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
         # Docstring inherited from base class
@@ -338,4 +287,5 @@ class S3Datastore(FileLikeDatastore):
 
         return StoredFileInfo(formatter=formatter, path=tgtLocation.pathInStore,
                               storageClass=ref.datasetType.storageClass,
+                              component=ref.datasetType.component(),
                               file_size=size, checksum=None)

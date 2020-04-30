@@ -32,13 +32,16 @@ from dataclasses import dataclass
 from typing import Optional, List, Type
 
 from lsst.daf.butler import (
+    CompositesMap,
     Config,
     FileDataset,
     DatasetRef,
+    DatasetType,
     DatasetTypeNotSupportedError,
     Datastore,
     DatastoreConfig,
     DatastoreValidationError,
+    FakeDatasetRef,
     FileDescriptor,
     FileTemplates,
     FileTemplateValidationError,
@@ -132,6 +135,9 @@ class FileLikeDatastore(GenericBaseDatastore):
     templates: FileTemplates
     """File templates that can be used by this `Datastore`."""
 
+    composites: CompositesMap
+    """Determines whether a dataset should be disassembled on put."""
+
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
         """Set any filesystem-dependent config options for this Datastore to
@@ -175,6 +181,8 @@ class FileLikeDatastore(GenericBaseDatastore):
                 ddl.FieldSpec(name="path", dtype=String, length=256, nullable=False),
                 ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
                 ddl.FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
+                # Use empty string to indicate no component
+                ddl.FieldSpec(name="component", dtype=String, length=16, primaryKey=True),
                 # TODO: should checksum be Base64Bytes instead?
                 ddl.FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
                 ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),
@@ -211,6 +219,10 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"],
                                        universe=self.registry.dimensions)
+
+        # See if composites should be disassembled
+        self.composites = CompositesMap(self.config["composites"],
+                                        universe=self.registry.dimensions)
 
         # Storage of paths and formatters, keyed by dataset_id
         self._tableName = self.config["records", "table"]
@@ -263,27 +275,102 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore
         records = []
         for ref, info in zip(refs, infos):
+            # Component should come from ref and fall back on info
+            component = ref.datasetType.component()
+            if component is None and info.component is not None:
+                component = info.component
+            if component is None:
+                # Use empty string since we want this to be part of the
+                # primary key.
+                component = ""
             records.append(
                 dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
-                     storage_class=info.storageClass.name,
+                     storage_class=info.storageClass.name, component=component,
                      checksum=info.checksum, file_size=info.file_size)
             )
         self.registry.insertOpaqueData(self._tableName, *records)
 
     def getStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
-        records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
+
+        where = {"dataset_id": ref.id}
+
+        # If we have no component we want the row from this table without
+        # a component. If we do have a component we either need the row
+        # with no component or the row with the component, depending on how
+        # this dataset was dissassembled.
+
+        # if we are emptying trash we won't have real refs so can't constrain
+        # by component. Will need to fix this to return multiple matches
+        # in future.
+        try:
+            component = ref.datasetType.component()
+        except AttributeError:
+            component = None
+        else:
+            if component is None:
+                where["component"] = ""
+
+        # Look for the dataset_id -- there might be multiple matches
+        # if we have disassembled the dataset.
+        records = list(self.registry.fetchOpaqueData(self._tableName, **where))
         if len(records) == 0:
             raise KeyError(f"Unable to retrieve location associated with dataset {ref}.")
-        assert len(records) == 1, "Primary key constraint should make more than one result impossible."
-        record = records[0]
+
+        # if we are not asking for a component
+        if not component and len(records) != 1:
+            raise RuntimeError(f"Got {len(records)} from location query of dataset {ref}")
+
+        # if we had a FakeDatasetRef we pick the first record regardless
+        if isinstance(ref, FakeDatasetRef):
+            record = records[0]
+        else:
+            records_by_component = {}
+            for r in records:
+                this_component = r["component"] if r["component"] else None
+                records_by_component[this_component] = r
+
+            # Look for component by name else fall back to the parent
+            for lookup in (component, None):
+                if lookup in records_by_component:
+                    record = records_by_component[lookup]
+                    break
+            else:
+                raise KeyError(f"Unable to retrieve location for component {component} associated with "
+                               f"dataset {ref}.")
+
         # Convert name of StorageClass to instance
         storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
+
         return StoredFileInfo(formatter=record["formatter"],
                               path=record["path"],
                               storageClass=storageClass,
+                              component=component,
                               checksum=record["checksum"],
                               file_size=record["file_size"])
+
+    def getStoredItemsInfo(self, ref):
+        # Docstring inherited from GenericBaseDatastore
+
+        # Look for the dataset_id -- there might be multiple matches
+        # if we have disassembled the dataset.
+        records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
+
+        results = []
+        for record in records:
+            # Convert name of StorageClass to instance
+            storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
+            component = record["component"] if record["component"] else None
+
+            info = StoredFileInfo(formatter=record["formatter"],
+                                  path=record["path"],
+                                  storageClass=storageClass,
+                                  component=component,
+                                  checksum=record["checksum"],
+                                  file_size=record["file_size"])
+            results.append(info)
+
+        return results
 
     def _registered_refs_per_artifact(self, pathInStore):
         """Return all dataset refs associated with the supplied path.
@@ -334,7 +421,28 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, storedFileInfo
 
-    def _can_remove_dataset_artifact(self, ref):
+    def _get_dataset_locations_info(self, ref):
+        r"""Find all the `Location`\ s  of the requested dataset in the
+        `Datastore` and the associated stored file information.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required `Dataset`.
+
+        Returns
+        -------
+        results : `list` [`tuple` [`Location`, `StoredFileInfo` ]]
+            Location of the dataset within the datastore and
+            stored information about each file and its formatter.
+        """
+        # Get the file information (this will fail if no file)
+        records = self.getStoredItemsInfo(ref)
+
+        # Use the path to determine the location
+        return [(self.locationFactory.fromPath(r.path), r) for r in records]
+
+    def _can_remove_dataset_artifact(self, ref, location):
         """Check that there is only one dataset associated with the
         specified artifact.
 
@@ -342,18 +450,19 @@ class FileLikeDatastore(GenericBaseDatastore):
         ----------
         ref : `DatasetRef`
             Dataset to be removed.
+        location : `Location`
+            The location of the artifact to be removed.
 
         Returns
         -------
         can_remove : `Bool`
             True if the artifact can be safely removed.
         """
-        storedFileInfo = self.getStoredItemInfo(ref)
 
         # Get all entries associated with this path
-        allRefs = self._registered_refs_per_artifact(storedFileInfo.path)
+        allRefs = self._registered_refs_per_artifact(location.pathInStore)
         if not allRefs:
-            raise RuntimeError(f"Datastore inconsistency error. {storedFileInfo.path} not in registry")
+            raise RuntimeError(f"Datastore inconsistency error. {location.pathInStore} not in registry")
 
         # Get all the refs associated with this dataset if it is a composite
         theseRefs = {r.id for r in ref.flatten([ref])}
@@ -380,35 +489,65 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         Returns
         -------
-        getInfo : `DatastoreFileGetInformation`
-            Parameters needed to retrieve the file.
+        getInfo : `list` [`DatastoreFileGetInformation`]
+            Parameters needed to retrieve each file.
         """
         log.debug("Retrieve %s from %s with parameters %s", ref, self.name, parameters)
 
         # Get file metadata and internal metadata
-        location, storedFileInfo = self._get_dataset_location_info(ref)
-        if location is None:
+        fileLocations = self._get_dataset_locations_info(ref)
+        if not fileLocations:
             raise FileNotFoundError(f"Could not retrieve dataset {ref}.")
 
-        # We have a write storage class and a read storage class and they
-        # can be different for concrete composites.
-        readStorageClass = ref.datasetType.storageClass
-        writeStorageClass = storedFileInfo.storageClass
+        # The storage class we want to use eventually
+        refStorageClass = ref.datasetType.storageClass
 
         # Check that the supplied parameters are suitable for the type read
-        readStorageClass.validateParameters(parameters)
+        refStorageClass.validateParameters(parameters)
+
+        if len(fileLocations) > 1:
+            disassembled = True
+        else:
+            disassembled = False
 
         # Is this a component request?
-        component = ref.datasetType.component()
+        refComponent = ref.datasetType.component()
 
-        formatter = getInstanceOf(storedFileInfo.formatter,
-                                  FileDescriptor(location, readStorageClass=readStorageClass,
-                                                 storageClass=writeStorageClass, parameters=parameters),
-                                  ref.dataId)
-        formatterParams, assemblerParams = formatter.segregateParameters()
+        fileGetInfo = []
+        for location, storedFileInfo in fileLocations:
 
-        return DatastoreFileGetInformation(location, formatter, storedFileInfo,
-                                           assemblerParams, component, readStorageClass)
+            # The storage class used to write the file
+            writeStorageClass = storedFileInfo.storageClass
+
+            # If this has been disassembled we need read to match the write
+            if disassembled:
+                readStorageClass = writeStorageClass
+            else:
+                readStorageClass = refStorageClass
+
+            formatter = getInstanceOf(storedFileInfo.formatter,
+                                      FileDescriptor(location, readStorageClass=readStorageClass,
+                                                     storageClass=writeStorageClass, parameters=parameters),
+                                      ref.dataId)
+
+            _, notFormatterParams = formatter.segregateParameters()
+
+            # Of the remaining parameters, extract the ones supported by
+            # this StorageClass (for components not all will be handled)
+            assemblerParams = readStorageClass.filterParameters(notFormatterParams)
+
+            # The ref itself could be a component if the dataset was
+            # disassembled by butler, or we disassembled in datastore and
+            # components came from the datastore records
+            if storedFileInfo.component:
+                component = storedFileInfo.component
+            else:
+                component = refComponent
+
+            fileGetInfo.append(DatastoreFileGetInformation(location, formatter, storedFileInfo,
+                                                           assemblerParams, component, readStorageClass))
+
+        return fileGetInfo
 
     def _prepare_for_put(self, inMemoryDataset, ref):
         """Check the arguments for ``put`` and obtain formatter and
@@ -570,10 +709,14 @@ class FileLikeDatastore(GenericBaseDatastore):
         exists : `bool`
             `True` if the entity exists in the `Datastore`.
         """
-        location, _ = self._get_dataset_location_info(ref)
-        if location is None:
+        fileLocations = self._get_dataset_locations_info(ref)
+        if not fileLocations:
             return False
-        return self._artifact_exists(location)
+        for location, _ in fileLocations:
+            if not self._artifact_exists(location):
+                return False
+
+        return True
 
     def getUri(self, ref, predict=False):
         """URI to the Dataset.
@@ -638,6 +781,129 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location.uri
 
+    def get(self, ref, parameters=None):
+        """Load an InMemoryDataset from the store.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required Dataset.
+        parameters : `dict`
+            `StorageClass`-specific parameters that specify, for example,
+            a slice of the dataset to be loaded.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            Requested dataset or slice thereof as an InMemoryDataset.
+
+        Raises
+        ------
+        FileNotFoundError
+            Requested dataset can not be retrieved.
+        TypeError
+            Return value from formatter has unexpected type.
+        ValueError
+            Formatter failed to process the dataset.
+        """
+        allGetInfo = self._prepare_for_get(ref, parameters)
+        refComponent = ref.datasetType.component()
+
+        if len(allGetInfo) > 1 and not refComponent:
+            # This was a disassembled dataset spread over multiple files
+            # and we need to put them all back together again.
+            # Read into memory and then assemble
+            usedParams = set()
+            components = {}
+            for getInfo in allGetInfo:
+                # assemblerParams are parameters not understood by the
+                # associated formatter.
+                usedParams.update(set(getInfo.assemblerParams))
+
+                component = getInfo.component
+                # We do not want the formatter to think it's reading
+                # a component though because it is really reading a
+                # standalone dataset -- always tell reader it is not a
+                # component.
+                components[component] = self._read_artifact_into_memory(getInfo, ref, isComponent=False)
+
+            inMemoryDataset = ref.datasetType.storageClass.assembler().assemble(components)
+
+            # Any unused parameters will have to be passed to the assembler
+            if parameters:
+                unusedParams = {k: v for k, v in parameters.items() if k not in usedParams}
+            else:
+                unusedParams = {}
+
+            # Process parameters
+            return ref.datasetType.storageClass.assembler().handleParameters(inMemoryDataset,
+                                                                             parameters=unusedParams)
+
+        else:
+            # Single file request or component from that composite file
+            allComponents = {i.component: i for i in allGetInfo}
+            for lookup in (refComponent, None):
+                if lookup in allComponents:
+                    getInfo = allComponents[lookup]
+                    break
+            else:
+                raise FileNotFoundError(f"Component {refComponent} not found "
+                                        f"for ref {ref} in datastore {self.name}")
+
+            return self._read_artifact_into_memory(getInfo, ref, isComponent=getInfo.component is not None)
+
+    @transactional
+    def put(self, inMemoryDataset, ref):
+        """Write a InMemoryDataset with a given `DatasetRef` to the store.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            The dataset to store.
+        ref : `DatasetRef`
+            Reference to the associated Dataset.
+
+        Raises
+        ------
+        TypeError
+            Supplied object and storage class are inconsistent.
+        DatasetTypeNotSupportedError
+            The associated `DatasetType` is not handled by this datastore.
+
+        Notes
+        -----
+        If the datastore is configured to reject certain dataset types it
+        is possible that the put will fail and raise a
+        `DatasetTypeNotSupportedError`.  The main use case for this is to
+        allow `ChainedDatastore` to put to multiple datastores without
+        requiring that every datastore accepts the dataset.
+        """
+
+        doDisassembly = self.composites.shouldBeDisassembled(ref)
+        # doDisassembly = True
+
+        artifacts = []
+        if doDisassembly:
+            components = ref.datasetType.storageClass.assembler().disassemble(inMemoryDataset)
+            for component, componentInfo in components.items():
+                compTypeName = ref.datasetType.componentTypeName(component)
+                # Don't recurse because we want to take advantage of
+                # bulk insert -- need a new DatasetRef that refers to the
+                # same dataset_id but has the component DatasetType
+                # DatasetType does not refer to the types of components
+                # So we construct one ourselves.
+                compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
+                                       storageClass=componentInfo.storageClass)
+                compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
+                storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
+                artifacts.append((compRef, storedInfo))
+        else:
+            # Write the entire thing out
+            storedInfo = self._write_in_memory_to_artifact(inMemoryDataset, ref)
+            artifacts.append((ref, storedInfo))
+
+        self._register_datasets(artifacts)
+
     @transactional
     def trash(self, ref, ignore_errors=True):
         """Indicate to the datastore that a dataset can be removed.
@@ -658,8 +924,10 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         # Get file metadata and internal metadata
         log.debug("Trashing %s in datastore %s", ref, self.name)
-        location, _ = self._get_dataset_location_info(ref)
-        if location is None:
+
+        fileLocations = self._get_dataset_locations_info(ref)
+
+        if not fileLocations:
             err_msg = f"Requested dataset to trash ({ref}) is not known to datastore {self.name}"
             if ignore_errors:
                 log.warning(err_msg)
@@ -667,14 +935,15 @@ class FileLikeDatastore(GenericBaseDatastore):
             else:
                 raise FileNotFoundError(err_msg)
 
-        if not self._artifact_exists(location):
-            err_msg = f"Dataset is known to datastore {self.name} but " \
-                      f"associated artifact ({location.uri}) is missing"
-            if ignore_errors:
-                log.warning(err_msg)
-                return
-            else:
-                raise FileNotFoundError(err_msg)
+        for location, storedFileInfo in fileLocations:
+            if not self._artifact_exists(location):
+                err_msg = f"Dataset is known to datastore {self.name} but " \
+                          f"associated artifact ({location.uri}) is missing"
+                if ignore_errors:
+                    log.warning(err_msg)
+                    return
+                else:
+                    raise FileNotFoundError(err_msg)
 
         # Mark dataset as trashed
         try:
@@ -702,42 +971,46 @@ class FileLikeDatastore(GenericBaseDatastore):
         trashed = self.registry.getTrashedDatasets(self.name)
 
         for ref in trashed:
-            location, _ = self._get_dataset_location_info(ref)
+            fileLocations = self._get_dataset_locations_info(ref)
 
-            if location is None:
-                err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
-                if ignore_errors:
-                    log.warning(err_msg)
-                    continue
-                else:
-                    raise FileNotFoundError(err_msg)
+            for location, _ in fileLocations:
 
-            if not self._artifact_exists(location):
-                err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
-                if ignore_errors:
-                    log.warning(err_msg)
-                    continue
-                else:
-                    raise FileNotFoundError(err_msg)
-
-            # Can only delete the artifact if there are no references
-            # to the file from untrashed dataset refs.
-            if self._can_remove_dataset_artifact(ref):
-                # Point of no return for this artifact
-                log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
-                try:
-                    self._delete_artifact(location)
-                except Exception as e:
+                if location is None:
+                    err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
                     if ignore_errors:
-                        log.critical("Encountered error removing artifact %s from datastore %s: %s",
-                                     location.uri, self.name, e)
+                        log.warning(err_msg)
+                        continue
                     else:
-                        raise
+                        raise FileNotFoundError(err_msg)
 
-            # Now must remove the entry from the internal registry even if the
-            # artifact removal failed and was ignored,
+                if not self._artifact_exists(location):
+                    err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
+                    if ignore_errors:
+                        log.warning(err_msg)
+                        continue
+                    else:
+                        raise FileNotFoundError(err_msg)
+
+                # Can only delete the artifact if there are no references
+                # to the file from untrashed dataset refs.
+                if self._can_remove_dataset_artifact(ref, location):
+                    # Point of no return for this artifact
+                    log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
+                    try:
+                        self._delete_artifact(location)
+                    except Exception as e:
+                        if ignore_errors:
+                            log.critical("Encountered error removing artifact %s from datastore %s: %s",
+                                         location.uri, self.name, e)
+                        else:
+                            raise
+
+            # Now must remove the entry from the internal registry even if
+            # the artifact removal failed and was ignored,
             # otherwise the removal check above will never be true
             try:
+                # There may be multiple rows associated with this ref
+                # depending on disassembly
                 self.removeStoredItemInfo(ref)
             except Exception as e:
                 if ignore_errors:

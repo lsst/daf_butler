@@ -644,13 +644,17 @@ class Butler:
                 raise TypeError(f"Cannot associate into collection '{tag}' of non-TAGGED type "
                                 f"{collectionType.name}.")
 
-        isVirtualComposite = self._composites.shouldBeDisassembled(datasetType)
+        # Disable all disassembly at the registry level for now
+        isVirtualComposite = False
 
         # Add Registry Dataset entry.  If not a virtual composite, add
         # and attach components at the same time.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
         ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId],
-                                            producer=producer, recursive=not isVirtualComposite)
+                                            producer=producer,
+                                            # Never write components into
+                                            # registry
+                                            recursive=False)
 
         # Check to see if this datasetType requires disassembly
         if isVirtualComposite:
@@ -694,7 +698,9 @@ class Butler:
         # if the ref exists in the store we return it directly
         if self.datastore.exists(ref):
             return self.datastore.get(ref, parameters=parameters)
-        elif ref.isComposite():
+        elif ref.isComposite() and ref.components:
+            # The presence of components indicates that this dataset
+            # was disassembled at the registry level.
             # Check that we haven't got any unknown parameters
             ref.datasetType.storageClass.validateParameters(parameters)
             # Reconstruct the composite
@@ -1047,6 +1053,13 @@ class Butler:
                 if collectionType is not CollectionType.TAGGED:
                     raise TypeError(f"Cannot disassociate from collection '{tag}' "
                                     f"of non-TAGGED type {collectionType.name}.")
+        # Pruning a component of a DatasetRef makes no sense since registry
+        # doesn't always know about components and datastore might not store
+        # components in a separate file
+        for ref in refs:
+            if ref.datasetType.component():
+                raise ValueError(f"Can not prune a component of a dataset (ref={ref})")
+
         if recursive:
             refs = list(DatasetRef.flatten(refs))
         # We don't need an unreliable Datastore transaction for this, because

@@ -164,8 +164,7 @@ class DatastoreTests(DatastoreTestsBase):
             # Get a component -- we need to construct new refs for them
             # with derived storage classes but with parent ID
             for comp in ("data", "output"):
-                compRef = self.makeDatasetRef(ref.datasetType.componentTypeName(comp), dimensions,
-                                              sc.components[comp], dataId, id=ref.id)
+                compRef = ref.components[comp]
                 output = datastore.get(compRef)
                 self.assertEqual(output, getattr(metricsOut, comp))
 
@@ -183,8 +182,7 @@ class DatastoreTests(DatastoreTestsBase):
 
         comp = "data"
         for comp in ("data", "output"):
-            compRef = self.makeDatasetRef(refNone.datasetType.componentTypeName(comp), dimensions,
-                                          sc.components[comp], dataIdNone, id=refNone.id)
+            compRef = refNone.components[comp]
             output = datastore.get(compRef)
             self.assertEqual(output, getattr(metricsNone, comp))
 
