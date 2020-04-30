@@ -34,6 +34,10 @@ class DbAuthError(RuntimeError):
     pass
 
 
+class DbAuthNotFoundError(DbAuthError):
+    """Credentials file does not exist or no match was found in it."""
+
+
 class DbAuthPermissionsError(DbAuthError):
     """Credentials file has incorrect permissions."""
 
@@ -66,12 +70,12 @@ class DbAuth:
         if envVar is not None and envVar in os.environ:
             secretPath = os.path.expanduser(os.environ[envVar])
         elif path is None:
-            raise DbAuthError(
+            raise DbAuthNotFoundError(
                 "No default path provided to DbAuth configuration file")
         else:
             secretPath = os.path.expanduser(path)
         if not os.path.isfile(secretPath):
-            raise DbAuthError("No DbAuth configuration file: " + secretPath)
+            raise DbAuthNotFoundError(f"No DbAuth configuration file: {secretPath}")
         mode = os.stat(secretPath).st_mode
         if mode & (stat.S_IRWXG | stat.S_IRWXO) != 0:
             raise DbAuthPermissionsError(
@@ -206,7 +210,7 @@ class DbAuth:
                     return (None, authDict["password"])
                 return (authDict["username"], authDict["password"])
 
-        raise DbAuthError(
+        raise DbAuthNotFoundError(
             "No matching DbAuth configuration for: "
             f"({drivername}, {username}, {host}, {port}, {database})")
 

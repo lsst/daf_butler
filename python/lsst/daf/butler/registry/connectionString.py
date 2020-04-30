@@ -22,7 +22,7 @@
 __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
 
 from sqlalchemy.engine import url
-from ._dbAuth import DbAuth, DbAuthError, DbAuthPermissionsError
+from ._dbAuth import DbAuth, DbAuthNotFoundError
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
@@ -67,8 +67,10 @@ class ConnectionStringFactory:
 
         Raises
         ------
-        DBAuthError
+        DbAuthPermissionsError
             If the credentials file has incorrect permissions.
+        DbAuthError
+            A problem occured when retrieving DB authentication.
         """
         # this import can not live on the top because of circular import issue
         from lsst.daf.butler.registry import RegistryConfig
@@ -91,13 +93,12 @@ class ConnectionStringFactory:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
             auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
                                   conStr.port, conStr.database)
-        except DbAuthPermissionsError:
-            # re-raise permission error for safety
-            raise
-        except DbAuthError:
-            # credentials file doesn't exist or no match was found
+        except DbAuthNotFoundError:
+            # credentials file doesn't exist or no matches were found
             pass
         else:
+            # only assign auth when *no* errors were raised, otherwise assume
+            # connection string was correct
             conStr.username = auth[0]
             conStr.password = auth[1]
 

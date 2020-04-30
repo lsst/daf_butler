@@ -26,7 +26,7 @@ import lsst.utils.tests
 from lsst.daf.butler.registry import DbAuth, DbAuthError
 
 TESTDIR = os.path.join(
-    os.path.abspath(os.path.dirname(__file__)), "data", "dbAuth")
+    os.path.abspath(os.path.dirname(__file__)), "config", "dbAuth")
 
 
 class DbAuthTestCase(unittest.TestCase):
@@ -74,7 +74,7 @@ class DbAuthTestCase(unittest.TestCase):
 
     def test_load(self):
         """Test loading from a YAML file and matching in order."""
-        filePath = os.path.join(TESTDIR, "good_test.yaml")
+        filePath = os.path.join(TESTDIR, "db-auth.yaml")
         os.chmod(filePath, 0o600)
         auth = DbAuth(filePath)
         self.assertEqual(
@@ -201,16 +201,16 @@ class DbAuthTestCase(unittest.TestCase):
                           envVar="LSST_NONEXISTENT")
         with self.assertRaisesRegex(
                 DbAuthError,
-                r"^DbAuth configuration file .*bad_test1.yaml has incorrect "
+                r"^DbAuth configuration file .*badDbAuth1.yaml has incorrect "
                 r"permissions: \d*644$"):
-            filePath = os.path.join(TESTDIR, "bad_test1.yaml")
+            filePath = os.path.join(TESTDIR, "badDbAuth1.yaml")
             os.chmod(filePath, 0o644)
             auth = DbAuth(filePath)
         with self.assertRaisesRegex(
                 DbAuthError,
                 r"^Unable to load DbAuth configuration file: "
-                r".*bad_test2.yaml"):
-            filePath = os.path.join(TESTDIR, "bad_test2.yaml")
+                r".*badDbAuth2.yaml"):
+            filePath = os.path.join(TESTDIR, "badDbAuth2.yaml")
             os.chmod(filePath, 0o600)
             os.environ["LSST_DB_AUTH_TEST"] = filePath
             auth = DbAuth(envVar="LSST_DB_AUTH_TEST")
@@ -298,7 +298,7 @@ class DbAuthTestCase(unittest.TestCase):
             auth.getUrl("postgresql://host.example.com:5432/my_database"),
             "postgresql://foo:bar@host.example.com:5432/my_database"),
 
-        filePath = os.path.join(TESTDIR, "good_test.yaml")
+        filePath = os.path.join(TESTDIR, "db-auth.yaml")
         os.chmod(filePath, 0o600)
         auth = DbAuth(filePath)
         self.assertEqual(
