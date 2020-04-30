@@ -197,23 +197,24 @@ class ButlerURI:
         return self._uri.geturl()
 
     def split(self):
-        """Splits URI into head and tail. Either head or tail can be empty.
-        Equivalent to os.path.split where head preserves the scheme and netloc.
+        """Splits URI into head and tail. Equivalent to os.path.split where
+        head preserves the URI components.
 
         Returns
         -------
-        head: `str`
-            Everything leading up to tail. Trailing slashes are stripped from
-            the head. If `self.path` contains no slashes will be empty.
+        head: `ButlerURI`
+            Everything leading up to tail, expanded and normalized as per
+            ButlerURI rules.
         tail : `str`
             Last `self.path` component. Tail will be empty if path ends on a
             separator. Tail will never contain separators.
         """
         if self.scheme:
             head, tail = posixpath.split(self.path)
-            return f"{self.scheme}://{self.netloc}{head}", tail
         else:
-            return os.path.split(self.path)
+            head, tail = os.path.split(self.path)
+        headuri = self._uri._replace(path=head)
+        return self.__class__(headuri, forceDirectory=True), tail
 
     def basename(self):
         """Returns the base name, last element of path, of the URI. If URI ends
@@ -221,15 +222,26 @@ class ButlerURI:
         by split().
 
         Equivalent of os.path.basename().
+
+        Returns
+        -------
+        tail : `str`
+            Last part of the path attribute. Trail will be empty if path ends
+            on a separator.
         """
         return self.split()[1]
 
     def dirname(self):
-        """Returns the directory name of URI, everything up to the last element
-        of path.
+        """Returns a ButlerURI containing all the directories of the path
+        attribute.
 
-        Equivalent of os.path.dirname except trailing slashes are preserved for
-        URIs with known schemes.
+        Equivalent of os.path.dirname()
+
+        Returns
+        -------
+        head : `ButlerURI`
+            Everything except the tail of path attribute, expanded and
+            normalized as per ButlerURI rules.
         """
         return self.split()[0]
 

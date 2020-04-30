@@ -177,30 +177,37 @@ class LocationTestCase(unittest.TestCase):
                      "relative/file.ext", "relative/")
 
         osRelExpected = os.path.join(testRoot, "relative")
-        expected = (("file:///absolute", "file.ext"), ("file:///absolute", ""),
-                    ("file:///absolute", "file.ext"), ("file:///absolute", ""),
-                    ("s3://bucket/root", "file.ext"), ("s3://bucket/root", ""),
-                    (osRelExpected, "file.ext"), (osRelExpected, ""))
+        expected = (("file:///absolute/", "file.ext"), ("file:///absolute/", ""),
+                    ("file:///absolute/", "file.ext"), ("file:///absolute/", ""),
+                    ("s3://bucket/root/", "file.ext"), ("s3://bucket/root/", ""),
+                    (f"file://{osRelExpected}/", "file.ext"), (f"file://{osRelExpected}/", ""))
 
         for p, e in zip(testPaths, expected):
             with self.subTest(path=p):
                 uri = ButlerURI(p, testRoot)
-                self.assertEqual(uri.split(), e)
+                head, tail = uri.split()
+                self.assertEqual((head.geturl(), tail), e)
 
         # explicit file scheme should force posixpath, check os.path is ignored
         posixRelFilePath = posixpath.join(testRoot, "relative")
         uri = ButlerURI("file:relative/file.ext", testRoot)
-        self.assertEqual(uri.split(), (f"file://{posixRelFilePath}", "file.ext"))
+        head, tail = uri.split()
+        self.assertEqual((head.geturl(), tail), (f"file://{posixRelFilePath}/", "file.ext"))
 
         # check head can be empty
+        curDir = os.path.abspath(os.path.curdir) + os.sep
         uri = ButlerURI("file.ext", forceAbsolute=False)
-        self.assertEqual(uri.split(), ("", "file.ext"))
+        head, tail = uri.split()
+        self.assertEqual((head.geturl(), tail), (curDir, "file.ext"))
 
         # ensure empty path is not a problem and conforms to os.path.split
         uri = ButlerURI("", forceAbsolute=False)
-        self.assertEqual(uri.split(), (".", ""))
+        head, tail = uri.split()
+        self.assertEqual((head.geturl(), tail), (curDir, ""))
+
         uri = ButlerURI(".", forceAbsolute=False)
-        self.assertEqual(uri.split(), ("", "."))
+        head, tail = uri.split()
+        self.assertEqual((head.geturl(), tail), (curDir, "."))
 
 
 if __name__ == "__main__":
