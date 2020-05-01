@@ -40,10 +40,10 @@ class Suite(unittest.TestCase):
         """Test validating a valid config."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
-            result = runner.invoke(butler.cli, ["config-validate", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["config-validate", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")
 
@@ -51,10 +51,10 @@ class Suite(unittest.TestCase):
         """Test the ignore flag"""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # verify the just-created repo validates without error
-            result = runner.invoke(butler.cli, ["config-validate", "--repo", "here",
+            result = runner.invoke(butler.cli, ["config-validate", "here",
                                    "--ignore", "storageClasses,repoTransferFormats", "-i", "dimensions"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             self.assertEqual(result.stdout, "No problems encountered with configuration.\n")

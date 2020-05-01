@@ -23,13 +23,34 @@
 import click
 
 
-class repo_option:  # noqa: N801
-    def __init__(self, required=False, help=None):
-        self.help = help if help is not None else """Path to an existing data repository root or configuration
-                    file."""
+class repo_argument:  # noqa: N801
+    """Decorator to add a repo argument to a click command.
+
+    Parameters
+    ----------
+    required : bool, optional
+        Indicates if the caller must pass this argument to the command, by
+        default True.
+    help : str, optional
+        The help text for this argument to append to the command's help text.
+        If None or '' then nothing will be appended to the help text (in which
+        case the command should document this argument directly in its help
+        text). By default the value of repo_argument.existing_repo.
+    """
+
+    will_create_repo = "REPO is the URI or path to the new repository. " \
+                       "Will be created if it does not exist."
+    existing_repo = "REPO is the URI or path to an existing data repository root " \
+                    "or configuration file."
+
+    def __init__(self, required=False, help=existing_repo):
         self.required = required
+        self.helpText = help
 
     def __call__(self, f):
-        return click.option('--repo',
-                            required=self.required,
-                            help=self.help)(f)
+        if self.helpText:
+            # Modify the passed-in fucntions's doc string, which is used to
+            # generate the Click Command help, to include the argument help
+            # text:
+            f.__doc__ = f"{'' if f.__doc__ is None else f.__doc__}\n\n {self.helpText}"
+        return click.argument("repo", required=self.required)(f)

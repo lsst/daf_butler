@@ -22,13 +22,13 @@
 import click
 
 from ... import Butler, ValidationError
-from ..opt import dataset_type_option, repo_option
+from ..opt import dataset_type_option, repo_argument
 from ..utils import split_commas
 
 
 @click.command()
 @click.pass_context
-@repo_option(required=True)
+@repo_argument(required=True)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.")
 @click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
