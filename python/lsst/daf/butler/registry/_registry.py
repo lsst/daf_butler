@@ -746,11 +746,6 @@ class Registry:
         ref : `DatasetRef`
             An updated version of ``parent`` with components included.
 
-        Returns
-        -------
-        ref : `DatasetRef`
-            A version ``parent`` with ``component`` included in its components.
-
         Raises
         ------
         AmbiguousDatasetError
