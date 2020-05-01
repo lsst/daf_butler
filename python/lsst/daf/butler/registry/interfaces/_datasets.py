@@ -302,8 +302,8 @@ class DatasetRecordStorageManager(ABC):
             The object representing the records for the given dataset type, or
             `None` if there are no records for that dataset type.
 
-        Note
-        ----
+        Notes
+        -----
         Dataset types registered by another client of the same repository since
         the last call to `initialize` or `refresh` may not be found.
         """
@@ -338,8 +338,8 @@ class DatasetRecordStorageManager(ABC):
     def __iter__(self) -> Iterator[DatasetType]:
         """Return an iterator over the the dataset types present in this layer.
 
-        Note
-        ----
+        Notes
+        -----
         Dataset types registered by another client of the same layer since
         the last call to `initialize` or `refresh` may not be included.
         """
@@ -396,7 +396,7 @@ class DatasetRecordStorageManager(ABC):
 
         Returns
         -------
-        parent : `DatasetRef
+        parent : `DatasetRef`
             Version of ``ref`` with components attached.
 
         Raises
