@@ -30,7 +30,6 @@ import sqlalchemy
 
 from lsst.utils import doImport
 from lsst.daf.butler import DimensionUniverse, ddl
-from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.databases.oracle import OracleDatabase
 from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
@@ -143,8 +142,14 @@ class OracleDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
 
 @unittest.skipUnless(TEST_URI is not None, f"{ENVVAR} environment variable not set.")
-class OracleRegistryTestCase(unittest.TestCase, RegistryTests):
+class OracleRegistryTests(RegistryTests):
     """Tests for `Registry` backed by an `Oracle` database.
+
+    Note
+    ----
+    This is not a subclass of `unittest.TestCase` but to avoid repetition it
+    defines methods that override `unittest.TestCase` methods. To make this
+    work sublasses have to have this class first in the bases list.
     """
 
     @classmethod
@@ -165,7 +170,7 @@ class OracleRegistryTestCase(unittest.TestCase, RegistryTests):
     def makeRegistry(self) -> Registry:
         prefix = f"test_{secrets.token_hex(8).lower()}_"
         self._prefixes.append(prefix)
-        config = RegistryConfig()
+        config = self.makeRegistryConfig()
         # Can't use Registry.fromConfig for these tests because we don't want
         # to reconnect to the server every single time.  But we at least use
         # OracleDatabase.fromConnection rather than the constructor so
@@ -180,6 +185,22 @@ class OracleRegistryTestCase(unittest.TestCase, RegistryTests):
                         dimensions=dimensions,
                         collections=collections,
                         universe=DimensionUniverse(config), create=True)
+
+
+class OracleRegistryNameKeyCollMgrTestCase(OracleRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a Oracle database.
+
+    This test case uses NameKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+
+
+class OracleRegistrySynthIntKeyCollMgrTestCase(OracleRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a Oracle database.
+
+    This test case uses SynthIntKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
 
 
 if __name__ == "__main__":

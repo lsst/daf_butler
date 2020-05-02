@@ -37,7 +37,6 @@ except ImportError:
 import sqlalchemy
 
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.databases.postgresql import PostgresqlDatabase
 from lsst.daf.butler.registry import Registry
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
@@ -128,8 +127,14 @@ class PostgresqlDatabaseTestCase(unittest.TestCase, DatabaseTests):
 
 
 @unittest.skipUnless(testing is not None, "testing.postgresql module not found")
-class PostgresqlRegistryTestCase(unittest.TestCase, RegistryTests):
+class PostgresqlRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a PostgreSQL database.
+
+    Note
+    ----
+    This is not a subclass of `unittest.TestCase` but to avoid repetition it
+    defines methods that override `unittest.TestCase` methods. To make this
+    work sublasses have to have this class first in the bases list.
     """
 
     @classmethod
@@ -146,10 +151,26 @@ class PostgresqlRegistryTestCase(unittest.TestCase, RegistryTests):
 
     def makeRegistry(self) -> Registry:
         namespace = f"namespace_{secrets.token_hex(8).lower()}"
-        config = RegistryConfig()
+        config = self.makeRegistryConfig()
         config["db"] = self.server.url()
         config["namespace"] = namespace
         return Registry.fromConfig(config, create=True)
+
+
+class PostgresqlRegistryNameKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a PostgreSQL database.
+
+    This test case uses NameKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+
+
+class PostgresqlRegistrySynthIntKeyCollMgrTestCase(PostgresqlRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a PostgreSQL database.
+
+    This test case uses SynthIntKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
 
 
 if __name__ == "__main__":

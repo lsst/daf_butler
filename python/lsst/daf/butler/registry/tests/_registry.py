@@ -27,6 +27,7 @@ import os
 
 import astropy.time
 import sqlalchemy
+from typing import Optional
 
 from ...core import (
     DataCoordinate,
@@ -42,6 +43,7 @@ from .._registry import (
     ConsistentDataIds,
     OrphanedRecordError,
     Registry,
+    RegistryConfig,
 )
 from ..wildcards import DatasetTypeRestriction
 from ..interfaces import MissingCollectionError
@@ -52,12 +54,32 @@ class RegistryTests(ABC):
     generate tests for different configurations.
     """
 
+    collectionsManager: Optional[str] = None
+    """Name of the collections manager class, if subclass provides value for
+    this member then it overrides name specified in default configuration
+    (`str`).
+    """
+
     @classmethod
     @abstractmethod
     def getDataDir(cls) -> str:
         """Return the root directory containing test data YAML files.
         """
         raise NotImplementedError()
+
+    def makeRegistryConfig(self) -> RegistryConfig:
+        """Create RegistryConfig used to create a registry.
+
+        This method should be called by a subclass from `makeRegistry`.
+        Returned instance will be pre-configured based on the values of class
+        members, and default-configured for all other parametrs. Subclasses
+        that need default configuration should just instantiate
+        `RegistryConfig` directly.
+        """
+        config = RegistryConfig()
+        if self.collectionsManager:
+            config["managers"]["collections"] = self.collectionsManager
+        return config
 
     @abstractmethod
     def makeRegistry(self) -> Registry:
