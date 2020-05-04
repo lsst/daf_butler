@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import click
+
 from ..core.utils import iterable
 
 
@@ -65,3 +67,28 @@ def to_upper(context, param, value):
         A copy of the passed-in value, converted to upper case.
     """
     return value.upper()
+
+
+def cli_handle_exception(func, *args, **kwargs):
+    """Wrap a function call in an exception handler that raises a
+    ClickException if there is an Exception.
+
+    Parameters
+    ----------
+    func : function
+        A function to be called and exceptions handled. Will pass args & kwargs
+        to the function.
+
+    Returns
+    -------
+    The result of calling func.
+
+    Raises
+    ------
+    click.ClickException
+        An exception to be handled by the Click CLI tool.
+    """
+    try:
+        return func(*args, **kwargs)
+    except Exception as err:
+        raise click.ClickException(err)
