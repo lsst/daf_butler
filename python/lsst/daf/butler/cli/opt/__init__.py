@@ -20,5 +20,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from .dataset_type import dataset_type_option
-from .repo import repo_option
+from .repo import repo_argument
 from .run import run_option
+

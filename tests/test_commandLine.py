@@ -40,14 +40,14 @@ class Suite(unittest.TestCase):
         """Test creating a repostiry."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0)
 
     def testCreate_outfile(self):
         """Test creating a repository and specify an outfile location."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here", "--outfile=there"])
+            result = runner.invoke(butler.cli, ["create", "here", "--outfile=there"])
             self.assertEqual(result.exit_code, 0)
             self.assertTrue(os.path.exists("there"))  # verify the separate config file was made
             with open("there", "r") as f:

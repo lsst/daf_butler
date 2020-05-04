@@ -91,7 +91,7 @@ class Suite(unittest.TestCase):
         """Test that a command in daf_butler can be loaded and executed."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "test_repo"])
+            result = runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 0, result.output)
             self.assertTrue(os.path.exists("test_repo"))
 
@@ -127,7 +127,7 @@ class Suite(unittest.TestCase):
         self.maxDiff = None
         runner = click.testing.CliRunner()
         with duplicate_command_test_env(runner):
-            result = runner.invoke(butler.cli, ["create", "--repo", "test_repo"])
+            result = runner.invoke(butler.cli, ["create", "test_repo"])
             self.assertEqual(result.exit_code, 1, result.output)
             self.assertEqual(result.output, "Error: Command 'create' "
                              "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "

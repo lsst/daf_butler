@@ -26,24 +26,30 @@ import click
 import click.testing
 import unittest
 
-from lsst.daf.butler.cli.opt.repo import repo_option
+from lsst.daf.butler.cli.opt import repo_argument
 
 
 @click.command()
-@repo_option(required=True)
+@repo_argument(required=True)
 def repoRequired(repo):
     pass
 
 
 @click.command()
-@repo_option()  # required default val is False
+@repo_argument(required=False)
 def repoNotRequired(repo):
     pass
 
 
 @click.command()
-@repo_option(help="custom help text")
+@repo_argument(help="REPO custom help text")
 def repoWithHelpText(repo):
+    pass
+
+
+@click.command()
+@repo_argument(help=repo_argument.will_create_repo)
+def repoWithWillCreateHelpText(repo):
     pass
 
 
@@ -51,18 +57,18 @@ class Suite(unittest.TestCase):
 
     def testRequired_provided(self):
         runner = click.testing.CliRunner()
-        result = runner.invoke(repoRequired, ["--repo", "location"])
+        result = runner.invoke(repoRequired, ["location"])
         self.assertEqual(result.exit_code, 0)
 
     def testRequired_notProvided(self):
         runner = click.testing.CliRunner()
         result = runner.invoke(repoRequired)
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn('Missing option "--repo"', result.output)
+        self.assertIn('Error: Missing argument "REPO"', result.output)
 
     def testNotRequired_provided(self):
         runner = click.testing.CliRunner()
-        result = runner.invoke(repoNotRequired, ["--repo", "location"])
+        result = runner.invoke(repoNotRequired, ["location"])
         self.assertEqual(result.exit_code, 0)
 
     def testNotRequired_notProvided(self):
@@ -74,6 +80,11 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         result = runner.invoke(repoWithHelpText, "--help")
         self.assertIn("custom help text", result.output)
+
+    def testWillCreateHelpText(self):
+        runner = click.testing.CliRunner()
+        result = runner.invoke(repoWithWillCreateHelpText, "--help")
+        self.assertIn(repo_argument.will_create_repo, result.output.replace("\n ", ""))
 
 
 if __name__ == "__main__":

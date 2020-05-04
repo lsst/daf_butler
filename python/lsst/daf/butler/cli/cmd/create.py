@@ -22,12 +22,11 @@
 import click
 
 from ... import Butler, Config
-from ..opt import repo_option
+from ..opt import repo_argument
 
 
 @click.command()
-@repo_option(required=True, help="The filesystem path for the new repository. Will be created if it does not "
-             "exist.")
+@repo_argument(help=repo_argument.will_create_repo)
 @click.option("--config", "-c", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
               "insulating the repo from changes in package defaults.")

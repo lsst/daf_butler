@@ -22,12 +22,11 @@
 import click
 
 from ... import ButlerConfig
-from ..opt import repo_option
+from ..opt import repo_argument
 
 
 @click.command()
-@repo_option(required=True, help="filesystem path for an existing Butler repository or path to config "
-             "file.")
+@repo_argument(required=True)
 @click.option("--subset", "-s", type=str,
               help="Subset of a configuration to report. This can be any key in the hierarchy such as "
               "'.datastore.root' where the leading '.' specified the delimiter for the hierarchy.")

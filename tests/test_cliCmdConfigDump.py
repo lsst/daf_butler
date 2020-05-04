@@ -41,11 +41,11 @@ class Suite(unittest.TestCase):
         """Test dumping the config to stdout."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
 
             # test dumping to stdout:
-            result = runner.invoke(butler.cli, ["config-dump", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["config-dump", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # check for some expected keywords:
             cfg = yaml.safe_load(result.stdout)
@@ -57,9 +57,9 @@ class Suite(unittest.TestCase):
         """test dumping the config to a file."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
-            result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--file=there"])
+            result = runner.invoke(butler.cli, ["config-dump", "here", "--file=there"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # check for some expected keywords:
             with open("there", "r") as f:
@@ -72,9 +72,9 @@ class Suite(unittest.TestCase):
         """Test selecting a subset of the config."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
-            result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--subset", "datastore"])
+            result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "datastore"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             cfg = yaml.safe_load(result.stdout)
             # count the keys in the datastore config
@@ -90,10 +90,10 @@ class Suite(unittest.TestCase):
         """Test selecting a subset key that does not exist in the config."""
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
-            result = runner.invoke(butler.cli, ["create", "--repo", "here"])
+            result = runner.invoke(butler.cli, ["create", "here"])
             self.assertEqual(result.exit_code, 0, result.stdout)
             # test dumping to stdout:
-            result = runner.invoke(butler.cli, ["config-dump", "--repo", "here", "--subset", "foo"])
+            result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)
             self.assertEqual(result.output, "Error: foo not found in config at here\n")
 
