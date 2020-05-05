@@ -23,6 +23,7 @@ from __future__ import annotations
 __all__ = ["NameShrinker"]
 
 import hashlib
+from typing import Dict
 
 
 class NameShrinker:
@@ -44,7 +45,7 @@ class NameShrinker:
     def __init__(self, maxLength: int, hashSize: int = 4):
         self.maxLength = maxLength
         self.hashSize = hashSize
-        self._names = {}
+        self._names: Dict[str, str] = {}
 
     def shrink(self, original: str) -> str:
         """Shrink a name and remember the mapping between the original name and
