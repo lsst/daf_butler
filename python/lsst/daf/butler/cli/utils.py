@@ -33,9 +33,13 @@ def split_commas(context, param, values):
 
     Parameters
     ----------
-    context : click.Context
-
-    values : tuple of string
+    context : `click.Context` or `None`
+        The current execution context. Unused, but Click always passes it to
+        callbacks.
+    param : `click.core.Option` or `None`
+        The parameter being handled. Unused, but Click always passes it to
+        callbacks.
+    values : [`str`]
         All the values passed for this option. Strings may contain commas,
         which will be treated as delimiters for separate values.
 
