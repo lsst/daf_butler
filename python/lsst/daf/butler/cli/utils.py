@@ -75,8 +75,9 @@ def split_kv(context, param, values, separator="="):
         All the values passed for this option. Strings may contain commas,
         which will be treated as delimiters for separate values.
     separator : str, optional
-        The character that separates key-value pairs. May not be a comma. By
-        default "=".
+        The character that separates key-value pairs. May not be a comma or an
+        empty space (for space separators use Click's default implementation
+        for tuples; `type=(str, str)`). By default "=".
 
     Returns
     -------
@@ -89,6 +90,8 @@ def split_kv(context, param, values, separator="="):
         Raised if the separator is not found in an entry, or if duplicate keys
         are encountered.
     """
+    if "," == separator or " " == separator:
+        raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
     vals = split_commas(context, param, values)
     ret = {}
     for val in vals:

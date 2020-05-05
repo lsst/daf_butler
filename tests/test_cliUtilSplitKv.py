@@ -24,6 +24,7 @@
 
 import click
 import click.testing
+import functools
 import unittest
 
 from lsst.daf.butler.cli.utils import split_kv
@@ -49,10 +50,6 @@ class Suite(unittest.TestCase):
         with self.assertRaises(click.ClickException):
             split_kv("context", "param", "first=1,first=2")
 
-    # todo I'm not sure click will allow a space separator.
-    def test_spaceSeparator(self):
-        self.assertEqual(split_kv("context", "param", "first 1,second 2", " "), {"first": "1", "second": "2"})
-
     def test_dashSeparator(self):
         self.assertEqual(split_kv("context", "param", "first-1,second-2", "-"), {"first": "1", "second": "2"})
 
@@ -62,15 +59,62 @@ class Suite(unittest.TestCase):
         def cli(value):
             click.echo(value)
         runner = click.testing.CliRunner()
+
         result = runner.invoke(cli, ["--value", "first=1"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "{'first': '1'}\n")
+
         result = runner.invoke(cli, ["--value", "first=1,second=2"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
+
         result = runner.invoke(cli, ["--value", "first=1", "--value", "second=2"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
+
+    def test_separatorDash(self):
+        def split_kv_dash(context, param, values):
+            return split_kv(context, param, values, separator="-")
+
+        @click.command()
+        @click.option("--value", callback=split_kv_dash, multiple=True)
+        def cli(value):
+            click.echo(value)
+
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["--value", "first-1"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(result.stdout, "{'first': '1'}\n")
+
+    def test_separatorFunctoolsDash(self):
+        @click.command()
+        @click.option("--value", callback=functools.partial(split_kv, separator="-"), multiple=True)
+        def cli(value):
+            click.echo(value)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["--value", "first-1", "--value", "second-2"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
+
+    def test_separatorSpace(self):
+        @click.command()
+        @click.option("--value", callback=functools.partial(split_kv, separator=" "), multiple=True)
+        def cli(value):
+            click.echo(value)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["--value", "first 1"])
+        self.assertEqual(str(result.exception),
+                         "' ' is not a supported separator for key-value pairs.")
+
+    def test_separatorComma(self):
+        @click.command()
+        @click.option("--value", callback=functools.partial(split_kv, separator=","), multiple=True)
+        def cli(value):
+            click.echo(value)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["--value", "first,1"])
+        self.assertEqual(str(result.exception),
+                         "',' is not a supported separator for key-value pairs.")
 
 
 if __name__ == "__main__":
