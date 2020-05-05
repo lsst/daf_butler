@@ -43,7 +43,7 @@ from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
 
 if TYPE_CHECKING:
-    from .database import Database, StaticTablesContext
+    from ._database import Database, StaticTablesContext
 
 
 class MissingCollectionError(Exception):
