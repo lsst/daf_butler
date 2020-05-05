@@ -22,6 +22,7 @@
 
 import click
 
+from ..utils import split_kv
 
 class config_option:  # noqa: N801
     def __init__(self, required=False, helpMsg=None):
@@ -30,6 +31,6 @@ class config_option:  # noqa: N801
     def __call__(self, f):
         return click.option("-c", "--config",
                             required=self.required,
-                            type=(str, str),
+                            callback=split_kv,
                             multiple=True,
                             help="Config override, as a key-value pair.")(f)
