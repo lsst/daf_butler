@@ -1,0 +1,6 @@
+# -*- python -*-
+from lsst.sconsUtils import state
+mypy = state.env.Command("../mypy.log", "lsst/daf/butler",
+                         "cd python && mypy -p lsst.daf.butler 2>&1 | tee -a ../mypy.log")
+
+state.env.Alias("mypy", mypy)
