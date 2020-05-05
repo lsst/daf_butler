@@ -72,6 +72,12 @@ class Suite(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(eval(result.stdout), {'first': '1', 'second': '2'})
 
+        # double separator "==" should fail:
+        result = runner.invoke(cli, ["--value", "first==1"])
+        self.assertEqual(result.exit_code, 1)
+        self.assertEqual(result.output,
+                         "Error: Missing or invalid key-value separator in value 'first==1'\n")
+
     def test_separatorDash(self):
         def split_kv_dash(context, param, values):
             return split_kv(context, param, values, separator="-")

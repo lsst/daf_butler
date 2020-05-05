@@ -98,9 +98,9 @@ def split_kv(context, param, values, separator="="):
         try:
             k, v = val.split(separator)
         except ValueError:
-            raise click.ClickException(f"Missing or invalid separator in value {val}")
+            raise click.ClickException(f"Missing or invalid key-value separator in value '{val}'")
         if k in ret:
-            raise click.ClickException(f"Duplicate entries for {k} in {values}")
+            raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
         ret[k] = v
     return ret
 
