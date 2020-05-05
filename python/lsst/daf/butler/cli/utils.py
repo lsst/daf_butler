@@ -55,6 +55,53 @@ def split_commas(context, param, values):
     return valueList
 
 
+def split_kv(context, param, values, separator="="):
+    """Process a tuple of values that are key-value pairs separated by a given
+    separator. Multiple pairs may be comma separated. Return a dictionary of
+    all the passed-in values.
+
+    This function can be passed to the 'callback' argument of a click.option to
+    allow it to process comma-separated values (e.g. "--my-opt a=1,b=2").
+
+    Parameters
+    ----------
+    context : `click.Context` or `None`
+        The current execution context. Unused, but Click always passes it to
+        callbacks.
+    param : `click.core.Option` or `None`
+        The parameter being handled. Unused, but Click always passes it to
+        callbacks.
+    values : [`str`]
+        All the values passed for this option. Strings may contain commas,
+        which will be treated as delimiters for separate values.
+    separator : str, optional
+        The character that separates key-value pairs. May not be a comma. By
+        default "=".
+
+    Returns
+    -------
+    `dict` : [`str`, `str`]
+        The passed-in values in dict form.
+
+    Raises
+    ------
+    `click.ClickException`
+        Raised if the separator is not found in an entry, or if duplicate keys
+        are encountered.
+    """
+    vals = split_commas(context, param, values)
+    ret = {}
+    for val in vals:
+        try:
+            k, v = val.split(separator)
+        except ValueError:
+            raise click.ClickException(f"Missing or invalid separator in value {val}")
+        if k in ret:
+            raise click.ClickException(f"Duplicate entries for {k} in {values}")
+        ret[k] = v
+    return ret
+
+
 def to_upper(context, param, value):
     """Convert a value to upper case.
 
