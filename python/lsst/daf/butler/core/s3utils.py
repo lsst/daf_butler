@@ -38,7 +38,7 @@ def s3CheckFileExists(path, bucket=None, client=None):
 
     Parameters
     ----------
-    path : `Location`, `ButlerURI`, `str`
+    path : `Location`, `ButlerURI` or `str`
         Location or ButlerURI containing the bucket name and filepath.
     bucket : `str`, optional
         Name of the bucket in which to look. If provided, path will be assumed

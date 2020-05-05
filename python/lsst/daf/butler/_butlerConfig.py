@@ -26,7 +26,6 @@ Configuration classes specific to the Butler
 __all__ = ("ButlerConfig",)
 
 import os.path
-import posixpath
 
 from .core import (
     ButlerURI,
@@ -86,9 +85,9 @@ class ButlerConfig(Config):
                 if os.path.isdir(uri.ospath):
                     other = os.path.join(uri.ospath, "butler.yaml")
             elif uri.scheme == "s3":
-                head, filename = posixpath.split(uri.path)
-                if "." not in filename:
-                    uri.updateFile("butler.yaml")
+                if not uri.dirLike and "." not in uri.basename():
+                    uri = ButlerURI(other, forceDirectory=True)
+                uri.updateFile("butler.yaml")
                 other = uri.geturl()
             else:
                 raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")
@@ -102,7 +101,12 @@ class ButlerConfig(Config):
 
         configFile = butlerConfig.configFile
         if configFile is not None:
-            self.configDir = os.path.dirname(os.path.abspath(configFile))
+            uri = ButlerURI(configFile)
+            if uri.scheme == "s3":
+                uri.updateFile("")
+                self.configDir = uri.geturl()
+            else:
+                self.configDir = os.path.dirname(os.path.abspath(configFile))
 
         # A Butler config contains defaults defined by each of the component
         # configuration classes. We ask each of them to apply defaults to

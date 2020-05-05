@@ -32,7 +32,6 @@ import yaml
 import sys
 from yaml.representer import Representer
 import io
-import posixpath
 from typing import Sequence, Optional, ClassVar
 
 try:
@@ -251,6 +250,7 @@ class Config(collections.abc.MutableMapping):
                 self.__initFromYamlFile(uri.ospath)
         else:
             raise RuntimeError("Unhandled config file type:%s" % uri)
+        self.configFile = str(path)
 
     def __initFromS3YamlFile(self, url):
         """Load a file at a given S3 Bucket uri and attempts to load it from
@@ -290,7 +290,6 @@ class Config(collections.abc.MutableMapping):
         log.debug("Opening YAML config file: %s", path)
         with open(path, "r") as f:
             self.__initFromYaml(f)
-        self.configFile = path
 
     def __initFromYaml(self, stream):
         """Loads a YAML config from any readable stream that contains one.
@@ -807,9 +806,9 @@ class Config(collections.abc.MutableMapping):
                 uri = ButlerURI(os.path.join(uri.ospath, defaultFileName))
             self.dumpToFile(uri.ospath, overwrite=overwrite)
         elif uri.scheme == "s3":
-            head, filename = posixpath.split(uri.path)
-            if "." not in filename:
-                uri.updateFile(defaultFileName)
+            if not uri.dirLike and "." not in uri.basename():
+                uri = ButlerURI(uri.geturl(), forceDirectory=True)
+            uri.updateFile(defaultFileName)
             self.dumpToS3File(uri, overwrite=overwrite)
         else:
             raise ValueError(f"Unrecognized URI scheme: {uri.scheme}")

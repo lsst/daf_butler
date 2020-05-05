@@ -113,9 +113,12 @@ class ButlerURI:
         If `True`, scheme-less relative URI will be converted to an absolute
         path using a ``file`` scheme. If `False` scheme-less URI will remain
         scheme-less and will not be updated to ``file`` or absolute path.
+    forceDirectory: `bool`, optional
+        If `True` forces the URI to end with a separator, otherwise given URI
+        is interpreted as is.
     """
 
-    def __init__(self, uri, root=None, forceAbsolute=True):
+    def __init__(self, uri, root=None, forceAbsolute=True, forceDirectory=False):
         if isinstance(uri, str):
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
@@ -123,7 +126,11 @@ class ButlerURI:
         else:
             raise ValueError("Supplied URI must be either string or ParseResult")
 
-        parsed = self._fixupFileUri(parsed, root=root, forceAbsolute=forceAbsolute)
+        parsed, dirLike = self._fixupPathUri(parsed, root=root,
+                                             forceAbsolute=forceAbsolute,
+                                             forceDirectory=forceDirectory)
+
+        self.dirLike = dirLike
         self._uri = parsed
 
     @property
@@ -159,7 +166,10 @@ class ButlerURI:
             p = PurePath(self.path)
         else:
             p = PurePosixPath(self.path)
-        return str(p.relative_to(p.root))
+        relToRoot = str(p.relative_to(p.root))
+        if self.dirLike and not relToRoot.endswith("/"):
+            relToRoot += "/"
+        return relToRoot
 
     @property
     def fragment(self):
@@ -186,6 +196,55 @@ class ButlerURI:
         """
         return self._uri.geturl()
 
+    def split(self):
+        """Splits URI into head and tail. Equivalent to os.path.split where
+        head preserves the URI components.
+
+        Returns
+        -------
+        head: `ButlerURI`
+            Everything leading up to tail, expanded and normalized as per
+            ButlerURI rules.
+        tail : `str`
+            Last `self.path` component. Tail will be empty if path ends on a
+            separator. Tail will never contain separators.
+        """
+        if self.scheme:
+            head, tail = posixpath.split(self.path)
+        else:
+            head, tail = os.path.split(self.path)
+        headuri = self._uri._replace(path=head)
+        return self.__class__(headuri, forceDirectory=True), tail
+
+    def basename(self):
+        """Returns the base name, last element of path, of the URI. If URI ends
+        on a slash returns an empty string. This is the second element returned
+        by split().
+
+        Equivalent of os.path.basename().
+
+        Returns
+        -------
+        tail : `str`
+            Last part of the path attribute. Trail will be empty if path ends
+            on a separator.
+        """
+        return self.split()[1]
+
+    def dirname(self):
+        """Returns a ButlerURI containing all the directories of the path
+        attribute.
+
+        Equivalent of os.path.dirname()
+
+        Returns
+        -------
+        head : `ButlerURI`
+            Everything except the tail of path attribute, expanded and
+            normalized as per ButlerURI rules.
+        """
+        return self.split()[0]
+
     def replace(self, **kwargs):
         """Replace components in a URI with new values and return a new
         instance.
@@ -209,6 +268,7 @@ class ButlerURI:
         Notes
         -----
         Updates the URI in place.
+        Updates the ButlerURI.dirLike attribute.
         """
         if self.scheme:
             # POSIX
@@ -219,14 +279,15 @@ class ButlerURI:
         dir, _ = pathclass.split(self.path)
         newpath = pathclass.join(dir, newfile)
 
+        self.dirLike = False
         self._uri = self._uri._replace(path=newpath)
 
     def __str__(self):
         return self.geturl()
 
     @staticmethod
-    def _fixupFileUri(parsed, root=None, forceAbsolute=False):
-        """Fix up relative paths in file URI instances.
+    def _fixupPathUri(parsed, root=None, forceAbsolute=False, forceDirectory=False):
+        """Fix up relative paths in URI instances.
 
         Parameters
         ----------
@@ -236,17 +297,23 @@ class ButlerURI:
             Path to use as root when converting relative to absolute.
             If `None`, it will be the current working directory. This
             is a local file system path, not a URI.
-        forceAbsolute : `bool`
+        forceAbsolute : `bool`, optional
             If `True`, scheme-less relative URI will be converted to an
             absolute path using a ``file`` scheme. If `False` scheme-less URI
             will remain scheme-less and will not be updated to ``file`` or
             absolute path. URIs with a defined scheme will not be affected
             by this parameter.
+        forceDirectory : `bool`, optional
+            If `True` forces the URI to end with a separator, otherwise given
+            URI is interpreted as is.
 
         Returns
         -------
         modified : `~urllib.parse.ParseResult`
-            Update result if a file URI is being handled.
+            Update result if a URI is being handled.
+        dirLike : `bool`
+            `True` if given parsed URI has a trailing separator or
+            forceDirectory is True. Otherwise `False`.
 
         Notes
         -----
@@ -255,8 +322,13 @@ class ButlerURI:
         to be turned into absolute paths before they can be used.  This is
         always done regardless of the ``forceAbsolute`` parameter.
 
+        AWS S3 differentiates between keys with trailing POSIX separators (i.e
+        `/dir` and `/dir/`) whereas POSIX does not neccessarily.
+
         Scheme-less paths are normalized.
         """
+        # assume we are not dealing with a directory like URI
+        dirLike = False
         if not parsed.scheme or parsed.scheme == "file":
 
             # Replacement values for the URI
@@ -282,16 +354,24 @@ class ButlerURI:
                     # No change needed for relative local path staying relative
                     # except normalization
                     replacements["path"] = os.path.normpath(expandedPath)
+                    # normalization of empty path returns "." so we are dirLike
+                    if expandedPath == "":
+                        dirLike = True
 
                 # normpath strips trailing "/" which makes it hard to keep
                 # track of directory vs file when calling replaceFile
-                # put it back.
+                # find the appropriate separator
                 if "scheme" in replacements:
                     sep = posixpath.sep
                 else:
                     sep = os.sep
 
-                if expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep):
+                # add the trailing separator only if explicitly required or
+                # if it was stripped by normpath. Acknowledge that trailing
+                # separator exists.
+                endsOnSep = expandedPath.endswith(os.sep) and not replacements["path"].endswith(sep)
+                if (forceDirectory or endsOnSep or dirLike):
+                    dirLike = True
                     replacements["path"] += sep
 
             elif parsed.scheme == "file":
@@ -299,23 +379,38 @@ class ButlerURI:
                 # then join as os, and convert to abspath. Do not handle
                 # home directories since "file" scheme is explicitly documented
                 # to not do tilde expansion.
+                sep = posixpath.sep
                 if posixpath.isabs(parsed.path):
-                    # No change needed
-                    return copy.copy(parsed)
+                    if forceDirectory:
+                        parsed = parsed._replace(path=parsed.path+sep)
+                        dirLike = True
+                    return copy.copy(parsed), dirLike
 
                 replacements["path"] = posixpath.normpath(posixpath.join(os2posix(root), parsed.path))
 
                 # normpath strips trailing "/" so put it back if necessary
-                if parsed.path.endswith(posixpath.sep) and not replacements["path"].endswith(posixpath.sep):
-                    replacements["path"] += posixpath.sep
-
+                # Acknowledge that trailing separator exists.
+                if forceDirectory or (parsed.path.endswith(sep) and not replacements["path"].endswith(sep)):
+                    replacements["path"] += sep
+                    dirLike = True
             else:
                 raise RuntimeError("Unexpectedly got confused by URI scheme")
 
             # ParseResult is a NamedTuple so _replace is standard API
             parsed = parsed._replace(**replacements)
 
-        return parsed
+        # URI is dir-like if explicitly stated or if it ends on a separator
+        endsOnSep = parsed.path.endswith(posixpath.sep)
+        if forceDirectory or endsOnSep:
+            dirLike = True
+            # only add the separator if it's not already there
+            if not endsOnSep:
+                parsed = parsed._replace(path=parsed.path+posixpath.sep)
+
+        if dirLike is None:
+            raise RuntimeError("ButlerURI.dirLike attribute not set successfully.")
+
+        return parsed, dirLike
 
 
 class Location:
@@ -335,7 +430,7 @@ class Location:
 
     def __init__(self, datastoreRootUri, path):
         if isinstance(datastoreRootUri, str):
-            datastoreRootUri = ButlerURI(datastoreRootUri)
+            datastoreRootUri = ButlerURI(datastoreRootUri, forceDirectory=True)
         elif not isinstance(datastoreRootUri, ButlerURI):
             raise ValueError("Datastore root must be a ButlerURI instance")
 
@@ -454,7 +549,8 @@ class LocationFactory:
     """
 
     def __init__(self, datastoreRoot):
-        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True)
+        self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True,
+                                           forceDirectory=True)
 
     def __str__(self):
         return f"{self.__class__.__name__}@{self._datastoreRootUri}"

@@ -959,7 +959,7 @@ class ButlerMakeRepoOutfileTestCase(ButlerPutGetTests, unittest.TestCase):
     def testConfigExistence(self):
         c = Config(self.tmpConfigFile)
         uri_config = ButlerURI(c["root"])
-        uri_expected = ButlerURI(self.root)
+        uri_expected = ButlerURI(self.root, forceDirectory=True)
         self.assertEqual(uri_config.geturl(), uri_expected.geturl())
         self.assertNotIn(":", uri_config.path, "Check for URI concatenated with normal path")
 
@@ -1096,8 +1096,8 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
         `lsst.daf.butler.core.s3utils.s3checkFileExists` call.
         """
         uri = ButlerURI(root)
-        client = boto3.client("s3")
-        return s3CheckFileExists(uri, client=client)[0]
+        uri.updateFile(relpath)
+        return s3CheckFileExists(uri)[0]
 
     @unittest.expectedFailure
     def testImportExport(self):

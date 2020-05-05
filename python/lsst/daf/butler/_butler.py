@@ -69,6 +69,7 @@ from .core import (
 from .core.repoRelocation import BUTLER_ROOT_TAG
 from .core.safeFileIo import safeMakeDir
 from .core.utils import transactional, getClassOf
+from .core.s3utils import bucketExists
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig
 from .registry import Registry, RegistryConfig, CollectionType
@@ -260,9 +261,9 @@ class Butler:
 
         Parameters
         ----------
-        root : `str`
-            Filesystem path to the root of the new repository.  Will be created
-            if it does not exist.
+        root : `str` or `ButlerURI`
+            Path or URI to the root location of the new repository. Will be
+            created if it does not exist.
         config : `Config` or `str`, optional
             Configuration to write to the repository, after setting any
             root-dependent Registry or Datastore config options.  Can not
@@ -329,15 +330,18 @@ class Butler:
 
         # for "file" schemes we are assuming POSIX semantics for paths, for
         # schemeless URIs we are assuming os.path semantics.
-        uri = ButlerURI(root)
+        uri = ButlerURI(root, forceDirectory=True)
         if uri.scheme == "file" or not uri.scheme:
             if not os.path.isdir(uri.ospath):
                 safeMakeDir(uri.ospath)
         elif uri.scheme == "s3":
-            s3 = boto3.resource("s3")
-            # implies bucket exists, if not another level of checks
-            bucket = s3.Bucket(uri.netloc)
-            bucket.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
+            # bucket must already exist
+            if not bucketExists(uri.netloc):
+                raise ValueError(f"Bucket {uri.netloc} does not exist!")
+            s3 = boto3.client("s3")
+            # don't create S3 key when root is at the top-level of an Bucket
+            if not uri.path == "/":
+                s3.put_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         else:
             raise ValueError(f"Unrecognized scheme: {uri.scheme}")
         config = Config(config)
