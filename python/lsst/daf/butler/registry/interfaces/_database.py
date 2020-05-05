@@ -33,6 +33,7 @@ from typing import (
     Any,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Sequence,
@@ -47,7 +48,7 @@ from ...core import ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
 
-def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: Dict[str, Any]):
+def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: List[Dict[str, Any]]):
     """Test that the definition of a table in a `ddl.TableSpec` and from
     database introspection are consistent.
 
@@ -95,7 +96,7 @@ class StaticTablesContext:
 
     def __init__(self, db: Database):
         self._db = db
-        self._foreignKeys = []
+        self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
         self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
 
@@ -136,7 +137,8 @@ class StaticTablesContext:
         is just a factory for `type` objects, not an actual type itself,
         we cannot represent this with type annotations.
         """
-        return specs._make(self.addTable(name, spec) for name, spec in zip(specs._fields, specs))
+        return specs._make(self.addTable(name, spec)                     # type: ignore
+                           for name, spec in zip(specs._fields, specs))  # type: ignore
 
 
 class Database(ABC):
@@ -188,7 +190,7 @@ class Database(ABC):
         self.origin = origin
         self.namespace = namespace
         self._connection = connection
-        self._metadata = None
+        self._metadata: Optional[sqlalchemy.schema.MetaData] = None
 
     @classmethod
     def makeDefaultUri(cls, root: str) -> Optional[str]:
@@ -299,7 +301,7 @@ class Database(ABC):
         raise NotImplementedError()
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False) -> None:
+    def transaction(self, *, interrupting: bool = False) -> Iterator:
         """Return a context manager that represents a transaction.
 
         Parameters
@@ -326,7 +328,7 @@ class Database(ABC):
             raise
 
     @contextmanager
-    def declareStaticTables(self, *, create: bool) -> StaticTablesContext:
+    def declareStaticTables(self, *, create: bool) -> Iterator[StaticTablesContext]:
         """Return a context manager in which the database's static DDL schema
         can be declared.
 
@@ -696,7 +698,7 @@ class Database(ABC):
              compared: Optional[Dict[str, Any]] = None,
              extra: Optional[Dict[str, Any]] = None,
              returning: Optional[Sequence[str]] = None,
-             ) -> Tuple[Optional[Dict[str, Any], bool]]:
+             ) -> Tuple[Optional[Dict[str, Any]], bool]:
         """Insert into a table as necessary to ensure database contains
         values equivalent to the given ones.
 
@@ -913,6 +915,7 @@ class Database(ABC):
             raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
         if not returnIds:
             self._connection.execute(table.insert(), *rows)
+            return None
         else:
             sql = table.insert()
             return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
