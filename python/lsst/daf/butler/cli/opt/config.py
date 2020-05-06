@@ -24,6 +24,7 @@ import click
 
 from ..utils import split_kv
 
+
 class config_option:  # noqa: N801
     def __init__(self, required=False, helpMsg=None):
         self.required = required
