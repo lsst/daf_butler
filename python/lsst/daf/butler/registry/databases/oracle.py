@@ -134,13 +134,7 @@ class OracleDatabase(Database):
 
     @classmethod
     def connect(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Connection:
-        connection = sqlalchemy.engine.create_engine(uri, pool_size=1).connect()
-        # Work around SQLAlchemy assuming that the Oracle limit on identifier
-        # names is even shorter than it is after 12.2.
-        oracle_ver = connection.engine.dialect._get_server_version_info(connection)
-        if oracle_ver < (12, 2):
-            raise RuntimeError("Oracle server version >= 12.2 required.")
-        connection.engine.dialect.max_identifier_length = 128
+        connection = sqlalchemy.engine.create_engine(uri, pool_size=1, max_identifier_length=128).connect()
         return connection
 
     @classmethod
