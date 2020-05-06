@@ -27,6 +27,7 @@ import logging
 from abc import abstractmethod
 
 from lsst.daf.butler import Datastore, DatasetTypeNotSupportedError
+from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +37,14 @@ class GenericBaseDatastore(Datastore):
 
     Should always be sub-classed since key abstract methods are missing.
     """
+
+    @property
+    @abstractmethod
+    def bridge(self) -> DatastoreRegistryBridge:
+        """Object that manages the interface between this `Datastore` and the
+        `Registry` (`DatastoreRegistryBridge`).
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def addStoredItemInfo(self, refs, infos):
@@ -130,7 +139,7 @@ class GenericBaseDatastore(Datastore):
         # disassembled in datastore we have to deduplicate. Since they
         # will have different datasetTypes we can't use a set
         registryRefs = {r.id: r for r in expandedRefs}
-        self.registry.insertDatasetLocations(self.name, registryRefs.values())
+        self.bridge.insert(registryRefs.values())
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
     def _move_to_trash_in_registry(self, ref):
@@ -146,11 +155,10 @@ class GenericBaseDatastore(Datastore):
         -----
         Dataset is not removed from internal stored item info table.
         """
-
         # Note that a ref can point to component dataset refs that
         # have been deleted already from registry but are still in
-        # the python object. moveDatasetLocationToTrash will deal with that.
-        self.registry.moveDatasetLocationToTrash(self.name, list(ref.flatten([ref])))
+        # the python object. moveToTrash will deal with that.
+        self.bridge.moveToTrash(ref.flatten([ref]))
 
     def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None,
                           isComponent=False):

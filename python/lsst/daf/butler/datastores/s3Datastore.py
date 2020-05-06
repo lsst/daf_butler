@@ -52,8 +52,8 @@ class S3Datastore(FileLikeDatastore):
     ----------
     config : `DatastoreConfig` or `str`
         Configuration. A string should refer to the name of the config file.
-    registry : `Registry`
-        Registry to use for storing internal information about the datasets.
+    bridgeManager : `DatastoreRegistryBridgeManager`
+        Object that manages the interface between `Registry` and datastores.
     butlerRoot : `str`, optional
         New datastore root to use to override the configuration value.
 
@@ -74,8 +74,8 @@ class S3Datastore(FileLikeDatastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, config, registry, butlerRoot=None):
-        super().__init__(config, registry, butlerRoot)
+    def __init__(self, config, bridgeManager, butlerRoot=None):
+        super().__init__(config, bridgeManager, butlerRoot)
 
         self.client = boto3.client("s3")
         if not bucketExists(self.locationFactory.netloc):

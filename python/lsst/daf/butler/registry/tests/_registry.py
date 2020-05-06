@@ -41,7 +41,6 @@ from .._registry import (
     CollectionType,
     ConflictingDefinitionError,
     ConsistentDataIds,
-    OrphanedRecordError,
     Registry,
     RegistryConfig,
 )
@@ -570,46 +569,6 @@ class RegistryTests(ABC):
         registry.removeCollection(tag1)
         with self.assertRaises(MissingCollectionError):
             registry.getCollectionType(tag1)
-
-    def testDatasetLocations(self):
-        """Tests for `Registry.insertDatasetLocations`,
-        `Registry.getDatasetLocations`, and `Registry.removeDatasetLocation`.
-        """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        self.loadData(registry, "datasets.yaml")
-        run = "imported_g"
-        ref = registry.findDataset("permabias", dataId={"instrument": "Cam1", "detector": 1}, collections=run)
-        ref2 = registry.findDataset("permaflat",
-                                    dataId={"instrument": "Cam1", "detector": 3, "physical_filter": "Cam1-G"},
-                                    collections=run)
-        datastoreName = "dummystore"
-        datastoreName2 = "dummystore2"
-        # Test adding information about a new dataset
-        registry.insertDatasetLocations(datastoreName, [ref])
-        addresses = registry.getDatasetLocations(ref)
-        self.assertIn(datastoreName, addresses)
-        self.assertEqual(len(addresses), 1)
-        registry.insertDatasetLocations(datastoreName2, [ref, ref2])
-        addresses = registry.getDatasetLocations(ref)
-        self.assertEqual(len(addresses), 2)
-        self.assertIn(datastoreName, addresses)
-        self.assertIn(datastoreName2, addresses)
-        registry.removeDatasetLocation(datastoreName, [ref])
-        addresses = registry.getDatasetLocations(ref)
-        self.assertEqual(len(addresses), 1)
-        self.assertNotIn(datastoreName, addresses)
-        self.assertIn(datastoreName2, addresses)
-        with self.assertRaises(OrphanedRecordError):
-            registry.removeDatasets([ref])
-        registry.removeDatasetLocation(datastoreName2, [ref])
-        addresses = registry.getDatasetLocations(ref)
-        self.assertEqual(len(addresses), 0)
-        self.assertNotIn(datastoreName2, addresses)
-        registry.removeDatasets([ref])  # should not raise
-        addresses = registry.getDatasetLocations(ref2)
-        self.assertEqual(len(addresses), 1)
-        self.assertIn(datastoreName2, addresses)
 
     def testBasicTransaction(self):
         """Test that all operations within a single transaction block are
