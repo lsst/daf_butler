@@ -566,27 +566,33 @@ class Database(ABC):
         """
         name = self._mangleTableName(name)
         args = [self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields]
+        # Track indexes added for primary key and unique constraints, to make
+        # sure we don't add duplicate explicit or foreign key indexes for
+        # those.
+        allIndexes = {tuple(fieldSpec.name for fieldSpec in spec.fields if fieldSpec.primaryKey)}
         args.extend(
             sqlalchemy.schema.UniqueConstraint(
                 *columns,
                 name=self.shrinkDatabaseEntityName("_".join([name, "unq"] + list(columns)))
             )
-            for columns in spec.unique if columns not in spec.indexes
+            for columns in spec.unique
         )
+        allIndexes.update(spec.unique)
         args.extend(
             sqlalchemy.schema.Index(
                 self.shrinkDatabaseEntityName("_".join([name, "idx"] + list(columns))),
                 *columns,
                 unique=(columns in spec.unique)
             )
-            for columns in spec.indexes
+            for columns in spec.indexes if columns not in allIndexes
         )
+        allIndexes.update(spec.indexes)
         args.extend(
             sqlalchemy.schema.Index(
                 self.shrinkDatabaseEntityName("_".join((name, "fkidx") + fk.source)),
                 *fk.source,
             )
-            for fk in spec.foreignKeys if fk.addIndex
+            for fk in spec.foreignKeys if fk.addIndex and fk.source not in allIndexes
         )
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
