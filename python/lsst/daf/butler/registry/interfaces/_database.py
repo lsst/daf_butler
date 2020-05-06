@@ -946,6 +946,11 @@ class Database(ABC):
         """
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
+        if not rows:
+            if returnIds:
+                return []
+            else:
+                return None
         if not returnIds:
             self._connection.execute(table.insert(), *rows)
             return None
@@ -1023,6 +1028,13 @@ class Database(ABC):
         """
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to delete from read-only database '{self}'.")
+        if columns and not rows:
+            # If there are no columns, this operation is supposed to delete
+            # everything (so we proceed as usual).  But if there are columns,
+            # but no rows, it was a constrained bulk operation where the
+            # constraint is that no rows match, and we should short-circuit
+            # while reporting that no rows were affected.
+            return 0
         sql = table.delete()
         whereTerms = [table.columns[name] == sqlalchemy.sql.bindparam(name) for name in columns]
         if whereTerms:
@@ -1068,6 +1080,8 @@ class Database(ABC):
         """
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to update read-only database '{self}'.")
+        if not rows:
+            return 0
         sql = table.update().where(
             sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
         )

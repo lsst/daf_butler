@@ -381,6 +381,8 @@ class SqliteDatabase(Database):
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
+        if not rows:
+            return
         if table.name in self._autoincr:
             raise NotImplementedError(
                 "replace does not support compound primary keys with autoincrement fields."
