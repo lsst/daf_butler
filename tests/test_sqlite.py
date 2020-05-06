@@ -33,7 +33,6 @@ import sqlalchemy
 from lsst.sphgeom import ConvexPolygon, UnitVector3d
 
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry import RegistryConfig
 from lsst.daf.butler.registry.databases.sqlite import SqliteDatabase
 from lsst.daf.butler.registry.tests import DatabaseTests, RegistryTests
 from lsst.daf.butler.registry import Registry
@@ -173,8 +172,14 @@ class SqliteMemoryDatabaseTestCase(unittest.TestCase, DatabaseTests):
             SqliteDatabase.connect(filename=None, writeable=False)
 
 
-class SqliteFileRegistryTestCase(unittest.TestCase, RegistryTests):
+class SqliteFileRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a SQLite file-based database.
+
+    Note
+    ----
+    This is not a subclass of `unittest.TestCase` but to avoid repetition it
+    defines methods that override `unittest.TestCase` methods. To make this
+    work sublasses have to have this class first in the bases list.
     """
 
     def setUp(self):
@@ -190,12 +195,28 @@ class SqliteFileRegistryTestCase(unittest.TestCase, RegistryTests):
 
     def makeRegistry(self) -> Registry:
         _, filename = tempfile.mkstemp(dir=self.root, suffix=".sqlite3")
-        config = RegistryConfig()
+        config = self.makeRegistryConfig()
         config["db"] = f"sqlite:///{filename}"
         return Registry.fromConfig(config, create=True, butlerRoot=self.root)
 
 
-class SqliteMemoryRegistryTestCase(unittest.TestCase, RegistryTests):
+class SqliteFileRegistryNameKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a SQLite file-based database.
+
+    This test case uses NameKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+
+
+class SqliteFileRegistrySynthIntKeyCollMgrTestCase(SqliteFileRegistryTests, unittest.TestCase):
+    """Tests for `Registry` backed by a SQLite file-based database.
+
+    This test case uses SynthIntKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
+
+
+class SqliteMemoryRegistryTests(RegistryTests):
     """Tests for `Registry` backed by a SQLite in-memory database.
     """
 
@@ -204,7 +225,7 @@ class SqliteMemoryRegistryTestCase(unittest.TestCase, RegistryTests):
         return os.path.normpath(os.path.join(os.path.dirname(__file__), "data", "registry"))
 
     def makeRegistry(self) -> Registry:
-        config = RegistryConfig()
+        config = self.makeRegistryConfig()
         config["db"] = f"sqlite://"
         return Registry.fromConfig(config, create=True)
 
@@ -293,6 +314,22 @@ class SqliteMemoryRegistryTestCase(unittest.TestCase, RegistryTests):
         self.assertIsInstance(getRegion({"htm9": 1000}), ConvexPolygon)
         # patch_htm7_overlap should not be empty
         self.assertNotEqual(len(list(registry.queryDimensions(["patch", "htm7"]))), 0)
+
+
+class SqliteMemoryRegistryNameKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
+    """Tests for `Registry` backed by a SQLite in-memory database.
+
+    This test case uses NameKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.nameKey.NameKeyCollectionManager"
+
+
+class SqliteMemoryRegistrySynthIntKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):
+    """Tests for `Registry` backed by a SQLite in-memory database.
+
+    This test case uses SynthIntKeyCollectionManager.
+    """
+    collectionsManager = "lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager"
 
 
 if __name__ == "__main__":

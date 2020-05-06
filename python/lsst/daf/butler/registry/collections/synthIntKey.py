@@ -20,11 +20,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["NameKeyCollectionManager"]
+__all__ = ["SynthIntKeyCollectionManager"]
 
 from collections import namedtuple
 from typing import (
     Any,
+    Iterator,
+    NamedTuple,
     Optional,
     TYPE_CHECKING,
 )
@@ -33,6 +35,7 @@ import sqlalchemy
 
 from ._base import makeRunTableSpec, makeCollectionChainTableSpec, DefaultCollectionManager
 from ...core import ddl
+from ..interfaces import CollectionRecord
 
 if TYPE_CHECKING:
     from .database import Database, StaticTablesContext
@@ -43,39 +46,54 @@ _TablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collec
 _TABLES_SPEC = _TablesTuple(
     collection=ddl.TableSpec(
         fields=[
-            ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True),
+            ddl.FieldSpec("collection_id", dtype=sqlalchemy.Integer, primaryKey=True, autoincrement=True),
+            ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
             ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
         ],
+        unique=[("name",)],
     ),
-    run=makeRunTableSpec("name", sqlalchemy.String),
-    collection_chain=makeCollectionChainTableSpec("name", sqlalchemy.String),
+    run=makeRunTableSpec("collection_id", sqlalchemy.Integer),
+    collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.Integer),
 )
 
 
-class NameKeyCollectionManager(DefaultCollectionManager):
-    """A `CollectionManager` implementation that uses collection names for
-    primary/foreign keys and aggressively loads all collection/run records in
-    the database into memory.
+class SynthIntKeyCollectionManager(DefaultCollectionManager):
+    """A `CollectionManager` implementation that uses synthetic primary key
+    (auto-incremented integer) for collections table.
 
     Most of the logic, including caching policy, is implemented in the base
     class, this class only adds customisations specific to this particular
     table schema.
+
+    Parameters
+    ----------
+    db : `Database`
+        Interface to the underlying database engine and namespace.
+    tables : `NamedTuple`
+        Named tuple of SQLAlchemy table objects.
+    collectionIdName : `str`
+        Name of the column in collections table that identifies it (PK).
     """
+    def __init__(self, db: Database, tables: NamedTuple[sqlalchemy.schema.Table, ...],
+                 collectionIdName: str):
+        super().__init__(db=db, tables=tables, collectionIdName=collectionIdName)
+        self._nameCache = {}  # indexed by collection name
 
     @classmethod
-    def initialize(cls, db: Database, context: StaticTablesContext) -> NameKeyCollectionManager:
+    def initialize(cls, db: Database, context: StaticTablesContext) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC), collectionIdName="name")
+        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),
+                   collectionIdName="collection_id")
 
     @classmethod
     def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
         # Docstring inherited from CollectionManager.
-        return f"{prefix}_name"
+        return f"{prefix}_id"
 
     @classmethod
     def getRunForeignKeyName(cls, prefix: str = "run") -> str:
         # Docstring inherited from CollectionManager.
-        return f"{prefix}_name"
+        return f"{prefix}_id"
 
     @classmethod
     def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
@@ -83,9 +101,8 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         # Docstring inherited from CollectionManager.
         if prefix is None:
             prefix = "collection"
-        original = _TABLES_SPEC.collection.fields["name"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
-                             length=original.length, **kwds)
+        original = _TABLES_SPEC.collection.fields["collection_id"]
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
@@ -97,14 +114,35 @@ class NameKeyCollectionManager(DefaultCollectionManager):
         # Docstring inherited from CollectionManager.
         if prefix is None:
             prefix = "run"
-        original = _TABLES_SPEC.run.fields["name"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
-                             length=original.length, **kwds)
+        original = _TABLES_SPEC.run.fields["collection_id"]
+        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwds)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
         return copy
 
+    def _setRecordCache(self, records: Iterator[CollectionRecord]):
+        """Set internal record cache to contain given records,
+        old cached records will be removed.
+        """
+        self._records = {}
+        self._nameCache = {}
+        for record in records:
+            self._records[record.key] = record
+            self._nameCache[record.name] = record
+
+    def _addCachedRecord(self, record: CollectionRecord):
+        """Add single record to cache.
+        """
+        self._records[record.key] = record
+        self._nameCache[record.name] = record
+
+    def _removeCachedRecord(self, record: CollectionRecord):
+        """Remove single record from cache.
+        """
+        del self._records[record.key]
+        del self._nameCache[record.name]
+
     def _getByName(self, name: str):
         # Docstring inherited from DefaultCollectionManager.
-        return self._records.get(name)
+        return self._nameCache.get(name)

@@ -52,32 +52,34 @@ class MissingCollectionError(Exception):
     """
 
 
-class CollectionRecord(ABC):
+class CollectionRecord:
     """A struct used to represent a collection in internal `Registry` APIs.
 
     User-facing code should always just use a `str` to represent collections.
 
     Parameters
     ----------
+    key
+        Unique collection ID, can be the same as ``name`` if ``name`` is used
+        for identification. Usually this is an integer or string, but can be
+        other database-specific type.
     name : `str`
         Name of the collection.
     type : `CollectionType`
         Enumeration value describing the type of the collection.
     """
-    def __init__(self, name: str, type: CollectionType):
+    def __init__(self, key: Any, name: str, type: CollectionType):
+        self.key = key
         self.name = name
         self.type = type
         assert isinstance(self.type, CollectionType)
 
-    @property
-    @abstractmethod
-    def key(self) -> Any:
-        """The primary/foreign key value for this collection.
-        """
-        raise NotImplementedError()
-
     name: str
     """Name of the collection (`str`).
+    """
+
+    key: Any
+    """The primary/foreign key value for this collection.
     """
 
     type: CollectionType
@@ -135,12 +137,16 @@ class ChainedCollectionRecord(CollectionRecord):
 
     Parameters
     ----------
+    key
+        Unique collection ID, can be the same as ``name`` if ``name`` is used
+        for identification. Usually this is an integer or string, but can be
+        other database-specific type.
     name : `str`
         Name of the collection.
     """
 
-    def __init__(self, name: str):
-        super().__init__(name=name, type=CollectionType.CHAINED)
+    def __init__(self, key: Any, name: str):
+        super().__init__(key=key, name=name, type=CollectionType.CHAINED)
         self._children = CollectionSearch.fromExpression([])
 
     @property
