@@ -24,3 +24,4 @@ from ._opaque import *
 from ._dimensions import *
 from ._collections import *
 from ._datasets import *
+from ._bridge import *
