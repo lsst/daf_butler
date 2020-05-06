@@ -175,8 +175,7 @@ class Database(ABC):
 
     `Database` itself has several underscore-prefixed attributes:
 
-     - ``_cs``: SQLAlchemy objects representing the connection and transaction
-        state.
+     - ``_connection``: SQLAlchemy object representing the connection.
      - ``_metadata``: the `sqlalchemy.schema.MetaData` object representing
         the tables and other schema entities.
 
