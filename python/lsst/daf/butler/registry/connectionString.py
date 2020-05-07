@@ -47,12 +47,16 @@ class ConnectionStringFactory:
 
     @classmethod
     def fromConfig(cls, registryConfig):
-        """Parses the 'db' and, if they exist, username, password, host, port
-        and database keys from given config.
+        """Parses the `db`, and, if they exist, username, password, host, port
+        and database keys from the given config.
 
         If no  username and password are found in the connection string, or in
         the config, they are retrieved from a file at `DB_AUTH_PATH` or
         `DB_AUTH_ENVVAR`. Sqlite dialect does not require a password.
+
+        The `db` key value of the given config specifies the default connection
+        string, such that if no additional connection string parameters are
+        provided or retrieved, the `db` key is returned unmodified.
 
         Parameters
         ----------
@@ -73,13 +77,13 @@ class ConnectionStringFactory:
 
         Notes
         -----
-        Matching requires drivername, host and database keys. If drivername is
-        not specified in the db string and host and database keys are not found
-        in the db string, or as explicit keys in the config, the matcher
-        returns an unchanged connection string.
-        Insufficiently specified connection strings are interpreted as
-        indication that a 3rd party authentication mechanism, f.e. Oracle
-        Wallet, are used and are not modified.
+        Matching requires dialect, host and database keys. If dialect is not
+        specified in the db string and host and database keys are not found in
+        the db string, or as explicit keys in the config, the matcher returns
+        an unchanged connection string.
+        Insufficiently specified connection strings are interpreted as an
+        indication that a 3rd party authentication mechanism, such as Oracle
+        Wallet, is being used and therefore are left unmodified.
         """
         # this import can not live on the top because of circular import issue
         from lsst.daf.butler.registry import RegistryConfig
@@ -90,7 +94,7 @@ class ConnectionStringFactory:
             if getattr(conStr, key) is None:
                 setattr(conStr, key, regConf.get(key))
 
-        # allow 3rd party authentication mechanisms by assuming connection
+        # Allow 3rd party authentication mechanisms by assuming connection
         # string is correct when we can not recognize (dialect, host, database)
         # matching keys.
         if any((conStr.drivername is None,

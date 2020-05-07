@@ -97,7 +97,8 @@ class DbAuth:
         Parameters
         ----------
         dialectname : `str`
-            Database dialect, f.e. sqlite, mysql, postgresql, oracle, or mssql.
+            Database dialect, for example sqlite, mysql, postgresql, oracle,
+            or mssql.
         username : `str` or None
             Username from connection URL if present.
         host : `str`
@@ -131,9 +132,8 @@ class DbAuth:
         the database connection URL, the dictionary must also contain a
         ``username`` item.
 
-        The ``url`` item of the authorization dictionaries can contain both the
-        dialect and the driver of the database URL but the driver is ignored
-        during matching.
+        The ``url`` item must begin with a dialect and is not allowed to
+        specify dialect+driver.
 
         Glob-style patterns (using "``*``" and "``?``" as wildcards) can be
         used to match the host and database name portions of the connection
@@ -181,13 +181,16 @@ class DbAuth:
                 raise DbAuthError(
                     "Missing database dialect in URL: " + authDict["url"])
 
+            if "+" in components.scheme:
+                raise DbAuthError("Authorization dictionary URLs should only specify "
+                                  f"dialects, got: {components.scheme}. instead.")
+
             # dialect and driver are allowed in db string, since functionality
             # could change. Connecting to a DB using different driver does not
             # change dbname/user/pass and other auth info so we ignore it.
             # https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls
             dialect = dialectname.split("+")[0]
-            componentsDialect = components.scheme.split("+")[0]
-            if dialect != componentsDialect:
+            if dialect != components.scheme:
                 continue
 
             # Check for same database name
