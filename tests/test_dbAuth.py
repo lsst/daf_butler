@@ -218,11 +218,11 @@ class DbAuthTestCase(unittest.TestCase):
         auth = DbAuth(authList=[])
         with self.assertRaisesRegex(
                 DbAuthError,
-                r"^Missing drivername parameter$"):
+                r"^Missing dialectname parameter$"):
             auth.getAuth(None, None, None, None, None)
         with self.assertRaisesRegex(
                 DbAuthError,
-                r"^Missing drivername parameter$"):
+                r"^Missing dialectname parameter$"):
             auth.getAuth("", None, None, None, None)
         with self.assertRaisesRegex(
                 DbAuthError,
@@ -255,7 +255,7 @@ class DbAuthTestCase(unittest.TestCase):
         auth = DbAuth(authList=[dict(url="testing", password="testing")])
         with self.assertRaisesRegex(
                 DbAuthError,
-                r"^Missing database driver in URL: testing$"):
+                r"^Missing database dialect in URL: testing$"):
             auth.getAuth("postgresql", None, "example.com", None, "foo")
 
         auth = DbAuth(authList=[
@@ -389,7 +389,7 @@ class DbAuthTestCase(unittest.TestCase):
         auth = DbAuth(authList=[])
         with self.assertRaisesRegex(
                 DbAuthError,
-                r"^Missing drivername parameter$"):
+                r"^Missing dialectname parameter$"):
             auth.getUrl("/")
         with self.assertRaisesRegex(
                 DbAuthError,

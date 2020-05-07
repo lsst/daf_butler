@@ -20,3 +20,6 @@
 - url: "postgresql://*"
   username: user
   password: test8
+- url: "oracle://*.example.com"
+  username: user
+  password: test9

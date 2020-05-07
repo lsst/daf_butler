@@ -1,0 +1,6 @@
+# tests that dbAuth can match Oracle strings.
+registry:
+  db: "oracle+cx_oracle://oracle.example.com"
+  database: "my_database"
+  port: 5432
+  expected: "oracle+cx_oracle://user:test9@oracle.example.com:5432/my_database"

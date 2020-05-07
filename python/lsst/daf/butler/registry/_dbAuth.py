@@ -88,7 +88,7 @@ class DbAuth:
         except Exception as exc:
             raise DbAuthError(f"Unable to load DbAuth configuration file: {secretPath}.") from exc
 
-    def getAuth(self, drivername, username, host, port, database):
+    def getAuth(self, dialectname, username, host, port, database):
         """Retrieve a username and password for a database connection.
 
         This function matches elements from the database connection URL with
@@ -96,8 +96,8 @@ class DbAuth:
 
         Parameters
         ----------
-        drivername : `str`
-            Name of database backend driver from connection URL.
+        dialectname : `str`
+            Database dialect, f.e. sqlite, mysql, postgresql, oracle, or mssql.
         username : `str` or None
             Username from connection URL if present.
         host : `str`
@@ -131,6 +131,10 @@ class DbAuth:
         the database connection URL, the dictionary must also contain a
         ``username`` item.
 
+        The ``url`` item of the authorization dictionaries can contain both the
+        dialect and the driver of the database URL but the driver is ignored
+        during matching.
+
         Glob-style patterns (using "``*``" and "``?``" as wildcards) can be
         used to match the host and database name portions of the connection
         URL.  For the username, port, and database name portions, omitting them
@@ -156,8 +160,8 @@ class DbAuth:
         the pattern ``postgresql://host.example.com:5432``, even if the default
         port for the connection is 5432.
         """
-        if drivername is None or drivername == "":
-            raise DbAuthError("Missing drivername parameter")
+        if dialectname is None or dialectname == "":
+            raise DbAuthError("Missing dialectname parameter")
         if host is None or host == "":
             raise DbAuthError("Missing host parameter")
         if database is None or database == "":
@@ -172,11 +176,18 @@ class DbAuth:
             # Parse pseudo-URL from db-auth.yaml
             components = urllib.parse.urlparse(authDict["url"])
 
-            # Check for same database backend type/driver
+            # Check for same database backend type/dialect
             if components.scheme == "":
                 raise DbAuthError(
-                    "Missing database driver in URL: " + authDict["url"])
-            if drivername != components.scheme:
+                    "Missing database dialect in URL: " + authDict["url"])
+
+            # dialect and driver are allowed in db string, since functionality
+            # could change. Connecting to a DB using different driver does not
+            # change dbname/user/pass and other auth info so we ignore it.
+            # https://docs.sqlalchemy.org/en/13/core/engines.html#database-urls
+            dialect = dialectname.split("+")[0]
+            componentsDialect = components.scheme.split("+")[0]
+            if dialect != componentsDialect:
                 continue
 
             # Check for same database name
@@ -212,7 +223,7 @@ class DbAuth:
 
         raise DbAuthNotFoundError(
             "No matching DbAuth configuration for: "
-            f"({drivername}, {username}, {host}, {port}, {database})")
+            f"({dialectname}, {username}, {host}, {port}, {database})")
 
     def getUrl(self, url):
         """Fill in a username and password in a database connection URL.

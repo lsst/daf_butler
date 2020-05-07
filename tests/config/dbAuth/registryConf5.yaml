@@ -1,0 +1,4 @@
+# tests that connection string factory leaves non-standard strings unmodified (f.e. Oracle Wallet)
+registry:
+  db: "oracle+cx_oracle://@oracleRegistry"
+  expected: "oracle+cx_oracle://@oracleRegistry"
