@@ -47,13 +47,16 @@ class ConnectionStringFactory:
 
     @classmethod
     def fromConfig(cls, registryConfig):
-        """Parses the 'db' key in the config, and if they exist username,
-        password, host, port and database keys, and returns an connection
-        string object.
+        """Parses the `db`, and, if they exist, username, password, host, port
+        and database keys from the given config.
 
         If no  username and password are found in the connection string, or in
         the config, they are retrieved from a file at `DB_AUTH_PATH` or
         `DB_AUTH_ENVVAR`. Sqlite dialect does not require a password.
+
+        The `db` key value of the given config specifies the default connection
+        string, such that if no additional connection string parameters are
+        provided or retrieved, the `db` key is returned unmodified.
 
         Parameters
         ----------
@@ -71,6 +74,16 @@ class ConnectionStringFactory:
             If the credentials file has incorrect permissions.
         DbAuthError
             A problem occured when retrieving DB authentication.
+
+        Notes
+        -----
+        Matching requires dialect, host and database keys. If dialect is not
+        specified in the db string and host and database keys are not found in
+        the db string, or as explicit keys in the config, the matcher returns
+        an unchanged connection string.
+        Insufficiently specified connection strings are interpreted as an
+        indication that a 3rd party authentication mechanism, such as Oracle
+        Wallet, is being used and therefore are left unmodified.
         """
         # this import can not live on the top because of circular import issue
         from lsst.daf.butler.registry import RegistryConfig
@@ -81,14 +94,15 @@ class ConnectionStringFactory:
             if getattr(conStr, key) is None:
                 setattr(conStr, key, regConf.get(key))
 
-        # when host is None we cross our fingers and return
-        if conStr.host is None:
+        # Allow 3rd party authentication mechanisms by assuming connection
+        # string is correct when we can not recognize (dialect, host, database)
+        # matching keys.
+        if any((conStr.drivername is None,
+               conStr.host is None,
+               conStr.database is None)):
             return conStr
 
-        # allow other mechanisms to insert username and password by not forcing
-        # the credentials to exist. If other mechanisms are used it's possible
-        # that credentials were never set-up, or that there would be no match
-        # in the credentials file. Both need to be ignored.
+        # Ignore when credentials are not set up, or when no matches are found
         try:
             dbAuth = DbAuth(DB_AUTH_PATH, DB_AUTH_ENVVAR)
             auth = dbAuth.getAuth(conStr.drivername, conStr.username, conStr.host,
@@ -97,8 +111,7 @@ class ConnectionStringFactory:
             # credentials file doesn't exist or no matches were found
             pass
         else:
-            # only assign auth when *no* errors were raised, otherwise assume
-            # connection string was correct
+            # only assign auth when *no* errors were raised
             conStr.username = auth[0]
             conStr.password = auth[1]
 
