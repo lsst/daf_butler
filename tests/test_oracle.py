@@ -180,10 +180,12 @@ class OracleRegistryTests(RegistryTests):
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
         collections = doImport(config["managers", "collections"])
+        datasets = doImport(config["managers", "datasets"])
         return Registry(database=database,
                         opaque=opaque,
                         dimensions=dimensions,
                         collections=collections,
+                        datasets=datasets,
                         universe=DimensionUniverse(config), create=True)
 
 
