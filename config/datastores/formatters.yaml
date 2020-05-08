@@ -24,6 +24,7 @@ ObjectMaskCatalog: lsst.pipe.tasks.objectMasks.RegionFileFormatter
 DataFrame: lsst.daf.butler.formatters.parquetFormatter.ParquetFormatter
 Defects: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 QECurve: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
+CrosstalkCalib: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 ImageF: lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter
 ImageU: lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter
 DecoratedImageU: lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter
