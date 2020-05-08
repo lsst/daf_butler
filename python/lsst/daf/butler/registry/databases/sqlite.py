@@ -275,6 +275,20 @@ class SqliteDatabase(Database):
                 spec.dtype = sqlalchemy.Integer
         return super()._convertFieldSpec(table, spec, metadata, **kwds)
 
+    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
+        # For sqlite we force constraints on all string columns since sqlite
+        # ignores everything otherwise and this leads to problems with
+        # other databases.
+
+        constraints = []
+        if spec.dtype == sqlalchemy.String:
+            name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
+            constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}",
+                                                          name=name))
+
+        constraints.extend(super()._makeColumnConstraints(table, spec))
+        return constraints
+
     def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
                           **kwds) -> sqlalchemy.schema.Table:
         primaryKeyFieldNames = set(field.name for field in spec.fields if field.primaryKey)

@@ -467,6 +467,24 @@ class Database(ABC):
         """
         return name
 
+    def _makeColumnConstraints(self, table: str, spec: ddl.FieldSpec) -> List[sqlalchemy.CheckConstraint]:
+        """Create constraints based on this spec.
+
+        Parameters
+        ----------
+        table : `str`
+            Name of the table this column is being added to.
+        spec : `FieldSpec`
+            Specification for the field to be added.
+
+        Returns
+        -------
+        constraint : `list` of `sqlalchemy.CheckConstraint`
+            Constraint added for this column.
+        """
+        # By default we return no additional constraints
+        return []
+
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
                           **kwds: Any) -> sqlalchemy.schema.Column:
         """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
@@ -568,6 +586,11 @@ class Database(ABC):
         """
         name = self._mangleTableName(name)
         args = [self._convertFieldSpec(name, fieldSpec, metadata) for fieldSpec in spec.fields]
+
+        # Add any column constraints
+        for fieldSpec in spec.fields:
+            args.extend(self._makeColumnConstraints(name, fieldSpec))
+
         # Track indexes added for primary key and unique constraints, to make
         # sure we don't add duplicate explicit or foreign key indexes for
         # those.
