@@ -25,6 +25,7 @@ __all__ = ("Select", "SimpleQuery")
 
 from typing import (
     Any,
+    ClassVar,
     List,
     Optional,
     Union,
@@ -42,7 +43,8 @@ class Select:
     """Tag class used to indicate that a field should be returned in
     a SELECT query.
     """
-    pass
+
+    Or: ClassVar
 
 
 Select.Or = Union[T, Type[Select]]

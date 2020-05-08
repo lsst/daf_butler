@@ -133,7 +133,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         """Clear any in-memory caches held by the storage instance.
 
         This is called by `Registry` when transactions are rolled back, to
@@ -148,7 +148,7 @@ class DimensionRecordStorage(ABC):
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
-    ):
+    ) -> sqlalchemy.sql.FromClause:
         """Add the dimension element's logical table to a query under
         construction.
 
@@ -187,7 +187,7 @@ class DimensionRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def insert(self, *records: DimensionRecord):
+    def insert(self, *records: DimensionRecord) -> None:
         """Insert one or more records into storage.
 
         Parameters
@@ -313,7 +313,7 @@ class DimensionRecordStorageManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def refresh(self):
+    def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
         dataset types that may have been registered by other clients since
         it was initialized or last refreshed.
@@ -379,7 +379,7 @@ class DimensionRecordStorageManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         """Clear any in-memory caches held by nested `DimensionRecordStorage`
         instances.
 

@@ -43,7 +43,7 @@ from ..wildcards import CollectionSearch
 from .._collectionType import CollectionType
 
 if TYPE_CHECKING:
-    from .database import Database, StaticTablesContext
+    from ._database import Database, StaticTablesContext
 
 
 class MissingCollectionError(Exception):
@@ -94,7 +94,8 @@ class RunRecord(CollectionRecord):
     """
 
     @abstractmethod
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[astropy.time.Time]] = None):
+    def update(self, host: Optional[str] = None,
+               timespan: Optional[Timespan[astropy.time.Time]] = None) -> None:
         """Update the database record for this run with new execution
         information.
 
@@ -156,7 +157,7 @@ class ChainedCollectionRecord(CollectionRecord):
         """
         return self._children
 
-    def update(self, manager: CollectionManager, children: CollectionSearch):
+    def update(self, manager: CollectionManager, children: CollectionSearch) -> None:
         """Redefine this chain to search the given child collections.
 
         This method should be used by all external code to set children.  It
@@ -184,7 +185,7 @@ class ChainedCollectionRecord(CollectionRecord):
         self._update(manager, children)
         self._children = children
 
-    def refresh(self, manager: CollectionManager):
+    def refresh(self, manager: CollectionManager) -> None:
         """Load children from the database, using the given manager to resolve
         collection primary key values into records.
 
@@ -203,7 +204,7 @@ class ChainedCollectionRecord(CollectionRecord):
         self._children = self._load(manager)
 
     @abstractmethod
-    def _update(self, manager: CollectionManager, children: CollectionSearch):
+    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
         """Protected implementation hook for setting the `children` property.
 
         This method should be implemented by subclasses to update the database
@@ -375,7 +376,7 @@ class CollectionManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def refresh(self):
+    def refresh(self) -> None:
         """Ensure all other operations on this manager are aware of any
         collections that may have been registered by other clients since it
         was initialized or last refreshed.
@@ -420,7 +421,7 @@ class CollectionManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def remove(self, name: str):
+    def remove(self, name: str) -> None:
         """Completely remove a collection.
 
         Any existing `CollectionRecord` objects that correspond to the removed

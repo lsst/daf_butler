@@ -25,6 +25,7 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 
 from abc import ABC, abstractmethod
 from typing import (
+    Any,
     Dict,
     Iterable,
     Iterator,
@@ -115,7 +116,7 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]):
+    def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         """Associate one or more datasets with a collection.
 
         Parameters
@@ -144,7 +145,7 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]):
+    def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         """Remove one or more datasets from a collection.
 
         Parameters
@@ -245,9 +246,9 @@ class DatasetRecordStorageManager(ABC):
 
     @classmethod
     @abstractmethod
-    def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
-                             constraint: bool = True, onDelete: Optional[str] = None,
-                             **kwargs) -> ddl.FieldSpec:
+    def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *,
+                             name: str = "dataset", constraint: bool = True, onDelete: Optional[str] = None,
+                             **kwargs: Any) -> ddl.FieldSpec:
         """Add a foreign key (field and constraint) referencing the dataset
         table.
 
@@ -279,7 +280,7 @@ class DatasetRecordStorageManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def refresh(self, *, universe: DimensionUniverse):
+    def refresh(self, *, universe: DimensionUniverse) -> None:
         """Ensure all other operations on this manager are aware of any
         dataset types that may have been registered by other clients since
         it was initialized or last refreshed.

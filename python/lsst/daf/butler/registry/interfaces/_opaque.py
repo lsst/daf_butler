@@ -49,7 +49,7 @@ class OpaqueTableStorage(ABC):
         self.name = name
 
     @abstractmethod
-    def insert(self, *data: dict):
+    def insert(self, *data: dict) -> None:
         """Insert records into the table
 
         Parameters
@@ -80,7 +80,7 @@ class OpaqueTableStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def delete(self, **where: Any):
+    def delete(self, **where: Any) -> None:
         """Remove records from an opaque table.
 
         Parameters
