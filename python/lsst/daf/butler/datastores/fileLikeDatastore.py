@@ -182,7 +182,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                 ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
                 ddl.FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
                 # Use empty string to indicate no component
-                ddl.FieldSpec(name="component", dtype=String, length=16, primaryKey=True),
+                ddl.FieldSpec(name="component", dtype=String, length=32, primaryKey=True),
                 # TODO: should checksum be Base64Bytes instead?
                 ddl.FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
                 ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),

@@ -78,7 +78,6 @@ class DatasetTestHelper:
                                                       dimensions, sc, dataId, id=None, run=run,
                                                       conform=conform)
 
-        print(compRefs)
         return self._makeDatasetRef(datasetTypeName, dimensions, storageClass, dataId, id=id, run=run,
                                     conform=conform, components=compRefs)
 
