@@ -37,6 +37,7 @@ from typing import (
     List,
     Optional,
     Sequence,
+    Set,
     Tuple,
 )
 import warnings
@@ -48,7 +49,7 @@ from ...core import ddl, time_utils
 from .._exceptions import ConflictingDefinitionError
 
 
-def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: List[Dict[str, Any]]):
+def _checkExistingTableDefinition(name: str, spec: ddl.TableSpec, inspection: List[Dict[str, Any]]) -> None:
     """Test that the definition of a table in a `ddl.TableSpec` and from
     database introspection are consistent.
 
@@ -467,7 +468,7 @@ class Database(ABC):
         return name
 
     def _convertFieldSpec(self, table: str, spec: ddl.FieldSpec, metadata: sqlalchemy.MetaData,
-                          **kwds) -> sqlalchemy.schema.Column:
+                          **kwds: Any) -> sqlalchemy.schema.Column:
         """Convert a `FieldSpec` to a `sqlalchemy.schema.Column`.
 
         Parameters
@@ -502,7 +503,7 @@ class Database(ABC):
                                         comment=spec.doc, **kwds)
 
     def _convertForeignKeySpec(self, table: str, spec: ddl.ForeignKeySpec, metadata: sqlalchemy.MetaData,
-                               **kwds) -> sqlalchemy.schema.ForeignKeyConstraint:
+                               **kwds: Any) -> sqlalchemy.schema.ForeignKeyConstraint:
         """Convert a `ForeignKeySpec` to a
         `sqlalchemy.schema.ForeignKeyConstraint`.
 
@@ -538,7 +539,7 @@ class Database(ABC):
         )
 
     def _convertTableSpec(self, name: str, spec: ddl.TableSpec, metadata: sqlalchemy.MetaData,
-                          **kwds) -> sqlalchemy.schema.Table:
+                          **kwds: Any) -> sqlalchemy.schema.Table:
         """Convert a `TableSpec` to a `sqlalchemy.schema.Table`.
 
         Parameters
@@ -750,7 +751,7 @@ class Database(ABC):
         already exist.
         """
 
-        def check():
+        def check() -> Tuple[int, Optional[List[str]], Optional[List]]:
             """Query for a row that matches the ``key`` argument, and compare
             to what was given by the caller.
 
@@ -769,7 +770,7 @@ class Database(ABC):
                 Results in the database that correspond to the columns given
                 in ``returning``, or `None` if ``returning is None``.
             """
-            toSelect = set()
+            toSelect: Set[str] = set()
             if compared is not None:
                 toSelect.update(compared.keys())
             if returning is not None:
@@ -789,7 +790,7 @@ class Database(ABC):
             existing = fetched[0]
             if compared is not None:
 
-                def safeNotEqual(a, b):
+                def safeNotEqual(a: Any, b: Any) -> bool:
                     if isinstance(a, astropy.time.Time):
                         return not time_utils.times_equal(a, b)
                     return a != b
@@ -800,7 +801,7 @@ class Database(ABC):
             else:
                 inconsistencies = []
             if returning is not None:
-                toReturn = [existing[k] for k in returning]
+                toReturn: Optional[list] = [existing[k] for k in returning]
             else:
                 toReturn = None
             return 1, inconsistencies, toReturn
@@ -874,7 +875,11 @@ class Database(ABC):
             elif bad:
                 raise DatabaseConflictError(f"Conflict in sync on column(s) {bad}.")
             inserted = False
-        return {k: v for k, v in zip(returning, result)} if returning is not None else None, inserted
+        if returning is None:
+            return None, inserted
+        else:
+            assert result is not None
+            return {k: v for k, v in zip(returning, result)}, inserted
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
                ) -> Optional[List[int]]:
@@ -926,7 +931,7 @@ class Database(ABC):
             return [self._connection.execute(sql, row).inserted_primary_key[0] for row in rows]
 
     @abstractmethod
-    def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
         """Insert one or more rows into a table, replacing any existing rows
         for which insertion of a new row would violate the primary key
         constraint.
@@ -1045,7 +1050,8 @@ class Database(ABC):
         )
         return self._connection.execute(sql, *rows).rowcount
 
-    def query(self, sql: sqlalchemy.sql.FromClause, *args, **kwds) -> sqlalchemy.engine.ResultProxy:
+    def query(self, sql: sqlalchemy.sql.FromClause,
+              *args: Any, **kwds: Any) -> sqlalchemy.engine.ResultProxy:
         """Run a SELECT query against the database.
 
         Parameters
