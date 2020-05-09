@@ -21,21 +21,20 @@
 
 import click
 
-from ... import Butler, Config
-from ..opt import config_file, repo_argument
+from ..opt import config_file_option, repo_argument
+from ..utils import cli_handle_exception
+from ...script import createRepo
 
 
 @click.command()
 @repo_argument(help=repo_argument.will_create_repo)
-@config_file(help="Path to an existing YAML config file to apply (on top of defaults).")
+@config_file_option(helpMsg="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
               "insulating the repo from changes in package defaults.")
 @click.option("--override", "-o", is_flag=True, help="Allow values in the supplied config to override any "
               "repo settings.")
 @click.option("--outfile", "-f", default=None, type=str, help="Name of output file to receive repository "
               "configuration. Default is to write butler.yaml into the specified repo.")
-def create(repo, config_file, standalone, override, outfile):
+def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
-    config = Config(config_file) if config_file is not None else None
-    Butler.makeRepo(repo, config=config, standalone=standalone, forceConfigRoot=not override,
-                    outfile=outfile)
+    cli_handle_exception(createRepo, *args, **kwargs)
