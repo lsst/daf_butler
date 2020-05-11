@@ -283,7 +283,11 @@ class SqliteDatabase(Database):
         constraints = []
         if spec.dtype == sqlalchemy.String:
             name = self.shrinkDatabaseEntityName("_".join([table, "len", spec.name]))
-            constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}",
+            constraints.append(sqlalchemy.CheckConstraint(f"length({spec.name})<={spec.length}"
+                                                          # Oracle converts
+                                                          # empty strings to
+                                                          # NULL so check
+                                                          f" AND length({spec.name})>=1",
                                                           name=name))
 
         constraints.extend(super()._makeColumnConstraints(table, spec))
