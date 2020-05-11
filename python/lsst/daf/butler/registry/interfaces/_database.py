@@ -29,6 +29,7 @@ __all__ = [
 
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
+import threading
 from typing import (
     Any,
     Callable,
@@ -205,8 +206,23 @@ class Database(ABC):
                  namespace: Optional[str] = None):
         self.origin = origin
         self.namespace = namespace
-        self._connection = connection
+        self._setupConnection(connection)
         self._metadata: Optional[sqlalchemy.schema.MetaData] = None
+
+    def _setupConnection(self, connection: sqlalchemy.engine.Connection) -> None:
+        # Ensure that this is only run once
+        if hasattr(self._setupConnection, "executed"):
+            return
+        self._base_connection = connection
+        self._threadlocal_connection = threading.local()
+        # This sets the threadlocal connection for the currently running thread
+        self._threadlocal_connection.connection = self._base_connection
+
+    @property
+    def _connection(self) -> sqlalchemy.engine.Connection:
+        if not hasattr(self._threadlocal_connection, "connection"):
+            self._threadlocal_connection.connection = self._base_connection.engine.connect()
+        return self._threadlocal_connection.connection
 
     @classmethod
     def makeDefaultUri(cls, root: str) -> Optional[str]:
