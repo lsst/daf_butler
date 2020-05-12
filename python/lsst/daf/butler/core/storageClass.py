@@ -510,7 +510,7 @@ StorageClasses
 
         # If we have parameters they should be a frozen set so that the
         # parameters in the class can not be modified.
-        pk = f"_cls_parameters"
+        pk = "_cls_parameters"
         if pk in clsargs:
             clsargs[pk] = frozenset(clsargs[pk])
 

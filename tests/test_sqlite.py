@@ -226,7 +226,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
 
     def makeRegistry(self) -> Registry:
         config = self.makeRegistryConfig()
-        config["db"] = f"sqlite://"
+        config["db"] = "sqlite://"
         return Registry.fromConfig(config, create=True)
 
     def testRegions(self):

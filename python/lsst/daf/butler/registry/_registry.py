@@ -1119,8 +1119,8 @@ class Registry:
                 if element.alwaysJoin:
                     raise InconsistentDataIdError(
                         f"Could not fetch record for element {element.name} via keys {keys}, ",
-                        f"but it is marked alwaysJoin=True; this means one or more dimensions are not "
-                        f"related."
+                        "but it is marked alwaysJoin=True; this means one or more dimensions are not "
+                        "related."
                     )
                 records.update((d, None) for d in element.implied)
         return ExpandedDataCoordinate(standardized.graph, standardized.values(), records=records)

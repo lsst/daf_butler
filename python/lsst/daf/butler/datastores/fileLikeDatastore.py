@@ -1018,7 +1018,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                 self.removeStoredItemInfo(ref)
             except Exception as e:
                 if ignore_errors:
-                    log.warning(f"Error removing dataset %s (%s) from internal registry of %s: %s",
+                    log.warning("Error removing dataset %s (%s) from internal registry of %s: %s",
                                 ref.id, location.uri, self.name, e)
                     continue
                 else:

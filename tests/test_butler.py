@@ -1036,7 +1036,7 @@ class S3DatastoreButlerTestCase(FileLikeDatastoreButlerTests, unittest.TestCase)
     datastoreName = ["S3Datastore@s3://{bucketName}/{root}"]
     """The expected format of the S3Datastore string."""
 
-    registryStr = f":memory:"
+    registryStr = ":memory:"
     """Expected format of the Registry string."""
 
     def genRoot(self):
