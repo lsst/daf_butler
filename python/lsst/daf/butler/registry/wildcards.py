@@ -334,7 +334,7 @@ class DatasetTypeRestriction:
 
     def __repr__(self) -> str:
         if self.names is ...:
-            return f"DatasetTypeRestriction(...)"
+            return "DatasetTypeRestriction(...)"
         else:
             return f"DatasetTypeRestriction({self.names!r})"
 

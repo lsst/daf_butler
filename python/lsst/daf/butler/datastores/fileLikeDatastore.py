@@ -62,6 +62,9 @@ from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)
 
+# String to use when a Python None is encountered
+NULLSTR = "__NULL_STRING__"
+
 
 class _IngestPrepData(Datastore.IngestPrepData):
     """Helper class for FileLikeDatastore ingest implementation.
@@ -282,7 +285,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if component is None:
                 # Use empty string since we want this to be part of the
                 # primary key.
-                component = ""
+                component = NULLSTR
             records.append(
                 dict(dataset_id=ref.id, formatter=info.formatter, path=info.path,
                      storage_class=info.storageClass.name, component=component,
@@ -309,7 +312,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             component = None
         else:
             if component is None:
-                where["component"] = ""
+                where["component"] = NULLSTR
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
@@ -327,7 +330,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         else:
             records_by_component = {}
             for r in records:
-                this_component = r["component"] if r["component"] else None
+                this_component = r["component"] if r["component"] and r["component"] != NULLSTR else None
                 records_by_component[this_component] = r
 
             # Look for component by name else fall back to the parent
@@ -360,7 +363,8 @@ class FileLikeDatastore(GenericBaseDatastore):
         for record in records:
             # Convert name of StorageClass to instance
             storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
-            component = record["component"] if record["component"] else None
+            component = record["component"] if (record["component"]
+                                                and record["component"] != NULLSTR) else None
 
             info = StoredFileInfo(formatter=record["formatter"],
                                   path=record["path"],
@@ -1014,7 +1018,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                 self.removeStoredItemInfo(ref)
             except Exception as e:
                 if ignore_errors:
-                    log.warning(f"Error removing dataset %s (%s) from internal registry of %s: %s",
+                    log.warning("Error removing dataset %s (%s) from internal registry of %s: %s",
                                 ref.id, location.uri, self.name, e)
                     continue
                 else:

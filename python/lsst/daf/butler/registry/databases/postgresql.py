@@ -64,7 +64,7 @@ class PostgresqlDatabase(Database):
         try:
             dsn = dbapi.get_dsn_parameters()
         except (AttributeError, KeyError) as err:
-            raise RuntimeError(f"Only the psycopg2 driver for PostgreSQL is supported.") from err
+            raise RuntimeError("Only the psycopg2 driver for PostgreSQL is supported.") from err
         if namespace is None:
             namespace = connection.execute("SELECT current_schema();").scalar()
         self.namespace = namespace

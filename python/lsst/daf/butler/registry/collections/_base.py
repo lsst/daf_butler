@@ -246,7 +246,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         for child, restriction in children.iter(manager, withRestrictions=True, flattenChains=False):
             if restriction.names is ...:
                 rows.append({"parent": self.key, "child": child.key,
-                             "position": next(position), "dataset_type_name": ""})
+                             "position": next(position), "dataset_type_name": None})
             else:
                 for name in restriction.names:
                     rows.append({"parent": self.key, "child": child.key,
