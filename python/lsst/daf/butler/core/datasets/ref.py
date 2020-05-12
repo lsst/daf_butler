@@ -464,6 +464,10 @@ class FakeDatasetRef:
     def __hash__(self) -> int:
         return hash(self.id)
 
+    id: int
+    """Unique integer that identifies this dataset.
+    """
+
     @property
     def components(self):
         return {}
@@ -471,3 +475,16 @@ class FakeDatasetRef:
     @staticmethod
     def flatten(refs: Iterable[FakeDatasetRef], *, parents: bool = True) -> Iterator[DatasetRef]:
         return DatasetRef.flatten(refs, parents=parents)
+
+    def getCheckedId(self) -> int:
+        """Return ``self.id``.
+
+        This trivial method exists for compatibility with `DatasetRef`, for
+        which checking is actually done.
+
+        Returns
+        -------
+        id : `int`
+            ``self.id``.
+        """
+        return self.id
