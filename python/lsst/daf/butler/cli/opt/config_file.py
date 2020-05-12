@@ -30,5 +30,5 @@ class config_file_option:  # noqa: N801
     def __call__(self, f):
         return click.option("-C", "--config-file",
                             required=self.required,
-                            type=click.File(mode='r'),
+                            type=click.STRING,
                             help="The path to the config file.")(f)
