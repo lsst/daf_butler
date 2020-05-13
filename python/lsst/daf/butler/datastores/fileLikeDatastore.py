@@ -18,6 +18,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 """Generic file-based datastore code."""
 
@@ -41,7 +42,6 @@ from lsst.daf.butler import (
     Datastore,
     DatastoreConfig,
     DatastoreValidationError,
-    FakeDatasetRef,
     FileDescriptor,
     FileTemplates,
     FileTemplateValidationError,
@@ -54,7 +54,11 @@ from lsst.daf.butler import (
 )
 
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry.interfaces import ReadOnlyDatabaseError
+from lsst.daf.butler.registry.interfaces import (
+    ReadOnlyDatabaseError,
+    DatastoreRegistryBridge,
+    FakeDatasetRef,
+)
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
@@ -113,6 +117,10 @@ class FileLikeDatastore(GenericBaseDatastore):
     ----------
     config : `DatastoreConfig` or `str`
         Configuration as either a `Config` object or URI to file.
+    bridgeManager : `DatastoreRegistryBridgeManager`
+        Object that manages the interface between `Registry` and datastores.
+    butlerRoot : `str`, optional
+        New datastore root to use to override the configuration value.
 
     Raises
     ------
@@ -193,8 +201,8 @@ class FileLikeDatastore(GenericBaseDatastore):
             unique=frozenset(),
         )
 
-    def __init__(self, config, registry, butlerRoot=None):
-        super().__init__(config, registry)
+    def __init__(self, config, bridgeManager, butlerRoot=None):
+        super().__init__(config, bridgeManager)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
 
@@ -217,20 +225,22 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Now associate formatters with storage classes
         self.formatterFactory.registerFormatters(self.config["formatters"],
-                                                 universe=self.registry.dimensions)
+                                                 universe=bridgeManager.universe)
 
         # Read the file naming templates
         self.templates = FileTemplates(self.config["templates"],
-                                       universe=self.registry.dimensions)
+                                       universe=bridgeManager.universe)
 
         # See if composites should be disassembled
         self.composites = CompositesMap(self.config["composites"],
-                                        universe=self.registry.dimensions)
+                                        universe=bridgeManager.universe)
 
-        # Storage of paths and formatters, keyed by dataset_id
-        self._tableName = self.config["records", "table"]
+        tableName = self.config["records", "table"]
         try:
-            registry.registerOpaqueTable(self._tableName, self.makeTableSpec())
+            # Storage of paths and formatters, keyed by dataset_id
+            self._table = bridgeManager.opaque.register(tableName, self.makeTableSpec())
+            # Interface to Registry.
+            self._bridge = bridgeManager.register(self.name)
         except ReadOnlyDatabaseError:
             # If the database is read only and we just tried and failed to
             # create a table, it means someone is trying to create a read-only
@@ -245,6 +255,10 @@ class FileLikeDatastore(GenericBaseDatastore):
 
     def __str__(self):
         return self.root
+
+    @property
+    def bridge(self) -> DatastoreRegistryBridge:
+        return self._bridge
 
     @abstractmethod
     def _artifact_exists(self, location):
@@ -291,7 +305,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                      storage_class=info.storageClass.name, component=component,
                      checksum=info.checksum, file_size=info.file_size)
             )
-        self.registry.insertOpaqueData(self._tableName, *records)
+        self._table.insert(*records)
 
     def getStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
@@ -316,7 +330,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
-        records = list(self.registry.fetchOpaqueData(self._tableName, **where))
+        records = list(self._table.fetch(**where))
         if len(records) == 0:
             raise KeyError(f"Unable to retrieve location associated with dataset {ref}.")
 
@@ -357,7 +371,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         # Look for the dataset_id -- there might be multiple matches
         # if we have disassembled the dataset.
-        records = list(self.registry.fetchOpaqueData(self._tableName, dataset_id=ref.id))
+        records = list(self._table.fetch(dataset_id=ref.id))
 
         results = []
         for record in records:
@@ -389,13 +403,13 @@ class FileLikeDatastore(GenericBaseDatastore):
         ids : `set` of `int`
             All `DatasetRef` IDs associated with this path.
         """
-        records = list(self.registry.fetchOpaqueData(self._tableName, path=pathInStore))
+        records = list(self._table.fetch(path=pathInStore))
         ids = {r["dataset_id"] for r in records}
         return ids
 
     def removeStoredItemInfo(self, ref):
         # Docstring inherited from GenericBaseDatastore
-        self.registry.deleteOpaqueData(self._tableName, dataset_id=ref.id)
+        self._table.delete(dataset_id=ref.id)
 
     def _get_dataset_location_info(self, ref):
         """Find the `Location` of the requested dataset in the
@@ -972,61 +986,57 @@ class FileLikeDatastore(GenericBaseDatastore):
             to delete.
         """
         log.debug("Emptying trash in datastore %s", self.name)
-        trashed = self.registry.getTrashedDatasets(self.name)
+        # Context manager will empty trash iff we finish it without raising.
+        with self._bridge.emptyTrash() as trashed:
+            for ref in trashed:
+                fileLocations = self._get_dataset_locations_info(ref)
 
-        for ref in trashed:
-            fileLocations = self._get_dataset_locations_info(ref)
+                for location, _ in fileLocations:
 
-            for location, _ in fileLocations:
-
-                if location is None:
-                    err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
-                    if ignore_errors:
-                        log.warning(err_msg)
-                        continue
-                    else:
-                        raise FileNotFoundError(err_msg)
-
-                if not self._artifact_exists(location):
-                    err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
-                    if ignore_errors:
-                        log.warning(err_msg)
-                        continue
-                    else:
-                        raise FileNotFoundError(err_msg)
-
-                # Can only delete the artifact if there are no references
-                # to the file from untrashed dataset refs.
-                if self._can_remove_dataset_artifact(ref, location):
-                    # Point of no return for this artifact
-                    log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
-                    try:
-                        self._delete_artifact(location)
-                    except Exception as e:
+                    if location is None:
+                        err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
                         if ignore_errors:
-                            log.critical("Encountered error removing artifact %s from datastore %s: %s",
-                                         location.uri, self.name, e)
+                            log.warning(err_msg)
+                            continue
                         else:
-                            raise
+                            raise FileNotFoundError(err_msg)
 
-            # Now must remove the entry from the internal registry even if
-            # the artifact removal failed and was ignored,
-            # otherwise the removal check above will never be true
-            try:
-                # There may be multiple rows associated with this ref
-                # depending on disassembly
-                self.removeStoredItemInfo(ref)
-            except Exception as e:
-                if ignore_errors:
-                    log.warning("Error removing dataset %s (%s) from internal registry of %s: %s",
-                                ref.id, location.uri, self.name, e)
-                    continue
-                else:
-                    raise
+                    if not self._artifact_exists(location):
+                        err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
+                        if ignore_errors:
+                            log.warning(err_msg)
+                            continue
+                        else:
+                            raise FileNotFoundError(err_msg)
 
-        # Inform registry that we have removed items from datastore
-        # This should work even if another process is clearing out those rows
-        self.registry.emptyDatasetLocationsTrash(self.name, trashed)
+                    # Can only delete the artifact if there are no references
+                    # to the file from untrashed dataset refs.
+                    if self._can_remove_dataset_artifact(ref, location):
+                        # Point of no return for this artifact
+                        log.debug("Removing artifact %s from datastore %s", location.uri, self.name)
+                        try:
+                            self._delete_artifact(location)
+                        except Exception as e:
+                            if ignore_errors:
+                                log.critical("Encountered error removing artifact %s from datastore %s: %s",
+                                             location.uri, self.name, e)
+                            else:
+                                raise
+
+                # Now must remove the entry from the internal registry even if
+                # the artifact removal failed and was ignored,
+                # otherwise the removal check above will never be true
+                try:
+                    # There may be multiple rows associated with this ref
+                    # depending on disassembly
+                    self.removeStoredItemInfo(ref)
+                except Exception as e:
+                    if ignore_errors:
+                        log.warning("Error removing dataset %s (%s) from internal registry of %s: %s",
+                                    ref.id, location.uri, self.name, e)
+                        continue
+                    else:
+                        raise FileNotFoundError(err_msg)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

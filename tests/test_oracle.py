@@ -181,11 +181,13 @@ class OracleRegistryTests(RegistryTests):
         dimensions = doImport(config["managers", "dimensions"])
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
+        datastoreBridges = doImport(config["managers", "datastores"])
         return Registry(database=database,
                         opaque=opaque,
                         dimensions=dimensions,
                         collections=collections,
                         datasets=datasets,
+                        datastoreBridges=datastoreBridges,
                         universe=DimensionUniverse(config), create=True)
 
 

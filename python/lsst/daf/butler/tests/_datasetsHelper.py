@@ -136,7 +136,7 @@ class DatastoreTestHelper:
             registry = registryClass()
         else:
             registry = self.registry
-        return self.datastoreType(config=config, registry=registry)
+        return self.datastoreType(config=config, bridgeManager=registry.getDatastoreBridgeManager())
 
 
 class BadWriteFormatter(YamlFormatter):

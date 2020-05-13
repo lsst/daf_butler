@@ -41,7 +41,7 @@ from .constraints import Constraints
 from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
-    from ..registry import Registry
+    from ..registry.interfaces import DatastoreRegistryBridgeManager
     from .datasets import DatasetRef
     from .repoTransfer import FileDataset
 
@@ -169,8 +169,8 @@ class Datastore(metaclass=ABCMeta):
     config : `DatastoreConfig` or `str`
         Load configuration either from an existing config instance or by
         referring to a configuration file.
-    registry : `Registry`
-        Registry to use for storing internal information about the datasets.
+    bridgeManager : `DatastoreRegistryBridgeManager`
+        Object that manages the interface between `Registry` and datastores.
     butlerRoot : `str`, optional
         New datastore root to use to override the configuration value.
     """
@@ -195,9 +195,6 @@ class Datastore(metaclass=ABCMeta):
 
     config: DatastoreConfig
     """Configuration used to create Datastore."""
-
-    registry: Registry
-    """`Registry` to use when recording the writing of Datasets."""
 
     name: str
     """Label associated with this Datastore."""
@@ -251,24 +248,25 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @staticmethod
-    def fromConfig(config: Config, registry: Registry, butlerRoot: Optional[str] = None) -> 'Datastore':
+    def fromConfig(config: Config, bridgeManager: DatastoreRegistryBridgeManager,
+                   butlerRoot: Optional[str] = None) -> 'Datastore':
         """Create datastore from type specified in config file.
 
         Parameters
         ----------
         config : `Config`
             Configuration instance.
-        registry : `Registry`
-            Registry to be used by the Datastore for internal data.
+        bridgeManager : `DatastoreRegistryBridgeManager`
+            Object that manages the interface between `Registry` and
+            datastores.
         butlerRoot : `str`, optional
             Butler root directory.
         """
         cls = doImport(config["datastore", "cls"])
-        return cls(config=config, registry=registry, butlerRoot=butlerRoot)
+        return cls(config=config, bridgeManager=bridgeManager, butlerRoot=butlerRoot)
 
-    def __init__(self, config, registry, butlerRoot=None):
+    def __init__(self, config, bridgeManager, butlerRoot=None):
         self.config = DatastoreConfig(config)
-        self.registry = registry
         self.name = "ABCDataStore"
         self._transaction = None
 
@@ -277,7 +275,7 @@ class Datastore(metaclass=ABCMeta):
 
         # And read the constraints list
         constraintsConfig = self.config.get("constraints")
-        self.constraints = Constraints(constraintsConfig, universe=self.registry.dimensions)
+        self.constraints = Constraints(constraintsConfig, universe=bridgeManager.universe)
 
     def __str__(self):
         return self.name

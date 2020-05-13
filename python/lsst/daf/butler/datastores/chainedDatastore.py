@@ -63,8 +63,8 @@ class ChainedDatastore(Datastore):
         Configuration.  This configuration must include a ``datastores`` field
         as a sequence of datastore configurations.  The order in this sequence
         indicates the order to use for read operations.
-    registry : `Registry`
-        Registry to use for storing internal information about the datasets.
+    bridgeManager : `DatastoreRegistryBridgeManager`
+        Object that manages the interface between `Registry` and datastores.
     butlerRoot : `str`, optional
         New datastore root to use to override the configuration value. This
         root is sent to each child datastore.
@@ -155,15 +155,15 @@ class ChainedDatastore(Datastore):
 
         return
 
-    def __init__(self, config, registry=None, butlerRoot=None):
-        super().__init__(config, registry)
+    def __init__(self, config, bridgeManager, butlerRoot=None):
+        super().__init__(config, bridgeManager)
 
         # Scan for child datastores and instantiate them with the same registry
         self.datastores = []
         for c in self.config["datastores"]:
             c = DatastoreConfig(c)
             datastoreType = doImport(c["cls"])
-            datastore = datastoreType(c, registry, butlerRoot=butlerRoot)
+            datastore = datastoreType(c, bridgeManager, butlerRoot=butlerRoot)
             log.debug("Creating child datastore %s", datastore.name)
             self.datastores.append(datastore)
 
@@ -195,7 +195,7 @@ class ChainedDatastore(Datastore):
                                                " differs from number of constraints overrides"
                                                f" {len(overrides)}")
 
-            self.datastoreConstraints = [Constraints(c.get("constraints"), universe=self.registry.dimensions)
+            self.datastoreConstraints = [Constraints(c.get("constraints"), universe=bridgeManager.universe)
                                          for c in overrides]
 
         else:

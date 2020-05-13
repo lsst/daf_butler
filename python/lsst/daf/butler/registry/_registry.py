@@ -37,7 +37,6 @@ from typing import (
     List,
     Mapping,
     Optional,
-    Set,
     Type,
     TYPE_CHECKING,
     Union,
@@ -58,7 +57,6 @@ from ..core import (
     DimensionRecord,
     DimensionUniverse,
     ExpandedDataCoordinate,
-    FakeDatasetRef,
     StorageClassFactory,
 )
 from ..core import ddl
@@ -84,6 +82,7 @@ if TYPE_CHECKING:
         OpaqueTableStorageManager,
         DimensionRecordStorageManager,
         DatasetRecordStorageManager,
+        DatastoreRegistryBridgeManager,
     )
 
 
@@ -200,14 +199,16 @@ class Registry:
         dimensions = doImport(config["managers", "dimensions"])
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
+        datastoreBridges = doImport(config["managers", "datastores"])
         return cls(database, universe, dimensions=dimensions, opaque=opaque, collections=collections,
-                   datasets=datasets, create=create)
+                   datasets=datasets, datastoreBridges=datastoreBridges, create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
                  collections: Type[CollectionManager],
                  datasets: Type[DatasetRecordStorageManager],
+                 datastoreBridges: Type[DatastoreRegistryBridgeManager],
                  create: bool = False):
         self._db = database
         self.storageClasses = StorageClassFactory()
@@ -217,10 +218,14 @@ class Registry:
             self._datasets = datasets.initialize(self._db, context,
                                                  collections=self._collections,
                                                  universe=self.dimensions)
+            self._opaque = opaque.initialize(self._db, context)
+            self._datastoreBridges = datastoreBridges.initialize(self._db, context,
+                                                                 opaque=self._opaque,
+                                                                 datasets=datasets,
+                                                                 universe=self.dimensions)
             self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions,
                                                                         self._collections,
                                                                         self._datasets))
-            self._opaque = opaque.initialize(self._db, context)
         self._collections.refresh()
         self._datasets.refresh(universe=self._dimensions.universe)
 
@@ -852,96 +857,11 @@ class Registry:
             storage = self._datasets.find(datasetType.name)
             storage.disassociate(collectionRecord, refsForType)
 
-    @transactional
-    def insertDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
-        """Record that a datastore holds the given datasets.
+    def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
+        # TODO docs
+        return self._datastoreBridges
 
-        Typically used by `Datastore`.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of the datastore holding these datasets.
-        refs : `~collections.abc.Iterable` of `DatasetRef`
-            References to the datasets.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
-        """
-        self._db.insert(
-            self._tables.dataset_location,
-            *[{"datastore_name": datastoreName, "dataset_id": ref.getCheckedId()} for ref in refs]
-        )
-
-    @transactional
-    def moveDatasetLocationToTrash(self, datastoreName: str, refs: Iterable[DatasetRef]):
-        """Move the dataset location information to trash.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of the datastore holding these datasets.
-        refs : `~collections.abc.Iterable` of `DatasetRef`
-            References to the datasets.
-        """
-        # We only want to move rows that already exist in the main table
-        filtered = self.checkDatasetLocations(datastoreName, refs)
-        self.canDeleteDatasetLocations(datastoreName, filtered)
-        self.removeDatasetLocation(datastoreName, filtered)
-
-    @transactional
-    def canDeleteDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]):
-        """Record that a datastore can delete this dataset
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of the datastore holding these datasets.
-        refs : `~collections.abc.Iterable` of `DatasetRef`
-            References to the datasets.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``any(ref.id is None for ref in refs)``.
-        """
-        self._db.insert(
-            self._tables.dataset_location_trash,
-            *[{"datastore_name": datastoreName, "dataset_id": ref.getCheckedId()} for ref in refs]
-        )
-
-    def checkDatasetLocations(self, datastoreName: str, refs: Iterable[DatasetRef]) -> List[DatasetRef]:
-        """Check which refs are listed for this datastore.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of the datastore holding these datasets.
-        refs : `~collections.abc.Iterable` of `DatasetRef`
-            References to the datasets.
-
-        Returns
-        -------
-        present : `list` of `DatasetRef`
-            All the `DatasetRef` that are listed.
-        """
-
-        table = self._tables.dataset_location
-        result = self._db.query(
-            sqlalchemy.sql.select(
-                [table.columns.datastore_name, table.columns.dataset_id]
-            ).where(
-                sqlalchemy.sql.and_(table.columns.dataset_id.in_([ref.id for ref in refs]),
-                                    table.columns.datastore_name == datastoreName)
-            )
-        ).fetchall()
-
-        matched_ids = {r["dataset_id"] for r in result}
-        return [ref for ref in refs if ref.id in matched_ids]
-
-    def getDatasetLocations(self, ref: DatasetRef) -> Set[str]:
+    def getDatasetLocations(self, ref: DatasetRef) -> Iterator[str]:
         """Retrieve datastore locations for a given dataset.
 
         Typically used by `Datastore`.
@@ -954,102 +874,15 @@ class Registry:
 
         Returns
         -------
-        datastores : `set` of `str`
-            All the matching datastores holding this dataset. Empty set
-            if the dataset does not exist anywhere.
+        datastores : `Iterable` [ `str` ]
+            All the matching datastores holding this dataset.
 
         Raises
         ------
         AmbiguousDatasetError
             Raised if ``ref.id`` is `None`.
         """
-        table = self._tables.dataset_location
-        result = self._db.query(
-            sqlalchemy.sql.select(
-                [table.columns.datastore_name]
-            ).where(
-                table.columns.dataset_id == ref.id
-            )
-        ).fetchall()
-        return {r["datastore_name"] for r in result}
-
-    @transactional
-    def getTrashedDatasets(self, datastoreName: str) -> Set[FakeDatasetRef]:
-        """Retrieve all the dataset ref IDs that are in the trash
-        associated with the specified datastore.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            The relevant datastore name to use.
-
-        Returns
-        -------
-        ids : `set` of `FakeDatasetRef`
-            The IDs of datasets that can be safely removed from this datastore.
-            Can be empty.
-        """
-        table = self._tables.dataset_location_trash
-        result = self._db.query(
-            sqlalchemy.sql.select(
-                [table.columns.dataset_id]
-            ).where(
-                table.columns.datastore_name == datastoreName
-            )
-        ).fetchall()
-        return {FakeDatasetRef(r["dataset_id"]) for r in result}
-
-    @transactional
-    def emptyDatasetLocationsTrash(self, datastoreName: str, refs: Iterable[FakeDatasetRef]) -> None:
-        """Remove datastore location associated with these datasets from trash.
-
-        Typically used by `Datastore` when a dataset is removed.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of this `Datastore`.
-        refs : iterable of `FakeDatasetRef`
-            The dataset IDs to be removed.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
-        """
-        if not refs:
-            return
-        self._db.delete(
-            self._tables.dataset_location_trash,
-            ["dataset_id", "datastore_name"],
-            *[{"dataset_id": ref.id, "datastore_name": datastoreName} for ref in refs]
-        )
-
-    @transactional
-    def removeDatasetLocation(self, datastoreName: str, refs: Iterable[DatasetRef]) -> None:
-        """Remove datastore location associated with this dataset.
-
-        Typically used by `Datastore` when a dataset is removed.
-
-        Parameters
-        ----------
-        datastoreName : `str`
-            Name of this `Datastore`.
-        refs : iterable of `DatasetRef`
-            A reference to the dataset for which information is to be removed.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``ref.id`` is `None`.
-        """
-        if not refs:
-            return
-        self._db.delete(
-            self._tables.dataset_location,
-            ["dataset_id", "datastore_name"],
-            *[{"dataset_id": ref.getCheckedId(), "datastore_name": datastoreName} for ref in refs]
-        )
+        return self._datastoreBridges.findDatastores(ref)
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
                      records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):

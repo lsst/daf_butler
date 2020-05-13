@@ -22,91 +22,113 @@
 __all__ = ("DummyRegistry", )
 
 
-from contextlib import contextmanager
-from typing import Any, Iterator
+from typing import Any, Iterable, Iterator, Optional, Type
 
-from lsst.daf.butler import DimensionUniverse, ddl, FakeDatasetRef
+from lsst.daf.butler import ddl, DatasetRef, DimensionUniverse
+from lsst.daf.butler.registry.interfaces import (
+    Database,
+    DatasetRecordStorageManager,
+    DatastoreRegistryBridge,
+    DatastoreRegistryBridgeManager,
+    OpaqueTableStorageManager,
+    OpaqueTableStorage,
+    StaticTablesContext,
+)
+from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
+
+
+class DummyOpaqueTableStorage(OpaqueTableStorage):
+
+    def __init__(self, name: str, spec: ddl.TableSpec):
+        super().__init__(name=name)
+        self._rows = []
+        self._spec = spec
+
+    def insert(self, *data: dict):
+        # Docstring inherited from OpaqueTableStorage.
+        uniqueConstraints = list(self._spec.unique)
+        uniqueConstraints.append(tuple(field.name for field in self._spec.fields if field.primaryKey))
+        for d in data:
+            for constraint in uniqueConstraints:
+                matching = list(self.fetch(**{k: d[k] for k in constraint}))
+                if len(matching) != 0:
+                    raise RuntimeError(f"Unique constraint {constraint} violation "
+                                       "in external table {self.name}.")
+            self._rows.append(d)
+
+    def fetch(self, **where: Any) -> Iterator[dict]:
+        # Docstring inherited from OpaqueTableStorage.
+        for d in self._rows:
+            if all(d[k] == v for k, v in where.items()):
+                yield d
+
+    def delete(self, **where: Any):
+        # Docstring inherited from OpaqueTableStorage.
+        kept = []
+        for d in self._rows:
+            if not all(d[k] == v for k, v in where.items()):
+                kept.append(d)
+        self._rows = kept
+
+
+class DummyOpaqueTableStorageManager(OpaqueTableStorageManager):
+
+    def __init__(self):
+        self._storages = {}
+
+    @classmethod
+    def initialize(cls, db: Database, context: StaticTablesContext) -> OpaqueTableStorageManager:
+        # Docstring inherited from OpaqueTableStorageManager.
+        # Not used, but needed to satisfy ABC requirement.
+        return cls()
+
+    def get(self, name: str) -> Optional[OpaqueTableStorage]:
+        # Docstring inherited from OpaqueTableStorageManager.
+        return self._storage.get(name)
+
+    def register(self, name: str, spec: ddl.TableSpec) -> OpaqueTableStorage:
+        # Docstring inherited from OpaqueTableStorageManager.
+        return self._storages.setdefault(name, DummyOpaqueTableStorage(name, spec))
+
+
+class DummyDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
+
+    def __init__(self, opaque: OpaqueTableStorageManager, universe: DimensionUniverse):
+        super().__init__(opaque=opaque, universe=universe)
+        self._bridges = {}
+
+    @classmethod
+    def initialize(cls, db: Database, context: StaticTablesContext, *,
+                   opaque: OpaqueTableStorageManager,
+                   datasets: Type[DatasetRecordStorageManager],
+                   universe: DimensionUniverse,
+                   ) -> DatastoreRegistryBridgeManager:
+        # Docstring inherited from DatastoreRegistryBridgeManager
+        # Not used, but needed to satisfy ABC requirement.
+        return cls(opaque=opaque, universe=universe)
+
+    def refresh(self):
+        # Docstring inherited from DatastoreRegistryBridgeManager
+        pass
+
+    def register(self, name: str, *, ephemeral: bool = False) -> DatastoreRegistryBridge:
+        # Docstring inherited from DatastoreRegistryBridgeManager
+        return self._bridges.setdefault(name, EphemeralDatastoreRegistryBridge(name))
+
+    def findDatastores(self, ref: DatasetRef) -> Iterable[str]:
+        # Docstring inherited from DatastoreRegistryBridgeManager
+        for name, bridge in self._bridges.items():
+            if ref in bridge:
+                yield name
 
 
 class DummyRegistry:
     """Dummy Registry, for Datastore test purposes.
     """
     def __init__(self):
-        self._counter = 0
-        self._entries = {}
-        self._trashedEntries = {}
-        self._externalTableRows = {}
-        self._externalTableSpecs = {}
+        self._opaque = DummyOpaqueTableStorageManager()
         self.dimensions = DimensionUniverse()
+        self._datastoreBridges = DummyDatastoreRegistryBridgeManager(self._opaque, self.dimensions)
 
-    def registerOpaqueTable(self, name: str, spec: ddl.TableSpec):
-        self._externalTableSpecs[name] = spec
-        self._externalTableRows[name] = []
-
-    def insertOpaqueData(self, name: str, *data: dict):
-        spec = self._externalTableSpecs[name]
-        uniqueConstraints = list(spec.unique)
-        uniqueConstraints.append(tuple(field.name for field in spec.fields if field.primaryKey))
-        for d in data:
-            for constraint in uniqueConstraints:
-                matching = list(self.fetchOpaqueData(name, **{k: d[k] for k in constraint}))
-                if len(matching) != 0:
-                    raise RuntimeError(f"Unique constraint {constraint} violation in external table {name}.")
-            self._externalTableRows[name].append(d)
-
-    def fetchOpaqueData(self, name: str, **where: Any) -> Iterator[dict]:
-        for d in self._externalTableRows[name]:
-            if all(d[k] == v for k, v in where.items()):
-                yield d
-
-    def deleteOpaqueData(self, name: str, **where: Any):
-        kept = []
-        for d in self._externalTableRows[name]:
-            if not all(d[k] == v for k, v in where.items()):
-                kept.append(d)
-        self._externalTableRows[name] = kept
-
-    def insertDatasetLocations(self, datastoreName, refs):
-        # Only set ID if ID is 0 or None
-        for ref in refs:
-            incrementCounter = True
-            if ref.id is None or ref.id == 0:
-                ref._id = self._counter
-                incrementCounter = False
-            if ref.id not in self._entries:
-                self._entries[ref.id] = set()
-            self._entries[ref.id].add(datastoreName)
-            if incrementCounter:
-                self._counter += 1
-
-    def moveDatasetLocationToTrash(self, datastoreName, refs):
-        for ref in refs:
-            if ref.id not in self._trashedEntries:
-                self._trashedEntries[ref.id] = set()
-            self._trashedEntries[ref.id].add(datastoreName)
-            self._entries[ref.id].remove(datastoreName)
-
-    def getTrashedDatasets(self, datastoreName):
-        refs = set()
-        for ref, stores in self._trashedEntries.items():
-            if datastoreName in stores:
-                refs.add(FakeDatasetRef(ref))
-        return refs
-
-    def emptyDatasetLocationsTrash(self, datastoreName, refs):
-        for ref in refs:
-            self._trashedEntries[ref.id].remove(datastoreName)
-
-    def getDatasetLocations(self, ref):
-        return self._entries[ref.id].copy()
-
-    def removeDatasetLocation(self, datastoreName, refs):
-        for ref in refs:
-            self._entries[ref.id].remove(datastoreName)
-
-    def makeDatabaseDict(self, table, key, value):
-        return dict()
-
-    @contextmanager
-    def transaction(self):
-        yield
+    def getDatastoreBridgeManager(self):
+        return self._datastoreBridges

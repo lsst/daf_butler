@@ -29,6 +29,7 @@ from dataclasses import dataclass
 from typing import Dict, Optional, Any
 
 from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass
+from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)
@@ -65,8 +66,8 @@ class InMemoryDatastore(GenericBaseDatastore):
     ----------
     config : `DatastoreConfig` or `str`
         Configuration.
-    registry : `Registry`, optional
-        Unused parameter.
+    bridgeManager : `DatastoreRegistryBridgeManager`
+        Object that manages the interface between `Registry` and datastores.
     butlerRoot : `str`, optional
         Unused parameter.
 
@@ -90,8 +91,8 @@ class InMemoryDatastore(GenericBaseDatastore):
     records: Dict[int, StoredMemoryItemInfo]
     """Internal records about stored datasets."""
 
-    def __init__(self, config, registry=None, butlerRoot=None):
-        super().__init__(config, registry)
+    def __init__(self, config, bridgeManager, butlerRoot=None):
+        super().__init__(config, bridgeManager)
 
         # Name ourselves with the timestamp the datastore
         # was created.
@@ -107,6 +108,8 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         # Related records that share the same parent
         self.related = {}
+
+        self._bridge = bridgeManager.register(self.name, ephemeral=True)
 
     @classmethod
     def setConfigRoot(cls, root, config, full, overwrite=True):
@@ -142,6 +145,11 @@ class InMemoryDatastore(GenericBaseDatastore):
         This allows explicit values set in external configs to be retained.
         """
         return
+
+    @property
+    def bridge(self) -> DatastoreRegistryBridge:
+        # Docstring inherited from GenericBaseDatastore.
+        return self._bridge
 
     def addStoredItemInfo(self, refs, infos):
         # Docstring inherited from GenericBaseDatastore.
@@ -424,34 +432,30 @@ class InMemoryDatastore(GenericBaseDatastore):
         the registry only changes rows associated with this process.
         """
         log.debug("Emptying trash in datastore %s", self.name)
-        trashed = self.registry.getTrashedDatasets(self.name)
+        with self._bridge.emptyTrash() as trashed:
+            for ref in trashed:
+                try:
+                    realID, _ = self._get_dataset_info(ref)
+                except Exception as e:
+                    if ignore_errors:
+                        log.warning("Emptying trash in datastore %s but encountered an "
+                                    "error with dataset %s: %s",
+                                    self.name, ref.id, e)
+                        continue
+                    else:
+                        raise
 
-        for ref in trashed:
-            try:
-                realID, _ = self._get_dataset_info(ref)
-            except Exception as e:
-                if ignore_errors:
-                    log.warning("Emptying trash in datastore %s but encountered an error with dataset %s: %s",
-                                self.name, ref.id, e)
-                    continue
-                else:
-                    raise
+                # Determine whether all references to this dataset have been
+                # removed and we can delete the dataset itself
+                allRefs = self.related[realID]
+                theseRefs = {r.id for r in ref.flatten([ref])}
+                remainingRefs = allRefs - theseRefs
+                if not remainingRefs:
+                    log.debug("Removing artifact %s from datastore %s", realID, self.name)
+                    del self.datasets[realID]
 
-            # Determine whether all references to this dataset have been
-            # removed and we can delete the dataset itself
-            allRefs = self.related[realID]
-            theseRefs = {r.id for r in ref.flatten([ref])}
-            remainingRefs = allRefs - theseRefs
-            if not remainingRefs:
-                log.debug("Removing artifact %s from datastore %s", realID, self.name)
-                del self.datasets[realID]
-
-            # Remove this entry
-            self.removeStoredItemInfo(ref)
-
-        # Inform registry that we have handled these items
-        # This should work even if another process is clearing out those rows
-        self.registry.emptyDatasetLocationsTrash(self.name, trashed)
+                # Remove this entry
+                self.removeStoredItemInfo(ref)
 
     def validateConfiguration(self, entities, logFailures=False):
         """Validate some of the configuration for this datastore.

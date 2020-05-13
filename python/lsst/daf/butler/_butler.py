@@ -218,7 +218,8 @@ class Butler:
             if writeable is None:
                 writeable = run is not None or chains is not None or self.tags
             self.registry = Registry.fromConfig(self._config, butlerRoot=butlerRoot, writeable=writeable)
-            self.datastore = Datastore.fromConfig(self._config, self.registry, butlerRoot=butlerRoot)
+            self.datastore = Datastore.fromConfig(self._config, self.registry.getDatastoreBridgeManager(),
+                                                  butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self._config)
             self._composites = CompositesMap(self._config, universe=self.registry.dimensions)

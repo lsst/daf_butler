@@ -39,8 +39,6 @@ RegistryTablesTuple = namedtuple(
     [
         "quantum",
         "dataset_consumers",
-        "dataset_location",
-        "dataset_location_trash",
     ]
 )
 
@@ -59,6 +57,8 @@ def makeRegistryTableSpecs(universe: DimensionUniverse,
     collections : `Collection`
         The `CollectionManager` that will be used for this `Registry`; used to
         create foreign keys to the run and collection tables.
+    datasets : subclass of `DatasetRecordStorageManager`
+        Manager class for dataset tables; used only to create foreign keys.
 
     Returns
     -------
@@ -133,36 +133,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse,
         ]
     )
     datasets.addDatasetForeignKey(dataset_consumers, nullable=True, onDelete="SET NULL")
-
-    # We want the dataset_location and dataset_location_trash tables
-    # to have the same definition, aside from the behavior of their link
-    # to the dataset table: the trash table has no foreign key constraint.
-    dataset_location_spec = dict(
-        doc=(
-            "A table that provides information on whether a dataset is stored in "
-            "one or more Datastores.  The presence or absence of a record in this "
-            "table itself indicates whether the dataset is present in that "
-            "Datastore. "
-        ),
-        fields=[
-            ddl.FieldSpec(
-                name="datastore_name",
-                dtype=sqlalchemy.String,
-                length=256,
-                primaryKey=True,
-                nullable=False,
-                doc="Name of the Datastore this entry corresponds to.",
-            ),
-        ],
-    )
-    dataset_location = ddl.TableSpec(**dataset_location_spec)
-    datasets.addDatasetForeignKey(dataset_location, primaryKey=True)
-    dataset_location_trash = ddl.TableSpec(**dataset_location_spec)
-    datasets.addDatasetForeignKey(dataset_location_trash, primaryKey=True, constraint=False)
-
     return RegistryTablesTuple(
         quantum=quantum,
         dataset_consumers=dataset_consumers,
-        dataset_location=dataset_location,
-        dataset_location_trash=dataset_location_trash,
     )

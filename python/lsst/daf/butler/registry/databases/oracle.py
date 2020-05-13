@@ -183,6 +183,8 @@ class OracleDatabase(Database):
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
+        if not rows:
+            return
         self._connection.execute(_Merge(table), *rows)
 
     prefix: Optional[str]
