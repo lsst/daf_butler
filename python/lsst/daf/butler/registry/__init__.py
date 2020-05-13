@@ -24,6 +24,7 @@ from ._exceptions import *
 from ._registry import *
 from ._dbAuth import *
 from ._collectionType import *
+from ._dimensionRecordCache import *
 
 from . import wildcards
 from .wildcards import CollectionSearch, DatasetTypeRestriction
