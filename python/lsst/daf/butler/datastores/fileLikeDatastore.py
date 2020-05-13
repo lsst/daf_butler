@@ -42,7 +42,6 @@ from lsst.daf.butler import (
     Datastore,
     DatastoreConfig,
     DatastoreValidationError,
-    FakeDatasetRef,
     FileDescriptor,
     FileTemplates,
     FileTemplateValidationError,
@@ -55,7 +54,11 @@ from lsst.daf.butler import (
 )
 
 from lsst.daf.butler import ddl
-from lsst.daf.butler.registry.interfaces import ReadOnlyDatabaseError, DatastoreRegistryBridge
+from lsst.daf.butler.registry.interfaces import (
+    ReadOnlyDatabaseError,
+    DatastoreRegistryBridge,
+    FakeDatasetRef,
+)
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional

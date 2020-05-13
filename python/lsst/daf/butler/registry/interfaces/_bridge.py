@@ -20,21 +20,96 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ("DatastoreRegistryBridgeManager", "DatastoreRegistryBridge")
+__all__ = ("DatastoreRegistryBridgeManager", "DatastoreRegistryBridge", "FakeDatasetRef", "DatasetIdRef")
 
 from abc import ABC, abstractmethod
 from typing import (
+    Any,
+    cast,
     ContextManager,
+    Dict,
     Iterable,
+    Iterator,
     Type,
     TYPE_CHECKING,
+    Union,
 )
 
+from ...core.utils import immutable
+from ...core import DatasetRef
+
 if TYPE_CHECKING:
-    from ...core import DatasetRef, DimensionUniverse, FakeDatasetRef
+    from ...core import DimensionUniverse
     from ._database import Database, StaticTablesContext
     from ._datasets import DatasetRecordStorageManager
     from ._opaque import OpaqueTableStorageManager
+
+
+@immutable
+class FakeDatasetRef:
+    """A fake `DatasetRef` that can be used internally by butler where
+    only the dataset ID is available.
+
+    Should only be used when registry can not be used to create a full
+    `DatasetRef` from the ID.  A particular use case is during dataset
+    deletion when solely the ID is available.
+
+    Parameters
+    ----------
+    id : `int`
+        The dataset ID.
+    """
+    __slots__ = ("id",)
+
+    def __new__(cls, id: int) -> FakeDatasetRef:
+        self = super().__new__(cls)
+        self.id = id
+        return self
+
+    def __str__(self) -> str:
+        return f"dataset_id={self.id}"
+
+    def __repr__(self) -> str:
+        return f"FakeDatasetRef({self.id})"
+
+    def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
+        try:
+            return self.id == other.id
+        except AttributeError:
+            return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+    id: int
+    """Unique integer that identifies this dataset.
+    """
+
+    @property
+    def components(self) -> Dict[str, FakeDatasetRef]:
+        return {}
+
+    @staticmethod
+    def flatten(refs: Iterable[FakeDatasetRef], *, parents: bool = True) -> Iterator[DatasetRef]:
+        return DatasetRef.flatten(cast(Iterable[DatasetRef], refs), parents=parents)
+
+    def getCheckedId(self) -> int:
+        """Return ``self.id``.
+
+        This trivial method exists for compatibility with `DatasetRef`, for
+        which checking is actually done.
+
+        Returns
+        -------
+        id : `int`
+            ``self.id``.
+        """
+        return self.id
+
+
+DatasetIdRef = Union[DatasetRef, FakeDatasetRef]
+"""A type-annotation alias that matches both `DatasetRef` and `FakeDatasetRef`.
+"""
 
 
 class DatastoreRegistryBridge(ABC):
@@ -51,12 +126,12 @@ class DatastoreRegistryBridge(ABC):
         self.datastoreName = datastoreName
 
     @abstractmethod
-    def insert(self, refs: Iterable[DatasetRef]) -> None:
+    def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         """Record that a datastore holds the given datasets.
 
         Parameters
         ----------
-        refs : `Iterable` of `DatasetRef`
+        refs : `Iterable` of `DatasetIdRef`
             References to the datasets.
 
         Raises
@@ -67,12 +142,12 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def moveToTrash(self, refs: Iterable[DatasetRef]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
         """Move dataset location information to trash.
 
         Parameters
         ----------
-        refs : `Iterable` of `DatasetRef`
+        refs : `Iterable` of `DatasetIdRef`
             References to the datasets.
 
         Raises
@@ -83,17 +158,17 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def check(self, refs: Iterable[DatasetRef]) -> Iterable[DatasetRef]:
+    def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         """Check which refs are listed for this datastore.
 
         Parameters
         ----------
-        refs : `~collections.abc.Iterable` of `DatasetRef`
+        refs : `~collections.abc.Iterable` of `DatasetIdRef`
             References to the datasets.
 
         Returns
         -------
-        present : `Iterable` [ `DatasetRef` ]
+        present : `Iterable` [ `DatasetIdRef` ]
             Datasets from ``refs`` that are recorded as being in this
             datastore.
 
@@ -105,14 +180,14 @@ class DatastoreRegistryBridge(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def emptyTrash(self) -> ContextManager[Iterable[FakeDatasetRef]]:
+    def emptyTrash(self) -> ContextManager[Iterable[DatasetIdRef]]:
         """Retrieve all the dataset ref IDs that are in the trash
         associated for this datastore, and then remove them if the context
         exists without an exception being raised.
 
         Returns
         -------
-        ids : `set` of `FakeDatasetRef`
+        ids : `set` of `DatasetIdRef`
             The IDs of datasets that can be safely removed from this datastore.
             Can be empty.
 

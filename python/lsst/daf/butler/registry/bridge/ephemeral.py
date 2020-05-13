@@ -25,8 +25,7 @@ __all__ = ("EphemeralDatastoreRegistryBridge",)
 from contextlib import contextmanager
 from typing import Iterable, Iterator, Set
 
-from lsst.daf.butler import DatasetRef, FakeDatasetRef
-from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
+from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridge, FakeDatasetRef
 
 
 class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
@@ -51,23 +50,23 @@ class EphemeralDatastoreRegistryBridge(DatastoreRegistryBridge):
         self._datasetIds: Set[int] = set()
         self._trashedIds: Set[int] = set()
 
-    def insert(self, refs: Iterable[DatasetRef]) -> None:
+    def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         self._datasetIds.update(ref.getCheckedId() for ref in refs)
 
-    def moveToTrash(self, refs: Iterable[DatasetRef]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         self._trashedIds.update(ref.getCheckedId() for ref in refs)
 
-    def check(self, refs: Iterable[DatasetRef]) -> Iterable[DatasetRef]:
+    def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
         yield from (ref for ref in refs if ref in self)
 
-    def __contains__(self, ref: DatasetRef) -> bool:
+    def __contains__(self, ref: DatasetIdRef) -> bool:
         return ref.getCheckedId() in self._datasetIds and ref.getCheckedId() not in self._trashedIds
 
     @contextmanager
-    def emptyTrash(self) -> Iterator[Iterable[FakeDatasetRef]]:
+    def emptyTrash(self) -> Iterator[Iterable[DatasetIdRef]]:
         # Docstring inherited from DatastoreRegistryBridge
         yield (FakeDatasetRef(id) for id in self._trashedIds)
         self._datasetIds.difference_update(self._trashedIds)

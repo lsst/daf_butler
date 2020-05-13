@@ -25,15 +25,17 @@ __all__ = ("MonolithicDatastoreRegistryBridgeManager", "MonolithicDatastoreRegis
 from collections import namedtuple
 from contextlib import contextmanager
 import copy
-from typing import Dict, Iterable, Iterator, List, Type, TYPE_CHECKING, Union
+from typing import cast, Dict, Iterable, Iterator, List, Type, TYPE_CHECKING
 
 import sqlalchemy
 
-from lsst.daf.butler import DatasetRef, ddl, FakeDatasetRef
+from lsst.daf.butler import DatasetRef, ddl
 from lsst.daf.butler.core.utils import NamedValueSet
 from lsst.daf.butler.registry.interfaces import (
+    DatasetIdRef,
     DatastoreRegistryBridge,
     DatastoreRegistryBridgeManager,
+    FakeDatasetRef,
 )
 from lsst.daf.butler.registry.bridge.ephemeral import EphemeralDatastoreRegistryBridge
 
@@ -122,14 +124,14 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         self._db = db
         self._tables = tables
 
-    def _refsToRows(self, refs: Iterable[Union[DatasetRef, FakeDatasetRef]]) -> List[dict]:
+    def _refsToRows(self, refs: Iterable[DatasetIdRef]) -> List[dict]:
         """Transform an iterable of `DatasetRef` or `FakeDatasetRef` objects to
         a list of dictionaries that match the schema of the tables used by this
         class.
 
         Parameters
         ----------
-        refs : `Iterable` [ `DatasetRef` ]
+        refs : `Iterable` [ `DatasetRef` or `FakeDatasetRef` ]
             Datasets to transform.
 
         Returns
@@ -139,11 +141,11 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
         """
         return [{"datastore_name": self.datastoreName, "dataset_id": ref.getCheckedId()} for ref in refs]
 
-    def insert(self, refs: Iterable[DatasetRef]) -> None:
+    def insert(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         self._db.insert(self._tables.dataset_location, *self._refsToRows(refs))
 
-    def moveToTrash(self, refs: Iterable[DatasetRef]) -> None:
+    def moveToTrash(self, refs: Iterable[DatasetIdRef]) -> None:
         # Docstring inherited from DatastoreRegistryBridge
         # TODO: avoid self.check() call via queries like
         #     INSERT INTO dataset_location_trash
@@ -158,7 +160,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             self._db.delete(self._tables.dataset_location, ["datastore_name", "dataset_id"], *rows)
             self._db.insert(self._tables.dataset_location_trash, *rows)
 
-    def check(self, refs: Iterable[DatasetRef]) -> Iterable[DatasetRef]:
+    def check(self, refs: Iterable[DatasetIdRef]) -> Iterable[DatasetIdRef]:
         # Docstring inherited from DatastoreRegistryBridge
         byId = {ref.getCheckedId(): ref for ref in refs}
         sql = sqlalchemy.sql.select(
@@ -175,7 +177,7 @@ class MonolithicDatastoreRegistryBridge(DatastoreRegistryBridge):
             yield byId[row["dataset_id"]]
 
     @contextmanager
-    def emptyTrash(self) -> Iterator[Iterable[FakeDatasetRef]]:
+    def emptyTrash(self) -> Iterator[Iterable[DatasetIdRef]]:
         # Docstring inherited from DatastoreRegistryBridge
         sql = sqlalchemy.sql.select(
             [self._tables.dataset_location_trash.columns.dataset_id]
@@ -225,7 +227,7 @@ class MonolithicDatastoreRegistryBridgeManager(DatastoreRegistryBridgeManager):
                    ) -> DatastoreRegistryBridgeManager:
         # Docstring inherited from DatastoreRegistryBridge
         tables = context.addTableTuple(_makeTableSpecs(datasets))
-        return cls(db=db, tables=tables, opaque=opaque, universe=universe)
+        return cls(db=db, tables=cast(_TablesTuple, tables), opaque=opaque, universe=universe)
 
     def refresh(self) -> None:
         # Docstring inherited from DatastoreRegistryBridge
