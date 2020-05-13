@@ -21,16 +21,37 @@
 
 import click
 import os
+from unittest.mock import MagicMock
 
 from ..core.utils import iterable
 
 
-# DAF_BUTLER_MOCK is set by some tests as an environment variable and indicates
-# to the cli_handle_exception function that instead of executing the command
-# implementation function it should print details about the called command to
-# stdout. These details are then used to verify the command function was loaded
-# and received expected inputs.
-DAF_BUTLER_MOCK = {"DAF_BUTLER_MOCK": ""}
+# CLI_BUTLER_MOCK_ENV is set by some tests as an environment variable, it
+# indicates to the cli_handle_exception function that instead of executing the
+# command implementation function it should use the Mocker class for unit test
+# verification.
+mockEnvVarKey = "CLI_BUTLER_MOCK_ENV"
+mockEnvVar = {mockEnvVarKey: "1"}
+
+
+class Mocker:
+
+    mock = MagicMock()
+
+    def __init__(self, *args, **kwargs):
+        """Mocker is a helper class for unit tests. It can be imported and
+        called and later imported again and call can be verified.
+
+        For convenience, constructor arguments are forwarded to the call
+        function.
+        """
+        self.__call__(*args, **kwargs)
+
+    def __call__(self, *args, **kwargs):
+        """Creates a MagicMock and stores it in a static variable that can
+        later be verified.
+        """
+        Mocker.mock(*args, **kwargs)
 
 
 def split_commas(context, param, values):
@@ -132,51 +153,6 @@ def to_upper(context, param, value):
     return value.upper()
 
 
-def printFunctionInfo(func, *args, **kwargs):
-    """For unit testing butler subcommand call execution, write a dict to
-    stdout that formats information about a funciton call into a dict that can
-    be evaluated by `verifyFunctionInfo`
-
-    Parameters
-    ----------
-    func : function
-        The function that has been called, whose name should be written.
-    args : [`str`]
-        The values of the arguments the function was called with.
-    kwags : `dict` [`str`, `str`]
-        The names and values of the kwargs the function was called with.
-    """
-    print(dict(function=func.__name__,
-               args=args,
-               kwargs=kwargs))
-
-
-def verifyFunctionInfo(testSuite, output, function, expectedArgs, expectedKwargs):
-    """For unit testing butler subcommand call execution, compare a dict that
-    has been printed to stdout to expected data.
-
-    Parameters
-    ----------
-    testSuite : `unittest.Testsuite`
-        The test suite that is executing a unit test.
-    output : `str`
-        The dict that has been printed to stdout. It should be formatted to
-        re-instantiate by calling `eval`.
-    function : `str`
-        The name of the function that was was expected to have been called.
-    expectedArgs : [`str`]
-        The values of the arguments that should have been passed to the
-        function.
-    expectedKwargs : `dict` [`str`, `str`]
-        The names and values of the kwargs that should have been passsed to the
-        funciton.
-    """
-    calledWith = eval(output)
-    testSuite.assertEqual(calledWith['function'], function)
-    testSuite.assertEqual(calledWith['args'], expectedArgs)
-    testSuite.assertEqual(calledWith['kwargs'], expectedKwargs)
-
-
 def cli_handle_exception(func, *args, **kwargs):
     """Wrap a function call in an exception handler that raises a
     ClickException if there is an Exception.
@@ -200,10 +176,8 @@ def cli_handle_exception(func, *args, **kwargs):
     click.ClickException
         An exception to be handled by the Click CLI tool.
     """
-    # "DAF_BUTLER_MOCK" matches the key in the variable DAF_BUTLER_MOCK,
-    # defined in the top of this file.
-    if "DAF_BUTLER_MOCK" in os.environ:
-        printFunctionInfo(func, *args, **kwargs)
+    if mockEnvVarKey in os.environ:
+        Mocker(*args, **kwargs)
         return
     try:
         return func(*args, **kwargs)
