@@ -1139,13 +1139,17 @@ class Registry:
             builder.joinDataset(datasetType, collections, isResult=False)
         query = builder.finish()
         predicate = query.predicate()
-        for row in self._db.query(query.sql):
-            if predicate(row):
-                result = query.extractDataId(row)
-                if expand:
-                    yield self.expandDataId(result, records=standardizedDataId.records)
-                else:
-                    yield result
+        # We start a dimension cache even though we only need it if
+        # expand=True, just to keep this code simple; it should be quite cheap
+        # if we don't use it.
+        with self.cachedDimensions() as cache:
+            for row in self._db.query(query.sql):
+                if predicate(row):
+                    result = query.extractDataId(row)
+                    if expand:
+                        yield cache.expandDataId(result, records=standardizedDataId.records)
+                    else:
+                        yield result
 
     def queryDatasets(self, datasetType: Any, *,
                       collections: Any,
@@ -1263,34 +1267,38 @@ class Registry:
             return
         query = builder.finish()
         predicate = query.predicate()
-        if not deduplicate:
-            # No need to de-duplicate across collections.
-            for row in self._db.query(query.sql):
-                if predicate(row):
-                    dataId = query.extractDataId(row, graph=datasetType.dimensions)
-                    if expand:
-                        dataId = self.expandDataId(dataId, records=standardizedDataId.records)
-                    yield query.extractDatasetRef(row, datasetType, dataId)[0]
-        else:
-            # For each data ID, yield only the DatasetRef with the lowest
-            # collection rank.
-            bestRefs = {}
-            bestRanks = {}
-            for row in self._db.query(query.sql):
-                if predicate(row):
-                    ref, rank = query.extractDatasetRef(row, datasetType)
-                    bestRank = bestRanks.get(ref.dataId, sys.maxsize)
-                    if rank < bestRank:
-                        bestRefs[ref.dataId] = ref
-                        bestRanks[ref.dataId] = rank
-            # If caller requested expanded data IDs, we defer that until here
-            # so we do as little expansion as possible.
-            if expand:
-                for ref in bestRefs.values():
-                    dataId = self.expandDataId(ref.dataId, records=standardizedDataId.records)
-                    yield ref.expanded(dataId)
+        # We start a dimension cache even though we only need it if
+        # expand=True, just to keep this code simple; it should be quite cheap
+        # if we don't use it.
+        with self.cachedDimensions() as cache:
+            if not deduplicate:
+                # No need to de-duplicate across collections.
+                for row in self._db.query(query.sql):
+                    if predicate(row):
+                        dataId = query.extractDataId(row, graph=datasetType.dimensions)
+                        if expand:
+                            dataId = cache.expandDataId(dataId, records=standardizedDataId.records)
+                        yield query.extractDatasetRef(row, datasetType, dataId)[0]
             else:
-                yield from bestRefs.values()
+                # For each data ID, yield only the DatasetRef with the lowest
+                # collection rank.
+                bestRefs = {}
+                bestRanks = {}
+                for row in self._db.query(query.sql):
+                    if predicate(row):
+                        ref, rank = query.extractDatasetRef(row, datasetType)
+                        bestRank = bestRanks.get(ref.dataId, sys.maxsize)
+                        if rank < bestRank:
+                            bestRefs[ref.dataId] = ref
+                            bestRanks[ref.dataId] = rank
+                # If caller requested expanded data IDs, we defer that until
+                # here so we do as little expansion as possible.
+                if expand:
+                    for ref in bestRefs.values():
+                        dataId = cache.expandDataId(ref.dataId, records=standardizedDataId.records)
+                        yield ref.expanded(dataId)
+                else:
+                    yield from bestRefs.values()
 
     dimensions: DimensionUniverse
     """The universe of all dimensions known to the registry
