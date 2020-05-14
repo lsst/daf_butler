@@ -61,7 +61,8 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
+from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional
+from lsst.daf.butler.core import NamedValueSet
 from .genericDatastore import GenericBaseDatastore
 
 log = logging.getLogger(__name__)

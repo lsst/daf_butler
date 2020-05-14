@@ -47,7 +47,8 @@ from lsst.sphgeom import ConvexPolygon
 from .config import Config
 from .exceptions import ValidationError
 from . import time_utils
-from .utils import iterable, stripIfNotNone, NamedValueSet
+from .utils import iterable, stripIfNotNone
+from .named import NamedValueSet
 
 
 _LOG = logging.getLogger(__name__)

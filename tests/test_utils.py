@@ -22,9 +22,9 @@
 import unittest
 from collections import namedtuple
 
-from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton, NamedKeyDict
+from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
 from lsst.daf.butler.core.formatter import Formatter
-from lsst.daf.butler import StorageClass
+from lsst.daf.butler import Named, NamedKeyDict, StorageClass
 
 
 class IterableTestCase(unittest.TestCase):
@@ -79,7 +79,7 @@ class SingletonTestCase(unittest.TestCase):
 class NamedKeyDictTest(unittest.TestCase):
 
     def setUp(self):
-        self.TestTuple = namedtuple("TestTuple", ("name", "id"))
+        self.TestTuple = Named.register(namedtuple("TestTuple", ("name", "id")))
         self.a = self.TestTuple(name="a", id=1)
         self.b = self.TestTuple(name="b", id=2)
         self.dictionary = {self.a: 10, self.b: 20}

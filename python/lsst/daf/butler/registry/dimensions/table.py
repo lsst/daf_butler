@@ -31,10 +31,10 @@ from ...core import (
     DimensionElement,
     DimensionRecord,
     makeDimensionElementTableSpec,
+    NamedKeyDict,
     Timespan,
     TIMESPAN_FIELD_SPECS,
 )
-from ...core.utils import NamedKeyDict
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 

@@ -28,7 +28,8 @@ import pickle
 from typing import Optional, Iterable, List, Union, TYPE_CHECKING
 
 from ..config import Config
-from ..utils import NamedValueSet, immutable
+from ..named import NamedValueSet
+from ..utils import immutable
 from .elements import Dimension, DimensionElement, SkyPixDimension
 from .graph import DimensionGraph
 from .config import processElementsConfig, processSkyPixConfig, DimensionConfig

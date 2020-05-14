@@ -31,7 +31,7 @@ import copy
 from typing import TYPE_CHECKING
 
 from .. import ddl
-from ..utils import NamedValueSet
+from ..named import NamedValueSet
 from ..timespan import TIMESPAN_FIELD_SPECS
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.

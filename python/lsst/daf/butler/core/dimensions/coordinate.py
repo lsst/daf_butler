@@ -27,7 +27,8 @@ import numbers
 from typing import Any, Tuple, Mapping, Optional, Dict, Union, TYPE_CHECKING
 
 from lsst.sphgeom import Region
-from ..utils import IndexedTupleDict, immutable
+from ..named import IndexedTupleDict
+from ..utils import immutable
 from ..timespan import Timespan
 from .graph import DimensionGraph
 

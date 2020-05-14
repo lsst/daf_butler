@@ -28,7 +28,8 @@ from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
 from ..configSupport import LookupKey
-from ..utils import immutable, NamedKeyDict
+from ..utils import immutable
+from ..named import NamedKeyDict
 from .type import DatasetType
 
 

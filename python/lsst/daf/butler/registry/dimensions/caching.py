@@ -26,8 +26,7 @@ from typing import Optional
 
 import sqlalchemy
 
-from ...core import DataCoordinate, DimensionElement, DimensionRecord, Timespan
-from ...core.utils import NamedKeyDict
+from ...core import DataCoordinate, DimensionElement, DimensionRecord, NamedKeyDict, Timespan
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 

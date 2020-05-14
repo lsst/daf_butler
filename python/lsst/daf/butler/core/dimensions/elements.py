@@ -35,7 +35,8 @@ from typing import (
 from sqlalchemy import Integer
 
 from lsst.sphgeom import Pixelization
-from ..utils import NamedValueSet, immutable
+from ..utils import immutable
+from ..named import Named, NamedValueSet
 from .. import ddl
 from .records import _subclassDimensionRecord
 from .graph import DimensionGraph
