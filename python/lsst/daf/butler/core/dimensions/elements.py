@@ -136,7 +136,7 @@ class RelatedDimensions:
 
 
 @immutable
-class DimensionElement:
+class DimensionElement(Named):
     """A named data-organization concept that defines a label and/or metadata
     in the dimensions system.
 
@@ -181,7 +181,7 @@ class DimensionElement:
                  cached: bool = False,
                  viewOf: Optional[str] = None,
                  alwaysJoin: bool = False):
-        self.name = name
+        super().__init__(name)
         self._related = related
         self.metadata = NamedValueSet(metadata)
         self.metadata.freeze()

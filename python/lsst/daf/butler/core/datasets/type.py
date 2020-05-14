@@ -27,6 +27,7 @@ from copy import deepcopy
 import re
 
 from types import MappingProxyType
+from ..named import Named
 from ..storageClass import StorageClass, StorageClassFactory
 from ..dimensions import DimensionGraph
 from ..configSupport import LookupKey
@@ -38,7 +39,7 @@ def _safeMakeMappingProxyType(data):
     return MappingProxyType(data)
 
 
-class DatasetType:
+class DatasetType(Named):
     r"""A named category of Datasets that defines how they are organized,
     related, and stored.
 
@@ -96,7 +97,7 @@ class DatasetType:
     def __init__(self, name, dimensions, storageClass, *, universe=None):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
-        self._name = name
+        super().__init__(name)
         if not isinstance(dimensions, DimensionGraph):
             if universe is None:
                 raise ValueError("If dimensions is not a normalized DimensionGraph, "
@@ -117,7 +118,7 @@ class DatasetType:
     def __eq__(self, other):
         if not isinstance(other, type(self)):
             return False
-        if self._name != other._name:
+        if self.name != other.name:
             return False
         if self._dimensions != other._dimensions:
             return False
@@ -132,14 +133,12 @@ class DatasetType:
         This only uses StorageClass name which is it consistent with the
         implementation of StorageClass hash method.
         """
-        return hash((self._name, self._dimensions, self._storageClassName))
+        return hash((self.name, self._dimensions, self._storageClassName))
 
-    @property
-    def name(self):
-        """A string name for the Dataset; must correspond to the same
-        `DatasetType` across all Registries.
-        """
-        return self._name
+    name: str
+    """A string name for the Dataset; must correspond to the same
+    `DatasetType` across all Registries.
+    """
 
     @property
     def dimensions(self):

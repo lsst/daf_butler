@@ -34,8 +34,8 @@ from ..core import (
     DimensionGraph,
     DimensionRecord,
     ExpandedDataCoordinate,
+    NamedKeyDict,
 )
-from ..core.utils import NamedKeyDict
 from ._exceptions import InconsistentDataIdError
 
 if TYPE_CHECKING:
@@ -205,12 +205,10 @@ class DimensionRecordCache:
                                                   **kwargs)
         if isinstance(standardized, ExpandedDataCoordinate):
             return standardized
-        elif isinstance(dataId, ExpandedDataCoordinate):
-            records = NamedKeyDict(records) if records is not None else NamedKeyDict()
+        records = NamedKeyDict(records) if records is not None else NamedKeyDict()
+        if isinstance(dataId, ExpandedDataCoordinate):
             records.update(dataId.records)
-        else:
-            records = NamedKeyDict(records) if records is not None else NamedKeyDict()
-        keys = dict(standardized)
+        keys = dict(standardized.byName())
         regions: List[lsst.sphgeom.Region] = []
         timespans: List[Timespan] = []
         for element in standardized.graph.primaryKeyTraversalOrder:
