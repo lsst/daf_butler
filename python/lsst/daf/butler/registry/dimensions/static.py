@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from typing import Optional
 
+from ...core import NamedKeyDict
 from ...core.dimensions import DimensionElement, DimensionUniverse
-from ...core.utils import NamedKeyDict
 from ..interfaces import Database, StaticTablesContext, DimensionRecordStorageManager, DimensionRecordStorage
 
 

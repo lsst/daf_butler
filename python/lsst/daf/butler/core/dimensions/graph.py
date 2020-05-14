@@ -25,7 +25,8 @@ __all__ = ["DimensionGraph"]
 
 from typing import Optional, Iterable, Iterator, KeysView, Union, Any, Tuple, TYPE_CHECKING
 
-from ..utils import NamedValueSet, NamedKeyDict, immutable
+from ..named import NamedValueSet, NamedKeyDict
+from ..utils import immutable
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .universe import DimensionUniverse

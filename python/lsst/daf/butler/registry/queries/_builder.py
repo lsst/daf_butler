@@ -32,8 +32,8 @@ from ...core import (
     SkyPixDimension,
     Dimension,
     DatasetType,
+    NamedKeyDict,
 )
-from ...core.utils import NamedKeyDict
 
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
 from .expressions import ClauseVisitor

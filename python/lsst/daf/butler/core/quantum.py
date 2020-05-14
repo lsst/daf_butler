@@ -25,7 +25,7 @@ import astropy.time
 
 from lsst.utils import doImport
 
-from .utils import NamedKeyDict
+from .named import NamedKeyDict
 
 
 class Quantum:

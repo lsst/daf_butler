@@ -49,7 +49,8 @@ import astropy.time
 from lsst.utils import doImport
 from .config import ConfigSubset
 from .datasets import DatasetType, DatasetRef
-from .utils import NamedValueSet, iterable
+from .utils import iterable
+from .named import NamedValueSet
 
 if TYPE_CHECKING:
     from .dimensions import DimensionElement, DimensionRecord, ExpandedDataCoordinate

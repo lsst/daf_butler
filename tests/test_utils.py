@@ -22,9 +22,9 @@
 import unittest
 from collections import namedtuple
 
-from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton, NamedKeyDict
+from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
 from lsst.daf.butler.core.formatter import Formatter
-from lsst.daf.butler import StorageClass
+from lsst.daf.butler import NamedKeyDict, StorageClass
 
 
 class IterableTestCase(unittest.TestCase):

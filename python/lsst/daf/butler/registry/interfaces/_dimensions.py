@@ -35,9 +35,9 @@ if TYPE_CHECKING:
         DimensionElement,
         DimensionRecord,
         DimensionUniverse,
+        NamedKeyDict,
         Timespan,
     )
-    from ...core.utils import NamedKeyDict
     from ..queries import QueryBuilder
     from ._database import Database, StaticTablesContext
 
