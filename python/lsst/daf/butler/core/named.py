@@ -43,9 +43,21 @@ from typing import (
     ValuesView,
 )
 from types import MappingProxyType
+try:
+    # If we're running mypy, we should have typing_extensions.
+    # If we aren't running mypy, we shouldn't assume we do.
+    # When we're safely on Python 3.8, we can import Protocol
+    # from typing and avoid all of this.
+    from typing_extensions import Protocol
+
+    class Named(Protocol):
+        name: str
+
+except ImportError:
+    Named = Any  # type: ignore
 
 
-K = TypeVar("K")
+K = TypeVar("K", bound=Named)
 V = TypeVar("V")
 
 
@@ -109,26 +121,26 @@ class NamedKeyDict(MutableMapping[K, V]):
         return "NamedKeyDict({{{}}})".format(", ".join(f"{repr(k)}: {repr(v)}" for k, v in self.items()))
 
     def __getitem__(self, key: Union[str, K]) -> V:
-        if hasattr(key, "name"):
-            return self._dict[key]
-        else:
+        if isinstance(key, str):
             return self._dict[self._names[key]]
+        else:
+            return self._dict[key]
 
     def __setitem__(self, key: Union[str, K], value: V) -> None:
-        if hasattr(key, "name"):
+        if isinstance(key, str):
+            self._dict[self._names[key]] = value
+        else:
             assert self._names.get(key.name, key) == key, "Name is already associated with a different key."
             self._dict[key] = value
             self._names[key.name] = key
-        else:
-            self._dict[self._names[key]] = value
 
     def __delitem__(self, key: Union[str, K]) -> None:
-        if hasattr(key, "name"):
-            del self._dict[key]
-            del self._names[key.name]
-        else:
+        if isinstance(key, str):
             del self._dict[self._names[key]]
             del self._names[key]
+        else:
+            del self._dict[key]
+            del self._names[key.name]
 
     def keys(self) -> KeysView[K]:
         return self._dict.keys()
@@ -221,9 +233,9 @@ class NamedValueSet(MutableSet[K]):
         return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
 
     def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
-        try:
+        if isinstance(other, NamedValueSet):
             return self._dict.keys() == other._dict.keys()
-        except AttributeError:
+        else:
             return NotImplemented
 
     def __hash__(self) -> int:
@@ -233,15 +245,15 @@ class NamedValueSet(MutableSet[K]):
     # cover the other comparisons, too.
 
     def __le__(self, other: AbstractSet[K]) -> Union[bool, NotImplemented]:
-        try:
+        if isinstance(other, NamedValueSet):
             return self._dict.keys() <= other._dict.keys()
-        except AttributeError:
+        else:
             return NotImplemented
 
     def __ge__(self, other: AbstractSet[K]) -> Union[bool, NotImplemented]:
-        try:
+        if isinstance(other, NamedValueSet):
             return self._dict.keys() >= other._dict.keys()
-        except AttributeError:
+        else:
             return NotImplemented
 
     def issubset(self, other: AbstractSet[K]) -> bool:
