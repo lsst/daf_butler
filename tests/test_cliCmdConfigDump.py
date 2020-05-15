@@ -95,7 +95,7 @@ class Suite(unittest.TestCase):
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)
-            self.assertEqual(result.output, "Error: foo not found in config at here\n")
+            self.assertEqual(result.output, "Error: 'foo not found in config at here'\n")
 
 
 if __name__ == "__main__":

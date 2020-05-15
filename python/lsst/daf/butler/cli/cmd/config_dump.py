@@ -21,8 +21,9 @@
 
 import click
 
-from ... import ButlerConfig
 from ..opt import repo_argument
+from ..utils import cli_handle_exception
+from ...script import configDump
 
 
 @click.command()
@@ -35,17 +36,6 @@ from ..opt import repo_argument
 @click.option("--file", "outfile", type=click.File("w"), default="-",
               help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
               "by default.")
-def config_dump(repo, subset, searchpath, outfile):
+def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
-    config = ButlerConfig(repo, searchPaths=searchpath)
-
-    if subset is not None:
-        try:
-            config = config[subset]
-        except KeyError:
-            raise click.ClickException(f"{subset} not found in config at {repo}")
-
-    try:
-        config.dump(outfile)
-    except AttributeError:
-        print(config, file=outfile)
+    cli_handle_exception(configDump, *args, **kwargs)

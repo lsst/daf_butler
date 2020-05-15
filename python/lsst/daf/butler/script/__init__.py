@@ -20,3 +20,4 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 from .createRepo import createRepo
+from .configDump import configDump
