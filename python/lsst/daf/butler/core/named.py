@@ -26,8 +26,22 @@ __all__ = (
     "NamedValueSet",
 )
 
-from typing import (TypeVar, MutableMapping, Iterator, KeysView, ValuesView, ItemsView, Dict, Union,
-                    MutableSet, Iterable, Mapping, Tuple)
+from typing import (
+    AbstractSet,
+    Any,
+    Dict,
+    ItemsView,
+    Iterable,
+    Iterator,
+    KeysView,
+    Mapping,
+    MutableMapping,
+    MutableSet,
+    Tuple,
+    TypeVar,
+    Union,
+    ValuesView,
+)
 from types import MappingProxyType
 
 
@@ -65,8 +79,8 @@ class NamedKeyDict(MutableMapping[K, V]):
 
     __slots__ = ("_dict", "_names",)
 
-    def __init__(self, *args):
-        self._dict = dict(*args)
+    def __init__(self, *args: Any):
+        self._dict: Dict[K, V] = dict(*args)
         self._names = {key.name: key for key in self._dict}
         assert len(self._names) == len(self._dict), "Duplicate names in keys."
 
@@ -100,7 +114,7 @@ class NamedKeyDict(MutableMapping[K, V]):
         else:
             return self._dict[self._names[key]]
 
-    def __setitem__(self, key: Union[str, K], value: V):
+    def __setitem__(self, key: Union[str, K], value: V) -> None:
         if hasattr(key, "name"):
             assert self._names.get(key.name, key) == key, "Name is already associated with a different key."
             self._dict[key] = value
@@ -108,7 +122,7 @@ class NamedKeyDict(MutableMapping[K, V]):
         else:
             self._dict[self._names[key]] = value
 
-    def __delitem__(self, key: Union[str, K]):
+    def __delitem__(self, key: Union[str, K]) -> None:
         if hasattr(key, "name"):
             del self._dict[key]
             del self._names[key.name]
@@ -131,18 +145,15 @@ class NamedKeyDict(MutableMapping[K, V]):
         result._names = dict(self._names)
         return result
 
-    def freeze(self):
+    def freeze(self) -> None:
         """Disable all mutators, effectively transforming ``self`` into
         an immutable mapping.
         """
         if not isinstance(self._dict, MappingProxyType):
-            self._dict = MappingProxyType(self._dict)
+            self._dict = MappingProxyType(self._dict)  # type: ignore
 
 
-T = TypeVar("T")
-
-
-class NamedValueSet(MutableSet[T]):
+class NamedValueSet(MutableSet[K]):
     """A custom mutable set class that requires elements to have a ``.name``
     attribute, which can then be used as keys in `dict`-like lookup.
 
@@ -174,7 +185,7 @@ class NamedValueSet(MutableSet[T]):
 
     __slots__ = ("_dict",)
 
-    def __init__(self, elements: Iterable[T] = ()):
+    def __init__(self, elements: Iterable[K] = ()):
         self._dict = {element.name: element for element in elements}
 
     @property
@@ -184,7 +195,7 @@ class NamedValueSet(MutableSet[T]):
         """
         return self._dict.keys()
 
-    def asDict(self) -> Mapping[str, T]:
+    def asDict(self) -> Mapping[str, K]:
         """Return a mapping view with names as keys.
 
         Returns
@@ -194,13 +205,13 @@ class NamedValueSet(MutableSet[T]):
         """
         return self._dict
 
-    def __contains__(self, key: Union[str, T]) -> bool:
+    def __contains__(self, key: Any) -> bool:
         return getattr(key, "name", key) in self._dict
 
     def __len__(self) -> int:
         return len(self._dict)
 
-    def __iter__(self) -> Iterator[T]:
+    def __iter__(self) -> Iterator[K]:
         return iter(self._dict.values())
 
     def __str__(self) -> str:
@@ -209,49 +220,49 @@ class NamedValueSet(MutableSet[T]):
     def __repr__(self) -> str:
         return "NamedValueSet({{{}}})".format(", ".join(repr(element) for element in self))
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
         try:
             return self._dict.keys() == other._dict.keys()
         except AttributeError:
             return NotImplemented
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(frozenset(self._dict.keys()))
 
     # As per Set's docs, overriding just __le__ and __ge__ for performance will
     # cover the other comparisons, too.
 
-    def __le__(self, other: NamedValueSet[T]) -> bool:
+    def __le__(self, other: AbstractSet[K]) -> Union[bool, NotImplemented]:
         try:
             return self._dict.keys() <= other._dict.keys()
         except AttributeError:
             return NotImplemented
 
-    def __ge__(self, other: NamedValueSet[T]) -> bool:
+    def __ge__(self, other: AbstractSet[K]) -> Union[bool, NotImplemented]:
         try:
             return self._dict.keys() >= other._dict.keys()
         except AttributeError:
             return NotImplemented
 
-    def issubset(self, other):
+    def issubset(self, other: AbstractSet[K]) -> bool:
         return self <= other
 
-    def issuperset(self, other):
+    def issuperset(self, other: AbstractSet[K]) -> bool:
         return self >= other
 
-    def __getitem__(self, name: str) -> T:
+    def __getitem__(self, name: str) -> K:
         return self._dict[name]
 
-    def get(self, name: str, default=None):
+    def get(self, name: str, default: Any = None) -> Any:
         """Return the element with the given name, or ``default`` if
         no such element is present.
         """
         return self._dict.get(name, default)
 
-    def __delitem__(self, name: str):
+    def __delitem__(self, name: str) -> None:
         del self._dict[name]
 
-    def add(self, element: T):
+    def add(self, element: K) -> None:
         """Add an element to the set.
 
         Raises
@@ -261,7 +272,7 @@ class NamedValueSet(MutableSet[T]):
         """
         self._dict[element.name] = element
 
-    def remove(self, element: Union[str, T]):
+    def remove(self, element: Union[str, K]) -> Any:
         """Remove an element from the set.
 
         Parameters
@@ -277,7 +288,7 @@ class NamedValueSet(MutableSet[T]):
         """
         del self._dict[getattr(element, "name", element)]
 
-    def discard(self, element: Union[str, T]):
+    def discard(self, element: Union[str, K]) -> Any:
         """Remove an element from the set if it exists.
 
         Does nothing if no matching element is present.
@@ -293,7 +304,7 @@ class NamedValueSet(MutableSet[T]):
         except KeyError:
             pass
 
-    def pop(self, *args):
+    def pop(self, *args: str) -> K:
         """Remove and return an element from the set.
 
         Parameters
@@ -317,17 +328,17 @@ class NamedValueSet(MutableSet[T]):
         else:
             return self._dict.pop(*args)
 
-    def copy(self) -> NamedValueSet[T]:
+    def copy(self) -> NamedValueSet[K]:
         result = NamedValueSet.__new__(NamedValueSet)
         result._dict = dict(self._dict)
         return result
 
-    def freeze(self):
+    def freeze(self) -> None:
         """Disable all mutators, effectively transforming ``self`` into
         an immutable set.
         """
         if not isinstance(self._dict, MappingProxyType):
-            self._dict = MappingProxyType(self._dict)
+            self._dict = MappingProxyType(self._dict)  # type: ignore
 
 
 class IndexedTupleDict(Mapping[K, V]):
@@ -336,29 +347,29 @@ class IndexedTupleDict(Mapping[K, V]):
 
     Parameters
     ----------
-    indices: `~collections.abc.Mapping`
+    indices: `NamedKeyDict`
         Mapping from key to integer index in the values tuple.  This mapping
         is used as-is, not copied or converted to a true `dict`, which means
         that the caller must guarantee that it will not be modified by other
-        (shared) owners in the future.  If it is a `NamedKeyDict`, both names
-        and key instances will be usable as keys in the `IndexedTupleDict`.
+        (shared) owners in the future.
         The caller is also responsible for guaranteeing that the indices in
         the mapping are all valid for the given tuple.
     values: `tuple`
-        Tuple of values for the dictionary.  The caller is responsible for
-        guaranteeing that this has the same number of elements as ``indices``.
+        Tuple of values for the dictionary.  This may have a length greater
+        than the length of indices; these values are not considered part of
+        the mapping.
     """
 
     __slots__ = ("_indices", "_values")
 
-    def __new__(cls, indices: Mapping[K, int], values: Tuple[V, ...]):
+    def __new__(cls, indices: NamedKeyDict[K, int], values: Tuple[V, ...]) -> IndexedTupleDict:
         self = super().__new__(cls)
-        assert len(indices) == len(values)
+        assert len(indices) <= len(values)
         self._indices = indices
         self._values = values
         return self
 
-    def __getitem__(self, key: K) -> V:
+    def __getitem__(self, key: Union[str, K]) -> V:
         return self._values[self._indices[key]]
 
     def __iter__(self) -> Iterator[K]:
@@ -373,13 +384,17 @@ class IndexedTupleDict(Mapping[K, V]):
     def __repr__(self) -> str:
         return "IndexedTupleDict({{{}}})".format(", ".join(f"{repr(k)}: {repr(v)}" for k, v in self.items()))
 
-    def __contains__(self, key: K) -> bool:
+    def __contains__(self, key: Any) -> bool:
         return key in self._indices
 
     def keys(self) -> KeysView[K]:
         return self._indices.keys()
 
-    def values(self) -> Tuple[V, ...]:
+    # Tuple meets all requirements of ValuesView, but the Python typing system
+    # doesn't recognize it as substitutable, perhaps because it only really is
+    # for immutable mappings where there's no need to worry about the view
+    # being updated because the mapping changed.
+    def values(self) -> Tuple[V, ...]:   # type: ignore
         return self._values
 
     def __getnewargs__(self) -> tuple:
@@ -389,10 +404,16 @@ class IndexedTupleDict(Mapping[K, V]):
         # Disable default state-setting when unpickled.
         return {}
 
-    def __setstate__(self, state):  # noqa: N807
+    def __setstate__(self, state: Tuple) -> None:  # noqa: N807
         # Disable default state-setting when copied.
         # Sadly what works for pickle doesn't work for copy.
         assert not state
 
     # Let Mapping base class provide items(); we can't do it any more
     # efficiently ourselves.
+
+    # These private attributes need to have types annotated outside __new__
+    # because mypy hasn't learned (yet) how to infer instance attribute types
+    # there they way it can with __init__.
+    _indices: NamedKeyDict[K, int]
+    _values: Tuple[V, ...]
