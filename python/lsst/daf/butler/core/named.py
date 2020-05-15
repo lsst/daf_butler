@@ -325,9 +325,6 @@ class NamedValueSet(MutableSet[K]):
             Name of the element to remove and return.  Must be passed
             positionally.  If not provided, an arbitrary element is
             removed and returned.
-        default : `object`, optional
-            Value to return if ``name`` is provided but no such element
-            exists.
 
         Raises
         ------
