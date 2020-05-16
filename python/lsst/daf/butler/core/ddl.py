@@ -38,7 +38,7 @@ from base64 import b64encode, b64decode
 import logging
 from math import ceil
 from dataclasses import dataclass
-from typing import Optional, Tuple, Sequence, Set
+from typing import Any, Callable, Iterable, List, Optional, Set, Tuple, Type, Union
 
 import sqlalchemy
 import astropy.time
@@ -59,7 +59,7 @@ class SchemaValidationError(ValidationError):
     """
 
     @classmethod
-    def translate(cls, caught, message):
+    def translate(cls, caught: Type[Exception], message: str) -> Callable:
         """A decorator that re-raises exceptions as `SchemaValidationError`.
 
         Decorated functions must be class or instance methods, with a
@@ -76,8 +76,8 @@ class SchemaValidationError(ValidationError):
             ``config``, ``err``, or any keyword-only argument accepted by
             the decorated function.
         """
-        def decorate(func):
-            def decorated(self, config, *args, **kwds):
+        def decorate(func: Callable) -> Callable:
+            def decorated(self: Any, config: Config, *args: Any, **kwds: Any) -> Any:
                 try:
                     return func(self, config, *args, **kwds)
                 except caught as err:
@@ -93,12 +93,13 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
 
     impl = sqlalchemy.String
 
-    def __init__(self, nbytes, *args, **kwds):
+    def __init__(self, nbytes: int, *args: Any, **kwargs: Any):
         length = 4*ceil(nbytes/3)
-        super().__init__(*args, length=length, **kwds)
+        super().__init__(*args, length=length, **kwargs)
         self.nbytes = nbytes
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Optional[bytes], dialect: sqlalchemy.engine.Dialect
+                           ) -> Optional[str]:
         # 'value' is native `bytes`.  We want to encode that to base64 `bytes`
         # and then ASCII `str`, because `str` is what SQLAlchemy expects for
         # String fields.
@@ -110,7 +111,8 @@ class Base64Bytes(sqlalchemy.TypeDecorator):
             )
         return b64encode(value).decode("ascii")
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
+                             ) -> Optional[bytes]:
         # 'value' is a `str` that must be ASCII because it's base64-encoded.
         # We want to transform that to base64-encoded `bytes` and then
         # native `bytes`.
@@ -122,12 +124,14 @@ class Base64Region(Base64Bytes):
     base64-encoded `sqlalchemy.String`.
     """
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Optional[ConvexPolygon], dialect: sqlalchemy.engine.Dialect
+                           ) -> Optional[str]:
         if value is None:
             return None
         return super().process_bind_param(value.encode(), dialect)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Optional[str], dialect: sqlalchemy.engine.Dialect
+                             ) -> Optional[ConvexPolygon]:
         if value is None:
             return None
         return ConvexPolygon.decode(super().process_result_value(value, dialect))
@@ -140,8 +144,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
 
     impl = sqlalchemy.BigInteger
 
-    def process_bind_param(self, value, dialect):
-        # value is astropy.time.Time or None
+    def process_bind_param(self, value: Optional[astropy.time.Time], dialect: sqlalchemy.engine.Dialect
+                           ) -> Optional[int]:
         if value is None:
             return None
         if not isinstance(value, astropy.time.Time):
@@ -149,7 +153,8 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
         value = time_utils.astropy_to_nsec(value)
         return value
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Optional[int], dialect: sqlalchemy.engine.Dialect
+                             ) -> Optional[astropy.time.Time]:
         # value is nanoseconds since epoch, or None
         if value is None:
             return None
@@ -205,15 +210,18 @@ class FieldSpec:
     doc: Optional[str] = None
     """Documentation for this field."""
 
-    def __eq__(self, other):
-        return self.name == other.name
+    def __eq__(self, other: Any) -> Union[bool, NotImplemented]:
+        if isinstance(other, FieldSpec):
+            return self.name == other.name
+        else:
+            return NotImplemented
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
     @classmethod
     @SchemaValidationError.translate(KeyError, "Missing key {err} in column config '{config}'.")
-    def fromConfig(cls, config: Config, **kwds) -> FieldSpec:
+    def fromConfig(cls, config: Config, **kwds: Any) -> FieldSpec:
         """Create a `FieldSpec` from a subset of a `SchemaConfig`.
 
         Parameters
@@ -325,18 +333,49 @@ class ForeignKeySpec:
 class TableSpec:
     """A struct-like class used to define a table or table-like
     query interface.
+
+    Parameters
+    ----------
+    fields : `Iterable` [ `FieldSpec` ]
+        Specifications for the columns in this table.
+    unique : `Iterable` [ `tuple` [ `str` ] ], optional
+        Non-primary-key unique constraints for the table.
+    indexes: `Iterable` [ `tuple` [ `str` ] ], optional
+        Indexes for the table.
+    foreignKeys : `Iterable` [ `ForeignKeySpec` ], optional
+        Foreign key constraints for the table.
+    recycleIds : bool, optional
+        If `True`, allow databases that might normally recycle autoincrement
+        IDs to do so (usually better for performance) on any autoincrement
+        field in this table.
+    doc : str, optional
+        Documentation for the table.
     """
+    def __init__(
+        self, fields: Iterable[FieldSpec], *,
+        unique: Iterable[Tuple[str, ...]] = (),
+        indexes: Iterable[Tuple[str, ...]] = (),
+        foreignKeys: Iterable[ForeignKeySpec] = (),
+        recycleIds: bool = True,
+        doc: Optional[str] = None,
+    ):
+        self.fields = NamedValueSet(fields)
+        self.unique = set(unique)
+        self.indexes = set(indexes)
+        self.foreignKeys = list(foreignKeys)
+        self.recycleIds = recycleIds
+        self.doc = doc
 
     fields: NamedValueSet[FieldSpec]
     """Specifications for the columns in this table."""
 
-    unique: Set[Tuple[str, ...]] = frozenset()
+    unique: Set[Tuple[str, ...]]
     """Non-primary-key unique constraints for the table."""
 
-    indexes: Set[Tuple[str, ...]] = frozenset()
+    indexes: Set[Tuple[str, ...]]
     """Indexes for the table."""
 
-    foreignKeys: Sequence[ForeignKeySpec] = tuple()
+    foreignKeys: List[ForeignKeySpec]
     """Foreign key constraints for the table."""
 
     recycleIds: bool = True
@@ -347,12 +386,6 @@ class TableSpec:
 
     doc: Optional[str] = None
     """Documentation for the table."""
-
-    def __post_init__(self):
-        self.fields = NamedValueSet(self.fields)
-        self.unique = set(self.unique)
-        self.indexes = set(self.indexes)
-        self.foreignKeys = list(self.foreignKeys)
 
     @classmethod
     @SchemaValidationError.translate(KeyError, "Missing key {err} in table config '{config}'.")
@@ -379,6 +412,5 @@ class TableSpec:
             fields=NamedValueSet(FieldSpec.fromConfig(c) for c in config["columns"]),
             unique={tuple(u) for u in config.get("unique", ())},
             foreignKeys=[ForeignKeySpec.fromConfig(c) for c in config.get("foreignKeys", ())],
-            sql=config.get("sql"),
             doc=stripIfNotNone(config.get("doc")),
         )
