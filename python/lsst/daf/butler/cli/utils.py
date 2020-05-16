@@ -120,7 +120,7 @@ def split_kv(context, param, values, separator="="):
         Raised if the separator is not found in an entry, or if duplicate keys
         are encountered.
     """
-    if "," == separator or " " == separator:
+    if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
     vals = split_commas(context, param, values)
     ret = {}
