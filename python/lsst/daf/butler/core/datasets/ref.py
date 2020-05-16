@@ -310,6 +310,35 @@ class DatasetRef:
 
         return names
 
+    def allRefs(self, parents: bool = True) -> Iterator[DatasetRef]:
+        """Return all the nested component `DatasetRef` and optionally the
+        parent.
+
+        Parameters
+        ----------
+        parents : `bool`, optional
+            If `True` (default) include the given dataset in the output
+            iterable.  If `False`, include only its components.  This does
+            not propagate recursively - only the outermost level of parents
+            is ignored if ``parents`` is `False`.
+
+        Yields
+        ------
+        ref : `DatasetRef`
+            Itself (only if ``parent`` is `True`) or one of its (recursive)
+            children.
+
+        Notes
+        -----
+        If ``parents`` is `True`, components are guaranteed to be yielded
+        before their parents.
+        """
+        if self.components is None:
+            raise AmbiguousDatasetError(f"Unresolved ref {self} cannot be flattened.")
+        yield from DatasetRef.flatten(self.components.values(), parents=True)
+        if parents:
+            yield self
+
     @staticmethod
     def flatten(refs: Iterable[DatasetRef], *, parents: bool = True) -> Iterator[DatasetRef]:
         """Recursively transform an iterable over `DatasetRef` to include
@@ -330,7 +359,7 @@ class DatasetRef:
         ------
         ref : `DatasetRef`
             Either one of the given `DatasetRef` instances (only if ``parent``
-            is `True`) or on of its (recursive) children.
+            is `True`) or one of its (recursive) children.
 
         Notes
         -----
@@ -338,11 +367,8 @@ class DatasetRef:
         before their parents.
         """
         for ref in refs:
-            if ref.components is None:
-                raise AmbiguousDatasetError(f"Unresolved ref {ref} passed to 'flatten'.")
-            yield from DatasetRef.flatten(ref.components.values(), parents=True)
-            if parents:
-                yield ref
+            for subref in ref.allRefs(parents):
+                yield subref
 
     @staticmethod
     def groupByType(refs: Iterable[DatasetRef], *, recursive: bool = True

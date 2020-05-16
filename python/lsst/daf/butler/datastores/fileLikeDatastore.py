@@ -483,7 +483,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             raise RuntimeError(f"Datastore inconsistency error. {location.pathInStore} not in registry")
 
         # Get all the refs associated with this dataset if it is a composite
-        theseRefs = {r.id for r in ref.flatten([ref])}
+        theseRefs = {r.id for r in ref.allRefs()}
 
         # Remove these refs from all the refs and if there is nothing left
         # then we can delete
