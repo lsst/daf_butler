@@ -19,15 +19,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Generic datastore code useful for most datastores."""
 
 __all__ = ("GenericBaseDatastore", )
 
 import logging
 from abc import abstractmethod
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+)
 
 from lsst.daf.butler import Datastore, DatasetTypeNotSupportedError
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import DatasetRef, StorageClass, StoredDatastoreItemInfo
 
 log = logging.getLogger(__name__)
 
@@ -47,7 +62,8 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def addStoredItemInfo(self, refs, infos):
+    def addStoredItemInfo(self, refs: Iterable[DatasetRef],
+                          infos: Iterable[Any]) -> None:
         """Record internal storage information associated with one or more
         datasets.
 
@@ -61,7 +77,7 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def getStoredItemInfo(self, ref):
+    def getStoredItemInfo(self, ref: DatasetRef) -> Any:
         """Retrieve information associated with file stored in this
         `Datastore`.
 
@@ -83,7 +99,7 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def getStoredItemsInfo(self, ref):
+    def getStoredItemsInfo(self, ref: DatasetRef) -> Sequence[Any]:
         """Retrieve information associated with files stored in this
         `Datastore` associated with this dataset ref.
 
@@ -103,7 +119,7 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def removeStoredItemInfo(self, ref):
+    def removeStoredItemInfo(self, ref: DatasetRef) -> None:
         """Remove information about the file associated with this dataset.
 
         Parameters
@@ -113,7 +129,7 @@ class GenericBaseDatastore(Datastore):
         """
         raise NotImplementedError()
 
-    def _register_datasets(self, refsAndInfos):
+    def _register_datasets(self, refsAndInfos: Iterable[Tuple[DatasetRef, StoredDatastoreItemInfo]]) -> None:
         """Update registry to indicate that one or more datasets have been
         stored.
 
@@ -124,12 +140,15 @@ class GenericBaseDatastore(Datastore):
             Datasets to register and the internal datastore metadata associated
             with them.
         """
-        expandedRefs = []
+        expandedRefs: List[DatasetRef] = []
         expandedItemInfos = []
 
         for ref, itemInfo in refsAndInfos:
             # Need the main dataset and the components
             expandedRefs.extend(ref.flatten([ref]))
+
+            if ref.components is None:
+                raise RuntimeError("Unable to register an unresolved DatasetRef")
 
             # Need one for the main ref and then one for each registered
             # component
@@ -142,7 +161,7 @@ class GenericBaseDatastore(Datastore):
         self.bridge.insert(registryRefs.values())
         self.addStoredItemInfo(expandedRefs, expandedItemInfos)
 
-    def _move_to_trash_in_registry(self, ref):
+    def _move_to_trash_in_registry(self, ref: DatasetRef) -> None:
         """Tell registry that this dataset and associated components
         are to be trashed.
 
@@ -160,8 +179,9 @@ class GenericBaseDatastore(Datastore):
         # the python object. moveToTrash will deal with that.
         self.bridge.moveToTrash(ref.flatten([ref]))
 
-    def _post_process_get(self, inMemoryDataset, readStorageClass, assemblerParams=None,
-                          isComponent=False):
+    def _post_process_get(self, inMemoryDataset: Any, readStorageClass: StorageClass,
+                          assemblerParams: Optional[Mapping[str, Any]] = None,
+                          isComponent: bool = False) -> Any:
         """Given the Python object read from the datastore, manipulate
         it based on the supplied parameters and ensure the Python
         type is correct.
@@ -199,7 +219,7 @@ class GenericBaseDatastore(Datastore):
 
         return inMemoryDataset
 
-    def _validate_put_parameters(self, inMemoryDataset, ref):
+    def _validate_put_parameters(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Validate the supplied arguments for put.
 
         Parameters
@@ -225,7 +245,7 @@ class GenericBaseDatastore(Datastore):
 
         return
 
-    def remove(self, ref):
+    def remove(self, ref: DatasetRef) -> None:
         """Indicate to the Datastore that a dataset can be removed.
 
         .. warning::
@@ -254,7 +274,7 @@ class GenericBaseDatastore(Datastore):
         self.trash(ref, ignore_errors=False)
         self.emptyTrash(ignore_errors=False)
 
-    def transfer(self, inputDatastore, ref):
+    def transfer(self, inputDatastore: Datastore, ref: DatasetRef) -> None:
         """Retrieve a dataset from an input `Datastore`,
         and store the result in this `Datastore`.
 

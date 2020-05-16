@@ -152,6 +152,10 @@ class FakeDatasetRef:
         """
         return self.id
 
+    @property
+    def datasetType(self) -> DatasetType:
+        raise AttributeError("A FakeDatasetRef can not be associated with a valid DatasetType")
+
 
 DatasetIdRef = Union[DatasetRef, FakeDatasetRef]
 """A type-annotation alias that matches both `DatasetRef` and `FakeDatasetRef`.

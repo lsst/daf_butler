@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """In-memory datastore."""
 
 __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
@@ -26,11 +28,27 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 import time
 import logging
 from dataclasses import dataclass
-from typing import Dict, Optional, Any
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from .genericDatastore import GenericBaseDatastore
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import (Config, DatasetRef, DatasetType,
+                                 LookupKey)
+    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager, FakeDatasetRef
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +66,7 @@ class StoredMemoryItemInfo(StoredDatastoreItemInfo):
     storageClass: StorageClass
     """StorageClass associated with the dataset."""
 
-    parentID: Optional[int]
+    parentID: int
     """ID of the parent `DatasetRef` if this entry is a concrete
     composite. Not used if the dataset being stored is not a
     virtual component of a composite
@@ -91,7 +109,9 @@ class InMemoryDatastore(GenericBaseDatastore):
     records: Dict[int, StoredMemoryItemInfo]
     """Internal records about stored datasets."""
 
-    def __init__(self, config, bridgeManager, butlerRoot=None):
+    def __init__(self, config: Union[Config, str],
+                 bridgeManager: DatastoreRegistryBridgeManager,
+                 butlerRoot: Optional[str] = None):
         super().__init__(config, bridgeManager)
 
         # Name ourselves with the timestamp the datastore
@@ -100,19 +120,19 @@ class InMemoryDatastore(GenericBaseDatastore):
         log.debug("Creating datastore %s", self.name)
 
         # Storage of datasets, keyed by dataset_id
-        self.datasets = {}
+        self.datasets: Dict[int, Any] = {}
 
         # Records is distinct in order to track concrete composite components
         # where we register multiple components for a single dataset.
-        self.records = {}
+        self.records: Dict[int, StoredMemoryItemInfo] = {}
 
         # Related records that share the same parent
-        self.related = {}
+        self.related: Dict[int, Set[int]] = {}
 
         self._bridge = bridgeManager.register(self.name, ephemeral=True)
 
     @classmethod
-    def setConfigRoot(cls, root, config, full, overwrite=True):
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
 
@@ -151,32 +171,39 @@ class InMemoryDatastore(GenericBaseDatastore):
         # Docstring inherited from GenericBaseDatastore.
         return self._bridge
 
-    def addStoredItemInfo(self, refs, infos):
+    def addStoredItemInfo(self, refs: Iterable[DatasetRef],
+                          infos: Iterable[StoredMemoryItemInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore.
         for ref, info in zip(refs, infos):
+            if ref.id is None:
+                raise RuntimeError(f"Can not store unresolved DatasetRef {ref}")
             self.records[ref.id] = info
             self.related.setdefault(info.parentID, set()).add(ref.id)
 
-    def getStoredItemInfo(self, ref):
+    def getStoredItemInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> StoredMemoryItemInfo:
         # Docstring inherited from GenericBaseDatastore.
+        if ref.id is None:
+            raise RuntimeError(f"Can not retrieve unresolved DatasetRef {ref}")
         return self.records[ref.id]
 
-    def getStoredItemsInfo(self, ref):
+    def getStoredItemsInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> List[StoredMemoryItemInfo]:
         # Docstring inherited from GenericBaseDatastore.
         return [self.getStoredItemInfo(ref)]
 
-    def removeStoredItemInfo(self, ref):
+    def removeStoredItemInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> None:
         # Docstring inherited from GenericBaseDatastore.
         # If a component has been removed previously then we can sometimes
         # be asked to remove it again. Other datastores ignore this
         # so also ignore here
+        if ref.id is None:
+            raise RuntimeError(f"Can not remove unresolved DatasetRef {ref}")
         if ref.id not in self.records:
             return
         record = self.records[ref.id]
         del self.records[ref.id]
         self.related[record.parentID].remove(ref.id)
 
-    def _get_dataset_info(self, ref):
+    def _get_dataset_info(self, ref: Union[FakeDatasetRef, DatasetRef]) -> Tuple[int, StoredMemoryItemInfo]:
         """Check that the dataset is present and return the real ID and
         associated information.
 
@@ -211,7 +238,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         return realID, storedItemInfo
 
-    def exists(self, ref):
+    def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
 
         Parameters
@@ -230,7 +257,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             return False
         return True
 
-    def get(self, ref, parameters=None):
+    def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.
 
         Parameters
@@ -288,7 +315,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         return self._post_process_get(inMemoryDataset, readStorageClass, parameters,
                                       isComponent=component is not None)
 
-    def put(self, inMemoryDataset, ref):
+    def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
         Parameters
@@ -314,6 +341,9 @@ class InMemoryDatastore(GenericBaseDatastore):
         requiring that every datastore accepts the dataset.
         """
 
+        if ref.id is None:
+            raise RuntimeError(f"Can not store unresolved DatasetRef {ref}")
+
         self._validate_put_parameters(inMemoryDataset, ref)
 
         self.datasets[ref.id] = inMemoryDataset
@@ -333,7 +363,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def getUri(self, ref, predict=False):
+    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
 
         Always uses "mem://" URI prefix.
@@ -376,7 +406,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         return "mem://{}".format(name)
 
-    def trash(self, ref, ignore_errors=False):
+    def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.
 
         Parameters
@@ -413,7 +443,7 @@ class InMemoryDatastore(GenericBaseDatastore):
             else:
                 raise
 
-    def emptyTrash(self, ignore_errors=False):
+    def emptyTrash(self, ignore_errors: bool = False) -> None:
         """Remove all datasets from the trash.
 
         Parameters
@@ -457,7 +487,8 @@ class InMemoryDatastore(GenericBaseDatastore):
                 # Remove this entry
                 self.removeStoredItemInfo(ref)
 
-    def validateConfiguration(self, entities, logFailures=False):
+    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
+                              logFailures: bool = False) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters
@@ -481,14 +512,14 @@ class InMemoryDatastore(GenericBaseDatastore):
         """
         return
 
-    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
         # Docstring is inherited from base class
         return transfer
 
-    def validateKey(self, lookupKey, entity):
+    def validateKey(self, lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         # Docstring is inherited from base class
         return
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         # Docstring is inherited from base class
         return self.constraints.getLookupKeys()

@@ -23,7 +23,16 @@ from __future__ import annotations
 __all__ = ["AmbiguousDatasetError", "DatasetRef"]
 
 import hashlib
-from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Tuple
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+)
 
 from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
@@ -136,7 +145,7 @@ class DatasetRef:
             self._hash = hash
         return self
 
-    def __eq__(self, other: DatasetRef):
+    def __eq__(self, other: Any) -> bool:
         try:
             return (self.datasetType, self.dataId, self.id) == (other.datasetType, other.dataId, other.id)
         except AttributeError:
@@ -287,7 +296,7 @@ class DatasetRef:
         """
         return self.datasetType.isComposite()
 
-    def _lookupNames(self) -> Tuple[LookupKey]:
+    def _lookupNames(self) -> Tuple[LookupKey, ...]:
         """Name keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
@@ -302,7 +311,7 @@ class DatasetRef:
         """
         # Special case the instrument Dimension since we allow configs
         # to include the instrument name in the hierarchy.
-        names = self.datasetType._lookupNames()
+        names: Tuple[LookupKey, ...] = self.datasetType._lookupNames()
 
         if "instrument" in self.dataId:
             names = tuple(n.clone(dataId={"instrument": self.dataId["instrument"]})

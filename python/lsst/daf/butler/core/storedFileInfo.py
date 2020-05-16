@@ -19,13 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
 
 import inspect
 from dataclasses import dataclass
 from typing import Optional
 
-from .formatter import Formatter
+from .formatter import Formatter, FormatterParameter
 from .storageClass import StorageClass
 
 

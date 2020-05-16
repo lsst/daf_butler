@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Support for file template string expansion."""
 
 __all__ = ("FileTemplates", "FileTemplate", "FileTemplatesConfig", "FileTemplateValidationError")
@@ -28,10 +30,26 @@ import string
 import logging
 from types import MappingProxyType
 
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
+
 from .config import Config
 from .configSupport import processLookupConfigs, LookupKey
 from .exceptions import ValidationError
 from .dimensions import SkyPixDimension, DataCoordinate
+
+if TYPE_CHECKING:
+    from .dimensions import DimensionUniverse
+    from .datasets import DatasetType, DatasetRef
+    from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +99,9 @@ class FileTemplates:
     defaultKey = LookupKey("default")
     """Configuration key associated with the default template."""
 
-    def __init__(self, config, default=None, *, universe):
+    def __init__(self, config: Union[FileTemplatesConfig, str],
+                 default: Optional[str] = None, *,
+                 universe: DimensionUniverse):
         self.config = FileTemplatesConfig(config)
         self._templates = {}
         self.default = FileTemplate(default) if default is not None else None
@@ -98,11 +118,11 @@ class FileTemplates:
                 self._templates[key] = FileTemplate(templateStr)
 
     @property
-    def templates(self):
+    def templates(self) -> Mapping[LookupKey, FileTemplate]:
         """Collection of templates indexed by lookup key (`dict`)."""
         return MappingProxyType(self._templates)
 
-    def __contains__(self, key):
+    def __contains__(self, key: LookupKey) -> bool:
         """Indicates whether the supplied key is present in the templates.
 
         Parameters
@@ -118,10 +138,11 @@ class FileTemplates:
         """
         return key in self.templates
 
-    def __getitem__(self, key):
+    def __getitem__(self, key: LookupKey) -> FileTemplate:
         return self.templates[key]
 
-    def validateTemplates(self, entities, logFailures=False):
+    def validateTemplates(self, entities: Iterable[Union[DatasetType, DatasetRef, StorageClass]],
+                          logFailures: bool = False) -> None:
         """Retrieve the template associated with each dataset type and
         validate the dimensions against the template.
 
@@ -177,7 +198,7 @@ class FileTemplates:
                 msg = f"{len(failed)} template validation failures: {failMsg}"
             raise FileTemplateValidationError(msg)
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         """Retrieve the look up keys for all the template entries.
 
         Returns
@@ -187,7 +208,9 @@ class FileTemplates:
         """
         return set(self.templates)
 
-    def getTemplateWithMatch(self, entity):
+    def getTemplateWithMatch(self, entity: Union[DatasetRef,
+                                                 DatasetType, StorageClass]) -> Tuple[LookupKey,
+                                                                                      FileTemplate]:
         """Retrieve the `FileTemplate` associated with the dataset type along
         with the lookup key that was a match for this template.
 
@@ -236,7 +259,7 @@ class FileTemplates:
 
         return source, template
 
-    def getTemplate(self, entity):
+    def getTemplate(self, entity: Union[DatasetType, DatasetRef, StorageClass]) -> FileTemplate:
         """Retrieve the `FileTemplate` associated with the dataset type.
 
         If the lookup name corresponds to a component the base name for
@@ -318,7 +341,7 @@ class FileTemplate:
     """Set of special fields that are available independently of the defined
     Dimensions."""
 
-    def __init__(self, template):
+    def __init__(self, template: str):
         if not isinstance(template, str):
             raise FileTemplateValidationError(f"Template ('{template}') does "
                                               "not contain any format specifiers")
@@ -327,19 +350,19 @@ class FileTemplate:
         # Do basic validation without access to dimensions
         self.validateTemplate(None)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, FileTemplate):
             return False
 
         return self.template == other.template
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.template
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.__class__.__name__}("{self.template}")'
 
-    def fields(self, optionals=False, specials=False, subfields=False):
+    def fields(self, optionals: bool = False, specials: bool = False, subfields: bool = False) -> Set[str]:
         """Return the field names used in this template.
 
         Parameters
@@ -367,7 +390,7 @@ class FileTemplate:
 
         names = set()
         for literal, field_name, format_spec, conversion in parts:
-            if field_name is not None:
+            if field_name is not None and format_spec is not None:
                 if "?" in format_spec and not optionals:
                     continue
 
@@ -381,7 +404,7 @@ class FileTemplate:
 
         return names
 
-    def format(self, ref):
+    def format(self, ref: DatasetRef) -> str:
         """Format a template string into a full path.
 
         Parameters
@@ -448,6 +471,10 @@ class FileTemplate:
             if format_spec is None:
                 output = output + literal
                 continue
+
+            # Should only happen if format_spec is None
+            if field_name is None:
+                raise RuntimeError(f"Unexpected blank field_name encountered in {self.template} [{literal}]")
 
             if "?" in format_spec:
                 optional = True
@@ -526,7 +553,7 @@ class FileTemplate:
 
         return path
 
-    def validateTemplate(self, entity):
+    def validateTemplate(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         """Compare the template against a representative entity that would
         like to use template.
 

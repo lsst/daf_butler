@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """S3 datastore."""
 
 __all__ = ("S3Datastore", )
@@ -29,7 +31,13 @@ import os
 import pathlib
 import tempfile
 
-from typing import Optional, Type, Any
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    Type,
+    Union,
+)
 
 from lsst.daf.butler import (
     ButlerURI,
@@ -41,6 +49,11 @@ from lsst.daf.butler import (
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.s3utils import s3CheckFileExists, bucketExists
+
+if TYPE_CHECKING:
+    from .fileLikeDatastore import DatastoreFileGetInformation
+    from lsst.daf.butler import DatastoreConfig
+    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -74,7 +87,8 @@ class S3Datastore(FileLikeDatastore):
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, config, bridgeManager, butlerRoot=None):
+    def __init__(self, config: Union[DatastoreConfig, str],
+                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
 
         self.client = boto3.client("s3")
@@ -86,7 +100,7 @@ class S3Datastore(FileLikeDatastore):
             # missing. Further discussion can make this happen though.
             raise IOError(f"Bucket {self.locationFactory.netloc} does not exist!")
 
-    def _artifact_exists(self, location):
+    def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.
 
@@ -102,7 +116,7 @@ class S3Datastore(FileLikeDatastore):
         """
         return s3CheckFileExists(location, client=self.client)
 
-    def _delete_artifact(self, location):
+    def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
 
         Parameters
@@ -112,7 +126,8 @@ class S3Datastore(FileLikeDatastore):
         """
         self.client.delete_object(Bucket=location.netloc, Key=location.relativeToPathRoot)
 
-    def _read_artifact_into_memory(self, getInfo, ref, isComponent=False):
+    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
+                                   ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
 
         # since we have to make a GET request to S3 anyhow (for download) we
@@ -161,10 +176,10 @@ class S3Datastore(FileLikeDatastore):
                                          component=getInfo.component if isComponent else None)
         except NotImplementedError:
             with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
-                tmpFile.file.write(serializedDataset)
+                tmpFile.write(serializedDataset)
                 # Flush the write. Do not close the file because that
                 # will delete it.
-                tmpFile.file.flush()
+                tmpFile.flush()
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 result = formatter.read(component=getInfo.component if isComponent else None)
         except Exception as e:
@@ -174,7 +189,7 @@ class S3Datastore(FileLikeDatastore):
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
 
-    def _write_in_memory_to_artifact(self, inMemoryDataset, ref):
+    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
 
         # in PosixDatastore a directory can be created by `safeMakeDir`. In S3
@@ -201,6 +216,9 @@ class S3Datastore(FileLikeDatastore):
                                         Filename=tmpFile.name)
                 log.debug("Wrote file to %s via a temporary directory.", location.uri)
 
+        if self._transaction is None:
+            raise RuntimeError("Attempting to write artifact without transaction enabled")
+
         # Register a callback to try to delete the uploaded data if
         # the ingest fails below
         self._transaction.registerUndo("write", self.client.delete_object,
@@ -209,7 +227,7 @@ class S3Datastore(FileLikeDatastore):
         # URI is needed to resolve what ingest case are we dealing with
         return self._extractIngestInfo(location.uri, ref, formatter=formatter)
 
-    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from base class
         if transfer != "auto":
             return transfer
@@ -244,7 +262,8 @@ class S3Datastore(FileLikeDatastore):
                     raise RuntimeError(f"'{srcUri}' is not inside repository root '{rootUri}'.")
         return path
 
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
+    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+                           formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         # Docstring inherited from FileLikeDatastore._extractIngestInfo.
         srcUri = ButlerURI(path)

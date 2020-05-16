@@ -27,12 +27,28 @@ from copy import deepcopy
 import re
 
 from types import MappingProxyType
+
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Iterable,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
+    Union,
+)
+
+
 from ..storageClass import StorageClass, StorageClassFactory
 from ..dimensions import DimensionGraph
 from ..configSupport import LookupKey
 
+if TYPE_CHECKING:
+    from ..dimensions import Dimension, DimensionUniverse
 
-def _safeMakeMappingProxyType(data):
+
+def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
     if data is None:
         data = {}
     return MappingProxyType(data)
@@ -74,7 +90,7 @@ class DatasetType:
     VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
     @staticmethod
-    def nameWithComponent(datasetTypeName, componentName):
+    def nameWithComponent(datasetTypeName: str, componentName: str) -> str:
         """Form a valid DatasetTypeName from a parent and component.
 
         No validation is performed.
@@ -93,7 +109,9 @@ class DatasetType:
         """
         return "{}.{}".format(datasetTypeName, componentName)
 
-    def __init__(self, name, dimensions, storageClass, *, universe=None):
+    def __init__(self, name: str, dimensions: Union[DimensionGraph, Iterable[Dimension]],
+                 storageClass: Union[StorageClass, str],
+                 *, universe: DimensionUniverse = None):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
@@ -104,6 +122,7 @@ class DatasetType:
             dimensions = universe.extract(dimensions)
         self._dimensions = dimensions
         assert isinstance(storageClass, (StorageClass, str))
+        self._storageClass: Optional[StorageClass]
         if isinstance(storageClass, StorageClass):
             self._storageClass = storageClass
             self._storageClassName = storageClass.name
@@ -111,10 +130,10 @@ class DatasetType:
             self._storageClass = None
             self._storageClassName = storageClass
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, type(self)):
             return False
         if self._name != other._name:
@@ -126,7 +145,7 @@ class DatasetType:
         else:
             return self._storageClassName == other._storageClassName
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """Hash DatasetType instance.
 
         This only uses StorageClass name which is it consistent with the
@@ -135,21 +154,21 @@ class DatasetType:
         return hash((self._name, self._dimensions, self._storageClassName))
 
     @property
-    def name(self):
+    def name(self) -> str:
         """A string name for the Dataset; must correspond to the same
         `DatasetType` across all Registries.
         """
         return self._name
 
     @property
-    def dimensions(self):
+    def dimensions(self) -> DimensionGraph:
         r"""The `Dimension`\ s that label and relate instances of this
         `DatasetType` (`DimensionGraph`).
         """
         return self._dimensions
 
     @property
-    def storageClass(self):
+    def storageClass(self) -> StorageClass:
         """`StorageClass` instance that defines how this `DatasetType`
         is persisted. Note that if DatasetType was constructed with a name
         of a StorageClass then Butler has to be initialized before using
@@ -160,7 +179,7 @@ class DatasetType:
         return self._storageClass
 
     @staticmethod
-    def splitDatasetTypeName(datasetTypeName):
+    def splitDatasetTypeName(datasetTypeName: str) -> Tuple[str, Optional[str]]:
         """Given a dataset type name, return the root name and the component
         name.
 
@@ -189,7 +208,7 @@ class DatasetType:
             root, comp = root.split(".", maxsplit=1)
         return root, comp
 
-    def nameAndComponent(self):
+    def nameAndComponent(self) -> Tuple[str, Optional[str]]:
         """Return the root name of this dataset type and the component
         name (if defined).
 
@@ -202,7 +221,7 @@ class DatasetType:
         """
         return self.splitDatasetTypeName(self.name)
 
-    def component(self):
+    def component(self) -> Optional[str]:
         """Component name (if defined)
 
         Returns
@@ -214,7 +233,7 @@ class DatasetType:
         _, comp = self.nameAndComponent()
         return comp
 
-    def componentTypeName(self, component):
+    def componentTypeName(self, component: str) -> str:
         """Given a component name, derive the datasetTypeName of that component
 
         Parameters
@@ -253,7 +272,7 @@ class DatasetType:
         return DatasetType(self.componentTypeName(component), dimensions=self.dimensions,
                            storageClass=self.storageClass.components[component])
 
-    def isComponent(self):
+    def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetType` refers to a
         component of a composite.
 
@@ -266,7 +285,7 @@ class DatasetType:
             return True
         return False
 
-    def isComposite(self):
+    def isComposite(self) -> bool:
         """Boolean indicating whether this `DatasetType` is a composite type.
 
         Returns
@@ -277,7 +296,7 @@ class DatasetType:
         """
         return self.storageClass.isComposite()
 
-    def _lookupNames(self):
+    def _lookupNames(self) -> Tuple[LookupKey, ...]:
         """Name keys to use when looking up this datasetType in a
         configuration.
 
@@ -292,7 +311,7 @@ class DatasetType:
             the storage class name.
         """
         rootName, componentName = self.nameAndComponent()
-        lookups = (LookupKey(name=self.name),)
+        lookups: Tuple[LookupKey, ...] = (LookupKey(name=self.name),)
         if componentName is not None:
             lookups = lookups + (LookupKey(name=rootName),)
 
@@ -302,7 +321,7 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
-    def __reduce__(self):
+    def __reduce__(self) -> Tuple[Type[DatasetType], Tuple[str, DimensionGraph, str]]:
         """Support pickling.
 
         StorageClass instances can not normally be pickled, so we pickle
@@ -310,7 +329,7 @@ class DatasetType:
         """
         return (DatasetType, (self.name, self.dimensions, self._storageClassName))
 
-    def __deepcopy__(self, memo):
+    def __deepcopy__(self, memo: Any) -> DatasetType:
         """Support for deep copy method.
 
         Normally ``deepcopy`` will use pickle mechanism to make copies.

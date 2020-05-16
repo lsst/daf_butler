@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Support for Storage Classes."""
 
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
@@ -26,10 +28,23 @@ __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 import builtins
 import logging
 
+from typing import (
+    Any,
+    Collection,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
+)
+
 from lsst.utils import doImport
 from .utils import Singleton, getFullTypeName
 from .assembler import CompositeAssembler
-from .config import ConfigSubset
+from .config import ConfigSubset, Config
 from .configSupport import LookupKey
 
 log = logging.getLogger(__name__)
@@ -47,7 +62,7 @@ class StorageClass:
     ----------
     name : `str`
         Name to use for this class.
-    pytype : `type`
+    pytype : `type` or `str`
         Python type (or name of type) to associate with the `StorageClass`
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
@@ -57,15 +72,19 @@ class StorageClass:
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
     """
-    _cls_name = "BaseStorageClass"
-    _cls_components = None
-    _cls_parameters = None
-    _cls_assembler = None
-    _cls_pytype = None
-    defaultAssembler = CompositeAssembler
-    defaultAssemblerName = getFullTypeName(defaultAssembler)
+    _cls_name: str = "BaseStorageClass"
+    _cls_components: Optional[Dict[str, StorageClass]] = None
+    _cls_parameters: Optional[Union[Set[str], Sequence[str]]] = None
+    _cls_assembler: Optional[str] = None
+    _cls_pytype: Optional[Union[Type, str]] = None
+    defaultAssembler: Type = CompositeAssembler
+    defaultAssemblerName: str = getFullTypeName(defaultAssembler)
 
-    def __init__(self, name=None, pytype=None, components=None, parameters=None, assembler=None):
+    def __init__(self, name: Optional[str] = None,
+                 pytype: Optional[Union[Type, str]] = None,
+                 components: Optional[Dict[str, StorageClass]] = None,
+                 parameters: Optional[Union[Sequence, Set]] = None,
+                 assembler: Optional[str] = None):
         if name is None:
             name = self._cls_name
         if pytype is None:
@@ -81,6 +100,7 @@ class StorageClass:
         if pytype is None:
             pytype = object
 
+        self._pytype: Optional[Type]
         if not isinstance(pytype, str):
             # Already have a type so store it and get the name
             self._pytypeName = getFullTypeName(pytype)
@@ -88,11 +108,14 @@ class StorageClass:
         else:
             # Store the type name and defer loading of type
             self._pytypeName = pytype
+            self._pytype = None
 
         self._components = components if components is not None else {}
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the assembler is not None also set it and clear the default
         # assembler
+        self._assembler: Optional[Type]
+        self._assemblerClassName: Optional[str]
         if assembler is not None:
             self._assemblerClassName = assembler
             self._assembler = None
@@ -105,23 +128,21 @@ class StorageClass:
         else:
             self._assembler = None
             self._assemblerClassName = None
-        # The types are created on demand and cached
-        self._pytype = None
 
     @property
-    def components(self):
+    def components(self) -> Dict[str, StorageClass]:
         """Component names mapped to associated `StorageClass`
         """
         return self._components
 
     @property
-    def parameters(self):
+    def parameters(self) -> Set[str]:
         """`set` of names of parameters supported by this `StorageClass`
         """
         return set(self._parameters)
 
     @property
-    def pytype(self):
+    def pytype(self) -> Type:
         """Python type associated with this `StorageClass`."""
         if self._pytype is not None:
             return self._pytype
@@ -134,7 +155,7 @@ class StorageClass:
         return self._pytype
 
     @property
-    def assemblerClass(self):
+    def assemblerClass(self) -> Optional[Type]:
         """Class to use to (dis)assemble an object from components."""
         if self._assembler is not None:
             return self._assembler
@@ -143,7 +164,7 @@ class StorageClass:
         self._assembler = doImport(self._assemblerClassName)
         return self._assembler
 
-    def assembler(self):
+    def assembler(self) -> CompositeAssembler:
         """Return an instance of an assembler.
 
         Returns
@@ -162,7 +183,7 @@ class StorageClass:
             raise TypeError(f"No assembler class is associated with StorageClass {self.name}")
         return cls(storageClass=self)
 
-    def isComposite(self):
+    def isComposite(self) -> bool:
         """Boolean indicating whether this `StorageClass` is a composite
         or not.
 
@@ -176,7 +197,7 @@ class StorageClass:
             return True
         return False
 
-    def _lookupNames(self):
+    def _lookupNames(self) -> Tuple[LookupKey]:
         """Keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
@@ -188,7 +209,7 @@ class StorageClass:
         """
         return (LookupKey(name=self.name), )
 
-    def knownParameters(self):
+    def knownParameters(self) -> Set[str]:
         """Return set of all parameters known to this `StorageClass`
 
         The set includes parameters understood by components of a composite.
@@ -204,7 +225,7 @@ class StorageClass:
             known.update(sc.knownParameters())
         return known
 
-    def validateParameters(self, parameters=None):
+    def validateParameters(self, parameters: Collection = None) -> None:
         """Check that the parameters are known to this `StorageClass`
 
         Does not check the values.
@@ -235,7 +256,8 @@ class StorageClass:
             unknown = '\', \''.join(diff)
             raise KeyError(f"Parameter{s} '{unknown}' not understood by StorageClass {self.name}")
 
-    def filterParameters(self, parameters, subset=None):
+    def filterParameters(self, parameters: Dict[str, Any],
+                         subset: Collection = None) -> Dict[str, Any]:
         """Filter out parameters that are not known to this StorageClass
 
         Parameters
@@ -262,7 +284,7 @@ class StorageClass:
                              f" known parameters ({known})")
         return {k: parameters[k] for k in known if k in parameters}
 
-    def validateInstance(self, instance):
+    def validateInstance(self, instance: Any) -> bool:
         """Check that the supplied Python object has the expected Python type
 
         Parameters
@@ -278,12 +300,13 @@ class StorageClass:
         """
         return isinstance(instance, self.pytype)
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
         """Equality checks name, pytype name, assembler name, and components"""
-        if self.name != other.name:
-            return False
 
         if not isinstance(other, StorageClass):
+            return False
+
+        if self.name != other.name:
             return False
 
         # We must compare pytype and assembler by name since we do not want
@@ -309,10 +332,10 @@ class StorageClass:
         # If we got to this point everything checks out
         return True
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         return hash(self.name)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         optionals = {}
         if self._pytypeName != "object":
             optionals["pytype"] = self._pytypeName
@@ -333,7 +356,7 @@ class StorageClass:
         r = r + ")"
         return r
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
 
@@ -353,9 +376,9 @@ class StorageClassFactory(metaclass=Singleton):
         is located in the ``storageClasses`` section.
     """
 
-    def __init__(self, config=None):
-        self._storageClasses = {}
-        self._configs = []
+    def __init__(self, config: Optional[Union[StorageClassConfig, str]] = None):
+        self._storageClasses: Dict[str, StorageClass] = {}
+        self._configs: List[StorageClassConfig] = []
 
         # Always seed with the default config
         self.addFromConfig(StorageClassConfig())
@@ -363,7 +386,7 @@ class StorageClassFactory(metaclass=Singleton):
         if config is not None:
             self.addFromConfig(config)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Return summary of factory.
 
         Returns
@@ -379,7 +402,7 @@ StorageClasses
 {sep.join(f"{s}: {self._storageClasses[s]}" for s in self._storageClasses)}
 """
 
-    def __contains__(self, storageClassOrName):
+    def __contains__(self, storageClassOrName: Union[StorageClass, str]) -> bool:
         """Indicates whether the storage class exists in the factory.
 
         Parameters
@@ -409,7 +432,7 @@ StorageClasses
                 return storageClassOrName == self._storageClasses[storageClassOrName.name]
         return False
 
-    def addFromConfig(self, config):
+    def addFromConfig(self, config: Union[StorageClassConfig, Config, str]) -> None:
         """Add more `StorageClass` definitions from a config file.
 
         Parameters
@@ -425,7 +448,7 @@ StorageClasses
         # components or parents before their classes are defined
         # we have a helper function that we can call recursively
         # to extract definitions from the configuration.
-        def processStorageClass(name, sconfig):
+        def processStorageClass(name: str, sconfig: StorageClassConfig) -> None:
             # Maybe we've already processed this through recursion
             if name not in sconfig:
                 return
@@ -464,7 +487,9 @@ StorageClasses
             processStorageClass(name, sconfig)
 
     @staticmethod
-    def makeNewStorageClass(name, baseClass=StorageClass, **kwargs):
+    def makeNewStorageClass(name: str,
+                            baseClass: Optional[Type[StorageClass]] = StorageClass,
+                            **kwargs: Any) -> Type[StorageClass]:
         """Create a new Python class as a subclass of `StorageClass`.
 
         Parameters
@@ -516,7 +541,7 @@ StorageClasses
 
         return type(f"StorageClass{name}", (baseClass,), clsargs)
 
-    def getStorageClass(self, storageClassName):
+    def getStorageClass(self, storageClassName: str) -> StorageClass:
         """Get a StorageClass instance associated with the supplied name.
 
         Parameters
@@ -536,7 +561,7 @@ StorageClasses
         """
         return self._storageClasses[storageClassName]
 
-    def registerStorageClass(self, storageClass):
+    def registerStorageClass(self, storageClass: StorageClass) -> None:
         """Store the `StorageClass` in the factory.
 
         Will be indexed by `StorageClass.name` and will return instances
@@ -561,7 +586,7 @@ StorageClasses
         else:
             self._storageClasses[storageClass.name] = storageClass
 
-    def _unregisterStorageClass(self, storageClassName):
+    def _unregisterStorageClass(self, storageClassName: str) -> None:
         """Remove the named StorageClass from the factory.
 
         Parameters
