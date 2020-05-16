@@ -287,10 +287,10 @@ class Datastore(metaclass=ABCMeta):
     def names(self):
         """Names associated with this datastore returned as a list.
 
-        Some datastores can have child datastores.
+        Can be different to ``name`` for a chaining datastore.
         """
         # Default implementation returns solely the name itself
-        return [self.name]
+        return (self.name, )
 
     @contextlib.contextmanager
     def transaction(self):

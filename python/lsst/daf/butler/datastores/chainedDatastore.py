@@ -204,8 +204,8 @@ class ChainedDatastore(Datastore):
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
     @property
-    def names(self):
-        return self._names
+    def names(self) -> Tuple[str, ...]:
+        return tuple(self._names)
 
     def __str__(self):
         chainName = ", ".join(str(ds) for ds in self.datastores)
