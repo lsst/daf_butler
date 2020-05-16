@@ -79,7 +79,7 @@ from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
     from lsst.daf.butler import LookupKey
-    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
+    from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -325,7 +325,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             )
         self._table.insert(*records)
 
-    def getStoredItemInfo(self, ref: Union[DatasetRef, FakeDatasetRef]) -> StoredFileInfo:
+    def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredFileInfo:
         # Docstring inherited from GenericBaseDatastore
 
         if ref.id is None:
@@ -388,7 +388,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                               checksum=record["checksum"],
                               file_size=record["file_size"])
 
-    def getStoredItemsInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> List[StoredFileInfo]:
+    def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
 
         # Look for the dataset_id -- there might be multiple matches
@@ -429,7 +429,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         ids = {r["dataset_id"] for r in records}
         return ids
 
-    def removeStoredItemInfo(self, ref: Union[DatasetRef, FakeDatasetRef]) -> None:
+    def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
         self._table.delete(dataset_id=ref.id)
 
@@ -462,9 +462,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, storedFileInfo
 
-    def _get_dataset_locations_info(self,
-                                    ref: Union[DatasetRef, FakeDatasetRef]) -> List[Tuple[Location,
-                                                                                          StoredFileInfo]]:
+    def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
         `Datastore` and the associated stored file information.
 
@@ -485,8 +483,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Use the path to determine the location
         return [(self.locationFactory.fromPath(r.path), r) for r in records]
 
-    def _can_remove_dataset_artifact(self, ref: Union[DatasetRef, FakeDatasetRef],
-                                     location: Location) -> bool:
+    def _can_remove_dataset_artifact(self, ref: DatasetIdRef, location: Location) -> bool:
         """Check that there is only one dataset associated with the
         specified artifact.
 

@@ -48,7 +48,7 @@ from .genericDatastore import GenericBaseDatastore
 if TYPE_CHECKING:
     from lsst.daf.butler import (Config, DatasetRef, DatasetType,
                                  LookupKey)
-    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager, FakeDatasetRef
+    from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -180,17 +180,17 @@ class InMemoryDatastore(GenericBaseDatastore):
             self.records[ref.id] = info
             self.related.setdefault(info.parentID, set()).add(ref.id)
 
-    def getStoredItemInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> StoredMemoryItemInfo:
+    def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredMemoryItemInfo:
         # Docstring inherited from GenericBaseDatastore.
         if ref.id is None:
             raise RuntimeError(f"Can not retrieve unresolved DatasetRef {ref}")
         return self.records[ref.id]
 
-    def getStoredItemsInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> List[StoredMemoryItemInfo]:
+    def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredMemoryItemInfo]:
         # Docstring inherited from GenericBaseDatastore.
         return [self.getStoredItemInfo(ref)]
 
-    def removeStoredItemInfo(self, ref: Union[FakeDatasetRef, DatasetRef]) -> None:
+    def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore.
         # If a component has been removed previously then we can sometimes
         # be asked to remove it again. Other datastores ignore this
@@ -203,7 +203,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         del self.records[ref.id]
         self.related[record.parentID].remove(ref.id)
 
-    def _get_dataset_info(self, ref: Union[FakeDatasetRef, DatasetRef]) -> Tuple[int, StoredMemoryItemInfo]:
+    def _get_dataset_info(self, ref: DatasetIdRef) -> Tuple[int, StoredMemoryItemInfo]:
         """Check that the dataset is present and return the real ID and
         associated information.
 
