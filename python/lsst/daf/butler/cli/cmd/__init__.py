@@ -21,6 +21,5 @@
 
 __all__ = ["create", "config_dump", "config_validate"]
 
-from .create import create
-from .config_dump import config_dump
-from .config_validate import config_validate
+
+from .commands import create, config_dump, config_validate

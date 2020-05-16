@@ -21,9 +21,23 @@
 
 import click
 
-from ..opt import repo_argument
-from ..utils import cli_handle_exception
-from ...script import configDump
+from ..opt import config_file_option, dataset_type_option, repo_argument
+from ..utils import split_commas, cli_handle_exception
+from ...script import createRepo, configDump, configValidate
+
+
+@click.command()
+@repo_argument(help=repo_argument.will_create_repo)
+@config_file_option(help="Path to an existing YAML config file to apply (on top of defaults).")
+@click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
+              "insulating the repo from changes in package defaults.")
+@click.option("--override", "-o", is_flag=True, help="Allow values in the supplied config to override any "
+              "repo settings.")
+@click.option("--outfile", "-f", default=None, type=str, help="Name of output file to receive repository "
+              "configuration. Default is to write butler.yaml into the specified repo.")
+def create(*args, **kwargs):
+    """Create an empty Gen3 Butler repository."""
+    cli_handle_exception(createRepo, *args, **kwargs)
 
 
 @click.command()
@@ -39,3 +53,14 @@ from ...script import configDump
 def config_dump(*args, **kwargs):
     """Dump either a subset or full Butler configuration to standard output."""
     cli_handle_exception(configDump, *args, **kwargs)
+
+
+@click.command()
+@repo_argument(required=True)
+@click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
+@dataset_type_option(help="Specific DatasetType(s) to validate.")
+@click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
+              help="DatasetType(s) to ignore for validation.")
+def config_validate(*args, **kwargs):
+    """Validate the configuration files for a Gen3 Butler repository."""
+    cli_handle_exception(configValidate, *args, **kwargs)
