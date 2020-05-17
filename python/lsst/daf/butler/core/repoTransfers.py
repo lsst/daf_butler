@@ -29,7 +29,18 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Iterable, Optional, IO, List, Mapping, Tuple, Callable, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    IO,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 from collections import defaultdict
 
 import yaml
@@ -75,12 +86,12 @@ class FileDataset:
     to `Datastore.export`.
     """
 
-    formatter: FormatterParameter
+    formatter: Optional[FormatterParameter]
     """A `Formatter` class or fully-qualified name.
     """
 
     def __init__(self, path: str, refs: Union[DatasetRef, List[DatasetRef]], *,
-                 formatter: FormatterParameter = None):
+                 formatter: Optional[FormatterParameter] = None):
         self.path = path
         if isinstance(refs, DatasetRef):
             refs = [refs]
@@ -119,10 +130,10 @@ class RepoExport:
         self._backend = backend
         self._directory = directory
         self._transfer = transfer
-        self._dataset_ids = set()
+        self._dataset_ids: Set[int] = set()
 
     def saveDataIds(self, dataIds: Iterable[ExpandedDataCoordinate], *,
-                    elements: Optional[Iterable[DimensionElement]] = None):
+                    elements: Optional[Iterable[DimensionElement]] = None) -> None:
         """Export the dimension records associated with one or more data IDs.
 
         Parameters
@@ -148,7 +159,7 @@ class RepoExport:
 
     def saveDatasets(self, refs: Iterable[DatasetRef], *,
                      elements: Optional[Iterable[DimensionElement]] = None,
-                     rewrite: Optional[Callable[[FileDataset], FileDataset]] = None):
+                     rewrite: Optional[Callable[[FileDataset], FileDataset]] = None) -> None:
         """Export one or more datasets.
 
         This automatically exports any `DatasetType`, `Run`, and dimension
@@ -198,7 +209,7 @@ class RepoExport:
         for (datasetType, run), records in datasets.items():
             self._backend.saveDatasets(datasetType, run, *records)
 
-    def _finish(self):
+    def _finish(self) -> None:
         """Delegate to the backend to finish the export process.
 
         For use by `Butler.export` only.
@@ -211,7 +222,7 @@ class RepoExportBackend(ABC):
     """
 
     @abstractmethod
-    def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord):
+    def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         """Export one or more dimension element records.
 
         Parameters
@@ -225,7 +236,7 @@ class RepoExportBackend(ABC):
 
     @abstractmethod
     def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset,
-                     collections: Iterable[str] = ()):
+                     collections: Iterable[str] = ()) -> None:
         """Export one or more datasets, including their associated DatasetType
         and run information (but not including associated dimension
         information).
@@ -246,7 +257,7 @@ class RepoExportBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def finish(self):
+    def finish(self) -> None:
         """Complete the export process.
         """
         raise NotImplementedError()
@@ -261,7 +272,7 @@ class RepoImportBackend(ABC):
     """
 
     @abstractmethod
-    def register(self):
+    def register(self) -> None:
         """Register all runs and dataset types associated with the backend with
         the `Registry` the backend was constructed with.
 
@@ -271,7 +282,7 @@ class RepoImportBackend(ABC):
 
     @abstractmethod
     def load(self, datastore: Optional[Datastore], *,
-             directory: Optional[str] = None, transfer: Optional[str] = None):
+             directory: Optional[str] = None, transfer: Optional[str] = None) -> None:
         """Import information associated with the backend into the given
         registry and datastore.
 
@@ -304,7 +315,7 @@ class YamlRepoExportBackend(RepoExportBackend):
         self.stream = stream
         self.data = []
 
-    def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord):
+    def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         # Docstring inherited from RepoExportBackend.saveDimensionData.
         # Convert astropy time in TAI to datetime in UTC for YAML
         data_dicts = []
@@ -320,7 +331,7 @@ class YamlRepoExportBackend(RepoExportBackend):
             "records": data_dicts,  # TODO: encode regions
         })
 
-    def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset):
+    def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset) -> None:
         # Docstring inherited from RepoExportBackend.saveDatasets.
         self.data.append({
             "type": "dataset_type",
@@ -348,7 +359,7 @@ class YamlRepoExportBackend(RepoExportBackend):
             ]
         })
 
-    def finish(self):
+    def finish(self) -> None:
         # Docstring inherited from RepoExportBackend.
         yaml.dump(
             {
@@ -410,7 +421,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             else:
                 raise ValueError(f"Unexpected dictionary type: {data['type']}.")
         # key is (dataset type name, run); inner most list is collections
-        self.datasets: Mapping[(str, str), List[Tuple[FileDataset, List[str]]]] = defaultdict(list)
+        self.datasets: Mapping[Tuple[str, str], List[Tuple[FileDataset, List[str]]]] = defaultdict(list)
         for data in datasetData:
             datasetType = self.datasetTypes.get(data["dataset_type"])
             if datasetType is None:
@@ -428,7 +439,7 @@ class YamlRepoImportBackend(RepoImportBackend):
                 for d in data["records"]
             )
 
-    def register(self):
+    def register(self) -> None:
         # Docstring inherited from RepoImportBackend.register.
         for run in self.runs:
             self.registry.registerRun(run)
@@ -436,7 +447,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             self.registry.registerDatasetType(datasetType)
 
     def load(self, datastore: Optional[Datastore], *,
-             directory: Optional[str] = None, transfer: Optional[str] = None):
+             directory: Optional[str] = None, transfer: Optional[str] = None) -> None:
         # Docstring inherited from RepoImportBackend.load.
         for element, records in self.dimensions.items():
             self.registry.insertDimensionData(element, *records)

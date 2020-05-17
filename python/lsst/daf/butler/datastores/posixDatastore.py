@@ -19,9 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-"""POSIX datastore."""
-
 from __future__ import annotations
+
+"""POSIX datastore."""
 
 __all__ = ("PosixDatastore", )
 
@@ -29,11 +29,24 @@ import hashlib
 import logging
 import os
 import shutil
-from typing import Iterable, Optional, Type
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Iterable,
+    Optional,
+    Type,
+    Union
+)
 
 from .fileLikeDatastore import FileLikeDatastore
 from lsst.daf.butler.core.safeFileIo import safeMakeDir
 from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, Formatter, DatasetRef
+
+if TYPE_CHECKING:
+    from .fileLikeDatastore import DatastoreFileGetInformation
+    from lsst.daf.butler import DatastoreConfig, Location
+    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -63,12 +76,13 @@ class PosixDatastore(FileLikeDatastore):
     and `None` (no transfer).
     """
 
-    defaultConfigFile = "datastores/posixDatastore.yaml"
+    defaultConfigFile: ClassVar[Optional[str]] = "datastores/posixDatastore.yaml"
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
 
-    def __init__(self, config, bridgeManager, butlerRoot=None):
+    def __init__(self, config: Union[DatastoreConfig, str],
+                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
 
         # Check that root is a valid URI for this datastore
@@ -82,7 +96,7 @@ class PosixDatastore(FileLikeDatastore):
                 raise ValueError(f"No valid root at: {self.root}")
             safeMakeDir(self.root)
 
-    def _artifact_exists(self, location):
+    def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.
 
@@ -98,7 +112,7 @@ class PosixDatastore(FileLikeDatastore):
         """
         return os.path.exists(location.path)
 
-    def _delete_artifact(self, location):
+    def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
 
         Parameters
@@ -108,7 +122,8 @@ class PosixDatastore(FileLikeDatastore):
         """
         os.remove(location.path)
 
-    def _read_artifact_into_memory(self, getInfo, ref, isComponent=False):
+    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
+                                   ref: DatasetRef, isComponent: bool = False) -> Any:
         location = getInfo.location
 
         # Too expensive to recalculate the checksum on fetch
@@ -134,7 +149,7 @@ class PosixDatastore(FileLikeDatastore):
         return self._post_process_get(result, getInfo.readStorageClass, getInfo.assemblerParams,
                                       isComponent=isComponent)
 
-    def _write_in_memory_to_artifact(self, inMemoryDataset, ref):
+    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         # Inherit docstring
 
         location, formatter = self._prepare_for_put(inMemoryDataset, ref)
@@ -153,7 +168,7 @@ class PosixDatastore(FileLikeDatastore):
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {predictedFullPath} already exists")
 
-        def _removeFileExists(path):
+        def _removeFileExists(path: str) -> None:
             """Remove a file and do not complain if it is not there.
 
             This is important since a formatter might fail before the file
@@ -164,6 +179,9 @@ class PosixDatastore(FileLikeDatastore):
                 os.remove(path)
             except FileNotFoundError:
                 pass
+
+        if self._transaction is None:
+            raise RuntimeError("Attempting to write dataset without transaction enabled")
 
         formatter_exception = None
         with self._transaction.undoWith("write", _removeFileExists, predictedFullPath):
@@ -180,7 +198,7 @@ class PosixDatastore(FileLikeDatastore):
 
         return self._extractIngestInfo(path, ref, formatter=formatter)
 
-    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> str:
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from base class
         if transfer != "auto":
             return transfer
@@ -198,7 +216,7 @@ class PosixDatastore(FileLikeDatastore):
 
         return transfer
 
-    def _pathInStore(self, path: str) -> str:
+    def _pathInStore(self, path: str) -> Optional[str]:
         """Return path relative to datastore root
 
         Parameters
@@ -229,14 +247,20 @@ class PosixDatastore(FileLikeDatastore):
             raise FileNotFoundError(f"File at '{fullPath}' does not exist; note that paths to ingest "
                                     f"are assumed to be relative to self.root unless they are absolute.")
         if transfer is None:
-            path = self._pathInStore(path)
-            if path is None:
+            # Can not reuse path var because of typing
+            pathx = self._pathInStore(path)
+            if pathx is None:
                 raise RuntimeError(f"'{path}' is not inside repository root '{self.root}'.")
+            path = pathx
         return path
 
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
+    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+                           formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         # Docstring inherited from FileLikeDatastore._extractIngestInfo.
+        if self._transaction is None:
+            raise RuntimeError("Ingest called without transaction enabled")
+
         fullPath = os.path.normpath(os.path.join(self.root, path))
         if transfer is not None:
             template = self.templates.getTemplate(ref)
@@ -287,10 +311,7 @@ class PosixDatastore(FileLikeDatastore):
                 raise NotImplementedError("Transfer type '{}' not supported.".format(transfer))
             path = newPath
             fullPath = newFullPath
-        if self.useChecksum:
-            checksum = self.computeChecksum(fullPath)
-        else:
-            checksum = None
+        checksum = self.computeChecksum(fullPath) if self.useChecksum else None
         stat = os.stat(fullPath)
         size = stat.st_size
         return StoredFileInfo(formatter=formatter, path=path, storageClass=ref.datasetType.storageClass,
@@ -298,7 +319,7 @@ class PosixDatastore(FileLikeDatastore):
                               file_size=size, checksum=checksum)
 
     @staticmethod
-    def computeChecksum(filename, algorithm="blake2b", block_size=8192):
+    def computeChecksum(filename: str, algorithm: str = "blake2b", block_size: int = 8192) -> str:
         """Compute the checksum of the supplied file.
 
         Parameters

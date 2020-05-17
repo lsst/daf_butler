@@ -19,13 +19,15 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("StoredFileInfo", "StoredDatastoreItemInfo")
 
 import inspect
 from dataclasses import dataclass
 from typing import Optional
 
-from .formatter import Formatter
+from .formatter import Formatter, FormatterParameter
 from .storageClass import StorageClass
 
 
@@ -38,15 +40,40 @@ class StoredDatastoreItemInfo:
     __slots__ = ()
 
 
-@dataclass
+@dataclass(frozen=True)
 class StoredFileInfo(StoredDatastoreItemInfo):
     """Datastore-private metadata associated with a file stored in a Datastore.
     """
     __slots__ = {"formatter", "path", "storageClass", "component",
                  "checksum", "file_size"}
 
+    def __init__(self, formatter: FormatterParameter,
+                 path: str,
+                 storageClass: StorageClass,
+                 component: Optional[str],
+                 checksum: Optional[str],
+                 file_size: int):
+
+        # Use these shenanigans to allow us to use a frozen dataclass
+        object.__setattr__(self, "path", path)
+        object.__setattr__(self, "storageClass", storageClass)
+        object.__setattr__(self, "component", component)
+        object.__setattr__(self, "checksum", checksum)
+        object.__setattr__(self, "file_size", file_size)
+
+        if isinstance(formatter, str):
+            # We trust that this string refers to a Formatter
+            formatterStr = formatter
+        elif isinstance(formatter, Formatter) or \
+                (inspect.isclass(formatter) and issubclass(formatter, Formatter)):
+            formatterStr = formatter.name()
+        else:
+            raise TypeError(f"Supplied formatter '{formatter}' is not a Formatter")
+        object.__setattr__(self, "formatter", formatterStr)
+
     formatter: str
-    """Fully-qualified name of Formatter."""
+    """Fully-qualified name of Formatter. If a Formatter class or instance
+    is given the name will be extracted."""
 
     path: str
     """Path to dataset within Datastore."""
@@ -63,14 +90,3 @@ class StoredFileInfo(StoredDatastoreItemInfo):
 
     file_size: int
     """Size of the serialized dataset in bytes."""
-
-    def __post_init__(self):
-        # This modification prevents the data class from being frozen.
-        if isinstance(self.formatter, str):
-            # We trust that this string refers to a Formatter
-            pass
-        elif isinstance(self.formatter, Formatter) or \
-                (inspect.isclass(self.formatter) and issubclass(self.formatter, Formatter)):
-            self.formatter = self.formatter.name()
-        else:
-            raise TypeError(f"Supplied formatter '{self.formatter}' is not a Formatter")

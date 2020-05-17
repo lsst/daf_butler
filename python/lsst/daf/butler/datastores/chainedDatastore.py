@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Chained datastore."""
 
 __all__ = ("ChainedDatastore",)
@@ -27,11 +29,26 @@ import time
 import logging
 import warnings
 import itertools
-from typing import List, Sequence, Optional, Tuple, Any
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    List,
+    Iterable,
+    Mapping,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 from lsst.utils import doImport
 from lsst.daf.butler import Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
     DatastoreValidationError, Constraints, FileDataset
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import Config, DatasetRef, DatasetType, LookupKey, StorageClass
+    from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -91,7 +108,7 @@ class ChainedDatastore(Datastore):
     """Constraints to be applied to each of the child datastores."""
 
     @classmethod
-    def setConfigRoot(cls, root, config, full, overwrite=True):
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
         """Set any filesystem-dependent config options for child Datastores to
         be appropriate for a new empty repository with the given root.
 
@@ -155,7 +172,8 @@ class ChainedDatastore(Datastore):
 
         return
 
-    def __init__(self, config, bridgeManager, butlerRoot=None):
+    def __init__(self, config: Union[Config, str], bridgeManager: DatastoreRegistryBridgeManager,
+                 butlerRoot: str = None):
         super().__init__(config, bridgeManager)
 
         # Scan for child datastores and instantiate them with the same registry
@@ -204,14 +222,14 @@ class ChainedDatastore(Datastore):
         log.debug("Created %s (%s)", self.name, ("ephemeral" if self.isEphemeral else "permanent"))
 
     @property
-    def names(self):
-        return self._names
+    def names(self) -> Tuple[str, ...]:
+        return tuple(self._names)
 
-    def __str__(self):
+    def __str__(self) -> str:
         chainName = ", ".join(str(ds) for ds in self.datastores)
         return chainName
 
-    def exists(self, ref):
+    def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in one of the datastores.
 
         Parameters
@@ -230,7 +248,7 @@ class ChainedDatastore(Datastore):
                 return True
         return False
 
-    def get(self, ref, parameters=None):
+    def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.
 
         The dataset is returned from the first datastore that has
@@ -269,7 +287,7 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError("Dataset {} could not be found in any of the datastores".format(ref))
 
-    def put(self, inMemoryDataset, ref):
+    def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to each
         datastore.
 
@@ -331,7 +349,7 @@ class ChainedDatastore(Datastore):
         if self._transaction is not None:
             self._transaction.registerUndo('put', self.remove, ref)
 
-    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> str:
+    def _overrideTransferMode(self, *datasets: Any, transfer: Optional[str] = None) -> Optional[str]:
         # Docstring inherited from base class.
         if transfer != "auto":
             return transfer
@@ -355,7 +373,7 @@ class ChainedDatastore(Datastore):
         if transfer is None or transfer == "move":
             raise NotImplementedError("ChainedDatastore does not support transfer=None or transfer='move'.")
 
-        def isDatasetAcceptable(dataset, *, name, constraints):
+        def isDatasetAcceptable(dataset: FileDataset, *, name: str, constraints: Constraints) -> bool:
             acceptable = [ref for ref in dataset.refs if constraints.isAcceptable(ref)]
             if not acceptable:
                 log.debug("Datastore %s skipping ingest via configuration for refs %s",
@@ -377,12 +395,13 @@ class ChainedDatastore(Datastore):
         # NotImplementedError being raised.
         allFailuresAreNotImplementedError = True
         for datastore, constraints in zip(self.datastores, self.datastoreConstraints):
+            okForChild: List[FileDataset]
             if constraints is not None:
-                okForChild: List[FileDataset] = [dataset for dataset in okForParent
-                                                 if isDatasetAcceptable(dataset, name=datastore.name,
-                                                                        constraints=constraints)]
+                okForChild = [dataset for dataset in okForParent
+                              if isDatasetAcceptable(dataset, name=datastore.name,
+                                                     constraints=constraints)]
             else:
-                okForChild: List[FileDataset] = okForParent
+                okForChild = okForParent
             try:
                 prepDataForChild = datastore._prepIngest(*okForChild, transfer=transfer)
             except NotImplementedError:
@@ -395,12 +414,12 @@ class ChainedDatastore(Datastore):
             raise NotImplementedError(f"No child datastore supports transfer mode {transfer}.")
         return _IngestPrepData(children=children)
 
-    def _finishIngest(self, prepData: _IngestPrepData, *, transfer: Optional[str] = None):
+    def _finishIngest(self, prepData: _IngestPrepData, *, transfer: Optional[str] = None) -> None:
         # Docstring inherited from Datastore._finishIngest.
         for datastore, prepDataForChild in prepData.children:
             datastore._finishIngest(prepDataForChild, transfer=transfer)
 
-    def getUri(self, ref, predict=False):
+    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
 
         The returned URI is from the first datastore in the list that has
@@ -438,9 +457,9 @@ class ChainedDatastore(Datastore):
             guessing is not allowed.
         """
         log.debug("Requesting URI for %s", ref)
-        predictedUri = None
-        predictedEphemeralUri = None
-        firstEphemeralUri = None
+        predictedUri: Optional[str] = None
+        predictedEphemeralUri: Optional[str] = None
+        firstEphemeralUri: Optional[str] = None
         for datastore in self.datastores:
             if datastore.exists(ref):
                 if not datastore.isEphemeral:
@@ -469,7 +488,7 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
 
-    def remove(self, ref):
+    def remove(self, ref: DatasetRef) -> None:
         """Indicate to the datastore that a dataset can be removed.
 
         The dataset will be removed from each datastore.  The dataset is
@@ -490,7 +509,7 @@ class ChainedDatastore(Datastore):
         self.trash(ref, ignore_errors=False)
         self.emptyTrash(ignore_errors=False)
 
-    def trash(self, ref, ignore_errors=True):
+    def trash(self, ref: DatasetRef, ignore_errors: bool = True) -> None:
         log.debug("Trashing %s", ref)
 
         counter = 0
@@ -508,11 +527,11 @@ class ChainedDatastore(Datastore):
             else:
                 raise FileNotFoundError(err_msg)
 
-    def emptyTrash(self, ignore_errors=True):
+    def emptyTrash(self, ignore_errors: bool = True) -> None:
         for datastore in self.datastores:
             datastore.emptyTrash(ignore_errors=ignore_errors)
 
-    def transfer(self, inputDatastore, ref):
+    def transfer(self, inputDatastore: Datastore, ref: DatasetRef) -> None:
         """Retrieve a dataset from an input `Datastore`,
         and store the result in this `Datastore`.
 
@@ -531,9 +550,10 @@ class ChainedDatastore(Datastore):
         """
         assert inputDatastore is not self  # unless we want it for renames?
         inMemoryDataset = inputDatastore.get(ref)
-        return [datastore.put(inMemoryDataset, ref) for datastore in self.datastores]
+        self.put(inMemoryDataset, ref)
 
-    def validateConfiguration(self, entities, logFailures=False):
+    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
+                              logFailures: bool = False) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters
@@ -571,7 +591,8 @@ class ChainedDatastore(Datastore):
             msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)
 
-    def validateKey(self, lookupKey, entity):
+    def validateKey(self, lookupKey: LookupKey,
+                    entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         # Docstring is inherited from base class
         failures = []
         for datastore in self.datastores:
@@ -584,7 +605,7 @@ class ChainedDatastore(Datastore):
             msg = ";\n".join(failures)
             raise DatastoreValidationError(msg)
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         # Docstring is inherited from base class
         keys = set()
         for datastore in self.datastores:

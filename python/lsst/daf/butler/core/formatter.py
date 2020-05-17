@@ -66,16 +66,19 @@ class Formatter(metaclass=ABCMeta):
     are supported (`frozenset`).
     """
 
+    extension: Optional[str] = None
+    """File extension default provided by this formatter."""
+
     def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
         self._dataId = dataId
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name()}@{self.fileDescriptor.location.path}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"{self.name()}({self.fileDescriptor!r})"
 
     @property
@@ -85,7 +88,7 @@ class Formatter(metaclass=ABCMeta):
         return self._fileDescriptor
 
     @property
-    def dataId(self) -> DataCoordinate:
+    def dataId(self) -> Optional[DataCoordinate]:
         """DataId associated with this formatter (`DataCoordinate`)"""
         return self._dataId
 
@@ -277,10 +280,10 @@ class FormatterFactory:
     """Factory for `Formatter` instances.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._mappingFactory = MappingFactory(Formatter)
 
-    def __contains__(self, key):
+    def __contains__(self, key: Union[LookupKey, str]) -> bool:
         """Indicates whether the supplied key is present in the factory.
 
         Parameters
@@ -353,10 +356,7 @@ class FormatterFactory:
         formatter : `type`
             The class of the registered formatter.
         """
-        if isinstance(entity, str):
-            names = (entity,)
-        else:
-            names = entity._lookupNames()
+        names = (entity,) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getClassFromRegistryWithMatch(names)
         log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
                   matchKey, entity)
@@ -383,7 +383,7 @@ class FormatterFactory:
         _, formatter = self.getFormatterClassWithMatch(entity)
         return formatter
 
-    def getFormatterWithMatch(self, entity: Entity, *args, **kwargs) -> Tuple[LookupKey, Formatter]:
+    def getFormatterWithMatch(self, entity: Entity, *args: Any, **kwargs: Any) -> Tuple[LookupKey, Formatter]:
         """Get a new formatter instance along with the matching registry
         key.
 
@@ -407,17 +407,14 @@ class FormatterFactory:
         formatter : `Formatter`
             An instance of the registered formatter.
         """
-        if isinstance(entity, str):
-            names = (entity,)
-        else:
-            names = entity._lookupNames()
+        names = (entity,) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
         log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
                   matchKey, entity)
 
         return matchKey, formatter
 
-    def getFormatter(self, entity: Entity, *args, **kwargs) -> Formatter:
+    def getFormatter(self, entity: Entity, *args: Any, **kwargs: Any) -> Formatter:
         """Get a new formatter instance.
 
         Parameters
@@ -468,4 +465,4 @@ class FormatterFactory:
 
 
 # Type to use when allowing a Formatter or its class name
-FormatterParameter = Union[None, str, Type[Formatter]]
+FormatterParameter = Union[str, Type[Formatter], Formatter]

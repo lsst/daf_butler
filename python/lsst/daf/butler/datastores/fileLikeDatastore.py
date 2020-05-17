@@ -30,7 +30,20 @@ from abc import abstractmethod
 from sqlalchemy import Integer, String
 
 from dataclasses import dataclass
-from typing import Optional, List, Type
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    ClassVar,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from lsst.daf.butler import (
     CompositesMap,
@@ -63,6 +76,10 @@ from lsst.daf.butler.registry.interfaces import (
 from lsst.daf.butler.core.repoRelocation import replaceRoot
 from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
 from .genericDatastore import GenericBaseDatastore
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import LookupKey
+    from lsst.daf.butler.registry.interfaces import DatasetIdRef, DatastoreRegistryBridgeManager
 
 log = logging.getLogger(__name__)
 
@@ -129,7 +146,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         configuration.
     """
 
-    defaultConfigFile = None
+    defaultConfigFile: ClassVar[Optional[str]] = None
     """Path to configuration defaults. Relative to $DAF_BUTLER_DIR/config or
     absolute path. Can be None if no defaults specified.
     """
@@ -150,7 +167,7 @@ class FileLikeDatastore(GenericBaseDatastore):
     """Determines whether a dataset should be disassembled on put."""
 
     @classmethod
-    def setConfigRoot(cls, root, config, full, overwrite=True):
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
 
@@ -185,7 +202,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                                 toCopy=("cls", ("records", "table")), overwrite=overwrite)
 
     @classmethod
-    def makeTableSpec(cls):
+    def makeTableSpec(cls) -> ddl.TableSpec:
         return ddl.TableSpec(
             fields=NamedValueSet([
                 ddl.FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
@@ -198,10 +215,11 @@ class FileLikeDatastore(GenericBaseDatastore):
                 ddl.FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
                 ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),
             ]),
-            unique=frozenset(),
+            unique=frozenset(),  # type: ignore
         )
 
-    def __init__(self, config, bridgeManager, butlerRoot=None):
+    def __init__(self, config: Union[DatastoreConfig, str],
+                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager)
         if "root" not in self.config:
             raise ValueError("No root directory specified in configuration")
@@ -253,7 +271,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Determine whether checksums should be used
         self.useChecksum = self.config.get("checksum", True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.root
 
     @property
@@ -261,7 +279,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         return self._bridge
 
     @abstractmethod
-    def _artifact_exists(self, location):
+    def _artifact_exists(self, location: Location) -> bool:
         """Check that an artifact exists in this datastore at the specified
         location.
 
@@ -278,7 +296,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def _delete_artifact(self, location):
+    def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.
 
         Parameters
@@ -288,7 +306,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         """
         raise NotImplementedError()
 
-    def addStoredItemInfo(self, refs, infos):
+    def addStoredItemInfo(self, refs: Iterable[DatasetRef], infos: Iterable[StoredFileInfo]) -> None:
         # Docstring inherited from GenericBaseDatastore
         records = []
         for ref, info in zip(refs, infos):
@@ -307,10 +325,13 @@ class FileLikeDatastore(GenericBaseDatastore):
             )
         self._table.insert(*records)
 
-    def getStoredItemInfo(self, ref):
+    def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredFileInfo:
         # Docstring inherited from GenericBaseDatastore
 
-        where = {"dataset_id": ref.id}
+        if ref.id is None:
+            raise RuntimeError("Unable to retrieve information for unresolved DatasetRef")
+
+        where: Dict[str, Union[int, str]] = {"dataset_id": ref.id}
 
         # If we have no component we want the row from this table without
         # a component. If we do have a component we either need the row
@@ -320,10 +341,11 @@ class FileLikeDatastore(GenericBaseDatastore):
         # if we are emptying trash we won't have real refs so can't constrain
         # by component. Will need to fix this to return multiple matches
         # in future.
+        component = None
         try:
             component = ref.datasetType.component()
         except AttributeError:
-            component = None
+            pass
         else:
             if component is None:
                 where["component"] = NULLSTR
@@ -366,7 +388,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                               checksum=record["checksum"],
                               file_size=record["file_size"])
 
-    def getStoredItemsInfo(self, ref):
+    def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
 
         # Look for the dataset_id -- there might be multiple matches
@@ -390,7 +412,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return results
 
-    def _registered_refs_per_artifact(self, pathInStore):
+    def _registered_refs_per_artifact(self, pathInStore: str) -> Set[int]:
         """Return all dataset refs associated with the supplied path.
 
         Parameters
@@ -407,11 +429,12 @@ class FileLikeDatastore(GenericBaseDatastore):
         ids = {r["dataset_id"] for r in records}
         return ids
 
-    def removeStoredItemInfo(self, ref):
+    def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
         self._table.delete(dataset_id=ref.id)
 
-    def _get_dataset_location_info(self, ref):
+    def _get_dataset_location_info(self,
+                                   ref: DatasetRef) -> Tuple[Optional[Location], Optional[StoredFileInfo]]:
         """Find the `Location` of the requested dataset in the
         `Datastore` and the associated stored file information.
 
@@ -439,7 +462,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location, storedFileInfo
 
-    def _get_dataset_locations_info(self, ref):
+    def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
         `Datastore` and the associated stored file information.
 
@@ -460,13 +483,13 @@ class FileLikeDatastore(GenericBaseDatastore):
         # Use the path to determine the location
         return [(self.locationFactory.fromPath(r.path), r) for r in records]
 
-    def _can_remove_dataset_artifact(self, ref, location):
+    def _can_remove_dataset_artifact(self, ref: DatasetIdRef, location: Location) -> bool:
         """Check that there is only one dataset associated with the
         specified artifact.
 
         Parameters
         ----------
-        ref : `DatasetRef`
+        ref : `DatasetRef` or `FakeDatasetRef`
             Dataset to be removed.
         location : `Location`
             The location of the artifact to be removed.
@@ -483,7 +506,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             raise RuntimeError(f"Datastore inconsistency error. {location.pathInStore} not in registry")
 
         # Get all the refs associated with this dataset if it is a composite
-        theseRefs = {r.id for r in ref.flatten([ref])}
+        theseRefs = {r.id for r in ref.allRefs()}
 
         # Remove these refs from all the refs and if there is nothing left
         # then we can delete
@@ -493,7 +516,8 @@ class FileLikeDatastore(GenericBaseDatastore):
             return False
         return True
 
-    def _prepare_for_get(self, ref, parameters=None):
+    def _prepare_for_get(self, ref: DatasetRef,
+                         parameters: Optional[Mapping[str, Any]] = None) -> List[DatastoreFileGetInformation]:
         """Check parameters for ``get`` and obtain formatter and
         location.
 
@@ -557,17 +581,14 @@ class FileLikeDatastore(GenericBaseDatastore):
             # The ref itself could be a component if the dataset was
             # disassembled by butler, or we disassembled in datastore and
             # components came from the datastore records
-            if storedFileInfo.component:
-                component = storedFileInfo.component
-            else:
-                component = refComponent
+            component = storedFileInfo.component if storedFileInfo.component else refComponent
 
             fileGetInfo.append(DatastoreFileGetInformation(location, formatter, storedFileInfo,
                                                            assemblerParams, component, readStorageClass))
 
         return fileGetInfo
 
-    def _prepare_for_put(self, inMemoryDataset, ref):
+    def _prepare_for_put(self, inMemoryDataset: Any, ref: DatasetRef) -> Tuple[Location, Formatter]:
         """Check the arguments for ``put`` and obtain formatter and
         location.
 
@@ -651,7 +672,8 @@ class FileLikeDatastore(GenericBaseDatastore):
         raise NotImplementedError("Must be implemented by subclasses.")
 
     @abstractmethod
-    def _extractIngestInfo(self, path: str, ref: DatasetRef, *, formatter: Type[Formatter],
+    def _extractIngestInfo(self, path: str, ref: DatasetRef, *,
+                           formatter: Union[Formatter, Type[Formatter]],
                            transfer: Optional[str] = None) -> StoredFileInfo:
         """Relocate (if necessary) and extract `StoredFileInfo` from a
         to-be-ingested file.
@@ -663,8 +685,8 @@ class FileLikeDatastore(GenericBaseDatastore):
         ref : `DatasetRef`
             Reference for the dataset being ingested.  Guaranteed to have
             ``dataset_id not None`.
-        formatter : `type`
-            `Formatter` subclass to use for this dataset.
+        formatter : `type` or `Formatter`
+            `Formatter` subclass to use for this dataset or an instance.
         transfer : `str`, optional
             How (and whether) the dataset should be added to the datastore.
             See `ingest` for details of transfer modes.
@@ -704,7 +726,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         return _IngestPrepData(filtered)
 
     @transactional
-    def _finishIngest(self, prepData: Datastore.IngestPrepData, *, transfer: Optional[str] = None):
+    def _finishIngest(self, prepData: Datastore.IngestPrepData, *, transfer: Optional[str] = None) -> None:
         # Docstring inherited from Datastore._finishIngest.
         refsAndInfos = []
         for dataset in prepData.datasets:
@@ -714,7 +736,46 @@ class FileLikeDatastore(GenericBaseDatastore):
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)
 
-    def exists(self, ref):
+    @abstractmethod
+    def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
+        """Write out in memory dataset to datastore.
+
+        Parameters
+        ----------
+        inMemoryDataset : `object`
+            Dataset to write to datastore.
+        ref : `DatasetRef`
+            Registry information associated with this dataset.
+
+        Returns
+        -------
+        info : `StoredFileInfo`
+            Information describin the artifact written to the datastore.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _read_artifact_into_memory(self, getInfo: DatastoreFileGetInformation,
+                                   ref: DatasetRef, isComponent: bool = False) -> Any:
+        """Read the artifact from datastore into in memory object.
+
+        Parameters
+        ----------
+        getInfo : `DatastoreFileGetInformation`
+            Information about the artifact within the datastore.
+        ref : `DatasetRef`
+            The registry information associated with this artifact.
+        isComponent : `bool`
+            Flag to indicate if a component is being read from this artifact.
+
+        Returns
+        -------
+        inMemoryDataset : `object`
+            The artifact as a python object.
+        """
+        raise NotImplementedError()
+
+    def exists(self, ref: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
 
         Parameters
@@ -736,7 +797,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return True
 
-    def getUri(self, ref, predict=False):
+    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
 
         Parameters
@@ -799,7 +860,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return location.uri
 
-    def get(self, ref, parameters=None):
+    def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.
 
         Parameters
@@ -871,7 +932,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             return self._read_artifact_into_memory(getInfo, ref, isComponent=getInfo.component is not None)
 
     @transactional
-    def put(self, inMemoryDataset, ref):
+    def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
         """Write a InMemoryDataset with a given `DatasetRef` to the store.
 
         Parameters
@@ -923,7 +984,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         self._register_datasets(artifacts)
 
     @transactional
-    def trash(self, ref, ignore_errors=True):
+    def trash(self, ref: DatasetRef, ignore_errors: bool = True) -> None:
         """Indicate to the datastore that a dataset can be removed.
 
         Parameters
@@ -975,7 +1036,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                 raise
 
     @transactional
-    def emptyTrash(self, ignore_errors=True):
+    def emptyTrash(self, ignore_errors: bool = True) -> None:
         """Remove all datasets from the trash.
 
         Parameters
@@ -991,15 +1052,15 @@ class FileLikeDatastore(GenericBaseDatastore):
             for ref in trashed:
                 fileLocations = self._get_dataset_locations_info(ref)
 
-                for location, _ in fileLocations:
+                if not fileLocations:
+                    err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
+                    if ignore_errors:
+                        log.warning(err_msg)
+                        continue
+                    else:
+                        raise FileNotFoundError(err_msg)
 
-                    if location is None:
-                        err_msg = f"Requested dataset ({ref}) does not exist in datastore {self.name}"
-                        if ignore_errors:
-                            log.warning(err_msg)
-                            continue
-                        else:
-                            raise FileNotFoundError(err_msg)
+                for location, _ in fileLocations:
 
                     if not self._artifact_exists(location):
                         err_msg = f"Dataset {location.uri} no longer present in datastore {self.name}"
@@ -1038,7 +1099,8 @@ class FileLikeDatastore(GenericBaseDatastore):
                     else:
                         raise FileNotFoundError(err_msg)
 
-    def validateConfiguration(self, entities, logFailures=False):
+    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
+                              logFailures: bool = False) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters
@@ -1086,12 +1148,13 @@ class FileLikeDatastore(GenericBaseDatastore):
             msg = ";\n".join(messages)
             raise DatastoreValidationError(msg)
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         # Docstring is inherited from base class
         return self.templates.getLookupKeys() | self.formatterFactory.getLookupKeys() | \
             self.constraints.getLookupKeys()
 
-    def validateKey(self, lookupKey, entity):
+    def validateKey(self, lookupKey: LookupKey,
+                    entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         # Docstring is inherited from base class
         # The key can be valid in either formatters or templates so we can
         # only check the template if it exists

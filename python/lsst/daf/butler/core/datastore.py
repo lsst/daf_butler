@@ -30,7 +30,22 @@ __all__ = ("DatastoreConfig", "Datastore", "DatastoreValidationError")
 import contextlib
 import logging
 from collections import defaultdict
-from typing import TYPE_CHECKING, Optional, Type, Callable, ClassVar, Any, Generator, Iterable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    ClassVar,
+    Iterable,
+    Iterator,
+    List,
+    Mapping,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
+
 from dataclasses import dataclass
 from abc import ABCMeta, abstractmethod
 
@@ -42,8 +57,10 @@ from .storageClass import StorageClassFactory
 
 if TYPE_CHECKING:
     from ..registry.interfaces import DatastoreRegistryBridgeManager
-    from .datasets import DatasetRef
-    from .repoTransfer import FileDataset
+    from .datasets import DatasetRef, DatasetType
+    from .configSupport import LookupKey
+    from .repoTransfers import FileDataset
+    from .storageClass import StorageClass
 
 
 class DatastoreConfig(ConfigSubset):
@@ -98,9 +115,9 @@ class DatastoreTransaction:
     parent: Optional['DatastoreTransaction']
     """The parent transaction. (`DatastoreTransaction`, optional)"""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent: Optional[DatastoreTransaction] = None):
         self.parent = parent
-        self._log = []
+        self._log: List[Event] = []
 
     def registerUndo(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> None:
         """Register event with undo function.
@@ -119,7 +136,7 @@ class DatastoreTransaction:
         self._log.append(self.Event(name, undoFunc, args, kwargs))
 
     @contextlib.contextmanager
-    def undoWith(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> Generator:
+    def undoWith(self, name: str, undoFunc: Callable, *args: Any, **kwargs: Any) -> Iterator[None]:
         """A context manager that calls `registerUndo` if the nested operation
         does not raise an exception.
 
@@ -188,10 +205,10 @@ class Datastore(metaclass=ABCMeta):
     and containing a "cls" definition. None indicates that no containers
     are expected in this Datastore."""
 
-    isEphemeral: ClassVar[bool] = False
+    isEphemeral: bool = False
     """Indicate whether this Datastore is ephemeral or not.  An ephemeral
     datastore is one where the contents of the datastore will not exist
-    across process restarts."""
+    across process restarts.  This value can change per-instance."""
 
     config: DatastoreConfig
     """Configuration used to create Datastore."""
@@ -199,23 +216,19 @@ class Datastore(metaclass=ABCMeta):
     name: str
     """Label associated with this Datastore."""
 
-    names: list
-    """List of names associated with this Datastore. Can be different to
-    ``name`` for a chaining datastore."""
-
     storageClassFactory: StorageClassFactory
     """Factory for creating storage class instances from name."""
 
     constraints: Constraints
     """Constraints to apply when putting datasets into the datastore."""
 
-    IngestPrepData: ClassVar[Type] = IngestPrepData
+    IngestPrepData: ClassVar = IngestPrepData
     """Helper base class for ingest implementations.
     """
 
     @classmethod
     @abstractmethod
-    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True):
+    def setConfigRoot(cls, root: str, config: Config, full: Config, overwrite: bool = True) -> None:
         """Set any filesystem-dependent config options for this Datastore to
         be appropriate for a new empty repository with the given root.
 
@@ -265,10 +278,11 @@ class Datastore(metaclass=ABCMeta):
         cls = doImport(config["datastore", "cls"])
         return cls(config=config, bridgeManager=bridgeManager, butlerRoot=butlerRoot)
 
-    def __init__(self, config, bridgeManager, butlerRoot=None):
+    def __init__(self, config: Union[Config, str],
+                 bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         self.config = DatastoreConfig(config)
         self.name = "ABCDataStore"
-        self._transaction = None
+        self._transaction: Optional[DatastoreTransaction] = None
 
         # All Datastores need storage classes and constraints
         self.storageClassFactory = StorageClassFactory()
@@ -277,23 +291,23 @@ class Datastore(metaclass=ABCMeta):
         constraintsConfig = self.config.get("constraints")
         self.constraints = Constraints(constraintsConfig, universe=bridgeManager.universe)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.name
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
     @property
-    def names(self):
+    def names(self) -> Tuple[str, ...]:
         """Names associated with this datastore returned as a list.
 
-        Some datastores can have child datastores.
+        Can be different to ``name`` for a chaining datastore.
         """
         # Default implementation returns solely the name itself
-        return [self.name]
+        return (self.name, )
 
     @contextlib.contextmanager
-    def transaction(self):
+    def transaction(self) -> Iterator[DatastoreTransaction]:
         """Context manager supporting `Datastore` transactions.
 
         Transactions can be nested, and are to be used in combination with
@@ -310,7 +324,7 @@ class Datastore(metaclass=ABCMeta):
         self._transaction = self._transaction.parent
 
     @abstractmethod
-    def exists(self, datasetRef):
+    def exists(self, datasetRef: DatasetRef) -> bool:
         """Check if the dataset exists in the datastore.
 
         Parameters
@@ -326,7 +340,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def get(self, datasetRef, parameters=None):
+    def get(self, datasetRef: DatasetRef, parameters: Mapping[str, Any] = None) -> Any:
         """Load an `InMemoryDataset` from the store.
 
         Parameters
@@ -345,19 +359,19 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def put(self, inMemoryDataset, datasetRef):
+    def put(self, inMemoryDataset: Any, datasetRef: DatasetRef) -> None:
         """Write a `InMemoryDataset` with a given `DatasetRef` to the store.
 
         Parameters
         ----------
-        inMemoryDataset : `InMemoryDataset`
+        inMemoryDataset : `object`
             The Dataset to store.
         datasetRef : `DatasetRef`
             Reference to the associated Dataset.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
-    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> str:
+    def _overrideTransferMode(self, *datasets: FileDataset, transfer: Optional[str] = None) -> Optional[str]:
         """Allow ingest transfer mode to be defaulted based on datasets.
 
         Parameters
@@ -445,7 +459,7 @@ class Datastore(metaclass=ABCMeta):
             "Datastore does not support direct file-based ingest."
         )
 
-    def _finishIngest(self, prepData: IngestPrepData, *, transfer: Optional[str] = None):
+    def _finishIngest(self, prepData: IngestPrepData, *, transfer: Optional[str] = None) -> None:
         """Complete an ingest operation.
 
         Parameters
@@ -475,7 +489,7 @@ class Datastore(metaclass=ABCMeta):
             "Datastore does not support direct file-based ingest."
         )
 
-    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None):
+    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None) -> None:
         """Ingest one or more files into the datastore.
 
         Parameters
@@ -543,13 +557,16 @@ class Datastore(metaclass=ABCMeta):
         self._finishIngest(prepData, transfer=transfer)
 
     @abstractmethod
-    def getUri(self, datasetRef):
+    def getUri(self, datasetRef: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
 
         Parameters
         ----------
         datasetRef : `DatasetRef`
             Reference to the required Dataset.
+        predict : `bool`
+            If `True` attempt to predict the URI for a dataset if it does
+            not exist in datastore.
 
         Returns
         -------
@@ -559,11 +576,17 @@ class Datastore(metaclass=ABCMeta):
             If the datastore does not have entities that relate well
             to the concept of a URI the returned URI string will be
             descriptive. The returned URI is not guaranteed to be obtainable.
+
+        Raises
+        ------
+        FileNotFoundError
+            A URI has been requested for a dataset that does not exist and
+            guessing is not allowed.
         """
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def remove(self, datasetRef):
+    def remove(self, datasetRef: DatasetRef) -> None:
         """Indicate to the Datastore that a Dataset can be removed.
 
         Parameters
@@ -584,7 +607,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def trash(self, datasetRef, ignore_errors=True):
+    def trash(self, datasetRef: DatasetRef, ignore_errors: bool = True) -> None:
         """Indicate to the Datastore that a Dataset can be moved to the trash.
 
         Parameters
@@ -607,7 +630,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def emptyTrash(self, ignore_errors=True):
+    def emptyTrash(self, ignore_errors: bool = True) -> None:
         """Remove all datasets from the trash.
 
         Parameters
@@ -623,7 +646,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def transfer(self, inputDatastore, datasetRef):
+    def transfer(self, inputDatastore: Datastore, datasetRef: DatasetRef) -> None:
         """Retrieve a Dataset from an input `Datastore`, and store the result
         in this `Datastore`.
 
@@ -667,12 +690,13 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError(f"Transfer mode {transfer} not supported.")
 
     @abstractmethod
-    def validateConfiguration(self, entities, logFailures=False):
+    def validateConfiguration(self, entities: Iterable[Union[DatasetRef, DatasetType, StorageClass]],
+                              logFailures: bool = False) -> None:
         """Validate some of the configuration for this datastore.
 
         Parameters
         ----------
-        entities : `DatasetRef`, `DatasetType`, or `StorageClass`
+        entities : iterable of `DatasetRef`, `DatasetType`, or `StorageClass`
             Entities to test against this configuration.    Can be differing
             types.
         logFailures : `bool`, optional
@@ -692,7 +716,8 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def validateKey(self, lookupKey, entity, logFailures=False):
+    def validateKey(self,
+                    lookupKey: LookupKey, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
         """Validate a specific look up key with supplied entity.
 
         Parameters
@@ -718,7 +743,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError("Must be implemented by subclass")
 
     @abstractmethod
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         """Return all the lookup keys relevant to this datastore.
 
         Returns
