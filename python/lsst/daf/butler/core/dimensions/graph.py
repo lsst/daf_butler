@@ -23,7 +23,17 @@ from __future__ import annotations
 
 __all__ = ["DimensionGraph"]
 
-from typing import Optional, Iterable, Iterator, KeysView, Union, Any, Tuple, TYPE_CHECKING
+from typing import (
+    Any,
+    Iterable,
+    Iterator,
+    KeysView,
+    Optional,
+    Set,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 
 from ..named import NamedValueSet, NamedKeyDict
 from ..utils import immutable
@@ -80,24 +90,27 @@ class DimensionGraph:
                 dimensions: Optional[Iterable[Dimension]] = None,
                 names: Optional[Iterable[str]] = None,
                 conform: bool = True) -> DimensionGraph:
+        conformedNames: Set[str]
         if names is None:
             if dimensions is None:
-                names = ()
+                conformedNames = set()
             else:
                 try:
-                    names = set(dimensions.names)
+                    # Optimize for NamedValueSet/NamedKeyDict, though that's
+                    # not required.
+                    conformedNames = set(dimensions.names)  # type: ignore
                 except AttributeError:
-                    names = set(d.name for d in dimensions)
+                    conformedNames = set(d.name for d in dimensions)
         else:
             if dimensions is not None:
                 raise TypeError("Only one of 'dimensions' and 'names' may be provided.")
-            names = set(names)
+            conformedNames = set(names)
         if conform:
             # Expand given dimensions to include all dependencies.
-            for name in tuple(names):  # iterate over a temporary copy so we can modify the original
-                names.update(universe[name]._related.dependencies)
+            for name in tuple(conformedNames):  # iterate over a temporary copy so we can modify the original
+                conformedNames.update(universe[name]._related.dependencies)
         # Look in the cache of existing graphs, with the expanded set of names.
-        cacheKey = frozenset(names)
+        cacheKey = frozenset(conformedNames)
         self = universe._cache.get(cacheKey, None)
         if self is not None:
             return self
@@ -107,7 +120,7 @@ class DimensionGraph:
         self.universe = universe
         # Reorder dimensions by iterating over the universe (which is
         # ordered already) and extracting the ones in the set.
-        self.dimensions = NamedValueSet(d for d in universe.dimensions if d.name in names)
+        self.dimensions = NamedValueSet(d for d in universe.dimensions if d.name in conformedNames)
         # Make a set that includes both the dimensions and any
         # DimensionElements whose dependencies are in self.dimensions.
         self.elements = NamedValueSet(e for e in universe.elements
@@ -115,7 +128,7 @@ class DimensionGraph:
         self._finish()
         return self
 
-    def _finish(self):
+    def _finish(self) -> None:
         """Complete construction of the graph.
 
         This is intended for internal use by `DimensionGraph` and
@@ -168,9 +181,15 @@ class DimensionGraph:
         # DataCoordinate, but we put it in DimensionGraph because many
         # (many!) DataCoordinates will share the same DimensionGraph, and
         # we want them to be lightweight.
-        self._requiredIndices = NamedKeyDict({dimension: i for i, dimension in enumerate(self.required)})
-        self._dimensionIndices = NamedKeyDict({dimension: i for i, dimension in enumerate(self.dimensions)})
-        self._elementIndices = NamedKeyDict({element: i for i, element in enumerate(self.elements)})
+        self._requiredIndices: NamedKeyDict[Dimension, int] = NamedKeyDict(
+            {dimension: i for i, dimension in enumerate(self.required)}
+        )
+        self._dimensionIndices: NamedKeyDict[Dimension, int] = NamedKeyDict(
+            {dimension: i for i, dimension in enumerate(self.dimensions)}
+        )
+        self._elementIndices: NamedKeyDict[DimensionElement, int] = NamedKeyDict(
+            {element: i for i, element in enumerate(self.elements)}
+        )
 
     def __getnewargs__(self) -> tuple:
         return (self.universe, None, tuple(self.dimensions.names), False)
@@ -285,11 +304,14 @@ class DimensionGraph:
         """
         return self.dimensions.issuperset(other.dimensions)
 
-    def __eq__(self, other: DimensionGraph) -> bool:
+    def __eq__(self, other: Any) -> bool:
         """Test whether ``self`` and ``other`` have exactly the same dimensions
         and elements.
         """
-        return self.dimensions == other.dimensions
+        if isinstance(other, DimensionGraph):
+            return self.dimensions == other.dimensions
+        else:
+            return False
 
     def __hash__(self) -> int:
         return hash(tuple(self.dimensions.names))
@@ -314,7 +336,7 @@ class DimensionGraph:
         """
         return self.dimensions > other.dimensions
 
-    def union(self, *others: DimensionGraph):
+    def union(self, *others: DimensionGraph) -> DimensionGraph:
         """Construct a new graph containing all dimensions in any of the
         operands.
 
@@ -326,14 +348,14 @@ class DimensionGraph:
         names = set(self.names).union(*[other.names for other in others])
         return DimensionGraph(self.universe, names=names)
 
-    def intersection(self, *others: DimensionGraph):
+    def intersection(self, *others: DimensionGraph) -> DimensionGraph:
         """Construct a new graph containing only dimensions in all of the
         operands.
         """
         names = set(self.names).intersection(*[other.names for other in others])
         return DimensionGraph(self.universe, names=names)
 
-    def __or__(self, other):
+    def __or__(self, other: DimensionGraph) -> DimensionGraph:
         """Construct a new graph containing all dimensions in any of the
         operands.
 
@@ -341,14 +363,14 @@ class DimensionGraph:
         """
         return self.union(other)
 
-    def __and__(self, other):
+    def __and__(self, other: DimensionGraph) -> DimensionGraph:
         """Construct a new graph containing only dimensions in all of the
         operands.
         """
         return self.intersection(other)
 
     @property
-    def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement]:
+    def primaryKeyTraversalOrder(self) -> Tuple[DimensionElement, ...]:
         """Return a tuple of all elements in an order allows records to be
         found given their primary keys, starting from only the primary keys of
         required dimensions (`tuple` [ `DimensionRecord` ]).
@@ -359,10 +381,10 @@ class DimensionGraph:
         """
         order = getattr(self, "_primaryKeyTraversalOrder", None)
         if order is None:
-            done = set()
+            done: Set[str] = set()
             order = []
 
-            def addToOrder(element) -> bool:
+            def addToOrder(element: DimensionElement) -> None:
                 if element.name in done:
                     return
                 predecessors = set(element.required.names)
@@ -370,7 +392,7 @@ class DimensionGraph:
                 if not done.issuperset(predecessors):
                     return
                 order.append(element)
-                done.add(element)
+                done.add(element.name)
                 for other in element.implied:
                     addToOrder(other)
 

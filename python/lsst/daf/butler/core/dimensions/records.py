@@ -23,16 +23,25 @@ from __future__ import annotations
 
 __all__ = ("DimensionRecord",)
 
-from typing import Dict, Any, Type, Mapping, TYPE_CHECKING
+from typing import (
+    Any,
+    ClassVar,
+    Dict,
+    Mapping,
+    TYPE_CHECKING,
+    Type,
+)
 
 from ..timespan import Timespan
 from .coordinate import DataCoordinate
+from .elements import Dimension
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
+    import astropy.time
     from .elements import DimensionElement
 
 
-def _reconstructDimensionRecord(definition: DimensionElement, *args):
+def _reconstructDimensionRecord(definition: DimensionElement, *args: Any) -> DimensionRecord:
     """Unpickle implementation for `DimensionRecord` subclasses.
 
     For internal use by `DimensionRecord`.
@@ -40,7 +49,7 @@ def _reconstructDimensionRecord(definition: DimensionElement, *args):
     return definition.RecordClass(*args)
 
 
-def _makeTimespanFromRecord(record: DimensionRecord):
+def _makeTimespanFromRecord(record: DimensionRecord) -> Timespan[astropy.time.Time]:
     """Extract a `Timespan` object from the appropriate endpoint attributes.
 
     For internal use by `DimensionRecord`.
@@ -110,7 +119,7 @@ class DimensionRecord:
     # when they access self.__slots__.
     __slots__ = ("dataId",)
 
-    def __init__(self, *args):
+    def __init__(self, *args: Any):
         for attrName, value in zip(self.__slots__, args):
             object.__setattr__(self, attrName, value)
         dataId = DataCoordinate(
@@ -120,7 +129,7 @@ class DimensionRecord:
         object.__setattr__(self, "dataId", dataId)
 
     @classmethod
-    def fromDict(cls, mapping: Mapping[str, Any]):
+    def fromDict(cls, mapping: Mapping[str, Any]) -> DimensionRecord:
         """Construct a `DimensionRecord` subclass instance from a mapping
         of field values.
 
@@ -143,7 +152,8 @@ class DimensionRecord:
         # For example, allow {"instrument": "HSC", ...} instead of
         # {"name": "HSC", ...} when building a record for instrument dimension.
         primaryKey = mapping.get(cls.definition.name)
-        if primaryKey is not None:
+        d: Mapping[str, Any]
+        if primaryKey is not None and isinstance(cls.definition, Dimension):
             d = dict(mapping)
             d[cls.definition.primaryKey.name] = primaryKey
         else:
@@ -151,7 +161,7 @@ class DimensionRecord:
         values = tuple(d.get(k) for k in cls.__slots__)
         return cls(*values)
 
-    def __reduce__(self):
+    def __reduce__(self) -> tuple:
         args = tuple(getattr(self, name) for name in self.__slots__)
         return (_reconstructDimensionRecord, (self.definition,) + args)
 
@@ -167,3 +177,5 @@ class DimensionRecord:
     """A dict-like identifier for this record's primary keys
     (`DataCoordinate`).
     """
+
+    definition: ClassVar[DimensionElement]

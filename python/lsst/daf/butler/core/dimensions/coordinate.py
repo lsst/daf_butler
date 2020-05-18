@@ -24,20 +24,29 @@ from __future__ import annotations
 __all__ = ("DataCoordinate", "ExpandedDataCoordinate", "DataId")
 
 import numbers
-from typing import Any, Tuple, Mapping, Optional, Dict, Union, TYPE_CHECKING
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+    Union,
+)
 
 from lsst.sphgeom import Region
-from ..named import IndexedTupleDict
+from ..named import IndexedTupleDict, NamedKeyMapping
 from ..timespan import Timespan
+from .elements import Dimension
 from .graph import DimensionGraph
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
-    from .elements import DimensionElement, Dimension
+    from .elements import DimensionElement
     from .universe import DimensionUniverse
     from .records import DimensionRecord
 
 
-class DataCoordinate(IndexedTupleDict):
+class DataCoordinate(IndexedTupleDict[Dimension, Any]):
     """An immutable data ID dictionary that guarantees that its key-value pairs
     identify all required dimensions in a `DimensionGraph`.
 
@@ -75,10 +84,10 @@ class DataCoordinate(IndexedTupleDict):
         self._graph = graph
 
     @staticmethod
-    def standardize(mapping: Optional[Mapping[str, Any]] = None, *,
+    def standardize(mapping: Optional[Union[Mapping[str, Any], NamedKeyMapping[Dimension, Any]]] = None, *,
                     graph: Optional[DimensionGraph] = None,
                     universe: Optional[DimensionUniverse] = None,
-                    **kwds) -> DataCoordinate:
+                    **kwargs: Any) -> DataCoordinate:
         """Adapt an arbitrary mapping and/or additional arguments into a true
         `DataCoordinate`, or augment an existing one.
 
@@ -95,7 +104,7 @@ class DataCoordinate(IndexedTupleDict):
         universe : `DimensionUniverse`
             All known dimensions and their relationships; used to expand
             and validate dependencies when ``graph`` is not provided.
-        kwds
+        **kwargs
             Additional keyword arguments are treated like additional key-value
             pairs in ``mapping``.
 
@@ -123,7 +132,7 @@ class DataCoordinate(IndexedTupleDict):
         """
         if isinstance(mapping, DataCoordinate):
             if graph is None:
-                if not kwds:
+                if not kwargs:
                     # Already standardized to exactly what we want.
                     return mapping
             elif mapping.graph.issuperset(graph):
@@ -131,18 +140,19 @@ class DataCoordinate(IndexedTupleDict):
                 return mapping.subset(graph)
             assert universe is None or universe == mapping.universe
             universe = mapping.universe
-        if kwds:
+        d: Mapping[str, Any]
+        if kwargs:
             if mapping:
-                try:
-                    d = dict(mapping.byName(), **kwds)
-                except AttributeError:
-                    d = dict(mapping, **kwds)
+                if isinstance(mapping, NamedKeyMapping):
+                    d = dict(mapping.byName(), **kwargs)
+                else:
+                    d = dict(mapping, **kwargs)
             else:
-                d = kwds
+                d = kwargs
         elif mapping:
-            try:
+            if isinstance(mapping, NamedKeyMapping):
                 d = mapping.byName()
-            except AttributeError:
+            else:
                 d = mapping
         else:
             d = {}
@@ -162,7 +172,7 @@ class DataCoordinate(IndexedTupleDict):
     def __hash__(self) -> int:
         return hash((self.graph, self.values()))
 
-    def __eq__(self, other: DataCoordinate) -> bool:
+    def __eq__(self, other: Any) -> bool:
         try:
             # Optimized code path for DataCoordinate comparisons.
             return self.graph == other.graph and self.values() == other.values()
@@ -178,13 +188,13 @@ class DataCoordinate(IndexedTupleDict):
             raise TypeError("Cannot compare DataCoordinate instances to other objects without potentially "
                             "misleading results.") from None
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.byName()}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"DataCoordinate({self.graph}, {self.values()})"
 
-    def fingerprint(self, update):
+    def fingerprint(self, update: Callable[[bytes], None]) -> None:
         """Update a secure hash function with the values in this data ID.
 
         Parameters
@@ -320,8 +330,8 @@ class ExpandedDataCoordinate(DataCoordinate):
     __slots__ = ("_records", "_full", "_region", "_timespan")
 
     def __init__(self, graph: DimensionGraph, values: Tuple[Any, ...], *,
-                 records: Mapping[DimensionElement, DimensionRecord],
-                 full: Optional[Mapping[Dimension, Any]] = None,
+                 records: NamedKeyMapping[DimensionElement, Optional[DimensionRecord]],
+                 full: Optional[NamedKeyMapping[Dimension, Any]] = None,
                  region: Optional[Region] = None,
                  timespan: Optional[Timespan] = None,
                  conform: bool = True):
@@ -329,7 +339,7 @@ class ExpandedDataCoordinate(DataCoordinate):
         if conform:
             self._records = IndexedTupleDict(
                 indices=graph._elementIndices,
-                values=tuple(records[element] for element in graph.elements)
+                values=tuple(records[element.name] for element in graph.elements)
             )
             self._full = IndexedTupleDict(
                 indices=graph._dimensionIndices,
@@ -339,39 +349,44 @@ class ExpandedDataCoordinate(DataCoordinate):
             regions = []
             for element in self.graph.spatial:
                 record = self.records[element.name]
-                if record is None or record.region is None:
+                # DimensionRecord subclasses for spatial elements always have a
+                # .region, but they're dynamic so this can't be type-checked.
+                if record is None or record.region is None:  # type: ignore
                     self._region = None
                     break
                 else:
-                    regions.append(record.region)
+                    regions.append(record.region)  # type:ignore
             else:
                 self._region = _intersectRegions(*regions)
             timespans = []
             for element in self.graph.temporal:
                 record = self.records[element.name]
-                if record is None or record.timespan is None:
+                # DimensionRecord subclasses for temporal elements always have
+                # .timespan, but they're dynamic so this can't be type-checked.
+                if record is None or record.timespan is None:  # type:ignore
                     self._timespan = None
                     break
                 else:
-                    timespans.append(record.timespan)
+                    timespans.append(record.timespan)  # type:ignore
             else:
                 self._timespan = Timespan.intersection(*timespans)
         else:
-            self._records = records
-            self._full = full
+            # User has declared that the types are correct; ignore them.
+            self._records = records  # type: ignore
+            self._full = full  # type: ignore
             self._region = region
             self._timespan = timespan
 
-    def __contains__(self, key: Union[DimensionElement, str]) -> bool:
+    def __contains__(self, key: Any) -> bool:
         return key in self.full
 
-    def __getitem__(self, key: Union[DimensionElement, str]) -> Any:
+    def __getitem__(self, key: Union[Dimension, str]) -> Any:
         return self.full[key]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f"ExpandedDataCoordinate({self.graph}, {self.values()})"
 
-    def pack(self, name: str, *, returnMaxBits: bool = False) -> int:
+    def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:
         """Pack this data ID into an integer.
 
         Parameters
@@ -404,9 +419,9 @@ class ExpandedDataCoordinate(DataCoordinate):
         )
 
     @property
-    def full(self) -> IndexedTupleDict[Dimension, Any]:
+    def full(self) -> NamedKeyMapping[Dimension, Any]:
         """Dictionary mapping dimensions to their primary key values for all
-        dimensions in the graph, not just required ones (`IndexedTupleDict`).
+        dimensions in the graph, not just required ones (`NamedKeyMapping`).
 
         Like `DataCoordinate` itself, this dictionary can be indexed by `str`
         name as well as `Dimension` instance.
@@ -414,9 +429,9 @@ class ExpandedDataCoordinate(DataCoordinate):
         return self._full
 
     @property
-    def records(self) -> IndexedTupleDict[DimensionElement, DimensionRecord]:
+    def records(self) -> NamedKeyMapping[DimensionElement, Optional[DimensionRecord]]:
         """Dictionary mapping `DimensionElement` to the associated
-        `DimensionRecord` (`IndexedTupleDict`).
+        `DimensionRecord` (`NamedKeyMapping`).
 
         Like `DataCoordinate` itself, this dictionary can be indexed by `str`
         name as well as `DimensionElement` instance.

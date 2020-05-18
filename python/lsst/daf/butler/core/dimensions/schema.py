@@ -150,7 +150,7 @@ def makeDimensionElementTableSpec(element: DimensionElement) -> ddl.TableSpec:
             # A Dimension instance is in its own required dependency graph
             # (always at the end, because of topological ordering).  In this
             # case we don't want to rename the field.
-            tableSpec.fields.add(element.primaryKey)
+            tableSpec.fields.add(element.primaryKey)   # type: ignore
     # Add fields and foreign keys for implied dimensions.  These are primary
     # keys in their own table, but should not be here.  As with required
     # dependencies, we rename the fields with the dimension name.

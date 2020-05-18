@@ -23,7 +23,7 @@ from __future__ import annotations
 
 __all__ = ("DimensionConfig",)
 
-from typing import Tuple, Dict
+from typing import Any, Dict, Tuple
 
 from ..config import Config, ConfigSubset
 from ..utils import doImport
@@ -115,9 +115,9 @@ def processElementsConfig(config: Config) -> Dict[str, DimensionElement]:
         is responsible for calling `DimensionElement._finish` to complete
         construction.
     """
-    elements = dict()
+    elements: Dict[str, DimensionElement] = dict()
     for name, subconfig in config.items():
-        kwargs = {}
+        kwargs: Dict[str, Any] = {}
         kwargs["related"] = RelatedDimensions(
             required=set(subconfig.get("requires", ())),
             implied=set(subconfig.get("implies", ())),
