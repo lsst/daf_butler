@@ -28,7 +28,6 @@ from typing import Any, Tuple, Mapping, Optional, Dict, Union, TYPE_CHECKING
 
 from lsst.sphgeom import Region
 from ..named import IndexedTupleDict
-from ..utils import immutable
 from ..timespan import Timespan
 from .graph import DimensionGraph
 
@@ -38,7 +37,6 @@ if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .records import DimensionRecord
 
 
-@immutable
 class DataCoordinate(IndexedTupleDict):
     """An immutable data ID dictionary that guarantees that its key-value pairs
     identify all required dimensions in a `DimensionGraph`.
@@ -70,12 +68,11 @@ class DataCoordinate(IndexedTupleDict):
     (i.e. Liskov) substitutability.
     """
 
-    __slots__ = ("graph",)
+    __slots__ = ("_graph",)
 
-    def __new__(cls, graph: DimensionGraph, values: Tuple[Any, ...]):
-        self = super().__new__(cls, graph._requiredIndices, values)
-        self.graph = graph
-        return self
+    def __init__(self, graph: DimensionGraph, values: Tuple[Any, ...]):
+        super().__init__(graph._requiredIndices, values)
+        self._graph = graph
 
     @staticmethod
     def standardize(mapping: Optional[Mapping[str, Any]] = None, *,
@@ -168,11 +165,6 @@ class DataCoordinate(IndexedTupleDict):
         """
         return {k.name: v for k, v in self.items()}
 
-    def __getnewargs__(self) -> tuple:
-        # Implements pickle support (in addition to methods provided by
-        # @immutable decorator).
-        return (self.graph, self.values())
-
     def __hash__(self) -> int:
         return hash((self.graph, self.values()))
 
@@ -249,16 +241,15 @@ class DataCoordinate(IndexedTupleDict):
         """
         return self.graph.universe
 
-    # Class attributes below are shadowed by instance attributes, and are
-    # present just to hold the docstrings for those instance attributes.
+    @property
+    def graph(self) -> DimensionGraph:
+        """The dimensions identified by this data ID (`DimensionGraph`).
 
-    graph: DimensionGraph
-    """The dimensions identified by this data ID (`DimensionGraph`).
-
-    Note that values are only required to be present for dimensions in
-    ``self.graph.required``; all others may be retrieved (from a `Registry`)
-    given these.
-    """
+        Note that values are only required to be present for dimensions in
+        ``self.graph.required``; all others may be retrieved (from a
+        `Registry`) given these.
+        """
+        return self._graph
 
 
 DataId = Union[DataCoordinate, Mapping[str, Any]]
@@ -289,7 +280,6 @@ def _intersectRegions(*args: Region) -> Optional[Region]:
         return NotImplemented
 
 
-@immutable
 class ExpandedDataCoordinate(DataCoordinate):
     """A data ID that has been expanded to include all relevant metadata.
 
@@ -333,21 +323,21 @@ class ExpandedDataCoordinate(DataCoordinate):
     attribute, and are also accessible in dict lookups and the ``in`` operator.
     """
 
-    __slots__ = ("records", "full", "region", "timespan")
+    __slots__ = ("_records", "_full", "_region", "_timespan")
 
-    def __new__(cls, graph: DimensionGraph, values: Tuple[Any, ...], *,
-                records: Mapping[DimensionElement, DimensionRecord],
-                full: Optional[Mapping[Dimension, Any]] = None,
-                region: Optional[Region] = None,
-                timespan: Optional[Timespan] = None,
-                conform: bool = True):
-        self = super().__new__(cls, graph, values)
+    def __init__(self, graph: DimensionGraph, values: Tuple[Any, ...], *,
+                 records: Mapping[DimensionElement, DimensionRecord],
+                 full: Optional[Mapping[Dimension, Any]] = None,
+                 region: Optional[Region] = None,
+                 timespan: Optional[Timespan] = None,
+                 conform: bool = True):
+        super().__init__(graph, values)
         if conform:
-            self.records = IndexedTupleDict(
+            self._records = IndexedTupleDict(
                 indices=graph._elementIndices,
                 values=tuple(records[element] for element in graph.elements)
             )
-            self.full = IndexedTupleDict(
+            self._full = IndexedTupleDict(
                 indices=graph._dimensionIndices,
                 values=tuple(getattr(self.records[dimension], dimension.primaryKey.name, None)
                              for dimension in graph.dimensions)
@@ -356,28 +346,27 @@ class ExpandedDataCoordinate(DataCoordinate):
             for element in self.graph.spatial:
                 record = self.records[element.name]
                 if record is None or record.region is None:
-                    self.region = None
+                    self._region = None
                     break
                 else:
                     regions.append(record.region)
             else:
-                self.region = _intersectRegions(*regions)
+                self._region = _intersectRegions(*regions)
             timespans = []
             for element in self.graph.temporal:
                 record = self.records[element.name]
                 if record is None or record.timespan is None:
-                    self.timespan = None
+                    self._timespan = None
                     break
                 else:
                     timespans.append(record.timespan)
             else:
-                self.timespan = Timespan.intersection(*timespans)
+                self._timespan = Timespan.intersection(*timespans)
         else:
-            self.records = records
-            self.full = full
-            self.region = region
-            self.timespan = timespan
-        return self
+            self._records = records
+            self._full = full
+            self._region = region
+            self._timespan = timespan
 
     def __contains__(self, key: Union[DimensionElement, str]) -> bool:
         return key in self.full
@@ -425,47 +414,40 @@ class ExpandedDataCoordinate(DataCoordinate):
             conform=True
         )
 
-    def __getnewargs_ex__(self) -> Tuple(tuple, dict):
-        return (
-            (self.graph, self.values()),
-            dict(
-                records=self.records,
-                full=self.full,
-                region=self.region,
-                timespan=self.timespan,
-                conform=False,
-            )
-        )
+    @property
+    def full(self) -> IndexedTupleDict[Dimension, Any]:
+        """Dictionary mapping dimensions to their primary key values for all
+        dimensions in the graph, not just required ones (`IndexedTupleDict`).
 
-    # Class attributes below are shadowed by instance attributes, and are
-    # present just to hold the docstrings for those instance attributes.
+        Like `DataCoordinate` itself, this dictionary can be indexed by `str`
+        name as well as `Dimension` instance.
+        """
+        return self._full
 
-    full: IndexedTupleDict[Dimension, Any]
-    """Dictionary mapping dimensions to their primary key values for all
-    dimensions in the graph, not just required ones (`IndexedTupleDict`).
+    @property
+    def records(self) -> IndexedTupleDict[DimensionElement, DimensionRecord]:
+        """Dictionary mapping `DimensionElement` to the associated
+        `DimensionRecord` (`IndexedTupleDict`).
 
-    Like `DataCoordinate` itself, this dictionary can be indexed by `str` name
-    as well as `Dimension` instance.
-    """
+        Like `DataCoordinate` itself, this dictionary can be indexed by `str`
+        name as well as `DimensionElement` instance.
+        """
+        return self._records
 
-    records: IndexedTupleDict[DimensionElement, DimensionRecord]
-    """Dictionary mapping `DimensionElement` to the associated
-    `DimensionRecord` (`IndexedTupleDict`).
+    @property
+    def region(self) -> Optional[Region]:
+        """Region on the sky associated with this data ID, or `None` if there
+        are no spatial dimensions (`sphgeom.Region`).
 
-    Like `DataCoordinate` itself, this dictionary can be indexed by `str` name
-    as well as `DimensionElement` instance.
-    """
+        At present, this may be the special value `NotImplemented` if there
+        multiple spatial dimensions identified; in the future this will be
+        replaced with the intersection.
+        """
+        return self._region
 
-    region: Optional[Region]
-    """Region on the sky associated with this data ID, or `None` if there
-    are no spatial dimensions (`sphgeom.Region`).
-
-    At present, this may be the special value `NotImplemented` if there
-    multiple spatial dimensions identified; in the future this will be replaced
-    with the intersection.
-    """
-
-    timespan: Optional[Timespan]
-    """Timespan associated with this data ID, or `None` if there are no
-    temporal dimensions (`TimeSpan`).
-    """
+    @property
+    def timespan(self) -> Optional[Timespan]:
+        """Timespan associated with this data ID, or `None` if there are no
+        temporal dimensions (`TimeSpan`).
+        """
+        return self._timespan

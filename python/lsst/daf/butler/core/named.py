@@ -371,12 +371,10 @@ class IndexedTupleDict(Mapping[K, V]):
 
     __slots__ = ("_indices", "_values")
 
-    def __new__(cls, indices: NamedKeyDict[K, int], values: Tuple[V, ...]) -> IndexedTupleDict:
-        self = super().__new__(cls)
-        assert len(indices) <= len(values)
+    def __init__(self, indices: NamedKeyDict[K, int], values: Tuple[V, ...]):
+        assert tuple(indices.values()) == tuple(range(len(values)))
         self._indices = indices
         self._values = values
-        return self
 
     def __getitem__(self, key: Union[str, K]) -> V:
         return self._values[self._indices[key]]
@@ -405,18 +403,6 @@ class IndexedTupleDict(Mapping[K, V]):
     # being updated because the mapping changed.
     def values(self) -> Tuple[V, ...]:   # type: ignore
         return self._values
-
-    def __getnewargs__(self) -> tuple:
-        return (self._indices, self._values)
-
-    def __getstate__(self) -> dict:  # noqa: N807
-        # Disable default state-setting when unpickled.
-        return {}
-
-    def __setstate__(self, state: Tuple) -> None:  # noqa: N807
-        # Disable default state-setting when copied.
-        # Sadly what works for pickle doesn't work for copy.
-        assert not state
 
     # Let Mapping base class provide items(); we can't do it any more
     # efficiently ourselves.
