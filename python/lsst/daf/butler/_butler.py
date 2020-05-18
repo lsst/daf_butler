@@ -825,6 +825,59 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.getDirect(ref, parameters=parameters)
 
+    def getURIs(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                dataId: Optional[DataId] = None, *,
+                predict: bool = False,
+                collections: Any = None,
+                run: Optional[str] = None,
+                **kwds: Any) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Returns the URIs associated with the dataset.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataCoordinate`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+        collections : Any, optional
+            Collections to be searched, overriding ``self.collections``.
+            Can be any of the types supported by the ``collections`` argument
+            to butler construction.
+        run : `str`, optional
+            Run to use for predictions, overriding ``self.run``.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+        """
+        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict,
+                                   collections=collections, **kwds)
+        if ref.id is None:  # only possible if predict is True
+            if run is None:
+                run = self.run
+                if run is None:
+                    raise TypeError("Cannot predict location with run=None.")
+            # Lie about ID, because we can't guess it, and only
+            # Datastore.getUri() will ever see it (and it doesn't use it).
+            ref = ref.resolved(id=0, run=self.run)
+        return self.datastore.getURIs(ref, predict)
+
     def getUri(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                dataId: Optional[DataId] = None, *,
                predict: bool = False,
@@ -878,17 +931,11 @@ class Butler:
         TypeError
             Raised if no collections were provided.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict,
-                                   collections=collections, **kwds)
-        if ref.id is None:  # only possible if predict is True
-            if run is None:
-                run = self.run
-                if run is None:
-                    raise TypeError("Cannot predict location with run=None.")
-            # Lie about ID, because we can't guess it, and only
-            # Datastore.getUri() will ever see it (and it doesn't use it).
-            ref = ref.resolved(id=0, run=self.run)
-        return self.datastore.getUri(ref, predict)
+        primary, _ = self.getURIs(datasetRefOrType, dataId=dataId, predict=predict,
+                                  collections=collections, run=run, **kwds)
+        if primary is None:
+            raise RuntimeError(f"Found dataset but no single URI retrieved for it {datasetRefOrType}")
+        return str(primary)
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,

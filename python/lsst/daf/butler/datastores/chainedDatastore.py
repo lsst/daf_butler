@@ -32,6 +32,7 @@ import itertools
 from typing import (
     TYPE_CHECKING,
     Any,
+    Dict,
     List,
     Iterable,
     Mapping,
@@ -43,7 +44,7 @@ from typing import (
 )
 
 from lsst.utils import doImport
-from lsst.daf.butler import Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
+from lsst.daf.butler import ButlerURI, Datastore, DatastoreConfig, DatasetTypeNotSupportedError, \
     DatastoreValidationError, Constraints, FileDataset
 
 if TYPE_CHECKING:
@@ -419,6 +420,69 @@ class ChainedDatastore(Datastore):
         for datastore, prepDataForChild in prepData.children:
             datastore._finishIngest(prepDataForChild, transfer=transfer)
 
+    def getURIs(self, ref: DatasetRef,
+                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Return URIs associated with dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+        predict : `bool`, optional
+            If the datastore does not know about the dataset, should it
+            return a predicted URI or not?
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+
+        Notes
+        -----
+        The returned URI is from the first datastore in the list that has
+        the dataset with preference given to the first dataset coming from
+        a permanent datastore. If no datastores have the dataset and prediction
+        is allowed, the predicted URI for the first datastore in the list will
+        be returned.
+        """
+        DatastoreURIs = Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]
+        log.debug("Requesting URIs for %s", ref)
+        predictedUri: Optional[DatastoreURIs] = None
+        predictedEphemeralUri: Optional[DatastoreURIs] = None
+        firstEphemeralUri: Optional[DatastoreURIs] = None
+        for datastore in self.datastores:
+            if datastore.exists(ref):
+                if not datastore.isEphemeral:
+                    uri = datastore.getURIs(ref)
+                    log.debug("Retrieved non-ephemeral URI: %s", uri)
+                    return uri
+                elif not firstEphemeralUri:
+                    firstEphemeralUri = datastore.getURIs(ref)
+            elif predict:
+                if not predictedUri and not datastore.isEphemeral:
+                    predictedUri = datastore.getURIs(ref, predict)
+                elif not predictedEphemeralUri and datastore.isEphemeral:
+                    predictedEphemeralUri = datastore.getURIs(ref, predict)
+
+        if firstEphemeralUri:
+            log.debug("Retrieved ephemeral URI: %s", firstEphemeralUri)
+            return firstEphemeralUri
+
+        if predictedUri:
+            log.debug("Retrieved predicted URI: %s", predictedUri)
+            return predictedUri
+
+        if predictedEphemeralUri:
+            log.debug("Retrieved predicted ephemeral URI: %s", predictedEphemeralUri)
+            return predictedEphemeralUri
+
+        raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
+
     def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
 
@@ -454,39 +518,14 @@ class ChainedDatastore(Datastore):
         ------
         FileNotFoundError
             A URI has been requested for a dataset that does not exist and
-            guessing is not allowed.
+            guessing is not allowed.  Can also raise if the dataset is
+            present but it has been disassembled into multiple artifacts.
         """
         log.debug("Requesting URI for %s", ref)
-        predictedUri: Optional[str] = None
-        predictedEphemeralUri: Optional[str] = None
-        firstEphemeralUri: Optional[str] = None
-        for datastore in self.datastores:
-            if datastore.exists(ref):
-                if not datastore.isEphemeral:
-                    uri = datastore.getUri(ref)
-                    log.debug("Retrieved ephemeral URI: %s", uri)
-                    return uri
-                elif firstEphemeralUri is None:
-                    firstEphemeralUri = datastore.getUri(ref)
-            elif predict:
-                if predictedUri is None and not datastore.isEphemeral:
-                    predictedUri = datastore.getUri(ref, predict)
-                elif predictedEphemeralUri is None and datastore.isEphemeral:
-                    predictedEphemeralUri = datastore.getUri(ref, predict)
-
-        if firstEphemeralUri is not None:
-            log.debug("Retrieved ephemeral URI: %s", firstEphemeralUri)
-            return firstEphemeralUri
-
-        if predictedUri is not None:
-            log.debug("Retrieved predicted URI: %s", predictedUri)
-            return predictedUri
-
-        if predictedEphemeralUri is not None:
-            log.debug("Retrieved predicted ephemeral URI: %s", predictedEphemeralUri)
-            return predictedEphemeralUri
-
-        raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
+        primary, _ = self.getURIs(ref, predict)
+        if primary is None:
+            raise FileNotFoundError(f"Found dataset but no single URI possible for {ref}")
+        return str(primary)
 
     def remove(self, ref: DatasetRef) -> None:
         """Indicate to the datastore that a dataset can be removed.

@@ -35,6 +35,7 @@ from typing import (
     Any,
     Callable,
     ClassVar,
+    Dict,
     Iterable,
     Iterator,
     List,
@@ -61,6 +62,7 @@ if TYPE_CHECKING:
     from .configSupport import LookupKey
     from .repoTransfers import FileDataset
     from .storageClass import StorageClass
+    from .location import ButlerURI
 
 
 class DatastoreConfig(ConfigSubset):
@@ -555,6 +557,31 @@ class Datastore(metaclass=ABCMeta):
                 + ", ".join(f"{k.name} ({len(v)} dataset(s))" for k, v in byDatasetType.items())
             )
         self._finishIngest(prepData, transfer=transfer)
+
+    @abstractmethod
+    def getURIs(self, datasetRef: DatasetRef,
+                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Return URIs associated with dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+        predict : `bool`, optional
+            If the datastore does not know about the dataset, should it
+            return a predicted URI or not?
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+        """
+        raise NotImplementedError()
 
     @abstractmethod
     def getUri(self, datasetRef: DatasetRef, predict: bool = False) -> str:

@@ -392,11 +392,32 @@ class ButlerTests(ButlerPutGetTests):
 
     def testCompositePutGetConcrete(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        self.runPutGetTest(storageClass, "test_metric")
+        butler = self.runPutGetTest(storageClass, "test_metric")
+
+        # Should *not* be disassembled
+        datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
+        self.assertEqual(len(datasets), 1)
+        uri, components = butler.getURIs(datasets[0])
+        self.assertIsInstance(uri, ButlerURI)
+        self.assertFalse(components)
 
     def testCompositePutGetVirtual(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
-        self.runPutGetTest(storageClass, "test_metric_comp")
+        butler = self.runPutGetTest(storageClass, "test_metric_comp")
+
+        # Should be disassembled
+        datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
+        self.assertEqual(len(datasets), 1)
+        uri, components = butler.getURIs(datasets[0])
+        if butler.datastore.isEphemeral:
+            # Never disassemble in-memory datastore
+            self.assertIsInstance(uri, ButlerURI)
+            self.assertFalse(components)
+        else:
+            self.assertIsNone(uri)
+            self.assertEqual(set(components), set(storageClass.components))
+            for compuri in components.values():
+                self.assertIsInstance(compuri, ButlerURI)
 
     def testIngest(self):
         butler = Butler(self.tmpConfigFile, run="ingest")

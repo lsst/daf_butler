@@ -41,7 +41,7 @@ from typing import (
     Union,
 )
 
-from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass
+from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass, ButlerURI
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from .genericDatastore import GenericBaseDatastore
 
@@ -363,6 +363,39 @@ class InMemoryDatastore(GenericBaseDatastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
+    def getURIs(self, ref: DatasetRef,
+                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Return URIs associated with dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+        predict : `bool`, optional
+            If the datastore does not know about the dataset, should it
+            return a predicted URI or not?
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+        """
+        # if this has never been written then we have to guess
+        if not self.exists(ref):
+            if not predict:
+                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
+            name = "{}#predicted".format(ref.datasetType.name)
+        else:
+            realID, _ = self._get_dataset_info(ref)
+            name = '{}'.format(id(self.datasets[realID]))
+
+        return ButlerURI("mem://{}".format(name)), {}
+
     def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
 
@@ -394,17 +427,8 @@ class InMemoryDatastore(GenericBaseDatastore):
             guessing is not allowed.
 
         """
-
-        # if this has never been written then we have to guess
-        if not self.exists(ref):
-            if not predict:
-                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
-            name = "{}#predicted".format(ref.datasetType.name)
-        else:
-            realID, _ = self._get_dataset_info(ref)
-            name = '{}'.format(id(self.datasets[realID]))
-
-        return "mem://{}".format(name)
+        uri, _ = self.getURIs(ref, predict)
+        return str(uri)
 
     def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.
