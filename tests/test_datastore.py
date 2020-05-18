@@ -30,7 +30,6 @@ from lsst.utils import doImport
 
 from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse, FileDataset
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
-from lsst.daf.butler import ButlerURI
 from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
 
 from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
@@ -158,8 +157,8 @@ class DatastoreTests(DatastoreTestsBase):
             metricsOut = datastore.get(ref, parameters=None)
             self.assertEqual(metrics, metricsOut)
 
-            uri = datastore.getUri(ref)
-            self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
+            uri = datastore.getURI(ref)
+            self.assertEqual(uri.scheme, self.uriScheme)
 
             # Get a component -- we need to construct new refs for them
             # with derived storage classes but with parent ID
@@ -168,8 +167,8 @@ class DatastoreTests(DatastoreTestsBase):
                 output = datastore.get(compRef)
                 self.assertEqual(output, getattr(metricsOut, comp))
 
-                uri = datastore.getUri(compRef)
-                self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
+                uri = datastore.getURI(compRef)
+                self.assertEqual(uri.scheme, self.uriScheme)
 
         storageClass = sc
 
@@ -200,11 +199,11 @@ class DatastoreTests(DatastoreTestsBase):
             datastore.get(ref)
 
         # Get a URI from it
-        uri = datastore.getUri(ref, predict=True)
-        self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
+        uri = datastore.getURI(ref, predict=True)
+        self.assertEqual(uri.scheme, self.uriScheme)
 
         with self.assertRaises(FileNotFoundError):
-            datastore.getUri(ref)
+            datastore.getURI(ref)
 
     def testCompositePutGet(self):
         metrics = makeExampleMetrics()
@@ -237,8 +236,8 @@ class DatastoreTests(DatastoreTestsBase):
                 print("Writing component {} with {}".format(compName, compRef.datasetType.storageClass.name))
                 datastore.put(compInfo.component, compRef)
 
-                uri = datastore.getUri(compRef)
-                self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
+                uri = datastore.getURI(compRef)
+                self.assertEqual(uri.scheme, self.uriScheme)
 
                 compsRead[compName] = datastore.get(compRef)
 
@@ -274,8 +273,8 @@ class DatastoreTests(DatastoreTestsBase):
         self.assertFalse(datastore.exists(ref))
 
         # Do we now get a predicted URI?
-        uri = datastore.getUri(ref, predict=True)
-        self.assertTrue(uri.endswith("#predicted"))
+        uri = datastore.getURI(ref, predict=True)
+        self.assertEqual(uri.fragment, "predicted")
 
         # Get should now fail
         with self.assertRaises(FileNotFoundError):
@@ -331,8 +330,8 @@ class DatastoreTests(DatastoreTestsBase):
             metricsOut = datastore.get(ref, parameters=None)
             self.assertEqual(metrics, metricsOut)
             # URI
-            uri = datastore.getUri(ref)
-            self.assertEqual(uri[:len(self.uriScheme)], self.uriScheme)
+            uri = datastore.getURI(ref)
+            self.assertEqual(uri.scheme, self.uriScheme)
         # Check for datasets that should not exist
         for ref, _ in fail:
             # These should raise
@@ -340,7 +339,7 @@ class DatastoreTests(DatastoreTestsBase):
                 # non-existing file
                 datastore.get(ref)
             with self.assertRaises(FileNotFoundError):
-                datastore.getUri(ref)
+                datastore.getURI(ref)
 
     def testNestedTransaction(self):
         datastore = self.makeDatastore()
@@ -503,7 +502,7 @@ class DatastoreTests(DatastoreTestsBase):
                     datastore = self.makeDatastore()
                     datastore.ingest(FileDataset(path=os.path.abspath(sympath), refs=ref), transfer=mode)
 
-                    uri = ButlerURI(datastore.getUri(ref))
+                    uri = datastore.getURI(ref)
                     self.assertTrue(not uri.scheme or uri.scheme == "file", f"Check {uri.scheme}")
                     self.assertTrue(os.path.islink(uri.path))
 
@@ -525,7 +524,7 @@ class DatastoreTests(DatastoreTestsBase):
 class PosixDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    uriScheme = "file:"
+    uriScheme = "file"
     canIngestNoTransferAuto = True
     ingestTransferModes = (None, "copy", "move", "link", "hardlink", "symlink", "relsymlink", "auto")
     isEphemeral = False
@@ -590,13 +589,12 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
 
         # Determine where the file will end up (we assume Formatters use
         # the same file extension)
-        expectedUri = datastore.getUri(ref, predict=True)
-        self.assertTrue(expectedUri.endswith(".yaml#predicted"),
-                        f"Is there a file extension in {expectedUri}")
+        expectedUri = datastore.getURI(ref, predict=True)
+        self.assertEqual(expectedUri.fragment, "predicted")
 
-        # Convert to ButlerURI so we can extract the path component
-        expectedUri = ButlerURI(expectedUri)
         expectedFile = expectedUri.path
+        self.assertTrue(expectedFile.endswith(".yaml"),
+                        f"Is there a file extension in {expectedUri}")
 
         # Try formatter that fails and formatter that fails and leaves
         # a file behind
@@ -630,7 +628,7 @@ class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
 class InMemoryDatastoreTestCase(DatastoreTests, unittest.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
-    uriScheme = "mem:"
+    uriScheme = "mem"
     hasUnsupportedPut = False
     ingestTransferModes = ()
     isEphemeral = True

@@ -408,7 +408,7 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         return ButlerURI(f"mem://{name}?{query}{fragment}"), {}
 
-    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
         """URI to the Dataset.
 
         Always uses "mem://" URI prefix.
@@ -424,7 +424,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the dataset within the datastore. If the
+            URI pointing to the dataset within the datastore. If the
             dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
@@ -440,7 +440,9 @@ class InMemoryDatastore(GenericBaseDatastore):
 
         """
         uri, _ = self.getURIs(ref, predict)
-        return str(uri)
+        if uri is None:
+            raise RuntimeError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
+        return uri
 
     def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.

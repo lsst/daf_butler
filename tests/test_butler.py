@@ -468,8 +468,8 @@ class ButlerTests(ButlerPutGetTests):
         self.assertNotEqual(metrics1, metrics2)
 
         # Compare URIs
-        uri1 = butler.getUri(datasetTypeName, dataId1)
-        uri2 = butler.getUri(datasetTypeName, dataId2)
+        uri1 = butler.getURI(datasetTypeName, dataId1)
+        uri2 = butler.getURI(datasetTypeName, dataId2)
         self.assertNotEqual(uri1, uri2)
 
         # Now do a multi-dataset but single file ingest
@@ -498,9 +498,9 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(multi2, metrics2)
 
         # Compare URIs
-        uri1 = butler.getUri(datasetTypeName, dataId1)
-        uri2 = butler.getUri(datasetTypeName, dataId2)
-        self.assertEqual(uri1, uri2)
+        uri1 = butler.getURI(datasetTypeName, dataId1)
+        uri2 = butler.getURI(datasetTypeName, dataId2)
+        self.assertEqual(uri1, uri2, f"Cf. {uri1} with {uri2}")
 
         # Test that removing one does not break the second
         # This line will issue a warning log message for a ChainedDatastore

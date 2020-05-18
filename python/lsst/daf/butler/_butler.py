@@ -874,16 +874,16 @@ class Butler:
                 if run is None:
                     raise TypeError("Cannot predict location with run=None.")
             # Lie about ID, because we can't guess it, and only
-            # Datastore.getUri() will ever see it (and it doesn't use it).
+            # Datastore.getURIs() will ever see it (and it doesn't use it).
             ref = ref.resolved(id=0, run=self.run)
         return self.datastore.getURIs(ref, predict)
 
-    def getUri(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+    def getURI(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                dataId: Optional[DataId] = None, *,
                predict: bool = False,
                collections: Any = None,
                run: Optional[str] = None,
-               **kwds: Any) -> str:
+               **kwds: Any) -> ButlerURI:
         """Return the URI to the Dataset.
 
         Parameters
@@ -911,8 +911,8 @@ class Butler:
 
         Returns
         -------
-        uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
+        uri : `ButlerURI`
+            URI pointing to the Dataset within the datastore. If the
             Dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
@@ -935,7 +935,7 @@ class Butler:
                                   collections=collections, run=run, **kwds)
         if primary is None:
             raise RuntimeError(f"Found dataset but no single URI retrieved for it {datasetRefOrType}")
-        return str(primary)
+        return primary
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,

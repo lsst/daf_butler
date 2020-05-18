@@ -483,7 +483,7 @@ class ChainedDatastore(Datastore):
 
         raise FileNotFoundError("Dataset {} not in any datastore".format(ref))
 
-    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
         """URI to the Dataset.
 
         The returned URI is from the first datastore in the list that has
@@ -502,8 +502,8 @@ class ChainedDatastore(Datastore):
 
         Returns
         -------
-        uri : `str`
-            URI string pointing to the dataset within the datastore. If the
+        uri : `ButlerURI`
+            URI pointing to the dataset within the datastore. If the
             dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
@@ -525,7 +525,7 @@ class ChainedDatastore(Datastore):
         primary, _ = self.getURIs(ref, predict)
         if primary is None:
             raise FileNotFoundError(f"Found dataset but no single URI possible for {ref}")
-        return str(primary)
+        return primary
 
     def remove(self, ref: DatasetRef) -> None:
         """Indicate to the datastore that a dataset can be removed.

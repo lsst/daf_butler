@@ -866,7 +866,7 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return primary, components
 
-    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
         """URI to the Dataset.
 
         Parameters
@@ -880,12 +880,12 @@ class FileLikeDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the dataset within the datastore. If the
+            URI pointing to the dataset within the datastore. If the
             dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
             If the datastore does not have entities that relate well
-            to the concept of a URI the returned URI string will be
+            to the concept of a URI the returned URI will be
             descriptive. The returned URI is not guaranteed to be obtainable.
 
         Raises
@@ -903,7 +903,7 @@ class FileLikeDatastore(GenericBaseDatastore):
         uri, components = self.getURIs(ref, predict)
         if uri is None:
             raise FileNotFoundError(f"Found dataset but no single URI possible for {ref}")
-        return str(uri)
+        return uri
 
     def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.

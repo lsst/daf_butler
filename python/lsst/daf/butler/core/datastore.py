@@ -584,7 +584,7 @@ class Datastore(metaclass=ABCMeta):
         raise NotImplementedError()
 
     @abstractmethod
-    def getUri(self, datasetRef: DatasetRef, predict: bool = False) -> str:
+    def getURI(self, datasetRef: DatasetRef, predict: bool = False) -> ButlerURI:
         """URI to the Dataset.
 
         Parameters
