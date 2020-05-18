@@ -42,6 +42,7 @@ except ImportError:
 import lsst.utils
 from lsst.utils import doImport
 from .location import ButlerURI
+from .s3utils import getClient
 
 yaml.add_representer(collections.defaultdict, Representer.represent_dict)
 
@@ -108,7 +109,7 @@ class Loader(yaml.CSafeLoader):
         elif fileuri.scheme == "s3":
             if boto3 is None:
                 raise ModuleNotFoundError("Could not find boto3. Are you sure it is installed?")
-            s3 = boto3.client("s3")
+            s3 = getClient()
             try:
                 response = s3.get_object(Bucket=fileuri.netloc, Key=fileuri.relativeToPathRoot)
             except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
@@ -266,7 +267,7 @@ class Config(collections.abc.MutableMapping):
                                       "Are you sure it is installed?")
 
         uri = ButlerURI(url)
-        s3 = boto3.client("s3")
+        s3 = getClient()
         try:
             response = s3.get_object(Bucket=uri.netloc, Key=uri.relativeToPathRoot)
         except (s3.exceptions.NoSuchKey, s3.exceptions.NoSuchBucket) as err:
@@ -864,7 +865,7 @@ class Config(collections.abc.MutableMapping):
         if uri.scheme != "s3":
             raise ValueError(f"Must provide S3 URI not {uri}")
 
-        s3 = boto3.client("s3")
+        s3 = getClient()
 
         if not overwrite:
             from .s3utils import s3CheckFileExists

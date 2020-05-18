@@ -19,17 +19,32 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
+__all__ = ("getClient", "s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
            "unsetAwsEnvCredentials")
 
 import os
-
-try:
-    import boto3
-except ImportError:
-    boto3 = None
+import boto3
 
 from .location import ButlerURI, Location
+
+
+def getClient():
+    """Return a s3 client
+
+    Check if the crendentials key is set in the env, and connect to the S3 client
+    with the default AWS or the Google Cloud Storage endpoint
+    """
+    endpoint = None
+    try:
+        hmacKey = os.environ['AWS_ACCESS_KEY_ID']
+        if hmacKey.startswith('GOOG'):
+            endpoint = {'endpoint_url': 'https://storage.googleapis.com'}
+    except KeyError:
+        pass
+    if endpoint is None:
+        return boto3.client("s3")
+    else:
+        return boto3.client("s3", **endpoint)
 
 
 def s3CheckFileExists(path, bucket=None, client=None):
@@ -61,12 +76,8 @@ def s3CheckFileExists(path, bucket=None, client=None):
     .. _manual: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/\
     configuration.html#configuring-credentials
     """
-    if boto3 is None:
-        raise ModuleNotFoundError(("Could not find boto3. "
-                                   "Are you sure it is installed?"))
-
     if client is None:
-        client = boto3.client('s3')
+        client = getClient()
 
     if isinstance(path, str):
         if bucket is not None:
@@ -119,15 +130,12 @@ def bucketExists(bucketName, client=None):
     .. _manual: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/\
     configuration.html#configuring-credentials
     """
-    if boto3 is None:
-        raise ModuleNotFoundError(("Could not find boto3. "
-                                   "Are you sure it is installed?"))
-
-    s3 = boto3.client("s3")
+    if client is None:
+        client = getClient()
     try:
-        s3.get_bucket_location(Bucket=bucketName)
+        client.get_bucket_location(Bucket=bucketName)
         return True
-    except s3.exceptions.NoSuchBucket:
+    except client.exceptions.NoSuchBucket:
         return False
 
 
