@@ -21,9 +21,9 @@
 
 import click
 
-from ..opt import config_file_option, repo_argument
-from ..utils import cli_handle_exception
-from ...script import createRepo
+from ..opt import config_file_option, dataset_type_option, repo_argument
+from ..utils import split_commas, cli_handle_exception
+from ...script import createRepo, configDump, configValidate
 
 
 @click.command()
@@ -38,3 +38,29 @@ from ...script import createRepo
 def create(*args, **kwargs):
     """Create an empty Gen3 Butler repository."""
     cli_handle_exception(createRepo, *args, **kwargs)
+
+
+@click.command()
+@repo_argument(required=True)
+@click.option("--subset", "-s", type=str,
+              help="Subset of a configuration to report. This can be any key in the hierarchy such as "
+              "'.datastore.root' where the leading '.' specified the delimiter for the hierarchy.")
+@click.option("--searchpath", "-p", type=str, multiple=True,
+              help="Additional search paths to use for configuration overrides")
+@click.option("--file", "outfile", type=click.File("w"), default="-",
+              help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
+              "by default.")
+def config_dump(*args, **kwargs):
+    """Dump either a subset or full Butler configuration to standard output."""
+    cli_handle_exception(configDump, *args, **kwargs)
+
+
+@click.command()
+@repo_argument(required=True)
+@click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
+@dataset_type_option(help="Specific DatasetType(s) to validate.")
+@click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
+              help="DatasetType(s) to ignore for validation.")
+def config_validate(*args, **kwargs):
+    """Validate the configuration files for a Gen3 Butler repository."""
+    cli_handle_exception(configValidate, *args, **kwargs)

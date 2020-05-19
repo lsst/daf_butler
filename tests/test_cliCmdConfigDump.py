@@ -42,11 +42,11 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
 
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "here"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             # check for some expected keywords:
             cfg = yaml.safe_load(result.stdout)
             self.assertIn("composites", cfg)
@@ -58,9 +58,9 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             result = runner.invoke(butler.cli, ["config-dump", "here", "--file=there"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             # check for some expected keywords:
             with open("there", "r") as f:
                 cfg = yaml.safe_load(f)
@@ -73,9 +73,9 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "datastore"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             cfg = yaml.safe_load(result.stdout)
             # count the keys in the datastore config
             self.assertIs(len(cfg), 7)
@@ -91,11 +91,11 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)
-            self.assertEqual(result.output, "Error: foo not found in config at here\n")
+            self.assertIn("Error: 'foo not found in config at here'", result.output)
 
 
 if __name__ == "__main__":

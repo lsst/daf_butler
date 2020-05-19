@@ -19,26 +19,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import click
-
-from ... import Butler, ValidationError
-from ..opt import dataset_type_option, repo_argument
-from ..utils import split_commas
+from .. import Butler
 
 
-@click.command()
-@click.pass_context
-@repo_argument(required=True)
-@click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
-@dataset_type_option(help="Specific DatasetType(s) to validate.")
-@click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
-              help="DatasetType(s) to ignore for validation.")
-def config_validate(ctx, repo, quiet, dataset_type, ignore):
-    """Validate the configuration files for a Gen3 Butler repository."""
+def configValidate(repo, quiet, dataset_type, ignore):
+    """Validate the configuration files for a Gen3 Butler repository.
+
+    Parameters
+    ----------
+    repo : `str`
+        URI to the location to create the repo.
+    quiet : `bool`
+        Do not report individual failures if True.
+    dataset_type : [`str`]
+        Specific DatasetTypes to validate.
+    ignore : [`str`]
+        "DatasetTypes to ignore for validation."
+
+    Raises
+    ------
+    ValidationError
+        If a configuration fails validation.
+    """
     logFailures = not quiet
     butler = Butler(config=repo)
-    try:
-        butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=dataset_type, ignore=ignore)
-    except ValidationError:
-        ctx.exit(1)
-    click.echo("No problems encountered with configuration.")
+    butler.validateConfiguration(logFailures=logFailures, datasetTypeNames=dataset_type, ignore=ignore)
+    print("No problems encountered with configuration.")

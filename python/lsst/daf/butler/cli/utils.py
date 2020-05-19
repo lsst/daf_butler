@@ -20,7 +20,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+import io
 import os
+import traceback
 from unittest.mock import MagicMock
 
 from ..core.utils import iterable
@@ -120,7 +122,7 @@ def split_kv(context, param, values, separator="="):
         Raised if the separator is not found in an entry, or if duplicate keys
         are encountered.
     """
-    if "," == separator or " " == separator:
+    if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
     vals = split_commas(context, param, values)
     ret = {}
@@ -181,5 +183,9 @@ def cli_handle_exception(func, *args, **kwargs):
         return
     try:
         return func(*args, **kwargs)
-    except Exception as err:
-        raise click.ClickException(err)
+    except Exception:
+        msg = io.StringIO()
+        msg.write("An error occurred during command execution:\n")
+        traceback.print_exc(file=msg)
+        msg.seek(0)
+        raise click.ClickException(msg.read())
