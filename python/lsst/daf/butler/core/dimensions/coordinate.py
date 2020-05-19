@@ -394,11 +394,6 @@ class ExpandedDataCoordinate(DataCoordinate):
         """
         return self.universe.makePacker(name, self).pack(self, returnMaxBits=returnMaxBits)
 
-    def matches(self, other) -> bool:
-        # Docstring inherited from DataCoordinate.matches.
-        d = getattr(other, "full", other)
-        return all(self[k] == d[k] for k in (self.full.keys() & d.keys()))
-
     def subset(self, graph: DimensionGraph) -> ExpandedDataCoordinate:
         # Docstring inherited from DataCoordinate.subset.
         return ExpandedDataCoordinate(
