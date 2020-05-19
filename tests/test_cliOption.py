@@ -27,7 +27,7 @@ import click.testing
 import unittest
 import yaml
 
-from lsst.daf.butler.cli.opt import config_option, dataset_type_option
+from lsst.daf.butler.cli.opt import config_file_option, config_option, dataset_type_option
 
 
 class DatasetTypeTestCase(unittest.TestCase):
@@ -103,6 +103,39 @@ class ConfigTestCase(unittest.TestCase):
         """test capture of the help text"""
         runner = click.testing.CliRunner()
         result = runner.invoke(ConfigTestCase.cli, ["--help"])
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn("foo bar baz", result.stdout)
+
+
+class ConfigFileTestCase(unittest.TestCase):
+
+    @staticmethod
+    @click.command()
+    @config_file_option(help="foo bar baz")
+    def cli(config_file):
+        click.echo(config_file, nl=False)
+
+    def test_basic(self):
+        """test arguments"""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(ConfigFileTestCase.cli, ["--config-file", "path/to/file"])
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertEqual("path/to/file", result.stdout)
+
+    def test_missing(self):
+        @click.command()
+        @config_file_option(required=True)
+        def cli(config):
+            pass
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, [])
+        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn('Missing option "-C" / "--config-file"', result.output)
+
+    def test_help(self):
+        """test capture of the help text"""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(ConfigFileTestCase.cli, ["--help"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertIn("foo bar baz", result.stdout)
 
