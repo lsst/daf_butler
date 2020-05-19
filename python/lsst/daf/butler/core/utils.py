@@ -34,12 +34,22 @@ __all__ = (
 
 import builtins
 import functools
-from typing import Mapping
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    Mapping,
+    Optional,
+    Type,
+    Union,
+)
 
 from lsst.utils import doImport
 
 
-def iterable(a):
+def iterable(a: Any) -> Iterable[Any]:
     """Make input iterable.
 
     There are three cases, when the input is:
@@ -72,7 +82,7 @@ def iterable(a):
         yield a
 
 
-def allSlots(self):
+def allSlots(self: Any) -> Iterator[str]:
     """
     Return combined ``__slots__`` for all classes in objects mro.
 
@@ -90,7 +100,7 @@ def allSlots(self):
     return chain.from_iterable(getattr(cls, "__slots__", []) for cls in self.__class__.__mro__)
 
 
-def getFullTypeName(cls):
+def getFullTypeName(cls: Any) -> str:
     """Return full type name of the supplied entity.
 
     Parameters
@@ -118,7 +128,7 @@ def getFullTypeName(cls):
     return cls.__module__ + "." + cls.__qualname__
 
 
-def getClassOf(typeOrName):
+def getClassOf(typeOrName: Union[Type, str]) -> Type:
     """Given the type name or a type, return the python type.
 
     If a type name is given, an attempt will be made to import the type.
@@ -145,7 +155,7 @@ def getClassOf(typeOrName):
     return cls
 
 
-def getInstanceOf(typeOrName, *args, **kwargs):
+def getInstanceOf(typeOrName: Union[Type, str], *args: Any, **kwargs: Any) -> Any:
     """Given the type name or a type, instantiate an object of that type.
 
     If a type name is given, an attempt will be made to import the type.
@@ -180,28 +190,31 @@ class Singleton(type):
     adjust state of the singleton.
     """
 
-    _instances = {}
+    _instances: Dict[Type, Any] = {}
 
-    def __call__(cls):
+    # Signature is intentionally not substitutable for type.__call__ (no *args,
+    # **kwargs) to require classes that use this metaclass to have no
+    # constructor arguments.
+    def __call__(cls) -> Any:  # type: ignore
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__()
         return cls._instances[cls]
 
 
-def transactional(func):
+def transactional(func: Callable) -> Callable:
     """Decorator that wraps a method and makes it transactional.
 
     This depends on the class also defining a `transaction` method
     that takes no arguments and acts as a context manager.
     """
     @functools.wraps(func)
-    def inner(self, *args, **kwargs):
+    def inner(self: Any, *args: Any, **kwargs: Any) -> Any:
         with self.transaction():
             return func(self, *args, **kwargs)
     return inner
 
 
-def stripIfNotNone(s):
+def stripIfNotNone(s: Optional[str]) -> Optional[str]:
     """Strip leading and trailing whitespace if the given object is not None.
 
     Parameters
@@ -220,7 +233,7 @@ def stripIfNotNone(s):
     return s
 
 
-def immutable(cls):
+def immutable(cls: Type) -> Type:
     """A class decorator that simulates a simple form of immutability for
     the decorated class.
 
@@ -235,18 +248,20 @@ def immutable(cls):
     only (other approaches such as ``__reduce__`` and ``__deepcopy__`` may
     also be used).
     """
-    def __setattr__(self, name, value):  # noqa: N807
+    def __setattr__(self: Any, name: str, value: Any) -> None:  # noqa: N807
         if hasattr(self, name):
             raise AttributeError(f"{cls.__name__} instances are immutable.")
         object.__setattr__(self, name, value)
-    cls.__setattr__ = __setattr__
+    # mypy says the variable here has signature (str, Any) i.e. no "self";
+    # I think it's just confused by descriptor stuff.
+    cls.__setattr__ = __setattr__  # type: ignore
 
-    def __getstate__(self) -> dict:  # noqa: N807
+    def __getstate__(self: Any) -> dict:  # noqa: N807
         # Disable default state-setting when unpickled.
         return {}
     cls.__getstate__ = __getstate__
 
-    def __setstate__(self, state):  # noqa: N807
+    def __setstate__(self: Any, state: Any) -> None:  # noqa: N807
         # Disable default state-setting when copied.
         # Sadly what works for pickle doesn't work for copy.
         assert not state
