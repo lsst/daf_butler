@@ -65,6 +65,13 @@ class DatasetTypeSuite(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two', 'three', 'four']")
 
+    def test_help(self):
+        """test capture of the help text"""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(DatasetTypeSuite.cli, ["--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("the dataset type", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
