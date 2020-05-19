@@ -23,9 +23,11 @@ from __future__ import annotations
 __all__ = (
     "IndexedTupleDict",
     "NamedKeyDict",
+    "NamedKeyMapping",
     "NamedValueSet",
 )
 
+from abc import abstractmethod
 from typing import (
     AbstractSet,
     Any,
@@ -51,7 +53,9 @@ try:
     from typing_extensions import Protocol
 
     class Named(Protocol):
-        name: str
+        @property
+        def name(self) -> str:
+            pass
 
 except ImportError:
     Named = Any  # type: ignore
@@ -61,7 +65,69 @@ K = TypeVar("K", bound=Named)
 V = TypeVar("V")
 
 
-class NamedKeyDict(MutableMapping[K, V]):
+class NamedKeyMapping(Mapping[K, V]):
+    """An abstract base class for custom mappings whose keys are objects with
+    a `str` ``name`` attribute, for which lookups on the name as well as the
+    object are permitted.
+
+    Notes
+    -----
+    In addition to the new `names` property and ``byName` attribute, this class
+    simply redefines the type signature for `__getitem__` and `get` that would
+    otherwise be inherited from `Mapping`. That is only relevant for static
+    type checking; the actual Python runtime doesn't care about types at all.
+    """
+
+    @property
+    @abstractmethod
+    def names(self) -> AbstractSet[str]:
+        """The set of names associated with the keys, in the same order
+        (`AbstractSet` [ `str` ]).
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def byName(self) -> Dict[str, V]:
+        """Return a `Mapping` with names as keys and the same values as
+        ``self``.
+
+        Returns
+        -------
+        dictionary : `dict`
+            A dictionary with the same values (and iteration order) as
+            ``self``, with `str` names as keys.  This is always a new object,
+            not a view.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def __getitem__(self, key: Union[str, K]) -> V:
+        raise NotImplementedError()
+
+    def get(self, key: Union[str, K], default: Any = None) -> Any:
+        # Delegating to super is not allowed by typing, because it doesn't
+        # accept str, but we know it just delegates to __getitem__, which does.
+        return super().get(key, default)  # type: ignore
+
+
+class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
+    """An abstract base class that adds mutation to `NamedKeyMapping`.
+    """
+
+    @abstractmethod
+    def __setitem__(self, key: Union[str, K], value: V) -> None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def __delitem__(self, key: Union[str, K]) -> None:
+        raise NotImplementedError()
+
+    def pop(self, key: Union[str, K], default: Any = None) -> Any:
+        # See comment in `NamedKeyMapping.get`; same logic applies here.
+        return super().pop(key, default)  # type: ignore
+
+
+class NamedKeyDict(NamedKeyMutableMapping[K, V]):
     """A dictionary wrapper that require keys to have a ``.name`` attribute,
     and permits lookups using either key objects or their names.
 
@@ -350,7 +416,7 @@ class NamedValueSet(MutableSet[K]):
             self._dict = MappingProxyType(self._dict)  # type: ignore
 
 
-class IndexedTupleDict(Mapping[K, V]):
+class IndexedTupleDict(NamedKeyMapping[K, V]):
     """An immutable mapping that combines a tuple of values with a (possibly
     shared) mapping from key to tuple index.
 
@@ -375,6 +441,13 @@ class IndexedTupleDict(Mapping[K, V]):
         assert tuple(indices.values()) == tuple(range(len(values)))
         self._indices = indices
         self._values = values
+
+    @property
+    def names(self) -> KeysView[str]:
+        return self._indices.names
+
+    def byName(self) -> Dict[str, V]:
+        return dict(zip(self.names, self._values))
 
     def __getitem__(self, key: Union[str, K]) -> V:
         return self._values[self._indices[key]]

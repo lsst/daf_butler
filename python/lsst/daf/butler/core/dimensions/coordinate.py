@@ -159,12 +159,6 @@ class DataCoordinate(IndexedTupleDict):
             raise KeyError(f"No value in data ID ({mapping}) for required dimension {err}.") from err
         return DataCoordinate(graph, values)
 
-    def byName(self) -> Dict[str, Any]:
-        """Return a true `dict` keyed by `str` dimension name and the same
-        values as ``self``.
-        """
-        return {k.name: v for k, v in self.items()}
-
     def __hash__(self) -> int:
         return hash((self.graph, self.values()))
 
