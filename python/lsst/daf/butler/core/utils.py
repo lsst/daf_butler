@@ -25,19 +25,14 @@ __all__ = (
     "getClassOf",
     "getFullTypeName",
     "getInstanceOf",
-    "getObjectSize",
     "immutable",
     "iterable",
-    "PrivateConstructorMeta",
     "Singleton",
-    "slotValuesAreEqual",
-    "slotValuesToHash",
     "stripIfNotNone",
     "transactional",
 )
 
 import builtins
-import sys
 import functools
 from typing import Mapping
 
@@ -93,43 +88,6 @@ def allSlots(self):
     """
     from itertools import chain
     return chain.from_iterable(getattr(cls, "__slots__", []) for cls in self.__class__.__mro__)
-
-
-def slotValuesAreEqual(self, other):
-    """
-    Test for equality by the contents of all slots, including those of its
-    parents.
-
-    Parameters
-    ----------
-    self : `object`
-        Reference instance.
-    other : `object`
-        Comparison instance.
-
-    Returns
-    -------
-    equal : `bool`
-        Returns True if all the slots are equal in both arguments.
-    """
-    return all((getattr(self, slot) == getattr(other, slot) for slot in allSlots(self)))
-
-
-def slotValuesToHash(self):
-    """
-    Generate a hash from slot values.
-
-    Parameters
-    ----------
-    self : `object`
-        Instance to be hashed.
-
-    Returns
-    -------
-    h : `int`
-        Hashed value generated from the slot values.
-    """
-    return hash(tuple(getattr(self, slot) for slot in allSlots(self)))
 
 
 def getFullTypeName(cls):
@@ -243,53 +201,6 @@ def transactional(func):
     return inner
 
 
-def getObjectSize(obj, seen=None):
-    """Recursively finds size of objects.
-
-    Only works well for pure python objects. For example it does not work for
-    ``Exposure`` objects where all the content is behind getter methods.
-
-    Parameters
-    ----------
-    obj : `object`
-       Instance for which size is to be calculated.
-    seen : `set`, optional
-       Used internally to keep track of objects already sized during
-       recursion.
-
-    Returns
-    -------
-    size : `int`
-       Size in bytes.
-
-    See Also
-    --------
-    sys.getsizeof
-
-    Notes
-    -----
-    See https://goshippo.com/blog/measure-real-size-any-python-object/
-    """
-    size = sys.getsizeof(obj)
-    if seen is None:
-        seen = set()
-    obj_id = id(obj)
-    if obj_id in seen:
-        return 0
-    # Important mark as seen *before* entering recursion to gracefully handle
-    # self-referential objects
-    seen.add(obj_id)
-    if isinstance(obj, dict):
-        size += sum([getObjectSize(v, seen) for v in obj.values()])
-        size += sum([getObjectSize(k, seen) for k in obj.keys()])
-    elif hasattr(obj, "__dict__"):
-        size += getObjectSize(obj.__dict__, seen)
-    elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes, bytearray)):
-        size += sum([getObjectSize(i, seen) for i in obj])
-
-    return size
-
-
 def stripIfNotNone(s):
     """Strip leading and trailing whitespace if the given object is not None.
 
@@ -307,61 +218,6 @@ def stripIfNotNone(s):
     if s is not None:
         s = s.strip()
     return s
-
-
-class PrivateConstructorMeta(type):
-    """A metaclass that disables regular construction syntax.
-
-    A class that uses PrivateConstructorMeta may have an ``__init__`` and/or
-    ``__new__`` method, but these can't be invoked by "calling" the class
-    (that will always raise `TypeError`).  Instead, such classes can be called
-    by calling the metaclass-provided `_construct` class method with the same
-    arguments.
-
-    As is usual in Python, there are no actual prohibitions on what code can
-    call `_construct`; the purpose of this metaclass is just to prevent
-    instances from being created normally when that can't do what users would
-    expect.
-
-    ..note::
-
-        Classes that inherit from PrivateConstructorMeta also inherit
-        the hidden-constructor behavior.  If you just want to disable
-        construction of the base class, `abc.ABCMeta` may be a better
-        option.
-
-    Examples
-    --------
-    Given this class definition::
-        class Hidden(metaclass=PrivateConstructorMeta):
-
-            def __init__(self, a, b):
-                self.a = a
-                self.b = b
-
-    This doesn't work:
-
-        >>> instance = Hidden(a=1, b="two")
-        TypeError: Hidden objects cannot be constructed directly.
-
-    But this does:
-
-        >>> instance = Hidden._construct(a=1, b="two")
-
-    """
-
-    def __call__(cls, *args, **kwds):
-        """Disabled class construction interface; always raises `TypeError.`
-        """
-        raise TypeError(f"{cls.__name__} objects cannot be constructed directly.")
-
-    def _construct(cls, *args, **kwds):
-        """Private class construction interface.
-
-        All arguments are forwarded to ``__init__`` and/or ``__new__``
-        in the usual way.
-        """
-        return type.__call__(cls, *args, **kwds)
 
 
 def immutable(cls):
