@@ -720,6 +720,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
+                assert isinstance(dataset.formatter, (type, str))
                 dataset.formatter = getClassOf(dataset.formatter)
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
             filtered.append(dataset)

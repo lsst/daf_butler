@@ -18,8 +18,15 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
 
 __all__ = ("FileDescriptor",)
+
+from typing import Any, Dict, Mapping, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .location import Location
+    from .storageClass import StorageClass
 
 
 class FileDescriptor:
@@ -41,14 +48,17 @@ class FileDescriptor:
 
     __slots__ = ("location", "storageClass", "_readStorageClass", "parameters")
 
-    def __init__(self, location, storageClass, readStorageClass=None, parameters=None):
+    def __init__(self, location: Location,
+                 storageClass: StorageClass,
+                 readStorageClass: Optional[StorageClass] = None,
+                 parameters: Optional[Mapping[str, Any]] = None):
         self.location = location
         self._readStorageClass = readStorageClass
         self.storageClass = storageClass
-        self.parameters = parameters
+        self.parameters = dict(parameters) if parameters is not None else None
 
-    def __repr__(self):
-        optionals = {}
+    def __repr__(self) -> str:
+        optionals: Dict[str, Any] = {}
         if self._readStorageClass is not None:
             optionals["readStorageClass"] = self._readStorageClass
         if self.parameters:
@@ -64,7 +74,7 @@ class FileDescriptor:
         return r
 
     @property
-    def readStorageClass(self):
+    def readStorageClass(self) -> StorageClass:
         """Storage class to use when reading. (`StorageClass`)
 
         Will default to ``storageClass`` if none specified."""
