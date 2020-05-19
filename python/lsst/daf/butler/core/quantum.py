@@ -19,13 +19,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("Quantum",)
+
+from typing import (
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Type,
+    TYPE_CHECKING,
+    Union,
+)
 
 import astropy.time
 
 from lsst.utils import doImport
 
 from .named import NamedKeyDict
+
+if TYPE_CHECKING:
+    from .dimensions import DataCoordinate
+    from .datasets import DatasetRef, DatasetType
 
 
 class Quantum:
@@ -80,11 +96,18 @@ class Quantum:
                  "_initInputs", "_predictedInputs", "_actualInputs", "_outputs",
                  "_id", "_startTime", "_endTime", "_host")
 
-    def __init__(self, *, taskName=None, taskClass=None, dataId=None, run=None,
-                 initInputs=None, predictedInputs=(), actualInputs=(), outputs=(),
-                 startTime=None, endTime=None, host=None, id=None,
-                 **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, *, taskName: Optional[str] = None,
+                 taskClass: Optional[Type] = None,
+                 dataId: Optional[DataCoordinate] = None,
+                 run: Optional[str] = None,
+                 initInputs: Optional[Union[Mapping[DatasetType, DatasetRef], Iterable[DatasetRef]]] = None,
+                 predictedInputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
+                 actualInputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
+                 outputs: Optional[Mapping[DatasetType, List[DatasetRef]]] = None,
+                 startTime: Optional[astropy.time.Time] = None,
+                 endTime: Optional[astropy.time.Time] = None,
+                 host: Optional[str] = None,
+                 id: Optional[int] = None):
         if taskClass is not None:
             taskName = f"{taskClass.__module__}.{taskClass.__name__}"
         self._taskName = taskName
@@ -93,19 +116,25 @@ class Quantum:
         self._dataId = dataId
         if initInputs is None:
             initInputs = {}
-        elif not hasattr(initInputs, "keys"):
+        elif not isinstance(initInputs, Mapping):
             initInputs = {ref.datasetType: ref for ref in initInputs}
-        self._initInputs = NamedKeyDict(initInputs)
-        self._predictedInputs = NamedKeyDict(predictedInputs)
-        self._actualInputs = NamedKeyDict(actualInputs)
-        self._outputs = NamedKeyDict(outputs)
+        if predictedInputs is None:
+            predictedInputs = {}
+        if actualInputs is None:
+            actualInputs = {}
+        if outputs is None:
+            outputs = {}
+        self._initInputs: NamedKeyDict[DatasetType, DatasetRef] = NamedKeyDict(initInputs)
+        self._predictedInputs: NamedKeyDict[DatasetType, List[DatasetRef]] = NamedKeyDict(predictedInputs)
+        self._actualInputs: NamedKeyDict[DatasetType, List[DatasetRef]] = NamedKeyDict(actualInputs)
+        self._outputs: NamedKeyDict[DatasetType, List[DatasetRef]] = NamedKeyDict(outputs)
         self._id = id
         self._startTime = startTime
         self._endTime = endTime
         self._host = host
 
     @property
-    def taskClass(self):
+    def taskClass(self) -> Optional[Type]:
         """Task class associated with this `Quantum` (`type`).
         """
         if self._taskClass is None:
@@ -113,25 +142,25 @@ class Quantum:
         return self._taskClass
 
     @property
-    def taskName(self):
+    def taskName(self) -> Optional[str]:
         """Fully-qualified name of the task associated with `Quantum` (`str`).
         """
         return self._taskName
 
     @property
-    def run(self):
+    def run(self) -> Optional[str]:
         """The name of the run this Quantum is a part of (`str`).
         """
         return self._run
 
     @property
-    def dataId(self):
+    def dataId(self) -> Optional[DataCoordinate]:
         """The dimension values of the unit of processing (`DataId`).
         """
         return self._dataId
 
     @property
-    def initInputs(self):
+    def initInputs(self) -> NamedKeyDict[DatasetType, DatasetRef]:
         """A mapping of datasets used to construct the Task,
         with `DatasetType` instances as keys (names can also be used for
         lookups) and `DatasetRef` instances as values.
@@ -139,7 +168,7 @@ class Quantum:
         return self._initInputs
 
     @property
-    def predictedInputs(self):
+    def predictedInputs(self) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
         """A mapping of input datasets that were expected to be used,
         with `DatasetType` instances as keys (names can also be used for
         lookups) and a list of `DatasetRef` instances as values.
@@ -153,7 +182,7 @@ class Quantum:
         return self._predictedInputs
 
     @property
-    def actualInputs(self):
+    def actualInputs(self) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
         """A mapping of input datasets that were actually used, with the same
         form as `Quantum.predictedInputs`.
 
@@ -166,7 +195,7 @@ class Quantum:
         return self._actualInputs
 
     @property
-    def outputs(self):
+    def outputs(self) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
         """A mapping of output datasets (to be) generated for this quantum,
         with the same form as `predictedInputs`.
 
@@ -178,7 +207,7 @@ class Quantum:
         """
         return self._outputs
 
-    def addPredictedInput(self, ref):
+    def addPredictedInput(self, ref: DatasetRef) -> None:
         """Add an input `DatasetRef` to the `Quantum`.
 
         This does not automatically update a `Registry`; all `predictedInputs`
@@ -191,7 +220,7 @@ class Quantum:
         """
         self._predictedInputs.setdefault(ref.datasetType, []).append(ref)
 
-    def _markInputUsed(self, ref):
+    def _markInputUsed(self, ref: DatasetRef) -> None:
         """Mark an input as used.
 
         This does not automatically update a `Registry`.
@@ -199,13 +228,13 @@ class Quantum:
         """
         # First validate against predicted
         if ref.datasetType not in self._predictedInputs:
-            raise ValueError("Dataset type {} not in predicted inputs".format(ref.datasetType.name))
+            raise ValueError(f"Dataset type {ref.datasetType.name} not in predicted inputs")
         if ref not in self._predictedInputs[ref.datasetType]:
-            raise ValueError("Actual input {} was not predicted".format(ref))
+            raise ValueError(f"Actual input {ref} was not predicted")
         # Now insert as actual
         self._actualInputs.setdefault(ref.datasetType, []).append(ref)
 
-    def addOutput(self, ref):
+    def addOutput(self, ref: DatasetRef) -> None:
         """Add an output `DatasetRef` to the `Quantum`.
 
         This does not automatically update a `Registry`; all `outputs`
@@ -219,27 +248,27 @@ class Quantum:
         self._outputs.setdefault(ref.datasetType, []).append(ref)
 
     @property
-    def id(self) -> int:
+    def id(self) -> Optional[int]:
         """Unique (autoincrement) integer for this quantum (`int`).
         """
         return self._id
 
     @property
-    def startTime(self) -> astropy.time.Time:
+    def startTime(self) -> Optional[astropy.time.Time]:
         """Begin timestamp for the execution of this quantum
         (`astropy.time.Time`).
         """
         return self._startTime
 
     @property
-    def endTime(self) -> astropy.time.Time:
+    def endTime(self) -> Optional[astropy.time.Time]:
         """End timestamp for the execution of this quantum
         (`astropy.time.Time`).
         """
         return self._endTime
 
     @property
-    def host(self) -> str:
+    def host(self) -> Optional[str]:
         """Name of the system on which this quantum was executed (`str`).
         """
         return self._host
