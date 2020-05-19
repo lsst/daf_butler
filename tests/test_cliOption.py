@@ -29,36 +29,39 @@ import unittest
 from lsst.daf.butler.cli.opt import dataset_type_option
 
 
-@click.command()
-@click.pass_context
-@dataset_type_option(help="the dataset type")
-def cli(ctx, dataset_type):
-    click.echo(dataset_type, nl=False)
+class DatasetTypeSuite(unittest.TestCase):
 
-
-class Suite(unittest.TestCase):
+    @staticmethod
+    @click.command()
+    @dataset_type_option(help="the dataset type")
+    def cli(dataset_type):
+        click.echo(dataset_type, nl=False)
 
     def test_single(self):
+        """test a single argument"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--dataset-type", "one"])
+        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one']")
 
     def test_multiple(self):
+        """test multiple arguments, using the long and short option names"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--dataset-type", "one,two"])
+        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one", "-d", "two"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two']")
 
     def test_singlePair(self):
+        """test a single comma-separated value pair"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--dataset-type", "one,two"])
+        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one,two"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two']")
 
     def test_multiplePair(self):
+        """test multiple comma-separated value pairs"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--dataset-type", "one,two", "-d", "three,four"])
+        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one,two", "-d", "three,four"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two', 'three', 'four']")
 

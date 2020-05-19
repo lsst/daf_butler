@@ -26,6 +26,7 @@ import click
 class config_file_option:  # noqa: N801
     def __init__(self, required=False, help=None):
         self.required = required
+        self.help = help
 
     def __call__(self, f):
         return click.option("-C", "--config-file",
