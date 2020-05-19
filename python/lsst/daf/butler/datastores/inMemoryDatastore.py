@@ -28,6 +28,7 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 import time
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlencode
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -384,17 +385,28 @@ class InMemoryDatastore(GenericBaseDatastore):
         components : `dict`
             URIs to any components associated with the dataset artifact.
             Can be empty if there are no components.
+
+        Notes
+        -----
+        The URIs returned for in-memory datastores are not usable but
+        provide an indication of the associated dataset.
         """
+
+        # Include the dataID as a URI query
+        query = urlencode(ref.dataId)
+
         # if this has never been written then we have to guess
         if not self.exists(ref):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
-            name = "{}#predicted".format(ref.datasetType.name)
+            name = f"{ref.datasetType.name}"
+            fragment = "#predicted"
         else:
             realID, _ = self._get_dataset_info(ref)
-            name = '{}'.format(id(self.datasets[realID]))
+            name = f"{id(self.datasets[realID])}?{query}"
+            fragment = ""
 
-        return ButlerURI("mem://{}".format(name)), {}
+        return ButlerURI(f"mem://{name}?{query}{fragment}"), {}
 
     def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
         """URI to the Dataset.
