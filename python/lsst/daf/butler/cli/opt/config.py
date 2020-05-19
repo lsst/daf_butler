@@ -26,7 +26,10 @@ from ..utils import split_kv
 
 
 class config_option:  # noqa: N801
-    def __init__(self, required=False, help=None):
+
+    defaultHelp = "Config override, as a key-value pair."
+
+    def __init__(self, required=False, help=defaultHelp):
         self.required = required
         self.help = help
 
@@ -35,4 +38,4 @@ class config_option:  # noqa: N801
                             required=self.required,
                             callback=split_kv,
                             multiple=True,
-                            help="Config override, as a key-value pair.")(f)
+                            help=self.help)(f)

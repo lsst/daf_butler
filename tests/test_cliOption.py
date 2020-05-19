@@ -25,8 +25,9 @@
 import click
 import click.testing
 import unittest
+import yaml
 
-from lsst.daf.butler.cli.opt import dataset_type_option
+from lsst.daf.butler.cli.opt import config_option, dataset_type_option
 
 
 class DatasetTypeTestCase(unittest.TestCase):
@@ -71,6 +72,39 @@ class DatasetTypeTestCase(unittest.TestCase):
         result = runner.invoke(DatasetTypeTestCase.cli, ["--help"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("the dataset type", result.stdout)
+
+
+class ConfigTestCase(unittest.TestCase):
+
+    @staticmethod
+    @click.command()
+    @config_option(help="foo bar baz")
+    def cli(config):
+        click.echo(yaml.dump(config), nl=False)
+
+    def test_basic(self):
+        """test arguments"""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(ConfigTestCase.cli, ["--config", "a=1", "-c", "b=2,c=3"])
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertEqual(yaml.safe_load(result.stdout), dict(a="1", b="2", c="3"))
+
+    def test_missing(self):
+        @click.command()
+        @config_option(required=True)
+        def cli(config):
+            pass
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, [])
+        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn('Missing option "-c" / "--config"', result.output)
+
+    def test_help(self):
+        """test capture of the help text"""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(ConfigTestCase.cli, ["--help"])
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn("foo bar baz", result.stdout)
 
 
 if __name__ == "__main__":
