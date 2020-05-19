@@ -821,26 +821,54 @@ class FileLikeDatastore(GenericBaseDatastore):
             URIs to any components associated with the dataset artifact.
             Can be empty if there are no components.
         """
+
+        primary: Optional[ButlerURI] = None
+        components: Dict[str, ButlerURI] = {}
+
         # if this has never been written then we have to guess
         if not self.exists(ref):
             if not predict:
                 raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
 
-            template = self.templates.getTemplate(ref)
-            location = self.locationFactory.fromPath(template.format(ref))
-            storageClass = ref.datasetType.storageClass
-            formatter = self.formatterFactory.getFormatter(ref, FileDescriptor(location,
-                                                                               storageClass=storageClass))
-            # Try to use the extension attribute but ignore problems if the
-            # formatter does not define one.
-            try:
-                location = formatter.makeUpdatedLocation(location)
-            except Exception:
-                # Use the default extension
-                pass
+            def predictLocation(thisRef: DatasetRef) -> Location:
+                template = self.templates.getTemplate(thisRef)
+                location = self.locationFactory.fromPath(template.format(thisRef))
+                storageClass = ref.datasetType.storageClass
+                formatter = self.formatterFactory.getFormatter(thisRef,
+                                                               FileDescriptor(location,
+                                                                              storageClass=storageClass))
+                # Try to use the extension attribute but ignore problems if the
+                # formatter does not define one.
+                try:
+                    location = formatter.makeUpdatedLocation(location)
+                except Exception:
+                    # Use the default extension
+                    pass
+                return location
 
-            # Add a URI fragment to indicate this is a guess
-            return ButlerURI(location.uri + "#predicted"), {}
+            doDisassembly = self.composites.shouldBeDisassembled(ref)
+
+            if doDisassembly:
+
+                for component, componentStorage in ref.datasetType.storageClass.components.items():
+                    compTypeName = ref.datasetType.componentTypeName(component)
+                    compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
+                                           storageClass=componentStorage)
+                    compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
+
+                    compLocation = predictLocation(compRef)
+
+                    # Add a URI fragment to indicate this is a guess
+                    components[component] = ButlerURI(compLocation.uri + "#predicted")
+
+            else:
+
+                location = predictLocation(ref)
+
+                # Add a URI fragment to indicate this is a guess
+                primary = ButlerURI(location.uri + "#predicted")
+
+            return primary, components
 
         # If this is a ref that we have written we can get the path.
         # Get file metadata and internal metadata
@@ -849,16 +877,11 @@ class FileLikeDatastore(GenericBaseDatastore):
         if not fileLocations:
             raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
 
-        primary: Optional[ButlerURI]
-        components: Dict[str, ButlerURI]
         if len(fileLocations) == 1:
             # No disassembly so this is the primary URI
             primary = ButlerURI(fileLocations[0][0].uri)
-            components = {}
 
         else:
-            primary = None
-            components = {}
             for location, storedFileInfo in fileLocations:
                 if storedFileInfo.component is None:
                     raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
