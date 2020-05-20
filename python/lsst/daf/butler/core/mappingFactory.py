@@ -19,7 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("MappingFactory", )
+
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 from .utils import getClassOf
 from .configSupport import LookupKey
@@ -43,11 +56,11 @@ class MappingFactory:
 
     """
 
-    def __init__(self, refType):
-        self._registry = {}
+    def __init__(self, refType: Type):
+        self._registry: Dict[LookupKey, Union[str, Type]] = {}
         self.refType = refType
 
-    def __contains__(self, key):
+    def __contains__(self, key: Any) -> bool:
         """Indicates whether the supplied key is present in the factory.
 
         Parameters
@@ -64,7 +77,7 @@ class MappingFactory:
         key = self._getNameKey(key)
         return key in self._registry
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         """Retrieve the look up keys for all the registry entries.
 
         Returns
@@ -74,7 +87,7 @@ class MappingFactory:
         """
         return set(self._registry)
 
-    def getClassFromRegistryWithMatch(self, targetClasses):
+    def getClassFromRegistryWithMatch(self, targetClasses: Iterable[Any]) -> Tuple[LookupKey, Type]:
         """Get the class stored in the registry along with
         the matching key.
 
@@ -98,7 +111,7 @@ class MappingFactory:
             Raised if none of the supplied target classes match an item in the
             registry.
         """
-        attempts = []
+        attempts: List[Any] = []
         for t in (targetClasses):
             if t is None:
                 attempts.append(t)
@@ -117,7 +130,7 @@ class MappingFactory:
         plural = "" if len(attempts) == 1 else "s"
         raise KeyError(f"Unable to find item in registry with key{plural}: {msg}")
 
-    def getClassFromRegistry(self, targetClasses, *args, **kwargs):
+    def getClassFromRegistry(self, targetClasses: Iterable[Any], *args: Any, **kwargs: Any) -> Type:
         """Get the matching class stored in the registry.
 
         Parameters
@@ -141,7 +154,8 @@ class MappingFactory:
         _, cls = self.getClassFromRegistryWithMatch(targetClasses)
         return cls
 
-    def getFromRegistryWithMatch(self, targetClasses, *args, **kwargs):
+    def getFromRegistryWithMatch(self, targetClasses: Iterable[Any], *args: Any,
+                                 **kwargs: Any) -> Tuple[LookupKey, Any]:
         """Get a new instance of the object stored in the registry along with
         the matching key.
 
@@ -172,7 +186,7 @@ class MappingFactory:
         key, cls = self.getClassFromRegistryWithMatch(targetClasses)
         return key, cls(*args, **kwargs)
 
-    def getFromRegistry(self, targetClasses, *args, **kwargs):
+    def getFromRegistry(self, targetClasses: Iterable[Any], *args: Any, **kwargs: Any) -> Any:
         """Get a new instance of the object stored in the registry.
 
         Parameters
@@ -200,7 +214,7 @@ class MappingFactory:
         _, instance = self.getFromRegistryWithMatch(targetClasses, *args, **kwargs)
         return instance
 
-    def placeInRegistry(self, registryKey, typeName, overwrite=False):
+    def placeInRegistry(self, registryKey: Any, typeName: Union[str, Type], overwrite: bool = False) -> None:
         """Register a class name with the associated type.
 
         Parameters
@@ -233,7 +247,7 @@ class MappingFactory:
         self._registry[key] = typeName
 
     @staticmethod
-    def _getNameKey(typeOrName):
+    def _getNameKey(typeOrName: Any) -> LookupKey:
         """Extract name of supplied object as string or entity suitable for
         using as key.
 

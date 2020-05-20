@@ -197,7 +197,7 @@ class StorageClass:
             return True
         return False
 
-    def _lookupNames(self) -> Tuple[LookupKey]:
+    def _lookupNames(self) -> Tuple[LookupKey, ...]:
         """Keys to use when looking up this DatasetRef in a configuration.
 
         The names are returned in order of priority.
@@ -336,7 +336,7 @@ class StorageClass:
         return hash(self.name)
 
     def __repr__(self) -> str:
-        optionals = {}
+        optionals: Dict[str, Any] = {}
         if self._pytypeName != "object":
             optionals["pytype"] = self._pytypeName
         if self._assemblerClassName is not None:

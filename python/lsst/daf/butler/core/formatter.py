@@ -336,7 +336,7 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type]:
+    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter]]:
         """Get the matching formatter class along with the matching registry
         key.
 
@@ -356,7 +356,7 @@ class FormatterFactory:
         formatter : `type`
             The class of the registered formatter.
         """
-        names = (entity,) if isinstance(entity, str) else entity._lookupNames()
+        names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getClassFromRegistryWithMatch(names)
         log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
                   matchKey, entity)
@@ -407,7 +407,7 @@ class FormatterFactory:
         formatter : `Formatter`
             An instance of the registered formatter.
         """
-        names = (entity,) if isinstance(entity, str) else entity._lookupNames()
+        names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
         matchKey, formatter = self._mappingFactory.getFromRegistryWithMatch(names, *args, **kwargs)
         log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
                   matchKey, entity)
