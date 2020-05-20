@@ -92,10 +92,10 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         # Does it exist?
         self.assertTrue(datastore.exists(ref))
 
-        uri = datastore.getUri(ref)
+        uri = datastore.getURI(ref)
         if self.fileExt is not None:
-            self.assertTrue(uri.endswith(self.fileExt))
-        self.assertTrue(uri.startswith(self.uriScheme))
+            self.assertTrue(uri.path.endswith(self.fileExt))
+        self.assertEqual(uri.scheme, self.uriScheme)
 
         # Get
         catalogOut = datastore.get(ref, parameters=None)
@@ -222,8 +222,8 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 
         # Get the predicted URI
         self.assertFalse(datastore.exists(ref))
-        uri = datastore.getUri(ref, predict=True)
-        self.assertTrue(uri.endswith("#predicted"))
+        uri = datastore.getURI(ref, predict=True)
+        self.assertEqual(uri.fragment, "predicted")
 
         components = storageClass.assembler().disassemble(exposure)
         self.assertEqual(set(components),
@@ -258,7 +258,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
 class PosixDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/butler.yaml")
-    uriScheme = "file:"
+    uriScheme = "file"
     fileExt = ".fits"
 
     def setUp(self):
@@ -270,7 +270,7 @@ class PosixDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
 class InMemoryDatastoreTestCase(DatastoreFitsTests, lsst.utils.tests.TestCase):
     """PosixDatastore specialization"""
     configFile = os.path.join(TESTDIR, "config/basic/inMemoryDatastore.yaml")
-    uriScheme = "mem:"
+    uriScheme = "mem"
     fileExt = None
 
 

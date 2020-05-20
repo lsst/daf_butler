@@ -46,6 +46,7 @@ from typing import (
 )
 
 from lsst.daf.butler import (
+    ButlerURI,
     CompositesMap,
     Config,
     FileDataset,
@@ -798,7 +799,97 @@ class FileLikeDatastore(GenericBaseDatastore):
 
         return True
 
-    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
+    def getURIs(self, ref: DatasetRef,
+                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Return URIs associated with dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+        predict : `bool`, optional
+            If the datastore does not know about the dataset, should it
+            return a predicted URI or not?
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+        """
+
+        primary: Optional[ButlerURI] = None
+        components: Dict[str, ButlerURI] = {}
+
+        # if this has never been written then we have to guess
+        if not self.exists(ref):
+            if not predict:
+                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
+
+            def predictLocation(thisRef: DatasetRef) -> Location:
+                template = self.templates.getTemplate(thisRef)
+                location = self.locationFactory.fromPath(template.format(thisRef))
+                storageClass = ref.datasetType.storageClass
+                formatter = self.formatterFactory.getFormatter(thisRef,
+                                                               FileDescriptor(location,
+                                                                              storageClass=storageClass))
+                # Try to use the extension attribute but ignore problems if the
+                # formatter does not define one.
+                try:
+                    location = formatter.makeUpdatedLocation(location)
+                except Exception:
+                    # Use the default extension
+                    pass
+                return location
+
+            doDisassembly = self.composites.shouldBeDisassembled(ref)
+
+            if doDisassembly:
+
+                for component, componentStorage in ref.datasetType.storageClass.components.items():
+                    compTypeName = ref.datasetType.componentTypeName(component)
+                    compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
+                                           storageClass=componentStorage)
+                    compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
+
+                    compLocation = predictLocation(compRef)
+
+                    # Add a URI fragment to indicate this is a guess
+                    components[component] = ButlerURI(compLocation.uri + "#predicted")
+
+            else:
+
+                location = predictLocation(ref)
+
+                # Add a URI fragment to indicate this is a guess
+                primary = ButlerURI(location.uri + "#predicted")
+
+            return primary, components
+
+        # If this is a ref that we have written we can get the path.
+        # Get file metadata and internal metadata
+        fileLocations = self._get_dataset_locations_info(ref)
+
+        if not fileLocations:
+            raise RuntimeError(f"Unexpectedly got no artifacts for dataset {ref}")
+
+        if len(fileLocations) == 1:
+            # No disassembly so this is the primary URI
+            primary = ButlerURI(fileLocations[0][0].uri)
+
+        else:
+            for location, storedFileInfo in fileLocations:
+                if storedFileInfo.component is None:
+                    raise RuntimeError(f"Unexpectedly got no component name for a component at {location}")
+                components[storedFileInfo.component] = ButlerURI(location.uri)
+
+        return primary, components
+
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
         """URI to the Dataset.
 
         Parameters
@@ -812,54 +903,33 @@ class FileLikeDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the dataset within the datastore. If the
+            URI pointing to the dataset within the datastore. If the
             dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
             If the datastore does not have entities that relate well
-            to the concept of a URI the returned URI string will be
+            to the concept of a URI the returned URI will be
             descriptive. The returned URI is not guaranteed to be obtainable.
 
         Raises
         ------
         FileNotFoundError
-            A URI has been requested for a dataset that does not exist and
-            guessing is not allowed.
+            Raised if a URI has been requested for a dataset that does not
+            exist and guessing is not allowed.
+        RuntimeError
+            Raised if a request is made for a single URI but multiple URIs
+            are associated with this dataset.
 
         Notes
         -----
         When a predicted URI is requested an attempt will be made to form
         a reasonable URI based on file templates and the expected formatter.
         """
-        # if this has never been written then we have to guess
-        if not self.exists(ref):
-            if not predict:
-                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
-
-            template = self.templates.getTemplate(ref)
-            location = self.locationFactory.fromPath(template.format(ref))
-            storageClass = ref.datasetType.storageClass
-            formatter = self.formatterFactory.getFormatter(ref, FileDescriptor(location,
-                                                                               storageClass=storageClass))
-            # Try to use the extension attribute but ignore problems if the
-            # formatter does not define one.
-            try:
-                location = formatter.makeUpdatedLocation(location)
-            except Exception:
-                # Use the default extension
-                pass
-
-            # Add a URI fragment to indicate this is a guess
-            return location.uri + "#predicted"
-
-        # If this is a ref that we have written we can get the path.
-        # Get file metadata and internal metadata
-        storedFileInfo = self.getStoredItemInfo(ref)
-
-        # Use the path to determine the location
-        location = self.locationFactory.fromPath(storedFileInfo.path)
-
-        return location.uri
+        primary, components = self.getURIs(ref, predict)
+        if primary is None or components:
+            raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
+                               "Use Dataastore.getURIs() instead.")
+        return primary
 
     def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.

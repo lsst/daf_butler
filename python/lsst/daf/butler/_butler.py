@@ -825,12 +825,65 @@ class Butler:
         ref = self._findDatasetRef(datasetRefOrType, dataId, collections=collections, **kwds)
         return self.getDirect(ref, parameters=parameters)
 
-    def getUri(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+    def getURIs(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
+                dataId: Optional[DataId] = None, *,
+                predict: bool = False,
+                collections: Any = None,
+                run: Optional[str] = None,
+                **kwds: Any) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Returns the URIs associated with the dataset.
+
+        Parameters
+        ----------
+        datasetRefOrType : `DatasetRef`, `DatasetType`, or `str`
+            When `DatasetRef` the `dataId` should be `None`.
+            Otherwise the `DatasetType` or name thereof.
+        dataId : `dict` or `DataCoordinate`
+            A `dict` of `Dimension` link name, value pairs that label the
+            `DatasetRef` within a Collection. When `None`, a `DatasetRef`
+            should be provided as the first argument.
+        predict : `bool`
+            If `True`, allow URIs to be returned of datasets that have not
+            been written.
+        collections : Any, optional
+            Collections to be searched, overriding ``self.collections``.
+            Can be any of the types supported by the ``collections`` argument
+            to butler construction.
+        run : `str`, optional
+            Run to use for predictions, overriding ``self.run``.
+        kwds
+            Additional keyword arguments used to augment or construct a
+            `DataCoordinate`.  See `DataCoordinate.standardize`
+            parameters.
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+        """
+        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict,
+                                   collections=collections, **kwds)
+        if ref.id is None:  # only possible if predict is True
+            if run is None:
+                run = self.run
+                if run is None:
+                    raise TypeError("Cannot predict location with run=None.")
+            # Lie about ID, because we can't guess it, and only
+            # Datastore.getURIs() will ever see it (and it doesn't use it).
+            ref = ref.resolved(id=0, run=self.run)
+        return self.datastore.getURIs(ref, predict)
+
+    def getURI(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                dataId: Optional[DataId] = None, *,
                predict: bool = False,
                collections: Any = None,
                run: Optional[str] = None,
-               **kwds: Any) -> str:
+               **kwds: Any) -> ButlerURI:
         """Return the URI to the Dataset.
 
         Parameters
@@ -858,8 +911,8 @@ class Butler:
 
         Returns
         -------
-        uri : `str`
-            URI string pointing to the Dataset within the datastore. If the
+        uri : `ButlerURI`
+            URI pointing to the Dataset within the datastore. If the
             Dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
@@ -877,18 +930,17 @@ class Butler:
             differs from the one found in the registry.
         TypeError
             Raised if no collections were provided.
+        RuntimeError
+            Raised if a URI is requested for a dataset that consists of
+            multiple artifacts.
         """
-        ref = self._findDatasetRef(datasetRefOrType, dataId, allowUnresolved=predict,
-                                   collections=collections, **kwds)
-        if ref.id is None:  # only possible if predict is True
-            if run is None:
-                run = self.run
-                if run is None:
-                    raise TypeError("Cannot predict location with run=None.")
-            # Lie about ID, because we can't guess it, and only
-            # Datastore.getUri() will ever see it (and it doesn't use it).
-            ref = ref.resolved(id=0, run=self.run)
-        return self.datastore.getUri(ref, predict)
+        primary, components = self.getURIs(datasetRefOrType, dataId=dataId, predict=predict,
+                                           collections=collections, run=run, **kwds)
+
+        if primary is None or components:
+            raise RuntimeError(f"Dataset ({datasetRefOrType}) includes distinct URIs for components. "
+                               "Use Butler.getURIs() instead.")
+        return primary
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
                       dataId: Optional[DataId] = None, *,

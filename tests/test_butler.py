@@ -162,6 +162,11 @@ class ButlerPutGetTests:
                                                       "name": "fourtwentythree", "physical_filter": "d-r",
                                                       "visit_system": 1})
 
+        # Add a second visit for some later tests
+        butler.registry.insertDimensionData("visit", {"instrument": "DummyCamComp", "id": 424,
+                                                      "name": "fourtwentyfour", "physical_filter": "d-r",
+                                                      "visit_system": 1})
+
         # Create and store a dataset
         metric = makeExampleMetrics()
         dataId = {"instrument": "DummyCamComp", "visit": 423}
@@ -392,11 +397,65 @@ class ButlerTests(ButlerPutGetTests):
 
     def testCompositePutGetConcrete(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredData")
-        self.runPutGetTest(storageClass, "test_metric")
+        butler = self.runPutGetTest(storageClass, "test_metric")
+
+        # Should *not* be disassembled
+        datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
+        self.assertEqual(len(datasets), 1)
+        uri, components = butler.getURIs(datasets[0])
+        self.assertIsInstance(uri, ButlerURI)
+        self.assertFalse(components)
+        self.assertEqual(uri.fragment, "", f"Checking absence of fragment in {uri}")
+        self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
+
+        # Predicted dataset
+        dataId = {"instrument": "DummyCamComp", "visit": 424}
+        uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
+        self.assertFalse(components)
+        self.assertIsInstance(uri, ButlerURI)
+        self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
+        self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
 
     def testCompositePutGetVirtual(self):
         storageClass = self.storageClassFactory.getStorageClass("StructuredComposite")
-        self.runPutGetTest(storageClass, "test_metric_comp")
+        butler = self.runPutGetTest(storageClass, "test_metric_comp")
+
+        # Should be disassembled
+        datasets = list(butler.registry.queryDatasets(..., collections="ingest"))
+        self.assertEqual(len(datasets), 1)
+        uri, components = butler.getURIs(datasets[0])
+
+        if butler.datastore.isEphemeral:
+            # Never disassemble in-memory datastore
+            self.assertIsInstance(uri, ButlerURI)
+            self.assertFalse(components)
+            self.assertEqual(uri.fragment, "", f"Checking absence of fragment in {uri}")
+            self.assertIn("423", str(uri), f"Checking visit is in URI {uri}")
+        else:
+            self.assertIsNone(uri)
+            self.assertEqual(set(components), set(storageClass.components))
+            for compuri in components.values():
+                self.assertIsInstance(compuri, ButlerURI)
+                self.assertIn("423", str(compuri), f"Checking visit is in URI {compuri}")
+                self.assertEqual(compuri.fragment, "", f"Checking absence of fragment in {compuri}")
+
+        # Predicted dataset
+        dataId = {"instrument": "DummyCamComp", "visit": 424}
+        uri, components = butler.getURIs(datasets[0].datasetType, dataId=dataId, predict=True)
+
+        if butler.datastore.isEphemeral:
+            # Never disassembled
+            self.assertIsInstance(uri, ButlerURI)
+            self.assertFalse(components)
+            self.assertIn("424", str(uri), f"Checking visit is in URI {uri}")
+            self.assertEqual(uri.fragment, "predicted", f"Checking for fragment in {uri}")
+        else:
+            self.assertIsNone(uri)
+            self.assertEqual(set(components), set(storageClass.components))
+            for compuri in components.values():
+                self.assertIsInstance(compuri, ButlerURI)
+                self.assertIn("424", str(compuri), f"Checking visit is in URI {compuri}")
+                self.assertEqual(compuri.fragment, "predicted", f"Checking for fragment in {compuri}")
 
     def testIngest(self):
         butler = Butler(self.tmpConfigFile, run="ingest")
@@ -447,8 +506,8 @@ class ButlerTests(ButlerPutGetTests):
         self.assertNotEqual(metrics1, metrics2)
 
         # Compare URIs
-        uri1 = butler.getUri(datasetTypeName, dataId1)
-        uri2 = butler.getUri(datasetTypeName, dataId2)
+        uri1 = butler.getURI(datasetTypeName, dataId1)
+        uri2 = butler.getURI(datasetTypeName, dataId2)
         self.assertNotEqual(uri1, uri2)
 
         # Now do a multi-dataset but single file ingest
@@ -477,9 +536,9 @@ class ButlerTests(ButlerPutGetTests):
         self.assertEqual(multi2, metrics2)
 
         # Compare URIs
-        uri1 = butler.getUri(datasetTypeName, dataId1)
-        uri2 = butler.getUri(datasetTypeName, dataId2)
-        self.assertEqual(uri1, uri2)
+        uri1 = butler.getURI(datasetTypeName, dataId1)
+        uri2 = butler.getURI(datasetTypeName, dataId2)
+        self.assertEqual(uri1, uri2, f"Cf. {uri1} with {uri2}")
 
         # Test that removing one does not break the second
         # This line will issue a warning log message for a ChainedDatastore

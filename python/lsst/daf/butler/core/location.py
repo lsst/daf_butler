@@ -285,6 +285,14 @@ class ButlerURI:
     def __str__(self):
         return self.geturl()
 
+    def __repr__(self) -> str:
+        return f'ButlerURI("{self.geturl()}")'
+
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, ButlerURI):
+            return False
+        return self.geturl() == other.geturl()
+
     @staticmethod
     def _fixupPathUri(parsed, root=None, forceAbsolute=False, forceDirectory=False):
         """Fix up relative paths in URI instances.

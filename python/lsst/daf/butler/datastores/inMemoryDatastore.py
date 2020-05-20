@@ -28,6 +28,7 @@ __all__ = ("StoredMemoryItemInfo", "InMemoryDatastore")
 import time
 import logging
 from dataclasses import dataclass
+from urllib.parse import urlencode
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -41,7 +42,7 @@ from typing import (
     Union,
 )
 
-from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass
+from lsst.daf.butler import StoredDatastoreItemInfo, StorageClass, ButlerURI
 from lsst.daf.butler.registry.interfaces import DatastoreRegistryBridge
 from .genericDatastore import GenericBaseDatastore
 
@@ -363,7 +364,51 @@ class InMemoryDatastore(GenericBaseDatastore):
         if self._transaction is not None:
             self._transaction.registerUndo("put", self.remove, ref)
 
-    def getUri(self, ref: DatasetRef, predict: bool = False) -> str:
+    def getURIs(self, ref: DatasetRef,
+                predict: bool = False) -> Tuple[Optional[ButlerURI], Dict[str, ButlerURI]]:
+        """Return URIs associated with dataset.
+
+        Parameters
+        ----------
+        ref : `DatasetRef`
+            Reference to the required dataset.
+        predict : `bool`, optional
+            If the datastore does not know about the dataset, should it
+            return a predicted URI or not?
+
+        Returns
+        -------
+        primary : `ButlerURI`
+            The URI to the primary artifact associated with this dataset.
+            If the dataset was disassembled within the datastore this
+            may be `None`.
+        components : `dict`
+            URIs to any components associated with the dataset artifact.
+            Can be empty if there are no components.
+
+        Notes
+        -----
+        The URIs returned for in-memory datastores are not usable but
+        provide an indication of the associated dataset.
+        """
+
+        # Include the dataID as a URI query
+        query = urlencode(ref.dataId)
+
+        # if this has never been written then we have to guess
+        if not self.exists(ref):
+            if not predict:
+                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
+            name = f"{ref.datasetType.name}"
+            fragment = "#predicted"
+        else:
+            realID, _ = self._get_dataset_info(ref)
+            name = f"{id(self.datasets[realID])}?{query}"
+            fragment = ""
+
+        return ButlerURI(f"mem://{name}?{query}{fragment}"), {}
+
+    def getURI(self, ref: DatasetRef, predict: bool = False) -> ButlerURI:
         """URI to the Dataset.
 
         Always uses "mem://" URI prefix.
@@ -379,7 +424,7 @@ class InMemoryDatastore(GenericBaseDatastore):
         Returns
         -------
         uri : `str`
-            URI string pointing to the dataset within the datastore. If the
+            URI pointing to the dataset within the datastore. If the
             dataset does not exist in the datastore, and if ``predict`` is
             `True`, the URI will be a prediction and will include a URI
             fragment "#predicted".
@@ -392,19 +437,15 @@ class InMemoryDatastore(GenericBaseDatastore):
         FileNotFoundError
             A URI has been requested for a dataset that does not exist and
             guessing is not allowed.
-
+        AssertionError
+            Raised if an internal error occurs.
         """
-
-        # if this has never been written then we have to guess
-        if not self.exists(ref):
-            if not predict:
-                raise FileNotFoundError("Dataset {} not in this datastore".format(ref))
-            name = "{}#predicted".format(ref.datasetType.name)
-        else:
-            realID, _ = self._get_dataset_info(ref)
-            name = '{}'.format(id(self.datasets[realID]))
-
-        return "mem://{}".format(name)
+        primary, _ = self.getURIs(ref, predict)
+        if primary is None:
+            # This should be impossible since this datastore does
+            # not disassemble. This check also helps mypy.
+            raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
+        return primary
 
     def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.

@@ -37,7 +37,6 @@ except ImportError:
 import numpy as np
 from lsst.daf.butler import Butler, DatasetType
 import filecmp
-import urllib
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -63,12 +62,14 @@ class MatplotlibFormatterTestCase(unittest.TestCase):
         butler.registry.registerDatasetType(datasetType)
         pyplot.imshow(np.random.randn(3, 4))
         ref = butler.put(pyplot.gcf(), datasetType)
-        parsed = urllib.parse.urlparse(butler.getUri(ref))
+        uri = butler.getURI(ref)
+        # The test after this will not work if we don't have local file
+        self.assertEqual(uri.scheme, "file", "Testing returned URI: {uri}")
         with tempfile.NamedTemporaryFile(suffix=".png") as file:
             pyplot.gcf().savefig(file.name)
             self.assertTrue(
                 filecmp.cmp(
-                    parsed.path,
+                    uri.path,
                     file.name,
                     shallow=True
                 )

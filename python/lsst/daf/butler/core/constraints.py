@@ -19,15 +19,29 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Code relating to constraints based on `DatasetRef`, `DatasetType`, or
 `StorageClass`."""
 
 __all__ = ("Constraints", "ConstraintsValidationError", "ConstraintsConfig")
 
+from typing import (
+    TYPE_CHECKING,
+    Optional,
+    Set,
+    Union,
+)
+
 import logging
 from .config import Config
 from .configSupport import LookupKey, processLookupConfigList
 from .exceptions import ValidationError
+
+if TYPE_CHECKING:
+    from .dimensions import DimensionUniverse
+    from .storageClass import StorageClass
+    from .datasets import DatasetRef, DatasetType
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +74,7 @@ class Constraints:
     matchAllKey = LookupKey("all")
     """Configuration key associated with matching everything."""
 
-    def __init__(self, config, *, universe):
+    def __init__(self, config: Optional[Union[ConstraintsConfig, str]], *, universe: DimensionUniverse):
         # Default is to accept all and reject nothing
         self._accept = set()
         self._reject = set()
@@ -77,7 +91,7 @@ class Constraints:
             raise ConstraintsValidationError("Can not explicitly accept 'all' and reject 'all'"
                                              " in one configuration")
 
-    def __str__(self):
+    def __str__(self) -> str:
         # Standard stringification
         if not self._accept and not self._reject:
             return "Accepts: all"
@@ -86,7 +100,7 @@ class Constraints:
         rejects = ", ".join(str(k) for k in self._reject)
         return f"Accepts: {accepts}; Rejects: {rejects}"
 
-    def isAcceptable(self, entity):
+    def isAcceptable(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         """Check whether the supplied entity will be acceptable to whatever
         this `Constraints` class is associated with.
 
@@ -136,7 +150,7 @@ class Constraints:
 
         return False
 
-    def getLookupKeys(self):
+    def getLookupKeys(self) -> Set[LookupKey]:
         """Retrieve the look up keys for all the constraints entries.
 
         Returns
