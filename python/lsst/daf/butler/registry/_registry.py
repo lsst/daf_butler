@@ -26,7 +26,6 @@ __all__ = (
     "Registry",
 )
 
-from collections import defaultdict
 import contextlib
 from dataclasses import dataclass
 import sys
@@ -585,8 +584,6 @@ class Registry:
         for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
             result = storage.find(collectionRecord, dataId)
             if result is not None:
-                if result.datasetType.isComposite():
-                    result = self._datasets.fetchComponents(result)
                 return result
 
         # fallback to the parent if we got nothing and this was a component
@@ -602,8 +599,7 @@ class Registry:
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: str, *, producer: Optional[Quantum] = None, recursive: bool = False
-                       ) -> List[DatasetRef]:
+                       run: str, *, producer: Optional[Quantum] = None) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -621,9 +617,6 @@ class Registry:
             Unit of work that produced the datasets.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.
-        recursive : `bool`
-            If True, recursively add datasets and attach entries for component
-            datasets as well.
 
         Returns
         -------
@@ -658,23 +651,6 @@ class Registry:
                                              f"This probably means a dataset with the same data ID "
                                              f"and dataset type already exists, but it may also mean a "
                                              f"dimension row is missing.") from err
-        if recursive and storage.datasetType.isComposite():
-            # Insert component rows by recursing.
-            composites = defaultdict(dict)
-            # TODO: we really shouldn't be inserting all components defined by
-            # the storage class, because there's no guarantee all of them are
-            # actually present in these datasets.
-            for componentName in storage.datasetType.storageClass.components:
-                componentDatasetType = storage.datasetType.makeComponentDatasetType(componentName)
-                componentRefs = self.insertDatasets(componentDatasetType,
-                                                    dataIds=dataIds,
-                                                    run=run,
-                                                    producer=producer,
-                                                    recursive=True)
-                for parentRef, componentRef in zip(refs, componentRefs):
-                    composites[parentRef][componentName] = componentRef
-            if composites:
-                refs = list(self._datasets.attachComponents(composites.items()))
         return refs
 
     def getDataset(self, id: int) -> Optional[DatasetRef]:
@@ -694,12 +670,10 @@ class Registry:
         ref = self._datasets.getDatasetRef(id)
         if ref is None:
             return None
-        if ref.datasetType.isComposite():
-            return self._datasets.fetchComponents(ref)
         return ref
 
     @transactional
-    def removeDatasets(self, refs: Iterable[DatasetRef], *, recursive: bool = True):
+    def removeDatasets(self, refs: Iterable[DatasetRef]):
         """Remove datasets from the Registry.
 
         The datasets will be removed unconditionally from all collections, and
@@ -713,12 +687,6 @@ class Registry:
         refs : `Iterable` of `DatasetRef`
             References to the datasets to be removed.  Must include a valid
             ``id`` attribute, and should be considered invalidated upon return.
-        recursive : `bool`, optional
-            If `True`, remove all component datasets as well.  Note that
-            this only removes components that are actually included in the
-            given `DatasetRef` instances, which may not be the same as those in
-            the database (especially if they were obtained from
-            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -727,7 +695,7 @@ class Registry:
         OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
-        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
             try:
                 storage.delete(refsForType)
@@ -736,39 +704,7 @@ class Registry:
                                           "present in one or more Datastores.") from err
 
     @transactional
-    def attachComponents(self, parent: DatasetRef, components: Mapping[str, DatasetRef]):
-        """Attach components to a dataset.
-
-        Parameters
-        ----------
-        parent : `DatasetRef`
-            A reference to the parent dataset.
-        components : `Mapping` [ `str`, `DatasetRef` ]
-            Mapping from component name to the `DatasetRef` for that component.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            An updated version of ``parent`` with components included.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``parent.id`` or any `DatasetRef.id` in ``components``
-            is `None`.
-        """
-        for name, ref in components.items():
-            if ref.datasetType.storageClass != parent.datasetType.storageClass.components[name]:
-                raise TypeError(f"Expected storage class "
-                                f"'{parent.datasetType.storageClass.components[name].name}' "
-                                f"for component '{name}' of dataset {parent}; got "
-                                f"dataset {ref} with storage class "
-                                f"'{ref.datasetType.storageClass.name}'.")
-        ref, = self._datasets.attachComponents([(parent, components)])
-        return ref
-
-    @transactional
-    def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
+    def associate(self, collection: str, refs: Iterable[DatasetRef]):
         """Add existing datasets to a `~CollectionType.TAGGED` collection.
 
         If a DatasetRef with the same exact integer ID is already in a
@@ -783,12 +719,6 @@ class Registry:
         refs : `Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
-        recursive : `bool`, optional
-            If `True`, associate all component datasets as well.  Note that
-            this only associates components that are actually included in the
-            given `DatasetRef` instances, which may not be the same as those in
-            the database (especially if they were obtained from
-            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -806,7 +736,7 @@ class Registry:
         collectionRecord = self._collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
-        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
             try:
                 storage.associate(collectionRecord, refsForType)
@@ -819,7 +749,7 @@ class Registry:
                 ) from err
 
     @transactional
-    def disassociate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
+    def disassociate(self, collection: str, refs: Iterable[DatasetRef]):
         """Remove existing datasets from a `~CollectionType.TAGGED` collection.
 
         ``collection`` and ``ref`` combinations that are not currently
@@ -832,12 +762,6 @@ class Registry:
         refs : `Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
-        recursive : `bool`, optional
-            If `True`, disassociate all component datasets as well.  Note that
-            this only disassociates components that are actually included in
-            the given `DatasetRef` instances, which may not be the same as
-            those in the database (especially if they were obtained from
-            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -853,7 +777,7 @@ class Registry:
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
                             "expected TAGGED.")
-        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
             storage.disassociate(collectionRecord, refsForType)
 

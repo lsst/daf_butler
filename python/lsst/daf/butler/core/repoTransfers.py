@@ -481,7 +481,6 @@ class YamlRepoImportBackend(RepoImportBackend):
                 datasetType,
                 dataIds=dataIds,
                 run=run,
-                recursive=True
             )
             # Now iterate over the original records, and install the new
             # resolved DatasetRefs to replace the unresolved ones as we

@@ -144,15 +144,8 @@ class GenericBaseDatastore(Datastore):
         expandedItemInfos = []
 
         for ref, itemInfo in refsAndInfos:
-            # Need the main dataset and the components
-            expandedRefs.extend(ref.flatten([ref]))
-
-            if ref.components is None:
-                raise RuntimeError("Unable to register an unresolved DatasetRef")
-
-            # Need one for the main ref and then one for each registered
-            # component
-            expandedItemInfos.extend([itemInfo] * (len(ref.components) + 1))
+            expandedRefs.append(ref)
+            expandedItemInfos.append(itemInfo)
 
         # Dataset location only cares about registry ID so if we have
         # disassembled in datastore we have to deduplicate. Since they
@@ -177,7 +170,7 @@ class GenericBaseDatastore(Datastore):
         # Note that a ref can point to component dataset refs that
         # have been deleted already from registry but are still in
         # the python object. moveToTrash will deal with that.
-        self.bridge.moveToTrash(ref.flatten([ref]))
+        self.bridge.moveToTrash([ref])
 
     def _post_process_get(self, inMemoryDataset: Any, readStorageClass: StorageClass,
                           assemblerParams: Optional[Mapping[str, Any]] = None,

@@ -191,7 +191,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
                                  ("transmissionCurve", True),
                                  ("metadata", False)):
             with self.subTest(component=compName):
-                compRef = ref.components[compName]
+                compRef = ref.makeComponentRef(compName)
                 component = datastore.get(compRef)
                 if isNone:
                     self.assertIsNone(component)
@@ -199,7 +199,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
                     self.assertIsInstance(component, compRef.datasetType.storageClass.pytype)
 
         # Get the WCS component to check it
-        wcs = datastore.get(ref.components["wcs"])
+        wcs = datastore.get(ref.makeComponentRef("wcs"))
 
         # Simple check of WCS
         bbox = lsst.geom.Box2I(lsst.geom.Point2I(0, 0),
@@ -207,7 +207,7 @@ class DatastoreFitsTests(FitsCatalogDatasetsHelper, DatasetTestHelper, Datastore
         self.assertWcsAlmostEqualOverBBox(wcs, exposure.getWcs(), bbox)
 
         # Check basic metadata
-        metadata = datastore.get(ref.components["metadata"])
+        metadata = datastore.get(ref.makeComponentRef("metadata"))
         self.assertEqual(metadata["WCS_ID"], 3)
 
     def testExposureCompositePutGet(self):

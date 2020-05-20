@@ -376,31 +376,6 @@ class RegistryTests(ABC):
         registry.removeDatasets([ref])
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
-    def testComponents(self):
-        """Tests for `Registry.attachComponents` and other dataset operations
-        on composite datasets.
-        """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        run = "test"
-        registry.registerRun(run)
-        parentDatasetType = registry.getDatasetType("permabias")
-        childDatasetType1 = registry.getDatasetType("permabias.image")
-        childDatasetType2 = registry.getDatasetType("permabias.mask")
-        dataId = {"instrument": "Cam1", "detector": 2}
-        parent, = registry.insertDatasets(parentDatasetType, dataIds=[dataId], run=run)
-        children = {"image": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
-                    "mask": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
-        parent = registry.attachComponents(parent, children)
-        self.assertEqual(parent.components, children)
-        outParent = registry.getDataset(parent.id)
-        self.assertEqual(outParent.components, children)
-        # Remove the parent; this should remove all children.
-        registry.removeDatasets([parent])
-        self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collections=[run]))
-        self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collections=[run]))
-        self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collections=[run]))
-
     def testFindDataset(self):
         """Tests for `Registry.findDataset`.
         """

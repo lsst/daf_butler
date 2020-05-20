@@ -26,7 +26,6 @@ __all__ = ("DatasetRecordStorageManager", "DatasetRecordStorage")
 from abc import ABC, abstractmethod
 from typing import (
     Any,
-    Dict,
     Iterable,
     Iterator,
     Optional,
@@ -85,12 +84,6 @@ class DatasetRecordStorage(ABC):
         -------
         datasets : `Iterable` [ `DatasetRef` ]
             References to the inserted datasets.
-
-        Notes
-        -----
-        This method does not insert component datasets recursively, as those
-        have a different `DatasetType` than their parent and hence are managed
-        by a different `DatasetRecordStorage` instance.
         """
         raise NotImplementedError()
 
@@ -361,48 +354,5 @@ class DatasetRecordStorageManager(ABC):
         ref : `DatasetRef` or `None`
             Object representing the dataset, or `None` if no dataset with the
             given primary key values exists in this layer.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def attachComponents(self, composites: Iterable[Tuple[DatasetRef, Dict[str, DatasetRef]]]
-                         ) -> Iterator[DatasetRef]:
-        """Attach components to one or more datasets.
-
-        Parameters
-        ----------
-        composites : `Iterable` [ `tuple` [ `DatasetRef`, `dict` ] ]
-            Iterable over parents and dictionaries of components.  Both parent
-            and child `DatasetRef` instances must be resolved, and dict keys
-            are assumed (not necessarily checked) to match the component names
-            in the parent's storage class.
-
-        Yields
-        ------
-        parent : `DatasetRef`
-            Parent `DatasetRef` instances with `DatasetRef.components`
-            dictionaries updated to include new components.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
-    def fetchComponents(self, ref: DatasetRef) -> DatasetRef:
-        """Load references for all components to a `DatasetRef`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the parent dataset.  If this dataset is not a
-            composite it will be returned unmodified.
-
-        Returns
-        -------
-        parent : `DatasetRef`
-            Version of ``ref`` with components attached.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if the given `DatasetRef` is unresolved.
         """
         raise NotImplementedError()

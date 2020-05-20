@@ -27,14 +27,11 @@ from typing import (
     Any,
     Dict,
     Iterable,
-    Iterator,
     List,
-    Mapping,
     Optional,
     Tuple,
 )
 
-from types import MappingProxyType
 from ..dimensions import DataCoordinate, DimensionGraph, ExpandedDataCoordinate
 from ..configSupport import LookupKey
 from ..utils import immutable
@@ -43,8 +40,8 @@ from .type import DatasetType
 
 
 class AmbiguousDatasetError(Exception):
-    """Exception raised when a `DatasetRef` is not resolved (has no ID, run, or
-    components), but the requested operation requires one of them.
+    """Exception raised when a `DatasetRef` is not resolved (has no ID or run),
+    but the requested operation requires one of them.
     """
 
 
@@ -70,10 +67,6 @@ class DatasetRef:
         A hash of the dataset type and data ID.  Should only be provided if
         copying from another `DatasetRef` with the same dataset type and data
         ID.
-    components : `dict`, optional
-        A dictionary mapping component name to a `DatasetRef` for that
-        component.  Should not be passed unless ``id`` is also provided (i.e.
-        if this is a "resolved" reference).
     conform : `bool`, optional
         If `True` (default), call `DataCoordinate.standardize` to ensure that
         the data ID's dimensions are consistent with the dataset type's.
@@ -83,24 +76,22 @@ class DatasetRef:
         that the dimensions are already consistent.
     hasParentId : `bool`, optional
         If `True` this `DatasetRef` is a component that has the ``id``
-        of the composite parent.  This is set if the registry does not
-        know about individual components but does know about the composite.
+        of the composite parent.
 
     Raises
     ------
     ValueError
-        Raised if ``run`` or ``components`` is provided but ``id`` is not, or
-        if a component dataset is inconsistent with the storage class, or if
-        ``id`` is provided but ``run`` is not.
+        Raised if ``run`` is provided but ``id`` is not, or if ``id`` is
+        provided but ``run`` is not.
     """
 
-    __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "_components", "hasParentId")
+    __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "hasParentId")
 
     def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, *,
                 id: Optional[int] = None,
                 run: Optional[str] = None, hash: Optional[bytes] = None,
-                components: Optional[Mapping[str, DatasetRef]] = None, conform: bool = True,
-                hasParentId: bool = False) -> DatasetRef:
+                hasParentId: bool = False,
+                conform: bool = True) -> DatasetRef:
         self = super().__new__(cls)
         assert isinstance(datasetType, DatasetType)
         self.id = id
@@ -111,31 +102,11 @@ class DatasetRef:
         else:
             self.dataId = dataId
         if self.id is not None:
-            self._components = dict()
-            if components is not None:
-                self._components.update(components)
-                for k, v in self._components.items():
-                    expectedStorageClass = self.datasetType.storageClass.components.get(k)
-                    if expectedStorageClass is None:
-                        raise ValueError(f"{k} is not a valid component for "
-                                         f"storage class {self.datasetType.storageClass.name}.")
-                    if not isinstance(v, DatasetRef):
-                        # It's easy to accidentally pass DatasetType or
-                        # StorageClass; make that error message friendly.
-                        raise ValueError(f"Component {k}={v} is not a DatasetRef.")
-                    if v.id is None:
-                        raise ValueError(f"DatasetRef components must be resolved ({k}={v} isn't).")
-                    if expectedStorageClass != v.datasetType.storageClass:
-                        raise ValueError(f"Storage class mismatch for component {k}: "
-                                         f"{v.datasetType.storageClass.name} != {expectedStorageClass.name}")
             if run is None:
                 raise ValueError(f"Cannot provide id without run for dataset with id={id}, "
                                  f"type={datasetType}, and dataId={dataId}.")
             self.run = run
         else:
-            self._components = None
-            if components:
-                raise ValueError("'components' cannot be provided unless 'id' is.")
             if run is not None:
                 raise ValueError("'run' cannot be provided unless 'id' is.")
             self.run = None
@@ -167,18 +138,6 @@ class DatasetRef:
         return self._hash
 
     @property
-    def components(self) -> Optional[Mapping[str, DatasetRef]]:
-        """Named `DatasetRef` components (`~collections.abc.Mapping` or
-        `None`).
-
-        For resolved `DatasetRef` instances, this is a read-only mapping.  For
-        unresolved instances, this is always `None`.
-        """
-        if self._components is None:
-            return None
-        return MappingProxyType(self._components)
-
-    @property
     def dimensions(self) -> DimensionGraph:
         """The dimensions associated with the underlying `DatasetType`
         """
@@ -190,8 +149,7 @@ class DatasetRef:
         # __repr__ - is much harder to users to read, while its __str__ just
         # produces a dict that can also be passed to DatasetRef's constructor.
         if self.id is not None:
-            return (f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r}, "
-                    f"components={self._components})")
+            return (f"DatasetRef({self.datasetType!r}, {self.dataId!s}, id={self.id}, run={self.run!r})")
         else:
             return f"DatasetRef({self.datasetType!r}, {self.dataId!s})"
 
@@ -202,11 +160,9 @@ class DatasetRef:
         return s
 
     def __getnewargs_ex__(self) -> Tuple[Tuple[Any, ...], Dict[str, Any]]:
-        return ((self.datasetType, self.dataId),
-                {"id": self.id, "run": self.run, "components": self._components})
+        return ((self.datasetType, self.dataId), {"id": self.id, "run": self.run})
 
-    def resolved(self, id: int, run: str, components: Optional[Mapping[str, DatasetRef]] = None
-                 ) -> DatasetRef:
+    def resolved(self, id: int, run: str) -> DatasetRef:
         """Return a new `DatasetRef` with the same data ID and dataset type
         and the given ID and run.
 
@@ -216,29 +172,18 @@ class DatasetRef:
             The unique integer identifier assigned when the dataset is created.
         run : `str`
             The run this dataset was associated with when it was created.
-        components : `dict`, optional
-            A dictionary mapping component name to a `DatasetRef` for that
-            component.  If ``self`` is already a resolved `DatasetRef`,
-            its components will be merged with this dictionary, with this
-            dictionary taking precedence.
 
         Returns
         -------
         ref : `DatasetRef`
             A new `DatasetRef`.
         """
-        if self._components is not None:
-            newComponents = self._components.copy()
-        else:
-            newComponents = {}
-        if components:
-            newComponents.update(components)
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId,
-                          id=id, run=run, hash=self.hash, components=newComponents, conform=False)
+                          id=id, run=run, hash=self.hash, conform=False)
 
     def unresolved(self) -> DatasetRef:
         """Return a new `DatasetRef` with the same data ID and dataset type,
-        but no ID, run, or components.
+        but no ID or run.
 
         Returns
         -------
@@ -272,7 +217,7 @@ class DatasetRef:
         """
         assert dataId == self.dataId
         return DatasetRef(datasetType=self.datasetType, dataId=dataId,
-                          id=self.id, run=self.run, hash=self.hash, components=self.components,
+                          id=self.id, run=self.run, hash=self.hash,
                           conform=False)
 
     def isComponent(self) -> bool:
@@ -324,96 +269,22 @@ class DatasetRef:
 
         return names
 
-    def allRefs(self, parents: bool = True) -> Iterator[DatasetRef]:
-        """Return all the nested component `DatasetRef` and optionally the
-        parent.
-
-        Parameters
-        ----------
-        parents : `bool`, optional
-            If `True` (default) include the given dataset in the output
-            iterable.  If `False`, include only its components.  This does
-            not propagate recursively - only the outermost level of parents
-            is ignored if ``parents`` is `False`.
-
-        Yields
-        ------
-        ref : `DatasetRef`
-            Itself (only if ``parent`` is `True`) or one of its (recursive)
-            children.
-
-        Notes
-        -----
-        If ``parents`` is `True`, components are guaranteed to be yielded
-        before their parents.
-        """
-        if self.components is None:
-            raise AmbiguousDatasetError(f"Unresolved ref {self} cannot be flattened.")
-        yield from DatasetRef.flatten(self.components.values(), parents=True)
-        if parents:
-            yield self
-
     @staticmethod
-    def flatten(refs: Iterable[DatasetRef], *, parents: bool = True) -> Iterator[DatasetRef]:
-        """Recursively transform an iterable over `DatasetRef` to include
-        nested component `DatasetRef` instances.
-
-        Parameters
-        ----------
-        refs : `~collections.abc.Iterable` [ `DatasetRef` ]
-            Input iterable to process.  Must contain only resolved `DatasetRef`
-            instances (i.e. with `DatasetRef.components` not `None`).
-        parents : `bool`, optional
-            If `True` (default) include the given datasets in the output
-            iterable.  If `False`, include only their components.  This does
-            not propagate recursively - only the outermost level of parents
-            is ignored if ``parents`` is `False`.
-
-        Yields
-        ------
-        ref : `DatasetRef`
-            Either one of the given `DatasetRef` instances (only if ``parent``
-            is `True`) or one of its (recursive) children.
-
-        Notes
-        -----
-        If ``parents`` is `True`, components are guaranteed to be yielded
-        before their parents.
-        """
-        for ref in refs:
-            for subref in ref.allRefs(parents):
-                yield subref
-
-    @staticmethod
-    def groupByType(refs: Iterable[DatasetRef], *, recursive: bool = True
-                    ) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
+    def groupByType(refs: Iterable[DatasetRef]) -> NamedKeyDict[DatasetType, List[DatasetRef]]:
         """Group an iterable of `DatasetRef` by `DatasetType`.
 
         Parameters
         ----------
         refs : `Iterable` [ `DatasetRef` ]
             `DatasetRef` instances to group.
-        recursive : `bool`, optional
-            If `True` (default), also group any `DatasetRef` instances found in
-            the `DatasetRef.components` dictionaries of ``refs``, recursively.
-            `True` also checks that references are "resolved" (unresolved
-            references never have components).
 
         Returns
         -------
         grouped : `NamedKeyDict` [ `DatasetType`, `list` [ `DatasetRef` ] ]
             Grouped `DatasetRef` instances.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``recursive is True``, and one or more refs has
-            ``DatasetRef.components is None`` (as is always the case for
-            unresolved `DatasetRef` objects).
         """
         result: NamedKeyDict[DatasetType, List[DatasetRef]] = NamedKeyDict()
-        iter = DatasetRef.flatten(refs) if recursive else refs
-        for ref in iter:
+        for ref in refs:
             result.setdefault(ref.datasetType, []).append(ref)
         return result
 
@@ -437,6 +308,25 @@ class DatasetRef:
             raise AmbiguousDatasetError(f"ID for dataset {self} is `None`; "
                                         f"a resolved reference is required.")
         return self.id
+
+    def makeComponentRef(self, name: str) -> DatasetRef:
+        """Create a `DatasetRef` that corresponds to a component of this
+        dataset.
+
+        Parameters
+        ----------
+        name : `str`
+            Name of the component.
+
+        Returns
+        -------
+        ref : `DatasetRef`
+            A `DatasetRef` with a dataset type that corresponds to the given
+            component, with ``hasParentId=True``, and the same ID and run
+            (which may be `None`, if they are `None` in ``self``).
+        """
+        return DatasetRef(self.datasetType.makeComponentDatasetType(name), self.dataId,
+                          id=self.id, run=self.run, hasParentId=True)
 
     datasetType: DatasetType
     """The definition of this dataset (`DatasetType`).
@@ -466,5 +356,3 @@ class DatasetRef:
     `unresolved` to add or remove this information when creating a new
     `DatasetRef`.
     """
-
-    _components: Optional[Dict[str, DatasetRef]]

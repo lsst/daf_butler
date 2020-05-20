@@ -55,7 +55,6 @@ StaticDatasetTablesTuple = namedtuple(
     [
         "dataset_type",
         "dataset",
-        "dataset_composition",
     ]
 )
 
@@ -206,22 +205,9 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                 ddl.ForeignKeySpec("quantum", source=("quantum_id",), target=("id",), onDelete="SET NULL"),
             ]
         ),
-        dataset_composition=ddl.TableSpec(
-            fields=[
-                # Foreign keys to dataset added below (one of which is a
-                # primary key).
-                ddl.FieldSpec("component_name", dtype=sqlalchemy.String, length=32, primaryKey=True),
-                ddl.FieldSpec("simple", dtype=sqlalchemy.Boolean,
-                              doc=("True if this component is in the same RUN-type collection and has the "
-                                   "same data ID as its parent dataset, False otherwise."))
-            ],
-        ),
     )
     # Add foreign key fields programmatically.
     collections.addRunForeignKey(specs.dataset, onDelete="CASCADE", nullable=False)
-    addDatasetForeignKey(specs.dataset_composition, name="parent_dataset", onDelete="CASCADE",
-                         primaryKey=True)
-    addDatasetForeignKey(specs.dataset_composition, name="component_dataset", onDelete="CASCADE")
     return specs
 
 
