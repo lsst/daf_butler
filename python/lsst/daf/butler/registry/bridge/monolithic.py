@@ -29,8 +29,7 @@ from typing import cast, Dict, Iterable, Iterator, List, Type, TYPE_CHECKING
 
 import sqlalchemy
 
-from lsst.daf.butler import DatasetRef, ddl
-from lsst.daf.butler.core.utils import NamedValueSet
+from lsst.daf.butler import DatasetRef, ddl, NamedValueSet
 from lsst.daf.butler.registry.interfaces import (
     DatasetIdRef,
     DatastoreRegistryBridge,

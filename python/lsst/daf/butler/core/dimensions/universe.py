@@ -25,10 +25,21 @@ __all__ = ["DimensionUniverse"]
 
 import math
 import pickle
-from typing import Optional, Iterable, List, Union, TYPE_CHECKING
+from typing import (
+    ClassVar,
+    Dict,
+    FrozenSet,
+    Iterable,
+    List,
+    Optional,
+    TYPE_CHECKING,
+    TypeVar,
+    Union,
+)
 
 from ..config import Config
-from ..utils import NamedValueSet, immutable
+from ..named import NamedValueSet
+from ..utils import immutable
 from .elements import Dimension, DimensionElement, SkyPixDimension
 from .graph import DimensionGraph
 from .config import processElementsConfig, processSkyPixConfig, DimensionConfig
@@ -37,6 +48,9 @@ from .packer import DimensionPackerFactory
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .coordinate import ExpandedDataCoordinate
     from .packer import DimensionPacker
+
+
+E = TypeVar("E", bound=DimensionElement)
 
 
 @immutable
@@ -58,7 +72,7 @@ class DimensionUniverse(DimensionGraph):
         ``daf_butler/config/dimensions.yaml``) wil be loaded.
     """
 
-    _instances = {}
+    _instances: ClassVar[Dict[int, DimensionUniverse]] = {}
     """Singleton dictionary of all instances, keyed by version.
 
     For internal use only.
@@ -70,7 +84,7 @@ class DimensionUniverse(DimensionGraph):
 
         # First see if an equivalent instance already exists.
         version = config["version"]
-        self = cls._instances.get(version)
+        self: Optional[DimensionUniverse] = cls._instances.get(version)
         if self is not None:
             return self
 
@@ -117,9 +131,11 @@ class DimensionUniverse(DimensionGraph):
         self._finish()
 
         # Set up factories for dataId packers as defined by config.
+        # MyPy is totally confused by us setting attributes on self in __new__.
         self._packers = {}
         for name, subconfig in config.get("packers", {}).items():
-            self._packers[name] = DimensionPackerFactory.fromConfig(universe=self, config=subconfig)
+            self._packers[name] = DimensionPackerFactory.fromConfig(universe=self,  # type: ignore
+                                                                    config=subconfig)
 
         # Use the version number from the config as a key in the singleton
         # dict containing all instances; that will let us transfer dimension
@@ -155,12 +171,12 @@ class DimensionUniverse(DimensionGraph):
         names = set()
         for item in iterable:
             try:
-                names.add(item.name)
+                names.add(item.name)  # type: ignore
             except AttributeError:
                 names.add(item)
         return DimensionGraph(universe=self, names=names)
 
-    def sorted(self, elements: Iterable[DimensionElement], *, reverse=False) -> List[DimensionElement]:
+    def sorted(self, elements: Iterable[Union[E, str]], *, reverse: bool = False) -> List[E]:
         """Return a sorted version of the given iterable of dimension elements.
 
         The universe's sort order is topological (an element's dependencies
@@ -183,7 +199,9 @@ class DimensionUniverse(DimensionGraph):
         result = [element for element in self.elements if element in s or element.name in s]
         if reverse:
             result.reverse()
-        return result
+        # mypy thinks this can return DimensionElements even if all the user
+        # passed it was Dimensions; we know better.
+        return result  # type: ignore
 
     def makePacker(self, name: str, dataId: ExpandedDataCoordinate) -> DimensionPacker:
         """Construct a `DimensionPacker` that can pack data ID dictionaries
@@ -211,7 +229,7 @@ class DimensionUniverse(DimensionGraph):
         return math.ceil(len(self.dimensions)/8)
 
     @classmethod
-    def _unpickle(cls, version: bytes) -> DimensionUniverse:
+    def _unpickle(cls, version: int) -> DimensionUniverse:
         """Callable used for unpickling.
 
         For internal use only.
@@ -241,3 +259,9 @@ class DimensionUniverse(DimensionGraph):
     """The special skypix dimension that is used to relate all other spatial
     dimensions in the `Registry` database (`SkyPixDimension`).
     """
+
+    _cache: Dict[FrozenSet[str], DimensionGraph]
+
+    _packers: Dict[str, DimensionPackerFactory]
+
+    _version: int

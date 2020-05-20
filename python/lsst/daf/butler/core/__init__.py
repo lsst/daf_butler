@@ -18,8 +18,8 @@ from .fileTemplates import *
 from .formatter import *
 from .location import *
 from .mappingFactory import *
+from .named import *
 from .quantum import *
-from .regions import *
 from .storageClass import *
 from .storedFileInfo import *
 from .dimensions import *

@@ -36,7 +36,7 @@ It also categorizes those dimensions into `~DimensionGraph.required` and `~Dimen
 `DimensionGraph` also guarantees a deterministic and topological sort order for its elements.
 
 Because `Dimension` instances have a `~Dimension.name` attribute, we typically
-use `~lsst.daf.butler.core.utils.NamedValueSet` and `~lsst.daf.butler.core.utils.NamedKeyDict` as containers when immutability is needed or the guarantees of `DimensionGraph`.
+use `~lsst.daf.butler.NamedValueSet` and `~lsst.daf.butler.NamedKeyDict` as containers when immutability is needed or the guarantees of `DimensionGraph`.
 This allows the string names of dimensions to be used as well in most places where `Dimension` instances are expected.
 
 The complete set of all compatible dimensions is held by a special subclass of `DimensionGraph`, `DimensionUniverse`.

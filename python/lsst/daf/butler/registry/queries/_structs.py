@@ -34,10 +34,11 @@ from ...core import (
     DimensionGraph,
     DimensionUniverse,
     ExpandedDataCoordinate,
+    NamedKeyDict,
+    NamedValueSet,
     SkyPixDimension,
     Timespan,
 )
-from ...core.utils import NamedValueSet, NamedKeyDict
 from .exprParser import Node, ParserYacc
 
 

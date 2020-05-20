@@ -2,7 +2,6 @@ setupRequired(sphgeom)
 setupRequired(sconsUtils)
 setupRequired(utils)
 setupRequired(astro_metadata_translator)
-setupRequired(geom)
 setupRequired(afw)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)

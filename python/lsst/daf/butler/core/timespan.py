@@ -34,17 +34,21 @@ TIMESPAN_MAX = time_utils.MAX_TIME
 T = TypeVar("T")
 
 
-class Timespan(Generic[T], tuple):
+class BaseTimespan(Generic[T], tuple):
     """A generic 2-element named tuple for time intervals.
+
+    For cases where either or both bounds may be `None` to represent
+    infinite, the `Timespan` specialization should be preferred over using
+    this class directly.
 
     Parameters
     ----------
-    begin : ``T``, optional
+    begin : ``T``
         Minimum timestamp in the interval (inclusive).  `None` is interpreted
-        as -infinity.
-    end : ``T``, optional
+        as -infinity (if allowed by ``T``).
+    end : ``T``
         Maximum timestamp in the interval (inclusive).  `None` is interpreted
-        as +infinity.
+        as +infinity (if allowed by ``T``).
 
     Notes
     -----
@@ -58,10 +62,39 @@ class Timespan(Generic[T], tuple):
     so neither can be used here (but also wouldn't add much even if they
     could).
     """
-    def __new__(cls, begin: Optional[T], end: Optional[T]):
+
+    def __new__(cls, begin: T, end: T) -> BaseTimespan:
         return tuple.__new__(cls, (begin, end))
 
-    def overlaps(self, other, ops=operator) -> Any:
+    @property
+    def begin(self) -> T:
+        """Minimum timestamp in the interval (inclusive).
+
+        `None` should be interpreted as -infinity.
+        """
+        return self[0]
+
+    @property
+    def end(self) -> T:
+        """Maximum timestamp in the interval (inclusive).
+
+        `None` should be interpreted as +infinity.
+        """
+        return self[1]
+
+    def __getnewargs__(self) -> tuple:
+        return (self.begin, self.end)
+
+
+class Timespan(BaseTimespan[Optional[T]]):
+    """A generic 2-element named tuple for time intervals.
+
+    `Timespan` explicitly marks both its start and end bounds as possibly
+    `None` (signifying infinite bounds), and provides operations that take
+    that into account.
+    """
+
+    def overlaps(self, other: Timespan[Any], ops: Any = operator) -> Any:
         """Test whether this timespan overlaps another.
 
         Parameters
@@ -84,12 +117,24 @@ class Timespan(Generic[T], tuple):
             be a `bool`.  If ``ops`` is `sqlachemy.sql`, it will be a boolean
             column expression.
         """
+        # Silence flake8 below because we use "== None" to invoke SQLAlchemy
+        # operator overloads.
+        # Silence mypy below because this whole method is very much dynamically
+        # typed.
         return ops.and_(
-            ops.or_(self.end == None, other.begin == None, self.end >= other.begin),  # noqa: E711
-            ops.or_(self.begin == None, other.end == None, other.end >= self.begin),  # noqa: E711
+            ops.or_(
+                self.end == None,  # noqa: E711
+                other.begin == None,  # noqa: E711
+                self.end >= other.begin,  # type: ignore
+            ),
+            ops.or_(
+                self.begin == None,  # noqa: E711
+                other.end == None,  # noqa: E711
+                other.end >= self.begin,  # type: ignore
+            ),
         )
 
-    def intersection(*args) -> Optional[Timespan]:
+    def intersection(*args: Timespan[Any]) -> Optional[Timespan]:
         """Return a new `Timespan` that is contained by all of the given ones.
 
         Parameters
@@ -131,29 +176,10 @@ class Timespan(Generic[T], tuple):
                 return None
             return Timespan(begin=begin, end=end)
 
-    @property
-    def begin(self) -> Optional[T]:
-        """Minimum timestamp in the interval (inclusive).
-
-        `None` should be interpreted as -infinity.
-        """
-        return self[0]
-
-    @property
-    def end(self) -> T:
-        """Maximum timestamp in the interval (inclusive).
-
-        `None` should be interpreted as +infinity.
-        """
-        return self[1]
-
-    def __getnewargs__(self) -> tuple:
-        return (self.begin, self.end)
-
 
 # For timestamps we use Unix time in nanoseconds in TAI scale which need
 # 64-bit integer,
-TIMESPAN_FIELD_SPECS = Timespan(
+TIMESPAN_FIELD_SPECS: BaseTimespan[ddl.FieldSpec] = BaseTimespan(
     begin=ddl.FieldSpec(name="datetime_begin", dtype=ddl.AstropyTimeNsecTai),
     end=ddl.FieldSpec(name="datetime_end", dtype=ddl.AstropyTimeNsecTai),
 )

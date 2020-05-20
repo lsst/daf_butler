@@ -763,20 +763,7 @@ class Config(collections.abc.MutableMapping):
         output
             The YAML stream to use for output.
         """
-        # First a set of known keys is handled and written to the stream in a
-        # specific order for readability.
-        # After the expected/ordered keys are weritten to the stream the
-        # remainder of the keys are written to the stream.
-        data = copy.copy(self._data)
-        keys = []
-        for key in keys:
-            try:
-                yaml.safe_dump({key: data.pop(key)}, output, default_flow_style=False)
-                output.write("\n")
-            except KeyError:
-                pass
-        if data:
-            yaml.safe_dump(data, output, default_flow_style=False)
+        yaml.safe_dump(self._data, output, default_flow_style=False)
 
     def dumpToUri(self, uri, updateFile=True, defaultFileName="butler.yaml",
                   overwrite=True):

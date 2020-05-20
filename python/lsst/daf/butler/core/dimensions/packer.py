@@ -25,7 +25,7 @@ from __future__ import annotations
 __all__ = ("DimensionPacker",)
 
 from abc import ABCMeta, abstractmethod
-from typing import TYPE_CHECKING
+from typing import Any, Optional, Tuple, Type, TYPE_CHECKING, Union
 
 from lsst.utils import doImport
 
@@ -92,7 +92,8 @@ class DimensionPacker(metaclass=ABCMeta):
         """
         raise NotImplementedError()
 
-    def pack(self, dataId: DataId, *, returnMaxBits: bool = False, **kwds) -> int:
+    def pack(self, dataId: DataId, *, returnMaxBits: bool = False,
+             **kwargs: Any) -> Union[Tuple[int, int], int]:
         """Pack the given data ID into a single integer.
 
         Parameters
@@ -103,7 +104,7 @@ class DimensionPacker(metaclass=ABCMeta):
             passed at construction.
         returnMaxBits : `bool`
             If `True`, return a tuple of ``(packed, self.maxBits)``.
-        kwds
+        **kwargs
             Additional keyword arguments forwarded to
             `DataCoordinate.standardize`.
 
@@ -120,7 +121,7 @@ class DimensionPacker(metaclass=ABCMeta):
         Should not be overridden by derived class
         (`~DimensionPacker._pack` should be overridden instead).
         """
-        dataId = DataCoordinate.standardize(dataId, **kwds)
+        dataId = DataCoordinate.standardize(dataId, **kwargs)
         packed = self._pack(dataId)
         if returnMaxBits:
             return packed, self.maxBits
@@ -174,10 +175,10 @@ class DimensionPackerFactory:
         self.fixed = fixed
         self.dimensions = dimensions
         self._clsName = clsName
-        self._cls = None
+        self._cls: Optional[Type[DimensionPacker]] = None
 
     @classmethod
-    def fromConfig(cls, universe: DimensionUniverse, config: Config):
+    def fromConfig(cls, universe: DimensionUniverse, config: Config) -> DimensionPackerFactory:
         """Construct a `DimensionPackerFactory` from a piece of dimension
         configuration.
 
@@ -212,9 +213,9 @@ class DimensionPackerFactory:
     # Class attributes below are shadowed by instance attributes, and are
     # present just to hold the docstrings for those instance attributes.
 
-    fixed: ExpandedDataCoordinate
+    fixed: DimensionGraph
     """The dimensions provided to new packers at construction
-    (`ExpandedDataCoordinate`)
+    (`DimensionGraph`)
 
     The packed ID values are only unique and reversible with these
     dimensions held fixed.

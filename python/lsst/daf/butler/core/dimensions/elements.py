@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ["DimensionElement", "Dimension", "SkyPixDimension"]
 
 from typing import (
+    Any,
     AbstractSet,
     Dict,
     Iterable,
@@ -35,13 +36,13 @@ from typing import (
 from sqlalchemy import Integer
 
 from lsst.sphgeom import Pixelization
-from ..utils import NamedValueSet, immutable
+from ..utils import immutable
+from ..named import NamedValueSet
 from .. import ddl
-from .records import _subclassDimensionRecord
-from .graph import DimensionGraph
 
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .universe import DimensionUniverse
+    from .graph import DimensionGraph
 
 
 class RelatedDimensions:
@@ -81,7 +82,7 @@ class RelatedDimensions:
 
     __slots__ = ("required", "implied", "spatial", "temporal", "dependencies")
 
-    def expand(self, universe: DimensionUniverse):
+    def expand(self, universe: DimensionUniverse) -> None:
         """Expand ``required`` and ``dependencies`` recursively.
 
         Parameters
@@ -188,7 +189,7 @@ class DimensionElement:
         self.viewOf = viewOf
         self.alwaysJoin = alwaysJoin
 
-    def _finish(self, universe: DimensionUniverse, elementsToDo: Dict[str, DimensionElement]):
+    def _finish(self, universe: DimensionUniverse, elementsToDo: Dict[str, DimensionElement]) -> None:
         """Finish construction of the element and add it to the given universe.
 
         For internal use by `DimensionUniverse` only.
@@ -237,9 +238,10 @@ class DimensionElement:
         self._attachGraph()
         # Create and attach a DimensionRecord subclass to hold values of this
         # dimension type.
+        from .records import _subclassDimensionRecord
         self.RecordClass = _subclassDimensionRecord(self)
 
-    def _attachToUniverse(self, universe: DimensionUniverse):
+    def _attachToUniverse(self, universe: DimensionUniverse) -> None:
         """Add the element to the given universe.
 
         Called only by `_finish`, but may be overridden by subclasses.
@@ -247,7 +249,7 @@ class DimensionElement:
         self.universe = universe
         self.universe.elements.add(self)
 
-    def _attachGraph(self):
+    def _attachGraph(self) -> None:
         """Initialize the `graph` attribute for this element.
 
         Called only by `_finish`, but may be overridden by subclasses.
@@ -255,7 +257,7 @@ class DimensionElement:
         from .graph import DimensionGraph
         self.graph = DimensionGraph(self.universe, names=self._related.dependencies, conform=False)
 
-    def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]):
+    def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]) -> bool:
         """Return `True` if this element should be included in `DimensionGraph`
         that includes the named dimensions.
 
@@ -269,7 +271,7 @@ class DimensionElement:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({self.name})"
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         try:
             return self.name == other.name
         except AttributeError:
@@ -278,25 +280,25 @@ class DimensionElement:
     def __hash__(self) -> int:
         return hash(self.name)
 
-    def __lt__(self, other) -> bool:
+    def __lt__(self, other: DimensionElement) -> bool:
         try:
             return self.universe._elementIndices[self] < self.universe._elementIndices[other]
         except KeyError:
             return NotImplemented
 
-    def __le__(self, other) -> bool:
+    def __le__(self, other: DimensionElement) -> bool:
         try:
             return self.universe._elementIndices[self] <= self.universe._elementIndices[other]
         except KeyError:
             return NotImplemented
 
-    def __gt__(self, other) -> bool:
+    def __gt__(self, other: DimensionElement) -> bool:
         try:
             return self.universe._elementIndices[self] > self.universe._elementIndices[other]
         except KeyError:
             return NotImplemented
 
-    def __ge__(self, other) -> bool:
+    def __ge__(self, other: DimensionElement) -> bool:
         try:
             return self.universe._elementIndices[self] >= self.universe._elementIndices[other]
         except KeyError:
@@ -430,27 +432,29 @@ class Dimension(DimensionElement):
         constructor.
     """
 
-    def __init__(self, name: str, *, related: RelatedDimensions, uniqueKeys: Iterable[ddl.FieldSpec], **kwds):
+    def __init__(self, name: str, *, related: RelatedDimensions, uniqueKeys: Iterable[ddl.FieldSpec],
+                 **kwargs: Any):
         related.required.add(name)
-        super().__init__(name, related=related, **kwds)
+        super().__init__(name, related=related, **kwargs)
         self.uniqueKeys = NamedValueSet(uniqueKeys)
         self.uniqueKeys.freeze()
         self.primaryKey, *alternateKeys = uniqueKeys
         self.alternateKeys = NamedValueSet(alternateKeys)
         self.alternateKeys.freeze()
 
-    def _attachToUniverse(self, universe: DimensionUniverse):
+    def _attachToUniverse(self, universe: DimensionUniverse) -> None:
         # Docstring inherited from DimensionElement._attachToUniverse.
         super()._attachToUniverse(universe)
         universe.dimensions.add(self)
 
-    def _attachGraph(self):
+    def _attachGraph(self) -> None:
         # Docstring inherited from DimensionElement._attachGraph.
+        from .graph import DimensionGraph
         self.graph = DimensionGraph(self.universe,
                                     names=self._related.dependencies.union([self.name]),
                                     conform=False)
 
-    def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]):
+    def _shouldBeInGraph(self, dimensionNames: AbstractSet[str]) -> bool:
         # Docstring inherited from DimensionElement._shouldBeInGraph.
         return self.name in dimensionNames
 
@@ -499,7 +503,7 @@ class SkyPixDimension(Dimension):
     """
 
     def __init__(self, name: str, pixelization: Pixelization):
-        related = RelatedDimensions(required=set(), implied=set(), spatial=self)
+        related = RelatedDimensions(required=set(), implied=set(), spatial=name)
         uniqueKeys = [ddl.FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
         super().__init__(name, related=related, uniqueKeys=uniqueKeys)
         self.pixelization = pixelization

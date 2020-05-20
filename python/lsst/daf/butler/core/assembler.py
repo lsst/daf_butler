@@ -21,33 +21,40 @@
 
 """Support for reading and writing composite objects."""
 
+from __future__ import annotations
+
 __all__ = ("DatasetComponent", "CompositeAssembler")
 
 import collections
+from dataclasses import dataclass
 import logging
+from typing import (
+    Any,
+    TYPE_CHECKING,
+)
+
+if TYPE_CHECKING:
+    from .storageClass import StorageClass
 
 log = logging.getLogger(__name__)
 
 
+@dataclass
 class DatasetComponent:
-
     """Component of a dataset and associated information.
-
-    Parameters
-    ----------
-    name : `str`
-        Name of the component.
-    storageClass : `StorageClass`
-        StorageClass to be used when reading or writing this component.
-    component : `object`
-        Component extracted from the composite object.
-
     """
 
-    def __init__(self, name, storageClass, component):
-        self.name = name
-        self.storageClass = storageClass
-        self.component = component
+    name: str
+    """Name of the component.
+    """
+
+    storageClass: StorageClass
+    """StorageClass to be used when reading or writing this component.
+    """
+
+    component: Any
+    """Component extracted from the composite object.
+    """
 
 
 class CompositeAssembler:

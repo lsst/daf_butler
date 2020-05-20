@@ -74,7 +74,7 @@ from lsst.daf.butler.registry.interfaces import (
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
-from lsst.daf.butler.core.utils import getInstanceOf, NamedValueSet, getClassOf, transactional
+from lsst.daf.butler.core.utils import getInstanceOf, getClassOf, transactional
 from .genericDatastore import GenericBaseDatastore
 
 if TYPE_CHECKING:
@@ -204,7 +204,7 @@ class FileLikeDatastore(GenericBaseDatastore):
     @classmethod
     def makeTableSpec(cls) -> ddl.TableSpec:
         return ddl.TableSpec(
-            fields=NamedValueSet([
+            fields=[
                 ddl.FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
                 ddl.FieldSpec(name="path", dtype=String, length=256, nullable=False),
                 ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
@@ -214,8 +214,8 @@ class FileLikeDatastore(GenericBaseDatastore):
                 # TODO: should checksum be Base64Bytes instead?
                 ddl.FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
                 ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),
-            ]),
-            unique=frozenset(),  # type: ignore
+            ],
+            unique=frozenset(),
         )
 
     def __init__(self, config: Union[DatastoreConfig, str],
@@ -720,6 +720,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if dataset.formatter is None:
                 dataset.formatter = self.formatterFactory.getFormatterClass(dataset.refs[0])
             else:
+                assert isinstance(dataset.formatter, (type, str))
                 dataset.formatter = getClassOf(dataset.formatter)
             dataset.path = self._standardizeIngestPath(dataset.path, transfer=transfer)
             filtered.append(dataset)

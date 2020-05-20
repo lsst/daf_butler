@@ -25,8 +25,7 @@ __all__ = ()  # all symbols intentionally private; for internal package use.
 
 from sqlalchemy.sql import not_, or_, and_, literal, FromClause
 
-from ...core.utils import NamedValueSet, NamedKeyDict
-from ...core import DimensionUniverse, Dimension, DimensionElement
+from ...core import DimensionUniverse, Dimension, DimensionElement, NamedKeyDict, NamedValueSet
 from .exprParser import TreeVisitor
 from ._structs import QueryColumns
 

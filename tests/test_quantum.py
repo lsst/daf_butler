@@ -22,8 +22,7 @@
 import unittest
 import astropy.time
 
-from lsst.daf.butler import Quantum, DimensionUniverse, StorageClass, DatasetType, DatasetRef
-from lsst.daf.butler.core.utils import NamedKeyDict
+from lsst.daf.butler import Quantum, DimensionUniverse, NamedKeyDict, StorageClass, DatasetType, DatasetRef
 
 """Tests for Quantum.
 """

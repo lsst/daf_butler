@@ -24,8 +24,14 @@ import copy
 import pickle
 import itertools
 
-from lsst.daf.butler.core.utils import NamedKeyDict, NamedValueSet
-from lsst.daf.butler import Dimension, DimensionGraph, DimensionUniverse, makeDimensionElementTableSpec
+from lsst.daf.butler import (
+    Dimension,
+    DimensionGraph,
+    DimensionUniverse,
+    makeDimensionElementTableSpec,
+    NamedKeyDict,
+    NamedValueSet,
+)
 
 
 class DimensionTestCase(unittest.TestCase):
