@@ -23,7 +23,6 @@ import unittest
 
 try:
     import boto3
-    import botocore
     from moto import mock_s3
 except ImportError:
     boto3 = None

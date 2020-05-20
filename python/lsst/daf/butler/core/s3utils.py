@@ -31,7 +31,7 @@ from .location import ButlerURI, Location
 def getClient():
     """Return a s3 client
 
-    Check if the crendentials key is set in the env, and connect to the S3 client
+    Look for the crendentials in the env, and connect to the S3 client
     with the default AWS or the Google Cloud Storage endpoint
     """
     endpoint = None

@@ -25,7 +25,6 @@ from __future__ import annotations
 
 __all__ = ("S3Datastore", )
 
-import boto3
 import logging
 import os
 import pathlib
@@ -283,7 +282,7 @@ class S3Datastore(FileLikeDatastore):
                 tgtLocation = self.locationFactory.fromPath(tgtPathInStore)
                 with open(srcUri.ospath, 'rb') as f:
                     self.client.put_object(Bucket=tgtLocation.netloc,
-                                            Key=tgtLocation.relativeToPathRoot, Body=f)
+                                           Key=tgtLocation.relativeToPathRoot, Body=f)
                 if transfer == "move":
                     os.remove(srcUri.ospath)
             elif srcUri.scheme == "s3":
