@@ -30,15 +30,19 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from typing import (
-    TYPE_CHECKING,
+    Any,
     Callable,
+    Dict,
     IO,
     Iterable,
     List,
     Mapping,
+    MutableMapping,
     Optional,
     Set,
     Tuple,
+    Type,
+    TYPE_CHECKING,
     Union,
 )
 from collections import defaultdict
@@ -53,7 +57,7 @@ from .utils import iterable
 from .named import NamedValueSet
 
 if TYPE_CHECKING:
-    from .dimensions import DimensionElement, DimensionRecord, ExpandedDataCoordinate
+    from .dimensions import DataCoordinate, DimensionElement, DimensionRecord, ExpandedDataCoordinate
     from ..registry import Registry
     from .datastore import Datastore
     from .formatter import FormatterParameter
@@ -150,10 +154,10 @@ class RepoExport:
                                  if element.hasTable() and element.viewOf is None)
         else:
             elements = frozenset(elements)
-        records = defaultdict(dict)
+        records: MutableMapping[DimensionElement, Dict[DataCoordinate, DimensionRecord]] = defaultdict(dict)
         for dataId in dataIds:
             for record in dataId.records.values():
-                if record.definition in elements:
+                if record is not None and record.definition in elements:
                     records[record.definition].setdefault(record.dataId, record)
         for element in self._registry.dimensions.sorted(records.keys()):
             self._backend.saveDimensionData(element, *records[element].values())
@@ -171,7 +175,8 @@ class RepoExport:
         refs : iterable of `DatasetRef`
             References to the datasets to export.  Their `DatasetRef.id`
             attributes must not be `None`.  Duplicates are automatically
-            ignored.
+            ignored.  Nested data IDs must be `ExpandedDataCoordinate`
+            instances.
         elements : iterable of `DimensionElement`, optional
             Dimension elements whose records should be exported; this is
             forwarded to `saveDataIds` when exporting the data IDs of the
@@ -197,15 +202,16 @@ class RepoExport:
             # convenience.
             if ref.id in self._dataset_ids:
                 continue
-            dataIds.add(ref.dataId)
+            dataIds.add(self._registry.expandDataId(ref.dataId))
             # `exports` is a single-element list here, because we anticipate
             # a future where more than just Datastore.export has a vectorized
             # API and we can pull this out of the loop.
             exports = self._datastore.export([ref], directory=self._directory, transfer=self._transfer)
             if rewrite is not None:
                 exports = [rewrite(export) for export in exports]
+            self._dataset_ids.add(ref.getCheckedId())
+            assert ref.run is not None
             datasets[ref.datasetType, ref.run].extend(exports)
-            self._dataset_ids.add(ref.id)
         self.saveDataIds(dataIds, elements=elements)
         for (datasetType, run), records in datasets.items():
             self._backend.saveDatasets(datasetType, run, *records)
@@ -236,8 +242,7 @@ class RepoExportBackend(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset,
-                     collections: Iterable[str] = ()) -> None:
+    def saveDatasets(self, datasetType: DatasetType, run: str, *datasets: FileDataset) -> None:
         """Export one or more datasets, including their associated DatasetType
         and run information (but not including associated dimension
         information).
@@ -251,9 +256,6 @@ class RepoExportBackend(ABC):
         datasets : `FileDataset`, variadic
             Per-dataset information to be exported.  `FileDataset.formatter`
             attributes should be strings, not `Formatter` instances or classes.
-        collections : iterable of `str`
-            Extra collections (in addition to ``run``) the dataset
-            should be associated with.
         """
         raise NotImplementedError()
 
@@ -314,7 +316,7 @@ class YamlRepoExportBackend(RepoExportBackend):
 
     def __init__(self, stream: IO):
         self.stream = stream
-        self.data = []
+        self.data: List[Dict[str, Any]] = []
 
     def saveDimensionData(self, element: DimensionElement, *data: DimensionRecord) -> None:
         # Docstring inherited from RepoExportBackend.saveDimensionData.
@@ -407,7 +409,10 @@ class YamlRepoImportBackend(RepoImportBackend):
                         if isinstance(record[key], datetime):
                             record[key] = astropy.time.Time(record[key], scale="utc")
                 element = self.registry.dimensions[data["element"]]
-                self.dimensions[element].extend(element.RecordClass.fromDict(r) for r in data["records"])
+                RecordClass: Type[DimensionRecord] = element.RecordClass
+                self.dimensions[element].extend(
+                    RecordClass.fromDict(r) for r in data["records"]
+                )
             elif data["type"] == "run":
                 self.runs.append(data["name"])
             elif data["type"] == "dataset_type":
@@ -450,8 +455,8 @@ class YamlRepoImportBackend(RepoImportBackend):
     def load(self, datastore: Optional[Datastore], *,
              directory: Optional[str] = None, transfer: Optional[str] = None) -> None:
         # Docstring inherited from RepoImportBackend.load.
-        for element, records in self.dimensions.items():
-            self.registry.insertDimensionData(element, *records)
+        for element, dimensionRecords in self.dimensions.items():
+            self.registry.insertDimensionData(element, *dimensionRecords)
         # Mapping from collection name to list of DatasetRefs to associate.
         collections = defaultdict(list)
         # FileDatasets to ingest into the datastore (in bulk):
@@ -461,7 +466,7 @@ class YamlRepoImportBackend(RepoImportBackend):
             # Make a big flattened list of all data IDs, while remembering
             # slices that associate them with the FileDataset instances they
             # came from.
-            dataIds = []
+            dataIds: List[DataCoordinate] = []
             slices = []
             for fileDataset, _ in records:
                 start = len(dataIds)
