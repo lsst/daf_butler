@@ -29,7 +29,7 @@ import unittest
 from lsst.daf.butler.cli.opt import dataset_type_option
 
 
-class DatasetTypeSuite(unittest.TestCase):
+class DatasetTypeTestCase(unittest.TestCase):
 
     @staticmethod
     @click.command()
@@ -40,35 +40,35 @@ class DatasetTypeSuite(unittest.TestCase):
     def test_single(self):
         """test a single argument"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one"])
+        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one']")
 
     def test_multiple(self):
         """test multiple arguments, using the long and short option names"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one", "-d", "two"])
+        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one", "-d", "two"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two']")
 
     def test_singlePair(self):
         """test a single comma-separated value pair"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one,two"])
+        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one,two"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two']")
 
     def test_multiplePair(self):
         """test multiple comma-separated value pairs"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeSuite.cli, ["--dataset-type", "one,two", "-d", "three,four"])
+        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one,two", "-d", "three,four"])
         self.assertEqual(result.exit_code, 0)
         self.assertEqual(result.stdout, "['one', 'two', 'three', 'four']")
 
     def test_help(self):
         """test capture of the help text"""
         runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeSuite.cli, ["--help"])
+        result = runner.invoke(DatasetTypeTestCase.cli, ["--help"])
         self.assertEqual(result.exit_code, 0)
         self.assertIn("the dataset type", result.stdout)
 
