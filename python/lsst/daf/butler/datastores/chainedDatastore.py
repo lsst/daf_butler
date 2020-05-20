@@ -518,13 +518,16 @@ class ChainedDatastore(Datastore):
         ------
         FileNotFoundError
             A URI has been requested for a dataset that does not exist and
-            guessing is not allowed.  Can also raise if the dataset is
-            present but it has been disassembled into multiple artifacts.
+            guessing is not allowed.
+        RuntimeError
+            Raised if a request is made for a single URI but multiple URIs
+            are associated with this dataset.
         """
         log.debug("Requesting URI for %s", ref)
-        primary, _ = self.getURIs(ref, predict)
-        if primary is None:
-            raise FileNotFoundError(f"Found dataset but no single URI possible for {ref}")
+        primary, components = self.getURIs(ref, predict)
+        if primary is None or components:
+            raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
+                               "Use Dataastore.getURIs() instead.")
         return primary
 
     def remove(self, ref: DatasetRef) -> None:

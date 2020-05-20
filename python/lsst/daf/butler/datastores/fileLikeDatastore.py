@@ -914,19 +914,22 @@ class FileLikeDatastore(GenericBaseDatastore):
         Raises
         ------
         FileNotFoundError
-            A URI has been requested for a dataset that does not exist and
-            guessing is not allowed. Can also raise if the dataset is
-            present but it has been disassembled into multiple artifacts.
+            Raised if a URI has been requested for a dataset that does not
+            exist and guessing is not allowed.
+        RuntimeError
+            Raised if a request is made for a single URI but multiple URIs
+            are associated with this dataset.
 
         Notes
         -----
         When a predicted URI is requested an attempt will be made to form
         a reasonable URI based on file templates and the expected formatter.
         """
-        uri, components = self.getURIs(ref, predict)
-        if uri is None:
-            raise FileNotFoundError(f"Found dataset but no single URI possible for {ref}")
-        return uri
+        primary, components = self.getURIs(ref, predict)
+        if primary is None or components:
+            raise RuntimeError(f"Dataset ({ref}) includes distinct URIs for components. "
+                               "Use Dataastore.getURIs() instead.")
+        return primary
 
     def get(self, ref: DatasetRef, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Load an InMemoryDataset from the store.

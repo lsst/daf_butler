@@ -930,11 +930,16 @@ class Butler:
             differs from the one found in the registry.
         TypeError
             Raised if no collections were provided.
+        RuntimeError
+            Raised if a URI is requested for a dataset that consists of
+            multiple artifacts.
         """
-        primary, _ = self.getURIs(datasetRefOrType, dataId=dataId, predict=predict,
-                                  collections=collections, run=run, **kwds)
-        if primary is None:
-            raise RuntimeError(f"Found dataset but no single URI retrieved for it {datasetRefOrType}")
+        primary, components = self.getURIs(datasetRefOrType, dataId=dataId, predict=predict,
+                                           collections=collections, run=run, **kwds)
+
+        if primary is None or components:
+            raise RuntimeError(f"Dataset ({datasetRefOrType}) includes distinct URIs for components. "
+                               "Use Butler.getURIs() instead.")
         return primary
 
     def datasetExists(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],

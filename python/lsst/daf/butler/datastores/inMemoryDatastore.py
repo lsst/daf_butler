@@ -437,12 +437,15 @@ class InMemoryDatastore(GenericBaseDatastore):
         FileNotFoundError
             A URI has been requested for a dataset that does not exist and
             guessing is not allowed.
-
+        AssertionError
+            Raised if an internal error occurs.
         """
-        uri, _ = self.getURIs(ref, predict)
-        if uri is None:
-            raise RuntimeError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
-        return uri
+        primary, _ = self.getURIs(ref, predict)
+        if primary is None:
+            # This should be impossible since this datastore does
+            # not disassemble. This check also helps mypy.
+            raise AssertionError(f"Unexpectedly got no URI for in-memory datastore for {ref}")
+        return primary
 
     def trash(self, ref: DatasetRef, ignore_errors: bool = False) -> None:
         """Indicate to the Datastore that a dataset can be removed.
