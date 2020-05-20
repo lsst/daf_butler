@@ -32,6 +32,7 @@ from typing import Optional
 
 from ...core import (
     DataCoordinate,
+    DatasetRef,
     DatasetType,
     DimensionGraph,
     NamedValueSet,
@@ -455,6 +456,52 @@ class RegistryTests(ABC):
         self.assertEqual(
             {"permabias.wcs"},
             NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=True)).names
+        )
+
+    def testComponentLookups(self):
+        """Test searching for component datasets via their parents.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Test getting the child dataset type (which does still exist in the
+        # Registry), and check for consistency with
+        # DatasetRef.makeComponentRef.
+        collection = "imported_g"
+        parentType = registry.getDatasetType("permabias")
+        childType = registry.getDatasetType("permabias.wcs")
+        parentRefResolved = registry.findDataset(parentType, collections=collection,
+                                                 instrument="Cam1", detector=1)
+        self.assertIsInstance(parentRefResolved, DatasetRef)
+        self.assertEqual(childType, parentRefResolved.makeComponentRef("wcs").datasetType)
+        # Search for a single dataset with findDataset.
+        childRef1 = registry.findDataset("permabias.wcs", collections=collection,
+                                         dataId=parentRefResolved.dataId)
+        self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
+        # Search for detector data IDs constrained by component dataset
+        # existence with queryDimensions.
+        dataIds = set(registry.queryDimensions(
+            ["detector"],
+            datasets=["permabias.wcs"],
+            collections=collection,
+            expand=False,
+        ))
+        self.assertEqual(
+            dataIds,
+            {
+                DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
+                for d in (1, 2, 3)
+            }
+        )
+        # Search for multiple datasets of a single type with queryDatasets.
+        childRefs2 = set(registry.queryDatasets(
+            "permabias.wcs",
+            collections=collection,
+            expand=False,
+        ))
+        self.assertEqual(
+            {ref.unresolved() for ref in childRefs2},
+            {DatasetRef(childType, dataId) for dataId in dataIds}
         )
 
     def testCollections(self):

@@ -26,11 +26,13 @@ __all__ = (
     "Registry",
 )
 
+from collections import defaultdict
 import contextlib
 from dataclasses import dataclass
 import sys
 from typing import (
     Any,
+    Dict,
     Iterable,
     Iterator,
     List,
@@ -1135,6 +1137,7 @@ class Registry:
                         collections: Any = None,
                         where: Optional[str] = None,
                         expand: bool = True,
+                        components: Optional[bool] = None,
                         **kwds) -> Iterator[DataCoordinate]:
         """Query for and iterate over data IDs matching user-provided criteria.
 
@@ -1173,6 +1176,13 @@ class Registry:
         expand : `bool`, optional
             If `True` (default) yield `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
+        components : `bool`, optional
+            If `True`, apply all dataset expression patterns to component
+            dataset type names as well.  If `False`, never apply patterns to
+            components.  If `None` (default), apply patterns to components only
+            if their parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1187,14 +1197,21 @@ class Registry:
         """
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwds)
-        standardizedDatasetTypes = []
+        standardizedDatasetTypes = set()
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
         if datasets is not None:
             if collections is None:
                 raise TypeError("Cannot pass 'datasets' without 'collections'.")
-            for datasetType in self.queryDatasetTypes(datasets):
+            for datasetType in self.queryDatasetTypes(datasets, components=components):
                 requestedDimensionNames.update(datasetType.dimensions.names)
-                standardizedDatasetTypes.append(datasetType)
+                # If any matched dataset type is a component, just operate on
+                # its parent instead, because Registry doesn't know anything
+                # about what components exist, and here (unlike queryDatasets)
+                # we don't care about returning them.
+                parentDatasetTypeName, componentName = datasetType.nameAndComponent()
+                if componentName is not None:
+                    datasetType = self.getDatasetType(parentDatasetTypeName)
+                standardizedDatasetTypes.add(datasetType)
             # Preprocess collections expression in case the original included
             # single-pass iterators (we'll want to use it multiple times
             # below).
@@ -1225,6 +1242,7 @@ class Registry:
                       where: Optional[str] = None,
                       deduplicate: bool = False,
                       expand: bool = True,
+                      components: Optional[bool] = None,
                       **kwds) -> Iterator[DatasetRef]:
         """Query for and iterate over dataset references matching user-provided
         criteria.
@@ -1266,6 +1284,13 @@ class Registry:
         expand : `bool`, optional
             If `True` (default) attach `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
+        components : `bool`, optional
+            If `True`, apply all dataset expression patterns to component
+            dataset type names as well.  If `False`, never apply patterns to
+            components.  If `None` (default), apply patterns to components only
+            if their parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1304,15 +1329,54 @@ class Registry:
             collections = CollectionQuery.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwds)
-        # If the datasetType passed isn't actually a DatasetType, expand it
-        # (it could be an expression that yields multiple DatasetTypes) and
-        # recurse.
+
+        # We can only query directly if given a non-component DatasetType
+        # instance.  If we were given an expression or str or a component
+        # DatasetType instance, we'll populate this dict, recurse, and return.
+        # If we already have a non-component DatasetType, it will remain None
+        # and we'll run the query directly.
+        composition: Optional[
+            Dict[
+                DatasetType,  # parent dataset type
+                List[Optional[str]]  # component name, or None for parent
+            ]
+        ] = None
         if not isinstance(datasetType, DatasetType):
-            for trueDatasetType in self.queryDatasetTypes(datasetType):
-                yield from self.queryDatasets(trueDatasetType, collections=collections,
-                                              dimensions=dimensions, dataId=standardizedDataId,
-                                              where=where, deduplicate=deduplicate)
+            # We were given a dataset type expression (which may be as simple
+            # as a str).  Loop over all matching datasets, delegating handling
+            # of the `components` argument to queryDatasetTypes, as we populate
+            # the composition dict.
+            composition = defaultdict(list)
+            for trueDatasetType in self.queryDatasetTypes(datasetType, components=components):
+                parentName, componentName = trueDatasetType.nameAndComponent()
+                if componentName is not None:
+                    parentDatasetType = self.getDatasetType(parentName)
+                    composition.setdefault(parentDatasetType, []).append(componentName)
+                else:
+                    composition.setdefault(trueDatasetType, []).append(None)
+        elif datasetType.isComponent():
+            # We were given a true DatasetType instance, but it's a component.
+            # the composition dict will have exactly one item.
+            parentName, componentName = datasetType.nameAndComponent()
+            parentDatasetType = self.getDatasetType(parentName)
+            composition = {parentDatasetType: [componentName]}
+        if composition is not None:
+            # We need to recurse.  Do that once for each parent dataset type.
+            for parentDatasetType, componentNames in composition.items():
+                for parentRef in self.queryDatasets(parentDatasetType, collections=collections,
+                                                    dimensions=dimensions, dataId=standardizedDataId,
+                                                    where=where, deduplicate=deduplicate):
+                    # Loop over components, yielding one for each one for each
+                    # one requested.
+                    for componentName in componentNames:
+                        if componentName is None:
+                            yield parentRef
+                        else:
+                            yield parentRef.makeComponentRef(componentName)
             return
+        # If we get here, there's no need to recurse (or we are already
+        # recursing; there can only ever be one level of recursion).
+
         # The full set of dimensions in the query is the combination of those
         # needed for the DatasetType and those explicitly requested, if any.
         requestedDimensionNames = set(datasetType.dimensions.names)
