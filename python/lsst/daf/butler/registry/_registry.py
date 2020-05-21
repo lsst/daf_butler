@@ -1005,7 +1005,8 @@ class Registry:
         storage = self._dimensions[element]
         return storage.sync(record)
 
-    def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
+    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
+                          ) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
 
         Parameters
@@ -1016,6 +1017,13 @@ class Registry:
             `...` can be used to return all dataset types, and is the default.
             See :ref:`daf_butler_dataset_type_expressions` for more
             information.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.
+            If `None` (default), apply patterns to components only if their
+            parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
 
         Yields
         ------
@@ -1024,7 +1032,9 @@ class Registry:
         """
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
         if wildcard is ...:
-            yield from self._datasets
+            for datasetType in self._datasets:
+                if components or not datasetType.isComponent():
+                    yield datasetType
             return
         done = set()
         for name in wildcard.strings:
@@ -1033,10 +1043,25 @@ class Registry:
                 done.add(storage.datasetType)
                 yield storage.datasetType
         if wildcard.patterns:
+            # If components (the argument) is None, we'll save component
+            # dataset that we might want to match, but only if their parents
+            # didn't get included.
+            componentsForLater = []
             for datasetType in self._datasets:
                 if datasetType.name in done:
                     continue
+                parentName, componentName = datasetType.nameAndComponent()
+                if componentName is not None and not components:
+                    if components is None and parentName not in done:
+                        componentsForLater.append(datasetType)
+                    continue
                 if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
+                    done.add(datasetType.name)
+                    yield datasetType
+            # Go back and try to match saved components.
+            for datasetType in componentsForLater:
+                parentName, _ = datasetType.nameAndComponent()
+                if parentName not in done and any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
                     yield datasetType
 
     def queryCollections(self, expression: Any = ...,

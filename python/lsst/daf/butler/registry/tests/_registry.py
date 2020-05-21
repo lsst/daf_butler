@@ -24,6 +24,7 @@ __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
 import os
+import re
 
 import astropy.time
 import sqlalchemy
@@ -33,6 +34,7 @@ from ...core import (
     DataCoordinate,
     DatasetType,
     DimensionGraph,
+    NamedValueSet,
     StorageClass,
     ddl,
     YamlRepoImportBackend
@@ -404,6 +406,56 @@ class RegistryTests(ABC):
         # Check that requesting a non-existing dataId returns None
         nonExistingDataId = {"instrument": "Cam1", "detector": 3}
         self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collections=run))
+
+    def testDatasetTypeComponentQueries(self):
+        """Test component options when querying for dataset types.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Test querying for dataset types with different inputs.
+        # First query for all dataset types; components should only be included
+        # when components=True.
+        self.assertEqual(
+            {"permabias", "permaflat"},
+            NamedValueSet(registry.queryDatasetTypes()).names
+        )
+        self.assertEqual(
+            {"permabias", "permaflat"},
+            NamedValueSet(registry.queryDatasetTypes(components=False)).names
+        )
+        self.assertLess(
+            {"permabias", "permaflat", "permabias.wcs", "permaflat.photoCalib"},
+            NamedValueSet(registry.queryDatasetTypes(components=True)).names
+        )
+        # Use a pattern that can match either parent or components.  Again,
+        # components are only returned if components=True.
+        self.assertEqual(
+            {"permabias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"))).names
+        )
+        self.assertEqual(
+            {"permabias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=False)).names
+        )
+        self.assertLess(
+            {"permabias", "permabias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=True)).names
+        )
+        # This pattern matches only a component.  In this case we also return
+        # that component dataset type if components=None.
+        self.assertEqual(
+            {"permabias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"))).names
+        )
+        self.assertEqual(
+            set(),
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=False)).names
+        )
+        self.assertEqual(
+            {"permabias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=True)).names
+        )
 
     def testCollections(self):
         """Tests for registry methods that manage collections.
