@@ -24,11 +24,15 @@ import click
 
 
 class config_file_option:  # noqa: N801
-    def __init__(self, required=False, help=None):
+
+    defaultHelp = "The path to the config file."
+
+    def __init__(self, required=False, help=defaultHelp):
         self.required = required
+        self.help = help
 
     def __call__(self, f):
         return click.option("-C", "--config-file",
                             required=self.required,
                             type=click.STRING,
-                            help="The path to the config file.")(f)
+                            help=self.help)(f)
