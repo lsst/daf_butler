@@ -188,11 +188,13 @@ class DataCoordinate(IndexedTupleDict[Dimension, Any]):
             raise TypeError("Cannot compare DataCoordinate instances to other objects without potentially "
                             "misleading results.") from None
 
-    def __str__(self) -> str:
-        return f"{self.byName()}"
-
     def __repr__(self) -> str:
-        return f"DataCoordinate({self.graph}, {self.values()})"
+        # We can't make repr yield something that could be exec'd here without
+        # printing out the whole DimensionUniverse the graph is derived from.
+        # So we print something that mostly looks like a dict, but doesn't
+        # quote it's keys: that's both more compact and something that can't
+        # be mistaken for an actual dict or something that could be exec'd.
+        return "{{{}}}".format(', '.join(f"{k.name}: {v!r}" for k, v in self.items()))
 
     def fingerprint(self, update: Callable[[bytes], None]) -> None:
         """Update a secure hash function with the values in this data ID.
@@ -384,7 +386,10 @@ class ExpandedDataCoordinate(DataCoordinate):
         return self.full[key]
 
     def __repr__(self) -> str:
-        return f"ExpandedDataCoordinate({self.graph}, {self.values()})"
+        # See DataCoordinate.__repr__ comment for reasoning behind this form.
+        # The expanded version just includes key-value pairs for implied
+        # dimensions.
+        return "{{{}}}".format(', '.join(f"{k.name}: {v!r}" for k, v in self.full.items()))
 
     def pack(self, name: str, *, returnMaxBits: bool = False) -> Union[Tuple[int, int], int]:
         """Pack this data ID into an integer.

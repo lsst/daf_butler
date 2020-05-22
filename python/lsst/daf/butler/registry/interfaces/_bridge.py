@@ -26,9 +26,7 @@ from abc import ABC, abstractmethod
 from typing import (
     Any,
     ContextManager,
-    Dict,
     Iterable,
-    Iterator,
     Type,
     TYPE_CHECKING,
     Union,
@@ -83,61 +81,6 @@ class FakeDatasetRef:
     id: int
     """Unique integer that identifies this dataset.
     """
-
-    @property
-    def components(self) -> Dict[str, FakeDatasetRef]:
-        return {}
-
-    def allRefs(self, parents: bool = True) -> Iterator[FakeDatasetRef]:
-        """Return all the nested component `DatasetRef` and optionally the
-        parent.
-
-        Parameters
-        ----------
-        parents : `bool`, optional
-            If `True` (default) include the given datasets in the output
-            iterable.  If `False`, include only their components.  Since
-            a `FakeDatasetRef` never have components, setting this to
-            `False` will yield no results.
-
-        Yields
-        ------
-        ref : `FakeDatasetRef`
-            Since there are never components, this will either return
-            itself or no results (depending on the value of ``parents``).
-        """
-        # No components
-        yield self
-
-    @staticmethod
-    def flatten(refs: Iterable[FakeDatasetRef], *,
-                parents: bool = True) -> Iterator[FakeDatasetRef]:
-        """Recursively transform an iterable over `FakeDatasetRef` to include
-        nested component `FakeDatasetRef` instances.
-
-        Parameters
-        ----------
-        refs : `~collections.abc.Iterable` [ `FakeDatasetRef` ]
-            Input iterable to process.
-        parents : `bool`, optional
-            If `True` (default) include the given datasets in the output
-            iterable.  If `False`, include only their components, which
-            for `FakeDatasetRef` means no results.
-
-        Yields
-        ------
-        ref : `DatasetRef`
-            Either one of the given `FakeDatasetRef` instances (only if
-            ``parent`` is `True`) or one of its (recursive) children.
-
-        Notes
-        -----
-        If ``parents`` is `True`, components are guaranteed to be yielded
-        before their parents.
-        """
-        for ref in refs:
-            for subref in ref.allRefs(parents):
-                yield subref
 
     def getCheckedId(self) -> int:
         """Return ``self.id``.

@@ -24,6 +24,7 @@ __all__ = ["RegistryTests"]
 
 from abc import ABC, abstractmethod
 import os
+import re
 
 import astropy.time
 import sqlalchemy
@@ -31,8 +32,10 @@ from typing import Optional
 
 from ...core import (
     DataCoordinate,
+    DatasetRef,
     DatasetType,
     DimensionGraph,
+    NamedValueSet,
     StorageClass,
     ddl,
     YamlRepoImportBackend
@@ -376,31 +379,6 @@ class RegistryTests(ABC):
         registry.removeDatasets([ref])
         self.assertIsNone(registry.findDataset(datasetType, dataId, collections=[run]))
 
-    def testComponents(self):
-        """Tests for `Registry.attachComponents` and other dataset operations
-        on composite datasets.
-        """
-        registry = self.makeRegistry()
-        self.loadData(registry, "base.yaml")
-        run = "test"
-        registry.registerRun(run)
-        parentDatasetType = registry.getDatasetType("permabias")
-        childDatasetType1 = registry.getDatasetType("permabias.image")
-        childDatasetType2 = registry.getDatasetType("permabias.mask")
-        dataId = {"instrument": "Cam1", "detector": 2}
-        parent, = registry.insertDatasets(parentDatasetType, dataIds=[dataId], run=run)
-        children = {"image": registry.insertDatasets(childDatasetType1, dataIds=[dataId], run=run)[0],
-                    "mask": registry.insertDatasets(childDatasetType2, dataIds=[dataId], run=run)[0]}
-        parent = registry.attachComponents(parent, children)
-        self.assertEqual(parent.components, children)
-        outParent = registry.getDataset(parent.id)
-        self.assertEqual(outParent.components, children)
-        # Remove the parent; this should remove all children.
-        registry.removeDatasets([parent])
-        self.assertIsNone(registry.findDataset(parentDatasetType, dataId, collections=[run]))
-        self.assertIsNone(registry.findDataset(childDatasetType1, dataId, collections=[run]))
-        self.assertIsNone(registry.findDataset(childDatasetType2, dataId, collections=[run]))
-
     def testFindDataset(self):
         """Tests for `Registry.findDataset`.
         """
@@ -429,6 +407,102 @@ class RegistryTests(ABC):
         # Check that requesting a non-existing dataId returns None
         nonExistingDataId = {"instrument": "Cam1", "detector": 3}
         self.assertIsNone(registry.findDataset(datasetType, nonExistingDataId, collections=run))
+
+    def testDatasetTypeComponentQueries(self):
+        """Test component options when querying for dataset types.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Test querying for dataset types with different inputs.
+        # First query for all dataset types; components should only be included
+        # when components=True.
+        self.assertEqual(
+            {"permabias", "permaflat"},
+            NamedValueSet(registry.queryDatasetTypes()).names
+        )
+        self.assertEqual(
+            {"permabias", "permaflat"},
+            NamedValueSet(registry.queryDatasetTypes(components=False)).names
+        )
+        self.assertLess(
+            {"permabias", "permaflat", "permabias.wcs", "permaflat.photoCalib"},
+            NamedValueSet(registry.queryDatasetTypes(components=True)).names
+        )
+        # Use a pattern that can match either parent or components.  Again,
+        # components are only returned if components=True.
+        self.assertEqual(
+            {"permabias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"))).names
+        )
+        self.assertEqual(
+            {"permabias"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=False)).names
+        )
+        self.assertLess(
+            {"permabias", "permabias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(".+bias.*"), components=True)).names
+        )
+        # This pattern matches only a component.  In this case we also return
+        # that component dataset type if components=None.
+        self.assertEqual(
+            {"permabias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"))).names
+        )
+        self.assertEqual(
+            set(),
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=False)).names
+        )
+        self.assertEqual(
+            {"permabias.wcs"},
+            NamedValueSet(registry.queryDatasetTypes(re.compile(r".+bias\.wcs"), components=True)).names
+        )
+
+    def testComponentLookups(self):
+        """Test searching for component datasets via their parents.
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Test getting the child dataset type (which does still exist in the
+        # Registry), and check for consistency with
+        # DatasetRef.makeComponentRef.
+        collection = "imported_g"
+        parentType = registry.getDatasetType("permabias")
+        childType = registry.getDatasetType("permabias.wcs")
+        parentRefResolved = registry.findDataset(parentType, collections=collection,
+                                                 instrument="Cam1", detector=1)
+        self.assertIsInstance(parentRefResolved, DatasetRef)
+        self.assertEqual(childType, parentRefResolved.makeComponentRef("wcs").datasetType)
+        # Search for a single dataset with findDataset.
+        childRef1 = registry.findDataset("permabias.wcs", collections=collection,
+                                         dataId=parentRefResolved.dataId)
+        self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
+        # Search for detector data IDs constrained by component dataset
+        # existence with queryDimensions.
+        dataIds = set(registry.queryDimensions(
+            ["detector"],
+            datasets=["permabias.wcs"],
+            collections=collection,
+            expand=False,
+        ))
+        self.assertEqual(
+            dataIds,
+            {
+                DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
+                for d in (1, 2, 3)
+            }
+        )
+        # Search for multiple datasets of a single type with queryDatasets.
+        childRefs2 = set(registry.queryDatasets(
+            "permabias.wcs",
+            collections=collection,
+            expand=False,
+        ))
+        self.assertEqual(
+            {ref.unresolved() for ref in childRefs2},
+            {DatasetRef(childType, dataId) for dataId in dataIds}
+        )
 
     def testCollections(self):
         """Tests for registry methods that manage collections.

@@ -519,8 +519,7 @@ class InMemoryDatastore(GenericBaseDatastore):
                 # Determine whether all references to this dataset have been
                 # removed and we can delete the dataset itself
                 allRefs = self.related[realID]
-                theseRefs = {r.id for r in ref.allRefs()}
-                remainingRefs = allRefs - theseRefs
+                remainingRefs = allRefs - {ref.id}
                 if not remainingRefs:
                     log.debug("Removing artifact %s from datastore %s", realID, self.name)
                     del self.datasets[realID]

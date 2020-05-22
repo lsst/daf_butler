@@ -3,8 +3,6 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorageManager",)
 
 from typing import (
-    Dict,
-    Iterable,
     Iterator,
     Optional,
     Tuple,
@@ -173,44 +171,3 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             id=id,
             run=self._collections[row[self._collections.getRunForeignKeyName()]].name
         )
-
-    def attachComponents(self, composites: Iterable[Tuple[DatasetRef, Dict[str, DatasetRef]]]
-                         ) -> Iterator[DatasetRef]:
-        # Docstring inherited from DatasetRecordStorageManager.
-        rows = []
-        results = []
-        for parentRef, components in composites:
-            rows.extend(
-                {
-                    "component_name": componentName,
-                    "component_dataset_id": componentRef.getCheckedId(),
-                    "parent_dataset_id": parentRef.getCheckedId(),
-                    "simple": (parentRef.dataId == componentRef.dataId and parentRef.run == componentRef.run)
-                }
-                for componentName, componentRef in components.items()
-            )
-            results.append(parentRef.resolved(parentRef.id, parentRef.run, components=components))
-        self._db.insert(self._static.dataset_composition, *rows)
-        yield from results
-
-    def fetchComponents(self, ref: DatasetRef) -> DatasetRef:
-        # Docstring inherited from DatasetRecordStorageManager.
-        sql = sqlalchemy.sql.select(
-            [
-                self._static.dataset_composition.columns.component_dataset_id.label("id"),
-                self._static.dataset_composition.columns.component_name.label("name"),
-                self._static.dataset_composition.columns.simple.label("simple"),
-            ]
-        ).select_from(
-            self._static.dataset_composition
-        ).where(
-            self._static.dataset_composition.columns.parent_dataset_id == ref.getCheckedId()
-        )
-        components = {}
-        for row in self._db.query(sql).fetchall():
-            if row["simple"]:
-                datasetType = ref.datasetType.makeComponentDatasetType(row["name"])
-                components[row["name"]] = DatasetRef(datasetType, ref.dataId, id=row["id"], run=ref.run)
-            else:
-                components[row["name"]] = self.getDatasetRef(row["id"])
-        return ref.resolved(id=ref.id, run=ref.run, components=components)

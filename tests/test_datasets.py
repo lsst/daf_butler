@@ -221,42 +221,23 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe),
                          msg=ref.dataId)
         self.assertIsInstance(ref.dataId, DataCoordinate)
-        self.assertIsNone(ref.components)
         # Constructing an unresolved ref with run and/or components should
         # fail.
         run = "somerun"
         with self.assertRaises(ValueError):
             DatasetRef(self.datasetType, self.dataId, run=run)
-        components = {
-            "a": DatasetRef(self.datasetType.makeComponentDatasetType("a"), self.dataId, id=2, run=run)
-        }
-        with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, components=components)
         # Passing a data ID that is missing dimensions should fail.
         with self.assertRaises(KeyError):
             DatasetRef(self.datasetType, {"instrument": "DummyCam"})
-        # Constructing a resolved ref should preserve run and components,
-        # as well as everything else.
-        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run, components=components)
+        # Constructing a resolved ref should preserve run as well as everything
+        # else.
+        ref = DatasetRef(self.datasetType, self.dataId, id=1, run=run)
         self.assertEqual(ref.datasetType, self.datasetType)
         self.assertEqual(ref.dataId, DataCoordinate.standardize(self.dataId, universe=self.universe),
                          msg=ref.dataId)
         self.assertIsInstance(ref.dataId, DataCoordinate)
         self.assertEqual(ref.id, 1)
         self.assertEqual(ref.run, run)
-        self.assertEqual(ref.components, components)
-        # Constructing a resolved ref with bad component storage classes
-        # should fail.
-        with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, id=1, run=run, components={"b": components["a"]})
-        # Constructing a resolved ref with unresolved components should fail.
-        with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, id=1, run=run,
-                       components={"a": components["a"].unresolved()})
-        # Constructing a resolved ref with bad component names should fail.
-        with self.assertRaises(ValueError):
-            DatasetRef(self.datasetType, self.dataId, id=1, run=run,
-                       components={"c": components["a"]})
 
     def testResolving(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")
@@ -264,7 +245,6 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertIsNotNone(ref.id)
         self.assertIsNone(unresolvedRef.id)
         self.assertIsNone(unresolvedRef.run)
-        self.assertIsNone(unresolvedRef.components)
         self.assertNotEqual(ref, unresolvedRef)
         self.assertEqual(ref.unresolved(), unresolvedRef)
         self.assertEqual(ref.datasetType, unresolvedRef.datasetType)
@@ -273,7 +253,6 @@ class DatasetRefTestCase(unittest.TestCase):
         self.assertEqual(ref, reresolvedRef)
         self.assertEqual(reresolvedRef.unresolved(), unresolvedRef)
         self.assertIsNotNone(reresolvedRef.run)
-        self.assertIsNotNone(reresolvedRef.components)
 
     def testPickle(self):
         ref = DatasetRef(self.datasetType, self.dataId, id=1, run="somerun")

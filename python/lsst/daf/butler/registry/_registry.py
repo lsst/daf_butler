@@ -32,6 +32,7 @@ from dataclasses import dataclass
 import sys
 from typing import (
     Any,
+    Dict,
     Iterable,
     Iterator,
     List,
@@ -585,8 +586,6 @@ class Registry:
         for collectionRecord in collections.iter(self._collections, datasetType=storage.datasetType):
             result = storage.find(collectionRecord, dataId)
             if result is not None:
-                if result.datasetType.isComposite():
-                    result = self._datasets.fetchComponents(result)
                 return result
 
         # fallback to the parent if we got nothing and this was a component
@@ -602,8 +601,7 @@ class Registry:
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: str, *, producer: Optional[Quantum] = None, recursive: bool = False
-                       ) -> List[DatasetRef]:
+                       run: str, *, producer: Optional[Quantum] = None) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -621,9 +619,6 @@ class Registry:
             Unit of work that produced the datasets.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.
-        recursive : `bool`
-            If True, recursively add datasets and attach entries for component
-            datasets as well.
 
         Returns
         -------
@@ -658,23 +653,6 @@ class Registry:
                                              f"This probably means a dataset with the same data ID "
                                              f"and dataset type already exists, but it may also mean a "
                                              f"dimension row is missing.") from err
-        if recursive and storage.datasetType.isComposite():
-            # Insert component rows by recursing.
-            composites = defaultdict(dict)
-            # TODO: we really shouldn't be inserting all components defined by
-            # the storage class, because there's no guarantee all of them are
-            # actually present in these datasets.
-            for componentName in storage.datasetType.storageClass.components:
-                componentDatasetType = storage.datasetType.makeComponentDatasetType(componentName)
-                componentRefs = self.insertDatasets(componentDatasetType,
-                                                    dataIds=dataIds,
-                                                    run=run,
-                                                    producer=producer,
-                                                    recursive=True)
-                for parentRef, componentRef in zip(refs, componentRefs):
-                    composites[parentRef][componentName] = componentRef
-            if composites:
-                refs = list(self._datasets.attachComponents(composites.items()))
         return refs
 
     def getDataset(self, id: int) -> Optional[DatasetRef]:
@@ -694,12 +672,10 @@ class Registry:
         ref = self._datasets.getDatasetRef(id)
         if ref is None:
             return None
-        if ref.datasetType.isComposite():
-            return self._datasets.fetchComponents(ref)
         return ref
 
     @transactional
-    def removeDatasets(self, refs: Iterable[DatasetRef], *, recursive: bool = True):
+    def removeDatasets(self, refs: Iterable[DatasetRef]):
         """Remove datasets from the Registry.
 
         The datasets will be removed unconditionally from all collections, and
@@ -713,12 +689,6 @@ class Registry:
         refs : `Iterable` of `DatasetRef`
             References to the datasets to be removed.  Must include a valid
             ``id`` attribute, and should be considered invalidated upon return.
-        recursive : `bool`, optional
-            If `True`, remove all component datasets as well.  Note that
-            this only removes components that are actually included in the
-            given `DatasetRef` instances, which may not be the same as those in
-            the database (especially if they were obtained from
-            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -727,7 +697,7 @@ class Registry:
         OrphanedRecordError
             Raised if any dataset is still present in any `Datastore`.
         """
-        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
             try:
                 storage.delete(refsForType)
@@ -736,39 +706,7 @@ class Registry:
                                           "present in one or more Datastores.") from err
 
     @transactional
-    def attachComponents(self, parent: DatasetRef, components: Mapping[str, DatasetRef]):
-        """Attach components to a dataset.
-
-        Parameters
-        ----------
-        parent : `DatasetRef`
-            A reference to the parent dataset.
-        components : `Mapping` [ `str`, `DatasetRef` ]
-            Mapping from component name to the `DatasetRef` for that component.
-
-        Returns
-        -------
-        ref : `DatasetRef`
-            An updated version of ``parent`` with components included.
-
-        Raises
-        ------
-        AmbiguousDatasetError
-            Raised if ``parent.id`` or any `DatasetRef.id` in ``components``
-            is `None`.
-        """
-        for name, ref in components.items():
-            if ref.datasetType.storageClass != parent.datasetType.storageClass.components[name]:
-                raise TypeError(f"Expected storage class "
-                                f"'{parent.datasetType.storageClass.components[name].name}' "
-                                f"for component '{name}' of dataset {parent}; got "
-                                f"dataset {ref} with storage class "
-                                f"'{ref.datasetType.storageClass.name}'.")
-        ref, = self._datasets.attachComponents([(parent, components)])
-        return ref
-
-    @transactional
-    def associate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
+    def associate(self, collection: str, refs: Iterable[DatasetRef]):
         """Add existing datasets to a `~CollectionType.TAGGED` collection.
 
         If a DatasetRef with the same exact integer ID is already in a
@@ -783,12 +721,6 @@ class Registry:
         refs : `Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
-        recursive : `bool`, optional
-            If `True`, associate all component datasets as well.  Note that
-            this only associates components that are actually included in the
-            given `DatasetRef` instances, which may not be the same as those in
-            the database (especially if they were obtained from
-            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -806,7 +738,7 @@ class Registry:
         collectionRecord = self._collections.find(collection)
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
-        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
             try:
                 storage.associate(collectionRecord, refsForType)
@@ -819,7 +751,7 @@ class Registry:
                 ) from err
 
     @transactional
-    def disassociate(self, collection: str, refs: Iterable[DatasetRef], *, recursive: bool = True):
+    def disassociate(self, collection: str, refs: Iterable[DatasetRef]):
         """Remove existing datasets from a `~CollectionType.TAGGED` collection.
 
         ``collection`` and ``ref`` combinations that are not currently
@@ -832,12 +764,6 @@ class Registry:
         refs : `Iterable` [ `DatasetRef` ]
             An iterable of resolved `DatasetRef` instances that already exist
             in this `Registry`.
-        recursive : `bool`, optional
-            If `True`, disassociate all component datasets as well.  Note that
-            this only disassociates components that are actually included in
-            the given `DatasetRef` instances, which may not be the same as
-            those in the database (especially if they were obtained from
-            `queryDatasets`, which does not populate `DatasetRef.components`).
 
         Raises
         ------
@@ -853,7 +779,7 @@ class Registry:
         if collectionRecord.type is not CollectionType.TAGGED:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}; "
                             "expected TAGGED.")
-        for datasetType, refsForType in DatasetRef.groupByType(refs, recursive=recursive).items():
+        for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
             storage.disassociate(collectionRecord, refsForType)
 
@@ -1081,7 +1007,8 @@ class Registry:
         storage = self._dimensions[element]
         return storage.sync(record)
 
-    def queryDatasetTypes(self, expression: Any = ...) -> Iterator[DatasetType]:
+    def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
+                          ) -> Iterator[DatasetType]:
         """Iterate over the dataset types whose names match an expression.
 
         Parameters
@@ -1092,6 +1019,13 @@ class Registry:
             `...` can be used to return all dataset types, and is the default.
             See :ref:`daf_butler_dataset_type_expressions` for more
             information.
+        components : `bool`, optional
+            If `True`, apply all expression patterns to component dataset type
+            names as well.  If `False`, never apply patterns to components.
+            If `None` (default), apply patterns to components only if their
+            parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
 
         Yields
         ------
@@ -1100,7 +1034,9 @@ class Registry:
         """
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
         if wildcard is ...:
-            yield from self._datasets
+            for datasetType in self._datasets:
+                if components or not datasetType.isComponent():
+                    yield datasetType
             return
         done = set()
         for name in wildcard.strings:
@@ -1109,10 +1045,25 @@ class Registry:
                 done.add(storage.datasetType)
                 yield storage.datasetType
         if wildcard.patterns:
+            # If components (the argument) is None, we'll save component
+            # dataset that we might want to match, but only if their parents
+            # didn't get included.
+            componentsForLater = []
             for datasetType in self._datasets:
                 if datasetType.name in done:
                     continue
+                parentName, componentName = datasetType.nameAndComponent()
+                if componentName is not None and not components:
+                    if components is None and parentName not in done:
+                        componentsForLater.append(datasetType)
+                    continue
                 if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
+                    done.add(datasetType.name)
+                    yield datasetType
+            # Go back and try to match saved components.
+            for datasetType in componentsForLater:
+                parentName, _ = datasetType.nameAndComponent()
+                if parentName not in done and any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
                     yield datasetType
 
     def queryCollections(self, expression: Any = ...,
@@ -1186,6 +1137,7 @@ class Registry:
                         collections: Any = None,
                         where: Optional[str] = None,
                         expand: bool = True,
+                        components: Optional[bool] = None,
                         **kwds) -> Iterator[DataCoordinate]:
         """Query for and iterate over data IDs matching user-provided criteria.
 
@@ -1224,6 +1176,13 @@ class Registry:
         expand : `bool`, optional
             If `True` (default) yield `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
+        components : `bool`, optional
+            If `True`, apply all dataset expression patterns to component
+            dataset type names as well.  If `False`, never apply patterns to
+            components.  If `None` (default), apply patterns to components only
+            if their parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1238,14 +1197,21 @@ class Registry:
         """
         dimensions = iterable(dimensions)
         standardizedDataId = self.expandDataId(dataId, **kwds)
-        standardizedDatasetTypes = []
+        standardizedDatasetTypes = set()
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
         if datasets is not None:
             if collections is None:
                 raise TypeError("Cannot pass 'datasets' without 'collections'.")
-            for datasetType in self.queryDatasetTypes(datasets):
+            for datasetType in self.queryDatasetTypes(datasets, components=components):
                 requestedDimensionNames.update(datasetType.dimensions.names)
-                standardizedDatasetTypes.append(datasetType)
+                # If any matched dataset type is a component, just operate on
+                # its parent instead, because Registry doesn't know anything
+                # about what components exist, and here (unlike queryDatasets)
+                # we don't care about returning them.
+                parentDatasetTypeName, componentName = datasetType.nameAndComponent()
+                if componentName is not None:
+                    datasetType = self.getDatasetType(parentDatasetTypeName)
+                standardizedDatasetTypes.add(datasetType)
             # Preprocess collections expression in case the original included
             # single-pass iterators (we'll want to use it multiple times
             # below).
@@ -1276,6 +1242,7 @@ class Registry:
                       where: Optional[str] = None,
                       deduplicate: bool = False,
                       expand: bool = True,
+                      components: Optional[bool] = None,
                       **kwds) -> Iterator[DatasetRef]:
         """Query for and iterate over dataset references matching user-provided
         criteria.
@@ -1317,6 +1284,13 @@ class Registry:
         expand : `bool`, optional
             If `True` (default) attach `ExpandedDataCoordinate` instead of
             minimal `DataCoordinate` base-class instances.
+        components : `bool`, optional
+            If `True`, apply all dataset expression patterns to component
+            dataset type names as well.  If `False`, never apply patterns to
+            components.  If `None` (default), apply patterns to components only
+            if their parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
         kwds
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
@@ -1355,15 +1329,54 @@ class Registry:
             collections = CollectionQuery.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
         standardizedDataId = self.expandDataId(dataId, **kwds)
-        # If the datasetType passed isn't actually a DatasetType, expand it
-        # (it could be an expression that yields multiple DatasetTypes) and
-        # recurse.
+
+        # We can only query directly if given a non-component DatasetType
+        # instance.  If we were given an expression or str or a component
+        # DatasetType instance, we'll populate this dict, recurse, and return.
+        # If we already have a non-component DatasetType, it will remain None
+        # and we'll run the query directly.
+        composition: Optional[
+            Dict[
+                DatasetType,  # parent dataset type
+                List[Optional[str]]  # component name, or None for parent
+            ]
+        ] = None
         if not isinstance(datasetType, DatasetType):
-            for trueDatasetType in self.queryDatasetTypes(datasetType):
-                yield from self.queryDatasets(trueDatasetType, collections=collections,
-                                              dimensions=dimensions, dataId=standardizedDataId,
-                                              where=where, deduplicate=deduplicate)
+            # We were given a dataset type expression (which may be as simple
+            # as a str).  Loop over all matching datasets, delegating handling
+            # of the `components` argument to queryDatasetTypes, as we populate
+            # the composition dict.
+            composition = defaultdict(list)
+            for trueDatasetType in self.queryDatasetTypes(datasetType, components=components):
+                parentName, componentName = trueDatasetType.nameAndComponent()
+                if componentName is not None:
+                    parentDatasetType = self.getDatasetType(parentName)
+                    composition.setdefault(parentDatasetType, []).append(componentName)
+                else:
+                    composition.setdefault(trueDatasetType, []).append(None)
+        elif datasetType.isComponent():
+            # We were given a true DatasetType instance, but it's a component.
+            # the composition dict will have exactly one item.
+            parentName, componentName = datasetType.nameAndComponent()
+            parentDatasetType = self.getDatasetType(parentName)
+            composition = {parentDatasetType: [componentName]}
+        if composition is not None:
+            # We need to recurse.  Do that once for each parent dataset type.
+            for parentDatasetType, componentNames in composition.items():
+                for parentRef in self.queryDatasets(parentDatasetType, collections=collections,
+                                                    dimensions=dimensions, dataId=standardizedDataId,
+                                                    where=where, deduplicate=deduplicate):
+                    # Loop over components, yielding one for each one for each
+                    # one requested.
+                    for componentName in componentNames:
+                        if componentName is None:
+                            yield parentRef
+                        else:
+                            yield parentRef.makeComponentRef(componentName)
             return
+        # If we get here, there's no need to recurse (or we are already
+        # recursing; there can only ever be one level of recursion).
+
         # The full set of dimensions in the query is the combination of those
         # needed for the DatasetType and those explicitly requested, if any.
         requestedDimensionNames = set(datasetType.dimensions.names)
