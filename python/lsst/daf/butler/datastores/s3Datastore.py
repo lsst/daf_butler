@@ -25,7 +25,6 @@ from __future__ import annotations
 
 __all__ = ("S3Datastore", )
 
-import boto3
 import logging
 import os
 import pathlib
@@ -48,7 +47,7 @@ from lsst.daf.butler import (
 )
 
 from .fileLikeDatastore import FileLikeDatastore
-from lsst.daf.butler.core.s3utils import s3CheckFileExists, bucketExists
+from lsst.daf.butler.core.s3utils import getS3Client, s3CheckFileExists, bucketExists
 
 if TYPE_CHECKING:
     from .fileLikeDatastore import DatastoreFileGetInformation
@@ -91,7 +90,7 @@ class S3Datastore(FileLikeDatastore):
                  bridgeManager: DatastoreRegistryBridgeManager, butlerRoot: str = None):
         super().__init__(config, bridgeManager, butlerRoot)
 
-        self.client = boto3.client("s3")
+        self.client = getS3Client()
         if not bucketExists(self.locationFactory.netloc):
             # PosixDatastore creates the root directory if one does not exist.
             # Calling s3 client.create_bucket is possible but also requires

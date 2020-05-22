@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
+__all__ = ("getS3Client", "s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
            "unsetAwsEnvCredentials")
 
 import os
@@ -30,6 +30,29 @@ except ImportError:
     boto3 = None
 
 from .location import ButlerURI, Location
+
+
+def getS3Client():
+    """Create a S3 client with AWS (default) or the specified endpoint
+
+    Returns
+    -------
+    s3client : `botocore.client.S3`
+        A client of the S3 service.
+
+    Notes
+    -----
+    The endpoint URL is from the environment variable S3_ENDPOINT_URL.
+    If none is specified, the default AWS one is used.
+    """
+    if boto3 is None:
+        raise ModuleNotFoundError("Could not find boto3. "
+                                  "Are you sure it is installed?")
+
+    endpoint = os.environ.get("S3_ENDPOINT_URL", None)
+    if not endpoint:
+        endpoint = None  # Handle ""
+    return boto3.client("s3", endpoint_url=endpoint)
 
 
 def s3CheckFileExists(path, bucket=None, client=None):
@@ -62,11 +85,11 @@ def s3CheckFileExists(path, bucket=None, client=None):
     configuration.html#configuring-credentials
     """
     if boto3 is None:
-        raise ModuleNotFoundError(("Could not find boto3. "
-                                   "Are you sure it is installed?"))
+        raise ModuleNotFoundError("Could not find boto3. "
+                                  "Are you sure it is installed?")
 
     if client is None:
-        client = boto3.client('s3')
+        client = getS3Client()
 
     if isinstance(path, str):
         if bucket is not None:
@@ -120,14 +143,15 @@ def bucketExists(bucketName, client=None):
     configuration.html#configuring-credentials
     """
     if boto3 is None:
-        raise ModuleNotFoundError(("Could not find boto3. "
-                                   "Are you sure it is installed?"))
+        raise ModuleNotFoundError("Could not find boto3. "
+                                  "Are you sure it is installed?")
 
-    s3 = boto3.client("s3")
+    if client is None:
+        client = getS3Client()
     try:
-        s3.get_bucket_location(Bucket=bucketName)
+        client.get_bucket_location(Bucket=bucketName)
         return True
-    except s3.exceptions.NoSuchBucket:
+    except client.exceptions.NoSuchBucket:
         return False
 
 
