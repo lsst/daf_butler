@@ -56,7 +56,6 @@ def cmdNameToFuncName(commandName):
 class LoaderCLI(click.MultiCommand):
 
     def __init__(self, *args, **kwargs):
-        self.commands = None
         super().__init__(*args, **kwargs)
 
     @staticmethod
@@ -164,8 +163,7 @@ class LoaderCLI(click.MultiCommand):
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
-        commands = cls._mergeCommandLists(cls._getLocalCommands(), cls._getPluginCommands())
-        return commands
+        return cls._mergeCommandLists(cls._getLocalCommands(), cls._getPluginCommands())
 
     @staticmethod
     def _raiseIfDuplicateCommands(commands):
@@ -206,11 +204,10 @@ class LoaderCLI(click.MultiCommand):
         commands : `list` [`str`]
             The names of the commands that can be called by the butler command.
         """
-        if self.commands is None:
-            self.commands = self._getCommands()
-        self._raiseIfDuplicateCommands(self.commands)
-        log.debug(self.commands.keys())
-        return self.commands.keys()
+        commands = self._getCommands()
+        self._raiseIfDuplicateCommands(commands)
+        log.debug(commands.keys())
+        return commands.keys()
 
     def get_command(self, context, name):
         """Used by Click to get a single command for execution.
@@ -227,14 +224,13 @@ class LoaderCLI(click.MultiCommand):
         command : click.Command
             A Command that wraps a callable command function.
         """
-        if self.commands is None:
-            self.commands = self._getCommands()
-        if name not in self.commands:
+        commands = self._getCommands()
+        if name not in commands:
             return None
-        self._raiseIfDuplicateCommands(self.commands)
-        if self.commands[name][0] == localCmdPkg:
+        self._raiseIfDuplicateCommands(commands)
+        if commands[name][0] == localCmdPkg:
             return getattr(butlerCommands, cmdNameToFuncName(name))
-        return doImport(self.commands[name][0] + "." + cmdNameToFuncName(name))
+        return doImport(commands[name][0] + "." + cmdNameToFuncName(name))
 
 
 @click.command(cls=LoaderCLI)
