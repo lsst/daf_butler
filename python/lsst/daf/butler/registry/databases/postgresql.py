@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["PostgresqlDatabase"]
 
 from contextlib import contextmanager, closing
-from typing import Optional
+from typing import Iterator, Optional
 
 import sqlalchemy
 
@@ -82,7 +82,7 @@ class PostgresqlDatabase(Database):
         return cls(connection=connection, origin=origin, namespace=namespace, writeable=writeable)
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False) -> None:
+    def transaction(self, *, interrupting: bool = False) -> Iterator[None]:
         with super().transaction(interrupting=interrupting):
             if not self.isWriteable():
                 with closing(self._connection.connection.cursor()) as cursor:
@@ -101,7 +101,7 @@ class PostgresqlDatabase(Database):
     def expandDatabaseEntityName(self, shrunk: str) -> str:
         return self._shrinker.expand(shrunk)
 
-    def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
         if not rows:

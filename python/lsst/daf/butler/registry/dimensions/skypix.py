@@ -27,7 +27,7 @@ from typing import Optional
 import sqlalchemy
 
 from ...core import (
-    DataCoordinate,
+    DataId,
     DimensionElement,
     DimensionRecord,
     NamedKeyDict,
@@ -56,6 +56,7 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
     def initialize(cls, db: Database, element: DimensionElement, *,
                    context: Optional[StaticTablesContext] = None) -> DimensionRecordStorage:
         # Docstring inherited from DimensionRecordStorage.
+        assert isinstance(element, SkyPixDimension)
         return cls(element)
 
     @property
@@ -63,7 +64,7 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._dimension
 
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
@@ -72,8 +73,8 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
-    ):
-        if builder.hasDimensionKey(self.element):
+    ) -> None:
+        if builder.hasDimensionKey(self._dimension):
             # If joining some other element or dataset type already brought in
             # the key for this dimension, there's nothing left to do, because
             # a SkyPix dimension never has metadata or implied dependencies,
@@ -87,15 +88,15 @@ class SkyPixDimensionRecordStorage(DimensionRecordStorage):
             return
         raise NotImplementedError(f"Cannot includeSkyPix dimension {self.element.name} directly in query.")
 
-    def insert(self, *records: DimensionRecord):
+    def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert into SkyPix dimension {self._dimension.name}.")
 
-    def sync(self, record: DimensionRecord):
+    def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync SkyPixdimension {self._dimension.name}.")
 
-    def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
+    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         return self._dimension.RecordClass(dataId[self._dimension.name],
                                            self._dimension.pixelization.pixel(dataId[self._dimension.name]))

@@ -19,12 +19,22 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ['TreeVisitor']
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from typing import Generic, List, Optional, TYPE_CHECKING, TypeVar
+
+if TYPE_CHECKING:
+    import astropy.time
+    from .exprTree import Node
 
 
-class TreeVisitor(ABC):
+T = TypeVar("T")
+
+
+class TreeVisitor(Generic[T]):
     """Definition of interface for visitor classes.
 
     Visitors and tree node classes implement Visitor pattern for tree
@@ -37,7 +47,7 @@ class TreeVisitor(ABC):
     to other methods of the visitor.
     """
     @abstractmethod
-    def visitNumericLiteral(self, value, node):
+    def visitNumericLiteral(self, value: str, node: Node) -> T:
         """Visit NumericLiteral node.
 
         Parameters
@@ -51,7 +61,7 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitStringLiteral(self, value, node):
+    def visitStringLiteral(self, value: str, node: Node) -> T:
         """Visit StringLiteral node.
 
         Parameters
@@ -63,19 +73,19 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitTimeLiteral(self, value, node):
+    def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> T:
         """Visit TimeLiteral node.
 
         Parameters
         ----------
-        value : `TimeLiteral`
+        value : `astropy.time.Time`
             The value associated with the visited node.
         node : `Node`
             Corresponding tree node, mostly useful for diagnostics.
         """
 
     @abstractmethod
-    def visitRangeLiteral(self, start, stop, stride, node):
+    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> T:
         """Visit RangeLiteral node.
 
         Parameters
@@ -92,7 +102,7 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitIdentifier(self, name, node):
+    def visitIdentifier(self, name: str, node: Node) -> T:
         """Visit Identifier node.
 
         Parameters
@@ -104,7 +114,7 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitUnaryOp(self, operator, operand, node):
+    def visitUnaryOp(self, operator: str, operand: T, node: Node) -> T:
         """Visit UnaryOp node.
 
         Parameters
@@ -119,7 +129,7 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitBinaryOp(self, operator, lhs, rhs, node):
+    def visitBinaryOp(self, operator: str, lhs: T, rhs: T, node: Node) -> T:
         """Visit BinaryOp node.
 
         Parameters
@@ -139,7 +149,7 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitIsIn(self, lhs, values, not_in, node):
+    def visitIsIn(self, lhs: T, values: List[T], not_in: bool, node: Node) -> T:
         """Visit IsIn node.
 
         Parameters
@@ -158,7 +168,7 @@ class TreeVisitor(ABC):
         """
 
     @abstractmethod
-    def visitParens(self, expression, node):
+    def visitParens(self, expression: T, node: Node) -> T:
         """Visit Parens node.
 
         Parameters

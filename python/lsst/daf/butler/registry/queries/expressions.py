@@ -22,15 +22,19 @@ from __future__ import annotations
 
 __all__ = ()  # all symbols intentionally private; for internal package use.
 
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING, Union
 
-from sqlalchemy.sql import not_, or_, and_, literal, FromClause
+import sqlalchemy
 
 from ...core import DimensionUniverse, Dimension, DimensionElement, NamedKeyDict, NamedValueSet
-from .exprParser import TreeVisitor
+from .exprParser import Node, TreeVisitor
 from ._structs import QueryColumns
 
+if TYPE_CHECKING:
+    import astropy.time
 
-def categorizeIdentifier(universe: DimensionUniverse, name: str):
+
+def categorizeIdentifier(universe: DimensionUniverse, name: str) -> Tuple[DimensionElement, Optional[str]]:
     """Categorize an identifier in a parsed expression as either a `Dimension`
     name (indicating the primary key for that dimension) or a non-primary-key
     column in a `DimensionElement` table.
@@ -81,7 +85,7 @@ def categorizeIdentifier(universe: DimensionUniverse, name: str):
             # Encourage them to clean that up and try again.
             raise RuntimeError(
                 f"Invalid reference to '{table}.{column}' in expression; please use "
-                f"'{column}' or '{column}.{universe[column].primaryKey.name}' instead."
+                f"'{column}' or '{column}.{universe.dimensions[column].primaryKey.name}' instead."
             )
         else:
             if column not in element.RecordClass.__slots__:
@@ -95,7 +99,7 @@ def categorizeIdentifier(universe: DimensionUniverse, name: str):
         return dimension, None
 
 
-class InspectionVisitor(TreeVisitor):
+class InspectionVisitor(TreeVisitor[None]):
     """Implements TreeVisitor to identify dimension elements that need
     to be included in a query, prior to actually constructing a SQLAlchemy
     WHERE clause from it.
@@ -108,51 +112,52 @@ class InspectionVisitor(TreeVisitor):
 
     def __init__(self, universe: DimensionUniverse):
         self.universe = universe
-        self.keys = NamedValueSet()
-        self.metadata = NamedKeyDict()
+        self.keys: NamedValueSet[Dimension] = NamedValueSet()
+        self.metadata: NamedKeyDict[DimensionElement, List[str]] = NamedKeyDict()
 
-    def visitNumericLiteral(self, value, node):
+    def visitNumericLiteral(self, value: str, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
         pass
 
-    def visitStringLiteral(self, value, node):
+    def visitStringLiteral(self, value: str, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitStringLiteral
         pass
 
-    def visitTimeLiteral(self, value, node):
+    def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
         pass
 
-    def visitIdentifier(self, name, node):
+    def visitIdentifier(self, name: str, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitIdentifier
         element, column = categorizeIdentifier(self.universe, name)
         if column is not None:
             self.metadata.setdefault(element, []).append(column)
         else:
+            assert isinstance(element, Dimension)
             self.keys.add(element)
 
-    def visitUnaryOp(self, operator, operand, node):
+    def visitUnaryOp(self, operator: str, operand: Any, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitUnaryOp
         pass
 
-    def visitBinaryOp(self, operator, lhs, rhs, node):
+    def visitBinaryOp(self, operator: str, lhs: Any, rhs: Any, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitBinaryOp
         pass
 
-    def visitIsIn(self, lhs, values, not_in, node):
+    def visitIsIn(self, lhs: Any, values: List[Any], not_in: bool, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitIsIn
         pass
 
-    def visitParens(self, expression, node):
+    def visitParens(self, expression: Any, node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitParens
         pass
 
-    def visitRangeLiteral(self, start, stop, stride, node):
+    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node) -> None:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
         pass
 
 
-class ClauseVisitor(TreeVisitor):
+class ClauseVisitor(TreeVisitor[sqlalchemy.sql.ColumnElement]):
     """Implements TreeVisitor to convert the tree into a SQLAlchemy WHERE
     clause.
 
@@ -167,13 +172,13 @@ class ClauseVisitor(TreeVisitor):
         `DimensionElement` instances and their associated tables.
     """
 
-    unaryOps = {"NOT": lambda x: not_(x),
+    unaryOps = {"NOT": lambda x: sqlalchemy.sql.not_(x),
                 "+": lambda x: +x,
                 "-": lambda x: -x}
     """Mapping or unary operator names to corresponding functions"""
 
-    binaryOps = {"OR": lambda x, y: or_(x, y),
-                 "AND": lambda x, y: and_(x, y),
+    binaryOps = {"OR": lambda x, y: sqlalchemy.sql.or_(x, y),
+                 "AND": lambda x, y: sqlalchemy.sql.and_(x, y),
                  "=": lambda x, y: x == y,
                  "!=": lambda x, y: x != y,
                  "<": lambda x, y: x < y,
@@ -188,37 +193,40 @@ class ClauseVisitor(TreeVisitor):
     """Mapping or binary operator names to corresponding functions"""
 
     def __init__(self, universe: DimensionUniverse,
-                 columns: QueryColumns, elements: NamedKeyDict[DimensionElement, FromClause]):
+                 columns: QueryColumns, elements: NamedKeyDict[DimensionElement, sqlalchemy.sql.FromClause]):
         self.universe = universe
         self.columns = columns
         self.elements = elements
 
-    def visitNumericLiteral(self, value, node):
+    def visitNumericLiteral(self, value: str, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitNumericLiteral
         # Convert string value into float or int
+        coerced: Union[int, float]
         try:
-            value = int(value)
+            coerced = int(value)
         except ValueError:
-            value = float(value)
-        return literal(value)
+            coerced = float(value)
+        return sqlalchemy.sql.literal(coerced)
 
-    def visitStringLiteral(self, value, node):
+    def visitStringLiteral(self, value: str, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitStringLiteral
-        return literal(value)
+        return sqlalchemy.sql.literal(value)
 
-    def visitTimeLiteral(self, value, node):
+    def visitTimeLiteral(self, value: astropy.time.Time, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitTimeLiteral
-        return literal(value)
+        return sqlalchemy.sql.literal(value)
 
-    def visitIdentifier(self, name, node):
+    def visitIdentifier(self, name: str, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitIdentifier
         element, column = categorizeIdentifier(self.universe, name)
         if column is not None:
             return self.elements[element].columns[column]
         else:
+            assert isinstance(element, Dimension)
             return self.columns.getKeyColumn(element)
 
-    def visitUnaryOp(self, operator, operand, node):
+    def visitUnaryOp(self, operator: str, operand: sqlalchemy.sql.ColumnElement, node: Node
+                     ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitUnaryOp
         func = self.unaryOps.get(operator)
         if func:
@@ -226,7 +234,8 @@ class ClauseVisitor(TreeVisitor):
         else:
             raise ValueError(f"Unexpected unary operator `{operator}' in `{node}'.")
 
-    def visitBinaryOp(self, operator, lhs, rhs, node):
+    def visitBinaryOp(self, operator: str, lhs: sqlalchemy.sql.ColumnElement,
+                      rhs: sqlalchemy.sql.ColumnElement, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitBinaryOp
         func = self.binaryOps.get(operator)
         if func:
@@ -234,7 +243,8 @@ class ClauseVisitor(TreeVisitor):
         else:
             raise ValueError(f"Unexpected binary operator `{operator}' in `{node}'.")
 
-    def visitIsIn(self, lhs, values, not_in, node):
+    def visitIsIn(self, lhs: sqlalchemy.sql.ColumnElement, values: List[sqlalchemy.sql.ColumnElement],
+                  not_in: bool, node: Node) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitIsIn
 
         # `values` is a list of literals and ranges, range is represented
@@ -274,27 +284,29 @@ class ClauseVisitor(TreeVisitor):
                 #    AND MOD(X, STRIDE) = MOD(START, STRIDE)
                 expr = lhs.between(start, stop)
                 if stride != 1:
-                    expr = and_(expr, (lhs % stride) == (start % stride))
+                    expr = sqlalchemy.sql.and_(expr, (lhs % stride) == (start % stride))
                 clauses.append(expr)
             else:
                 # add all values to literal list, stop is inclusive
-                literals += [literal(value) for value in range(start, stop+1, stride)]
+                literals += [sqlalchemy.sql.literal(value) for value in range(start, stop+1, stride)]
 
         if literals:
             # add IN() in front of BETWEENs
             clauses.insert(0, lhs.in_(literals))
 
-        expr = or_(*clauses)
+        expr = sqlalchemy.sql.or_(*clauses)
         if not_in:
-            expr = not_(expr)
+            expr = sqlalchemy.sql.not_(expr)
 
         return expr
 
-    def visitParens(self, expression, node):
+    def visitParens(self, expression: sqlalchemy.sql.ColumnElement, node: Node
+                    ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitParens
         return expression.self_group()
 
-    def visitRangeLiteral(self, start, stop, stride, node):
+    def visitRangeLiteral(self, start: int, stop: int, stride: Optional[int], node: Node
+                          ) -> sqlalchemy.sql.ColumnElement:
         # Docstring inherited from TreeVisitor.visitRangeLiteral
 
         # Just return a triple and let parent clauses handle it,

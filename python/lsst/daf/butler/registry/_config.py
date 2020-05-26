@@ -23,7 +23,9 @@ from __future__ import annotations
 
 __all__ = ("RegistryConfig",)
 
-from typing import Type, TYPE_CHECKING
+from typing import Optional, Type, TYPE_CHECKING
+
+import sqlalchemy
 
 from lsst.utils import doImport
 
@@ -40,7 +42,7 @@ class RegistryConfig(ConfigSubset):
     requiredKeys = ("db",)
     defaultConfigFile = "registry.yaml"
 
-    def getDialect(self):
+    def getDialect(self) -> str:
         """Parses the `db` key of the config and returns the database dialect.
 
         Returns
@@ -64,7 +66,7 @@ class RegistryConfig(ConfigSubset):
         databaseClass = self["engines", dialect]
         return doImport(databaseClass)
 
-    def makeDefaultDatabaseUri(self, root: str):
+    def makeDefaultDatabaseUri(self, root: str) -> Optional[str]:
         """Return a default 'db' URI for the registry configured here that is
         appropriate for a new empty repository with the given root.
 
@@ -81,14 +83,26 @@ class RegistryConfig(ConfigSubset):
         DatabaseClass = self.getDatabaseClass()
         return DatabaseClass.makeDefaultUri(root)
 
-    def replaceRoot(self, root: str):
+    def replaceRoot(self, root: Optional[str]) -> None:
         """Replace any occurrences of `BUTLER_ROOT_TAG` in the connection
         with the given root directory.
+
+        Parameters
+        ----------
+        root : `str` or `None`
+            String to substitute for `BUTLER_ROOT_TAG`.  Passing `None` here is
+            allowed only as a convenient way to raise an exception
+            (`ValueError`).
+
+        Raises
+        ------
+        ValueError
+            Raised if ``root`` is not set but a value is required.
         """
         self["db"] = replaceRoot(self["db"], root)
 
     @property
-    def connectionString(self):
+    def connectionString(self) -> sqlalchemy.engine.url.URL:
         """Return the connection string to the underlying database
         (`sqlalchemy.engine.url.URL`).
         """

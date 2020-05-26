@@ -20,8 +20,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = ["CategorizedWildcard", "CollectionQuery", "CollectionSearch", "DatasetTypeRestriction"]
-
+__all__ = (
+    "CategorizedWildcard",
+    "CollectionQuery",
+    "CollectionSearch",
+    "DatasetTypeRestriction",
+    "Ellipsis",
+    "EllipsisType",
+)
 
 from dataclasses import dataclass
 import itertools
@@ -30,6 +36,7 @@ import re
 from typing import (
     Any,
     Callable,
+    ClassVar,
     FrozenSet,
     Iterator,
     List,
@@ -49,6 +56,22 @@ from ._collectionType import CollectionType
 if TYPE_CHECKING:
     from .interfaces import CollectionManager, CollectionRecord
 
+    # Workaround for `...` not having an exposed type in Python, borrowed from
+    # https://github.com/python/typing/issues/684#issuecomment-548203158
+    # Along with that, we need to either use `Ellipsis` instead of `...` for
+    # the actual sentinal value internally, and tell MyPy to ignore conversions
+    # from `...` to `Ellipsis` at the public-interface boundary.
+    from enum import Enum
+
+    class EllipsisType(Enum):
+        Ellipsis = "..."
+
+    Ellipsis = EllipsisType.Ellipsis
+
+else:
+    EllipsisType = type(Ellipsis)
+    Ellipsis = Ellipsis
+
 
 @dataclass
 class CategorizedWildcard:
@@ -67,7 +90,7 @@ class CategorizedWildcard:
                        coerceUnrecognized: Optional[Callable[[Any], Union[Tuple[str, Any], str]]] = None,
                        coerceItemValue: Optional[Callable[[Any], Any]] = None,
                        defaultItemValue: Optional[Any] = None,
-                       ) -> Union[CategorizedWildcard, type(...)]:
+                       ) -> Union[CategorizedWildcard, EllipsisType]:
         """Categorize a wildcard expression.
 
         Parameters
@@ -123,10 +146,10 @@ class CategorizedWildcard:
         """
         assert expression is not None
         # See if we were given ...; just return that if we were.
-        if expression is ...:
+        if expression is Ellipsis:
             if not allowAny:
                 raise TypeError("This expression may not be unconstrained.")
-            return ...
+            return Ellipsis
         if isinstance(expression, cls):
             # This is already a CategorizedWildcard.  Make sure it meets the
             # reqs. implied by the kwargs we got.
@@ -174,7 +197,7 @@ class CategorizedWildcard:
         # process scalars or an iterable.  We put the body of the loop inside
         # a local function so we can recurse after coercion.
 
-        def process(element: Any, alreadyCoerced: bool = False):
+        def process(element: Any, alreadyCoerced: bool = False) -> None:
             if isinstance(element, str):
                 if defaultItemValue is not None:
                     self.items.append((element, defaultItemValue))
@@ -283,7 +306,7 @@ class DatasetTypeRestriction:
     implement the full set interface) because is not always iterable and
     sometimes has no length (i.e. when ``names`` is ``...``).
     """
-    def __init__(self, names: Union[FrozenSet[str], type(...)]):
+    def __init__(self, names: Union[FrozenSet[str], EllipsisType]):
         self.names = names
 
     __slots__ = ("names",)
@@ -313,27 +336,30 @@ class DatasetTypeRestriction:
             return expression
         wildcard = CategorizedWildcard.fromExpression(expression, allowPatterns=False,
                                                       coerceUnrecognized=lambda d: d.name)
-        if wildcard is ...:
+        if wildcard is Ellipsis:
             return cls.any
         else:
             return cls(frozenset(wildcard.strings))
 
     def __contains__(self, datasetType: DatasetType) -> bool:
-        return (self.names is ... or datasetType.name in self.names
+        return (self.names is Ellipsis or datasetType.name in self.names
                 or (datasetType.isComponent()
                     and DatasetType.splitDatasetTypeName(datasetType.name)[0] in self.names))
 
-    def __eq__(self, other: CollectionSearch) -> bool:
-        return self.names == other.names
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, DatasetTypeRestriction):
+            return self.names == other.names
+        else:
+            return False
 
     def __str__(self) -> str:
-        if self.names is ...:
+        if self.names is Ellipsis:
             return "..."
         else:
             return "{{{}}}".format(", ".join(self.names))
 
     def __repr__(self) -> str:
-        if self.names is ...:
+        if self.names is Ellipsis:
             return "DatasetTypeRestriction(...)"
         else:
             return f"DatasetTypeRestriction({self.names!r})"
@@ -348,24 +374,31 @@ class DatasetTypeRestriction:
         args
             Positional arguments are `DatasetTypeRestriction` instances.
         """
-        if any(a.names is ... for a in args):
-            return DatasetTypeRestriction.any
-        return DatasetTypeRestriction(frozenset.union(*tuple(a.names for a in args)))
+        result: Set[str] = set()
+        for a in args:
+            if a.names is Ellipsis:
+                return DatasetTypeRestriction.any
+            else:
+                result.update(a.names)
+        return DatasetTypeRestriction(frozenset(result))
 
-    names: Union[FrozenSet[str], type(...)]
+    names: Union[FrozenSet[str], EllipsisType]
     """The names of the dataset types included (i.e. permitted) by the
-    restriction, or the special value `...` to permit all dataset types
-    (`frozenset` [ `str` ] or `...`).
+    restriction, or the special value ``...`` to permit all dataset types
+    (`frozenset` [ `str` ] or ``...``).
+    """
+
+    any: ClassVar[DatasetTypeRestriction]
+    """A special `DatasetTypeRestriction` instance that permits any dataset
+    type.
+
+    This instance should be preferred instead of constructing a new one with
+    ``...``, when possible, but it should not be assumed to be the only such
+    instance (i.e. don't use ``is`` instead of ``==`` for comparisons).
     """
 
 
-DatasetTypeRestriction.any = DatasetTypeRestriction(...)
-"""A special `DatasetTypeRestriction` instance that permits any dataset type.
-
-This instance should be preferred instead of constructing a new one with `...`,
-when possible, but it should not be assumed to be the only such instance (i.e.
-don't use ``is`` instead of ``==`` for comparisons).
-"""
+DatasetTypeRestriction.any = DatasetTypeRestriction(Ellipsis)
 
 
 def _yieldCollectionRecords(
@@ -469,7 +502,7 @@ class CollectionSearch:
     `CollectionSearch` constructed from an equivalent expression,
     regardless of how different the original expressions appear.
     """
-    def __init__(self, items: List[Tuple[[str, DatasetTypeRestriction]]]):
+    def __init__(self, items: List[Tuple[str, DatasetTypeRestriction]]):
         assert all(isinstance(v, DatasetTypeRestriction) for _, v in items)
         self._items = items
 
@@ -513,7 +546,7 @@ class CollectionSearch:
                                                       allowPatterns=False,
                                                       coerceItemValue=DatasetTypeRestriction.fromExpression,
                                                       defaultItemValue=DatasetTypeRestriction.any)
-        assert wildcard is not ...
+        assert wildcard is not Ellipsis
         assert not wildcard.patterns
         assert not wildcard.strings
         return cls(
@@ -609,11 +642,14 @@ class CollectionSearch:
     def __iter__(self) -> Iterator[Tuple[str, DatasetTypeRestriction]]:
         yield from self._items
 
-    def __len__(self) -> bool:
+    def __len__(self) -> int:
         return len(self._items)
 
-    def __eq__(self, other: CollectionSearch) -> bool:
-        return self._items == other._items
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, CollectionSearch):
+            return self._items == other._items
+        else:
+            return False
 
     def __str__(self) -> str:
         return "[{}]".format(", ".join(f"{k}: {v}" for k, v in self._items))
@@ -651,14 +687,14 @@ class CollectionQuery:
     iterators into a form that can be used to call those `Registry` methods
     multiple times.
     """
-    def __init__(self, search: Union[CollectionSearch, type(...)], patterns: Optional[Tuple[str, ...]]):
+    def __init__(self, search: Union[CollectionSearch, EllipsisType], patterns: Tuple[re.Pattern, ...]):
         self._search = search
         self._patterns = patterns
 
     __slots__ = ("_search", "_patterns")
 
     @classmethod
-    def fromExpression(cls, expression: Any) -> Union[CollectionQuery, type(...)]:
+    def fromExpression(cls, expression: Any) -> CollectionQuery:
         """Process a general expression to construct a `CollectionQuery`
         instance.
 
@@ -688,7 +724,7 @@ class CollectionQuery:
         """
         if isinstance(expression, cls):
             return expression
-        if expression is ...:
+        if expression is Ellipsis:
             return cls.any
         if isinstance(expression, CollectionSearch):
             return cls(search=expression, patterns=())
@@ -697,7 +733,7 @@ class CollectionQuery:
                                                       allowPatterns=True,
                                                       coerceItemValue=DatasetTypeRestriction.fromExpression,
                                                       defaultItemValue=DatasetTypeRestriction.any)
-        if wildcard is ...:
+        if wildcard is Ellipsis:
             return cls.any
         assert not wildcard.strings
         return cls(search=CollectionSearch.fromExpression(wildcard),
@@ -799,9 +835,13 @@ class CollectionQuery:
                                         flattenChains=flattenChains, includeChains=includeChains):
             yield record
 
-CollectionQuery.any = CollectionQuery(..., None)
-"""A special `CollectionQuery` instance that matches any collection.
+    any: ClassVar[CollectionQuery]
+    """A special `CollectionQuery` instance that matches any collection.
 
-This instance should be preferred instead of constructing a new one with `...`,
-when possible, but it should not be assumed to be the only such instance.
-"""
+    This instance should be preferred instead of constructing a new one with
+    ``...``, when possible, but it should not be assumed to be the only such
+    instance.
+    """
+
+
+CollectionQuery.any = CollectionQuery(Ellipsis, ())

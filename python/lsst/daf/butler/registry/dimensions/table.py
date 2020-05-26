@@ -27,7 +27,7 @@ from typing import Optional
 import sqlalchemy
 
 from ...core import (
-    DataCoordinate,
+    DataId,
     DimensionElement,
     DimensionRecord,
     makeDimensionElementTableSpec,
@@ -76,7 +76,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._element
 
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
@@ -85,14 +85,14 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
-    ):
+    ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "This implementation does not handle spatial joins."
         joinDimensions = list(self.element.required)
         joinDimensions.extend(self.element.implied)
         joinOn = builder.startJoin(self._table, joinDimensions, self.element.RecordClass.__slots__)
         if timespans is not None:
-            timespanInTable = Timespan(
+            timespanInTable: Timespan[sqlalchemy.sql.ColumnElement] = Timespan(
                 begin=self._table.columns[TIMESPAN_FIELD_SPECS.begin.name],
                 end=self._table.columns[TIMESPAN_FIELD_SPECS.end.name],
             )
@@ -102,7 +102,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
         builder.finishJoin(self._table, joinOn)
         return self._table
 
-    def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
+    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass
         # I don't know how expensive it is to construct the query below, and
@@ -120,7 +120,7 @@ class TableDimensionRecordStorage(DimensionRecordStorage):
             return None
         return RecordClass(*row)
 
-    def insert(self, *records: DimensionRecord):
+    def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         elementRows = [record.toDict() for record in records]
         with self._db.transaction():

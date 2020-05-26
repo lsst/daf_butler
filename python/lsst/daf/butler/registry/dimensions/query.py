@@ -28,6 +28,7 @@ import sqlalchemy
 
 from ...core import (
     DataCoordinate,
+    DataId,
     Dimension,
     DimensionElement,
     DimensionRecord,
@@ -56,6 +57,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         The element whose records this storage will manage.
     """
     def __init__(self, db: Database, element: DimensionElement):
+        assert element.viewOf is not None
         self._db = db
         self._element = element
         self._target = element.universe[element.viewOf]
@@ -86,13 +88,14 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._element
 
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         pass
 
-    def _ensureQuery(self):
+    def _ensureQuery(self) -> None:
         if self._query is None:
             targetTable = self._db.getExistingTable(self._target.name, self._targetSpec)
+            assert targetTable is not None
             columns = []
             # The only columns for this dimension are ones for its required
             # dependencies and its own primary key (guaranteed by the checks in
@@ -119,7 +122,7 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
-    ):
+    ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         assert regions is None, "Should be guaranteed by constructor checks."
         assert timespans is None, "Should be guaranteed by constructor checks."
@@ -135,17 +138,19 @@ class QueryDimensionRecordStorage(DimensionRecordStorage):
         builder.finishJoin(self._query, joinOn)
         return self._query
 
-    def insert(self, *records: DimensionRecord):
+    def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         raise TypeError(f"Cannot insert {self.element.name} records.")
 
-    def sync(self, record: DimensionRecord):
+    def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
         raise TypeError(f"Cannot sync {self.element.name} records.")
 
-    def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
+    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         RecordClass = self.element.RecordClass
         # Given the restrictions imposed at construction, we know there's
         # nothing to actually fetch: everything we need is in the data ID.
+        if isinstance(dataId, DataCoordinate):
+            dataId = dataId.byName()
         return RecordClass.fromDict(dataId)

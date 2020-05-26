@@ -29,6 +29,8 @@ database-specific identifiers but everything else will probably be sent
 to database directly.
 """
 
+from __future__ import annotations
+
 __all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
            'Parens', 'RangeLiteral', 'StringLiteral', 'TimeLiteral',
            'UnaryOp']
@@ -37,6 +39,7 @@ __all__ = ['Node', 'BinaryOp', 'Identifier', 'IsIn', 'NumericLiteral',
 #  Imports of standard modules --
 # -------------------------------
 from abc import ABC, abstractmethod
+from typing import Any, List, Optional, Tuple, TYPE_CHECKING
 
 # -----------------------------
 #  Imports for other modules --
@@ -45,6 +48,10 @@ from abc import ABC, abstractmethod
 # ----------------------------------
 #  Local non-exported definitions --
 # ----------------------------------
+
+if TYPE_CHECKING:
+    import astropy.time
+    from .treeVisitor import TreeVisitor
 
 # ------------------------
 #  Exported definitions --
@@ -64,11 +71,11 @@ class Node(ABC):
     children : tuple of :py:class:`Node`
         Possibly empty list of sub-nodes.
     """
-    def __init__(self, children=None):
+    def __init__(self, children: Tuple[Node, ...] = None):
         self.children = tuple(children or ())
 
     @abstractmethod
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         """Implement Visitor pattern for parsed tree.
 
         Parameters
@@ -93,19 +100,19 @@ class BinaryOp(Node):
     op : str
         Operator name, e.g. '+', 'OR'
     """
-    def __init__(self, lhs, op, rhs):
+    def __init__(self, lhs: Node, op: str, rhs: Node):
         Node.__init__(self, (lhs, rhs))
         self.lhs = lhs
         self.op = op
         self.rhs = rhs
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         lhs = self.lhs.visit(visitor)
         rhs = self.rhs.visit(visitor)
         return visitor.visitBinaryOp(self.op, lhs, rhs, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{lhs} {op} {rhs}".format(**vars(self))
 
 
@@ -122,17 +129,17 @@ class UnaryOp(Node):
     operand : Node
         Operand.
     """
-    def __init__(self, op, operand):
+    def __init__(self, op: str, operand: Node):
         Node.__init__(self, (operand,))
         self.op = op
         self.operand = operand
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         operand = self.operand.visit(visitor)
         return visitor.visitUnaryOp(self.op, operand, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{op} {operand}".format(**vars(self))
 
 
@@ -144,15 +151,15 @@ class StringLiteral(Node):
     value : str
         Literal value.
     """
-    def __init__(self, value):
+    def __init__(self, value: str):
         Node.__init__(self)
         self.value = value
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         return visitor.visitStringLiteral(self.value, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "'{value}'".format(**vars(self))
 
 
@@ -161,18 +168,18 @@ class TimeLiteral(Node):
 
     Attributes
     ----------
-    value : str
+    value : `astropy.time.Time`
         Literal string value.
     """
-    def __init__(self, value):
+    def __init__(self, value: astropy.time.Time):
         Node.__init__(self)
         self.value = value
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         return visitor.visitTimeLiteral(self.value, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "'{value}'".format(**vars(self))
 
 
@@ -187,15 +194,15 @@ class NumericLiteral(Node):
     value : str
         Literal value.
     """
-    def __init__(self, value):
+    def __init__(self, value: str):
         Node.__init__(self)
         self.value = value
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         return visitor.visitNumericLiteral(self.value, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{value}".format(**vars(self))
 
 
@@ -210,15 +217,15 @@ class Identifier(Node):
     name : str
         Identifier name.
     """
-    def __init__(self, name):
+    def __init__(self, name: str):
         Node.__init__(self)
         self.name = name
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         return visitor.visitIdentifier(self.name, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "{name}".format(**vars(self))
 
 
@@ -241,16 +248,16 @@ class RangeLiteral(Node):
         as stride=1 but for some consumers it may be useful to know that
         stride was missing from literal.
     """
-    def __init__(self, start, stop, stride=None):
+    def __init__(self, start: int, stop: int, stride: Optional[int] = None):
         self.start = start
         self.stop = stop
         self.stride = stride
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         return visitor.visitRangeLiteral(self.start, self.stop, self.stride, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         res = f"{self.start}..{self.stop}" + (f":{self.stride}" if self.stride else "")
         return res
 
@@ -267,19 +274,19 @@ class IsIn(Node):
     not_in : bool
         If `True` then it is NOT IN expression, otherwise it is IN expression.
     """
-    def __init__(self, lhs, values, not_in=False):
+    def __init__(self, lhs: Node, values: List[Node], not_in: bool = False):
         Node.__init__(self, (lhs,) + tuple(values))
         self.lhs = lhs
         self.values = values
         self.not_in = not_in
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         lhs = self.lhs.visit(visitor)
         values = [value.visit(visitor) for value in self.values]
         return visitor.visitIsIn(lhs, values, self.not_in, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         values = ", ".join(str(x) for x in self.values)
         not_in = ""
         if self.not_in:
@@ -297,14 +304,14 @@ class Parens(Node):
     expr : Node
         Expression inside parentheses.
     """
-    def __init__(self, expr):
+    def __init__(self, expr: Node):
         Node.__init__(self, (expr,))
         self.expr = expr
 
-    def visit(self, visitor):
+    def visit(self, visitor: TreeVisitor) -> Any:
         # Docstring inherited from Node.visit
         expr = self.expr.visit(visitor)
         return visitor.visitParens(expr, self)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return "({expr})".format(**vars(self))

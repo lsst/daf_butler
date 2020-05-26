@@ -56,13 +56,13 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
     def initialize(cls, db: Database, context: StaticTablesContext, *,
                    universe: DimensionUniverse) -> DimensionRecordStorageManager:
         # Docstring inherited from DimensionRecordStorageManager.
-        records = NamedKeyDict({})
+        records: NamedKeyDict[DimensionElement, DimensionRecordStorage] = NamedKeyDict()
         for element in universe.elements:
             ImplementationClass = DimensionRecordStorage.getDefaultImplementation(element)
             records[element] = ImplementationClass.initialize(db, element, context=context)
         return cls(db=db, records=records, universe=universe)
 
-    def refresh(self):
+    def refresh(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
         pass
 
@@ -76,7 +76,7 @@ class StaticDimensionRecordStorageManager(DimensionRecordStorageManager):
         assert result, "All records instances should be created in initialize()."
         return result
 
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorageManager.
         for storage in self._records.values():
             storage.clearCaches()

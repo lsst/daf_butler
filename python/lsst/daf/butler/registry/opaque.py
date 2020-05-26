@@ -28,6 +28,7 @@ __all__ = ["ByNameOpaqueTableStorage", "ByNameOpaqueTableStorageManager"]
 from typing import (
     Any,
     ClassVar,
+    Dict,
     Iterator,
     Optional,
 )
@@ -61,7 +62,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         self._db = db
         self._table = table
 
-    def insert(self, *data: dict):
+    def insert(self, *data: dict) -> None:
         # Docstring inherited from OpaqueTableStorage.
         self._db.insert(self._table, *data)
 
@@ -73,7 +74,7 @@ class ByNameOpaqueTableStorage(OpaqueTableStorage):
         for row in self._db.query(sql):
             yield dict(row)
 
-    def delete(self, **where: Any):
+    def delete(self, **where: Any) -> None:
         # Docstring inherited from OpaqueTableStorage.
         self._db.delete(self._table, where.keys(), where)
 
@@ -96,7 +97,7 @@ class ByNameOpaqueTableStorageManager(OpaqueTableStorageManager):
     def __init__(self, db: Database, metaTable: sqlalchemy.schema.Table):
         self._db = db
         self._metaTable = metaTable
-        self._storage = {}
+        self._storage: Dict[str, OpaqueTableStorage] = {}
 
     _META_TABLE_NAME: ClassVar[str] = "opaque_meta"
 
