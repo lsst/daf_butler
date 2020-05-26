@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = ["NameKeyCollectionManager"]
 
-from collections import namedtuple
 from typing import (
     Any,
     Optional,
@@ -31,16 +30,18 @@ from typing import (
 
 import sqlalchemy
 
-from ._base import makeRunTableSpec, makeCollectionChainTableSpec, DefaultCollectionManager
+from ._base import (
+    CollectionTablesTuple,
+    DefaultCollectionManager,
+    makeRunTableSpec,
+    makeCollectionChainTableSpec,
+)
 from ...core import ddl
 
 if TYPE_CHECKING:
-    from .database import Database, StaticTablesContext
+    from ..interfaces import CollectionRecord, Database, StaticTablesContext
 
-
-_TablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
-
-_TABLES_SPEC = _TablesTuple(
+_TABLES_SPEC = CollectionTablesTuple(
     collection=ddl.TableSpec(
         fields=[
             ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True),
@@ -65,7 +66,7 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC), collectionIdName="name")
+        return cls(db, tables=context.addTableTuple(_TABLES_SPEC), collectionIdName="name")  # type: ignore
 
     @classmethod
     def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
@@ -81,8 +82,6 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
                                 onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        if prefix is None:
-            prefix = "collection"
         original = _TABLES_SPEC.collection.fields["name"]
         copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
                              length=original.length, **kwds)
@@ -95,8 +94,6 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
                          onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        if prefix is None:
-            prefix = "run"
         original = _TABLES_SPEC.run.fields["name"]
         copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
                              length=original.length, **kwds)
@@ -105,6 +102,6 @@ class NameKeyCollectionManager(DefaultCollectionManager):
                                                         target=(original.name,), onDelete=onDelete))
         return copy
 
-    def _getByName(self, name: str):
+    def _getByName(self, name: str) -> Optional[CollectionRecord]:
         # Docstring inherited from DefaultCollectionManager.
         return self._records.get(name)

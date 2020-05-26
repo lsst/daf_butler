@@ -3,6 +3,8 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorage",)
 
 from typing import (
+    Any,
+    Dict,
     Iterable,
     Iterator,
     Optional,
@@ -63,6 +65,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         with self._db.transaction():
             datasetIds = self._db.insert(self._static.dataset, *([staticRow]*len(dataIds)),
                                          returnIds=True)
+            assert datasetIds is not None
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the dynamic table.
             protoDynamicRow = {
@@ -98,7 +101,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             run=self._collections[row[self._runKeyColumn]].name
         )
 
-    def delete(self, datasets: Iterable[DatasetRef]):
+    def delete(self, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         # Only delete from common dataset table; ON DELETE foreign key clauses
         # will handle the rest.
@@ -108,7 +111,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             *[{"id": dataset.getCheckedId()} for dataset in datasets],
         )
 
-    def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]):
+    def associate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if collection.type is not CollectionType.TAGGED:
             raise TypeError(f"Cannot associate into collection '{collection}' "
@@ -125,7 +128,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             rows.append(row)
         self._db.replace(self._dynamic, *rows)
 
-    def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]):
+    def disassociate(self, collection: CollectionRecord, datasets: Iterable[DatasetRef]) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         if collection.type is not CollectionType.TAGGED:
             raise TypeError(f"Cannot disassociate from collection '{collection}' "
@@ -144,7 +147,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
                dataId: Select.Or[DataCoordinate] = Select,
                id: Select.Or[Optional[int]] = Select,
                run: Select.Or[None] = Select,
-               ) -> Optional[SimpleQuery]:
+               ) -> SimpleQuery:
         # Docstring inherited from DatasetRecordStorageManager.
         assert collection.type is not CollectionType.CHAINED
         query = SimpleQuery()
@@ -166,6 +169,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # We get or constrain the data ID from the dynamic table, but that's
         # multiple columns, not one, so we need to transform the one Select.Or
         # argument into a dictionary of them.
+        kwargs: Dict[str, Any]
         if dataId is Select:
             kwargs = {dim.name: Select for dim in self.datasetType.dimensions.required}
         else:
@@ -176,7 +180,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         # And now we finally join in the dynamic table.
         query.join(
             self._dynamic,
-            onclause=self._static.dataset.columns.id == self._dynamic.columns.dataset_id,
+            onclause=(self._static.dataset.columns.id == self._dynamic.columns.dataset_id),
             **kwargs
         )
         return query
@@ -195,6 +199,6 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         row = self._db.query(sql).fetchone()
         assert row is not None, "Should be guaranteed by caller and foreign key constraints."
         return DataCoordinate.standardize(
-            {dimension: row[dimension.name] for dimension in self.datasetType.dimensions.required},
+            {dimension.name: row[dimension.name] for dimension in self.datasetType.dimensions.required},
             graph=self.datasetType.dimensions
         )

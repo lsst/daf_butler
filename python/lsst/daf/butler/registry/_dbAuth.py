@@ -19,10 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 import fnmatch
 import os
 import stat
 import urllib.parse
+from typing import Dict, List, Optional, Tuple, Union
 import yaml
 
 __all__ = ["DbAuth", "DbAuthError", "DbAuthPermissionsError"]
@@ -63,7 +66,8 @@ class DbAuth:
     At least one of ``path``, ``envVar``, or ``authList`` must be provided;
     generally ``path`` should be provided as a default location.
     """
-    def __init__(self, path=None, envVar=None, authList=None):
+    def __init__(self, path: Optional[str] = None, envVar: Optional[str] = None,
+                 authList: Optional[List[Dict[str, str]]] = None):
         if authList is not None:
             self.authList = authList
             return
@@ -88,7 +92,10 @@ class DbAuth:
         except Exception as exc:
             raise DbAuthError(f"Unable to load DbAuth configuration file: {secretPath}.") from exc
 
-    def getAuth(self, dialectname, username, host, port, database):
+    # Host is tagged as Optional only because other routines delegate to this
+    # one in order to raise a consistent exception for that condition.
+    def getAuth(self, dialectname: str, username: Optional[str], host: Optional[str],
+                port: Optional[Union[int, str]], database: str) -> Tuple[Optional[str], str]:
         """Retrieve a username and password for a database connection.
 
         This function matches elements from the database connection URL with
@@ -160,11 +167,13 @@ class DbAuth:
         the pattern ``postgresql://host.example.com:5432``, even if the default
         port for the connection is 5432.
         """
-        if dialectname is None or dialectname == "":
+        # Check inputs, squashing MyPy warnings that they're unnecessary
+        # (since they're only unnecessary if everyone else runs MyPy).
+        if dialectname is None or dialectname == "":  # type: ignore
             raise DbAuthError("Missing dialectname parameter")
         if host is None or host == "":
             raise DbAuthError("Missing host parameter")
-        if database is None or database == "":
+        if database is None or database == "":  # type: ignore
             raise DbAuthError("Missing database parameter")
 
         for authDict in self.authList:
@@ -228,7 +237,7 @@ class DbAuth:
             "No matching DbAuth configuration for: "
             f"({dialectname}, {username}, {host}, {port}, {database})")
 
-    def getUrl(self, url):
+    def getUrl(self, url: str) -> str:
         """Fill in a username and password in a database connection URL.
 
         This function parses the URL and calls `getAuth`.
@@ -260,8 +269,10 @@ class DbAuth:
             components.username, components.hostname, components.port,
             components.path.lstrip("/"))
         hostname = components.hostname
+        assert hostname is not None
         if ":" in hostname:     # ipv6
             hostname = f"[{hostname}]"
+        assert username is not None
         netloc = "{}:{}@{}".format(
             urllib.parse.quote(username, safe=""),
             urllib.parse.quote(password, safe=""), hostname)

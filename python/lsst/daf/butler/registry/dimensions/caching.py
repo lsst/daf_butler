@@ -22,11 +22,11 @@ from __future__ import annotations
 
 __all__ = ["CachingDimensionRecordStorage"]
 
-from typing import Optional
+from typing import Dict, Optional
 
 import sqlalchemy
 
-from ...core import DataCoordinate, DimensionElement, DimensionRecord, NamedKeyDict, Timespan
+from ...core import DataCoordinate, DataId, DimensionElement, DimensionRecord, NamedKeyDict, Timespan
 from ..interfaces import Database, DimensionRecordStorage, StaticTablesContext
 from ..queries import QueryBuilder
 
@@ -43,7 +43,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
     """
     def __init__(self, nested: DimensionRecordStorage):
         self._nested = nested
-        self._cache = {}
+        self._cache: Dict[DataCoordinate, DimensionRecord] = {}
 
     @classmethod
     def initialize(cls, db: Database, element: DimensionElement, *,
@@ -58,7 +58,7 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         # Docstring inherited from DimensionRecordStorage.element.
         return self._nested.element
 
-    def clearCaches(self):
+    def clearCaches(self) -> None:
         # Docstring inherited from DimensionRecordStorage.clearCaches.
         self._cache.clear()
         self._nested.clearCaches()
@@ -68,28 +68,29 @@ class CachingDimensionRecordStorage(DimensionRecordStorage):
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
-    ):
+    ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         return self._nested.join(builder, regions=regions, timespans=timespans)
 
-    def insert(self, *records: DimensionRecord):
+    def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         self._nested.insert(*records)
         for record in records:
             self._cache[record.dataId] = record
 
-    def sync(self, record: DimensionRecord):
+    def sync(self, record: DimensionRecord) -> bool:
         # Docstring inherited from DimensionRecordStorage.sync.
         inserted = self._nested.sync(record)
         if inserted:
             self._cache[record.dataId] = record
         return inserted
 
-    def fetch(self, dataId: DataCoordinate) -> Optional[DimensionRecord]:
+    def fetch(self, dataId: DataId) -> Optional[DimensionRecord]:
         # Docstring inherited from DimensionRecordStorage.fetch.
         dataId = DataCoordinate.standardize(dataId, graph=self.element.graph)
         record = self._cache.get(dataId)
         if record is None:
             record = self._nested.fetch(dataId)
-            self._cache[dataId] = record
+            if record is not None:
+                self._cache[dataId] = record
         return record

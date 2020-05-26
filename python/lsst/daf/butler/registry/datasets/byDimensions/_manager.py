@@ -3,6 +3,8 @@ from __future__ import annotations
 __all__ = ("ByDimensionsDatasetRecordStorageManager",)
 
 from typing import (
+    Any,
+    Dict,
     Iterator,
     Optional,
     Tuple,
@@ -66,25 +68,25 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         self._db = db
         self._collections = collections
         self._static = static
-        self._byName = {}
-        self._byId = {}
+        self._byName: Dict[str, ByDimensionsDatasetRecordStorage] = {}
+        self._byId: Dict[int, ByDimensionsDatasetRecordStorage] = {}
 
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext, *, collections: CollectionManager,
                    universe: DimensionUniverse) -> DatasetRecordStorageManager:
         # Docstring inherited from DatasetRecordStorageManager.
         specs = makeStaticTableSpecs(type(collections), universe=universe)
-        static = context.addTableTuple(specs)
+        static: StaticDatasetTablesTuple = context.addTableTuple(specs)  # type: ignore
         return cls(db=db, collections=collections, static=static)
 
     @classmethod
     def addDatasetForeignKey(cls, tableSpec: ddl.TableSpec, *, name: str = "dataset",
                              constraint: bool = True, onDelete: Optional[str] = None,
-                             **kwargs) -> ddl.FieldSpec:
+                             **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from DatasetRecordStorageManager.
         return addDatasetForeignKey(tableSpec, name=name, onDelete=onDelete, constraint=constraint, **kwargs)
 
-    def refresh(self, *, universe: DimensionUniverse):
+    def refresh(self, *, universe: DimensionUniverse) -> None:
         # Docstring inherited from DatasetRecordStorageManager.
         byName = {}
         byId = {}
@@ -121,6 +123,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                 },
                 returning=["id"],
             )
+            assert row is not None
             dynamic = self._db.ensureTableExists(
                 makeDynamicTableName(datasetType),
                 makeDynamicTableSpec(datasetType, type(self._collections)),
@@ -145,7 +148,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         for storage in self._byName.values():
             yield storage.datasetType
 
-    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: int, *, universe: DimensionUniverse) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         sql = sqlalchemy.sql.select(
             [
@@ -162,7 +165,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             return None
         recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
         if recordsForType is None:
-            self.refresh()
+            self.refresh(universe=universe)
             recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
             assert recordsForType is not None, "Should be guaranteed by foreign key constraints."
         return DatasetRef(

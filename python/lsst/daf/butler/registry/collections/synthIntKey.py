@@ -22,28 +22,30 @@ from __future__ import annotations
 
 __all__ = ["SynthIntKeyCollectionManager"]
 
-from collections import namedtuple
 from typing import (
     Any,
-    Iterator,
-    NamedTuple,
+    Dict,
+    Iterable,
     Optional,
     TYPE_CHECKING,
 )
 
 import sqlalchemy
 
-from ._base import makeRunTableSpec, makeCollectionChainTableSpec, DefaultCollectionManager
+from ._base import (
+    CollectionTablesTuple,
+    DefaultCollectionManager,
+    makeRunTableSpec,
+    makeCollectionChainTableSpec,
+)
 from ...core import ddl
 from ..interfaces import CollectionRecord
 
 if TYPE_CHECKING:
-    from .database import Database, StaticTablesContext
+    from ..interfaces import Database, StaticTablesContext
 
 
-_TablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
-
-_TABLES_SPEC = _TablesTuple(
+_TABLES_SPEC = CollectionTablesTuple(
     collection=ddl.TableSpec(
         fields=[
             ddl.FieldSpec("collection_id", dtype=sqlalchemy.Integer, primaryKey=True, autoincrement=True),
@@ -74,15 +76,14 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     collectionIdName : `str`
         Name of the column in collections table that identifies it (PK).
     """
-    def __init__(self, db: Database, tables: NamedTuple[sqlalchemy.schema.Table, ...],
-                 collectionIdName: str):
+    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionIdName: str):
         super().__init__(db=db, tables=tables, collectionIdName=collectionIdName)
-        self._nameCache = {}  # indexed by collection name
+        self._nameCache: Dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),
+        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),  # type: ignore
                    collectionIdName="collection_id")
 
     @classmethod
@@ -99,8 +100,6 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
                                 onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        if prefix is None:
-            prefix = "collection"
         original = _TABLES_SPEC.collection.fields["collection_id"]
         copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwds)
         tableSpec.fields.add(copy)
@@ -112,8 +111,6 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
     def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
                          onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
-        if prefix is None:
-            prefix = "run"
         original = _TABLES_SPEC.run.fields["collection_id"]
         copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwds)
         tableSpec.fields.add(copy)
@@ -121,7 +118,7 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
                                                         target=(original.name,), onDelete=onDelete))
         return copy
 
-    def _setRecordCache(self, records: Iterator[CollectionRecord]):
+    def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
         """Set internal record cache to contain given records,
         old cached records will be removed.
         """
@@ -131,18 +128,18 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
             self._records[record.key] = record
             self._nameCache[record.name] = record
 
-    def _addCachedRecord(self, record: CollectionRecord):
+    def _addCachedRecord(self, record: CollectionRecord) -> None:
         """Add single record to cache.
         """
         self._records[record.key] = record
         self._nameCache[record.name] = record
 
-    def _removeCachedRecord(self, record: CollectionRecord):
+    def _removeCachedRecord(self, record: CollectionRecord) -> None:
         """Remove single record from cache.
         """
         del self._records[record.key]
         del self._nameCache[record.name]
 
-    def _getByName(self, name: str):
+    def _getByName(self, name: str) -> Optional[CollectionRecord]:
         # Docstring inherited from DefaultCollectionManager.
         return self._nameCache.get(name)

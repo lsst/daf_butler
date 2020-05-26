@@ -19,10 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("DB_AUTH_ENVVAR", "DB_AUTH_PATH", "ConnectionStringFactory")
+
+from typing import TYPE_CHECKING
 
 from sqlalchemy.engine import url
 from ._dbAuth import DbAuth, DbAuthNotFoundError
+
+if TYPE_CHECKING:
+    from ._config import RegistryConfig
 
 DB_AUTH_ENVVAR = "LSST_DB_AUTH"
 """Default name of the environmental variable that will be used to locate DB
@@ -46,7 +53,7 @@ class ConnectionStringFactory:
     keys = ('username', 'password', 'host', 'port', 'database')
 
     @classmethod
-    def fromConfig(cls, registryConfig):
+    def fromConfig(cls, registryConfig: RegistryConfig) -> url.URL:
         """Parses the `db`, and, if they exist, username, password, host, port
         and database keys from the given config.
 
@@ -86,7 +93,7 @@ class ConnectionStringFactory:
         Wallet, is being used and therefore are left unmodified.
         """
         # this import can not live on the top because of circular import issue
-        from lsst.daf.butler.registry import RegistryConfig
+        from ._config import RegistryConfig
         regConf = RegistryConfig(registryConfig)
         conStr = url.make_url(regConf['db'])
 

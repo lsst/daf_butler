@@ -102,9 +102,26 @@ class DatasetRecordStorage(ABC):
 
         Returns
         -------
-        ref : `DatasetRef` or `None`
+        ref : `DatasetRef`
             A resolved `DatasetRef` (without components populated), or `None`
             if no matching dataset was found.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def delete(self, datasets: Iterable[DatasetRef]) -> None:
+        """Fully delete the given datasets from the registry.
+
+        Parameters
+        ----------
+         datasets : `Iterable` [ `DatasetRef` ]
+            Datasets to be deleted.  All datasets must be resolved and have
+            the same `DatasetType` as ``self``.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if any of the given `DatasetRef` instances is unresolved.
         """
         raise NotImplementedError()
 
@@ -340,7 +357,7 @@ class DatasetRecordStorageManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def getDatasetRef(self, id: int) -> Optional[DatasetRef]:
+    def getDatasetRef(self, id: int, *, universe: DimensionUniverse) -> Optional[DatasetRef]:
         """Return a `DatasetRef` for the given dataset primary key
         value.
 
@@ -348,6 +365,8 @@ class DatasetRecordStorageManager(ABC):
         ----------
         id : `int`
             Autoincrement primary key value for the dataset.
+        universe : `DimensionUniverse`
+            All known dimensions.
 
         Returns
         -------

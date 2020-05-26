@@ -119,7 +119,7 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         builder: QueryBuilder, *,
         regions: Optional[NamedKeyDict[DimensionElement, sqlalchemy.sql.ColumnElement]] = None,
         timespans: Optional[NamedKeyDict[DimensionElement, Timespan[sqlalchemy.sql.ColumnElement]]] = None,
-    ):
+    ) -> None:
         # Docstring inherited from DimensionRecordStorage.
         if regions is not None:
             dimensions = NamedValueSet(self.element.required)
@@ -132,18 +132,21 @@ class SpatialDimensionRecordStorage(TableDimensionRecordStorage):
         commonSkyPixRows = []
         commonSkyPix = self.element.universe.commonSkyPix
         for record in records:
-            if record.region is None:
+            # MyPy can't tell that some DimensionRecords have regions, because
+            # they're dynamically-created types.
+            region = record.region  # type: ignore
+            if region is None:
                 # TODO: should we warn about this case?
                 continue
             base = record.dataId.byName()
-            for begin, end in commonSkyPix.pixelization.envelope(record.region):
+            for begin, end in commonSkyPix.pixelization.envelope(region):
                 for skypix in range(begin, end):
                     row = base.copy()
                     row[commonSkyPix.name] = skypix
                     commonSkyPixRows.append(row)
         return commonSkyPixRows
 
-    def insert(self, *records: DimensionRecord):
+    def insert(self, *records: DimensionRecord) -> None:
         # Docstring inherited from DimensionRecordStorage.insert.
         commonSkyPixRows = self._computeCommonSkyPixRows(*records)
         with self._db.transaction():

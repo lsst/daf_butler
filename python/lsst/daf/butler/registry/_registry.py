@@ -38,11 +38,13 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Set,
     Type,
     TYPE_CHECKING,
     Union,
 )
 
+import astropy.time
 import sqlalchemy
 
 import lsst.sphgeom
@@ -52,15 +54,17 @@ from ..core import (
     DataId,
     DatasetRef,
     DatasetType,
+    ddl,
     Dimension,
     DimensionElement,
     DimensionGraph,
     DimensionRecord,
     DimensionUniverse,
     ExpandedDataCoordinate,
+    NamedKeyDict,
+    Timespan,
     StorageClassFactory,
 )
-from ..core import ddl
 from ..core.utils import doImport, iterable, transactional
 from ._config import RegistryConfig
 from .queries import (
@@ -70,7 +74,8 @@ from .queries import (
 from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
-from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch
+from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
+from .interfaces import ChainedCollectionRecord, RunRecord
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -249,7 +254,7 @@ class Registry:
         return self._dimensions.universe
 
     @contextlib.contextmanager
-    def transaction(self):
+    def transaction(self) -> Iterator[None]:
         """Return a context manager that represents a transaction.
         """
         # TODO make savepoint=False the default.
@@ -262,7 +267,7 @@ class Registry:
             self._dimensions.clearCaches()
             raise
 
-    def registerOpaqueTable(self, tableName: str, spec: ddl.TableSpec):
+    def registerOpaqueTable(self, tableName: str, spec: ddl.TableSpec) -> None:
         """Add an opaque (to the `Registry`) table for use by a `Datastore` or
         other data repository client.
 
@@ -280,7 +285,7 @@ class Registry:
         self._opaque.register(tableName, spec)
 
     @transactional
-    def insertOpaqueData(self, tableName: str, *data: dict):
+    def insertOpaqueData(self, tableName: str, *data: dict) -> None:
         """Insert records into an opaque table.
 
         Parameters
@@ -316,7 +321,7 @@ class Registry:
         yield from self._opaque[tableName].fetch(**where)
 
     @transactional
-    def deleteOpaqueData(self, tableName: str, **where: Any):
+    def deleteOpaqueData(self, tableName: str, **where: Any) -> None:
         """Remove records from an opaque table.
 
         Parameters
@@ -332,7 +337,7 @@ class Registry:
         """
         self._opaque[tableName].delete(**where)
 
-    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED):
+    def registerCollection(self, name: str, type: CollectionType = CollectionType.TAGGED) -> None:
         """Add a new collection if one with the given name does not exist.
 
         Parameters
@@ -370,7 +375,7 @@ class Registry:
         """
         return self._collections.find(name).type
 
-    def registerRun(self, name: str):
+    def registerRun(self, name: str) -> None:
         """Add a new run if one with the given name does not exist.
 
         Parameters
@@ -386,7 +391,7 @@ class Registry:
         self._collections.register(name, CollectionType.RUN)
 
     @transactional
-    def removeCollection(self, name: str):
+    def removeCollection(self, name: str) -> None:
         """Completely remove the given collection.
 
         Parameters
@@ -438,10 +443,11 @@ class Registry:
         record = self._collections.find(parent)
         if record.type is not CollectionType.CHAINED:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+        assert isinstance(record, ChainedCollectionRecord)
         return record.children
 
     @transactional
-    def setCollectionChain(self, parent: str, children: Any):
+    def setCollectionChain(self, parent: str, children: Any) -> None:
         """Define or redefine a `~CollectionType.CHAINED` collection.
 
         Parameters
@@ -470,6 +476,7 @@ class Registry:
         record = self._collections.find(parent)
         if record.type is not CollectionType.CHAINED:
             raise TypeError(f"Collection '{parent}' has type {record.type.name}, not CHAINED.")
+        assert isinstance(record, ChainedCollectionRecord)
         children = CollectionSearch.fromExpression(children)
         if children != record.children:
             record.update(self._collections, children)
@@ -643,9 +650,13 @@ class Registry:
             if storage is None:
                 raise LookupError(f"DatasetType with name '{datasetType}' has not been registered.")
         runRecord = self._collections.find(run)
-        dataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions) for dataId in dataIds]
+        if runRecord.type is not CollectionType.RUN:
+            raise TypeError("Given collection is of type {runRecord.type.name}; RUN collection required.")
+        assert isinstance(runRecord, RunRecord)
+        expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
+                           for dataId in dataIds]
         try:
-            refs = list(storage.insert(runRecord, dataIds, quantum=producer))
+            refs = list(storage.insert(runRecord, expandedDataIds, quantum=producer))
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
                                              f"one or more datasets of type {storage.datasetType} into "
@@ -669,13 +680,13 @@ class Registry:
             A ref to the Dataset, or `None` if no matching Dataset
             was found.
         """
-        ref = self._datasets.getDatasetRef(id)
+        ref = self._datasets.getDatasetRef(id, universe=self.dimensions)
         if ref is None:
             return None
         return ref
 
     @transactional
-    def removeDatasets(self, refs: Iterable[DatasetRef]):
+    def removeDatasets(self, refs: Iterable[DatasetRef]) -> None:
         """Remove datasets from the Registry.
 
         The datasets will be removed unconditionally from all collections, and
@@ -699,6 +710,7 @@ class Registry:
         """
         for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
+            assert storage is not None
             try:
                 storage.delete(refsForType)
             except sqlalchemy.exc.IntegrityError as err:
@@ -706,7 +718,7 @@ class Registry:
                                           "present in one or more Datastores.") from err
 
     @transactional
-    def associate(self, collection: str, refs: Iterable[DatasetRef]):
+    def associate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
         """Add existing datasets to a `~CollectionType.TAGGED` collection.
 
         If a DatasetRef with the same exact integer ID is already in a
@@ -740,6 +752,7 @@ class Registry:
             raise TypeError(f"Collection '{collection}' has type {collectionRecord.type.name}, not TAGGED.")
         for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
+            assert storage is not None
             try:
                 storage.associate(collectionRecord, refsForType)
             except sqlalchemy.exc.IntegrityError as err:
@@ -751,7 +764,7 @@ class Registry:
                 ) from err
 
     @transactional
-    def disassociate(self, collection: str, refs: Iterable[DatasetRef]):
+    def disassociate(self, collection: str, refs: Iterable[DatasetRef]) -> None:
         """Remove existing datasets from a `~CollectionType.TAGGED` collection.
 
         ``collection`` and ``ref`` combinations that are not currently
@@ -781,16 +794,23 @@ class Registry:
                             "expected TAGGED.")
         for datasetType, refsForType in DatasetRef.groupByType(refs).items():
             storage = self._datasets.find(datasetType.name)
+            assert storage is not None
             storage.disassociate(collectionRecord, refsForType)
 
     def getDatastoreBridgeManager(self) -> DatastoreRegistryBridgeManager:
-        # TODO docs
+        """Return an object that allows a new `Datastore` instance to
+        communicate with this `Registry`.
+
+        Returns
+        -------
+        manager : `DatastoreRegistryBridgeManager`
+            Object that mediates communication between this `Registry` and its
+            associated datastores.
+        """
         return self._datastoreBridges
 
-    def getDatasetLocations(self, ref: DatasetRef) -> Iterator[str]:
+    def getDatasetLocations(self, ref: DatasetRef) -> Iterable[str]:
         """Retrieve datastore locations for a given dataset.
-
-        Typically used by `Datastore`.
 
         Parameters
         ----------
@@ -811,7 +831,8 @@ class Registry:
         return self._datastoreBridges.findDatastores(ref)
 
     def expandDataId(self, dataId: Optional[DataId] = None, *, graph: Optional[DimensionGraph] = None,
-                     records: Optional[Mapping[DimensionElement, DimensionRecord]] = None, **kwds):
+                     records: Optional[Mapping[DimensionElement, Optional[DimensionRecord]]] = None,
+                     **kwargs: Any) -> ExpandedDataCoordinate:
         """Expand a dimension-based data ID to include additional information.
 
         Parameters
@@ -824,10 +845,10 @@ class Registry:
             Dimensions that are in ``dataId`` or ``kwds`` but not in ``graph``
             are silently ignored, providing a way to extract and expand a
             subset of a data ID.
-        records : mapping [`DimensionElement`, `DimensionRecord`], optional
+        records : `Mapping` [`DimensionElement`, `DimensionRecord`], optional
             Dimension record data to use before querying the database for that
             data.
-        **kwds
+        **kwargs
             Additional keywords are treated like additional key-value pairs for
             ``dataId``, extending and overriding
 
@@ -837,17 +858,17 @@ class Registry:
             A data ID that includes full metadata for all of the dimensions it
             identifieds.
         """
-        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwds)
+        standardized = DataCoordinate.standardize(dataId, graph=graph, universe=self.dimensions, **kwargs)
         if isinstance(standardized, ExpandedDataCoordinate):
             return standardized
         elif isinstance(dataId, ExpandedDataCoordinate):
-            records = dict(records) if records is not None else {}
+            records = NamedKeyDict(records) if records is not None else NamedKeyDict()
             records.update(dataId.records)
         else:
-            records = dict(records) if records is not None else {}
-        keys = dict(standardized)
-        regions = []
-        timespans = []
+            records = NamedKeyDict(records) if records is not None else NamedKeyDict()
+        keys = dict(standardized.byName())
+        regions: List[lsst.sphgeom.ConvexPolygon] = []
+        timespans: List[Timespan[astropy.time.Time]] = []
         for element in standardized.graph.primaryKeyTraversalOrder:
             record = records.get(element.name, ...)  # Use ... to mean not found; None might mean NULL
             if record is ...:
@@ -857,9 +878,11 @@ class Registry:
             if record is not None:
                 for d in element.implied:
                     value = getattr(record, d.name)
-                    if keys.setdefault(d, value) != value:
-                        raise InconsistentDataIdError(f"Data ID {standardized} has {d.name}={keys[d]!r}, "
-                                                      f"but {element.name} implies {d.name}={value!r}.")
+                    if keys.setdefault(d.name, value) != value:
+                        raise InconsistentDataIdError(
+                            f"Data ID {standardized} has {d.name}={keys[d.name]!r}, "
+                            f"but {element.name} implies {d.name}={value!r}."
+                        )
                 if element in standardized.graph.spatial and record.region is not None:
                     if any(record.region.relate(r) & lsst.sphgeom.DISJOINT for r in regions):
                         raise InconsistentDataIdError(f"Data ID {standardized}'s region for {element.name} "
@@ -921,13 +944,13 @@ class Registry:
         # keys from both; that will fail if they are inconsistent.
         # First, if either input was already an ExpandedDataCoordinate, extract
         # its records so we don't have to query for them.
-        records = {}
-        if hasattr(a, "records"):
+        records: NamedKeyDict[DimensionElement, Optional[DimensionRecord]] = NamedKeyDict()
+        if isinstance(a, ExpandedDataCoordinate):
             records.update(a.records)
-        if hasattr(b, "records"):
+        if isinstance(b, ExpandedDataCoordinate):
             records.update(b.records)
         try:
-            self.expandDataId({**a, **b}, graph=(a.graph | b.graph), records=records)
+            self.expandDataId({**a.byName(), **b.byName()}, graph=(a.graph | b.graph), records=records)
         except InconsistentDataIdError:
             return None
         # We know the answer is not `None`; time to figure out what it is.
@@ -938,8 +961,8 @@ class Registry:
         )
 
     def insertDimensionData(self, element: Union[DimensionElement, str],
-                            *data: Union[dict, DimensionRecord],
-                            conform: bool = True):
+                            *data: Union[Mapping[str, Any], DimensionRecord],
+                            conform: bool = True) -> None:
         """Insert one or more dimension records into the database.
 
         Parameters
@@ -956,16 +979,18 @@ class Registry:
             appropriate subclass.
         """
         if conform:
-            element = self.dimensions[element]  # if this is a name, convert it to a true DimensionElement.
-            records = [element.RecordClass.fromDict(row) if not type(row) is element.RecordClass else row
+            if isinstance(element, str):
+                element = self.dimensions[element]
+            records = [row if isinstance(row, DimensionRecord) else element.RecordClass.fromDict(row)
                        for row in data]
         else:
-            records = data
-        storage = self._dimensions[element]
+            # Ignore typing since caller said to trust them with conform=False.
+            records = data  # type: ignore
+        storage = self._dimensions[element]  # type: ignore
         storage.insert(*records)
 
     def syncDimensionData(self, element: Union[DimensionElement, str],
-                          row: Union[dict, DimensionRecord],
+                          row: Union[Mapping[str, Any], DimensionRecord],
                           conform: bool = True) -> bool:
         """Synchronize the given dimension record with the database, inserting
         if it does not already exist and comparing values if it does.
@@ -1000,11 +1025,13 @@ class Registry:
         able to perform its own transaction to be concurrent.
         """
         if conform:
-            element = self.dimensions[element]  # if this is a name, convert it to a true DimensionElement.
-            record = element.RecordClass.fromDict(row) if not type(row) is element.RecordClass else row
+            if isinstance(element, str):
+                element = self.dimensions[element]
+            record = row if isinstance(row, DimensionRecord) else element.RecordClass.fromDict(row)
         else:
-            record = row
-        storage = self._dimensions[element]
+            # Ignore typing since caller said to trust them with conform=False.
+            record = row  # type: ignore
+        storage = self._dimensions[element]  # type: ignore
         return storage.sync(record)
 
     def queryDatasetTypes(self, expression: Any = ..., *, components: Optional[bool] = None
@@ -1033,16 +1060,16 @@ class Registry:
             A `DatasetType` instance whose name matches ``expression``.
         """
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
-        if wildcard is ...:
+        if wildcard is Ellipsis:
             for datasetType in self._datasets:
                 if components or not datasetType.isComponent():
                     yield datasetType
             return
-        done = set()
+        done: Set[str] = set()
         for name in wildcard.strings:
             storage = self._datasets.find(name)
             if storage is not None:
-                done.add(storage.datasetType)
+                done.add(storage.datasetType.name)
                 yield storage.datasetType
         if wildcard.patterns:
             # If components (the argument) is None, we'll save component
@@ -1138,7 +1165,7 @@ class Registry:
                         where: Optional[str] = None,
                         expand: bool = True,
                         components: Optional[bool] = None,
-                        **kwds) -> Iterator[DataCoordinate]:
+                        **kwargs: Any) -> Iterator[DataCoordinate]:
         """Query for and iterate over data IDs matching user-provided criteria.
 
         Parameters
@@ -1183,7 +1210,7 @@ class Registry:
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
-        kwds
+        **kwargs
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
             argument (and may be used to provide a constraining data ID even
@@ -1196,7 +1223,7 @@ class Registry:
             unspecified.
         """
         dimensions = iterable(dimensions)
-        standardizedDataId = self.expandDataId(dataId, **kwds)
+        standardizedDataId = self.expandDataId(dataId, **kwargs)
         standardizedDatasetTypes = set()
         requestedDimensionNames = set(self.dimensions.extract(dimensions).names)
         if datasets is not None:
@@ -1243,7 +1270,7 @@ class Registry:
                       deduplicate: bool = False,
                       expand: bool = True,
                       components: Optional[bool] = None,
-                      **kwds) -> Iterator[DatasetRef]:
+                      **kwargs: Any) -> Iterator[DatasetRef]:
         """Query for and iterate over dataset references matching user-provided
         criteria.
 
@@ -1291,7 +1318,7 @@ class Registry:
             if their parent datasets were not matched by the expression.
             Fully-specified component datasets (`str` or `DatasetType`
             instances) are always included.
-        kwds
+        **kwargs
             Additional keyword arguments are forwarded to
             `DataCoordinate.standardize` when processing the ``dataId``
             argument (and may be used to provide a constraining data ID even
@@ -1328,7 +1355,7 @@ class Registry:
         else:
             collections = CollectionQuery.fromExpression(collections)
         # Standardize and expand the data ID provided as a constraint.
-        standardizedDataId = self.expandDataId(dataId, **kwds)
+        standardizedDataId = self.expandDataId(dataId, **kwargs)
 
         # We can only query directly if given a non-component DatasetType
         # instance.  If we were given an expression or str or a component
@@ -1410,11 +1437,12 @@ class Registry:
             # For each data ID, yield only the DatasetRef with the lowest
             # collection rank.
             bestRefs = {}
-            bestRanks = {}
+            bestRanks: Dict[DataCoordinate, int] = {}
             for row in self._db.query(query.sql):
                 if predicate(row):
                     ref, rank = query.extractDatasetRef(row, datasetType)
                     bestRank = bestRanks.get(ref.dataId, sys.maxsize)
+                    assert rank is not None
                     if rank < bestRank:
                         bestRefs[ref.dataId] = ref
                         bestRanks[ref.dataId] = rank
@@ -1426,11 +1454,6 @@ class Registry:
                     yield ref.expanded(dataId)
             else:
                 yield from bestRefs.values()
-
-    dimensions: DimensionUniverse
-    """The universe of all dimensions known to the registry
-    (`DimensionUniverse`).
-    """
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
