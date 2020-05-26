@@ -374,14 +374,13 @@ def _yieldCollectionRecords(
     restriction: DatasetTypeRestriction,
     datasetType: Optional[DatasetType] = None,
     collectionType: Optional[CollectionType] = None,
-    withRestrictions: bool = False,
     done: Optional[Set[str]] = None,
     flattenChains: bool = True,
     includeChains: Optional[bool] = None,
-) -> Iterator[CollectionRecord]:
+) -> Iterator[Tuple[CollectionRecord, DatasetTypeRestriction]]:
     """A helper function containing common logic for `CollectionSearch.iter`
-    and `CollectionQuery.iter`: yield a single `CollectionRecord` only if it
-    matches the criteria given in other arguments.
+    and `CollectionQuery.iter`: recursively yield `CollectionRecord` only they
+    match the criteria given in other arguments.
 
     Parameters
     ----------
@@ -398,16 +397,13 @@ def _yieldCollectionRecords(
     collectionType : `CollectionType`, optional
         If given, a `CollectionType` enumeration value that must match
         ``record.type`` in order for ``record`` to be yielded.
-    withRestrictions : `bool`, optional
-        If `True` (`False` is default), yield ``restriction`` along with
-        ``record``.
     done : `set` [ `str` ], optional
         A `set` of already-yielded collection names; if provided, ``record``
         will only be yielded if it is not already in ``done``, and ``done``
         will be updated to include it on return.
     flattenChains : `bool`, optional
         If `True` (default) recursively yield the child collections of
-        `~CollectionType.CHAINED` colelctions.
+        `~CollectionType.CHAINED` collections.
     includeChains : `bool`, optional
         If `False`, return records for `~CollectionType.CHAINED` collections
         themselves.  The default is the opposite of ``flattenChains``: either
@@ -416,10 +412,9 @@ def _yieldCollectionRecords(
     Yields
     ------
     record : `CollectionRecord`
-        The given collection record.
+        Matching collection records.
     restriction : `DatasetTypeRestriction`
-        The given dataset type restriction; yielded only if
-        ``withRestrictions`` is `True`.
+        The given dataset type restriction.
     """
     if done is None:
         done = set()
@@ -427,17 +422,15 @@ def _yieldCollectionRecords(
     if collectionType is None or record.type is collectionType:
         done.add(record.name)
         if record.type is not CollectionType.CHAINED or includeChains:
-            if withRestrictions:
-                yield record, restriction
-            else:
-                yield record
+            yield record, restriction
     if flattenChains and record.type is CollectionType.CHAINED:
         done.add(record.name)
-        yield from record.children.iter(
+        # We know this is a ChainedCollectionRecord because of the enum value,
+        # but MyPy doesn't.
+        yield from record.children.iterPairs(  # type: ignore
             manager,
             datasetType=datasetType,
             collectionType=collectionType,
-            withRestrictions=withRestrictions,
             done=done,
             flattenChains=flattenChains,
             includeChains=includeChains,
@@ -529,11 +522,45 @@ class CollectionSearch:
              for name, items in itertools.groupby(wildcard.items, key=operator.itemgetter(0))]
         )
 
+    def iterPairs(
+        self, manager: CollectionManager, *,
+        datasetType: Optional[DatasetType] = None,
+        collectionType: Optional[CollectionType] = None,
+        done: Optional[Set[str]] = None,
+        flattenChains: bool = True,
+        includeChains: Optional[bool] = None,
+    ) -> Iterator[Tuple[CollectionRecord, DatasetTypeRestriction]]:
+        """Like `iter`, but yield pairs of `CollectionRecord`,
+        `DatasetTypeRestriction` instead of just the former.
+
+        See `iter` for all parameter descriptions.
+
+        Yields
+        ------
+        record : `CollectionRecord`
+            Matching collection records.
+        restriction : `DatasetTypeRestriction`
+            The given dataset type restriction.
+        """
+        if done is None:
+            done = set()
+        for name, restriction in self._items:
+            if name not in done and (datasetType is None or datasetType in restriction):
+                yield from _yieldCollectionRecords(
+                    manager,
+                    manager.find(name),
+                    restriction,
+                    datasetType=datasetType,
+                    collectionType=collectionType,
+                    done=done,
+                    flattenChains=flattenChains,
+                    includeChains=includeChains,
+                )
+
     def iter(
         self, manager: CollectionManager, *,
         datasetType: Optional[DatasetType] = None,
         collectionType: Optional[CollectionType] = None,
-        withRestrictions: bool = False,
         done: Optional[Set[str]] = None,
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
@@ -555,9 +582,6 @@ class CollectionSearch:
             include this dataset type.
         collectionType : `CollectionType`, optional
             If given, only yield collections of this type.
-        withRestrictions : `bool`, optional
-            If `True` (`False` is default) yield the associated
-            `DatasetTypeRestriction` along with each `CollectionRecord`.
         done : `set`, optional
             A `set` containing the names of all collections already yielded;
             any collections whose names are already present in this set will
@@ -566,28 +590,21 @@ class CollectionSearch:
             used internally to avoid duplicates.
         flattenChains : `bool`, optional
             If `True` (default) recursively yield the child collections of
-            `~CollectionType.CHAINED` colelctions.
+            `~CollectionType.CHAINED` collections.
         includeChains : `bool`, optional
             If `False`, return records for `~CollectionType.CHAINED`
             collections themselves.  The default is the opposite of
             ``flattenChains``: either return records for CHAINED collections or
             their children, but not both.
+
+        Yields
+        ------
+        record : `CollectionRecord`
+            Matching collection records.
         """
-        if done is None:
-            done = set()
-        for name, restriction in self._items:
-            if name not in done and (datasetType is None or datasetType in restriction):
-                yield from _yieldCollectionRecords(
-                    manager,
-                    manager.find(name),
-                    restriction,
-                    datasetType=datasetType,
-                    collectionType=collectionType,
-                    withRestrictions=withRestrictions,
-                    done=done,
-                    flattenChains=flattenChains,
-                    includeChains=includeChains,
-                )
+        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionType=collectionType,
+                                        done=done, flattenChains=flattenChains, includeChains=includeChains):
+            yield record
 
     def __iter__(self) -> Iterator[Tuple[str, DatasetTypeRestriction]]:
         yield from self._items
@@ -686,11 +703,64 @@ class CollectionQuery:
         return cls(search=CollectionSearch.fromExpression(wildcard),
                    patterns=tuple(wildcard.patterns))
 
+    def iterPairs(
+        self, manager: CollectionManager, *,
+        datasetType: Optional[DatasetType] = None,
+        collectionType: Optional[CollectionType] = None,
+        flattenChains: bool = True,
+        includeChains: Optional[bool] = None,
+    ) -> Iterator[Tuple[CollectionRecord, DatasetTypeRestriction]]:
+        """Like `iter`, but yield pairs of `CollectionRecord`,
+        `DatasetTypeRestriction` instead of just the former.
+
+        See `iter` for all parameter descriptions.
+
+        Yields
+        ------
+        record : `CollectionRecord`
+            Matching collection records.
+        restriction : `DatasetTypeRestriction`
+            The given dataset type restriction.
+
+        """
+        if self._search is Ellipsis:
+            for record in manager:
+                yield from _yieldCollectionRecords(
+                    manager,
+                    record,
+                    DatasetTypeRestriction.any,
+                    datasetType=datasetType,
+                    collectionType=collectionType,
+                    flattenChains=flattenChains,
+                    includeChains=includeChains,
+                )
+        else:
+            done: Set[str] = set()
+            yield from self._search.iterPairs(
+                manager,
+                datasetType=datasetType,
+                collectionType=collectionType,
+                done=done,
+                flattenChains=flattenChains,
+                includeChains=includeChains,
+            )
+            for record in manager:
+                if record.name not in done and any(p.fullmatch(record.name) for p in self._patterns):
+                    yield from _yieldCollectionRecords(
+                        manager,
+                        record,
+                        DatasetTypeRestriction.any,
+                        datasetType=datasetType,
+                        collectionType=collectionType,
+                        done=done,
+                        flattenChains=flattenChains,
+                        includeChains=includeChains,
+                    )
+
     def iter(
         self, manager: CollectionManager, *,
         datasetType: Optional[DatasetType] = None,
         collectionType: Optional[CollectionType] = None,
-        withRestrictions: bool = False,
         flattenChains: bool = True,
         includeChains: Optional[bool] = None,
     ) -> Iterator[CollectionRecord]:
@@ -711,55 +781,23 @@ class CollectionQuery:
             include this dataset type.
         collectionType : `CollectionType`, optional
             If given, only yield collections of this type.
-        withRestrictions : `bool`, optional
-            If `True` (`False` is default) yield the associated
-            `DatasetTypeRestriction` along with each `CollectionRecord`.
         flattenChains : `bool`, optional
             If `True` (default) recursively yield the child collections of
-            `~CollectionType.CHAINED` colelctions.
+            `~CollectionType.CHAINED` collections.
         includeChains : `bool`, optional
             If `False`, return records for `~CollectionType.CHAINED`
             collections themselves.  The default is the opposite of
             ``flattenChains``: either return records for CHAINED collections or
             their children, but not both.
-        """
-        if self._search is ...:
-            for record in manager:
-                yield from _yieldCollectionRecords(
-                    manager,
-                    record,
-                    DatasetTypeRestriction.any,
-                    datasetType=datasetType,
-                    collectionType=collectionType,
-                    withRestrictions=withRestrictions,
-                    flattenChains=flattenChains,
-                    includeChains=includeChains,
-                )
-        else:
-            done = set()
-            yield from self._search.iter(
-                manager,
-                datasetType=datasetType,
-                collectionType=collectionType,
-                withRestrictions=withRestrictions,
-                done=done,
-                flattenChains=flattenChains,
-                includeChains=includeChains,
-            )
-            for record in manager:
-                if record.name not in done and any(p.fullmatch(record.name) for p in self._patterns):
-                    yield from _yieldCollectionRecords(
-                        manager,
-                        record,
-                        DatasetTypeRestriction.any,
-                        datasetType=datasetType,
-                        collectionType=collectionType,
-                        withRestrictions=withRestrictions,
-                        done=done,
-                        flattenChains=flattenChains,
-                        includeChains=includeChains,
-                    )
 
+        Yields
+        ------
+        record : `CollectionRecord`
+            Matching collection records.
+        """
+        for record, _ in self.iterPairs(manager, datasetType=datasetType, collectionType=collectionType,
+                                        flattenChains=flattenChains, includeChains=includeChains):
+            yield record
 
 CollectionQuery.any = CollectionQuery(..., None)
 """A special `CollectionQuery` instance that matches any collection.

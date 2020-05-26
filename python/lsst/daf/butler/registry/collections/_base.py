@@ -243,7 +243,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         # Docstring inherited from ChainedCollectionRecord.
         rows = []
         position = itertools.count()
-        for child, restriction in children.iter(manager, withRestrictions=True, flattenChains=False):
+        for child, restriction in children.iterPairs(manager, flattenChains=False):
             if restriction.names is ...:
                 rows.append({"parent": self.key, "child": child.key,
                              "position": next(position), "dataset_type_name": None})
