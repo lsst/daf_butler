@@ -87,7 +87,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with command_test_env(runner):
             result = runner.invoke(butler.cli, "command-test")
-            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.stdout, "test command\n")
 
     def test_loadAndExecuteLocalCommand(self):
@@ -95,7 +95,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "test_repo"])
-            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertTrue(os.path.exists("test_repo"))
 
     def test_loadTopHelp(self):
@@ -103,7 +103,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with command_test_env(runner):
             result = runner.invoke(butler.cli, "--help")
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertIn("command-test", result.stdout)
 
     def test_getLocalCommands(self):
@@ -131,7 +131,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with duplicate_command_test_env(runner):
             result = runner.invoke(butler.cli, ["create", "test_repo"])
-            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertEqual(result.exit_code, 1, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.output, "Error: Command 'create' "
                              "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "
                              "Duplicate commands are not supported, aborting.\n")
