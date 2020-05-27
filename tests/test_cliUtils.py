@@ -28,6 +28,7 @@ import unittest
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.utils import Mocker, mockEnvVar
+from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
 class MockerTestCase(unittest.TestCase):
@@ -40,6 +41,36 @@ class MockerTestCase(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         Mocker.mock.assert_called_with(repo="repo", config_file=None, standalone=False, override=False,
                                        outfile=None)
+
+
+class ArgumentHelpGeneratorTestCase(unittest.TestCase):
+
+    @staticmethod
+    @click.command()
+    # Use custom help in the arguments so that any changes to default help text
+    # do not break this test unnecessarily.
+    @repo_argument(help="repo help text")
+    @directory_argument(help="directory help text")
+    def cli():
+        pass
+
+    def test_help(self):
+        """Tests `utils.addArgumentHelp` and its use in repo_argument and
+        directory_argument; verifies that the argument help gets added to the
+        command fucntion help, and that it's added in the correct order. See
+        addArgumentHelp for more details."""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(ArgumentHelpGeneratorTestCase.cli, ["--help"])
+        expected = """Usage: cli [OPTIONS] [REPO] [DIRECTORY]
+
+  directory help text
+
+  repo help text
+
+Options:
+  --help  Show this message and exit.
+"""
+        self.assertIn(expected, result.output)
 
 
 if __name__ == "__main__":
