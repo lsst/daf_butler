@@ -6,7 +6,5 @@ composites:
     StructuredComposite: True
     StructuredCompositeTestA: True
     StructuredCompositeTestB: True
-    ExposureCompositeI: True
-    ExposureCompositeF: True
     dummyTrue: True
     dummyFalse: False

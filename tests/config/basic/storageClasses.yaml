@@ -49,10 +49,6 @@ storageClasses:
       summary: StructuredDataDictPickle
       output: StructuredDataDictJson
       data: StructuredDataListYaml
-  ExposureCompositeF:
-    inheritsFrom: ExposureF
-  ExposureCompositeI:
-    inheritsFrom: ExposureI
   ThingOne:
     pytype: dict
     parameters:

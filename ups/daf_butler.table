@@ -1,8 +1,6 @@
 setupRequired(sphgeom)
 setupRequired(sconsUtils)
 setupRequired(utils)
-setupRequired(astro_metadata_translator)
-setupRequired(afw)
 
 envPrepend(PATH, ${PRODUCT_DIR}/bin)
 envPrepend(PYTHONPATH, ${PRODUCT_DIR}/python)
