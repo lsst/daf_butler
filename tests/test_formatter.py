@@ -57,7 +57,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
         """
-        formatterTypeName = "lsst.daf.butler.formatters.fitsCatalogFormatter.FitsCatalogFormatter"
+        formatterTypeName = "lsst.daf.butler.formatters.pexConfigFormatter.PexConfigFormatter"
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName, self.fileDescriptor)
@@ -70,8 +70,8 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIsFormatter(fcls)
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
-        from lsst.daf.butler.formatters.fitsCatalogFormatter import FitsCatalogFormatter
-        self.assertEqual(type(f), FitsCatalogFormatter)
+        from lsst.daf.butler.formatters.pexConfigFormatter import PexConfigFormatter
+        self.assertEqual(type(f), PexConfigFormatter)
 
         with self.assertRaises(TypeError):
             # Requires a constructor parameter
