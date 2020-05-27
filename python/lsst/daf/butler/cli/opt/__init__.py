@@ -22,6 +22,7 @@
 from .config import config_option
 from .config_file import config_file_option
 from .dataset_type import dataset_type_option
+from .directory import directory_argument
 from .repo import repo_argument
 from .run import run_option
 from .transfer import transfer_option
