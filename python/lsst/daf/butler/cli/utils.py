@@ -56,6 +56,22 @@ class Mocker:
         Mocker.mock(*args, **kwargs)
 
 
+def clickResultMsg(result):
+    """Get a standard assert message from a click result
+
+    Parameters
+    ----------
+    result : click.Result
+        The result object returned from click.testing.CliRunner.invoke
+
+    Returns
+    -------
+    msg : `str`
+        The message string.
+    """
+    return f"output: {result.output} exception: {result.exception}"
+
+
 def addArgumentHelp(doc, helpText):
     """Add a Click argument's help message to a function's documentation.
 
