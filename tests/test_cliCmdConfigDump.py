@@ -49,8 +49,8 @@ class Suite(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             # check for some expected keywords:
             cfg = yaml.safe_load(result.stdout)
-            self.assertIn("composites", cfg)
             self.assertIn("datastore", cfg)
+            self.assertIn("composites", cfg["datastore"])
             self.assertIn("storageClasses", cfg)
 
     def test_file(self):
@@ -64,8 +64,8 @@ class Suite(unittest.TestCase):
             # check for some expected keywords:
             with open("there", "r") as f:
                 cfg = yaml.safe_load(f)
-                self.assertIn("composites", cfg)
                 self.assertIn("datastore", cfg)
+                self.assertIn("composites", cfg["datastore"])
                 self.assertIn("storageClasses", cfg)
 
     def test_subset(self):

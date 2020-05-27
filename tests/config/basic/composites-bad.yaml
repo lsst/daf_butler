@@ -1,10 +1,9 @@
-composites:
-  disassembled:
-    # This will fail since a str is not a bool
-    StructuredData: "False"
-    StructuredDataJson: False
-    StructuredDataPickle: False
-    StructuredComposite: True
-    StructuredCompositeTestA: True
-    StructuredCompositeTestB: True
-    dummyTest: True
+disassembled:
+  # This will fail since a str is not a bool
+  StructuredData: "False"
+  StructuredDataJson: False
+  StructuredDataPickle: False
+  StructuredComposite: True
+  StructuredCompositeTestA: True
+  StructuredCompositeTestB: True
+  dummyTest: True

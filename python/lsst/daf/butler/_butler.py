@@ -52,7 +52,6 @@ except ImportError:
 from lsst.utils import doImport
 from .core import (
     ButlerURI,
-    CompositesMap,
     Config,
     ConfigSubset,
     DataCoordinate,
@@ -207,7 +206,6 @@ class Butler:
             self.registry = butler.registry
             self.datastore = butler.datastore
             self.storageClasses = butler.storageClasses
-            self._composites = butler._composites
             self._config = butler._config
         else:
             self._config = ButlerConfig(config, searchPaths=searchPaths)
@@ -222,7 +220,6 @@ class Butler:
                                                   butlerRoot=butlerRoot)
             self.storageClasses = StorageClassFactory()
             self.storageClasses.addFromConfig(self._config)
-            self._composites = CompositesMap(self._config, universe=self.registry.dimensions)
         # Check the many collection arguments for consistency and create any
         # needed collections that don't exist.
         if collections is None:

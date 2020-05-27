@@ -37,7 +37,7 @@ DISASSEMBLY_KEY = "disassembled"
 class CompositesConfig(ConfigSubset):
     component = "composites"
     requiredKeys = ("default", DISASSEMBLY_KEY)
-    defaultConfigFile = "composites.yaml"
+    defaultConfigFile = "datastores/composites.yaml"
 
     def validate(self):
         """Validate entries have the correct type."""
