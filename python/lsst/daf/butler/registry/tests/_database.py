@@ -305,7 +305,7 @@ class DatabaseTests(ABC):
         db.insert(tables.a, {"name": "a1"}, {"name": "a2"})
         # Update one of the rows with a region.
         region = ConvexPolygon((UnitVector3d(1, 0, 0), UnitVector3d(0, 1, 0), UnitVector3d(0, 0, 1)))
-        n = db.update(tables.a, {"name": "k"}, {"k": "a2", "region": region})
+        n = db.update(tables.a, {"name"}, {"name": "a2", "region": region})
         self.assertEqual(n, 1)
         sql = sqlalchemy.sql.select([tables.a.columns.name, tables.a.columns.region]).select_from(tables.a)
         self.assertCountEqual(

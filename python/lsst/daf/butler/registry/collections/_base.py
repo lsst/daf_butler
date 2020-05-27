@@ -206,7 +206,7 @@ class DefaultRunRecord(RunRecord):
             TIMESPAN_FIELD_SPECS.end.name: timespan.end,
             "host": host
         }
-        count = self._db.update(self._table, {self._idName: self.key}, row)
+        count = self._db.update(self._table, {self._idName}, row)
         if count != 1:
             raise RuntimeError(f"Run update affected {count} records; expected exactly one.")
         self._host = host

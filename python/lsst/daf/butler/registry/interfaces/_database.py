@@ -1041,22 +1041,20 @@ class Database(ABC):
             sql = sql.where(sqlalchemy.sql.and_(*whereTerms))
         return self._connection.execute(sql, *rows).rowcount
 
-    def update(self, table: sqlalchemy.schema.Table, where: Dict[str, str], *rows: dict) -> int:
+    def update(self, table: sqlalchemy.schema.Table, where: Iterable[str], *rows: dict) -> int:
         """Update one or more rows in a table.
 
         Parameters
         ----------
         table : `sqlalchemy.schema.Table`
             Table containing the rows to be updated.
-        where : `dict` [`str`, `str`]
-            A mapping from the names of columns that will be used to search for
-            existing rows to the keys that will hold these values in the
-            ``rows`` dictionaries.  Note that these may not be the same due to
-            SQLAlchemy limitations.
+        where : `Iterable` [ `str` ]
+            The names of columns that will be used to search for existing rows.
+            This must be a subset of the keys of the ``rows`` dictionaries.
         *rows
             Positional arguments are the rows to be updated.  The keys in all
             dictionaries must be the same, and may correspond to either a
-            value in the ``where`` dictionary or the name of a column to be
+            name in the ``where`` argument or the name of a column to be
             updated.
 
         Returns
@@ -1082,8 +1080,18 @@ class Database(ABC):
             raise ReadOnlyDatabaseError(f"Attempt to update read-only database '{self}'.")
         if not rows:
             return 0
+        # Prefix all bindparam names with a string to work around SQLAlchemy's
+        # restriction that a bindparam can't have the same name as a column.
+        bindparamNames = {k: f"bindparam_{k}" for k in where}
         sql = table.update().where(
-            sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(v) for k, v in where.items()])
+            sqlalchemy.sql.and_(*[table.columns[k] == sqlalchemy.sql.bindparam(b)
+                                  for k, b in bindparamNames.items()])
+        )
+        # Rewrite rows, using the bindparam names as keys instead of the
+        # columns they're equated to.
+        rows = tuple(
+            {bindparamNames.get(k, k): v for k, v in row.items()}
+            for row in rows
         )
         return self._connection.execute(sql, *rows).rowcount
 
