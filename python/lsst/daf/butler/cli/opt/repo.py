@@ -22,6 +22,8 @@
 
 import click
 
+from ..utils import addArgumentHelp
+
 
 class repo_argument:  # noqa: N801
     """Decorator to add a repo argument to a click command.
@@ -48,9 +50,5 @@ class repo_argument:  # noqa: N801
         self.helpText = help
 
     def __call__(self, f):
-        if self.helpText:
-            # Modify the passed-in fucntions's doc string, which is used to
-            # generate the Click Command help, to include the argument help
-            # text:
-            f.__doc__ = f"{'' if f.__doc__ is None else f.__doc__}\n\n {self.helpText}"
+        f.__doc__ = addArgumentHelp(f.__doc__, self.helpText)
         return click.argument("repo", required=self.required)(f)
