@@ -19,14 +19,28 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Support for reading and writing composite objects."""
 
 __all__ = ("CompositesConfig", "CompositesMap")
 
 import logging
 
+from typing import (
+    TYPE_CHECKING,
+    Union,
+)
+
 from .configSupport import processLookupConfigs
 from .config import ConfigSubset
+
+if TYPE_CHECKING:
+    from .dimensions import DimensionUniverse
+    from .._butlerConfig import ButlerConfig
+    from .datasets import DatasetRef, DatasetType
+    from .storageClass import StorageClass
+    from .configSupport import LookupKey
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +53,7 @@ class CompositesConfig(ConfigSubset):
     requiredKeys = ("default", DISASSEMBLY_KEY)
     defaultConfigFile = "datastores/composites.yaml"
 
-    def validate(self):
+    def validate(self) -> None:
         """Validate entries have the correct type."""
         super().validate()
         # For now assume flat config with keys mapping to booleans
@@ -61,7 +75,8 @@ class CompositesMap:
         in lookup keys.
     """
 
-    def __init__(self, config, *, universe):
+    def __init__(self, config: Union[str, ButlerConfig, CompositesConfig], *,
+                 universe: DimensionUniverse):
         if not isinstance(config, CompositesConfig):
             config = CompositesConfig(config)
         assert isinstance(config, CompositesConfig)
@@ -71,7 +86,7 @@ class CompositesMap:
         # the values
         self._lut = processLookupConfigs(self.config[DISASSEMBLY_KEY], universe=universe)
 
-    def shouldBeDisassembled(self, entity):
+    def shouldBeDisassembled(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> bool:
         """Given some choices, indicate whether the entity should be
         disassembled.
 
@@ -103,11 +118,11 @@ class CompositesMap:
             log.debug("%s will not be disassembled (not a composite)", entity)
             return False
 
-        matchName = "{} (via default)".format(entity)
+        matchName: Union[LookupKey, str] = "{} (via default)".format(entity)
         disassemble = self.config["default"]
 
-        for key in (entity._lookupNames()):
-            if key is not None and key in self._lut:
+        for key in entity._lookupNames():
+            if key in self._lut:
                 disassemble = self._lut[key]
                 matchName = key
                 break
