@@ -961,13 +961,17 @@ class FileLikeDatastore(GenericBaseDatastore):
             # and we need to put them all back together again.
             # Read into memory and then assemble
             usedParams = set()
-            components = {}
+            components: Dict[str, Any] = {}
             for getInfo in allGetInfo:
                 # assemblerParams are parameters not understood by the
                 # associated formatter.
                 usedParams.update(set(getInfo.assemblerParams))
 
                 component = getInfo.component
+
+                if component is None:
+                    raise RuntimeError(f"Internal error in datastore assembly of {ref}")
+
                 # We do not want the formatter to think it's reading
                 # a component though because it is really reading a
                 # standalone dataset -- always tell reader it is not a
