@@ -25,6 +25,7 @@ __all__ = ["NameKeyCollectionManager"]
 from typing import (
     Any,
     Optional,
+    Tuple,
     TYPE_CHECKING,
 )
 
@@ -53,7 +54,7 @@ _TABLES_SPEC = CollectionTablesTuple(
 )
 
 
-class NameKeyCollectionManager(DefaultCollectionManager):
+class NameKeyCollectionManager(DefaultCollectionManager[Tuple[str]]):
     """A `CollectionManager` implementation that uses collection names for
     primary/foreign keys and aggressively loads all collection/run records in
     the database into memory.
@@ -66,41 +67,48 @@ class NameKeyCollectionManager(DefaultCollectionManager):
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC), collectionIdName="name")  # type: ignore
+        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),  # type: ignore
+                   collectionKeyNames=("name",))
 
     @classmethod
-    def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
+    def getCollectionForeignKeyNames(cls, prefix: str = "collection") -> Tuple[str]:
         # Docstring inherited from CollectionManager.
-        return f"{prefix}_name"
+        return (f"{prefix}_name",)
 
     @classmethod
-    def getRunForeignKeyName(cls, prefix: str = "run") -> str:
+    def getRunForeignKeyNames(cls, prefix: str = "run") -> Tuple[str]:
         # Docstring inherited from CollectionManager.
-        return f"{prefix}_name"
+        return (f"{prefix}_name",)
 
     @classmethod
-    def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+    def addCollectionForeignKeys(cls, tableSpec: ddl.TableSpec, *,
+                                 prefix: str = "collection",
+                                 onDelete: Optional[str] = None,
+                                 **kwargs: Any
+                                 ) -> Tuple[ddl.FieldSpec]:
         # Docstring inherited from CollectionManager.
         original = _TABLES_SPEC.collection.fields["name"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype,
-                             length=original.length, **kwds)
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyNames(prefix)[0], dtype=original.dtype,
+                             length=original.length, **kwargs)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
-        return copy
+        return (copy,)
 
     @classmethod
-    def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+    def addRunForeignKeys(cls, tableSpec: ddl.TableSpec, *,
+                          prefix: str = "run",
+                          onDelete: Optional[str] = None,
+                          **kwargs: Any
+                          ) -> Tuple[ddl.FieldSpec]:
         # Docstring inherited from CollectionManager.
         original = _TABLES_SPEC.run.fields["name"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype,
-                             length=original.length, **kwds)
+        copy = ddl.FieldSpec(cls.getRunForeignKeyNames(prefix)[0], dtype=original.dtype,
+                             length=original.length, **kwargs)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
                                                         target=(original.name,), onDelete=onDelete))
-        return copy
+        return (copy,)
 
     def _getByName(self, name: str) -> Optional[CollectionRecord]:
         # Docstring inherited from DefaultCollectionManager.

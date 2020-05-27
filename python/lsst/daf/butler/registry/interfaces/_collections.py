@@ -33,6 +33,7 @@ from typing import (
     Any,
     Iterator,
     Optional,
+    Tuple,
     TYPE_CHECKING,
 )
 
@@ -59,16 +60,16 @@ class CollectionRecord:
 
     Parameters
     ----------
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
+    key : `tuple`
+        Unique collection identifier; the Python equivalent of a database
+        primary key value.  Must be a tuple, even if the key is not compound
+        in the database.
     name : `str`
         Name of the collection.
     type : `CollectionType`
         Enumeration value describing the type of the collection.
     """
-    def __init__(self, key: Any, name: str, type: CollectionType):
+    def __init__(self, key: Tuple[Any, ...], name: str, type: CollectionType):
         self.key = key
         self.name = name
         self.type = type
@@ -78,8 +79,12 @@ class CollectionRecord:
     """Name of the collection (`str`).
     """
 
-    key: Any
-    """The primary/foreign key value for this collection.
+    key: Tuple[Any, ...]
+    """The primary/foreign key value for this collection (`tuple`).
+
+    This must be a tuple with the same number of elements as the tuple(s)
+    returned by the `CollectionManager` methods that add foreign key fields,
+    even if the key is a single column.
     """
 
     type: CollectionType
@@ -138,10 +143,10 @@ class ChainedCollectionRecord(CollectionRecord):
 
     Parameters
     ----------
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
+    key : `tuple`
+        Unique collection identifier; the Python equivalent of a database
+        primary key value.  Must be a tuple, even if the key is not compound
+        in the database.
     name : `str`
         Name of the collection.
     """
@@ -277,9 +282,12 @@ class CollectionManager(ABC):
 
     @classmethod
     @abstractmethod
-    def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
-        """Add a foreign key (field and constraint) referencing the collection
+    def addCollectionForeignKeys(cls, tableSpec: ddl.TableSpec, *,
+                                 prefix: str = "collection",
+                                 onDelete: Optional[str] = None,
+                                 **kwargs: Any
+                                 ) -> Tuple[ddl.FieldSpec, ...]:
+        """Add foreign keys (fields and constraints) referencing the collection
         table.
 
         Parameters
@@ -288,29 +296,33 @@ class CollectionManager(ABC):
             Specification for the table that should reference the collection
             table.  Will be modified in place.
         prefix: `str`, optional
-            A name to use for the prefix of the new field; the full name may
-            have a suffix (and is given in the returned `ddl.FieldSpec`).
+            A name to use for the prefix of the new field(s); the full names
+            may have a suffix (and are given in the returned `ddl.FieldSpec`
+            instances).
         onDelete: `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        **kwds
+        **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
             otherwise provided).
 
         Returns
         -------
-        fieldSpec : `ddl.FieldSpec`
-            Specification for the field being added.
+        fieldSpecs : `tuple [ `ddl.FieldSpec` ]
+            Specifications for the field(s) being added.
         """
         raise NotImplementedError()
 
     @classmethod
     @abstractmethod
-    def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
-        """Add a foreign key (field and constraint) referencing the run
+    def addRunForeignKeys(cls, tableSpec: ddl.TableSpec, *,
+                          prefix: str = "run",
+                          onDelete: Optional[str] = None,
+                          **kwargs: Any
+                          ) -> Tuple[ddl.FieldSpec, ...]:
+        """Add foreign keys (fields and constraints) referencing the run
         table.
 
         Parameters
@@ -319,59 +331,60 @@ class CollectionManager(ABC):
             Specification for the table that should reference the run table.
             Will be modified in place.
         prefix: `str`, optional
-            A name to use for the prefix of the new field; the full name may
-            have a suffix (and is given in the returned `ddl.FieldSpec`).
+            A name to use for the prefix of the new field(s); the full names
+            may have a suffix (and are given in the returned `ddl.FieldSpec`
+            instances).
         onDelete: `str`, optional
             One of "CASCADE" or "SET NULL", indicating what should happen to
             the referencing row if the collection row is deleted.  `None`
             indicates that this should be an integrity error.
-        **kwds
+        **kwargs
             Additional keyword arguments are forwarded to the `ddl.FieldSpec`
             constructor (only the ``name`` and ``dtype`` arguments are
             otherwise provided).
 
         Returns
         -------
-        fieldSpec : `ddl.FieldSpec`
-            Specification for the field being added.
+        fieldSpecs : `tuple [ `ddl.FieldSpec` ]
+            Specifications for the field(s) being added.
         """
         raise NotImplementedError()
 
     @classmethod
     @abstractmethod
-    def getCollectionForeignKeyName(cls, prefix: str = "collection") -> str:
-        """Return the name of the field added by `addCollectionForeignKey`
-        if called with the same prefix.
+    def getCollectionForeignKeyNames(cls, prefix: str = "collection") -> Tuple[str, ...]:
+        """Return the name(s) of the field(s) added by
+        `addCollectionForeignKey` if called with the same prefix.
 
         Parameters
         ----------
         prefix : `str`
-            A name to use for the prefix of the new field; the full name may
-            have a suffix.
+            A name to use for the prefix of the new field(s); the full names
+            may have a suffix.
 
         Returns
         -------
-        name : `str`
-            The field name.
+        names : `tuple` [ `str` ]
+            The field name(s).
         """
         raise NotImplementedError()
 
     @classmethod
     @abstractmethod
-    def getRunForeignKeyName(cls, prefix: str = "run") -> str:
-        """Return the name of the field added by `addRunForeignKey`
+    def getRunForeignKeyNames(cls, prefix: str = "run") -> Tuple[str, ...]:
+        """Return the name(s) of the field(s) added by `addRunForeignKeys`
         if called with the same prefix.
 
         Parameters
         ----------
         prefix : `str`
-            A name to use for the prefix of the new field; the full name may
-            have a suffix.
+            A name to use for the prefix of the new field(s); the full name(s)
+            may have a suffix.
 
         Returns
         -------
-        name : `str`
-            The field name.
+        names : `tuple` [ `str` ]
+            The field names.
         """
         raise NotImplementedError()
 

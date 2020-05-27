@@ -33,8 +33,11 @@ from typing import (
     Iterable,
     Iterator,
     Optional,
+    Tuple,
+    Type,
     TYPE_CHECKING,
     TypeVar,
+    Union,
 )
 
 import sqlalchemy
@@ -55,16 +58,16 @@ if TYPE_CHECKING:
     from ..interfaces import Database
 
 
-def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str,
+def _makeCollectionForeignKey(sourceColumnNames: Tuple[str, ...], collectionKeyNamess: Tuple[str, ...],
                               **kwargs: Any) -> ddl.ForeignKeySpec:
     """Define foreign key specification that refers to collections table.
 
     Parameters
     ----------
-    sourceColumnName : `str`
-        Name of the column in the referring table.
-    collectionIdName : `str`
-        Name of the column in collections table that identifies it (PK).
+    sourceColumnNames : `tuple` [ `str` ]
+        Names of the columns in the referring table.
+    collectionKeyNamess : `tuple` [ `str` ]
+        Names of the columns in collections table that identifies it (PK).
     **kwargs
         Additional keyword arguments passed directly to `ddl.ForeignKeySpec`.
 
@@ -76,26 +79,21 @@ def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str,
     Notes
     -----
     This method assumes fixed name ("collection") of a collections table.
-    There is also a general assumption that collection primary key consists
-    of a single column.
     """
-    return ddl.ForeignKeySpec("collection", source=(sourceColumnName,), target=(collectionIdName,),
-                              **kwargs)
+    return ddl.ForeignKeySpec("collection", source=sourceColumnNames, target=collectionKeyNamess, **kwargs)
 
 
 CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
 
 
-def makeRunTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.TableSpec:
+def makeRunTableSpec(manager: Union[CollectionManager, Type[CollectionManager]]) -> ddl.TableSpec:
     """Define specification for "run" table.
 
     Parameters
     ----------
-    collectionIdName : `str`
-        Name of the column in collections table that identifies it (PK).
-    collectionIdType
-        Type of the PK column in the collections table, one of the
-        `sqlalchemy` types.
+    manager : `CollectionManager` instance or subclass
+        Manager object that can be used to add a foreign key to the collections
+        table.
 
     Returns
     -------
@@ -104,33 +102,29 @@ def makeRunTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.Table
 
     Notes
     -----
-    Assumption here and in the code below is that the name of the identifying
-    column is the same in both collections and run tables. The names of
+    Assumption here and in the code below is that the names of the identifying
+    columns are the same in both the collection and run tables. The names of
     non-identifying columns containing run metadata are fixed.
     """
-    return ddl.TableSpec(
+    spec = ddl.TableSpec(
         fields=[
-            ddl.FieldSpec(collectionIdName, dtype=collectionIdType, primaryKey=True),
             TIMESPAN_FIELD_SPECS.begin,
             TIMESPAN_FIELD_SPECS.end,
             ddl.FieldSpec("host", dtype=sqlalchemy.String, length=128),
         ],
-        foreignKeys=[
-            _makeCollectionForeignKey(collectionIdName, collectionIdName, onDelete="CASCADE"),
-        ],
     )
+    manager.addCollectionForeignKeys(spec, onDelete="CASCADE", primaryKey=True)
+    return spec
 
 
-def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.TableSpec:
+def makeCollectionChainTableSpec(manager: Union[CollectionManager, Type[CollectionManager]]) -> ddl.TableSpec:
     """Define specification for "collection_chain" table.
 
     Parameters
     ----------
-    collectionIdName : `str`
-        Name of the column in collections table that identifies it (PK).
-    collectionIdType
-        Type of the PK column in the collections table, one of the
-        `sqlalchemy` types.
+    manager : `CollectionManager` instance or subclass
+        Manager object that can be used to add a foreign key to the collections
+        table.
 
     Returns
     -------
@@ -140,21 +134,18 @@ def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) 
     Notes
     -----
     Collection chain is simply an ordered one-to-many relation between
-    collections. The names of the columns in the table are fixed and
-    also hardcoded in the code below.
+    collections.  Foreign keys to the collection table are prefixed with
+    "parent_" and "suffix_" (with suffixes set by ``manager``).
     """
-    return ddl.TableSpec(
+    spec = ddl.TableSpec(
         fields=[
-            ddl.FieldSpec("parent", dtype=collectionIdType, primaryKey=True),
             ddl.FieldSpec("position", dtype=sqlalchemy.SmallInteger, primaryKey=True),
-            ddl.FieldSpec("child", dtype=collectionIdType, nullable=False),
             ddl.FieldSpec("dataset_type_name", dtype=sqlalchemy.String, length=128, nullable=True),
         ],
-        foreignKeys=[
-            _makeCollectionForeignKey("parent", collectionIdName, onDelete="CASCADE"),
-            _makeCollectionForeignKey("child", collectionIdName),
-        ],
     )
+    manager.addCollectionForeignKeys(spec, prefix="parent_", onDelete="CASCADE", primaryKey=True)
+    manager.addCollectionForeignKeys(spec, prefix="child_")
+    return spec
 
 
 class DefaultRunRecord(RunRecord):
@@ -168,23 +159,23 @@ class DefaultRunRecord(RunRecord):
     ----------
     db : `Database`
         Registry database.
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
+    key : `tuple`
+        Unique collection identifier; the Python equivalent of a database
+        primary key value.  Must be a tuple, even if the key is not compound
+        in the database.
     name : `str`
         Run collection name.
     table : `sqlalchemy.schema.Table`
         Table for run records.
-    idColumnName : `str`
-        Name of the identifying column in run table.
+    keyColumnNames : `tuple` [ `str` ]
+        Name of the identifying columns in the run table.
     host : `str`, optional
         Name of the host where run was produced.
     timespan : `Timespan`, optional
         Timespan for this run.
     """
-    def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table,
-                 idColumnName: str, host: Optional[str] = None,
+    def __init__(self, db: Database, key: Tuple[Any, ...], name: str, *, table: sqlalchemy.schema.Table,
+                 keyColumnNames: Tuple[str, ...], host: Optional[str] = None,
                  timespan: Optional[Timespan[astropy.time.Time]] = None):
         super().__init__(key=key, name=name, type=CollectionType.RUN)
         self._db = db
@@ -193,20 +184,20 @@ class DefaultRunRecord(RunRecord):
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
         self._timespan = timespan
-        self._idName = idColumnName
+        self._keyNames = keyColumnNames
 
     def update(self, host: Optional[str] = None,
                timespan: Optional[Timespan[astropy.time.Time]] = None) -> None:
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
-        row = {
-            self._idName: self.key,
+        row = dict(zip(self._keyNames, self.keys))
+        row.update({
             TIMESPAN_FIELD_SPECS.begin.name: timespan.begin,
             TIMESPAN_FIELD_SPECS.end.name: timespan.end,
             "host": host
-        }
-        count = self._db.update(self._table, {self._idName}, row)
+        })
+        count = self._db.update(self._table, self._keyNames, row)
         if count != 1:
             raise RuntimeError(f"Run update affected {count} records; expected exactly one.")
         self._host = host
@@ -234,44 +225,58 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
     ----------
     db : `Database`
         Registry database.
-    key
-        Unique collection ID, can be the same as ``name`` if ``name`` is used
-        for identification. Usually this is an integer or string, but can be
-        other database-specific type.
+    key : `tuple`
+        Unique collection identifier; the Python equivalent of a database
+        primary key value.  Must be a tuple, even if the key is not compound
+        in the database.
     name : `str`
         Collection name.
     table : `sqlalchemy.schema.Table`
         Table for chain relationship records.
+    keyColumnSuffixes : `tuple` [ `str` ]
+        Suffixes for the names of the collection table key columns; combining
+        these with "parent_" and "child_" prefixes yield the names of columns
+        in the table produced by `makeCollectionChainTableSpec`.
     """
-    def __init__(self, db: Database, key: Any, name: str, *, table: sqlalchemy.schema.Table):
+    def __init__(self, db: Database, key: Tuple[Any, ...], name: str, *,
+                 keyColumnSuffixes: Tuple[str, ...],
+                 table: sqlalchemy.schema.Table):
         super().__init__(key=key, name=name)
         self._db = db
         self._table = table
+        self._keyColumnSuffixes = keyColumnSuffixes
 
     def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
         # Docstring inherited from ChainedCollectionRecord.
         rows = []
+        baseParentRow = {
+            f"parent_{suffix}": value for suffix, value in zip(self._keyColumnSuffixes, self.keys)
+        }
         position = itertools.count()
         for child, restriction in children.iterPairs(manager, flattenChains=False):
+            baseChildRow = dict(
+                {f"child_{suffix}": value for suffix, value in zip(self._keyColumnSuffixes, child.keys)},
+                **baseParentRow
+            )
             if restriction.names is Ellipsis:
-                rows.append({"parent": self.key, "child": child.key,
-                             "position": next(position), "dataset_type_name": None})
+                rows.append(dict({"position": next(position), "dataset_type_name": None}, **baseChildRow))
             else:
                 for name in restriction.names:
-                    rows.append({"parent": self.key, "child": child.key,
-                                 "position": next(position), "dataset_type_name": name})
+                    rows.append(dict({"position": next(position), "dataset_type_name": name, **baseChildRow}))
         with self._db.transaction():
-            self._db.delete(self._table, ["parent"], {"parent": self.key})
+            self._db.delete(self._table, baseParentRow.keys(), baseParentRow)
             self._db.insert(self._table, *rows)
 
     def _load(self, manager: CollectionManager) -> CollectionSearch:
         # Docstring inherited from ChainedCollectionRecord.
+        columns = [self._table.columns[f"child_{k}"] for k in self._keyColumnSuffixes]
+        columns.append(self._table.columns.dataset_type_name)
         sql = sqlalchemy.sql.select(
-            [self._table.columns.child, self._table.columns.dataset_type_name]
+            columns
         ).select_from(
             self._table
         ).where(
-            self._table.columns.parent == self.key
+            sqlalchemy.sql.and_(*[self._table.columns[f"parent_{k}"] for k in self._keyColumnSuffixes])
         ).order_by(
             self._table.columns.position
         )
@@ -280,7 +285,7 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         # up for us.
         children = []
         for row in self._db.query(sql):
-            key = row[self._table.columns.child]
+            key = tuple(row[self._table.columns[f"child_{k}"]] for k in self._keyColumnSuffixes)
             restriction = row[self._table.columns.dataset_type_name]
             if not restriction:
                 restriction = ...  # we store ... as "" in the database
@@ -304,8 +309,8 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         Interface to the underlying database engine and namespace.
     tables : `CollectionTablesTuple`
         Named tuple of SQLAlchemy table objects.
-    collectionIdName : `str`
-        Name of the column in collections table that identifies it (PK).
+    collectionKeyNames : `tuple` [ `str` ]
+        Names of the columns in the collections table that identify it (PK).
 
     Notes
     -----
@@ -313,10 +318,10 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
     in memory. Memory cache is synchronized from database when `refresh`
     method is called.
     """
-    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionIdName: str):
+    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionKeyNames: Tuple[str, ...]):
         self._db = db
         self._tables = tables
-        self._collectionIdName = collectionIdName
+        self._collectionKeyNames = collectionKeyNames
         self._records: Dict[K, CollectionRecord] = {}  # indexed by record ID
 
     def refresh(self) -> None:
@@ -331,17 +336,19 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         records = []
         chains = []
         for row in self._db.query(sql).fetchall():
-            collection_id = row[self._tables.collection.columns[self._collectionIdName]]
+            collectionKey = tuple(
+                row[self._tables.collection.columns[k]] for k in self._collectionKeyNames
+            )
             name = row[self._tables.collection.columns.name]
             type = CollectionType(row["type"])
             record: CollectionRecord
             if type is CollectionType.RUN:
                 record = DefaultRunRecord(
-                    key=collection_id,
+                    key=collectionKey,
                     name=name,
                     db=self._db,
                     table=self._tables.run,
-                    idColumnName=self._collectionIdName,
+                    idColumnName=self._collectionKeyNames,
                     host=row[self._tables.run.columns.host],
                     timespan=Timespan(
                         begin=row[self._tables.run.columns[TIMESPAN_FIELD_SPECS.begin.name]],
@@ -350,12 +357,12 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 )
             elif type is CollectionType.CHAINED:
                 record = DefaultChainedCollectionRecord(db=self._db,
-                                                        key=collection_id,
+                                                        key=collectionKey,
                                                         table=self._tables.collection_chain,
                                                         name=name)
                 chains.append(record)
             else:
-                record = CollectionRecord(key=collection_id, name=name, type=type)
+                record = CollectionRecord(key=collectionKey, name=name, type=type)
             records.append(record)
         self._setRecordCache(records)
         for chain in chains:
@@ -369,23 +376,23 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                 self._tables.collection,
                 keys={"name": name},
                 compared={"type": int(type)},
-                returning=[self._collectionIdName],
+                returning=self._collectionKeyNames,
             )
             assert row is not None
-            collection_id = row[self._collectionIdName]
+            collectionKey = tuple(row[k] for k in self._collectionKeyNames)
             if type is CollectionType.RUN:
                 row, _ = self._db.sync(
                     self._tables.run,
-                    keys={self._collectionIdName: collection_id},
+                    keys=dict(zip(self._collectionKeyNames, collectionKey)),
                     returning=["host", TIMESPAN_FIELD_SPECS.begin.name, TIMESPAN_FIELD_SPECS.end.name],
                 )
                 assert row is not None
                 record = DefaultRunRecord(
                     db=self._db,
-                    key=collection_id,
+                    key=collectionKey,
                     name=name,
                     table=self._tables.run,
-                    idColumnName=self._collectionIdName,
+                    idColumnName=self._collectionKeyNames,
                     host=row["host"],
                     timespan=Timespan(
                         row[TIMESPAN_FIELD_SPECS.begin.name],
@@ -393,10 +400,10 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
                     ),
                 )
             elif type is CollectionType.CHAINED:
-                record = DefaultChainedCollectionRecord(db=self._db, key=collection_id, name=name,
+                record = DefaultChainedCollectionRecord(db=self._db, key=collectionKey, name=name,
                                                         table=self._tables.collection_chain)
             else:
-                record = CollectionRecord(key=collection_id, name=name, type=type)
+                record = CollectionRecord(key=collectionKey, name=name, type=type)
             self._addCachedRecord(record)
         return record
 
@@ -406,8 +413,8 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
         if record is None:
             raise MissingCollectionError(f"No collection with name '{name}' found.")
         # This may raise
-        self._db.delete(self._tables.collection, [self._collectionIdName],
-                        {self._collectionIdName: record.key})
+        self._db.delete(self._tables.collection, [self._collectionKeyNames],
+                        {self._collectionKeyNames: record.key})
         self._removeCachedRecord(record)
 
     def find(self, name: str) -> CollectionRecord:
@@ -417,7 +424,7 @@ class DefaultCollectionManager(Generic[K], CollectionManager):
             raise MissingCollectionError(f"No collection with name '{name}' found.")
         return result
 
-    def __getitem__(self, key: Any) -> CollectionRecord:
+    def __getitem__(self, key: Tuple[Any, ...]) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
         try:
             return self._records[key]

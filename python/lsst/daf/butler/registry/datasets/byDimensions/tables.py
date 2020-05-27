@@ -208,7 +208,7 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
         ),
     )
     # Add foreign key fields programmatically.
-    collections.addRunForeignKey(specs.dataset, onDelete="CASCADE", nullable=False)
+    collections.addRunForeignKeys(specs.dataset, onDelete="CASCADE", nullable=False)
     return specs
 
 
@@ -266,8 +266,8 @@ def makeDynamicTableSpec(datasetType: DatasetType, collections: Type[CollectionM
     addDatasetForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
     # Add foreign key fields to collection table (part of the primary key and
     # the data ID unique constraint).
-    fieldSpec = collections.addCollectionForeignKey(tableSpec, primaryKey=True, onDelete="CASCADE")
-    constraint.append(fieldSpec.name)
+    fieldSpecs = collections.addCollectionForeignKeys(tableSpec, primaryKey=True, onDelete="CASCADE")
+    constraint.extend(fs.name for fs in fieldSpecs)
     for dimension in datasetType.dimensions.required:
         fieldSpec = addDimensionForeignKey(tableSpec, dimension=dimension, nullable=False, primaryKey=False)
         constraint.append(fieldSpec.name)

@@ -102,7 +102,7 @@ def makeRegistryTableSpecs(universe: DimensionUniverse,
             ),
         ],
     )
-    collections.addRunForeignKey(quantum, onDelete="CASCADE", nullable=False)
+    collections.addRunForeignKeys(quantum, onDelete="CASCADE", nullable=False)
 
     dataset_consumers = ddl.TableSpec(
         doc="A table relating Quantum records to the datasets they used as inputs.",

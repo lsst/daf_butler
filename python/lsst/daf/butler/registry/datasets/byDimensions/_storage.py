@@ -49,7 +49,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._collections = collections
         self._static = static
         self._dynamic = dynamic
-        self._runKeyColumn = collections.getRunForeignKeyName()
+        self._runKeyColumns = collections.getRunForeignKeyNames()
 
     def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate], *,
                quantum: Optional[Quantum] = None) -> Iterator[DatasetRef]:
