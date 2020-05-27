@@ -23,7 +23,6 @@ import unittest
 
 try:
     import boto3
-    import botocore
     from moto import mock_s3
 except ImportError:
     boto3 = None
@@ -33,7 +32,7 @@ except ImportError:
         """
         return cls
 
-from lsst.daf.butler.core.s3utils import (bucketExists, s3CheckFileExists,
+from lsst.daf.butler.core.s3utils import (getS3Client, bucketExists, s3CheckFileExists,
                                           setAwsEnvCredentials, unsetAwsEnvCredentials)
 from lsst.daf.butler.core.location import Location, ButlerURI
 
@@ -43,36 +42,28 @@ from lsst.daf.butler.core.location import Location, ButlerURI
 class S3UtilsTestCase(unittest.TestCase):
     """Test for the S3 related utilities.
     """
-    bucketName = "testBucketName"
+    bucketName = "test_bucket_name"
     fileName = "testFileName"
 
     def setUp(self):
         # set up some fake credentials if they do not exist
         self.usingDummyCredentials = setAwsEnvCredentials()
 
-        s3 = boto3.client("s3")
+        self.client = getS3Client()
         try:
-            s3.create_bucket(Bucket=self.bucketName)
-            s3.put_object(Bucket=self.bucketName, Key=self.fileName,
-                          Body=b"test content")
-        except s3.exceptions.BucketAlreadyExists:
+            self.client.create_bucket(Bucket=self.bucketName)
+            self.client.put_object(Bucket=self.bucketName, Key=self.fileName,
+                                   Body=b"test content")
+        except self.client.exceptions.BucketAlreadyExists:
             pass
 
     def tearDown(self):
-        s3 = boto3.resource('s3')
-        bucket = s3.Bucket(self.bucketName)
-        try:
-            bucket.objects.all().delete()
-        except botocore.exceptions.ClientError as err:
-            errorcode = err.response["ResponseMetadata"]["HTTPStatusCode"]
-            if errorcode == 404:
-                # the key does not exists - pass
-                pass
-            else:
-                raise
+        objects = self.client.list_objects(Bucket=self.bucketName)
+        if 'Contents' in objects:
+            for item in objects['Contents']:
+                self.client.delete_object(Bucket=self.bucketName, Key=item['Key'])
 
-        bucket = s3.Bucket(self.bucketName)
-        bucket.delete()
+        self.client.delete_bucket(Bucket=self.bucketName)
 
         # unset any potentially set dummy credentials
         if self.usingDummyCredentials:
@@ -80,13 +71,12 @@ class S3UtilsTestCase(unittest.TestCase):
 
     def testBucketExists(self):
         self.assertTrue(bucketExists(f"{self.bucketName}"))
-        self.assertFalse(bucketExists(f"{self.bucketName}_NO_EXIST"))
+        self.assertFalse(bucketExists(f"{self.bucketName}_no_exist"))
 
     def testFileExists(self):
-        s3 = boto3.client('s3')
-        self.assertTrue(s3CheckFileExists(client=s3, bucket=self.bucketName,
+        self.assertTrue(s3CheckFileExists(client=self.client, bucket=self.bucketName,
                                           path=self.fileName)[0])
-        self.assertFalse(s3CheckFileExists(client=s3, bucket=self.bucketName,
+        self.assertFalse(s3CheckFileExists(client=self.client, bucket=self.bucketName,
                                            path=self.fileName+"_NO_EXIST")[0])
 
         datastoreRootUri = f"s3://{self.bucketName}/"
@@ -95,13 +85,13 @@ class S3UtilsTestCase(unittest.TestCase):
         buri = ButlerURI(uri)
         location = Location(datastoreRootUri, self.fileName)
 
-        self.assertTrue(s3CheckFileExists(client=s3, path=buri)[0])
+        self.assertTrue(s3CheckFileExists(client=self.client, path=buri)[0])
         # just to make sure the overloaded keyword works correctly
-        self.assertTrue(s3CheckFileExists(buri, client=s3)[0])
-        self.assertTrue(s3CheckFileExists(client=s3, path=location)[0])
+        self.assertTrue(s3CheckFileExists(buri, client=self.client)[0])
+        self.assertTrue(s3CheckFileExists(client=self.client, path=location)[0])
 
         # make sure supplying strings resolves correctly too
-        self.assertTrue(s3CheckFileExists(uri, client=s3))
+        self.assertTrue(s3CheckFileExists(uri, client=self.client))
         self.assertTrue(s3CheckFileExists(uri))
 
 
