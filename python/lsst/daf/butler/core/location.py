@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("Location", "LocationFactory", "ButlerURI")
 
 import os
@@ -27,6 +29,14 @@ import urllib
 import posixpath
 from pathlib import Path, PurePath, PurePosixPath
 import copy
+import types
+
+from typing import (
+    Any,
+    Optional,
+    Tuple,
+    Union,
+)
 
 # Determine if the path separator for the OS looks like POSIX
 IS_POSIX = os.sep == posixpath.sep
@@ -35,7 +45,7 @@ IS_POSIX = os.sep == posixpath.sep
 OS_ROOT_PATH = Path().resolve().root
 
 
-def os2posix(ospath):
+def os2posix(ospath: str) -> str:
     """Convert a local path description to a POSIX path description.
 
     Parameters
@@ -62,7 +72,7 @@ def os2posix(ospath):
     return posix
 
 
-def posix2os(posix):
+def posix2os(posix: Union[PurePath, str]) -> str:
     """Convert a POSIX path description to a local path description.
 
     Parameters
@@ -76,7 +86,7 @@ def posix2os(posix):
         Path using OS path separator
     """
     if IS_POSIX:
-        return posix
+        return str(posix)
 
     posixPath = PurePosixPath(posix)
     paths = list(posixPath.parts)
@@ -87,7 +97,7 @@ def posix2os(posix):
 
     # Trailing "/" is stripped so we need to add back an empty path
     # for consistency
-    if posix.endswith(posixpath.sep):
+    if str(posix).endswith(posixpath.sep):
         paths.append("")
 
     return os.path.join(*paths)
@@ -118,7 +128,8 @@ class ButlerURI:
         is interpreted as is.
     """
 
-    def __init__(self, uri, root=None, forceAbsolute=True, forceDirectory=False):
+    def __init__(self, uri: Union[str, urllib.parse.ParseResult],
+                 root: Optional[str] = None, forceAbsolute: bool = True, forceDirectory: bool = False):
         if isinstance(uri, str):
             parsed = urllib.parse.urlparse(uri)
         elif isinstance(uri, urllib.parse.ParseResult):
@@ -134,29 +145,29 @@ class ButlerURI:
         self._uri = parsed
 
     @property
-    def scheme(self):
+    def scheme(self) -> str:
         """The URI scheme (``://`` is not part of the scheme)."""
         return self._uri.scheme
 
     @property
-    def netloc(self):
+    def netloc(self) -> str:
         """The URI network location."""
         return self._uri.netloc
 
     @property
-    def path(self):
+    def path(self) -> str:
         """The path component of the URI."""
         return self._uri.path
 
     @property
-    def ospath(self):
+    def ospath(self) -> str:
         """Path component of the URI localized to current OS."""
         if self.scheme == 's3':
             raise AttributeError('S3 URIs have no OS path.')
         return posix2os(self._uri.path)
 
     @property
-    def relativeToPathRoot(self):
+    def relativeToPathRoot(self) -> str:
         """Returns path relative to network location.
 
         Effectively, this is the path property with posix separator stripped
@@ -172,21 +183,21 @@ class ButlerURI:
         return relToRoot
 
     @property
-    def fragment(self):
+    def fragment(self) -> str:
         """The fragment component of the URI."""
         return self._uri.fragment
 
     @property
-    def params(self):
+    def params(self) -> str:
         """Any parameters included in the URI."""
         return self._uri.params
 
     @property
-    def query(self):
+    def query(self) -> str:
         """Any query strings included in the URI."""
         return self._uri.query
 
-    def geturl(self):
+    def geturl(self) -> str:
         """Return the URI in string form.
 
         Returns
@@ -196,7 +207,7 @@ class ButlerURI:
         """
         return self._uri.geturl()
 
-    def split(self):
+    def split(self) -> Tuple[ButlerURI, str]:
         """Splits URI into head and tail. Equivalent to os.path.split where
         head preserves the URI components.
 
@@ -216,7 +227,7 @@ class ButlerURI:
         headuri = self._uri._replace(path=head)
         return self.__class__(headuri, forceDirectory=True), tail
 
-    def basename(self):
+    def basename(self) -> str:
         """Returns the base name, last element of path, of the URI. If URI ends
         on a slash returns an empty string. This is the second element returned
         by split().
@@ -231,7 +242,7 @@ class ButlerURI:
         """
         return self.split()[1]
 
-    def dirname(self):
+    def dirname(self) -> ButlerURI:
         """Returns a ButlerURI containing all the directories of the path
         attribute.
 
@@ -245,7 +256,7 @@ class ButlerURI:
         """
         return self.split()[0]
 
-    def replace(self, **kwargs):
+    def replace(self, **kwargs: Any) -> ButlerURI:
         """Replace components in a URI with new values and return a new
         instance.
 
@@ -256,7 +267,7 @@ class ButlerURI:
         """
         return self.__class__(self._uri._replace(**kwargs))
 
-    def updateFile(self, newfile):
+    def updateFile(self, newfile: str) -> None:
         """Update in place the final component of the path with the supplied
         file name.
 
@@ -270,31 +281,31 @@ class ButlerURI:
         Updates the URI in place.
         Updates the ButlerURI.dirLike attribute.
         """
-        if self.scheme:
-            # POSIX
-            pathclass = posixpath
-        else:
-            pathclass = os.path
+        pathclass = posixpath if self.scheme else os.path
 
-        dir, _ = pathclass.split(self.path)
-        newpath = pathclass.join(dir, newfile)
+        # Mypy can't work out that these specific modules support split
+        # and join
+        dir, _ = pathclass.split(self.path)  # type: ignore
+        newpath = pathclass.join(dir, newfile)  # type: ignore
 
         self.dirLike = False
         self._uri = self._uri._replace(path=newpath)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.geturl()
 
     def __repr__(self) -> str:
         return f'ButlerURI("{self.geturl()}")'
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, ButlerURI):
             return False
         return self.geturl() == other.geturl()
 
     @staticmethod
-    def _fixupPathUri(parsed, root=None, forceAbsolute=False, forceDirectory=False):
+    def _fixupPathUri(parsed: urllib.parse.ParseResult, root: Optional[str] = None,
+                      forceAbsolute: bool = False,
+                      forceDirectory: bool = False) -> Tuple[urllib.parse.ParseResult, bool]:
         """Fix up relative paths in URI instances.
 
         Parameters
@@ -436,7 +447,7 @@ class Location:
 
     __slots__ = ("_datastoreRootUri", "_path")
 
-    def __init__(self, datastoreRootUri, path):
+    def __init__(self, datastoreRootUri: Union[ButlerURI, str], path: str):
         if isinstance(datastoreRootUri, str):
             datastoreRootUri = ButlerURI(datastoreRootUri, forceDirectory=True)
         elif not isinstance(datastoreRootUri, ButlerURI):
@@ -447,33 +458,35 @@ class Location:
 
         self._datastoreRootUri = datastoreRootUri
 
+        pathModule: types.ModuleType
         if self._datastoreRootUri.scheme == "file":
             pathModule = os.path
         else:
             pathModule = posixpath
 
-        if pathModule.isabs(path):
+        # mypy can not work out that these modules support isabs
+        if pathModule.isabs(path):  # type: ignore
             raise ValueError("Path within datastore must be relative not absolute")
 
         self._path = path
 
-    def __str__(self):
+    def __str__(self) -> str:
         return self.uri
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         uri = self._datastoreRootUri.geturl()
         path = self._path
         return f"{self.__class__.__name__}({uri!r}, {path!r})"
 
     @property
-    def uri(self):
+    def uri(self) -> str:
         """URI string corresponding to fully-specified location in datastore.
         """
         uriPath = os2posix(self.path)
         return self._datastoreRootUri.replace(path=uriPath).geturl()
 
     @property
-    def path(self):
+    def path(self) -> str:
         """Path corresponding to location.
 
         This path includes the root of the `Datastore`, but does not include
@@ -489,7 +502,7 @@ class Location:
             return posixpath.join(self._datastoreRootUri.path, self.pathInStore)
 
     @property
-    def pathInStore(self):
+    def pathInStore(self) -> str:
         """Path corresponding to location relative to `Datastore` root.
 
         Uses the same path separator as supplied to the object constructor.
@@ -497,12 +510,12 @@ class Location:
         return self._path
 
     @property
-    def netloc(self):
+    def netloc(self) -> str:
         """The URI network location."""
         return self._datastoreRootUri.netloc
 
     @property
-    def relativeToPathRoot(self):
+    def relativeToPathRoot(self) -> str:
         """Returns the path component of the URI relative to the network
         location.
 
@@ -516,7 +529,7 @@ class Location:
         stripped = p.relative_to(p.root)
         return str(posix2os(stripped))
 
-    def updateExtension(self, ext):
+    def updateExtension(self, ext: Optional[str]) -> None:
         """Update the file extension associated with this `Location`.
 
         Parameters
@@ -556,19 +569,19 @@ class LocationFactory:
         be treated as a posixpath but then converted to an absolute path.
     """
 
-    def __init__(self, datastoreRoot):
+    def __init__(self, datastoreRoot: str):
         self._datastoreRootUri = ButlerURI(datastoreRoot, forceAbsolute=True,
                                            forceDirectory=True)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.__class__.__name__}@{self._datastoreRootUri}"
 
     @property
-    def netloc(self):
+    def netloc(self) -> str:
         """Returns the network location of root location of the `Datastore`."""
         return self._datastoreRootUri.netloc
 
-    def fromPath(self, path):
+    def fromPath(self, path: str) -> Location:
         """Factory function to create a `Location` from a POSIX path.
 
         Parameters
