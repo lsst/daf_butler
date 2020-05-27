@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Configuration control."""
 
 __all__ = ("Config", "ConfigSubset")
@@ -75,7 +77,11 @@ class Loader(yaml.CSafeLoader):
 
     def __init__(self, stream):
         super().__init__(stream)
-        self._root = ButlerURI(stream.name)
+        # if this is a string and not a stream we may well lack a name
+        try:
+            self._root = ButlerURI(stream.name)
+        except AttributeError:
+            self._root = None
         Loader.add_constructor("!include", Loader.include)
 
     def include(self, node):
@@ -99,6 +105,8 @@ class Loader(yaml.CSafeLoader):
             raise yaml.constructor.ConstructorError
 
     def extractFile(self, filename):
+        if self._root is None:
+            raise RuntimeError("Unable to load !include directive from YAML string")
         fileuri = copy.copy(self._root)
         fileuri.updateFile(filename)
         log.debug("Opening YAML file via !include: %s", fileuri)
@@ -235,6 +243,22 @@ class Config(collections.abc.MutableMapping):
     def copy(self):
         return type(self)(self)
 
+    @classmethod
+    def fromYaml(cls, string: str) -> Config:
+        """Create a new Config instance from a YAML string.
+
+        Parameters
+        ----------
+        string : `str`
+            String containing content in YAML format
+
+        Returns
+        -------
+        c : `Config`
+            Newly-constructed Config.
+        """
+        return cls().__initFromYaml(string)
+
     def __initFromFile(self, path):
         """Load a file from a path or an URI.
 
@@ -298,7 +322,7 @@ class Config(collections.abc.MutableMapping):
         Parameters
         ----------
         stream
-            To a persisted config file in YAML format.
+            To a persisted config file in YAML format. Can be a string.
 
         Raises
         ------
