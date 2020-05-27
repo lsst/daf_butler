@@ -44,6 +44,10 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
         A configuration for the repository (for details, see
         `lsst.daf.butler.Butler.makeRepo`). If omitted, creates a repository
         with default dataset and storage types, but optimized for speed.
+        The defaults set ``.datastore.cls``, ``.datastore.checksum`` and
+        ``.registry.db``.  If a supplied config does not specify these values
+        the internal defaults will be used to ensure that we have a usable
+        configuration.
     **kwargs
         Extra arguments to `lsst.daf.butler.Butler.makeRepo`.
 
@@ -68,13 +72,16 @@ def makeTestRepo(root, dataIds, *, config=None, **kwargs):
     `expandUniqueId`, so long as no other code has inserted dimensions into
     the repository registry.
     """
-    if not config:
-        config = Config()
-        config["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
-        config["datastore", "checksum"] = False  # In case of future changes
-        config["registry", "db"] = "sqlite:///:memory:"
+    defaults = Config()
+    defaults["datastore", "cls"] = "lsst.daf.butler.datastores.inMemoryDatastore.InMemoryDatastore"
+    defaults["datastore", "checksum"] = False  # In case of future changes
+    defaults["registry", "db"] = "sqlite:///:memory:"
+
+    if config:
+        defaults.update(config)
+
     # newConfig guards against location-related keywords like outfile
-    newConfig = Butler.makeRepo(root, config=config, **kwargs)
+    newConfig = Butler.makeRepo(root, config=defaults, **kwargs)
     butler = Butler(newConfig, writeable=True)
     dimensionRecords = _makeRecords(dataIds, butler.registry.dimensions)
     for dimension, records in dimensionRecords.items():
