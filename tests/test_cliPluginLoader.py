@@ -103,9 +103,11 @@ class PluginLoaderTest(unittest.TestCase):
     def test_getLocalCommands(self):
         """Test getting the daf_butler CLI commands."""
         localCommands = butler.LoaderCLI._getLocalCommands()
-        for command in cmd.__all__:
-            command = command.replace("_", "-")
-            self.assertEqual(localCommands[command], ["lsst.daf.butler.cli.cmd"])
+        # the number of local commands should equal the number of functions
+        # in cmd.__all__
+        self.assertEqual(len(localCommands), len(cmd.__all__))
+        for command, pkg in localCommands.items():
+            self.assertEqual(pkg, ["lsst.daf.butler.cli.cmd"])
 
     def test_mergeCommandLists(self):
         """Verify dicts of command to list-of-source-package get merged

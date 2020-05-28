@@ -21,9 +21,31 @@
 
 import click
 
-from ..opt import config_file_option, dataset_type_option, repo_argument
+from ..opt import (config_file_option, dataset_type_option, directory_argument, repo_argument, run_option,
+                   transfer_option)
 from ..utils import split_commas, cli_handle_exception
-from ...script import createRepo, configDump, configValidate
+from ...script import butlerImport, createRepo, configDump, configValidate
+
+
+# The conversion from the import command name to the butler_import function
+# name for subcommand lookup is implemented in the cli/butler.py, in
+# funcNameToCmdName and cmdNameToFuncName. If name changes are made here they
+# must be reflected in that location. If this becomes a common pattern a better
+# mechanism should be implemented.
+@click.command("import")
+@repo_argument(required=True, help=repo_argument.will_create_repo)
+@directory_argument(required=True)
+@transfer_option()
+@run_option(required=True)
+@click.option("--export-file",
+              help="Name for the file that contains database information associated with the exported "
+                   "datasets.  If this is not an absolute path, does not exist in the current working "
+                   "directory, and --dir is provided, it is assumed to be in that directory.  Defaults "
+                   "to \"export.yaml\".",
+              type=click.File('r'))
+def butler_import(*args, **kwargs):
+    """Import data into a butler repository."""
+    cli_handle_exception(butlerImport, *args, **kwargs)
 
 
 @click.command()

@@ -44,12 +44,32 @@ def _initLogging(logLevel):
 
 
 def funcNameToCmdName(functionName):
-    """Change underscores, used in functions, to dashes, used in commands."""
+    """Convert function name to the butler command name: change underscores,
+    (used in functions) to dashes (used in commands), and change local-package
+    command names that conflict with python keywords to a leagal function name.
+    """
+    # The "import" command name and "butler_import" function name are defined
+    # in cli/cmd/commands.py, and if those names are changed they must be
+    # changed here as well.
+    # It is expected that there will be very few butler command names that need
+    # to be changed because of e.g. conflicts with python keywords (as is done
+    # here and in cmdNameToFuncName for the 'import' command). If this becomes
+    # a common need then some way of doing this should be invented that is
+    # better than hard coding the function names into these conversion
+    # functions. An extension of the 'cli/resources.yaml' file (as is currently
+    # used in obs_base) might be a good way to do it.
+    if functionName == "butler_import":
+        functionName = "import"
     return functionName.replace("_", "-")
 
 
 def cmdNameToFuncName(commandName):
-    """Change dashes, used in commands, to underscores, used in functions."""
+    """Convert butler command name to function name: change dashes (used in
+    commands) to underscores (used in functions), and for local-package
+    commands names that conflict with python keywords, change the local, legal,
+    function name to the command name."""
+    if commandName == "import":
+        commandName = "butler_import"
     return commandName.replace("-", "_")
 
 
