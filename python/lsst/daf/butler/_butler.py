@@ -66,8 +66,7 @@ from .core import (
     ValidationError,
 )
 from .core.repoRelocation import BUTLER_ROOT_TAG
-from .core.safeFileIo import safeMakeDir
-from .core.utils import transactional, getClassOf
+from .core.utils import transactional, getClassOf, safeMakeDir
 from .core.s3utils import bucketExists
 from ._deferredDatasetHandle import DeferredDatasetHandle
 from ._butlerConfig import ButlerConfig

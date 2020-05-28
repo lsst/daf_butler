@@ -27,11 +27,14 @@ __all__ = (
     "getInstanceOf",
     "immutable",
     "iterable",
+    "safeMakeDir",
     "Singleton",
     "stripIfNotNone",
     "transactional",
 )
 
+import errno
+import os
 import builtins
 import functools
 from typing import (
@@ -47,6 +50,17 @@ from typing import (
 )
 
 from lsst.utils import doImport
+
+
+def safeMakeDir(directory: str) -> None:
+    """Make a directory in a manner avoiding race conditions"""
+    if directory != "" and not os.path.exists(directory):
+        try:
+            os.makedirs(directory)
+        except OSError as e:
+            # Don't fail if directory exists due to race
+            if e.errno != errno.EEXIST:
+                raise e
 
 
 def iterable(a: Any) -> Iterable[Any]:
