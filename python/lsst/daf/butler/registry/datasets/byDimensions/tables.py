@@ -160,12 +160,13 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                 ),
                 ddl.FieldSpec(
                     name="dimensions_encoded",
-                    dtype=ddl.Base64Bytes,
-                    nbytes=universe.getEncodeLength(),
+                    dtype=sqlalchemy.String,
+                    length=2*universe.getEncodeLength(),  # factor of 2 for hex
                     nullable=False,
                     doc=(
                         "An opaque (but reversible) encoding of the set of "
-                        "dimensions used to identify dataset of this type."
+                        "dimensions used to identify dataset of this type "
+                        "(in hexidecimal)."
                     ),
                 ),
             ],

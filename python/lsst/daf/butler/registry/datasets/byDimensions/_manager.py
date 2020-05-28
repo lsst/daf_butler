@@ -93,7 +93,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
         c = self._static.dataset_type.columns
         for row in self._db.query(self._static.dataset_type.select()).fetchall():
             name = row[c.name]
-            dimensions = DimensionGraph.decode(row[c.dimensions_encoded], universe=universe)
+            dimensions = DimensionGraph.decode(bytes.fromhex(row[c.dimensions_encoded]), universe=universe)
             datasetType = DatasetType(name, dimensions, row[c.storage_class])
             dynamic = self._db.getExistingTable(makeDynamicTableName(datasetType),
                                                 makeDynamicTableSpec(datasetType, type(self._collections)))
@@ -118,7 +118,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                 self._static.dataset_type,
                 keys={"name": datasetType.name},
                 compared={
-                    "dimensions_encoded": datasetType.dimensions.encode(),
+                    "dimensions_encoded": datasetType.dimensions.encode().hex(),
                     "storage_class": datasetType.storageClass.name,
                 },
                 returning=["id"],
