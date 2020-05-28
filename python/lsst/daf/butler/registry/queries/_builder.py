@@ -179,7 +179,7 @@ class QueryBuilder:
         if isResult:
             self._columns.datasets[datasetType] = DatasetQueryColumns(
                 id=subquery.columns["id"],
-                runKey=subquery.columns[self._collections.getRunForeignKeyName()],
+                runKeys=tuple(subquery.columns[k] for k in self._collections.getRunForeignKeyNames()),
                 rank=subquery.columns["rank"] if addRank else None
             )
         return True

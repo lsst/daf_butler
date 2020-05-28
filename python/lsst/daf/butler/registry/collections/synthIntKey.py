@@ -46,18 +46,8 @@ if TYPE_CHECKING:
     from ..interfaces import Database, StaticTablesContext
 
 
-_TABLES_SPEC = CollectionTablesTuple(
-    collection=ddl.TableSpec(
-        fields=[
-            ddl.FieldSpec("collection_id", dtype=sqlalchemy.Integer, primaryKey=True, autoincrement=True),
-            ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
-            ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
-        ],
-        unique=[("name",)],
-    ),
-    run=makeRunTableSpec("collection_id", sqlalchemy.Integer),
-    collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.Integer),
-)
+_ID_FIELD_SPEC = ddl.FieldSpec("id", dtype=sqlalchemy.BigInteger, primaryKey=True,
+                               autoincrement=True)
 
 
 class SynthIntKeyCollectionManager(DefaultCollectionManager[Tuple[int]]):
@@ -74,28 +64,40 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[Tuple[int]]):
         Interface to the underlying database engine and namespace.
     tables : `NamedTuple`
         Named tuple of SQLAlchemy table objects.
-    collectionKeyNames : `tuple` [ `str` ]
+    keyColumnNames : `tuple` [ `str` ]
         Names of the columns in the collections table that identify it (PK).
     """
-    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionKeyNames: Tuple[str]):
-        super().__init__(db=db, tables=tables, collectionKeyNames=collectionKeyNames)
+    def __init__(self, db: Database, tables: CollectionTablesTuple, keyColumnNames: Tuple[str]):
+        super().__init__(db=db, tables=tables, keyColumnNames=keyColumnNames)
         self._nameCache: Dict[str, CollectionRecord] = {}  # indexed by collection name
 
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> SynthIntKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),  # type: ignore
-                   collectionKeyNames=("id",))
+        specs = CollectionTablesTuple(
+            collection=ddl.TableSpec(
+                fields=[
+                    _ID_FIELD_SPEC,
+                    ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
+                    ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
+                ],
+                unique=[("name",)],
+            ),
+            run=makeRunTableSpec(cls),
+            collection_chain=makeCollectionChainTableSpec(cls),
+        )
+        return cls(db, tables=context.addTableTuple(specs),  # type: ignore
+                   keyColumnNames=(_ID_FIELD_SPEC.name,))
 
     @classmethod
     def getCollectionForeignKeyNames(cls, prefix: str = "collection") -> Tuple[str]:
         # Docstring inherited from CollectionManager.
-        return (f"{prefix}_id",)
+        return (f"{prefix}_{_ID_FIELD_SPEC.name}",)
 
     @classmethod
     def getRunForeignKeyNames(cls, prefix: str = "run") -> Tuple[str]:
         # Docstring inherited from CollectionManager.
-        return (f"{prefix}_id",)
+        return (f"{prefix}_{_ID_FIELD_SPEC.name}",)
 
     @classmethod
     def addCollectionForeignKeys(cls, tableSpec: ddl.TableSpec, *,
@@ -104,11 +106,11 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[Tuple[int]]):
                                  **kwargs: Any
                                  ) -> Tuple[ddl.FieldSpec]:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.collection.fields["id"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyNames(prefix)[0], dtype=original.dtype, **kwargs)
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyNames(prefix)[0], dtype=_ID_FIELD_SPEC.dtype,
+                             **kwargs)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
-                                                        target=(original.name,), onDelete=onDelete))
+                                                        target=(_ID_FIELD_SPEC.name,), onDelete=onDelete))
         return (copy,)
 
     @classmethod
@@ -118,11 +120,10 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager[Tuple[int]]):
                           **kwargs: Any
                           ) -> Tuple[ddl.FieldSpec]:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.run.fields["id"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyNames(prefix)[0], dtype=original.dtype, **kwargs)
+        copy = ddl.FieldSpec(cls.getRunForeignKeyNames(prefix)[0], dtype=_ID_FIELD_SPEC.dtype, **kwargs)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
-                                                        target=(original.name,), onDelete=onDelete))
+                                                        target=(_ID_FIELD_SPEC.name,), onDelete=onDelete))
         return (copy,)
 
     def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:

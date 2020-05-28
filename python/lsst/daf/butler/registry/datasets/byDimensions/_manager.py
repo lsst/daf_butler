@@ -150,11 +150,10 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
 
     def getDatasetRef(self, id: int, *, universe: DimensionUniverse) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
+        columns = [self._static.dataset.columns[k] for k in self._collections.getRunForeignKeyNames()]
+        columns.append(self._static.dataset.columns.dataset_type_id)
         sql = sqlalchemy.sql.select(
-            [
-                self._static.dataset.columns.dataset_type_id,
-                self._static.dataset.columns[self._collections.getRunForeignKeyName()],
-            ]
+            columns
         ).select_from(
             self._static.dataset
         ).where(
@@ -168,9 +167,10 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             self.refresh(universe=universe)
             recordsForType = self._byId.get(row[self._static.dataset.columns.dataset_type_id])
             assert recordsForType is not None, "Should be guaranteed by foreign key constraints."
+        runKey = tuple(row[k] for k in self._collections.getRunForeignKeyNames())
         return DatasetRef(
             recordsForType.datasetType,
             dataId=recordsForType.getDataId(id=id),
             id=id,
-            run=self._collections[row[self._collections.getRunForeignKeyName()]].name
+            run=self._collections[runKey].name
         )

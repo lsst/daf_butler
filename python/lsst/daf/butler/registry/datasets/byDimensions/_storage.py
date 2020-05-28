@@ -49,16 +49,17 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._collections = collections
         self._static = static
         self._dynamic = dynamic
-        self._runKeyColumns = collections.getRunForeignKeyNames()
+        self._runKeyColumnNames = collections.getRunForeignKeyNames()
+        self._collectionKeyColumnNames = collections.getCollectionForeignKeyNames()
 
     def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate], *,
                quantum: Optional[Quantum] = None) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
-        staticRow = {
-            "dataset_type_id": self._dataset_type_id,
-            self._runKeyColumn: run.key,
-            "quantum_id": quantum.id if quantum is not None else None,
-        }
+        staticRow = dict(
+            zip(self._runKeyColumnNames, run.key),
+            dataset_type_id=self._dataset_type_id,
+            quantum_id=(quantum.id if quantum is not None else None),
+        )
         dataIds = list(dataIds)
         # Insert into the static dataset table, generating autoincrement
         # dataset_id values.
@@ -68,10 +69,8 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             assert datasetIds is not None
             # Combine the generated dataset_id values and data ID fields to
             # form rows to be inserted into the dynamic table.
-            protoDynamicRow = {
-                "dataset_type_id": self._dataset_type_id,
-                self._collections.getCollectionForeignKeyName(): run.key,
-            }
+            protoDynamicRow = dict(zip(self._collectionKeyColumnNames, run.key),
+                                   dataset_type_id=self._dataset_type_id)
             dynamicRows = [
                 dict(protoDynamicRow, dataset_id=dataset_id, **dataId.byName())
                 for dataId, dataset_id in zip(dataIds, datasetIds)
@@ -94,11 +93,12 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         row = self._db.query(sql).fetchone()
         if row is None:
             return None
+        runKey = tuple(row[k] for k in self._runKeyColumnNames)
         return DatasetRef(
             datasetType=self.datasetType,
             dataId=dataId,
             id=row["id"],
-            run=self._collections[row[self._runKeyColumn]].name
+            run=self._collections[runKey].name
         )
 
     def delete(self, datasets: Iterable[DatasetRef]) -> None:
@@ -116,10 +116,10 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         if collection.type is not CollectionType.TAGGED:
             raise TypeError(f"Cannot associate into collection '{collection}' "
                             f"of type {collection.type.name}; must be TAGGED.")
-        protoRow = {
-            self._collections.getCollectionForeignKeyName(): collection.key,
-            "dataset_type_id": self._dataset_type_id,
-        }
+        protoRow = dict(
+            zip(self._collectionKeyColumnNames, collection.key),
+            dataset_type_id=self._dataset_type_id,
+        )
         rows = []
         for dataset in datasets:
             row = dict(protoRow, dataset_id=dataset.getCheckedId())
@@ -134,13 +134,13 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             raise TypeError(f"Cannot disassociate from collection '{collection}' "
                             f"of type {collection.type.name}; must be TAGGED.")
         rows = [
-            {
-                "dataset_id": dataset.getCheckedId(),
-                self._collections.getCollectionForeignKeyName(): collection.key
-            }
+            dict(
+                zip(self._collectionKeyColumnNames, collection.key),
+                dataset_id=dataset.getCheckedId(),
+            )
             for dataset in datasets
         ]
-        self._db.delete(self._dynamic, ["dataset_id", self._collections.getCollectionForeignKeyName()],
+        self._db.delete(self._dynamic, ("dataset_id",) + self._collectionKeyColumnNames,
                         *rows)
 
     def select(self, collection: CollectionRecord,
@@ -159,13 +159,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             self._static.dataset,
             id=id,
             dataset_type_id=self._dataset_type_id,
-            **{self._runKeyColumn: run}
+            **{k: run for k in self._runKeyColumnNames}
         )
         # If and only if the collection is a RUN, we constrain it in the static
         # table (and also the dynamic table below)
         if collection.type is CollectionType.RUN:
-            query.where.append(self._static.dataset.columns[self._runKeyColumn]
-                               == collection.key)
+            query.where.extend(
+                self._static.dataset.columns[k] == v
+                for k, v in zip(self._runKeyColumnNames, collection.key)
+            )
         # We get or constrain the data ID from the dynamic table, but that's
         # multiple columns, not one, so we need to transform the one Select.Or
         # argument into a dictionary of them.
@@ -176,7 +178,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             kwargs = dict(dataId.byName())
         # We always constrain (never retrieve) the collection from the dynamic
         # table.
-        kwargs[self._collections.getCollectionForeignKeyName()] = collection.key
+        kwargs.update(zip(self._collectionKeyColumnNames, collection.key))
         # And now we finally join in the dynamic table.
         query.join(
             self._dynamic,

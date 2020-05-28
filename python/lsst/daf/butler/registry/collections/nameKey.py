@@ -42,16 +42,7 @@ from ...core import ddl
 if TYPE_CHECKING:
     from ..interfaces import CollectionRecord, Database, StaticTablesContext
 
-_TABLES_SPEC = CollectionTablesTuple(
-    collection=ddl.TableSpec(
-        fields=[
-            ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True),
-            ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
-        ],
-    ),
-    run=makeRunTableSpec("name", sqlalchemy.String),
-    collection_chain=makeCollectionChainTableSpec("name", sqlalchemy.String),
-)
+_NAME_FIELD_SPEC = ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, primaryKey=True)
 
 
 class NameKeyCollectionManager(DefaultCollectionManager[Tuple[str]]):
@@ -67,18 +58,28 @@ class NameKeyCollectionManager(DefaultCollectionManager[Tuple[str]]):
     @classmethod
     def initialize(cls, db: Database, context: StaticTablesContext) -> NameKeyCollectionManager:
         # Docstring inherited from CollectionManager.
-        return cls(db, tables=context.addTableTuple(_TABLES_SPEC),  # type: ignore
-                   collectionKeyNames=("name",))
+        specs = CollectionTablesTuple(
+            collection=ddl.TableSpec(
+                fields=[
+                    _NAME_FIELD_SPEC,
+                    ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
+                ],
+            ),
+            run=makeRunTableSpec(cls),
+            collection_chain=makeCollectionChainTableSpec(cls),
+        )
+        return cls(db, tables=context.addTableTuple(specs),  # type: ignore
+                   keyColumnNames=(_NAME_FIELD_SPEC.name,))
 
     @classmethod
     def getCollectionForeignKeyNames(cls, prefix: str = "collection") -> Tuple[str]:
         # Docstring inherited from CollectionManager.
-        return (f"{prefix}_name",)
+        return (f"{prefix}_{_NAME_FIELD_SPEC.name}",)
 
     @classmethod
     def getRunForeignKeyNames(cls, prefix: str = "run") -> Tuple[str]:
         # Docstring inherited from CollectionManager.
-        return (f"{prefix}_name",)
+        return (f"{prefix}_{_NAME_FIELD_SPEC.name}",)
 
     @classmethod
     def addCollectionForeignKeys(cls, tableSpec: ddl.TableSpec, *,
@@ -87,12 +88,11 @@ class NameKeyCollectionManager(DefaultCollectionManager[Tuple[str]]):
                                  **kwargs: Any
                                  ) -> Tuple[ddl.FieldSpec]:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.collection.fields["name"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyNames(prefix)[0], dtype=original.dtype,
-                             length=original.length, **kwargs)
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyNames(prefix)[0], dtype=_NAME_FIELD_SPEC.dtype,
+                             length=_NAME_FIELD_SPEC.length, **kwargs)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
-                                                        target=(original.name,), onDelete=onDelete))
+                                                        target=(_NAME_FIELD_SPEC.name,), onDelete=onDelete))
         return (copy,)
 
     @classmethod
@@ -102,14 +102,13 @@ class NameKeyCollectionManager(DefaultCollectionManager[Tuple[str]]):
                           **kwargs: Any
                           ) -> Tuple[ddl.FieldSpec]:
         # Docstring inherited from CollectionManager.
-        original = _TABLES_SPEC.run.fields["name"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyNames(prefix)[0], dtype=original.dtype,
-                             length=original.length, **kwargs)
+        copy = ddl.FieldSpec(cls.getRunForeignKeyNames(prefix)[0], dtype=_NAME_FIELD_SPEC.dtype,
+                             length=_NAME_FIELD_SPEC.length, **kwargs)
         tableSpec.fields.add(copy)
         tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
-                                                        target=(original.name,), onDelete=onDelete))
+                                                        target=(_NAME_FIELD_SPEC.name,), onDelete=onDelete))
         return (copy,)
 
     def _getByName(self, name: str) -> Optional[CollectionRecord]:
         # Docstring inherited from DefaultCollectionManager.
-        return self._records.get(name)
+        return self._records.get((name,))

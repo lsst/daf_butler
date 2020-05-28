@@ -22,19 +22,22 @@ from __future__ import annotations
 
 __all__ = [
     "ChainedCollectionRecord",
+    "CollectionKey",
     "CollectionManager",
     "CollectionRecord",
     "MissingCollectionError",
     "RunRecord",
 ]
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import (
     Any,
+    Generic,
     Iterator,
     Optional,
     Tuple,
     TYPE_CHECKING,
+    TypeVar,
 )
 
 import astropy.time
@@ -53,7 +56,10 @@ class MissingCollectionError(Exception):
     """
 
 
-class CollectionRecord:
+CollectionKey = TypeVar("CollectionKey", bound=Tuple[Any, ...])
+
+
+class CollectionRecord(Generic[CollectionKey]):
     """A struct used to represent a collection in internal `Registry` APIs.
 
     User-facing code should always just use a `str` to represent collections.
@@ -69,7 +75,7 @@ class CollectionRecord:
     type : `CollectionType`
         Enumeration value describing the type of the collection.
     """
-    def __init__(self, key: Tuple[Any, ...], name: str, type: CollectionType):
+    def __init__(self, key: CollectionKey, name: str, type: CollectionType):
         self.key = key
         self.name = name
         self.type = type
@@ -79,7 +85,7 @@ class CollectionRecord:
     """Name of the collection (`str`).
     """
 
-    key: Tuple[Any, ...]
+    key: CollectionKey
     """The primary/foreign key value for this collection (`tuple`).
 
     This must be a tuple with the same number of elements as the tuple(s)
@@ -151,7 +157,7 @@ class ChainedCollectionRecord(CollectionRecord):
         Name of the collection.
     """
 
-    def __init__(self, key: Any, name: str):
+    def __init__(self, key: CollectionKey, name: str):
         super().__init__(key=key, name=name, type=CollectionType.CHAINED)
         self._children = CollectionSearch.fromExpression([])
 
@@ -246,7 +252,7 @@ class ChainedCollectionRecord(CollectionRecord):
         raise NotImplementedError()
 
 
-class CollectionManager(ABC):
+class CollectionManager(Generic[CollectionKey]):
     """An interface for managing the collections (including runs) in a
     `Registry`.
 
@@ -486,7 +492,7 @@ class CollectionManager(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def __getitem__(self, key: Any) -> CollectionRecord:
+    def __getitem__(self, key: CollectionKey) -> CollectionRecord:
         """Return the collection record associated with the given
         primary/foreign key value.
 

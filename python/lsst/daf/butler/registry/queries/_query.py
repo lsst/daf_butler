@@ -166,6 +166,7 @@ class Query:
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetType.dimensions)
         datasetColumns = self._columns.datasets[datasetType]
-        runRecord = self._collections[row[datasetColumns.runKey]]
+        runKey = tuple(row[k] for k in datasetColumns.runKeys)
+        runRecord = self._collections[runKey]
         return (DatasetRef(datasetType, dataId, id=row[datasetColumns.id], run=runRecord.name),
                 row[datasetColumns.rank] if datasetColumns.rank is not None else None)

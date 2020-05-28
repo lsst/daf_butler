@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Union
+from typing import Iterator, List, Optional, Tuple, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -222,8 +222,8 @@ class DatasetQueryColumns:
     """Column containing the unique integer ID for this dataset.
     """
 
-    runKey: ColumnElement
-    """Foreign key column to the `~CollectionType.RUN` collection that holds
+    runKeys: Tuple[ColumnElement, ...]
+    """Foreign key columns to the `~CollectionType.RUN` collection that holds
     this dataset.
     """
 
@@ -234,7 +234,7 @@ class DatasetQueryColumns:
 
     def __iter__(self) -> Iterator[ColumnElement]:
         yield self.id
-        yield self.runKey
+        yield from self.runKeys
         if self.rank is not None:
             yield self.rank
 
