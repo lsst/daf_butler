@@ -169,6 +169,20 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "(in hexidecimal)."
                     ),
                 ),
+                ddl.FieldSpec(
+                    name="collection_table",
+                    dtype=sqlalchemy.String,
+                    length=(len("dataset_collection_") + 2*universe.getEncodeLength()),
+                    nullable=False,
+                    doc=(
+                        "The name of the dynamic dataset_collection_* table "
+                        "used to associate datasets of this type with most "
+                        "types of collections.  This is initially redundant "
+                        "with the 'dimensions_encoded' column, but it may "
+                        "become decoupled in the future to aid with backwards "
+                        "compatibility."
+                    )
+                ),
             ],
             unique=[("name",)],
         ),

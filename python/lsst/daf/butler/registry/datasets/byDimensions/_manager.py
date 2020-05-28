@@ -95,7 +95,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
             name = row[c.name]
             dimensions = DimensionGraph.decode(bytes.fromhex(row[c.dimensions_encoded]), universe=universe)
             datasetType = DatasetType(name, dimensions, row[c.storage_class])
-            dynamic = self._db.getExistingTable(makeDynamicTableName(datasetType),
+            dynamic = self._db.getExistingTable(row[c.collection_table],
                                                 makeDynamicTableSpec(datasetType, type(self._collections)))
             storage = ByDimensionsDatasetRecordStorage(db=self._db, datasetType=datasetType,
                                                        static=self._static, dynamic=dynamic,
@@ -121,11 +121,14 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                     "dimensions_encoded": datasetType.dimensions.encode().hex(),
                     "storage_class": datasetType.storageClass.name,
                 },
-                returning=["id"],
+                extra={
+                    "collection_table": makeDynamicTableName(datasetType),
+                },
+                returning=["id", "collection_table"],
             )
             assert row is not None
             dynamic = self._db.ensureTableExists(
-                makeDynamicTableName(datasetType),
+                row["collection_table"],
                 makeDynamicTableSpec(datasetType, type(self._collections)),
             )
             storage = ByDimensionsDatasetRecordStorage(db=self._db, datasetType=datasetType,
