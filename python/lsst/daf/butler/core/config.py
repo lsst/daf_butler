@@ -81,7 +81,8 @@ class Loader(yaml.CSafeLoader):
         try:
             self._root = ButlerURI(stream.name)
         except AttributeError:
-            self._root = None
+            # No choice but to assume a local filesystem
+            self._root = ButlerURI("no-file.yaml")
         Loader.add_constructor("!include", Loader.include)
 
     def include(self, node):
@@ -105,10 +106,18 @@ class Loader(yaml.CSafeLoader):
             raise yaml.constructor.ConstructorError
 
     def extractFile(self, filename):
-        if self._root is None:
-            raise RuntimeError("Unable to load !include directive from YAML string")
-        fileuri = copy.copy(self._root)
-        fileuri.updateFile(filename)
+        # It is possible for the !include to point to an explicit URI
+        # instead of a relative URI, therefore we first see if it is
+        # scheme-less or not. If it has a scheme we use it directly
+        # if it is scheme-less we use it relative to the file root.
+        requesteduri = ButlerURI(filename, forceAbsolute=False)
+
+        if requesteduri.scheme:
+            fileuri = requesteduri
+        else:
+            fileuri = copy.copy(self._root)
+            fileuri.updateFile(filename)
+
         log.debug("Opening YAML file via !include: %s", fileuri)
 
         if not fileuri.scheme or fileuri.scheme == "file":
@@ -321,8 +330,10 @@ class Config(collections.abc.MutableMapping):
 
         Parameters
         ----------
-        stream
-            To a persisted config file in YAML format. Can be a string.
+        stream: `IO` or `str`
+            Stream to pass to the YAML loader. Accepts anything that
+            `yaml.load` accepts.  This can include a string as well as an
+            IO stream.
 
         Raises
         ------
