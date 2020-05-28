@@ -35,6 +35,13 @@ from ..core.utils import iterable
 mockEnvVarKey = "CLI_BUTLER_MOCK_ENV"
 mockEnvVar = {mockEnvVarKey: "1"}
 
+# This is used as the metavar argument to Options that accept multiple string
+# inputs, which may be comma-separarated. For example:
+# --my-opt foo,bar --my-opt baz.
+# Other arguments to the Option should include multiple=true and
+# callback=split_kv.
+typeStrAcceptsMultiple = "TEXT ..."
+
 
 class Mocker:
 

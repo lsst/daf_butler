@@ -23,7 +23,7 @@ import click
 
 from ..opt import (config_file_option, dataset_type_option, directory_argument, repo_argument, run_option,
                    transfer_option)
-from ..utils import split_commas, cli_handle_exception
+from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
 from ...script import butlerImport, createRepo, configDump, configValidate
 
 
@@ -67,7 +67,8 @@ def create(*args, **kwargs):
 @click.option("--subset", "-s", type=str,
               help="Subset of a configuration to report. This can be any key in the hierarchy such as "
               "'.datastore.root' where the leading '.' specified the delimiter for the hierarchy.")
-@click.option("--searchpath", "-p", type=str, multiple=True,
+@click.option("--searchpath", "-p", type=str, multiple=True, callback=split_commas,
+              metavar=typeStrAcceptsMultiple,
               help="Additional search paths to use for configuration overrides")
 @click.option("--file", "outfile", type=click.File("w"), default="-",
               help="Print the (possibly-expanded) configuration for a repository to a file, or to stdout "
@@ -82,6 +83,7 @@ def config_dump(*args, **kwargs):
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.")
 @click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
+              metavar=typeStrAcceptsMultiple,
               help="DatasetType(s) to ignore for validation.")
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
