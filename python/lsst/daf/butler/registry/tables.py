@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["RegistryTablesTuple", "makeRegistryTableSpecs"]
 
 from collections import namedtuple
-from typing import Type
+from typing import Type, Union
 
 import sqlalchemy
 
@@ -44,8 +44,8 @@ RegistryTablesTuple = namedtuple(
 
 
 def makeRegistryTableSpecs(universe: DimensionUniverse,
-                           collections: Type[CollectionManager],
-                           datasets: Type[DatasetRecordStorageManager],
+                           collections: Union[CollectionManager, Type[CollectionManager]],
+                           datasets: Union[DatasetRecordStorageManager, Type[DatasetRecordStorageManager]],
                            ) -> RegistryTablesTuple:
     """Construct descriptions tables in the Registry that are not (yet)
     managed by helper classes.

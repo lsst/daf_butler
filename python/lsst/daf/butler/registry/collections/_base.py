@@ -20,17 +20,21 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-__all__ = []
+__all__ = ()
 
 from abc import abstractmethod
 import astropy.time
+from collections import namedtuple
 import itertools
 from typing import (
     Any,
+    Dict,
+    Generic,
+    Iterable,
     Iterator,
-    NamedTuple,
     Optional,
     TYPE_CHECKING,
+    TypeVar,
 )
 
 import sqlalchemy
@@ -45,13 +49,14 @@ from ..interfaces import (
     MissingCollectionError,
     RunRecord,
 )
-from ..wildcards import CollectionSearch
+from ..wildcards import CollectionSearch, Ellipsis
 
 if TYPE_CHECKING:
-    from .database import Database
+    from ..interfaces import Database
 
 
-def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str, **kwargs) -> ddl.ForeignKeySpec:
+def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str,
+                              **kwargs: Any) -> ddl.ForeignKeySpec:
     """Define foreign key specification that refers to collections table.
 
     Parameters
@@ -78,7 +83,10 @@ def _makeCollectionForeignKey(sourceColumnName: str, collectionIdName: str, **kw
                               **kwargs)
 
 
-def makeRunTableSpec(collectionIdName: str, collectionIdType: type):
+CollectionTablesTuple = namedtuple("CollectionTablesTuple", ["collection", "run", "collection_chain"])
+
+
+def makeRunTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.TableSpec:
     """Define specification for "run" table.
 
     Parameters
@@ -113,7 +121,7 @@ def makeRunTableSpec(collectionIdName: str, collectionIdType: type):
     )
 
 
-def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type):
+def makeCollectionChainTableSpec(collectionIdName: str, collectionIdType: type) -> ddl.TableSpec:
     """Define specification for "collection_chain" table.
 
     Parameters
@@ -187,7 +195,8 @@ class DefaultRunRecord(RunRecord):
         self._timespan = timespan
         self._idName = idColumnName
 
-    def update(self, host: Optional[str] = None, timespan: Optional[Timespan[astropy.time.Time]] = None):
+    def update(self, host: Optional[str] = None,
+               timespan: Optional[Timespan[astropy.time.Time]] = None) -> None:
         # Docstring inherited from RunRecord.
         if timespan is None:
             timespan = Timespan(begin=None, end=None)
@@ -239,12 +248,12 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         self._db = db
         self._table = table
 
-    def _update(self, manager: CollectionManager, children: CollectionSearch):
+    def _update(self, manager: CollectionManager, children: CollectionSearch) -> None:
         # Docstring inherited from ChainedCollectionRecord.
         rows = []
         position = itertools.count()
-        for child, restriction in children.iter(manager, withRestrictions=True, flattenChains=False):
-            if restriction.names is ...:
+        for child, restriction in children.iterPairs(manager, flattenChains=False):
+            if restriction.names is Ellipsis:
                 rows.append({"parent": self.key, "child": child.key,
                              "position": next(position), "dataset_type_name": None})
             else:
@@ -280,7 +289,10 @@ class DefaultChainedCollectionRecord(ChainedCollectionRecord):
         return CollectionSearch.fromExpression(children)
 
 
-class DefaultCollectionManager(CollectionManager):
+K = TypeVar("K")
+
+
+class DefaultCollectionManager(Generic[K], CollectionManager):
     """Default `CollectionManager` implementation.
 
     This implementation uses record classes defined in this module and is
@@ -290,7 +302,7 @@ class DefaultCollectionManager(CollectionManager):
     ----------
     db : `Database`
         Interface to the underlying database engine and namespace.
-    tables : `NamedTuple`
+    tables : `CollectionTablesTuple`
         Named tuple of SQLAlchemy table objects.
     collectionIdName : `str`
         Name of the column in collections table that identifies it (PK).
@@ -301,14 +313,13 @@ class DefaultCollectionManager(CollectionManager):
     in memory. Memory cache is synchronized from database when `refresh`
     method is called.
     """
-    def __init__(self, db: Database, tables: NamedTuple[sqlalchemy.schema.Table, ...],
-                 collectionIdName: str):
+    def __init__(self, db: Database, tables: CollectionTablesTuple, collectionIdName: str):
         self._db = db
         self._tables = tables
         self._collectionIdName = collectionIdName
-        self._records = {}  # indexed by record ID
+        self._records: Dict[K, CollectionRecord] = {}  # indexed by record ID
 
-    def refresh(self):
+    def refresh(self) -> None:
         # Docstring inherited from CollectionManager.
         sql = sqlalchemy.sql.select(
             self._tables.collection.columns + self._tables.run.columns
@@ -323,6 +334,7 @@ class DefaultCollectionManager(CollectionManager):
             collection_id = row[self._tables.collection.columns[self._collectionIdName]]
             name = row[self._tables.collection.columns.name]
             type = CollectionType(row["type"])
+            record: CollectionRecord
             if type is CollectionType.RUN:
                 record = DefaultRunRecord(
                     key=collection_id,
@@ -359,13 +371,15 @@ class DefaultCollectionManager(CollectionManager):
                 compared={"type": int(type)},
                 returning=[self._collectionIdName],
             )
+            assert row is not None
             collection_id = row[self._collectionIdName]
             if type is CollectionType.RUN:
                 row, _ = self._db.sync(
                     self._tables.run,
                     keys={self._collectionIdName: collection_id},
-                    returning={"host", TIMESPAN_FIELD_SPECS.begin.name, TIMESPAN_FIELD_SPECS.end.name},
+                    returning=["host", TIMESPAN_FIELD_SPECS.begin.name, TIMESPAN_FIELD_SPECS.end.name],
                 )
+                assert row is not None
                 record = DefaultRunRecord(
                     db=self._db,
                     key=collection_id,
@@ -386,7 +400,7 @@ class DefaultCollectionManager(CollectionManager):
             self._addCachedRecord(record)
         return record
 
-    def remove(self, name: str):
+    def remove(self, name: str) -> None:
         # Docstring inherited from CollectionManager.
         record = self._getByName(name)
         if record is None:
@@ -403,7 +417,7 @@ class DefaultCollectionManager(CollectionManager):
             raise MissingCollectionError(f"No collection with name '{name}' found.")
         return result
 
-    def __getitem__(self, key: Any) -> Optional[CollectionRecord]:
+    def __getitem__(self, key: Any) -> CollectionRecord:
         # Docstring inherited from CollectionManager.
         try:
             return self._records[key]
@@ -413,7 +427,7 @@ class DefaultCollectionManager(CollectionManager):
     def __iter__(self) -> Iterator[CollectionRecord]:
         yield from self._records.values()
 
-    def _setRecordCache(self, records: Iterator[CollectionRecord]):
+    def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
         """Set internal record cache to contain given records,
         old cached records will be removed.
         """
@@ -421,18 +435,18 @@ class DefaultCollectionManager(CollectionManager):
         for record in records:
             self._records[record.key] = record
 
-    def _addCachedRecord(self, record: CollectionRecord):
+    def _addCachedRecord(self, record: CollectionRecord) -> None:
         """Add single record to cache.
         """
         self._records[record.key] = record
 
-    def _removeCachedRecord(self, record: CollectionRecord):
+    def _removeCachedRecord(self, record: CollectionRecord) -> None:
         """Remove single record from cache.
         """
         del self._records[record.key]
 
     @abstractmethod
-    def _getByName(self, name: str):
+    def _getByName(self, name: str) -> Optional[CollectionRecord]:
         """Find collection record given collection name.
         """
         raise NotImplementedError()

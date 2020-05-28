@@ -30,6 +30,7 @@ __all__ = (
 )
 
 from typing import (
+    Any,
     Optional,
     Type,
 )
@@ -63,7 +64,7 @@ def addDatasetForeignKey(tableSpec: ddl.TableSpec, *,
                          name: str = "dataset",
                          onDelete: Optional[str] = None,
                          constraint: bool = True,
-                         **kwargs) -> ddl.FieldSpec:
+                         **kwargs: Any) -> ddl.FieldSpec:
     """Add a foreign key column for datasets and (optionally) a constraint to
     a table.
 

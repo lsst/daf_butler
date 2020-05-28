@@ -58,16 +58,16 @@ class SimpleQuery:
     and WHERE clauses.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.columns = []
         self.where = []
-        self._from = None
+        self._from: Optional[sqlalchemy.sql.FromClause] = None
 
     def join(self, table: sqlalchemy.sql.FromClause, *,
              onclause: Optional[sqlalchemy.sql.ColumnElement] = None,
              isouter: bool = False,
              full: bool = False,
-             **kwargs: Select.Or[Any]):
+             **kwargs: Any) -> None:
         """Add a table or subquery join to the query, possibly adding
         SELECT columns or WHERE expressions at the same time.
 

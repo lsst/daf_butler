@@ -22,7 +22,7 @@ from __future__ import annotations
 
 __all__ = ("QueryBuilder",)
 
-from typing import Any, List, Iterable, TYPE_CHECKING
+from typing import Any, List, Iterable, Optional, TYPE_CHECKING
 
 from sqlalchemy.sql import ColumnElement, and_, literal, select, FromClause
 import sqlalchemy.sql
@@ -33,6 +33,7 @@ from ...core import (
     Dimension,
     DatasetType,
     NamedKeyDict,
+    NamedValueSet,
 )
 
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
@@ -42,7 +43,7 @@ from ..simpleQuery import Select
 from ..wildcards import CollectionSearch, CollectionQuery
 
 if TYPE_CHECKING:
-    from ..interfaces import CollectionsManager, DimensionRecordStorageManager, DatasetRecordStorageManager
+    from ..interfaces import CollectionManager, DimensionRecordStorageManager, DatasetRecordStorageManager
 
 
 class QueryBuilder:
@@ -53,7 +54,7 @@ class QueryBuilder:
     ----------
     summary : `QuerySummary`
         Struct organizing the dimensions involved in the query.
-    collections : `CollectionsManager`
+    collections : `CollectionManager`
         Manager object for collection tables.
     dimensions : `DimensionRecordStorageManager`
         Manager for storage backend objects that abstract access to dimension
@@ -63,14 +64,14 @@ class QueryBuilder:
     """
 
     def __init__(self, summary: QuerySummary, *,
-                 collections: CollectionsManager,
+                 collections: CollectionManager,
                  dimensions: DimensionRecordStorageManager,
                  datasets: DatasetRecordStorageManager):
         self.summary = summary
         self._collections = collections
         self._dimensions = dimensions
         self._datasets = datasets
-        self._sql = None
+        self._sql: Optional[sqlalchemy.sql.FromClause] = None
         self._elements: NamedKeyDict[DimensionElement, FromClause] = NamedKeyDict()
         self._columns = QueryColumns()
 
@@ -81,7 +82,7 @@ class QueryBuilder:
         """
         return dimension in self._columns.keys
 
-    def joinDimensionElement(self, element: DimensionElement):
+    def joinDimensionElement(self, element: DimensionElement) -> None:
         """Add the table for a `DimensionElement` to the query.
 
         This automatically joins the element table to all other tables in the
@@ -166,6 +167,8 @@ class QueryBuilder:
                                               dataId=Select,
                                               id=Select if isResult else None,
                                               run=Select if isResult else None)
+            if ssq is None:
+                continue
             if addRank:
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
             subsubqueries.append(ssq.combine())
@@ -181,7 +184,7 @@ class QueryBuilder:
             )
         return True
 
-    def joinTable(self, table: FromClause, dimensions: Iterable[Dimension]):
+    def joinTable(self, table: FromClause, dimensions: NamedValueSet[Dimension]) -> None:
         """Join an arbitrary table to the query via dimension relationships.
 
         External calls to this method should only be necessary for tables whose
@@ -235,7 +238,8 @@ class QueryBuilder:
             columnsInQuery.append(columnInTable)
         return joinOn
 
-    def finishJoin(self, table, joinOn):
+    def finishJoin(self, table: sqlalchemy.sql.FromClause, joinOn: List[sqlalchemy.sql.ColumnElement]
+                   ) -> None:
         """Complete a join on dimensions.
 
         Must be preceded by call to `startJoin`.
@@ -252,6 +256,7 @@ class QueryBuilder:
             at least the elements of the list returned by `startJoin`.
         """
         if joinOn:
+            assert self._sql is not None
             self._sql = self._sql.join(table, and_(*joinOn))
         elif self._sql is None:
             self._sql = table
@@ -264,7 +269,7 @@ class QueryBuilder:
             # always true.
             self._sql = self._sql.join(table, literal(True) == literal(True))
 
-    def _joinMissingDimensionElements(self):
+    def _joinMissingDimensionElements(self) -> None:
         """Join all dimension element tables that were identified as necessary
         by `QuerySummary` and have not yet been joined.
 
@@ -286,7 +291,7 @@ class QueryBuilder:
             if dimension not in self._columns.keys:
                 self.joinDimensionElement(dimension)
 
-    def _addWhereClause(self):
+    def _addWhereClause(self) -> None:
         """Add a WHERE clause to the query under construction, connecting all
         joined dimensions to the expression and data ID dimensions from
         `QuerySummary`.
@@ -312,7 +317,7 @@ class QueryBuilder:
                 # dimension that's constrained by a given region.
                 if self.summary.dataId.graph.spatial and isinstance(dimension, SkyPixDimension):
                     # We know the region now.
-                    givenSkyPixIds = []
+                    givenSkyPixIds: List[int] = []
                     for begin, end in dimension.pixelization.envelope(self.summary.dataId.region):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
@@ -323,14 +328,16 @@ class QueryBuilder:
         if self.summary.dataId.graph.temporal and self.summary.temporal:
             # Timespan is known now.
             givenInterval = self.summary.dataId.timespan
+            assert givenInterval is not None
             for element, intervalInQuery in self._columns.timespans.items():
                 assert element not in self.summary.dataId.graph.elements
                 whereTerms.append(intervalInQuery.overlaps(givenInterval, ops=sqlalchemy.sql))
         # AND-together the full WHERE clause, and combine it with the FROM
         # clause.
+        assert self._sql is not None
         self._sql = self._sql.where(and_(*whereTerms))
 
-    def _addSelectClause(self):
+    def _addSelectClause(self) -> None:
         """Add a SELECT clause to the query under construction containing all
         output columns identified by the `QuerySummary` and requested in calls
         to `joinDataset` with ``isResult=True``.

@@ -30,6 +30,7 @@ from typing import (
     Iterable,
     Optional,
     Set,
+    Type,
     TYPE_CHECKING,
 )
 
@@ -43,6 +44,7 @@ from .. import ddl
 if TYPE_CHECKING:  # Imports needed only for type annotations; may be circular.
     from .universe import DimensionUniverse
     from .graph import DimensionGraph
+    from .records import DimensionRecord
 
 
 class RelatedDimensions:
@@ -389,7 +391,7 @@ class DimensionElement:
     (`NamedValueSet` of `FieldSpec`).
     """
 
-    RecordClass: type
+    RecordClass: Type[DimensionRecord]
     """The `DimensionRecord` subclass used to hold records for this element
     (`type`).
 

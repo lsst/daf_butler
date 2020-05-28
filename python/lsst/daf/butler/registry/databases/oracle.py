@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["OracleDatabase"]
 
 from contextlib import closing, contextmanager
-from typing import Optional
+from typing import Any, Iterator, Optional
 
 import sqlalchemy
 import sqlalchemy.ext.compiler
@@ -38,13 +38,15 @@ class _Merge(sqlalchemy.sql.expression.Executable, sqlalchemy.sql.ClauseElement)
     primary key constraint for the table.
     """
 
-    def __init__(self, table):
+    def __init__(self, table: sqlalchemy.schema.Table):
         super().__init__()
         self.table = table
 
 
+# Hard to infer what types these should be from SQLAlchemy docs; just disable
+# static typing by calling everything "Any".
 @sqlalchemy.ext.compiler.compiles(_Merge, "oracle")
-def _merge(merge, compiler, **kw):
+def _merge(merge: Any, compiler: Any, **kwargs: Any) -> Any:
     """Generate MERGE query for inserting or updating records.
     """
     table = merge.table
@@ -61,28 +63,28 @@ def _merge(merge, compiler, **kw):
     selectClause = sqlalchemy.sql.select(selectColumns)
 
     tableAlias = table.alias("t")
-    tableAliasText = compiler.process(tableAlias, asfrom=True, **kw)
+    tableAliasText = compiler.process(tableAlias, asfrom=True, **kwargs)
     selectAlias = selectClause.alias("d")
-    selectAliasText = compiler.process(selectAlias, asfrom=True, **kw)
+    selectAliasText = compiler.process(selectAlias, asfrom=True, **kwargs)
 
     condition = sqlalchemy.sql.and_(
         *[tableAlias.columns[col] == selectAlias.columns[col] for col in pkColumns]
     )
-    conditionText = compiler.process(condition, **kw)
+    conditionText = compiler.process(condition, **kwargs)
 
     query = f"MERGE INTO {tableAliasText}" \
             f"\nUSING {selectAliasText}" \
             f"\nON ({conditionText})"
     updates = []
     for col in nonPkColumns:
-        src = compiler.process(selectAlias.columns[col], **kw)
-        dst = compiler.process(tableAlias.columns[col], **kw)
+        src = compiler.process(selectAlias.columns[col], **kwargs)
+        dst = compiler.process(tableAlias.columns[col], **kwargs)
         updates.append(f"{dst} = {src}")
-    updates = ", ".join(updates)
-    query += f"\nWHEN MATCHED THEN UPDATE SET {updates}"
+    text = ", ".join(updates)
+    query += f"\nWHEN MATCHED THEN UPDATE SET {text}"
 
     insertColumns = ", ".join([preparer.format_column(col) for col in table.columns])
-    insertValues = ", ".join([compiler.process(selectAlias.columns[col], **kw) for col in allColumns])
+    insertValues = ", ".join([compiler.process(selectAlias.columns[col], **kwargs) for col in allColumns])
 
     query += f"\nWHEN NOT MATCHED THEN INSERT ({insertColumns}) VALUES ({insertValues})"
     return query
@@ -140,6 +142,7 @@ class OracleDatabase(Database):
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
                        namespace: Optional[str] = None, writeable: bool = True) -> Database:
+        prefix: Optional[str]
         if namespace and "+" in namespace:
             namespace, prefix = namespace.split("+")
             if not namespace:
@@ -152,7 +155,7 @@ class OracleDatabase(Database):
                    prefix=prefix)
 
     @contextmanager
-    def transaction(self, *, interrupting: bool = False) -> None:
+    def transaction(self, *, interrupting: bool = False) -> Iterator[None]:
         with super().transaction(interrupting=interrupting):
             if not self.isWriteable():
                 with closing(self._connection.connection.cursor()) as cursor:
@@ -180,7 +183,7 @@ class OracleDatabase(Database):
             name = self.prefix + name
         return name
 
-    def replace(self, table: sqlalchemy.schema.Table, *rows: dict):
+    def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
         if not self.isWriteable():
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
         if not rows:

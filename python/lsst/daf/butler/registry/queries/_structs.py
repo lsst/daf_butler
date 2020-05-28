@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ["QuerySummary"]  # other classes here are local to subpackage
 
 from dataclasses import dataclass
-from typing import Iterator, List, Optional, Set, Union
+from typing import Iterator, List, Optional, Union
 
 from sqlalchemy.sql import ColumnElement
 
@@ -39,7 +39,9 @@ from ...core import (
     SkyPixDimension,
     Timespan,
 )
-from .exprParser import Node, ParserYacc
+# We're not trying to add parsing to the lex/yacc parser code, so MyPy
+# doesn't know about some of these imports.
+from .exprParser import Node, ParserYacc  # type: ignore
 
 
 @dataclass
@@ -62,6 +64,7 @@ class QueryWhereExpression:
             except Exception as exc:
                 raise RuntimeError(f"Failed to parse user expression `{expression}'.") from exc
             visitor = InspectionVisitor(universe)
+            assert self.tree is not None
             self.tree.visit(visitor)
             self.keys = visitor.keys
             self.metadata = visitor.metadata
@@ -79,7 +82,7 @@ class QueryWhereExpression:
     (`NamedValueSet` of `Dimension`).
     """
 
-    metadata: NamedKeyDict[DimensionElement, Set[str]]
+    metadata: NamedKeyDict[DimensionElement, List[str]]
     """All dimension elements metadata fields referenced by the expression
     (`NamedKeyDict` mapping `DimensionElement` to a `set` of field names).
     """
@@ -108,7 +111,8 @@ class QuerySummary:
                  dataId: Optional[ExpandedDataCoordinate] = None,
                  expression: Optional[Union[str, QueryWhereExpression]] = None):
         self.requested = requested
-        self.dataId = dataId if dataId is not None else ExpandedDataCoordinate(requested.universe.empty, ())
+        self.dataId = dataId if dataId is not None else ExpandedDataCoordinate(requested.universe.empty, (),
+                                                                               records=NamedKeyDict())
         self.expression = (expression if isinstance(expression, QueryWhereExpression)
                            else QueryWhereExpression(requested.universe, expression))
 
@@ -142,7 +146,7 @@ class QuerySummary:
         # - it's the most precise spatial element for its system in the
         #   requested dimensions (i.e. in `self.requested.spatial`);
         # - it isn't also given at query construction time.
-        result = self.mustHaveKeysJoined.spatial - self.dataId.graph.elements
+        result = NamedValueSet(self.mustHaveKeysJoined.spatial - self.dataId.graph.elements)
         if len(result) == 1:
             # There's no spatial join, but there might be a WHERE filter based
             # on a given region.
@@ -173,7 +177,7 @@ class QuerySummary:
         # - it's the most precise temporal element for its system in the
         #   requested dimensions (i.e. in `self.requested.temporal`);
         # - it isn't also given at query construction time.
-        result = self.mustHaveKeysJoined.temporal - self.dataId.graph.elements
+        result = NamedValueSet(self.mustHaveKeysJoined.temporal - self.dataId.graph.elements)
         if len(result) == 1 and not self.dataId.graph.temporal:
             # No temporal join or filter.  Even if this element might be
             # associated with temporal information, we don't need it for this
@@ -198,7 +202,7 @@ class QuerySummary:
         """Dimension elements whose associated tables must appear in the
         query's FROM clause (`NamedValueSet` of `DimensionElement`).
         """
-        result = self.spatial | self.temporal | self.expression.metadata.keys()
+        result = NamedValueSet(self.spatial | self.temporal | self.expression.metadata.keys())
         for dimension in self.mustHaveKeysJoined:
             if dimension.implied:
                 result.add(dimension)
@@ -243,7 +247,7 @@ class QueryColumns:
     Takes no parameters at construction, as expected usage is to add elements
     to its container attributes incrementally.
     """
-    def __init__(self):
+    def __init__(self) -> None:
         self.keys = NamedKeyDict()
         self.timespans = NamedKeyDict()
         self.regions = NamedKeyDict()
