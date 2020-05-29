@@ -25,8 +25,8 @@ import click
 
 class config_file_option:  # noqa: N801
 
-    defaultHelp =
-        "Path to a pex config override to be included after the Instrument config overrides are applied."
+    defaultHelp = "Path to a pex config override to be included after the Instrument config overrides are " \
+                  "applied."
 
     def __init__(self, required=False, help=defaultHelp):
         self.required = required
