@@ -23,7 +23,7 @@ import unittest
 from collections import namedtuple
 
 from lsst.daf.butler.core.utils import iterable, getFullTypeName, Singleton
-from lsst.daf.butler.core.formatter import Formatter
+from lsst.daf.butler import Formatter, Registry
 from lsst.daf.butler import NamedKeyDict, StorageClass
 
 
@@ -157,7 +157,8 @@ class TestButlerUtils(unittest.TestCase):
         tests = [(Formatter, "lsst.daf.butler.core.formatter.Formatter"),
                  (int, "int"),
                  (StorageClass, "lsst.daf.butler.core.storageClass.StorageClass"),
-                 (StorageClass(None), "lsst.daf.butler.core.storageClass.StorageClass")]
+                 (StorageClass(None), "lsst.daf.butler.core.storageClass.StorageClass"),
+                 (Registry, "lsst.daf.butler.registry.Registry")]
 
         for item, typeName in tests:
             self.assertEqual(getFullTypeName(item), typeName)
