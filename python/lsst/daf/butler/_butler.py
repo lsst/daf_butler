@@ -823,7 +823,7 @@ class Butler:
                     raise TypeError("Cannot predict location with run=None.")
             # Lie about ID, because we can't guess it, and only
             # Datastore.getURIs() will ever see it (and it doesn't use it).
-            ref = ref.resolved(id=0, run=self.run)
+            ref = ref.resolved(id=0, run=run)
         return self.datastore.getURIs(ref, predict)
 
     def getURI(self, datasetRefOrType: Union[DatasetRef, DatasetType, str],
