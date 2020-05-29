@@ -76,12 +76,6 @@ def duplicate_command_test_env(runner):
 
 class PluginLoaderTest(unittest.TestCase):
 
-    def setUp(self):
-        butler.cli.commands = None
-
-    def tearDown(self):
-        butler.cli.commands = None
-
     def test_loadAndExecutePluginCommand(self):
         """Test that a plugin command can be loaded and executed."""
         runner = click.testing.CliRunner()
