@@ -27,44 +27,22 @@ import click.testing
 import unittest
 
 from lsst.daf.butler.cli import butler
+from lsst.daf.butler.cli.mockeredTest import MockeredTestBase
 from lsst.daf.butler.cli.utils import clickResultMsg, Mocker, mockEnvVar
 
 
-def makeExpectedKwargs(**kwargs):
-    expected = dict(repo=None,
-                    transfer="auto",
-                    output_run=None,
-                    directory=None,
-                    export_file=None)
-    expected.update(kwargs)
-    return expected
+class ImportTestCase(MockeredTestBase):
 
-
-class Case(unittest.TestCase):
-
-    def setUp(self):
-        self.runner = click.testing.CliRunner(env=mockEnvVar)
-
-    def run_test(self, inputs, expectedKwargs):
-        """Test command line interaction with import command function.
-
-        Parameters
-        ----------
-        inputs : [`str`]
-            A list of the arguments to the butler command, starting with
-            `import`
-        expectedKwargs : `dict` [`str`, `str`]
-            The expected arguments to the import command function, keys are
-            the argument name and values are the argument value.
-        """
-        result = self.runner.invoke(butler.cli, inputs)
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        Mocker.mock.assert_called_with(**expectedKwargs)
+    defaultExpected = dict(repo=None,
+                           transfer="auto",
+                           output_run=None,
+                           directory=None,
+                           export_file=None)
 
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.
         """
-        expected = makeExpectedKwargs(repo="here", directory="foo", output_run="out")
+        expected = self.makeExpected(repo="here", directory="foo", output_run="out")
         self.run_test(["import", "here",
                        "foo",
                        "--output-run", "out"], expected)
@@ -74,7 +52,8 @@ class Case(unittest.TestCase):
         case below.
         """
         with self.runner.isolated_filesystem():
-            expected = makeExpectedKwargs(repo="here", directory="foo", output_run="out", transfer="symlink")
+            expected = self.makeExpected(repo="here", directory="foo", output_run="out",
+                                         transfer="symlink")
             self.run_test(["import", "here",
                            "foo",
                            "--output-run", "out",
