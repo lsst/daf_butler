@@ -354,6 +354,16 @@ class ConfigTestCase(unittest.TestCase):
         self.assertEqual(c._D, c2._D)  # Check that the child inherits
         self.assertNotEqual(c2._D, Config._D)
 
+    def testStringYaml(self):
+        """Test that we can create configs from strings"""
+
+        c = Config.fromYaml("""
+testing: hello
+formatters:
+  calexp: 3""")
+        self.assertEqual(c["formatters", "calexp"], 3)
+        self.assertEqual(c["testing"], "hello")
+
 
 class ConfigSubsetTestCase(unittest.TestCase):
     """Tests for ConfigSubset
@@ -511,6 +521,18 @@ class ConfigSubsetTestCase(unittest.TestCase):
         delimiter = "-"
         names = c.names(delimiter=delimiter)
         self.assertIn(delimiter.join(("", "comp3", "1", "comp", "item1")), names)
+
+    def testStringInclude(self):
+        """Using include directives in strings"""
+
+        # See if include works for absolute path
+        c = Config.fromYaml(f"something: !include {os.path.join(self.configDir, 'testconfig.yaml')}")
+        self.assertEqual(c["something", "comp", "item3"], 3)
+
+        with self.assertRaises(FileNotFoundError) as cm:
+            Config.fromYaml("something: !include /not/here.yaml")
+        # Test that it really was trying to open the absolute path
+        self.assertIn("'/not/here.yaml'", str(cm.exception))
 
     def testIncludeConfigs(self):
         """Test the special includeConfigs key for pulling in additional

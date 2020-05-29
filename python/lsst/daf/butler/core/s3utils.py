@@ -19,10 +19,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("getS3Client", "s3CheckFileExists", "bucketExists", "setAwsEnvCredentials",
            "unsetAwsEnvCredentials")
 
 import os
+
+from typing import (
+    Optional,
+    Tuple,
+    Union,
+)
 
 try:
     import boto3
@@ -32,7 +40,7 @@ except ImportError:
 from .location import ButlerURI, Location
 
 
-def getS3Client():
+def getS3Client() -> boto3.client:
     """Create a S3 client with AWS (default) or the specified endpoint
 
     Returns
@@ -55,7 +63,8 @@ def getS3Client():
     return boto3.client("s3", endpoint_url=endpoint)
 
 
-def s3CheckFileExists(path, bucket=None, client=None):
+def s3CheckFileExists(path: Union[Location, ButlerURI, str], bucket: Optional[str] = None,
+                      client: Optional[boto3.cient] = None) -> Tuple[bool, int]:
     """Returns (True, filesize) if file exists in the bucket and (False, -1) if
     the file is not found.
 
@@ -122,7 +131,7 @@ def s3CheckFileExists(path, bucket=None, client=None):
         raise
 
 
-def bucketExists(bucketName, client=None):
+def bucketExists(bucketName: str, client: Optional[boto3.client] = None) -> bool:
     """Check if the S3 bucket with the given name actually exists.
 
     Parameters
@@ -155,7 +164,8 @@ def bucketExists(bucketName, client=None):
         return False
 
 
-def setAwsEnvCredentials(accessKeyId='dummyAccessKeyId', secretAccessKey="dummySecretAccessKey"):
+def setAwsEnvCredentials(accessKeyId: str = 'dummyAccessKeyId',
+                         secretAccessKey: str = "dummySecretAccessKey") -> bool:
     """Set AWS credentials environmental variables AWS_ACCESS_KEY_ID and
     AWS_SECRET_ACCESS_KEY.
 
@@ -185,7 +195,7 @@ def setAwsEnvCredentials(accessKeyId='dummyAccessKeyId', secretAccessKey="dummyS
     return False
 
 
-def unsetAwsEnvCredentials():
+def unsetAwsEnvCredentials() -> None:
     """Unsets AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY environmental
     variables.
     """

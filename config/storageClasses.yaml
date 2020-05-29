@@ -95,7 +95,7 @@ storageClasses:
     pytype: lsst.meas.algorithms.Curve
   Exposure:
     pytype: lsst.afw.image.Exposure
-    assembler: lsst.daf.butler.assemblers.exposureAssembler.ExposureAssembler
+    assembler: lsst.obs.base.exposureAssembler.ExposureAssembler
     parameters:
       - bbox
       - origin

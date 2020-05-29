@@ -29,7 +29,6 @@ import os.path
 
 from .core import (
     ButlerURI,
-    CompositesConfig,
     Config,
     DatastoreConfig,
     DimensionConfig,
@@ -39,7 +38,7 @@ from .core import (
 from .registry import RegistryConfig
 
 CONFIG_COMPONENT_CLASSES = (RegistryConfig, StorageClassConfig,
-                            DatastoreConfig, CompositesConfig, DimensionConfig,
+                            DatastoreConfig, DimensionConfig,
                             RepoTransferFormatConfig)
 
 

@@ -1,12 +1,9 @@
-composites:
-  disassembled:
-    StructuredData: False
-    StructuredDataJson: False
-    StructuredDataPickle: False
-    StructuredComposite: True
-    StructuredCompositeTestA: True
-    StructuredCompositeTestB: True
-    ExposureCompositeI: True
-    ExposureCompositeF: True
-    dummyTrue: True
-    dummyFalse: False
+disassembled:
+  StructuredData: False
+  StructuredDataJson: False
+  StructuredDataPickle: False
+  StructuredComposite: True
+  StructuredCompositeTestA: True
+  StructuredCompositeTestB: True
+  dummyTrue: True
+  dummyFalse: False

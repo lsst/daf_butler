@@ -19,50 +19,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ("FitsCatalogDatasetsHelper", "DatasetTestHelper", "DatastoreTestHelper",
+__all__ = ("DatasetTestHelper", "DatastoreTestHelper",
            "BadWriteFormatter", "BadNoWriteFormatter", "MultiDetectorFormatter")
 
 import os
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
-
-
-class FitsCatalogDatasetsHelper:
-
-    def makeExampleCatalog(self):
-        import lsst.afw.table
-        catalogPath = os.path.join(self.testDir, "data", "basic", "source_catalog.fits")
-        return lsst.afw.table.SourceCatalog.readFits(catalogPath)
-
-    def assertCatalogEqual(self, inputCatalog, outputCatalog):
-        import lsst.afw.table
-        self.assertIsInstance(outputCatalog, lsst.afw.table.SourceCatalog)
-        inputTable = inputCatalog.getTable()
-        inputRecord = inputCatalog[0]
-        outputTable = outputCatalog.getTable()
-        outputRecord = outputCatalog[0]
-        self.assertEqual(inputRecord.getPsfInstFlux(), outputRecord.getPsfInstFlux())
-        self.assertEqual(inputRecord.getPsfFluxFlag(), outputRecord.getPsfFluxFlag())
-        self.assertEqual(inputTable.getSchema().getAliasMap().get("slot_Centroid"),
-                         outputTable.getSchema().getAliasMap().get("slot_Centroid"))
-        self.assertEqual(inputRecord.getCentroid(), outputRecord.getCentroid())
-        self.assertFloatsAlmostEqual(
-            inputRecord.getCentroidErr()[0, 0],
-            outputRecord.getCentroidErr()[0, 0], rtol=1e-6)
-        self.assertFloatsAlmostEqual(
-            inputRecord.getCentroidErr()[1, 1],
-            outputRecord.getCentroidErr()[1, 1], rtol=1e-6)
-        self.assertEqual(inputTable.getSchema().getAliasMap().get("slot_Shape"),
-                         outputTable.getSchema().getAliasMap().get("slot_Shape"))
-        self.assertFloatsAlmostEqual(
-            inputRecord.getShapeErr()[0, 0],
-            outputRecord.getShapeErr()[0, 0], rtol=1e-6)
-        self.assertFloatsAlmostEqual(
-            inputRecord.getShapeErr()[1, 1],
-            outputRecord.getShapeErr()[1, 1], rtol=1e-6)
-        self.assertFloatsAlmostEqual(
-            inputRecord.getShapeErr()[2, 2],
-            outputRecord.getShapeErr()[2, 2], rtol=1e-6)
 
 
 class DatasetTestHelper:

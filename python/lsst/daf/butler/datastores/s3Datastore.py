@@ -113,7 +113,8 @@ class S3Datastore(FileLikeDatastore):
         exists : `bool`
             True if the location can be found, false otherwise.
         """
-        return s3CheckFileExists(location, client=self.client)
+        exists, _ = s3CheckFileExists(location, client=self.client)
+        return exists
 
     def _delete_artifact(self, location: Location) -> None:
         """Delete the artifact from the datastore.

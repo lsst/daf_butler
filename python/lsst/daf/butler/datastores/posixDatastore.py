@@ -40,7 +40,7 @@ from typing import (
 )
 
 from .fileLikeDatastore import FileLikeDatastore
-from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import ButlerURI, FileDataset, StoredFileInfo, Formatter, DatasetRef
 
 if TYPE_CHECKING:

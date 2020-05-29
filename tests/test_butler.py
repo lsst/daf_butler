@@ -45,16 +45,16 @@ except ImportError:
         return cls
 
 from lsst.utils import doImport
-from lsst.daf.butler.core.safeFileIo import safeMakeDir
+from lsst.daf.butler.core.utils import safeMakeDir
 from lsst.daf.butler import Butler, Config, ButlerConfig
 from lsst.daf.butler import StorageClassFactory
 from lsst.daf.butler import DatasetType, DatasetRef
 from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from lsst.daf.butler import FileDataset
 from lsst.daf.butler import CollectionSearch, CollectionType
+from lsst.daf.butler import ButlerURI
 from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
-from lsst.daf.butler.core.location import ButlerURI
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
                                           unsetAwsEnvCredentials)
 

@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Support for configuration snippets"""
 
 __all__ = ("LookupKey", "processLookupConfigs",
@@ -27,7 +29,22 @@ __all__ = ("LookupKey", "processLookupConfigs",
 import logging
 import re
 from collections.abc import Mapping
+
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Dict,
+    Iterable,
+    Optional,
+    Set,
+    Union,
+)
+
 from .dimensions import DimensionGraph
+
+if TYPE_CHECKING:
+    from .dimensions import DimensionUniverse, Dimension
+    from .config import Config
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +74,9 @@ class LookupKey:
         full `DimensionGraph` is not provided.
     """
 
-    def __init__(self, name=None, dimensions=None, dataId=None, *, universe=None):
+    def __init__(self, name: Optional[str] = None,
+                 dimensions: Optional[Iterable[Union[str, Dimension]]] = None,
+                 dataId: Optional[Dict[str, Any]] = None, *, universe: Optional[DimensionUniverse] = None):
         if name is None and dimensions is None:
             raise ValueError("At least one of name or dimensions must be given")
 
@@ -75,43 +94,46 @@ class LookupKey:
             if "+" in name:
                 # If we are given a single dimension we use the "+" to
                 # indicate this but have to filter out the empty value
-                dimensions = [n for n in name.split("+") if n]
+                dimension_names = [n for n in name.split("+") if n]
                 if universe is None:
                     raise ValueError(f"Cannot construct LookupKey for {name} without dimension universe.")
                 else:
-                    self._dimensions = universe.extract(dimensions)
+                    self._dimensions = universe.extract(dimension_names)
             else:
                 self._name = name
-        else:
+
+        elif dimensions is not None:
             if not isinstance(dimensions, DimensionGraph):
                 if universe is None:
                     raise ValueError(f"Cannot construct LookupKey for dimensions={dimensions} "
-                                     f"without universe.")
+                                     "without universe.")
                 else:
                     self._dimensions = universe.extract(dimensions)
             else:
                 self._dimensions = dimensions
+        else:
+            # mypy cannot work this out on its own
+            raise ValueError("Name was None but dimensions is also None")
 
         # The dataId is converted to a frozenset of key/value
         # tuples so that it is not mutable
-        if dataId is not None:
-            self._dataId = frozenset(dataId.items())
-        else:
-            self._dataId = None
+        self._dataId = frozenset(dataId.items()) if dataId is not None else None
 
-    def __str__(self):
+    def __str__(self) -> str:
         # For the simple case return the simple string
         if self._name:
             name = self._name
-        else:
+        elif self._dimensions is not None:
             name = "+".join(self._dimensions.names)
+        else:
+            raise RuntimeError("Internal error since name and dimensions are both None")
 
         if not self._dataId:
             return name
 
         return f"{name} ({self.dataId})"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         params = ""
         if self.name:
             params += f"name={self.name!r},"
@@ -122,36 +144,39 @@ class LookupKey:
 
         return f"{self.__class__.__name__}({params})"
 
-    def __eq__(self, other):
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, type(self)):
+            return False
         if self._name == other._name and self._dimensions == other._dimensions and \
                 self._dataId == other._dataId:
             return True
         return False
 
     @property
-    def name(self):
+    def name(self) -> Optional[str]:
         """Primary name string to use as lookup. (`str`)"""
         return self._name
 
     @property
-    def dimensions(self):
+    def dimensions(self) -> Optional[DimensionGraph]:
         """Dimensions associated with lookup. (`DimensionGraph`)"""
         return self._dimensions
 
     @property
-    def dataId(self):
+    def dataId(self) -> Optional[Dict[str, Any]]:
         """Dict of keys/values that are important for dataId lookup.
         (`dict` or `None`)"""
         if self._dataId is not None:
             return {k: v for k, v in self._dataId}
         else:
-            return
+            return None
 
-    def __hash__(self):
+    def __hash__(self) -> int:
         """Hash the lookup to allow use as a key in a dict."""
         return hash((self._name, self._dimensions, self._dataId))
 
-    def clone(self, name=None, dimensions=None, dataId=None):
+    def clone(self, name: Optional[str] = None, dimensions: Optional[DimensionGraph] = None,
+              dataId: Optional[Dict[str, Any]] = None) -> LookupKey:
         """Clone the object, overriding some options.
 
         Used to create a new instance of the object whilst updating
@@ -189,7 +214,8 @@ class LookupKey:
         return self.__class__(name=name, dimensions=dimensions, dataId=dataId)
 
 
-def processLookupConfigs(config, *, universe=None):
+def processLookupConfigs(config: Config, *,
+                         universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey, str]:
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
@@ -262,14 +288,15 @@ def processLookupConfigs(config, *, universe=None):
     return contents
 
 
-def processLookupConfigList(config, *, universe=None):
+def processLookupConfigList(config: Iterable[Union[str, Mapping]],
+                            *, universe: Optional[DimensionUniverse] = None) -> Set[LookupKey]:
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
     Parameters
     ----------
     config : `list` of `str` or `dict`
-        Contents a configuration listing keys that can be
+        Contents of a configuration listing keys that can be
         dataset type names, storage class names, dimensions
         or dataId components.  DataId components are represented as entries
         in the `list` of `dicts` with a single key with a value of a `list`

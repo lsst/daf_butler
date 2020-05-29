@@ -30,6 +30,12 @@ from dataclasses import dataclass
 import logging
 from typing import (
     Any,
+    Dict,
+    Iterable,
+    Mapping,
+    Optional,
+    Tuple,
+    Type,
     TYPE_CHECKING,
 )
 
@@ -70,11 +76,12 @@ class CompositeAssembler:
         `StorageClass` to be used with this assembler.
     """
 
-    def __init__(self, storageClass):
+    def __init__(self, storageClass: StorageClass):
+        assert storageClass is not None
         self.storageClass = storageClass
 
     @staticmethod
-    def _attrNames(componentName, getter=True):
+    def _attrNames(componentName: str, getter: bool = True) -> Tuple[str, ...]:
         """Return list of suitable attribute names to attempt to use.
 
         Parameters
@@ -101,7 +108,7 @@ class CompositeAssembler:
         capitalized = "{}{}{}".format(root, first, tail)
         return (componentName, "{}_{}".format(root, componentName), capitalized)
 
-    def assemble(self, components, pytype=None):
+    def assemble(self, components: Dict[str, Any], pytype: Optional[Type] = None) -> Any:
         """Construct an object from components based on storageClass.
 
         This generic implementation assumes that instances of objects
@@ -171,7 +178,7 @@ class CompositeAssembler:
 
         return obj
 
-    def getValidComponents(self, composite):
+    def getValidComponents(self, composite: Any) -> Dict[str, Any]:
         """Extract all non-None components from a composite.
 
         Parameters
@@ -187,7 +194,7 @@ class CompositeAssembler:
             `CompositeAssembler.storageClass`.
         """
         components = {}
-        if self.storageClass is not None and self.storageClass.isComposite():
+        if self.storageClass.isComposite():
             for c in self.storageClass.components:
                 if isinstance(composite, collections.abc.Mapping):
                     comp = composite[c]
@@ -201,7 +208,7 @@ class CompositeAssembler:
                             components[c] = comp
         return components
 
-    def getComponent(self, composite, componentName):
+    def getComponent(self, composite: Any, componentName: str) -> Any:
         """Attempt to retrieve component from composite object by heuristic.
 
         Will attempt a direct attribute retrieval, or else getter methods of
@@ -240,7 +247,8 @@ class CompositeAssembler:
             raise AttributeError("Unable to get component {}".format(componentName))
         return component
 
-    def disassemble(self, composite, subset=None, override=None):
+    def disassemble(self, composite: Any, subset: Optional[Iterable] = None,
+                    override: bool = None) -> Dict[str, Any]:
         """Generic implementation of a disassembler.
 
         This implementation attempts to extract components from the parent
@@ -277,8 +285,9 @@ class CompositeAssembler:
             The parent object does not match the supplied
             `CompositeAssembler.storageClass`.
         """
-        if self.storageClass.components is None:
-            return
+        if not self.storageClass.isComposite():
+            raise TypeError("Can not disassemble something that is not a composite"
+                            f" (storage class={self.storageClass})")
 
         if not self.storageClass.validateInstance(composite):
             raise TypeError("Unexpected type mismatch between parent and StorageClass"
@@ -318,7 +327,7 @@ class CompositeAssembler:
 
         return components
 
-    def handleParameters(self, inMemoryDataset, parameters=None):
+    def handleParameters(self, inMemoryDataset: Any, parameters: Optional[Mapping[str, Any]] = None) -> Any:
         """Modify the in-memory dataset using the supplied parameters,
         returning a possibly new object.
 

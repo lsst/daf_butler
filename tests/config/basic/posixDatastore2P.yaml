@@ -26,5 +26,4 @@ datastore:
     StructuredDataNoComponents: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
     StructuredDataPickle: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-    ExposureCompositeF: lsst.daf.butler.formatters.fitsExposureFormatter.FitsExposureFormatter
     ThingOne: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
