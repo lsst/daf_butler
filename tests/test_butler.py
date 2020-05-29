@@ -924,8 +924,9 @@ class FileLikeDatastoreButlerTests(ButlerTests):
                 # butler command line interface "import" subcommand. Functions
                 # in the script folder are generally considered protected and
                 # should not be used as public api.
-                script.butlerImport(importDir, output_run="ingest/run", export_file=exportFile,
-                                    directory=exportButler.datastore.root, transfer="symlink")
+                with open(exportFile, "r") as f:
+                    script.butlerImport(importDir, output_run="ingest/run", export_file=f,
+                                        directory=exportButler.datastore.root, transfer="symlink")
                 importButler = Butler(importDir, run="ingest/run")
                 for ref in datasets:
                     with self.subTest(ref=ref):
