@@ -131,7 +131,10 @@ def getFullTypeName(cls: Any) -> str:
     Notes
     -----
     Builtins are returned without the ``builtins`` specifier included.  This
-    allows `str` to be returned as "str" rather than "builtins.str".
+    allows `str` to be returned as "str" rather than "builtins.str". Any
+    parts of the path that start with a leading underscore are removed
+    on the assumption that they are an implementation detail and the
+    entity will be hoisted into the parent namespace.
     """
     # If we have an instance we need to convert to a type
     if not hasattr(cls, "__qualname__"):
@@ -139,7 +142,26 @@ def getFullTypeName(cls: Any) -> str:
     if hasattr(builtins, cls.__qualname__):
         # Special case builtins such as str and dict
         return cls.__qualname__
-    return cls.__module__ + "." + cls.__qualname__
+
+    real_name = cls.__module__ + "." + cls.__qualname__
+
+    # Remove components with leading underscores
+    cleaned_name = ".".join(c for c in real_name.split(".") if not c.startswith("_"))
+
+    # Consistency check
+    if real_name != cleaned_name:
+        try:
+            test = doImport(cleaned_name)
+        except Exception:
+            # Could not import anything so return the real name
+            return real_name
+
+        # The thing we imported should match the class we started with
+        # despite the clean up. If it does not we return the real name
+        if test is not cls:
+            return real_name
+
+    return cleaned_name
 
 
 def getClassOf(typeOrName: Union[Type, str]) -> Type:

@@ -553,14 +553,15 @@ class FileTemplate:
 
         return path
 
-    def validateTemplate(self, entity: Union[DatasetRef, DatasetType, StorageClass]) -> None:
+    def validateTemplate(self, entity: Union[DatasetRef, DatasetType, StorageClass, None]) -> None:
         """Compare the template against a representative entity that would
         like to use template.
 
         Parameters
         ----------
         entity : `DatasetType`, `DatasetRef`, or `StorageClass`
-            Entity to compare against template.
+            Entity to compare against template. If `None` is given only
+            very basic validation of templates will be performed.
 
         Raises
         ------
@@ -596,7 +597,9 @@ class FileTemplate:
         # is present in the template. If the entity is not a component
         # make sure that component is not mandatory.
         try:
-            if entity.isComponent():
+            # mypy does not see the except block so complains about
+            # StorageClass not supporting isComponent
+            if entity.isComponent():  # type: ignore
                 if "component" not in withSpecials:
                     raise FileTemplateValidationError(f"Template '{self}' has no component but "
                                                       f"{entity} refers to a component.")
@@ -611,12 +614,14 @@ class FileTemplate:
         # Get the dimension links to get the full set of available field names
         # Fall back to dataId keys if we have them but no links.
         # dataId keys must still be present in the template
+        # Ignore warnings from mypy concerning StorageClass and DatasetType
+        # not supporting the full API.
         try:
-            minimal = set(entity.dimensions.required.names)
-            maximal = set(entity.dimensions.names)
+            minimal = set(entity.dimensions.required.names)  # type: ignore
+            maximal = set(entity.dimensions.names)  # type: ignore
         except AttributeError:
             try:
-                minimal = set(entity.dataId.keys())
+                minimal = set(entity.dataId.keys())  # type: ignore
                 maximal = minimal
             except AttributeError:
                 return
