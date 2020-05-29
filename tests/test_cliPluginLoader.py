@@ -74,7 +74,7 @@ def duplicate_command_test_env(runner):
             yield
 
 
-class Suite(unittest.TestCase):
+class PluginLoaderTest(unittest.TestCase):
 
     def setUp(self):
         butler.cli.commands = None
