@@ -35,6 +35,13 @@ from ..core.utils import iterable
 mockEnvVarKey = "CLI_BUTLER_MOCK_ENV"
 mockEnvVar = {mockEnvVarKey: "1"}
 
+# This is used as the metavar argument to Options that accept multiple string
+# inputs, which may be comma-separarated. For example:
+# --my-opt foo,bar --my-opt baz.
+# Other arguments to the Option should include multiple=true and
+# callback=split_kv.
+typeStrAcceptsMultiple = "TEXT ..."
+
 
 class Mocker:
 
@@ -54,6 +61,54 @@ class Mocker:
         later be verified.
         """
         Mocker.mock(*args, **kwargs)
+
+
+def clickResultMsg(result):
+    """Get a standard assert message from a click result
+
+    Parameters
+    ----------
+    result : click.Result
+        The result object returned from click.testing.CliRunner.invoke
+
+    Returns
+    -------
+    msg : `str`
+        The message string.
+    """
+    return f"output: {result.output} exception: {result.exception}"
+
+
+def addArgumentHelp(doc, helpText):
+    """Add a Click argument's help message to a function's documentation.
+
+    This is needed because click presents arguments in the order the argument
+    decorators are applied to a function, top down. But, the evaluation of the
+    decorators happens bottom up, so if arguments just append their help to the
+    function's docstring, the argument descriptions appear in reverse order
+    from the order they are applied in.
+
+    Parameters
+    ----------
+    doc : `str`
+        The function's docstring.
+    helpText : `str`
+        The argument's help string to be inserted into the function's
+        docstring.
+
+    Returns
+    -------
+    doc : `str`
+        Updated function documentation.
+    """
+    if doc is None:
+        doc = helpText
+    else:
+        doclines = doc.splitlines()
+        doclines.insert(1, helpText)
+        doclines.insert(1, "\n")
+        doc = "\n".join(doclines)
+    return doc
 
 
 def split_commas(context, param, values):

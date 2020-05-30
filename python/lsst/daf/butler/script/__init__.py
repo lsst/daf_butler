@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+from .butlerImport import butlerImport
 from .createRepo import createRepo
 from .configDump import configDump
 from .configValidate import configValidate

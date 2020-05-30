@@ -44,19 +44,38 @@ def _initLogging(logLevel):
 
 
 def funcNameToCmdName(functionName):
-    """Change underscores, used in functions, to dashes, used in commands."""
+    """Convert function name to the butler command name: change underscores,
+    (used in functions) to dashes (used in commands), and change local-package
+    command names that conflict with python keywords to a leagal function name.
+    """
+    # The "import" command name and "butler_import" function name are defined
+    # in cli/cmd/commands.py, and if those names are changed they must be
+    # changed here as well.
+    # It is expected that there will be very few butler command names that need
+    # to be changed because of e.g. conflicts with python keywords (as is done
+    # here and in cmdNameToFuncName for the 'import' command). If this becomes
+    # a common need then some way of doing this should be invented that is
+    # better than hard coding the function names into these conversion
+    # functions. An extension of the 'cli/resources.yaml' file (as is currently
+    # used in obs_base) might be a good way to do it.
+    if functionName == "butler_import":
+        functionName = "import"
     return functionName.replace("_", "-")
 
 
 def cmdNameToFuncName(commandName):
-    """Change dashes, used in commands, to underscores, used in functions."""
+    """Convert butler command name to function name: change dashes (used in
+    commands) to underscores (used in functions), and for local-package
+    commands names that conflict with python keywords, change the local, legal,
+    function name to the command name."""
+    if commandName == "import":
+        commandName = "butler_import"
     return commandName.replace("-", "_")
 
 
 class LoaderCLI(click.MultiCommand):
 
     def __init__(self, *args, **kwargs):
-        self.commands = None
         super().__init__(*args, **kwargs)
 
     @staticmethod
@@ -164,8 +183,7 @@ class LoaderCLI(click.MultiCommand):
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
-        commands = cls._mergeCommandLists(cls._getLocalCommands(), cls._getPluginCommands())
-        return commands
+        return cls._mergeCommandLists(cls._getLocalCommands(), cls._getPluginCommands())
 
     @staticmethod
     def _raiseIfDuplicateCommands(commands):
@@ -206,11 +224,10 @@ class LoaderCLI(click.MultiCommand):
         commands : `list` [`str`]
             The names of the commands that can be called by the butler command.
         """
-        if self.commands is None:
-            self.commands = self._getCommands()
-        self._raiseIfDuplicateCommands(self.commands)
-        log.debug(self.commands.keys())
-        return self.commands.keys()
+        commands = self._getCommands()
+        self._raiseIfDuplicateCommands(commands)
+        log.debug(commands.keys())
+        return commands.keys()
 
     def get_command(self, context, name):
         """Used by Click to get a single command for execution.
@@ -227,14 +244,13 @@ class LoaderCLI(click.MultiCommand):
         command : click.Command
             A Command that wraps a callable command function.
         """
-        if self.commands is None:
-            self.commands = self._getCommands()
-        if name not in self.commands:
+        commands = self._getCommands()
+        if name not in commands:
             return None
-        self._raiseIfDuplicateCommands(self.commands)
-        if self.commands[name][0] == localCmdPkg:
+        self._raiseIfDuplicateCommands(commands)
+        if commands[name][0] == localCmdPkg:
             return getattr(butlerCommands, cmdNameToFuncName(name))
-        return doImport(self.commands[name][0] + "." + cmdNameToFuncName(name))
+        return doImport(commands[name][0] + "." + cmdNameToFuncName(name))
 
 
 @click.command(cls=LoaderCLI)

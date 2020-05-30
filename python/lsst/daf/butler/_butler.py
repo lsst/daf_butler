@@ -40,6 +40,7 @@ from typing import (
     Mapping,
     MutableMapping,
     Optional,
+    TextIO,
     Tuple,
     Union,
 )
@@ -1291,7 +1292,7 @@ class Butler:
                 helper._finish()
 
     def import_(self, *, directory: Optional[str] = None,
-                filename: Optional[str] = None,
+                filename: Union[str, TextIO, None] = None,
                 format: Optional[str] = None,
                 transfer: Optional[str] = None):
         """Import datasets exported from a different butler repository.
@@ -1301,12 +1302,12 @@ class Butler:
         directory : `str`, optional
             Directory containing dataset files.  If `None`, all file paths
             must be absolute.
-        filename : `str`, optional
-            Name for the file that containing database information associated
-            with the exported datasets.  If this is not an absolute path, does
-            not exist in the current working directory, and ``directory`` is
-            not `None`, it is assumed to be in ``directory``.  Defaults to
-            "export.{format}".
+        filename : `str` or `TextIO`, optional
+            A stream or name of file that contains database information
+            associated with the exported datasets.  If this a string (name) and
+            is not an absolute path, does not exist in the current working
+            directory, and ``directory`` is not `None`, it is assumed to be in
+            ``directory``. Defaults to "export.{format}".
         format : `str`, optional
             File format for the database information file.  If `None`, the
             extension of ``filename`` will be used.
@@ -1328,14 +1329,21 @@ class Butler:
                 _, format = os.path.splitext(filename)
         elif filename is None:
             filename = f"export.{format}"
-        if directory is not None and not os.path.exists(filename):
+        if isinstance(filename, str) and directory is not None and not os.path.exists(filename):
             filename = os.path.join(directory, filename)
         BackendClass = getClassOf(self._config["repo_transfer_formats"][format]["import"])
-        with open(filename, 'r') as stream:
-            backend = BackendClass(stream, self.registry)
+
+        def doImport(importStream):
+            backend = BackendClass(importStream, self.registry)
             backend.register()
             with self.transaction():
                 backend.load(self.datastore, directory=directory, transfer=transfer)
+
+        if isinstance(filename, str):
+            with open(filename, "r") as stream:
+                doImport(stream)
+        else:
+            doImport(filename)
 
     def validateConfiguration(self, logFailures: bool = False,
                               datasetTypeNames: Optional[Iterable[str]] = None,

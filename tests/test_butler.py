@@ -53,6 +53,7 @@ from lsst.daf.butler import FileTemplateValidationError, ValidationError
 from lsst.daf.butler import FileDataset
 from lsst.daf.butler import CollectionSearch, CollectionType
 from lsst.daf.butler import ButlerURI
+from lsst.daf.butler import script
 from lsst.daf.butler.registry import MissingCollectionError
 from lsst.daf.butler.core.repoRelocation import BUTLER_ROOT_TAG
 from lsst.daf.butler.core.s3utils import (s3CheckFileExists, setAwsEnvCredentials,
@@ -919,9 +920,14 @@ class FileLikeDatastoreButlerTests(ButlerTests):
             self.assertTrue(os.path.exists(exportFile))
             with tempfile.TemporaryDirectory() as importDir:
                 Butler.makeRepo(importDir, config=Config(self.configFile))
+                # Calling script.butlerImport tests the implementation of the
+                # butler command line interface "import" subcommand. Functions
+                # in the script folder are generally considered protected and
+                # should not be used as public api.
+                with open(exportFile, "r") as f:
+                    script.butlerImport(importDir, output_run="ingest/run", export_file=f,
+                                        directory=exportButler.datastore.root, transfer="symlink")
                 importButler = Butler(importDir, run="ingest/run")
-                importButler.import_(filename=exportFile, directory=exportButler.datastore.root,
-                                     transfer="symlink")
                 for ref in datasets:
                     with self.subTest(ref=ref):
                         # Test for existence by passing in the DatasetType and

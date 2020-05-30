@@ -74,20 +74,14 @@ def duplicate_command_test_env(runner):
             yield
 
 
-class Suite(unittest.TestCase):
-
-    def setUp(self):
-        butler.cli.commands = None
-
-    def tearDown(self):
-        butler.cli.commands = None
+class PluginLoaderTest(unittest.TestCase):
 
     def test_loadAndExecutePluginCommand(self):
         """Test that a plugin command can be loaded and executed."""
         runner = click.testing.CliRunner()
         with command_test_env(runner):
             result = runner.invoke(butler.cli, "command-test")
-            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.stdout, "test command\n")
 
     def test_loadAndExecuteLocalCommand(self):
@@ -95,7 +89,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "test_repo"])
-            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertTrue(os.path.exists("test_repo"))
 
     def test_loadTopHelp(self):
@@ -103,15 +97,17 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with command_test_env(runner):
             result = runner.invoke(butler.cli, "--help")
-            self.assertEqual(result.exit_code, 0, result.stdout)
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertIn("command-test", result.stdout)
 
     def test_getLocalCommands(self):
         """Test getting the daf_butler CLI commands."""
         localCommands = butler.LoaderCLI._getLocalCommands()
-        for command in cmd.__all__:
-            command = command.replace("_", "-")
-            self.assertEqual(localCommands[command], ["lsst.daf.butler.cli.cmd"])
+        # the number of local commands should equal the number of functions
+        # in cmd.__all__
+        self.assertEqual(len(localCommands), len(cmd.__all__))
+        for command, pkg in localCommands.items():
+            self.assertEqual(pkg, ["lsst.daf.butler.cli.cmd"])
 
     def test_mergeCommandLists(self):
         """Verify dicts of command to list-of-source-package get merged
@@ -131,7 +127,7 @@ class Suite(unittest.TestCase):
         runner = click.testing.CliRunner()
         with duplicate_command_test_env(runner):
             result = runner.invoke(butler.cli, ["create", "test_repo"])
-            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertEqual(result.exit_code, 1, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.output, "Error: Command 'create' "
                              "exists in packages lsst.daf.butler.cli.cmd, test_cliPluginLoader. "
                              "Duplicate commands are not supported, aborting.\n")

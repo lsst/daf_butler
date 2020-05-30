@@ -1,8 +1,8 @@
-# This file is part of obs_base.
+# This file is part of daf_butler.
 #
 # Developed for the LSST Data Management System.
 # This product includes software developed by the LSST Project
-# (https://www.lsst.org).
+# (http://www.lsst.org).
 # See the COPYRIGHT file at the top-level directory of this distribution
 # for details of code ownership.
 #
@@ -19,11 +19,20 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from .config import config_option
-from .config_file import config_file_option
-from .dataset_type import dataset_type_option
-from .directory import directory_argument
-from .repo import repo_argument
-from .run import run_option
-from .transfer import transfer_option
 
+import click
+
+allowed_types = ["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink"]
+
+
+class transfer_option:  # noqa: N801
+    def __init__(self, required=False, help=None):
+        self.required = required
+        self.help = "The external data transfer mode." if help is None else help
+
+    def __call__(self, f):
+        return click.option("-t", "--transfer",
+                            default="auto",
+                            type=click.Choice(allowed_types),
+                            required=self.required,
+                            help=self.help)(f)

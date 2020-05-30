@@ -25,30 +25,27 @@ import click
 from ..utils import addArgumentHelp
 
 
-class repo_argument:  # noqa: N801
-    """Decorator to add a repo argument to a click command.
+class directory_argument:  # noqa: N801
+    """Decorator to add a directory argument to a click command.
 
     Parameters
     ----------
-    required : bool, optional
+    required : `bool`, optional
         Indicates if the caller must pass this argument to the command, by
         default True.
-    help : str, optional
+    help : `str`, optional
         The help text for this argument to append to the command's help text.
         If None or '' then nothing will be appended to the help text (in which
         case the command should document this argument directly in its help
-        text). By default the value of repo_argument.existing_repo.
+        text). By default, the value of directory_argument.default_help
     """
 
-    will_create_repo = "REPO is the URI or path to the new repository. " \
-                       "Will be created if it does not exist."
-    existing_repo = "REPO is the URI or path to an existing data repository root " \
-                    "or configuration file."
+    default_help = "DIRECTORY is the folder containing dataset files."
 
-    def __init__(self, required=False, help=existing_repo):
+    def __init__(self, required=False, help=default_help):
         self.required = required
         self.helpText = help
 
     def __call__(self, f):
         f.__doc__ = addArgumentHelp(f.__doc__, self.helpText)
-        return click.argument("repo", required=self.required)(f)
+        return click.argument("directory", required=self.required)(f)

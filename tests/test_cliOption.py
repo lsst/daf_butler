@@ -27,7 +27,8 @@ import click.testing
 import unittest
 import yaml
 
-from lsst.daf.butler.cli.opt import config_file_option, config_option, dataset_type_option
+from lsst.daf.butler.cli.opt import config_file_option, config_option, dataset_type_option, directory_argument
+from lsst.daf.butler.cli.utils import clickResultMsg
 
 
 class DatasetTypeTestCase(unittest.TestCase):
@@ -138,6 +139,57 @@ class ConfigFileTestCase(unittest.TestCase):
         result = runner.invoke(ConfigFileTestCase.cli, ["--help"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertIn("foo bar baz", result.stdout)
+
+
+class DirectoryArgumentTestCase(unittest.TestCase):
+
+    def test_required(self):
+        """test arguments"""
+        @click.command()
+        @directory_argument(required=True)
+        def cli(directory):
+            click.echo(directory, nl=False)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["this_dir"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual("this_dir", result.stdout)
+        result = runner.invoke(cli, [])
+        self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertIn('Missing argument "DIRECTORY"', result.stdout)
+
+    def test_notRequired(self):
+        """test arguments"""
+        @click.command()
+        @directory_argument()
+        def cli(directory):
+            click.echo(directory, nl=False)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["this_dir"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual("this_dir", result.stdout)
+        result = runner.invoke(cli, [])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual("", result.stdout)
+
+    def test_customHelp(self):
+        @click.command()
+        @directory_argument(help="custom help")
+        def cli(directory):
+            click.echo(directory, nl=False)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["--help"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertIn("custom help", result.stdout)
+
+    def test_defaultHelp(self):
+        @click.command()
+        @directory_argument()
+        def cli(directory):
+            click.echo(directory, nl=False)
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, ["--help"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertIn(directory_argument.default_help, result.stdout)
 
 
 if __name__ == "__main__":
