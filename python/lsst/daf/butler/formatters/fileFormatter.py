@@ -19,25 +19,37 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Support for reading and writing files to a POSIX file system."""
 
 __all__ = ("FileFormatter",)
 
 from abc import abstractmethod
 
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    Type,
+)
+
 from lsst.daf.butler import Formatter
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import StorageClass
 
 
 class FileFormatter(Formatter):
     """Interface for reading and writing files on a POSIX file system.
     """
 
-    extension = None
+    extension: Optional[str] = None
     """Default file extension to use for writing files. None means that no
     modifications will be made to the supplied file extension. (`str`)"""
 
     @abstractmethod
-    def _readFile(self, path, pytype=None):
+    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
         """Read a file from the path in the correct format.
 
         Parameters
@@ -61,7 +73,7 @@ class FileFormatter(Formatter):
         pass
 
     @abstractmethod
-    def _writeFile(self, inMemoryDataset):
+    def _writeFile(self, inMemoryDataset: Any) -> None:
         """Write the in memory dataset to file on disk.
 
         Parameters
@@ -76,7 +88,7 @@ class FileFormatter(Formatter):
         """
         pass
 
-    def _assembleDataset(self, data, component=None):
+    def _assembleDataset(self, data: Any, component: Optional[str] = None) -> Any:
         """Assembles and coerces the dataset, or one of its components,
         into an appropriate python type and returns it.
 
@@ -120,7 +132,8 @@ class FileFormatter(Formatter):
 
         return data
 
-    def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
+    def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
+                    pytype: Optional[Type[Any]] = None) -> Any:
         """Coerce the supplied inMemoryDataset to type `pytype`.
 
         Usually a no-op.
@@ -141,7 +154,7 @@ class FileFormatter(Formatter):
         """
         return inMemoryDataset
 
-    def read(self, component=None):
+    def read(self, component: Optional[str] = None) -> Any:
         """Read data from a file.
 
         Parameters
@@ -184,15 +197,13 @@ class FileFormatter(Formatter):
 
         return data
 
-    def fromBytes(self, serializedDataset, component=None):
+    def fromBytes(self, serializedDataset: bytes, component: Optional[str] = None) -> Any:
         """Reads serialized data into a Dataset or its component.
 
         Parameters
         ----------
         serializedDataset : `bytes`
             Bytes object to unserialize.
-        fileDescriptor : `FileDescriptor`
-            Identifies read type and parameters to be used for reading.
         component : `str`, optional
             Component to read from the Dataset. Only used if the `StorageClass`
             for reading differed from the `StorageClass` used to write the
@@ -212,7 +223,8 @@ class FileFormatter(Formatter):
         if not hasattr(self, '_fromBytes'):
             raise NotImplementedError("Type does not support reading from bytes.")
 
-        data = self._fromBytes(serializedDataset,
+        # mypy can not understand that the previous line protects this call
+        data = self._fromBytes(serializedDataset,  # type: ignore
                                self.fileDescriptor.storageClass.pytype)
 
         # Assemble the requested dataset and potentially return only its
@@ -224,7 +236,7 @@ class FileFormatter(Formatter):
 
         return data
 
-    def write(self, inMemoryDataset):
+    def write(self, inMemoryDataset: Any) -> str:
         """Write a Python object to a file.
 
         Parameters
@@ -245,15 +257,13 @@ class FileFormatter(Formatter):
 
         return fileDescriptor.location.pathInStore
 
-    def toBytes(self, inMemoryDataset):
+    def toBytes(self, inMemoryDataset: Any) -> bytes:
         """Serialize the Dataset to bytes based on formatter.
 
         Parameters
         ----------
         inMemoryDataset : `object`
             Object to serialize.
-        fileDescriptor : `FileDescriptor`
-            Identifies read type and parameters to be used for reading.
 
         Returns
         -------
@@ -268,4 +278,5 @@ class FileFormatter(Formatter):
         if not hasattr(self, '_toBytes'):
             raise NotImplementedError("Type does not support reading from bytes.")
 
-        return self._toBytes(inMemoryDataset)
+        # mypy can not understand that the previous line protects this call
+        return self._toBytes(inMemoryDataset)  # type: ignore

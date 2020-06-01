@@ -19,12 +19,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("YamlFormatter", )
 
 import builtins
 import yaml
 
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    Type,
+)
+
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import StorageClass
 
 
 class YamlFormatter(FileFormatter):
@@ -35,7 +47,7 @@ class YamlFormatter(FileFormatter):
     unsupportedParameters = None
     """This formatter does not support any parameters"""
 
-    def _readFile(self, path, pytype=None):
+    def _readFile(self, path: str, pytype: Type[Any] = None) -> Any:
         """Read a file from the path in YAML format.
 
         Parameters
@@ -63,7 +75,7 @@ class YamlFormatter(FileFormatter):
 
         return data
 
-    def _fromBytes(self, serializedDataset, pytype=None):
+    def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters
@@ -80,7 +92,7 @@ class YamlFormatter(FileFormatter):
             not be read.
         """
         try:
-            data = yaml.load(serializedDataset, Loader=yaml.UnsafeLoader)
+            data = yaml.load(serializedDataset, Loader=yaml.FullLoader)
         except yaml.YAMLError:
             data = None
         try:
@@ -89,7 +101,7 @@ class YamlFormatter(FileFormatter):
             pass
         return data
 
-    def _writeFile(self, inMemoryDataset):
+    def _writeFile(self, inMemoryDataset: Any) -> None:
         """Write the in memory dataset to file on disk.
 
         Will look for `_asdict()` method to aid YAML serialization, following
@@ -110,7 +122,7 @@ class YamlFormatter(FileFormatter):
                 inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
-    def _toBytes(self, inMemoryDataset):
+    def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
 
         Parameters
@@ -130,7 +142,8 @@ class YamlFormatter(FileFormatter):
         """
         return yaml.dump(inMemoryDataset).encode()
 
-    def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
+    def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
+                    pytype: Optional[Type[Any]] = None) -> Any:
         """Coerce the supplied inMemoryDataset to type `pytype`.
 
         Parameters
@@ -147,7 +160,7 @@ class YamlFormatter(FileFormatter):
         inMemoryDataset : `object`
             Object of expected type `pytype`.
         """
-        if not hasattr(builtins, pytype.__name__):
+        if pytype is not None and not hasattr(builtins, pytype.__name__):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.assembler().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):

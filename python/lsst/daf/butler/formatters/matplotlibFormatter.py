@@ -19,9 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 """Support for writing matplotlib figures."""
 
 __all__ = ("MatplotlibFormatter",)
+
+from typing import (
+    Any,
+    Optional,
+    Type,
+)
 
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
 
@@ -33,11 +41,11 @@ class MatplotlibFormatter(FileFormatter):
     extension = ".png"
     """Matplotlib figures are always written in PNG format."""
 
-    def _readFile(self, path, pytype=None):
+    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
         # docstring inherited from FileFormatter._readFile
         raise NotImplementedError(
             f"matplotlib figures cannot be read by the butler; path is {path}")
 
-    def _writeFile(self, inMemoryDataset):
+    def _writeFile(self, inMemoryDataset: Any) -> None:
         # docstring inherited from FileFormatter._writeFile
         inMemoryDataset.savefig(self.fileDescriptor.location.path)

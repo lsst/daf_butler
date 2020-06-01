@@ -19,12 +19,24 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("JsonFormatter", )
 
 import builtins
 import json
 
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Optional,
+    Type,
+)
+
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+
+if TYPE_CHECKING:
+    from lsst.daf.butler import StorageClass
 
 
 class JsonFormatter(FileFormatter):
@@ -35,13 +47,15 @@ class JsonFormatter(FileFormatter):
     unsupportedParameters = None
     """This formatter does not support any parameters (`frozenset`)"""
 
-    def _readFile(self, path, pytype=None):
+    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
         """Read a file from the path in JSON format.
 
         Parameters
         ----------
         path : `str`
             Path to use to open JSON format file.
+        pytype : `class`, optional
+            Not used by this implementation.
 
         Returns
         -------
@@ -57,7 +71,7 @@ class JsonFormatter(FileFormatter):
 
         return data
 
-    def _writeFile(self, inMemoryDataset):
+    def _writeFile(self, inMemoryDataset: Any) -> None:
         """Write the in memory dataset to file on disk.
 
         Will look for `_asdict()` method to aid JSON serialization, following
@@ -78,7 +92,7 @@ class JsonFormatter(FileFormatter):
                 inMemoryDataset = inMemoryDataset._asdict()
             fd.write(self._toBytes(inMemoryDataset))
 
-    def _fromBytes(self, serializedDataset, pytype=None):
+    def _fromBytes(self, serializedDataset: bytes, pytype: Optional[Type[Any]] = None) -> Any:
         """Read the bytes object as a python object.
 
         Parameters
@@ -101,7 +115,7 @@ class JsonFormatter(FileFormatter):
 
         return data
 
-    def _toBytes(self, inMemoryDataset):
+    def _toBytes(self, inMemoryDataset: Any) -> bytes:
         """Write the in memory dataset to a bytestring.
 
         Parameters
@@ -121,7 +135,8 @@ class JsonFormatter(FileFormatter):
         """
         return json.dumps(inMemoryDataset, ensure_ascii=False).encode()
 
-    def _coerceType(self, inMemoryDataset, storageClass, pytype=None):
+    def _coerceType(self, inMemoryDataset: Any, storageClass: StorageClass,
+                    pytype: Optional[Type[Any]] = None) -> Any:
         """Coerce the supplied inMemoryDataset to type `pytype`.
 
         Parameters
@@ -138,7 +153,7 @@ class JsonFormatter(FileFormatter):
         inMemoryDataset : `object`
             Object of expected type `pytype`.
         """
-        if not hasattr(builtins, pytype.__name__):
+        if pytype is not None and not hasattr(builtins, pytype.__name__):
             if storageClass.isComposite():
                 inMemoryDataset = storageClass.assembler().assemble(inMemoryDataset, pytype=pytype)
             elif not isinstance(inMemoryDataset, pytype):
