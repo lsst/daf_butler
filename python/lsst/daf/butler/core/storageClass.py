@@ -67,7 +67,8 @@ class StorageClass:
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
     parameters : `~collections.abc.Sequence` or `~collections.abc.Set`
-        Parameters understood by this `StorageClass`.
+        Parameters understood by this `StorageClass` that can control
+        reading of data from datastores.
     assembler : `str`, optional
         Fully qualified name of class supporting assembly and disassembly
         of a `pytype` instance.
@@ -268,21 +269,37 @@ class StorageClass:
         subset : `~collections.abc.Collection`, optional
             Subset of supported parameters that the caller is interested
             in using.  The subset must be known to the `StorageClass`
-            if specified.
+            if specified. If `None` the supplied parameters will all
+            be checked, else only the keys in this set will be checked.
 
         Returns
         -------
         filtered : `dict`
             Valid parameters. Empty `dict` if none are suitable.
+
+        Raises
+        ------
+        ValueError
+            Raised if the provided subset is not a subset of the supported
+            parameters or if it is an empty set.
         """
         if not parameters:
             return {}
-        subset = set(subset) if subset is not None else set()
+
         known = self.knownParameters()
-        if not subset.issubset(known):
-            raise ValueError(f"Requested subset ({subset}) is not a subset of"
-                             f" known parameters ({known})")
-        return {k: parameters[k] for k in known if k in parameters}
+
+        if subset is not None:
+            if not subset:
+                raise ValueError("Specified a parameter subset but it was empty")
+            subset = set(subset)
+            if not subset.issubset(known):
+                raise ValueError(f"Requested subset ({subset}) is not a subset of"
+                                 f" known parameters ({known})")
+            wanted = subset
+        else:
+            wanted = known
+
+        return {k: parameters[k] for k in wanted if k in parameters}
 
     def validateInstance(self, instance: Any) -> bool:
         """Check that the supplied Python object has the expected Python type
