@@ -52,7 +52,7 @@ def butler_import(*args, **kwargs):
 @click.option("--seed-config", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
               "insulating the repo from changes in package defaults.")
-@click.option("--override", "-o", is_flag=True, help="Allow values in the supplied config to override any "
+@click.option("--override", is_flag=True, help="Allow values in the supplied config to override all "
               "repo settings.")
 @click.option("--outfile", "-f", default=None, type=str, help="Name of output file to receive repository "
               "configuration. Default is to write butler.yaml into the specified repo.")
