@@ -2,7 +2,7 @@
 Core code for butler.
 """
 
-# Do not export the utility routines from safeFileIo, utils, and queries.
+# Do not export the utility routines from utils and queries.
 
 from .assembler import *
 from .config import *
