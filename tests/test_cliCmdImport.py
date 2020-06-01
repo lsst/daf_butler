@@ -22,13 +22,11 @@
 """Unit tests for daf_butler CLI config-dump command.
 """
 
-import click
-import click.testing
 import unittest
+import unittest.mock
 
-from lsst.daf.butler.cli import butler
-from lsst.daf.butler.cli.mockeredTest import MockeredTestBase
-from lsst.daf.butler.cli.utils import clickResultMsg, Mocker, mockEnvVar
+from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.cli.utils import Mocker
 
 
 class ImportTestCase(MockeredTestBase):
@@ -42,42 +40,49 @@ class ImportTestCase(MockeredTestBase):
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.
         """
-        expected = self.makeExpected(repo="here", directory="foo", output_run="out")
-        self.run_test(["import", "here",
-                       "foo",
-                       "--output-run", "out"], expected)
+        self.run_test(["import", "here", "foo",
+                       "--output-run", "out"],
+                      self.makeExpected(repo="here", directory="foo",
+                                        output_run="out"))
 
     def test_almostAll(self):
         """Test all the parameters, except export_file which gets its own test
         case below.
         """
-        with self.runner.isolated_filesystem():
-            expected = self.makeExpected(repo="here", directory="foo", output_run="out",
-                                         transfer="symlink")
-            self.run_test(["import", "here",
-                           "foo",
-                           "--output-run", "out",
-                           "--transfer", "symlink"], expected)
+        self.run_test(["import", "here", "foo",
+                       "--output-run", "out",
+                       "--transfer", "symlink"],
+                      self.makeExpected(repo="here", directory="foo",
+                                        output_run="out",
+                                        transfer="symlink"))
 
     def test_missingArgument(self):
-        """Verify the command fails if a positional argument is missing"""
-        runner = click.testing.CliRunner(env=mockEnvVar)
-        result = runner.invoke(butler.cli, ["import", "foo", "--output-run", "out"])
-        self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+        """Verify the command fails if either of the positional arguments,
+        REPO or DIRECTORY, is missing."""
+        self.run_missing(["import", "foo", "--output-run", "out"],
+                         'Error: Missing argument "DIRECTORY".')
 
 
-class ExportFileCase(unittest.TestCase):
+class ExportFileCase(MockeredTestBase):
 
     didRead = None
+
+    defaultExpected = dict(repo=None,
+                           transfer="auto",
+                           output_run=None,
+                           directory=None,
+                           export_file=None)
 
     def setUp(self):
         # add a side effect to Mocker so that it will call our method when it
         # is called.
         Mocker.mock.side_effect = self.read_test
+        super().setUp()
 
     def tearDown(self):
         # reset the Mocker's side effect on our way out!
         Mocker.mock.side_effect = None
+        super().tearDown()
 
     @staticmethod
     def read_test(*args, **kwargs):
@@ -92,14 +97,22 @@ class ExportFileCase(unittest.TestCase):
     def test_exportFile(self):
         """Test all the parameters, except export_file.
         """
-        runner = click.testing.CliRunner(env=mockEnvVar)
-        with runner.isolated_filesystem():
+        # export_file is ANY in makeExpected because that variable is opened by
+        # click and the open handle is passed to the command function as a
+        # TestIOWrapper. It doesn't work to test it with
+        # MagicMock.assert_called_with because if a TextIOWrapper is created
+        # here it will be a different instance and not compare equal. We test
+        # that variable via the mocker.side_effect used in self.read_test.
+        with self.runner.isolated_filesystem():
             f = open("output.yaml", "w")
             f.write("foobarbaz")
             f.close()
-            result = runner.invoke(butler.cli, ["import", "here", "foo", "--output-run", "out",
-                                                "--export-file", "output.yaml"])
-            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            self.run_test(["import", "here", "foo",
+                           "--output-run", "out",
+                           "--export-file", "output.yaml"],
+                          self.makeExpected(repo="here", directory="foo",
+                                            output_run="out",
+                                            export_file=unittest.mock.ANY))
             self.assertEqual("foobarbaz", ExportFileCase.didRead)
 
 
