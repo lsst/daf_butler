@@ -22,15 +22,15 @@
 from .. import Butler, Config
 
 
-def createRepo(repo, config_file=None, standalone=False, override=False, outfile=None):
+def createRepo(repo, seed_config=None, standalone=False, override=False, outfile=None):
     """Create an empty Gen3 Butler repository.
 
     Parameters
     ----------
     repo : `str`
         URI to the location to create the repo.
-    config_file : `str` or `None`
-        Path to a config yaml file, by default None
+    seed_config : `str` or `None`
+        Path to an existing YAML config file to apply (on top of defaults).
     standalone : `bool`
         Include all the defaults in the config file in the repo if True.
         Insulates the the repo from changes to package defaults. By default
@@ -42,6 +42,6 @@ def createRepo(repo, config_file=None, standalone=False, override=False, outfile
         Name of output file to receive repository configuration. Default is to
         write butler.yaml into the specified repo, by default False.
     """
-    config = Config(config_file) if config_file is not None else None
+    config = Config(seed_config) if seed_config is not None else None
     Butler.makeRepo(repo, config=config, standalone=standalone, forceConfigRoot=not override,
                     outfile=outfile)

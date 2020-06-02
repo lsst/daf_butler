@@ -253,7 +253,7 @@ class LoaderCLI(click.MultiCommand):
         return doImport(commands[name][0] + "." + cmdNameToFuncName(name))
 
 
-@click.command(cls=LoaderCLI)
+@click.command(cls=LoaderCLI, context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option("--log-level",
               type=click.Choice(["critical", "error", "warning", "info", "debug",
                                  "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]),

@@ -39,7 +39,7 @@ class MockerTestCase(unittest.TestCase):
         runner = click.testing.CliRunner(env=mockEnvVar)
         result = runner.invoke(butler.cli, ["create", "repo"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        Mocker.mock.assert_called_with(repo="repo", config_file=None, standalone=False, override=False,
+        Mocker.mock.assert_called_with(repo="repo", seed_config=None, standalone=False, override=False,
                                        outfile=None)
 
 
