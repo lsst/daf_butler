@@ -78,6 +78,8 @@ class NamedKeyMapping(Mapping[K, V]):
     type checking; the actual Python runtime doesn't care about types at all.
     """
 
+    __slots__ = ()
+
     @property
     @abstractmethod
     def names(self) -> AbstractSet[str]:
@@ -113,6 +115,8 @@ class NamedKeyMapping(Mapping[K, V]):
 class NamedKeyMutableMapping(NamedKeyMapping[K, V], MutableMapping[K, V]):
     """An abstract base class that adds mutation to `NamedKeyMapping`.
     """
+
+    __slots__ = ()
 
     @abstractmethod
     def __setitem__(self, key: Union[str, K], value: V) -> None:
@@ -350,7 +354,7 @@ class NamedValueSet(MutableSet[K]):
         """
         self._dict[element.name] = element
 
-    def remove(self, element: Union[str, K]) -> Any:
+    def remove(self, element: Union[str, K]) -> None:
         """Remove an element from the set.
 
         Parameters
@@ -366,7 +370,7 @@ class NamedValueSet(MutableSet[K]):
         """
         del self._dict[getattr(element, "name", element)]
 
-    def discard(self, element: Union[str, K]) -> Any:
+    def discard(self, element: Union[str, K]) -> None:
         """Remove an element from the set if it exists.
 
         Does nothing if no matching element is present.
