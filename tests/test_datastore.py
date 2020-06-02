@@ -24,7 +24,7 @@ import unittest
 import shutil
 import yaml
 import tempfile
-import lsst.utils
+import lsst.utils.tests
 
 from lsst.utils import doImport
 
