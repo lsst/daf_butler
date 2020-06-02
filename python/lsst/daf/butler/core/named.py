@@ -234,6 +234,14 @@ class NamedKeyDict(NamedKeyMutableMapping[K, V]):
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)  # type: ignore
 
+    def frozen(self) -> NamedKeyMapping[K, V]:
+        """Freeze ``self``, and then return it.
+
+        This is simply a convenience wrapper for `freeze`.
+        """
+        self.freeze()
+        return self
+
 
 class NamedValueSet(MutableSet[K]):
     """A custom mutable set class that requires elements to have a ``.name``
@@ -418,6 +426,14 @@ class NamedValueSet(MutableSet[K]):
         """
         if not isinstance(self._dict, MappingProxyType):
             self._dict = MappingProxyType(self._dict)  # type: ignore
+
+    def frozen(self) -> NamedValueSet[K]:
+        """Freeze ``self``, and then return it.
+
+        This is simply a convenience wrapper for `freeze`.
+        """
+        self.freeze()
+        return self
 
 
 class IndexedTupleDict(NamedKeyMapping[K, V]):
