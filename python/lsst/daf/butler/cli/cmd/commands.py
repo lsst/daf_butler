@@ -23,7 +23,7 @@ import click
 
 from ..opt import dataset_type_option, directory_argument, repo_argument, run_option, transfer_option
 from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
-from ...script import butlerImport, createRepo, configDump, configValidate
+from ...script import butlerImport, createRepo, configDump, configValidate, installExternalData
 
 
 # The conversion from the import command name to the butler_import function
@@ -87,3 +87,23 @@ def config_dump(*args, **kwargs):
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
     cli_handle_exception(configValidate, *args, **kwargs)
+
+
+@click.command()
+@repo_argument(required=True)
+@click.option("--source",
+              help="Source of external data")
+@click.option("--tract",
+              type=int,
+              default=0,
+              help="Tract identifier")
+@click.option("--visit-ccd",
+              nargs=2,
+              type=int,
+              default=[],
+              multiple=True,
+              metavar="INT INT ...",
+              help="Visit and CCD of jointcal data to ingest.")
+def install_external_data(*args, **kwargs):
+    "Install extenral data"
+    cli_handle_exception(installExternalData, *args, **kwargs)

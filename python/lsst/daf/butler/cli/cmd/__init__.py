@@ -19,7 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ["butler_import", "create", "config_dump", "config_validate"]
+__all__ = ["butler_import", "create", "config_dump", "config_validate", "install_external_data"]
 
 
-from .commands import butler_import, create, config_dump, config_validate
+from .commands import butler_import, create, config_dump, config_validate, install_external_data
