@@ -25,8 +25,6 @@ __all__ = (
     "CollectionQuery",
     "CollectionSearch",
     "DatasetTypeRestriction",
-    "Ellipsis",
-    "EllipsisType",
 )
 
 from dataclasses import dataclass
@@ -61,6 +59,11 @@ if TYPE_CHECKING:
     # Along with that, we need to either use `Ellipsis` instead of `...` for
     # the actual sentinal value internally, and tell MyPy to ignore conversions
     # from `...` to `Ellipsis` at the public-interface boundary.
+    #
+    # `Ellipsis` and `EllipsisType` should be directly imported from this
+    # module by related code that needs them; hopefully that will stay confined
+    # to `lsst.daf.butler.registry`.  Putting these in __all__ is bad for
+    # Sphinx, and probably more confusing than helpful overall.
     from enum import Enum
 
     class EllipsisType(Enum):
