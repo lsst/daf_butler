@@ -72,7 +72,7 @@ class NamedKeyMapping(Mapping[K, V]):
 
     Notes
     -----
-    In addition to the new `names` property and ``byName` attribute, this class
+    In addition to the new `names` property and `byName` method, this class
     simply redefines the type signature for `__getitem__` and `get` that would
     otherwise be inherited from `Mapping`. That is only relevant for static
     type checking; the actual Python runtime doesn't care about types at all.

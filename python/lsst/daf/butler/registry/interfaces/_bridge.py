@@ -228,15 +228,16 @@ class DatastoreRegistryBridgeManager(ABC):
     Datastores are passed an instance of `DatastoreRegistryBridgeManager` at
     construction, and should use it to obtain and keep any of the following:
 
-     - a `DatastoreRegistryBridge` instance to record in the `Registry` what is
-     present in the datastore (needed by all datastores that are not just
-     forwarders);
+    - a `DatastoreRegistryBridge` instance to record in the `Registry` what is
+      present in the datastore (needed by all datastores that are not just
+      forwarders);
 
-     - one or more `OpaqueTableStorage` instance if they wish to store internal
-     records in the `Registry` database;
+    - one or more `OpaqueTableStorage` instance if they wish to store internal
+      records in the `Registry` database;
 
-     - the `DimensionUniverse`, if they need it to (e.g.) construct or validate
-     filename templates.
+    - the `DimensionUniverse`, if they need it to (e.g.) construct or validate
+      filename templates.
+
     """
     def __init__(self, *, opaque: OpaqueTableStorageManager, universe: DimensionUniverse):
         self.opaque = opaque
