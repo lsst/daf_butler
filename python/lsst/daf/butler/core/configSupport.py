@@ -215,7 +215,8 @@ class LookupKey:
 
 
 def processLookupConfigs(config: Config, *,
-                         universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey, str]:
+                         allow_hierarchy: bool = False,
+                         universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey, Union[str, Dict]]:
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 
@@ -225,6 +226,10 @@ def processLookupConfigs(config: Config, *,
         A `Config` representing a configuration mapping keys to values where
         the keys can be dataset type names, storage class names, dimensions
         or dataId components.
+    allow_hierarchy : `bool`, optional
+        If `True`, keys that refer to a hierarchy that does not look like
+        a DataID specification are allowed and the full hierarchy, as a dict,
+        will be returned in the value for the lookup key.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to expand and validate any used
         in lookup keys.
@@ -255,7 +260,7 @@ def processLookupConfigs(config: Config, *,
     Currently only a single dataId field can be specified for a key.
     For example with a config such as:
 
-    .. code::
+    .. code-block:: yaml
 
        something:
          calexp: value1
@@ -270,6 +275,8 @@ def processLookupConfigs(config: Config, *,
     """
     contents = {}
     for name, value in config.items():
+        lookup = LookupKey(name=name, universe=universe)
+
         if isinstance(value, Mapping):
             # indicates a dataId component -- check the format
             kv = DATAID_RE.match(name)
@@ -279,10 +286,11 @@ def processLookupConfigs(config: Config, *,
                 for subKey, subStr in value.items():
                     lookup = LookupKey(name=subKey, dataId={dataIdKey: dataIdValue}, universe=universe)
                     contents[lookup] = subStr
+            elif allow_hierarchy:
+                contents[lookup] = value
             else:
                 raise RuntimeError(f"Hierarchical key '{name}' not in form 'key<value>'")
         else:
-            lookup = LookupKey(name=name, universe=universe)
             contents[lookup] = value
 
     return contents

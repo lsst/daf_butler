@@ -109,6 +109,8 @@ class FileTemplates:
 
         # Convert all the values to FileTemplate, handling defaults
         for key, templateStr in contents.items():
+            if not isinstance(templateStr, str):
+                raise RuntimeError(f"Unexpected value in file template key {key}: {templateStr}")
             if key == self.defaultKey:
                 if not templateStr:
                     self.default = None
