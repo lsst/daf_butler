@@ -122,9 +122,6 @@ Database backends
 Support API
 -----------
 
-.. automodapi:: lsst.daf.butler.core.safeFileIo
-   :no-main-docstr:
-   :headings: ^"
 .. automodapi:: lsst.daf.butler.core.utils
    :no-main-docstr:
    :headings: ^"
