@@ -87,8 +87,6 @@ storageClasses:
     pytype: lsst.daf.base.PropertySet
   PropertyList:
     pytype: lsst.daf.base.PropertyList
-  PropertySet:
-    pytype: lsst.daf.base.PropertySet
   Defects:
     pytype: lsst.meas.algorithms.Defects
   QECurve:

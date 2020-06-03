@@ -1,3 +1,4 @@
-# test default case is unchanged, test default case infers correct registry class from dialect directly
+# test default case is unchanged, test default case infers correct
+# registry class from dialect directly
 registry:
   expected: "sqlite:///:memory:"

@@ -32,10 +32,10 @@ datastore:
     datasetType.component: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     pvi: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
     paramtest:
-       formatter: lsst.daf.butler.tests.testFormatters.FormatterTest
-       parameters:
-         max: 5
-         comment: Additional commentary
+      formatter: lsst.daf.butler.tests.testFormatters.FormatterTest
+      parameters:
+        max: 5
+        comment: Additional commentary
     instrument<DummyHSC>:
       pvi: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
       StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter

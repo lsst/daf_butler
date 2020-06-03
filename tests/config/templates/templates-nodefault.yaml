@@ -1,5 +1,5 @@
 # This file disables defaulting
-default: False
+default: false
 calexp: "{run:/}/{datasetType}.{component:?}/{datasetType}_i{instrument}_v{visit}_f{physical_filter:?}_{component:?}"
 calexp.wcs: "{run:/}/{datasetType}.{component}-a-wcs-{instrument}-{visit}-{physical_filter}"
 StorageClassX: "StorageClass/{run:/}_{datasetType}_{instrument}_{visit}"

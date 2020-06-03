@@ -6,7 +6,7 @@ datastore:
     - constraints:
         reject:
           - instrument<DummyCamComp>:
-            - all
+              - all
     - constraints:
         accept:
           - metric
@@ -15,6 +15,6 @@ datastore:
         reject:
           - all
   datastores:
-  - !include inMemoryDatastore.yaml
-  - !include posixDatastore.yaml
-  - !include posixDatastore2.yaml
+    - !include inMemoryDatastore.yaml
+    - !include posixDatastore.yaml
+    - !include posixDatastore2.yaml

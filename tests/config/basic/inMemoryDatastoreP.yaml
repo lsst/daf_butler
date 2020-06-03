@@ -5,4 +5,4 @@ datastore:
       - metric
       - StructuredDataJson
       - instrument<DummyCamComp>:
-        - metric33
+          - metric33
