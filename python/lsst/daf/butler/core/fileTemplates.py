@@ -104,20 +104,21 @@ class FileTemplates:
                  universe: DimensionUniverse):
         self.config = FileTemplatesConfig(config)
         self._templates = {}
-        self.default = FileTemplate(default) if default is not None else None
+
         contents = processLookupConfigs(self.config, universe=universe)
+
+        # Determine default to use -- defaults can be disabled if
+        # we get a False or None
+        defaultValue = contents.get(self.defaultKey, default)
+        self.default = FileTemplate(defaultValue) if defaultValue else None
 
         # Convert all the values to FileTemplate, handling defaults
         for key, templateStr in contents.items():
+            if key == self.defaultKey:
+                continue
             if not isinstance(templateStr, str):
                 raise RuntimeError(f"Unexpected value in file template key {key}: {templateStr}")
-            if key == self.defaultKey:
-                if not templateStr:
-                    self.default = None
-                else:
-                    self.default = FileTemplate(templateStr)
-            else:
-                self._templates[key] = FileTemplate(templateStr)
+            self._templates[key] = FileTemplate(templateStr)
 
     @property
     def templates(self) -> Mapping[LookupKey, FileTemplate]:
