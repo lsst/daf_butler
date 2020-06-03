@@ -1,0 +1,17 @@
+extends: default
+
+ignore: |
+  /tests/config/dbAuth/badDbAuth2.yaml
+
+rules:
+  document-start: {present: false}
+  line-length:
+    max: 80
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+    ignore: |
+      /.github/workflows/lint.yaml
+  truthy:
+    # "on" as a key in workflows confuses things
+    ignore: |
+      /.github/workflows/
