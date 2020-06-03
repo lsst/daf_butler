@@ -123,7 +123,7 @@ class Formatter(metaclass=ABCMeta):
         return getFullTypeName(cls)
 
     @abstractmethod
-    def read(self, component: Optional[str] = None) -> object:
+    def read(self, component: Optional[str] = None) -> Any:
         """Read a Dataset.
 
         Parameters
