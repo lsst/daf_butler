@@ -20,10 +20,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+import yaml
 
-from ..opt import dataset_type_option, directory_argument, repo_argument, run_option, transfer_option
+from ..opt import (collection_type_option, dataset_type_option, directory_argument, repo_argument, run_option,
+                   transfer_option)
 from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
-from ...script import butlerImport, createRepo, configDump, configValidate
+from ...script import butlerImport, createRepo, configDump, configValidate, queryCollections
 
 
 # The conversion from the import command name to the butler_import function
@@ -87,3 +89,20 @@ def config_dump(*args, **kwargs):
 def config_validate(*args, **kwargs):
     """Validate the configuration files for a Gen3 Butler repository."""
     cli_handle_exception(configValidate, *args, **kwargs)
+
+
+@click.command()
+@repo_argument(required=True)
+@collection_type_option()
+@click.option("--flatten-chains/--no-flatten-chains",
+              help="Recursively get the child collections of matching CHAINED collections. Default is "
+                   "--no-flatten-chains.")
+@click.option("--include-chains/--no-include-chains",
+              default=None,
+              help="For --include-chains, return records for matching CHAINED collections. For "
+                   "--no-include-chains do not return records for CHAINED collections. Default is the "
+                   "opposite of --flatten-chains: include either CHAINED collections or their children, but "
+                   "not both.")
+def query_collections(*args, **kwargs):
+    """Get the collections whose names match an expression."""
+    print(yaml.dump(cli_handle_exception(queryCollections, *args, **kwargs)))
