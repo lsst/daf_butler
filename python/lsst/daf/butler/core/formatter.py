@@ -72,8 +72,7 @@ class Formatter(metaclass=ABCMeta):
     are supported. These param (`frozenset`).
     """
 
-    # Should we use ... to say that the parameters are unconstrained?
-    supportedWriteParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = frozenset()
+    supportedWriteParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = None
     """Parameters understood by this formatter that can be used to control
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
@@ -89,13 +88,17 @@ class Formatter(metaclass=ABCMeta):
         self._dataId = dataId
 
         # Check that the write parameters are allowed
-        if self.supportedWriteParameters is None and writeParameters:
-            raise ValueError("This formatter does not accept any write parameters.")
-        elif self.supportedWriteParameters and writeParameters:
-            given = set(writeParameters)
-            unknown = given - self.supportedWriteParameters
-            if unknown:
-                raise ValueError(f"This formatter does not accept supplied parameters: {unknown}")
+        if writeParameters:
+            if self.supportedWriteParameters is None:
+                raise ValueError("This formatter does not accept any write parameters. "
+                                 f"Got: {', '.join(writeParameters)}")
+            else:
+                given = set(writeParameters)
+                unknown = given - self.supportedWriteParameters
+                if unknown:
+                    s = "s" if len(unknown) != 1 else ""
+                    unknownStr = ", ".join(f"'{u}'" for u in unknown)
+                    raise ValueError(f"This formatter does not accept parameter{s} {unknownStr}")
 
         self._writeParameters = writeParameters
 
