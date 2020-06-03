@@ -688,7 +688,7 @@ class ButlerTests(ButlerPutGetTests):
         # for each component. Need entries for each component in the test
         # configuration otherwise validation won't work. The ones that
         # are deliberately broken will be ignored later.
-        datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi"}
+        datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
         components = set()
         for datasetTypeName in datasetTypeNames:
             # Create and register a DatasetType
