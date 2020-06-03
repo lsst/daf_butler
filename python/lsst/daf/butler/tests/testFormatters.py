@@ -33,6 +33,9 @@ from ..core import Formatter
 
 class FormatterTest(Formatter):
     """A test formatter that does not need to format anything."""
+
+    supportedWriteParameters = frozenset({"min", "max", "median", "comment", "extra"})
+
     def read(self, component: Optional[str] = None) -> Any:
         raise NotImplementedError("Type does not support reading")
 

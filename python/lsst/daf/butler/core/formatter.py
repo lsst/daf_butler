@@ -72,10 +72,11 @@ class Formatter(metaclass=ABCMeta):
     are supported. These param (`frozenset`).
     """
 
+    # Should we use ... to say that the parameters are unconstrained?
     supportedWriteParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = frozenset()
     """Parameters understood by this formatter that can be used to control
-    how a dataset is serialized.  An empty set means all parameters are
-    supported.  `None` indicates that no parameters are supported."""
+    how a dataset is serialized. `None` indicates that no parameters are
+    supported."""
 
     extension: Optional[str] = None
     """File extension default provided by this formatter."""
@@ -86,6 +87,16 @@ class Formatter(metaclass=ABCMeta):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
         self._dataId = dataId
+
+        # Check that the write parameters are allowed
+        if self.supportedWriteParameters is None and writeParameters:
+            raise ValueError("This formatter does not accept any write parameters.")
+        elif self.supportedWriteParameters and writeParameters:
+            given = set(writeParameters)
+            unknown = given - self.supportedWriteParameters
+            if unknown:
+                raise ValueError(f"This formatter does not accept supplied parameters: {unknown}")
+
         self._writeParameters = writeParameters
 
     def __str__(self) -> str:

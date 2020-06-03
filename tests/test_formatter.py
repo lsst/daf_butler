@@ -175,6 +175,9 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertEqual(f.writeParameters, {"max": 5, "min": 22, "comment": "Additional commentary",
                                              "extra": 50})
 
+        with self.assertRaises(ValueError):
+            self.factory.getFormatter(refParam, self.fileDescriptor, writeParameters={"new": 1})
+
 
 if __name__ == "__main__":
     unittest.main()
