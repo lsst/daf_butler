@@ -110,7 +110,10 @@ class FileTemplates:
         # Determine default to use -- defaults can be disabled if
         # we get a False or None
         defaultValue = contents.get(self.defaultKey, default)
-        self.default = FileTemplate(defaultValue) if defaultValue else None
+        if defaultValue and not isinstance(defaultValue, str):
+            raise RuntimeError("Default template value should be str or False, or None. "
+                               f"Got '{defaultValue}'")
+        self.default = FileTemplate(defaultValue) if isinstance(defaultValue, str) and defaultValue else None
 
         # Convert all the values to FileTemplate, handling defaults
         for key, templateStr in contents.items():
