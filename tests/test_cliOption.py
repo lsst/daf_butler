@@ -22,6 +22,7 @@
 """Unit tests for the daf_butler dataset-type CLI option.
 """
 
+import abc
 import click
 import click.testing
 import unittest
@@ -29,6 +30,59 @@ import yaml
 
 from lsst.daf.butler.cli.opt import config_file_option, config_option, dataset_type_option, directory_argument
 from lsst.daf.butler.cli.utils import clickResultMsg
+
+
+class OptionTestBase(unittest.TestCase, abc.ABC):
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
+    def run_command(self, cmd, args):
+        """
+
+        Parameters
+        ----------
+        cmd : click.Command
+            The command function to call
+        args : [`str`]
+            The arguments to pass to the function call.
+
+        Returns
+        -------
+        [type]
+            [description]
+        """
+        return self.runner.invoke(cmd, args)
+
+    def run_test(self, cmd, cmdArgs, verifyFunc, verifyArgs):
+        result = self.run_command(cmd, cmdArgs)
+        verifyFunc(result, verifyArgs)
+
+    def run_help_test(self, cmd, expcectedHelpText):
+        result = self.runner.invoke(cmd, ["--help"])
+        # remove all whitespace to work around line-wrap differences.
+        self.assertIn("".join(expcectedHelpText.split()), "".join(result.output.split()))
+
+    @property
+    @abc.abstractmethod
+    def optionClass(self):
+        pass
+
+    def help_test(self):
+        @click.command()
+        @self.optionClass()
+        def cli():
+            pass
+
+        self.run_help_test(cli, self.optionClass.defaultHelp)
+
+    def custom_help_test(self):
+        @click.command()
+        @self.optionClass(help="foobarbaz")
+        def cli(collection_type):
+            pass
+
+        self.run_help_test(cli, "foobarbaz")
 
 
 class ConfigTestCase(unittest.TestCase):
