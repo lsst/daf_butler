@@ -34,6 +34,7 @@ from typing import (
     Union,
 )
 
+from .config import Config
 from .utils import getClassOf
 from .configSupport import LookupKey
 
@@ -189,9 +190,14 @@ class MappingFactory:
         key, cls, registry_kwargs = self.getClassFromRegistryWithMatch(targetClasses)
 
         # Supplied keyword args must overwrite registry defaults
-        registry_kwargs.update(kwargs)
+        # We want this overwriting to happen recursively since we expect
+        # some of these keyword arguments to be dicts.
+        # Simplest to use Config for this
+        config_kwargs = Config(registry_kwargs)
+        config_kwargs.update(kwargs)
+        merged_kwargs = dict(config_kwargs)
 
-        return key, cls(*args, **registry_kwargs)
+        return key, cls(*args, **merged_kwargs)
 
     def getFromRegistry(self, targetClasses: Iterable[Any], *args: Any, **kwargs: Any) -> Any:
         """Get a new instance of the object stored in the registry.
