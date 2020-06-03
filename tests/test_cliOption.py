@@ -130,18 +130,19 @@ class CollectionTypeTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class ConfigTestCase(unittest.TestCase):
+class ConfigTestCase(OptionTestBase):
+
+    optionClass = config_option
 
     @staticmethod
     @click.command()
-    @config_option(help="foo bar baz")
+    @config_option()
     def cli(config):
         click.echo(yaml.dump(config), nl=False)
 
     def test_basic(self):
         """test arguments"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigTestCase.cli, ["--config", "a=1", "-c", "b=2,c=3"])
+        result = self.runner.invoke(ConfigTestCase.cli, ["--config", "a=1", "-c", "b=2,c=3"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertEqual(yaml.safe_load(result.stdout), dict(a="1", b="2", c="3"))
 
@@ -150,31 +151,29 @@ class ConfigTestCase(unittest.TestCase):
         @config_option(required=True)
         def cli(config):
             pass
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, [])
+
+        result = self.runner.invoke(cli, [])
         self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertIn('Missing option "-c" / "--config"', result.output)
 
     def test_help(self):
-        """test capture of the help text"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigTestCase.cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn("foo bar baz", result.stdout)
+        self.help_test()
+        self.custom_help_test()
 
 
-class ConfigFileTestCase(unittest.TestCase):
+class ConfigFileTestCase(OptionTestBase):
+
+    optionClass = config_file_option
 
     @staticmethod
     @click.command()
-    @config_file_option(help="foo bar baz")
+    @config_file_option()
     def cli(config_file):
         click.echo(config_file, nl=False)
 
     def test_basic(self):
         """test arguments"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigFileTestCase.cli, ["--config-file", "path/to/file"])
+        result = self.runner.invoke(ConfigFileTestCase.cli, ["--config-file", "path/to/file"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertEqual("path/to/file", result.stdout)
 
@@ -183,20 +182,18 @@ class ConfigFileTestCase(unittest.TestCase):
         @config_file_option(required=True)
         def cli(config):
             pass
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, [])
+        result = self.runner.invoke(cli, [])
         self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertIn('Missing option "-C" / "--config-file"', result.output)
 
     def test_help(self):
-        """test capture of the help text"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigFileTestCase.cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn("foo bar baz", result.stdout)
+        self.help_test()
+        self.custom_help_test()
 
 
-class DatasetTypeTestCase(unittest.TestCase):
+class DatasetTypeTestCase(OptionTestBase):
+
+    optionClass = dataset_type_option
 
     @staticmethod
     @click.command()
@@ -204,43 +201,37 @@ class DatasetTypeTestCase(unittest.TestCase):
     def cli(dataset_type):
         click.echo(dataset_type, nl=False)
 
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual(result.stdout, verifyArgs)
+
     def test_single(self):
         """test a single argument"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one']")
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one"], self.verify, "['one']")
 
     def test_multiple(self):
         """test multiple arguments, using the long and short option names"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one", "-d", "two"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two']")
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one", "-d", "two"],
+                      self.verify, "['one', 'two']")
 
     def test_singlePair(self):
         """test a single comma-separated value pair"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one,two"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two']")
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one,two"],
+                      self.verify, "['one', 'two']")
 
     def test_multiplePair(self):
         """test multiple comma-separated value pairs"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one,two", "-d", "three,four"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two', 'three', 'four']")
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one,two", "-d", "three,four"],
+                      self.verify, "['one', 'two', 'three', 'four']")
 
     def test_help(self):
-        """test capture of the help text"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--help"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertIn("the dataset type", result.stdout)
+        # dataset_type_option does not have default help
+        self.custom_help_test()
 
 
-class DirectoryArgumentTestCase(unittest.TestCase):
+class DirectoryArgumentTestCase(OptionTestBase):
+
+    optionClass = directory_argument
 
     def test_required(self):
         """test arguments"""
@@ -248,11 +239,10 @@ class DirectoryArgumentTestCase(unittest.TestCase):
         @directory_argument(required=True)
         def cli(directory):
             click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["this_dir"])
+        result = self.runner.invoke(cli, ["this_dir"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertEqual("this_dir", result.stdout)
-        result = runner.invoke(cli, [])
+        result = self.runner.invoke(cli, [])
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn('Missing argument "DIRECTORY"', result.stdout)
 
@@ -262,33 +252,16 @@ class DirectoryArgumentTestCase(unittest.TestCase):
         @directory_argument()
         def cli(directory):
             click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["this_dir"])
+        result = self.runner.invoke(cli, ["this_dir"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertEqual("this_dir", result.stdout)
-        result = runner.invoke(cli, [])
+        result = self.runner.invoke(cli, [])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertEqual("", result.stdout)
 
-    def test_customHelp(self):
-        @click.command()
-        @directory_argument(help="custom help")
-        def cli(directory):
-            click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn("custom help", result.stdout)
-
-    def test_defaultHelp(self):
-        @click.command()
-        @directory_argument()
-        def cli(directory):
-            click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn(directory_argument.default_help, result.stdout)
+    def test_help(self):
+        # directory_argument does not have default help.
+        self.custom_help_test()
 
 
 if __name__ == "__main__":
