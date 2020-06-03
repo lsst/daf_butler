@@ -28,7 +28,9 @@ import click.testing
 import unittest
 import yaml
 
-from lsst.daf.butler.cli.opt import config_file_option, config_option, dataset_type_option, directory_argument
+from lsst.daf.butler.registry import CollectionType
+from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
+                                     dataset_type_option, directory_argument)
 from lsst.daf.butler.cli.utils import clickResultMsg
 
 
@@ -83,6 +85,49 @@ class OptionTestBase(unittest.TestCase, abc.ABC):
             pass
 
         self.run_help_test(cli, "foobarbaz")
+
+
+class CollectionTypeTestCase(OptionTestBase):
+
+    optionClass = collection_type_option
+
+    def setUp(self):
+        super().setUp()
+        CollectionTypeTestCase.collectionType = None
+
+    @staticmethod
+    @click.command()
+    @collection_type_option()
+    def cli(collection_type):
+        CollectionTypeTestCase.collectionType = collection_type
+
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual(CollectionTypeTestCase.collectionType, verifyArgs)
+
+    def test_run(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "RUN"],
+                      self.verify, CollectionType.RUN)
+
+    def test_chained(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "CHAINED"],
+                      self.verify, CollectionType.CHAINED)
+
+    def test_tagged(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "TAGGED"],
+                      self.verify, CollectionType.TAGGED)
+
+    def test_default(self):
+        self.run_test(CollectionTypeTestCase.cli, [],
+                      self.verify, None)
+
+    def test_caseInsensitive(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "TaGGeD"],
+                      self.verify, CollectionType.TAGGED)
+
+    def test_help(self):
+        self.help_test()
+        self.custom_help_test()
 
 
 class ConfigTestCase(unittest.TestCase):

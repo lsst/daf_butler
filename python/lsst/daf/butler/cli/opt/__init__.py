@@ -19,6 +19,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from .collection_type import collection_type_option
 from .config import config_option
 from .config_file import config_file_option
 from .dataset_type import dataset_type_option
