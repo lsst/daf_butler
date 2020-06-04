@@ -189,21 +189,10 @@ def makeStaticTableSpecs(collections: Type[CollectionManager],
                         "table."
                     ),
                 ),
-                ddl.FieldSpec(
-                    name="quantum_id",
-                    dtype=sqlalchemy.BigInteger,
-                    doc=(
-                        "The id of the quantum that produced this dataset, providing access "
-                        "to fine-grained provenance information.  May be NULL for datasets "
-                        "not produced by running a PipelineTask."
-                    ),
-                ),
                 # Foreign key field/constraint to run added below.
-                # Eventually quantum field/constraint will move there, too.
             ],
             foreignKeys=[
                 ddl.ForeignKeySpec("dataset_type", source=("dataset_type_id",), target=("id",)),
-                ddl.ForeignKeySpec("quantum", source=("quantum_id",), target=("id",), onDelete="SET NULL"),
             ]
         ),
     )
