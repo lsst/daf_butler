@@ -30,7 +30,7 @@ import unittest
 
 import astropy.time
 import sqlalchemy
-from typing import Optional
+from typing import Optional, Type, Union
 
 try:
     import numpy as np
@@ -47,6 +47,7 @@ from ...core import (
     NamedValueSet,
     StorageClass,
     ddl,
+    Timespan,
 )
 from .._registry import (
     CollectionType,
@@ -1497,3 +1498,207 @@ class RegistryTests(ABC):
                     list(dataIds.findDatasets(schema, collections=[run2, run1], deduplicate=True)),
                     [dataset2],
                 )
+
+    def testCalibrationCollections(self):
+        """Test operations on `~CollectionType.CALIBRATION` collections,
+        including `Registry.certify`, `Registry.decertify`, and
+        `Registry.findDataset`.
+        """
+        # Setup - make a Registry, fill it with some datasets in
+        # non-calibration collections.
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        # Set up some timestamps.
+        t1 = astropy.time.Time('2020-01-01T01:00:00', format="isot", scale="tai")
+        t2 = astropy.time.Time('2020-01-01T02:00:00', format="isot", scale="tai")
+        t3 = astropy.time.Time('2020-01-01T03:00:00', format="isot", scale="tai")
+        t4 = astropy.time.Time('2020-01-01T04:00:00', format="isot", scale="tai")
+        t5 = astropy.time.Time('2020-01-01T05:00:00', format="isot", scale="tai")
+        allTimespans = [
+            Timespan(a, b) for a, b in itertools.combinations([None, t1, t2, t3, t4, t5, None], r=2)
+        ]
+        # Get references to some datasets.
+        bias2a = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_g")
+        bias3a = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_g")
+        bias2b = registry.findDataset("bias", instrument="Cam1", detector=2, collections="imported_r")
+        bias3b = registry.findDataset("bias", instrument="Cam1", detector=3, collections="imported_r")
+        # Register the main calibration collection we'll be working with.
+        collection = "Cam1/calibs/default"
+        registry.registerCollection(collection, type=CollectionType.CALIBRATION)
+        # Cannot associate into a calibration collection (no timespan).
+        with self.assertRaises(TypeError):
+            registry.associate(collection, [bias2a])
+        # Certify 2a dataset with [t2, t4) validity.
+        registry.certify(collection, [bias2a], Timespan(begin=t2, end=t4))
+        # We should not be able to certify 2b with anything overlapping that
+        # window.
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=None, end=t3))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=None, end=t5))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t1, end=t3))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t1, end=t5))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t1, end=None))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t2, end=t3))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t2, end=t5))
+        with self.assertRaises(ConflictingDefinitionError):
+            registry.certify(collection, [bias2b], Timespan(begin=t2, end=None))
+        # We should be able to certify 3a with a range overlapping that window,
+        # because it's for a different detector.
+        # We'll certify 3a over [t1, t3).
+        registry.certify(collection, [bias3a], Timespan(begin=t1, end=t3))
+        # Now we'll certify 2b and 3b together over [t4, ∞).
+        registry.certify(collection, [bias2b, bias3b], Timespan(begin=t4, end=None))
+
+        class Ambiguous:
+            """Tag class to denote lookups that are expected to be ambiguous.
+            """
+            pass
+
+        def assertLookup(detector: int, timespan: Timespan,
+                         expected: Optional[Union[DatasetRef, Type[Ambiguous]]]) -> None:
+            """Local function that asserts that a bias lookup returns the given
+            expected result.
+            """
+            if expected is Ambiguous:
+                with self.assertRaises(RuntimeError):
+                    registry.findDataset("bias", collections=collection, instrument="Cam1",
+                                         detector=detector, timespan=timespan)
+            else:
+                self.assertEqual(
+                    expected,
+                    registry.findDataset("bias", collections=collection, instrument="Cam1",
+                                         detector=detector, timespan=timespan)
+                )
+
+        # Systematically test lookups against expected results.
+        assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t3, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t3, t5), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t3, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t4, t5), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
+        assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t5), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t5), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t5), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t3, t5), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t4, t5), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+
+        # Decertify [t3, t5) for all data IDs, and do test lookups again.
+        # This should truncate bias2a to [t2, t3), leave bias3a unchanged at
+        # [t1, t3), and truncate bias2b and bias3b to [t5, ∞).
+        registry.decertify(collection=collection, datasetType="bias", timespan=Timespan(t3, t5))
+        assertLookup(detector=2, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(None, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, t5), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t1, t2), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t1, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, t5), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t2, t3), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t4), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, t5), expected=bias2a)
+        assertLookup(detector=2, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=2, timespan=Timespan(t3, t4), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t3, t5), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t3, None), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t4, t5), expected=None)
+        assertLookup(detector=2, timespan=Timespan(t4, None), expected=bias2b)
+        assertLookup(detector=2, timespan=Timespan(t5, None), expected=bias2b)
+        assertLookup(detector=3, timespan=Timespan(None, t1), expected=None)
+        assertLookup(detector=3, timespan=Timespan(None, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, t5), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(None, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t1, t2), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, t5), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t1, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t2, t3), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t4), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, t5), expected=bias3a)
+        assertLookup(detector=3, timespan=Timespan(t2, None), expected=Ambiguous)
+        assertLookup(detector=3, timespan=Timespan(t3, t4), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t3, t5), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t3, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t4, t5), expected=None)
+        assertLookup(detector=3, timespan=Timespan(t4, None), expected=bias3b)
+        assertLookup(detector=3, timespan=Timespan(t5, None), expected=bias3b)
+
+        # Decertify everything, this time with explicit data IDs, then check
+        # that no lookups succeed.
+        registry.decertify(
+            collection, "bias", Timespan(None, None),
+            dataIds=[
+                dict(instrument="Cam1", detector=2),
+                dict(instrument="Cam1", detector=3),
+            ]
+        )
+        for detector in (2, 3):
+            for timespan in allTimespans:
+                assertLookup(detector=detector, timespan=timespan, expected=None)
+        # Certify bias2a and bias3a over (-∞, ∞), check that all lookups return
+        # those.
+        registry.certify(collection, [bias2a, bias3a], Timespan(None, None),)
+        for timespan in allTimespans:
+            assertLookup(detector=2, timespan=timespan, expected=bias2a)
+            assertLookup(detector=3, timespan=timespan, expected=bias3a)
+        # Decertify just bias2 over [t2, t4).
+        # This should split a single certification row into two (and leave the
+        # other existing row, for bias3a, alone).
+        registry.decertify(collection, "bias", Timespan(t2, t4),
+                           dataIds=[dict(instrument="Cam1", detector=2)])
+        for timespan in allTimespans:
+            assertLookup(detector=3, timespan=timespan, expected=bias3a)
+            overlapsBefore = timespan.overlaps(Timespan(None, t2))
+            overlapsAfter = timespan.overlaps(Timespan(t4, None))
+            if overlapsBefore and overlapsAfter:
+                expected = Ambiguous
+            elif overlapsBefore or overlapsAfter:
+                expected = bias2a
+            else:
+                expected = None
+            assertLookup(detector=2, timespan=timespan, expected=expected)
