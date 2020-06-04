@@ -6,7 +6,7 @@ datastore:
       - metric
       - StructuredDataJson
       - instrument<DummyCamComp>:
-        - metric33
+          - metric33
   templates:
     default: "{run:/}/{datasetType}.{component:?}/{tract:?}/{patch:?}/{physical_filter:?}/{instrument:?}_{visit:?}"
     calexp: "{run:/}/{datasetType}.{component:?}/{datasetType}_v{visit}_f{physical_filter:?}_{component:?}"

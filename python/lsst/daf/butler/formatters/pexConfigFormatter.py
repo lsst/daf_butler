@@ -19,9 +19,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("PexConfigFormatter", )
 
 import os.path
+
+from typing import (
+    Any,
+    Optional,
+    Type,
+)
 
 from lsst.utils import doImport
 from lsst.daf.butler.formatters.fileFormatter import FileFormatter
@@ -32,7 +40,7 @@ class PexConfigFormatter(FileFormatter):
     """
     extension = ".py"
 
-    def _readFile(self, path, pytype):
+    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
         """Read a pex.config.Config instance from the given file.
 
         Parameters
@@ -48,6 +56,9 @@ class PexConfigFormatter(FileFormatter):
             Instance of class `pytype` read from config file. None
             if the file could not be opened.
         """
+        if pytype is None:
+            raise RuntimeError("A python type is always required for reading pex_config Config files")
+
         if not os.path.exists(path):
             return None
         instance = pytype()
@@ -71,7 +82,7 @@ class PexConfigFormatter(FileFormatter):
         instance.load(path)
         return instance
 
-    def _writeFile(self, inMemoryDataset):
+    def _writeFile(self, inMemoryDataset: Any) -> None:
         """Write the in memory dataset to file on disk.
 
         Parameters

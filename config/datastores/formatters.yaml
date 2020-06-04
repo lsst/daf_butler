@@ -10,11 +10,6 @@ PhotoCalib: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 TransmissionCurve: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 Camera: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 Detector: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
-ImageF: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
-MaskX: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
-Exposure: lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter
-ExposureF: lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter
-ExposureI: lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter
 Catalog: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 PeakCatalog: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 SimpleCatalog: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter

@@ -24,9 +24,10 @@ from __future__ import annotations
 __all__ = ("Formatter", "FormatterFactory", "FormatterParameter")
 
 from abc import ABCMeta, abstractmethod
+from collections.abc import Mapping
 import logging
 import copy
-from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type, TYPE_CHECKING
+from typing import ClassVar, Set, AbstractSet, Union, Optional, Dict, Any, Tuple, Type, TYPE_CHECKING
 
 from .configSupport import processLookupConfigs, LookupKey
 from .mappingFactory import MappingFactory
@@ -58,22 +59,48 @@ class Formatter(metaclass=ABCMeta):
         Identifies the file to read or write, and the associated storage
         classes and parameter information.  Its value can be `None` if the
         caller will never call `Formatter.read` or `Formatter.write`.
+    dataId : `DataCoordinate`, optional
+        Data ID associated with this formatter.
+    writeParameters : `dict`, optional
+        Any parameters to be hard-coded into this instance to control how
+        the dataset is serialized.
     """
 
-    unsupportedParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = frozenset()
-    """Set of parameters not understood by this `Formatter`. An empty set means
-    all parameters are supported.  `None` indicates that no parameters
-    are supported (`frozenset`).
+    unsupportedParameters: ClassVar[Optional[AbstractSet[str]]] = frozenset()
+    """Set of read parameters not understood by this `Formatter`. An empty set
+    means all parameters are supported.  `None` indicates that no parameters
+    are supported. These param (`frozenset`).
     """
+
+    supportedWriteParameters: ClassVar[Optional[AbstractSet[str]]] = None
+    """Parameters understood by this formatter that can be used to control
+    how a dataset is serialized. `None` indicates that no parameters are
+    supported."""
 
     extension: Optional[str] = None
     """File extension default provided by this formatter."""
 
-    def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None):
+    def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None,
+                 writeParameters: Optional[Dict[str, Any]] = None):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
         self._dataId = dataId
+
+        # Check that the write parameters are allowed
+        if writeParameters:
+            if self.supportedWriteParameters is None:
+                raise ValueError("This formatter does not accept any write parameters. "
+                                 f"Got: {', '.join(writeParameters)}")
+            else:
+                given = set(writeParameters)
+                unknown = given - self.supportedWriteParameters
+                if unknown:
+                    s = "s" if len(unknown) != 1 else ""
+                    unknownStr = ", ".join(f"'{u}'" for u in unknown)
+                    raise ValueError(f"This formatter does not accept parameter{s} {unknownStr}")
+
+        self._writeParameters = writeParameters
 
     def __str__(self) -> str:
         return f"{self.name()}@{self.fileDescriptor.location.path}"
@@ -92,6 +119,12 @@ class Formatter(metaclass=ABCMeta):
         """DataId associated with this formatter (`DataCoordinate`)"""
         return self._dataId
 
+    @property
+    def writeParameters(self) -> Mapping:
+        if self._writeParameters is not None:
+            return self._writeParameters
+        return {}
+
     @classmethod
     def name(cls) -> str:
         """Returns the fully qualified name of the formatter.
@@ -104,7 +137,7 @@ class Formatter(metaclass=ABCMeta):
         return getFullTypeName(cls)
 
     @abstractmethod
-    def read(self, component: Optional[str] = None) -> object:
+    def read(self, component: Optional[str] = None) -> Any:
         """Read a Dataset.
 
         Parameters
@@ -280,6 +313,9 @@ class FormatterFactory:
     """Factory for `Formatter` instances.
     """
 
+    defaultKey = LookupKey("default")
+    """Configuration key associated with default write parameter settings."""
+
     def __init__(self) -> None:
         self._mappingFactory = MappingFactory(Formatter)
 
@@ -321,10 +357,86 @@ class FormatterFactory:
 
         The config is parsed using the function
         `~lsst.daf.butler.configSubset.processLookupConfigs`.
+
+        The values for formatter entries can be either a simple string
+        referring to a python type or a dict representing the formatter and
+        parameters to be hard-coded into the formatter constructor. For
+        the dict case the following keys are supported:
+
+        - formatter: The python type to be used as the formatter class.
+        - parameters: A further dict to be passed directly to the
+            ``writeParameters`` Formatter constructor to seed it.
+            These parameters are validated at instance creation and not at
+            configuration.
+
+        Additionally, a special ``default`` section can be defined that
+        uses the formatter type (class) name as the keys and specifies
+        default write parameters that should be used whenever an instance
+        of that class is constructed.
+
+        .. code-block:: yaml
+
+        formatters:
+          default:
+            lsst.daf.butler.formatters.example.ExampleFormatter:
+              max: 10
+              min: 2
+              comment: Default comment
+          calexp: lsst.daf.butler.formatters.example.ExampleFormatter
+          coadd:
+            formatter: lsst.daf.butler.formatters.example.ExampleFormatter
+            parameters:
+              max: 5
+
+        Any time an ``ExampleFormatter`` is constructed it will use those
+        parameters. If an explicit entry later in the configuration specifies
+        a different set of parameters, the two will be merged with the later
+        entry taking priority.  In the example above ``calexp`` will use
+        the default parameters but ``coadd`` will override the value for
+        ``max``.
         """
-        contents = processLookupConfigs(config, universe=universe)
+        allowed_keys = {"formatter", "parameters"}
+
+        contents = processLookupConfigs(config, allow_hierarchy=True, universe=universe)
+
+        # Extract any default parameter settings
+        defaultParameters = contents.get(self.defaultKey, {})
+        if not isinstance(defaultParameters, Mapping):
+            raise RuntimeError("Default formatter parameters in config can not be a single string"
+                               f" (got: {type(defaultParameters)})")
+
         for key, f in contents.items():
-            self.registerFormatter(key, f)
+            # default is handled in a special way
+            if key == self.defaultKey:
+                continue
+
+            # Can be a str or a dict.
+            specificWriteParameters = {}
+            if isinstance(f, str):
+                formatter = f
+            elif isinstance(f, Mapping):
+                all_keys = set(f)
+                unexpected_keys = all_keys - allowed_keys
+                if unexpected_keys:
+                    raise ValueError(f"Formatter {key} uses unexpected keys {unexpected_keys} in config")
+                if "formatter" not in f:
+                    raise ValueError(f"Mandatory 'formatter' key missing for formatter key {key}")
+                formatter = f["formatter"]
+                if "parameters" in f:
+                    specificWriteParameters = f["parameters"]
+            else:
+                raise ValueError(f"Formatter for key {key} has unexpected value: '{f}'")
+
+            # Apply any default parameters for this formatter
+            writeParameters = defaultParameters.get(formatter, {})
+            writeParameters.update(specificWriteParameters)
+
+            kwargs: Dict[str, Any] = {}
+            if writeParameters:
+                # Need to coerce Config to dict
+                kwargs["writeParameters"] = dict(writeParameters)
+
+            self.registerFormatter(key, formatter, **kwargs)
 
     def getLookupKeys(self) -> Set[LookupKey]:
         """Retrieve the look up keys for all the registry entries.
@@ -336,7 +448,8 @@ class FormatterFactory:
         """
         return self._mappingFactory.getLookupKeys()
 
-    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter]]:
+    def getFormatterClassWithMatch(self, entity: Entity) -> Tuple[LookupKey, Type[Formatter],
+                                                                  Dict[str, Any]]:
         """Get the matching formatter class along with the matching registry
         key.
 
@@ -355,13 +468,15 @@ class FormatterFactory:
             The key that resulted in the successful match.
         formatter : `type`
             The class of the registered formatter.
+        formatter_kwargs : `dict`
+            Keyword arguments that are associated with this formatter entry.
         """
         names = (LookupKey(name=entity),) if isinstance(entity, str) else entity._lookupNames()
-        matchKey, formatter = self._mappingFactory.getClassFromRegistryWithMatch(names)
+        matchKey, formatter, formatter_kwargs = self._mappingFactory.getClassFromRegistryWithMatch(names)
         log.debug("Retrieved formatter %s from key '%s' for entity '%s'", getFullTypeName(formatter),
                   matchKey, entity)
 
-        return matchKey, formatter
+        return matchKey, formatter, formatter_kwargs
 
     def getFormatterClass(self, entity: Entity) -> Type:
         """Get the matching formatter class.
@@ -380,7 +495,7 @@ class FormatterFactory:
         formatter : `type`
             The class of the registered formatter.
         """
-        _, formatter = self.getFormatterClassWithMatch(entity)
+        _, formatter, _ = self.getFormatterClassWithMatch(entity)
         return formatter
 
     def getFormatterWithMatch(self, entity: Entity, *args: Any, **kwargs: Any) -> Tuple[LookupKey, Formatter]:
@@ -439,7 +554,8 @@ class FormatterFactory:
         return formatter
 
     def registerFormatter(self, type_: Union[LookupKey, str, StorageClass, DatasetType],
-                          formatter: str, overwrite: bool = False) -> None:
+                          formatter: str, *, overwrite: bool = False,
+                          **kwargs: Any) -> None:
         """Register a `Formatter`.
 
         Parameters
@@ -454,6 +570,9 @@ class FormatterFactory:
         overwrite : `bool`, optional
             If `True` an existing entry will be replaced by the new value.
             Default is `False`.
+        kwargs : `dict`
+            Keyword arguments to always pass to object constructor when
+            retrieved.
 
         Raises
         ------
@@ -461,7 +580,7 @@ class FormatterFactory:
             Raised if the formatter does not name a valid formatter type and
             ``overwrite`` is `False`.
         """
-        self._mappingFactory.placeInRegistry(type_, formatter, overwrite=overwrite)
+        self._mappingFactory.placeInRegistry(type_, formatter, overwrite=overwrite, **kwargs)
 
 
 # Type to use when allowing a Formatter or its class name

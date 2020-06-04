@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import annotations
+
 __all__ = ("ParquetFormatter", )
 
 import json
@@ -67,7 +69,7 @@ class _ParquetLoader:
         self.indexLevelNames = tuple(self.columns.names)
 
     @staticmethod
-    def _splitColumnnNames(n: int, names: Iterable[str]) -> Iterator[Tuple[str]]:
+    def _splitColumnnNames(n: int, names: Iterable[str]) -> Iterator[Tuple[str, ...]]:
         """Split a string that represents a multi-index column.
 
         PyArrow maps Pandas' multi-index column names (which are tuples in
@@ -149,7 +151,7 @@ class _ParquetLoader:
         return self.file.read(columns=columns, use_pandas_metadata=True).to_pandas()
 
 
-def _writeParquet(path: str, inMemoryDataset: pd.DataFrame):
+def _writeParquet(path: str, inMemoryDataset: pd.DataFrame) -> None:
     """Write a `pandas.DataFrame` instance as a Parquet file.
     """
     table = pa.Table.from_pandas(inMemoryDataset)
@@ -165,7 +167,7 @@ class ParquetFormatter(Formatter):
     """
     extension = ".parq"
 
-    def read(self, component: Optional[str] = None) -> object:
+    def read(self, component: Optional[str] = None) -> Any:
         # Docstring inherited from Formatter.read.
         loader = _ParquetLoader(self.fileDescriptor.location.path)
         if component == 'columns':

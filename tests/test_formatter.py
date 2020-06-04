@@ -157,6 +157,27 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIsFormatter(refPvixNotHscDims_fmt)
         self.assertIn("YamlFormatter", refPvixNotHscDims_fmt.name())
 
+        # Check that parameters are stored
+        refParam = self.makeDatasetRef("paramtest", dimensions, sc, {"instrument": "DummyNotHSC",
+                                                                     "physical_filter": "v"},
+                                       conform=False)
+        lookup, refParam_fmt, kwargs = self.factory.getFormatterClassWithMatch(refParam)
+        self.assertIn("writeParameters", kwargs)
+        expected = {"max": 5, "min": 2, "comment": "Additional commentary"}
+        self.assertEqual(kwargs["writeParameters"], expected)
+        self.assertIn("FormatterTest", refParam_fmt.name())
+
+        f = self.factory.getFormatter(refParam, self.fileDescriptor)
+        self.assertEqual(f.writeParameters, expected)
+
+        f = self.factory.getFormatter(refParam, self.fileDescriptor, writeParameters={"min": 22,
+                                                                                      "extra": 50})
+        self.assertEqual(f.writeParameters, {"max": 5, "min": 22, "comment": "Additional commentary",
+                                             "extra": 50})
+
+        with self.assertRaises(ValueError):
+            self.factory.getFormatter(refParam, self.fileDescriptor, writeParameters={"new": 1})
+
 
 if __name__ == "__main__":
     unittest.main()

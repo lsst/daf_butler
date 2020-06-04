@@ -13,6 +13,11 @@ datastore:
     instrument<DummyCamComp>:
       metric33: "{run:/}/{instrument}/{datasetType}.{component:?}/{datasetType}_v{visit:08d}_f{physical_filter}_{component:?}"
   formatters:
+    default:
+      lsst.daf.butler.tests.testFormatters.FormatterTest:
+        max: 10
+        min: 2
+        comment: Default comment
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataDictJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
@@ -26,6 +31,11 @@ datastore:
     ThingOne: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     datasetType.component: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     pvi: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+    paramtest:
+      formatter: lsst.daf.butler.tests.testFormatters.FormatterTest
+      parameters:
+        max: 5
+        comment: Additional commentary
     instrument<DummyHSC>:
       pvi: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
       StructuredData: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter

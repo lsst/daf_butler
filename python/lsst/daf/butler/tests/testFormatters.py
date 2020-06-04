@@ -21,31 +21,23 @@
 
 from __future__ import annotations
 
-"""Support for writing matplotlib figures."""
-
-__all__ = ("MatplotlibFormatter",)
+__all__ = ("FormatterTest", )
 
 from typing import (
     Any,
     Optional,
-    Type,
 )
 
-from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+from ..core import Formatter
 
 
-class MatplotlibFormatter(FileFormatter):
-    """Interface for writing matplotlib figures.
-    """
+class FormatterTest(Formatter):
+    """A test formatter that does not need to format anything."""
 
-    extension = ".png"
-    """Matplotlib figures are always written in PNG format."""
+    supportedWriteParameters = frozenset({"min", "max", "median", "comment", "extra"})
 
-    def _readFile(self, path: str, pytype: Optional[Type[Any]] = None) -> Any:
-        # docstring inherited from FileFormatter._readFile
-        raise NotImplementedError(
-            f"matplotlib figures cannot be read by the butler; path is {path}")
+    def read(self, component: Optional[str] = None) -> Any:
+        raise NotImplementedError("Type does not support reading")
 
-    def _writeFile(self, inMemoryDataset: Any) -> None:
-        # docstring inherited from FileFormatter._writeFile
-        inMemoryDataset.savefig(self.fileDescriptor.location.path)
+    def write(self, inMemoryDataset: Any) -> str:
+        raise NotImplementedError("Type does not support writing")

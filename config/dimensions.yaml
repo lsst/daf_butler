@@ -16,36 +16,36 @@ dimensions:
         physical_filters and detectors and a numbering system for the exposures
         and visits that represent observations with it.
       keys:
-      -
-        name: name
-        type: string
-        length: 16
+        -
+          name: name
+          type: string
+          length: 16
       metadata:
-      -
-        name: visit_max
-        type: int
-        doc: >
-          Maximum value for the 'visit' field for visits associated with
-          this instrument (exclusive).
-      -
-        name: exposure_max
-        type: int
-        doc: >
-          Maximum value for the 'exposure' field for exposures associated with
-          this instrument (exclusive).
-      -
-        name: detector_max
-        type: int
-        doc: >
-          Maximum value for the 'detector' field for detectors associated with
-          this instrument (exclusive).
-      -
-        name: class_name
-        type: string
-        length: 64
-        doc: >
-          Full class name of the Instrument class associated with this
-          instrument.
+        -
+          name: visit_max
+          type: int
+          doc: >
+            Maximum value for the 'visit' field for visits associated with
+            this instrument (exclusive).
+        -
+          name: exposure_max
+          type: int
+          doc: >
+            Maximum value for the 'exposure' field for exposures associated with
+            this instrument (exclusive).
+        -
+          name: detector_max
+          type: int
+          doc: >
+            Maximum value for the 'detector' field for detectors associated with
+            this instrument (exclusive).
+        -
+          name: class_name
+          type: string
+          length: 64
+          doc: >
+            Full class name of the Instrument class associated with this
+            instrument.
       cached: true
 
     abstract_filter:
@@ -54,10 +54,10 @@ dimensions:
         abstract filter can be used to relate similar physical filters, and
         is typically the filter associated with coadds.
       keys:
-      -
-        name: name
-        type: string
-        length: 32
+        -
+          name: name
+          type: string
+          length: 32
       view_of: physical_filter
 
     physical_filter:
@@ -66,14 +66,14 @@ dimensions:
         used to identify datasets that can only be associated with a single
         observation.
       keys:
-      -
-        name: name
-        type: string
-        length: 32
+        -
+          name: name
+          type: string
+          length: 32
       requires:
-      - instrument
+        - instrument
       implies:
-      - abstract_filter
+        - abstract_filter
       cached: true
 
     subfilter:
@@ -82,11 +82,11 @@ dimensions:
         model wavelength-dependent effects such as differential chromatic
         refraction.
       keys:
-      -
-        name: id
-        type: int
+        -
+          name: id
+          type: int
       requires:
-      - abstract_filter
+        - abstract_filter
       cached: true
 
     detector:
@@ -95,33 +95,33 @@ dimensions:
         of that detector; that requires specifying an exposure or visit as
         well).
       keys:
-      -
-        name: id
-        type: int
-      -
-        name: full_name
-        type: string
-        length: 32
+        -
+          name: id
+          type: int
+        -
+          name: full_name
+          type: string
+          length: 32
       requires: [instrument]
       metadata:
-      -
-        name: name_in_raft
-        type: string
-        length: 32
-      -
-        name: raft
-        type: string
-        length: 32
-        doc: >
-          A string name for a group of detectors with an instrument-dependent
-          interpretation.
-      -
-        name: purpose
-        type: string
-        length: 32
-        doc: >
-          Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
-          or "GUIDE", though instruments may define additional values.
+        -
+          name: name_in_raft
+          type: string
+          length: 32
+        -
+          name: raft
+          type: string
+          length: 32
+          doc: >
+            A string name for a group of detectors with an instrument-dependent
+            interpretation.
+        -
+          name: purpose
+          type: string
+          length: 32
+          doc: >
+            Role of the detector; typically one of "SCIENCE", "WAVEFRONT",
+            or "GUIDE", though instruments may define additional values.
       cached: true
 
     visit:
@@ -132,32 +132,32 @@ dimensions:
         The visit table contains metadata that is both meaningful only for
         science exposures and the same for all exposures in a visit.
       keys:
-      -
-        name: id
-        type: int
-      -
-        name: name
-        type: string
-        length: 64
+        -
+          name: id
+          type: int
+        -
+          name: name
+          type: string
+          length: 64
       requires: [instrument]
       implies: [physical_filter, visit_system]
       spatial: visit_detector_region
       temporal: exposure
       metadata:
-      -
-        name: exposure_time
-        type: float
-        doc: >
-          The total exposure time of the visit in seconds.  This should
-          be equal to the sum of the exposure_time values for all
-          constituent exposures (i.e. it should not include time between
-          exposures).
-      -
-        name: seeing
-        type: float
-        doc: >
-          Average seeing, measured as the FWHM of the Gaussian with the same
-          effective area (arcsec).
+        -
+          name: exposure_time
+          type: float
+          doc: >
+            The total exposure time of the visit in seconds.  This should
+            be equal to the sum of the exposure_time values for all
+            constituent exposures (i.e. it should not include time between
+            exposures).
+        -
+          name: seeing
+          type: float
+          doc: >
+            Average seeing, measured as the FWHM of the Gaussian with the same
+            effective area (arcsec).
 
     exposure:
       doc: >
@@ -174,68 +174,72 @@ dimensions:
         would be the same for all exposures within a visit with the exception
         of the exposure.group entry.
       keys:
-      -
-        name: id
-        type: int
-      -
-        name: name
-        type: string
-        length: 64
+        -
+          name: id
+          type: int
+        -
+          name: name
+          type: string
+          length: 64
       requires: [instrument]
       implies: [physical_filter]
       temporal: exposure
       metadata:
-      -
-        name: exposure_time
-        type: float
-        doc: Duration of the exposure with shutter open (seconds).
-      -
-        name: dark_time
-        type: float
-        doc: Duration of the exposure with shutter closed (seconds).
-      -
-        name: observation_type
-        type: string
-        length: 16
-        doc: The observation type of this exposure (e.g. dark, bias, science).
-      -
-        name: group_name
-        type: string
-        length: 64
-        doc: String group identifier associated with this exposure by the acquisition system.
-      -
-        name: group_id
-        type: int
-        doc: Integer group identifier associated with this exposure by the acquisition system.
+        -
+          name: exposure_time
+          type: float
+          doc: Duration of the exposure with shutter open (seconds).
+        -
+          name: dark_time
+          type: float
+          doc: Duration of the exposure with shutter closed (seconds).
+        -
+          name: observation_type
+          type: string
+          length: 16
+          doc: The observation type of this exposure (e.g. dark, bias, science).
+        -
+          name: group_name
+          type: string
+          length: 64
+          doc: >
+            String group identifier associated with this exposure by the
+            acquisition system.
+        -
+          name: group_id
+          type: int
+          doc: >
+            Integer group identifier associated with this exposure by the
+            acquisition system.
 
     skymap:
       doc: >
         A set of tracts and patches that subdivide the sky into rectangular
         regions with simple projections and intentional overlaps.
       keys:
-      -
-        name: name
-        type: string
-        length: 64
-      -
-        name: hash
-        type: hash
-        nbytes: 40
-        doc: >
-          A hash of the skymap's parameters.
+        -
+          name: name
+          type: string
+          length: 64
+        -
+          name: hash
+          type: hash
+          nbytes: 40
+          doc: >
+            A hash of the skymap's parameters.
       metadata:
-      - name: tract_max
-        type: int
-        doc: >
-          Maximum ID for tracts in this skymap, exclusive.
-      - name: patch_nx_max
-        type: int
-        doc: >
-          Number of patches in the x direction in each tract.
-      - name: patch_ny_max
-        type: int
-        doc: >
-          Number of patches in the y direction in each tract.
+        - name: tract_max
+          type: int
+          doc: >
+            Maximum ID for tracts in this skymap, exclusive.
+        - name: patch_nx_max
+          type: int
+          doc: >
+            Number of patches in the x direction in each tract.
+        - name: patch_ny_max
+          type: int
+          doc: >
+            Number of patches in the y direction in each tract.
       cached: true
 
     tract:
@@ -243,9 +247,9 @@ dimensions:
         A large rectangular region mapped to the sky with a single map
         projection, associated with a particular skymap.
       keys:
-      -
-        name: id
-        type: int
+        -
+          name: id
+          type: int
       requires: [skymap]
       spatial: patch
 
@@ -253,34 +257,34 @@ dimensions:
       doc: >
         A rectangular region within a tract.
       keys:
-      -
-        name: id
-        type: int
+        -
+          name: id
+          type: int
       requires: [skymap, tract]
       spatial: patch
       metadata:
-      -
-        name: cell_x
-        type: int
-        nullable: false
-        doc: >
-          Which column this patch occupies in the tract's grid of patches.
-      -
-        name: cell_y
-        type: int
-        nullable: false
-        doc: >
-          Which row this patch occupies in the tract's grid of patches.
+        -
+          name: cell_x
+          type: int
+          nullable: false
+          doc: >
+            Which column this patch occupies in the tract's grid of patches.
+        -
+          name: cell_y
+          type: int
+          nullable: false
+          doc: >
+            Which row this patch occupies in the tract's grid of patches.
 
     calibration_label:
       doc: >
         A string label that maps to a date validity range for master
         calibration products.
       keys:
-      -
-        name: name
-        type: string
-        length: 128
+        -
+          name: name
+          type: string
+          length: 128
       requires: [instrument]
       temporal: calibration_label
 
@@ -296,13 +300,13 @@ dimensions:
         A system of self-consistent visit definitions, within which each
         exposure should appear at most once.
       keys:
-      -
-        name: id
-        type: int
-      -
-        name: name
-        type: string
-        length: 32
+        -
+          name: id
+          type: int
+        -
+          name: name
+          type: string
+          length: 32
       requires: [instrument]
 
     visit_definition:

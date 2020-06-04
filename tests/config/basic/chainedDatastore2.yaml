@@ -1,5 +1,5 @@
 datastore:
   cls: lsst.daf.butler.datastores.chainedDatastore.ChainedDatastore
   datastores:
-  - !include inMemoryDatastore.yaml
-  - !include inMemoryDatastore.yaml
+    - !include inMemoryDatastore.yaml
+    - !include inMemoryDatastore.yaml

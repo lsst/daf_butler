@@ -23,4 +23,5 @@ jobs:
         run: touch python/lsst/__init__.py
 
       - name: Change to source directory and run mypy
-        run: 'cd python && mypy lsst'
+        working-directory: ./python
+        run: mypy lsst
