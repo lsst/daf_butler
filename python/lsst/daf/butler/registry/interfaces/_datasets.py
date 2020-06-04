@@ -39,6 +39,7 @@ from ...core import (
     DatasetType,
     ddl,
     SimpleQuery,
+    Timespan,
 )
 from ._versioning import VersionedExtension
 
@@ -82,7 +83,8 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def find(self, collection: CollectionRecord, dataId: DataCoordinate) -> Optional[DatasetRef]:
+    def find(self, collection: CollectionRecord, dataId: DataCoordinate,
+             timespan: Optional[Timespan] = None) -> Optional[DatasetRef]:
         """Search a collection for a dataset with the given data ID.
 
         Parameters
@@ -93,6 +95,10 @@ class DatasetRecordStorage(ABC):
         dataId: `DataCoordinate`
             Complete (but not necessarily expanded) data ID to search with,
             with ``dataId.graph == self.datasetType.dimensions``.
+        timespan : `Timespan`, optional
+            A timespan that the validity range of the dataset must overlap.
+            Required if ``collection.type is CollectionType.CALIBRATION``, and
+            ignored otherwise.
 
         Returns
         -------
@@ -169,10 +175,71 @@ class DatasetRecordStorage(ABC):
         raise NotImplementedError()
 
     @abstractmethod
+    def certify(self, collection: CollectionRecord, datasets: Iterable[DatasetRef],
+                timespan: Timespan) -> None:
+        """Associate one or more datasets with a calibration collection and a
+        validity range within it.
+
+        Parameters
+        ----------
+        collection : `CollectionRecord`
+            The record object describing the collection.  ``collection.type``
+            must be `~CollectionType.CALIBRATION`.
+        datasets : `Iterable` [ `DatasetRef` ]
+            Datasets to be associated.  All datasets must be resolved and have
+            the same `DatasetType` as ``self``.
+        timespan : `Timespan`
+            The validity range for these datasets within the collection.
+
+        Raises
+        ------
+        AmbiguousDatasetError
+            Raised if any of the given `DatasetRef` instances is unresolved.
+        ConflictingDefinitionError
+            Raised if the collection already contains a different dataset with
+            the same `DatasetType` and data ID and an overlapping validity
+            range.
+        TypeError
+            Raised if
+            ``collection.type is not CollectionType.CALIBRATION`` or if
+            ``self.datasetType.isCalibration() is False``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
+    def decertify(self, collection: CollectionRecord, timespan: Timespan, *,
+                  dataIds: Optional[Iterable[DataCoordinate]] = None) -> None:
+        """Remove or adjust datasets to clear a validity range within a
+        calibration collection.
+
+        Parameters
+        ----------
+        collection : `CollectionRecord`
+            The record object describing the collection.  ``collection.type``
+            must be `~CollectionType.CALIBRATION`.
+        timespan : `Timespan`
+            The validity range to remove datasets from within the collection.
+            Datasets that overlap this range but are not contained by it will
+            have their validity ranges adjusted to not overlap it, which may
+            split a single dataset validity range into two.
+        dataIds : `Iterable` [ `DataCoordinate` ], optional
+            Data IDs that should be decertified within the given validity range
+            If `None`, all data IDs for ``self.datasetType`` will be
+            decertified.
+
+        Raises
+        ------
+        TypeError
+            Raised if ``collection.type is not CollectionType.CALIBRATION``.
+        """
+        raise NotImplementedError()
+
+    @abstractmethod
     def select(self, collection: CollectionRecord,
                dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
                id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
                run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
+               timespan: SimpleQuery.Select.Or[Optional[Timespan]] = SimpleQuery.Select,
                ) -> Optional[SimpleQuery]:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
@@ -200,7 +267,12 @@ class DatasetRecordStorage(ABC):
             column labeled with the return value of
             ``CollectionManager.getRunForiegnKeyName``).
             If `None`, do not include this column (to constrain the run,
-            pass a `RunRecord` as the ``collection`` argument instead.)
+            pass a `RunRecord` as the ``collection`` argument instead).
+        timespan : `None`, `Select`, or `Timespan`
+            If `Select` (default), include the validity range timespan in the
+            result columns.  If a `Timespan` instance, constrain the results to
+            those whose validity ranges overlap that given timespan.  Ignored
+            unless ``collection.type is CollectionType.CALIBRATION``.
 
         Returns
         -------
