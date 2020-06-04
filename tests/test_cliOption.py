@@ -30,7 +30,7 @@ import yaml
 
 from lsst.daf.butler.registry import CollectionType
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
-                                     dataset_type_option, directory_argument)
+                                     dataset_type_option, directory_argument, verbose_option)
 from lsst.daf.butler.cli.utils import clickResultMsg
 
 
@@ -56,7 +56,7 @@ class OptionTestBase(unittest.TestCase, abc.ABC):
         """
         return self.runner.invoke(cmd, args)
 
-    def run_test(self, cmd, cmdArgs, verifyFunc, verifyArgs):
+    def run_test(self, cmd, cmdArgs, verifyFunc, verifyArgs=None):
         result = self.run_command(cmd, cmdArgs)
         verifyFunc(result, verifyArgs)
 
@@ -261,6 +261,33 @@ class DirectoryArgumentTestCase(OptionTestBase):
 
     def test_help(self):
         # directory_argument does not have default help.
+        self.custom_help_test()
+
+
+class VerboseTestCase(OptionTestBase):
+
+    optionClass = verbose_option
+
+    @staticmethod
+    @click.command()
+    @verbose_option()
+    def cli(verbose):
+        print(verbose)
+
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn(verifyArgs, result.stdout)
+
+    def test_verbose(self):
+        """test arguments"""
+        self.run_test(self.cli, ["--verbose"], self.verify, "True")
+
+    def test_notVerbose(self):
+        """test arguments"""
+        self.run_test(self.cli, [], self.verify, "False")
+
+    def test_help(self):
+        self.help_test()
         self.custom_help_test()
 
 
