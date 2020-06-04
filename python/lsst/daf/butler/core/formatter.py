@@ -27,7 +27,7 @@ from abc import ABCMeta, abstractmethod
 from collections.abc import Mapping
 import logging
 import copy
-from typing import ClassVar, Set, FrozenSet, Union, Optional, Dict, Any, Tuple, Type, TYPE_CHECKING
+from typing import ClassVar, Set, AbstractSet, Union, Optional, Dict, Any, Tuple, Type, TYPE_CHECKING
 
 from .configSupport import processLookupConfigs, LookupKey
 from .mappingFactory import MappingFactory
@@ -66,13 +66,13 @@ class Formatter(metaclass=ABCMeta):
         the dataset is serialized.
     """
 
-    unsupportedParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = frozenset()
+    unsupportedParameters: ClassVar[Optional[AbstractSet[str]]] = frozenset()
     """Set of read parameters not understood by this `Formatter`. An empty set
     means all parameters are supported.  `None` indicates that no parameters
     are supported. These param (`frozenset`).
     """
 
-    supportedWriteParameters: ClassVar[Optional[Union[FrozenSet[str], Set[str]]]] = None
+    supportedWriteParameters: ClassVar[Optional[AbstractSet[str]]] = None
     """Parameters understood by this formatter that can be used to control
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
