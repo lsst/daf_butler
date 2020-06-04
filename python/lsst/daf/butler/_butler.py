@@ -61,7 +61,6 @@ from .core import (
     DatasetType,
     Datastore,
     FileDataset,
-    Quantum,
     RepoExport,
     StorageClassFactory,
     ValidationError,
@@ -577,7 +576,6 @@ class Butler:
     @transactional
     def put(self, obj: Any, datasetRefOrType: Union[DatasetRef, DatasetType, str],
             dataId: Optional[DataId] = None, *,
-            producer: Optional[Quantum] = None,
             run: Optional[str] = None,
             tags: Optional[Iterable[str]] = None,
             **kwds: Any) -> DatasetRef:
@@ -594,8 +592,6 @@ class Butler:
             A `dict` of `Dimension` link name, value pairs that label the
             `DatasetRef` within a Collection. When `None`, a `DatasetRef`
             should be provided as the second argument.
-        producer : `Quantum`, optional
-            The producer.
         run : `str`, optional
             The name of the run the dataset should be added to, overriding
             ``self.run``.
@@ -619,7 +615,7 @@ class Butler:
         TypeError
             Raised if the butler is read-only or if no run has been provided.
         """
-        log.debug("Butler put: %s, dataId=%s, producer=%s, run=%s", datasetRefOrType, dataId, producer, run)
+        log.debug("Butler put: %s, dataId=%s, run=%s", datasetRefOrType, dataId, run)
         if not self.isWriteable():
             raise TypeError("Butler is read-only.")
         datasetType, dataId = self._standardizeArgs(datasetRefOrType, dataId, **kwds)
@@ -648,8 +644,7 @@ class Butler:
 
         # Add Registry Dataset entry.
         dataId = self.registry.expandDataId(dataId, graph=datasetType.dimensions, **kwds)
-        ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId],
-                                            producer=producer)
+        ref, = self.registry.insertDatasets(datasetType, run=run, dataIds=[dataId])
 
         # Add Datastore entry.
         self.datastore.put(obj, ref)

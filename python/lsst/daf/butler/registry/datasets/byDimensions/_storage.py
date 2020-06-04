@@ -19,7 +19,6 @@ from lsst.daf.butler import (
     DatasetRef,
     DatasetType,
     ExpandedDataCoordinate,
-    Quantum,
 )
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 from lsst.daf.butler.registry.simpleQuery import SimpleQuery, Select
@@ -51,13 +50,11 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._dynamic = dynamic
         self._runKeyColumn = collections.getRunForeignKeyName()
 
-    def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate], *,
-               quantum: Optional[Quantum] = None) -> Iterator[DatasetRef]:
+    def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate]) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
             self._runKeyColumn: run.key,
-            "quantum_id": quantum.id if quantum is not None else None,
         }
         dataIds = list(dataIds)
         # Insert into the static dataset table, generating autoincrement

@@ -71,7 +71,6 @@ from .queries import (
     QueryBuilder,
     QuerySummary,
 )
-from .tables import makeRegistryTableSpecs
 from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
@@ -79,9 +78,6 @@ from .interfaces import ChainedCollectionRecord, RunRecord
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
-    from ..core import (
-        Quantum
-    )
     from .interfaces import (
         CollectionManager,
         Database,
@@ -229,9 +225,6 @@ class Registry:
                                                                  opaque=self._opaque,
                                                                  datasets=datasets,
                                                                  universe=self.dimensions)
-            self._tables = context.addTableTuple(makeRegistryTableSpecs(self.dimensions,
-                                                                        self._collections,
-                                                                        self._datasets))
         self._collections.refresh()
         self._datasets.refresh(universe=self._dimensions.universe)
 
@@ -608,7 +601,7 @@ class Registry:
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: str, *, producer: Optional[Quantum] = None) -> List[DatasetRef]:
+                       run: str) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -622,10 +615,6 @@ class Registry:
             Dimension-based identifiers for the new datasets.
         run : `str`
             The name of the run that produced the datasets.
-        producer : `Quantum`
-            Unit of work that produced the datasets.  May be `None` to store
-            no provenance information, but if present the `Quantum` must
-            already have been added to the Registry.
 
         Returns
         -------
@@ -656,7 +645,7 @@ class Registry:
         expandedDataIds = [self.expandDataId(dataId, graph=storage.datasetType.dimensions)
                            for dataId in dataIds]
         try:
-            refs = list(storage.insert(runRecord, expandedDataIds, quantum=producer))
+            refs = list(storage.insert(runRecord, expandedDataIds))
         except sqlalchemy.exc.IntegrityError as err:
             raise ConflictingDefinitionError(f"A database constraint failure was triggered by inserting "
                                              f"one or more datasets of type {storage.datasetType} into "
