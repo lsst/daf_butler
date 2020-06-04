@@ -29,16 +29,11 @@ __all__ = (
     "QuantumExecutionStatus",
 )
 
-from abc import ABC, abstractmethod
 import enum
 from typing import (
-    AbstractSet,
     Any,
     Iterable,
-    Mapping,
-    MutableSet,
     Optional,
-    Set,
     Type,
     TYPE_CHECKING,
 )
@@ -47,11 +42,10 @@ import astropy.time
 
 from lsst.utils import doImport
 
-from .named import NamedKeyDict, NamedKeyMapping
+from .datasets import DatasetContainer, DatasetRef, MutableDatasetContainer
 
 if TYPE_CHECKING:
     from .dimensions import DataCoordinate
-    from .datasets import DatasetRef, DatasetType
 
 
 class QuantumExecutionStatus(enum.IntEnum):
@@ -82,7 +76,7 @@ class QuantumExecutionStatus(enum.IntEnum):
     """
 
 
-class Quantum(ABC):
+class Quantum:
     """A discrete unit of work that may depend on one or more datasets and
     produces one or more datasets.
 
@@ -102,25 +96,27 @@ class Quantum(ABC):
         provided.
     dataId : `DataCoordinate`
         The dimension values that identify this `Quantum`.
-    initInputs : `NamedKeyDict` [ `DatasetType`,  `DatasetRef` ]
+    initInputs : `DatasetContainer`
         Datasets that are needed to construct an instance of the Task.
-    predictedInputs : `NamedKeyDict`
-        Inputs identified prior to execution, organized as a mapping from
-        `DatasetType` to a set of `DatasetRef` instances.
-    predictedOutputs : `NamedKeyDict`
-        Outputs identified prior to execution, organized as a mapping
-        from `DatasetType` to a set of (unresolved) `DatasetRef` instances.
+    predictedInputs : `DatasetContainer`
+        Inputs identified prior to execution.
+    predictedOutputs : `DatasetContainer`
+        Outputs identified prior to execution.
+    actualInputs : `DatasetContainer`
+        Inputs actually used by the task during execution.
+    actualOutputs : `DatasetContainer`
+        Outputs actually produced by the task during execution.
     """
     def __init__(
         self, *,
         taskName: Optional[str] = None,
         taskClass: Optional[Type] = None,
         dataId: DataCoordinate,
-        initInputs: NamedKeyDict[DatasetType, DatasetRef],
-        predictedInputs: NamedKeyDict[DatasetType, AbstractSet[DatasetRef]],
-        predictedOutputs: NamedKeyDict[DatasetType, AbstractSet[DatasetRef]],
-        actualInputs: NamedKeyDict[DatasetType, AbstractSet[DatasetRef]],
-        actualOutputs: NamedKeyDict[DatasetType, AbstractSet[DatasetRef]],
+        initInputs: DatasetContainer,
+        predictedInputs: DatasetContainer,
+        predictedOutputs: DatasetContainer,
+        actualInputs: DatasetContainer,
+        actualOutputs: DatasetContainer,
     ):
         if taskClass is not None:
             taskName = f"{taskClass.__module__}.{taskClass.__name__}"
@@ -147,9 +143,15 @@ class Quantum(ABC):
             self._taskClass = doImport(self.taskName)
         return self._taskClass
 
-    @abstractmethod
     def reset(self) -> PredictedQuantum:
-        raise NotImplementedError()
+        return PredictedQuantum(
+            taskName=self.taskName,
+            taskClass=self._taskClass,
+            dataId=self.dataId,
+            initInputs=self.initInputs,
+            predictedInputs=self.predictedInputs,
+            predictedOutputs=self.predictedOutputs,
+        )
 
     @staticmethod
     def predict(
@@ -157,28 +159,21 @@ class Quantum(ABC):
         taskName: Optional[str] = None,
         taskClass: Optional[Type] = None,
         dataId: DataCoordinate,
-        initInputs: Mapping[DatasetType, DatasetRef],
-        inputs: Mapping[DatasetType, Iterable[DatasetRef]],
-        outputs: Mapping[DatasetType, Iterable[DatasetRef]],
+        initInputs: Iterable[DatasetRef],
+        inputs: Iterable[DatasetRef],
+        outputs: Iterable[DatasetRef],
     ) -> PredictedQuantum:
-        initInputs = NamedKeyDict(initInputs)
-        initInputs.freeze()
-        predictedInputs = NamedKeyDict((datasetType, frozenset(refs))
-                                       for datasetType, refs in inputs.items())
-        predictedInputs.freeze()
-        predictedOutputs = NamedKeyDict((datasetType, frozenset(r.unresolved() for r in refs))
-                                        for datasetType, refs in outputs.items())
-        predictedOutputs.freeze()
-        return PredictedQuantum(
+        result = PredictedQuantum(
             taskName=taskName,
             taskClass=taskClass,
             dataId=dataId,
-            initInputs=initInputs,
-            predictedInputs=predictedInputs,
-            predictedOutputs=predictedOutputs,
-            actualInputs=actualInputs,
-            actualOutputs=actualOutputs,
+            initInputs=DatasetContainer(initInputs),
+            predictedInputs=DatasetContainer(inputs),
+            predictedOutputs=DatasetContainer(outputs),
         )
+        result.predictedInputs.require(unique=True)
+        result.predictedOutputs.require(resolved=False, unique=True)
+        return result
 
     taskName: str
     """Fully-qualified name of the task associated with `Quantum` (`str`).
@@ -188,37 +183,30 @@ class Quantum(ABC):
     """The dimension values of the unit of processing (`DataCoordinate`).
     """
 
-    initInputs: NamedKeyMapping[DatasetType, DatasetRef]
-    """A mapping of datasets used to construct the Task,
-    with `DatasetType` instances as keys (names can also be used for
-    lookups) and `DatasetRef` instances as values.
+    initInputs: DatasetContainer
+    """Datasets that are needed to construct an instance of the Task.
     """
 
-    predictedInputs: NamedKeyMapping[DatasetType, AbstractSet[DatasetRef]]
-    """A mapping of input datasets that were expected to be used,
-    with `DatasetType` instances as keys (names can also be used for
-    lookups) and a set of `DatasetRef` instances as values.
+    predictedInputs: DatasetContainer
+    """Inputs identified prior to execution.
 
     Nested `DatasetRef` instances may be resolved or unresolved.
     """
 
-    predictedOutputs: NamedKeyMapping[DatasetType, AbstractSet[DatasetRef]]
-    """A mapping of output datasets expected to be produced by this quantum,
-    with the same form as `predictedInputs`.
+    predictedOutputs: DatasetContainer
+    """Outputs identified prior to execution.
 
     Nested `DatasetRef` instances are always unresolved.
     """
 
-    actualInputs: NamedKeyMapping[DatasetType, AbstractSet[DatasetRef]]
-    """A mapping of input datasets that were actually used, with the same
-    form and keys as `Quantum.predictedInputs`.
+    actualInputs: DatasetContainer
+    """Inputs actually used by the task during execution.
 
     Nested `DatasetRef` instances are always resolved.
     """
 
-    actualOutputs: NamedKeyMapping[DatasetType, AbstractSet[DatasetRef]]
-    """A mapping of output datasets that were actually produced, with the same
-    form and keys as `Quantum.predictedOutputs`.
+    actualOutputs: DatasetContainer
+    """Outputs actually produced by the task during execution.
 
     Nested `DatasetRef` instances are always resolved.
     """
@@ -234,14 +222,10 @@ class PredictedQuantum(Quantum):
         taskName: Optional[str] = None,
         taskClass: Optional[Type] = None,
         dataId: DataCoordinate,
-        initInputs: NamedKeyDict[DatasetType, DatasetRef],
-        predictedInputs: NamedKeyDict[DatasetType, AbstractSet[DatasetRef]],
-        predictedOutputs: NamedKeyDict[DatasetType, AbstractSet[DatasetRef]],
+        initInputs: DatasetContainer,
+        predictedInputs: DatasetContainer,
+        predictedOutputs: DatasetContainer,
     ):
-        actualInputs = NamedKeyDict((datasetType, frozenset()) for datasetType in predictedInputs)
-        actualInputs.freeze()
-        actualOutputs = NamedKeyDict((datasetType, frozenset()) for datasetType in predictedOutputs)
-        actualOutputs.freeze()
         super().__init__(
             taskName=taskName,
             taskClass=taskClass,
@@ -249,8 +233,8 @@ class PredictedQuantum(Quantum):
             initInputs=initInputs,
             predictedInputs=predictedInputs,
             predictedOutputs=predictedOutputs,
-            actualInputs=actualInputs,
-            actualOutputs=actualOutputs,
+            actualInputs=DatasetContainer(),
+            actualOutputs=DatasetContainer(),
         )
 
     __slots__ = ()
@@ -264,10 +248,6 @@ class PredictedQuantum(Quantum):
         run: str,
         host: Optional[str] = None,
     ) -> ActiveQuantum:
-        actualInputs = NamedKeyDict((datasetType, set()) for datasetType in self.predictedInputs)
-        actualInputs.freeze()
-        actualOutputs = NamedKeyDict((datasetType, set()) for datasetType in self.predictedOutputs)
-        actualOutputs.freeze()
         return ActiveQuantum(
             taskName=self.taskName,
             taskClass=self._taskClass,
@@ -275,8 +255,6 @@ class PredictedQuantum(Quantum):
             initInputs=self.initInputs,
             predictedInputs=self.predictedInputs,
             predictedOutputs=self.predictedOutputs,
-            actualInputs=actualInputs,
-            actualOutputs=actualOutputs,
             id=id,
             run=run,
             startTime=astropy.time.Time.now(),
@@ -294,7 +272,11 @@ class ActiveQuantum(Quantum):
         host: Optional[str],
         **kwargs: Any,
     ):
-        super().__init__(**kwargs)
+        super().__init__(
+            actualInputs=MutableDatasetContainer(),
+            actualOutputs=MutableDatasetContainer(),
+            **kwargs
+        )
         self.id = id
         self.run = run
         self.startTime = startTime
@@ -302,35 +284,32 @@ class ActiveQuantum(Quantum):
 
     __slots__ = ("id", "run", "startTime")
 
-    def reset(self) -> PredictedQuantum:
-        return PredictedQuantum(
-            taskName=self.taskName,
-            taskClass=self._taskClass,
-            dataId=self.dataId,
-            initInputs=self.initInputs,
-            predictedInputs=self.predictedInputs,
-            predictedOutputs=self.predictedOutputs,
-        )
-
     def finish(
         self, *,
         status: QuantumExecutionStatus,
     ) -> ExecutedQuantum:
-        # Make fully-frozen versions of actualInputs and actualOutputs, and
-        # validate them in the process.
-        actualInputs = NamedKeyDict()
-        for datasetType, refs in self.actualInputs.items():
-            if not refs <= self.predictedInputs[datasetType]:
-                raise RuntimeError(f"Data IDs of actual inputs for {datasetType.name} are not included in "
-                                   f"the predicted inputs: "
-                                   f"{[ref.dataId for ref in refs - self.predictedInputs[datasetType]]}."
-            actualInputs[datasetType] = frozenset(refs)
-        actualInputs.freeze()
-        outputs = NamedKeyDict()
-        for datasetType, refs in self.outputs.items():
-            if status is QuantumExecutionStatus.SUCCEEDED and any(ref.id is None for ref in refs):
-                status = QuantumExecutionStatus.FAILED_MISSING_OUTPUTS
-        outputs.freeze()
+        self.actualInputs.require(resolved=True, unique=True)
+        self.actualOutputs.require(resolved=True, unique=True)
+        if not (self.actualInputs.unresolved <= self.predictedInputs.unresolved):
+            raise ValueError(
+                f"actualInputs contains datasets not present in predictedInputs: "
+                f"{self.actualInputs.unresolved - self.predictedInputs.unresolved}."
+            )
+        if status is QuantumExecutionStatus.SUCCEEDED:
+            if self.actualOutputs.unresolved != self.predictedOutputs.unresolved:
+                raise ValueError(
+                    f"Some predicted output datasets were not actually produced: "
+                    f"{self.predictedOutputs.unresolved - self.actualOutputs.unresolved}."
+                )
+        else:
+            if not (self.actualOutputs.unresolved <= self.predictedOutputs.unresolved):
+                raise ValueError(
+                    f"actualOutputs contains datasets not present in predictedOutputs: "
+                    f"{self.actualOutputs.unresolved - self.predictedOutputs.unresolved}."
+                )
+        if (self.actualOutputs.unresolved != self.predictedOutputs.unresolved
+                and status is QuantumExecutionStatus.SUCCEEDED):
+            status = QuantumExecutionStatus.FAILED_MISSING_OUTPUTS
         return ExecutedQuantum(
             status=status,
             taskName=self.taskName,
@@ -338,8 +317,9 @@ class ActiveQuantum(Quantum):
             dataId=self.dataId,
             initInputs=self.initInputs,
             predictedInputs=self.predictedInputs,
-            actualInputs=actualInputs,
-            outputs=outputs,
+            predictedOutputs=self.predictedOutputs,
+            actualInputs=self.actualInputs.intoFrozen(),
+            actualOutputs=self.actualOutputs.intoFrozen(),
             id=self.id,
             run=self.run,
             startTime=self.startTime,
@@ -347,20 +327,12 @@ class ActiveQuantum(Quantum):
             host=self.host,
         )
 
-    actualInputs: NamedKeyMapping[DatasetType, MutableSet[DatasetRef]]
-    """A mapping of input datasets that were actually used, with the same
-    form and keys as `Quantum.predictedInputs`.
-
-    This is initialized to have empty (mutable) `set` instances as values.
-    These should be updated prior to calling `finish`.
+    actualInputs: MutableDatasetContainer
+    """Inputs actually used by the task during execution.
     """
 
-    actualOutputs: NamedKeyMapping[DatasetType, MutableSet[DatasetRef]]
-    """A mapping of input datasets that were actually used, with the same
-    form and keys as `Quantum.predictedOutputs`.
-
-    This is initialized to have empty (mutable) `set` instances as values.
-    These should be updated prior to calling `finish`.
+    actualOutputs: MutableDatasetContainer
+    """Outputs actually produced by the task during execution.
     """
 
     id: int
@@ -368,7 +340,7 @@ class ActiveQuantum(Quantum):
     """
 
     run: str
-    """The name of the run this Quantum is a part of (`str`).
+    """The name of the run this quantum is a part of (`str`).
     """
 
     startTime: astropy.time.Time
@@ -377,7 +349,7 @@ class ActiveQuantum(Quantum):
     """
 
     host: Optional[str]
-    """Name of the system on which this quantum was executed (`str`).
+    """Name of the system on which this quantum is being executed (`str`).
     """
 
 
@@ -388,23 +360,19 @@ class ExecutedQuantum(Quantum):
     Parameters
     ----------
     status : `QuantumExecutionStatus`
-        Status flag indicating whether execution was successful, and iff not,
+        Status flag indicating whether execution was successful, and if not,
         why.
-    actualInputs : `NamedKeyDict`
-        Inputs actually used during execution, organized as a mapping from
-        `DatasetType` to a list of `DatasetRef`.  Must be a subset of
-        ``predictedInputs``.
     run : `str`
-        The name of the run this Quantum is a part of.
+        The name of the run this quantum is a part of.
     id : `int`
         Unique integer identifier for this quantum.  Usually set to `None`
         (default) and assigned by `Registry`.
     startTime : `astropy.time.Time`
-        The start time for the quantum.
+        Begin timestamp for the execution of this quantum.
     endTime : `astropy.time.Time`
-        The end time for the quantum.
+        End timestamp for the execution of this quantum.
     host : `str`, optional
-        The system on this quantum was executed.  May be `None`.
+        The name of system on which this quantum was executed.  May be `None`.
     **kwargs
         All `Quantum` constructor keyword arguments are required, and are
         forwarded directly.
@@ -421,28 +389,13 @@ class ExecutedQuantum(Quantum):
     ):
         super().__init__(**kwargs)
         self.status = status
-        self.actualInputs = actualInputs
         self.id = id
         self.run = run
         self.startTime = startTime
         self.endTime = endTime
         self.host = host
 
-    __slots__ = ("status", "actualInputs", "id", "run", "startTime", "endTime", "host")
-
-    def reset(self) -> PredictedQuantum:
-        # Replace outputs with a version that has unresolved DatasetRefs.
-        outputs = NamedKeyDict((datasetType, frozenset(ref.unresolved() for ref in refs))
-                               for datasetType, refs in self.outputs.items())
-        outputs.freeze()
-        return PredictedQuantum(
-            taskName=self.taskName,
-            taskClass=self._taskClass,
-            dataId=self.dataId,
-            initInputs=self.initInputs,
-            predictedInputs=self.predictedInputs,
-            outputs=outputs,
-        )
+    __slots__ = ("status", "id", "run", "startTime", "endTime", "host")
 
     status: QuantumExecutionStatus
     """Status flag indicating whether execution was successful, and if not,
