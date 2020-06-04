@@ -39,7 +39,7 @@ from ...core import (
     DatasetType,
     ddl,
     ExpandedDataCoordinate,
-    Quantum,
+    ActiveQuantum,
 )
 from ..simpleQuery import Select
 
@@ -64,7 +64,7 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate], *,
-               quantum: Optional[Quantum] = None) -> Iterator[DatasetRef]:
+               quantum: Optional[ActiveQuantum] = None) -> Iterator[DatasetRef]:
         """Insert one or more dataset entries into the database.
 
         Parameters
@@ -76,9 +76,9 @@ class DatasetRecordStorage(ABC):
             Expanded data IDs (`ExpandedDataCoordinate` instances) for the
             datasets to be added.   The dimensions of all data IDs must be the
             same as ``self.datasetType.dimensions``.
-        quantum : `Quantum`, optional
-            The `Quantum` instance that should be recorded as responsible for
-            producing this dataset.
+        quantum : `ActiveQuantum`, optional
+            The `ActiveQuantum` instance that should be recorded as responsible
+            for producing this dataset.
 
         Returns
         -------

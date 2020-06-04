@@ -80,7 +80,7 @@ from .interfaces import ChainedCollectionRecord, RunRecord
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
     from ..core import (
-        Quantum
+        ActiveQuantum
     )
     from .interfaces import (
         CollectionManager,
@@ -608,7 +608,7 @@ class Registry:
 
     @transactional
     def insertDatasets(self, datasetType: Union[DatasetType, str], dataIds: Iterable[DataId],
-                       run: str, *, producer: Optional[Quantum] = None) -> List[DatasetRef]:
+                       run: str, *, producer: Optional[ActiveQuantum] = None) -> List[DatasetRef]:
         """Insert one or more datasets into the `Registry`
 
         This always adds new datasets; to associate existing datasets with
@@ -622,7 +622,7 @@ class Registry:
             Dimension-based identifiers for the new datasets.
         run : `str`
             The name of the run that produced the datasets.
-        producer : `Quantum`
+        producer : `ActiveQuantum`
             Unit of work that produced the datasets.  May be `None` to store
             no provenance information, but if present the `Quantum` must
             already have been added to the Registry.

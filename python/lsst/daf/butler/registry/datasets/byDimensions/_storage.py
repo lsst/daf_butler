@@ -14,12 +14,12 @@ from typing import (
 import sqlalchemy
 
 from lsst.daf.butler import (
+    ActiveQuantum,
     CollectionType,
     DataCoordinate,
     DatasetRef,
     DatasetType,
     ExpandedDataCoordinate,
-    Quantum,
 )
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
 from lsst.daf.butler.registry.simpleQuery import SimpleQuery, Select
@@ -52,7 +52,7 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
         self._runKeyColumn = collections.getRunForeignKeyName()
 
     def insert(self, run: RunRecord, dataIds: Iterable[ExpandedDataCoordinate], *,
-               quantum: Optional[Quantum] = None) -> Iterator[DatasetRef]:
+               quantum: Optional[ActiveQuantum] = None) -> Iterator[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
         staticRow = {
             "dataset_type_id": self._dataset_type_id,
@@ -80,12 +80,15 @@ class ByDimensionsDatasetRecordStorage(DatasetRecordStorage):
             # get any unique constraint violations.
             self._db.insert(self._dynamic, *dynamicRows)
         for dataId, datasetId in zip(dataIds, datasetIds):
-            yield DatasetRef(
+            ref = DatasetRef(
                 datasetType=self.datasetType,
                 dataId=dataId,
                 id=datasetId,
                 run=run.name,
             )
+            if quantum is not None:
+                quantum.actualInputs.add(ref)
+            yield ref
 
     def find(self, collection: CollectionRecord, dataId: DataCoordinate) -> Optional[DatasetRef]:
         # Docstring inherited from DatasetRecordStorageManager.
