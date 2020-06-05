@@ -42,6 +42,24 @@ mockEnvVar = {mockEnvVarKey: "1"}
 # Other arguments to the Option should include multiple=true and
 # callback=split_kv.
 typeStrAcceptsMultiple = "TEXT ..."
+typeStrAcceptsSingle = "TEXT"
+
+
+def textTypeStr(multiple):
+    """Get the text type string for CLI help documentation.
+
+    Parameters
+    ----------
+    multiple : `bool`
+        True if multiple text values are allowed, False if only one value is
+        allowed.
+
+    Returns
+    -------
+    textTypeStr : `str`
+        The type string to use.
+    """
+    return typeStrAcceptsMultiple if multiple else typeStrAcceptsSingle
 
 
 # The ParameterType enum is used to indicate a click Argument or Option (both
