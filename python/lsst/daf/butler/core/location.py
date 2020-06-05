@@ -553,6 +553,21 @@ class Location:
 
         self._path = path + ext
 
+    def getExtension(self) -> str:
+        """Return the file extension associated with this location.
+
+        Returns
+        -------
+        ext : `str`
+            The file extension (including the ``.``). Can be empty string
+            if there is no file extension.
+        """
+        if not self._datastoreRootUri.scheme:
+            _, ext = os.path.splitext(self.pathInStore)
+        else:
+            _, ext = posixpath.splitext(self.pathInStore)
+        return ext
+
 
 class LocationFactory:
     """Factory for `Location` instances.
