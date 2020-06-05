@@ -22,10 +22,11 @@
 import click
 import yaml
 
-from ..opt import (collection_type_option, dataset_type_option, directory_argument, repo_argument, run_option,
-                   transfer_option)
+from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_parameter,
+                   repo_argument, run_option, transfer_option, verbose_option)
 from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
-from ...script import butlerImport, createRepo, configDump, configValidate, queryCollections
+from ...script import (butlerImport, createRepo, configDump, configValidate, queryCollections,
+                       queryDatasetTypes)
 
 
 # The conversion from the import command name to the butler_import function
@@ -106,3 +107,12 @@ def config_validate(*args, **kwargs):
 def query_collections(*args, **kwargs):
     """Get the collections whose names match an expression."""
     print(yaml.dump(cli_handle_exception(queryCollections, *args, **kwargs)))
+
+
+@click.command()
+@repo_argument(required=True)
+@glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+@verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
+def query_dataset_types(*args, **kwargs):
+    """Get the dataset types in a repository."""
+    print(yaml.dump(cli_handle_exception(queryDatasetTypes, *args, **kwargs), sort_keys=False))

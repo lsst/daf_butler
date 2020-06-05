@@ -24,3 +24,4 @@ from .createRepo import createRepo
 from .configDump import configDump
 from .configValidate import configValidate
 from .queryCollections import queryCollections
+from .queryDatasetTypes import queryDatasetTypes
