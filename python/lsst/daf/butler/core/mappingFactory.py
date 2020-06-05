@@ -195,7 +195,7 @@ class MappingFactory:
         # Simplest to use Config for this
         config_kwargs = Config(registry_kwargs)
         config_kwargs.update(kwargs)
-        merged_kwargs = dict(config_kwargs)
+        merged_kwargs = config_kwargs.toDict()
 
         return key, cls(*args, **merged_kwargs)
 
