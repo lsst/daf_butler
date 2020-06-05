@@ -541,7 +541,10 @@ class Location:
         if ext is None:
             return
 
-        path, _ = os.path.splitext(self.pathInStore)
+        if not self._datastoreRootUri.scheme:
+            path, _ = os.path.splitext(self.pathInStore)
+        else:
+            path, _ = posixpath.splitext(self.pathInStore)
 
         # Ensure that we have a leading "." on file extension (and we do not
         # try to modify the empty string)
