@@ -77,9 +77,6 @@ class Formatter(metaclass=ABCMeta):
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
-    extension: Optional[str] = None
-    """File extension default provided by this formatter."""
-
     def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None,
                  writeParameters: Optional[Dict[str, Any]] = None):
         if not isinstance(fileDescriptor, FileDescriptor):
@@ -219,17 +216,28 @@ class Formatter(metaclass=ABCMeta):
         Returns
         -------
         updated : `Location`
-            The updated location with a new file extension applied.
+            A new `Location` with a new file extension applied.
 
         Raises
         ------
         NotImplementedError
             Raised if there is no ``extension`` attribute associated with
             this formatter.
+
+        Notes
+        -----
+        This method is available to all Formatters but might not be
+        implemented by all formatters. It requires that a formatter set
+        an ``extension`` attribute containing the file extension used when
+        writing files.  If ``extension`` is `None` the supplied file will
+        not be updated. Not all formatters write files so this is not
+        defined in the base class.
         """
         location = copy.deepcopy(location)
         try:
-            location.updateExtension(cls.extension)
+            # We are deliberately allowing extension to be undefined by
+            # default in the base class and mypy complains.
+            location.updateExtension(cls.extension)  # type:ignore
         except AttributeError:
             raise NotImplementedError("No file extension registered with this formatter") from None
         return location
