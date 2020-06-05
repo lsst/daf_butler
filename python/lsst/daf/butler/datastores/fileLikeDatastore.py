@@ -631,6 +631,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         except KeyError as e:
             raise DatasetTypeNotSupportedError(f"Unable to find formatter for {ref}") from e
 
+        # Now that we know the formatter, update the location
+        location = formatter.makeUpdatedLocation(location)
+
         return location, formatter
 
     @abstractmethod
