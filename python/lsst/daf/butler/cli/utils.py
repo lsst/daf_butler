@@ -20,6 +20,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+import enum
 import io
 import os
 import traceback
@@ -41,6 +42,13 @@ mockEnvVar = {mockEnvVarKey: "1"}
 # Other arguments to the Option should include multiple=true and
 # callback=split_kv.
 typeStrAcceptsMultiple = "TEXT ..."
+
+
+# The ParameterType enum is used to indicate a click Argument or Option (both
+# of which are subclasses of click.Parameter).
+class ParameterType(enum.Enum):
+    ARGUMENT = 0
+    OPTION = 1
 
 
 class Mocker:
