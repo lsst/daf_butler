@@ -216,7 +216,8 @@ class LookupKey:
 
 def processLookupConfigs(config: Config, *,
                          allow_hierarchy: bool = False,
-                         universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey, Union[str, Dict]]:
+                         universe: Optional[DimensionUniverse] = None) -> Dict[LookupKey,
+                                                                               Union[str, Dict[str, Any]]]:
     """Process sections of configuration relating to lookups by dataset type
     name, storage class name, dimensions, or values of dimensions.
 

@@ -117,7 +117,8 @@ class Formatter(metaclass=ABCMeta):
         return self._dataId
 
     @property
-    def writeParameters(self) -> Mapping:
+    def writeParameters(self) -> Mapping[str, Any]:
+        """Parameters to use when writing out datasets."""
         if self._writeParameters is not None:
             return self._writeParameters
         return {}
