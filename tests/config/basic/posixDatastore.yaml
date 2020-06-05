@@ -18,6 +18,13 @@ datastore:
         max: 10
         min: 2
         comment: Default comment
+        recipe: recipe1
+    writeRecipes:
+      lsst.daf.butler.tests.testFormatters.FormatterTest:
+        recipe1:
+          mode: red
+        recipe2:
+          mode: green
     StructuredDataDictYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataListYaml: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
     StructuredDataDictJson: lsst.daf.butler.formatters.jsonFormatter.JsonFormatter
