@@ -169,6 +169,18 @@ class ConfigTestCase(unittest.TestCase):
         # Check that c is now empty
         self.assertFalse(c)
 
+    def testDict(self):
+        """Test toDict()"""
+        c1 = Config({"a": {"b": 1}, "c": 2})
+        self.assertIsInstance(c1["a"], Config)
+        d1 = c1.toDict()
+        self.assertIsInstance(d1["a"], dict)
+        self.assertEqual(d1["a"], c1["a"])
+
+        # Modifying one does not change the other
+        d1["a"]["c"] = 2
+        self.assertNotEqual(d1["a"], c1["a"])
+
     def assertSplit(self, answer, *args):
         """Helper function to compare string splitting"""
         for s in (answer, *args):
