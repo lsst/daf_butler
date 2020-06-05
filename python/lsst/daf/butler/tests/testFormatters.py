@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("FormatterTest", )
+__all__ = ("FormatterTest", "DoNothingFormatter")
 
 from typing import (
     Any,
@@ -29,6 +29,17 @@ from typing import (
 )
 
 from ..core import Formatter
+
+
+class DoNothingFormatter(Formatter):
+    """A test formatter that does not need to format anything and has
+    parameters."""
+
+    def read(self, component: Optional[str] = None) -> Any:
+        raise NotImplementedError("Type does not support reading")
+
+    def write(self, inMemoryDataset: Any) -> str:
+        raise NotImplementedError("Type does not support writing")
 
 
 class FormatterTest(Formatter):
