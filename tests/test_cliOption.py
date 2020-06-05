@@ -30,7 +30,7 @@ import yaml
 
 from lsst.daf.butler.registry import CollectionType
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
-                                     dataset_type_option, directory_argument, verbose_option)
+                                     dataset_type_option, directory_argument, glob_parameter, verbose_option)
 from lsst.daf.butler.cli.utils import clickResultMsg
 
 
@@ -261,6 +261,86 @@ class DirectoryArgumentTestCase(OptionTestBase):
 
     def test_help(self):
         # directory_argument does not have default help.
+        self.custom_help_test()
+
+
+class GlobTestCase(OptionTestBase):
+
+    optionClass = glob_parameter
+
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn(verifyArgs, result.stdout)
+
+    def verifyMissing(self, result, verifyArgs):
+        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn(verifyArgs, result.stdout)
+
+    def test_glob_argument(self):
+        """test argument"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT)
+        def cli(glob):
+            if glob is None:
+                glob = "None"
+            print(glob)
+
+        self.run_test(cli, ["foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verify, "None")
+
+    def test_glob_argument_required(self):
+        """test with argument required"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verifyMissing, 'Error: Missing argument "GLOB"')
+
+    def test_glob_option(self):
+        """test option"""
+        @click.command()
+        @glob_parameter()
+        def cli(glob):
+            if glob is None:
+                glob = "None"
+            print(glob)
+
+        self.run_test(cli, ["--glob", "foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verify, "None")
+
+    def test_glob_option_required(self):
+        """test with argument required"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verifyMissing, 'Error: Missing argument "GLOB"')
+
+    def test_glob_argument_multiple(self):
+        """test with multiple argument values"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["foo*", "bar", "b?z"], self.verify, "('foo*', 'bar', 'b?z')")
+
+    def test_glob_option_multiple(self):
+        """test with multiple option values"""
+        @click.command()
+        @glob_parameter(multiple=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["--glob", "foo*", "--glob", "bar", "--glob", "b?z"], self.verify,
+                      "('foo*', 'bar', 'b?z')")
+
+    def test_help(self):
+        self.help_test()
         self.custom_help_test()
 
 
