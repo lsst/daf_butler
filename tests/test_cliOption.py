@@ -22,71 +22,127 @@
 """Unit tests for the daf_butler dataset-type CLI option.
 """
 
+import abc
 import click
 import click.testing
 import unittest
 import yaml
 
-from lsst.daf.butler.cli.opt import config_file_option, config_option, dataset_type_option, directory_argument
+from lsst.daf.butler.registry import CollectionType
+from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
+                                     dataset_type_option, directory_argument, glob_parameter, verbose_option)
 from lsst.daf.butler.cli.utils import clickResultMsg
 
 
-class DatasetTypeTestCase(unittest.TestCase):
+class OptionTestBase(unittest.TestCase, abc.ABC):
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
+    def run_command(self, cmd, args):
+        """
+
+        Parameters
+        ----------
+        cmd : click.Command
+            The command function to call
+        args : [`str`]
+            The arguments to pass to the function call.
+
+        Returns
+        -------
+        [type]
+            [description]
+        """
+        return self.runner.invoke(cmd, args)
+
+    def run_test(self, cmd, cmdArgs, verifyFunc, verifyArgs=None):
+        result = self.run_command(cmd, cmdArgs)
+        verifyFunc(result, verifyArgs)
+
+    def run_help_test(self, cmd, expcectedHelpText):
+        result = self.runner.invoke(cmd, ["--help"])
+        # remove all whitespace to work around line-wrap differences.
+        self.assertIn("".join(expcectedHelpText.split()), "".join(result.output.split()))
+
+    @property
+    @abc.abstractmethod
+    def optionClass(self):
+        pass
+
+    def help_test(self):
+        @click.command()
+        @self.optionClass()
+        def cli():
+            pass
+
+        self.run_help_test(cli, self.optionClass.defaultHelp)
+
+    def custom_help_test(self):
+        @click.command()
+        @self.optionClass(help="foobarbaz")
+        def cli(collection_type):
+            pass
+
+        self.run_help_test(cli, "foobarbaz")
+
+
+class CollectionTypeTestCase(OptionTestBase):
+
+    optionClass = collection_type_option
+
+    def setUp(self):
+        super().setUp()
+        CollectionTypeTestCase.collectionType = None
 
     @staticmethod
     @click.command()
-    @dataset_type_option(help="the dataset type")
-    def cli(dataset_type):
-        click.echo(dataset_type, nl=False)
+    @collection_type_option()
+    def cli(collection_type):
+        CollectionTypeTestCase.collectionType = collection_type
 
-    def test_single(self):
-        """test a single argument"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one']")
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual(CollectionTypeTestCase.collectionType, verifyArgs)
 
-    def test_multiple(self):
-        """test multiple arguments, using the long and short option names"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one", "-d", "two"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two']")
+    def test_run(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "RUN"],
+                      self.verify, CollectionType.RUN)
 
-    def test_singlePair(self):
-        """test a single comma-separated value pair"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one,two"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two']")
+    def test_chained(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "CHAINED"],
+                      self.verify, CollectionType.CHAINED)
 
-    def test_multiplePair(self):
-        """test multiple comma-separated value pairs"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--dataset-type", "one,two", "-d", "three,four"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two', 'three', 'four']")
+    def test_tagged(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "TAGGED"],
+                      self.verify, CollectionType.TAGGED)
+
+    def test_default(self):
+        self.run_test(CollectionTypeTestCase.cli, [],
+                      self.verify, None)
+
+    def test_caseInsensitive(self):
+        self.run_test(CollectionTypeTestCase.cli, ["--collection-type", "TaGGeD"],
+                      self.verify, CollectionType.TAGGED)
 
     def test_help(self):
-        """test capture of the help text"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(DatasetTypeTestCase.cli, ["--help"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertIn("the dataset type", result.stdout)
+        self.help_test()
+        self.custom_help_test()
 
 
-class ConfigTestCase(unittest.TestCase):
+class ConfigTestCase(OptionTestBase):
+
+    optionClass = config_option
 
     @staticmethod
     @click.command()
-    @config_option(help="foo bar baz")
+    @config_option()
     def cli(config):
         click.echo(yaml.dump(config), nl=False)
 
     def test_basic(self):
         """test arguments"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigTestCase.cli, ["--config", "a=1", "-c", "b=2,c=3"])
+        result = self.runner.invoke(ConfigTestCase.cli, ["--config", "a=1", "-c", "b=2,c=3"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertEqual(yaml.safe_load(result.stdout), dict(a="1", b="2", c="3"))
 
@@ -95,31 +151,29 @@ class ConfigTestCase(unittest.TestCase):
         @config_option(required=True)
         def cli(config):
             pass
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, [])
+
+        result = self.runner.invoke(cli, [])
         self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertIn('Missing option "-c" / "--config"', result.output)
 
     def test_help(self):
-        """test capture of the help text"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigTestCase.cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn("foo bar baz", result.stdout)
+        self.help_test()
+        self.custom_help_test()
 
 
-class ConfigFileTestCase(unittest.TestCase):
+class ConfigFileTestCase(OptionTestBase):
+
+    optionClass = config_file_option
 
     @staticmethod
     @click.command()
-    @config_file_option(help="foo bar baz")
+    @config_file_option()
     def cli(config_file):
         click.echo(config_file, nl=False)
 
     def test_basic(self):
         """test arguments"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigFileTestCase.cli, ["--config-file", "path/to/file"])
+        result = self.runner.invoke(ConfigFileTestCase.cli, ["--config-file", "path/to/file"])
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertEqual("path/to/file", result.stdout)
 
@@ -128,20 +182,56 @@ class ConfigFileTestCase(unittest.TestCase):
         @config_file_option(required=True)
         def cli(config):
             pass
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, [])
+        result = self.runner.invoke(cli, [])
         self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         self.assertIn('Missing option "-C" / "--config-file"', result.output)
 
     def test_help(self):
-        """test capture of the help text"""
-        runner = click.testing.CliRunner()
-        result = runner.invoke(ConfigFileTestCase.cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
-        self.assertIn("foo bar baz", result.stdout)
+        self.help_test()
+        self.custom_help_test()
 
 
-class DirectoryArgumentTestCase(unittest.TestCase):
+class DatasetTypeTestCase(OptionTestBase):
+
+    optionClass = dataset_type_option
+
+    @staticmethod
+    @click.command()
+    @dataset_type_option(help="the dataset type")
+    def cli(dataset_type):
+        click.echo(dataset_type, nl=False)
+
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertEqual(result.stdout, verifyArgs)
+
+    def test_single(self):
+        """test a single argument"""
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one"], self.verify, "['one']")
+
+    def test_multiple(self):
+        """test multiple arguments, using the long and short option names"""
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one", "-d", "two"],
+                      self.verify, "['one', 'two']")
+
+    def test_singlePair(self):
+        """test a single comma-separated value pair"""
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one,two"],
+                      self.verify, "['one', 'two']")
+
+    def test_multiplePair(self):
+        """test multiple comma-separated value pairs"""
+        self.run_test(DatasetTypeTestCase.cli, ["--dataset-type", "one,two", "-d", "three,four"],
+                      self.verify, "['one', 'two', 'three', 'four']")
+
+    def test_help(self):
+        # dataset_type_option does not have default help
+        self.custom_help_test()
+
+
+class DirectoryArgumentTestCase(OptionTestBase):
+
+    optionClass = directory_argument
 
     def test_required(self):
         """test arguments"""
@@ -149,11 +239,10 @@ class DirectoryArgumentTestCase(unittest.TestCase):
         @directory_argument(required=True)
         def cli(directory):
             click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["this_dir"])
+        result = self.runner.invoke(cli, ["this_dir"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertEqual("this_dir", result.stdout)
-        result = runner.invoke(cli, [])
+        result = self.runner.invoke(cli, [])
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn('Missing argument "DIRECTORY"', result.stdout)
 
@@ -163,33 +252,123 @@ class DirectoryArgumentTestCase(unittest.TestCase):
         @directory_argument()
         def cli(directory):
             click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["this_dir"])
+        result = self.runner.invoke(cli, ["this_dir"])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertEqual("this_dir", result.stdout)
-        result = runner.invoke(cli, [])
+        result = self.runner.invoke(cli, [])
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertEqual("", result.stdout)
 
-    def test_customHelp(self):
-        @click.command()
-        @directory_argument(help="custom help")
-        def cli(directory):
-            click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn("custom help", result.stdout)
+    def test_help(self):
+        # directory_argument does not have default help.
+        self.custom_help_test()
 
-    def test_defaultHelp(self):
+
+class GlobTestCase(OptionTestBase):
+
+    optionClass = glob_parameter
+
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn(verifyArgs, result.stdout)
+
+    def verifyMissing(self, result, verifyArgs):
+        self.assertNotEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn(verifyArgs, result.stdout)
+
+    def test_glob_argument(self):
+        """test argument"""
         @click.command()
-        @directory_argument()
-        def cli(directory):
-            click.echo(directory, nl=False)
-        runner = click.testing.CliRunner()
-        result = runner.invoke(cli, ["--help"])
-        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn(directory_argument.default_help, result.stdout)
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT)
+        def cli(glob):
+            if glob is None:
+                glob = "None"
+            print(glob)
+
+        self.run_test(cli, ["foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verify, "None")
+
+    def test_glob_argument_required(self):
+        """test with argument required"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verifyMissing, 'Error: Missing argument "GLOB"')
+
+    def test_glob_option(self):
+        """test option"""
+        @click.command()
+        @glob_parameter()
+        def cli(glob):
+            if glob is None:
+                glob = "None"
+            print(glob)
+
+        self.run_test(cli, ["--glob", "foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verify, "None")
+
+    def test_glob_option_required(self):
+        """test with argument required"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["foo*"], self.verify, "foo*")
+        self.run_test(cli, [], self.verifyMissing, 'Error: Missing argument "GLOB"')
+
+    def test_glob_argument_multiple(self):
+        """test with multiple argument values"""
+        @click.command()
+        @glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["foo*", "bar", "b?z"], self.verify, "('foo*', 'bar', 'b?z')")
+
+    def test_glob_option_multiple(self):
+        """test with multiple option values"""
+        @click.command()
+        @glob_parameter(multiple=True)
+        def cli(glob):
+            print(glob)
+
+        self.run_test(cli, ["--glob", "foo*", "--glob", "bar", "--glob", "b?z"], self.verify,
+                      "('foo*', 'bar', 'b?z')")
+
+    def test_help(self):
+        self.help_test()
+        self.custom_help_test()
+
+
+class VerboseTestCase(OptionTestBase):
+
+    optionClass = verbose_option
+
+    @staticmethod
+    @click.command()
+    @verbose_option()
+    def cli(verbose):
+        print(verbose)
+
+    def verify(self, result, verifyArgs):
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        self.assertIn(verifyArgs, result.stdout)
+
+    def test_verbose(self):
+        """test arguments"""
+        self.run_test(self.cli, ["--verbose"], self.verify, "True")
+
+    def test_notVerbose(self):
+        """test arguments"""
+        self.run_test(self.cli, [], self.verify, "False")
+
+    def test_help(self):
+        self.help_test()
+        self.custom_help_test()
 
 
 if __name__ == "__main__":

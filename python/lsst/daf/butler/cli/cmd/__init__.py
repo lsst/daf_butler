@@ -19,7 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-__all__ = ["butler_import", "create", "config_dump", "config_validate"]
+__all__ = ["butler_import", "create", "config_dump", "config_validate", "query_collections",
+           "query_dataset_types"]
 
 
-from .commands import butler_import, create, config_dump, config_validate
+from .commands import (butler_import, create, config_dump, config_validate, query_collections,
+                       query_dataset_types)
