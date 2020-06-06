@@ -36,7 +36,8 @@ class QueryDatasetTypesCmdTest(MockeredTestBase):
 
     defaultExpected = dict(repo=None,
                            verbose=False,
-                           glob=())
+                           glob=(),
+                           components=None)
 
     def test_minimal(self):
         """Test only required parameters.
@@ -50,8 +51,10 @@ class QueryDatasetTypesCmdTest(MockeredTestBase):
 
     def test_all(self):
         """Test all parameters."""
-        self.run_test(["query-dataset-types", "here", "--verbose", "foo*"],
-                      self.makeExpected(repo="here", verbose=True, glob=("foo*", )))
+        self.run_test(["query-dataset-types", "here", "--verbose", "foo*", "--components"],
+                      self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=True))
+        self.run_test(["query-dataset-types", "here", "--verbose", "foo*", "--no-components"],
+                      self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=False))
 
 
 class QueryDatasetTypesScriptTest(unittest.TestCase):

@@ -43,7 +43,7 @@ def _translateExpr(expr):
     return re.compile(fnmatch.translate(expr))
 
 
-def queryDatasetTypes(repo, verbose, glob):
+def queryDatasetTypes(repo, verbose, glob, components):
     """Get the dataset types in a repository.
 
     Parameters
@@ -57,6 +57,12 @@ def queryDatasetTypes(repo, verbose, glob):
     glob : [`str`]
         A list of glob-style search string that fully or partially identify
         the dataset type names to search for.
+    components : `bool` or `None`
+        If `True`, apply all glob patterns to component dataset type
+        names as well.  If `False`, never apply patterns to components. If
+        `None` (default), apply patterns to components only if their parent
+        datasets were not matched by the expression. Fully-specified component
+        datasets (`str` or `DatasetType` instances) are always included.
 
     Returns
     -------
@@ -68,6 +74,7 @@ def queryDatasetTypes(repo, verbose, glob):
     kwargs = dict()
     if glob:
         kwargs['expression'] = [_translateExpr(g) for g in glob]
+    kwargs['components'] = components
     datasetTypes = butler.registry.queryDatasetTypes(**kwargs)
     if verbose:
         info = [dict(name=datasetType.name,

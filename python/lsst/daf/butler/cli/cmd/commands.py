@@ -113,6 +113,13 @@ def query_collections(*args, **kwargs):
 @repo_argument(required=True)
 @glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
+@click.option("--components/--no-components",
+              default=None,
+              help="For --components, apply all expression patterns to component dataset type names as well. "
+                   "For --no-components, never apply patterns to components. Default (where neither is "
+                   "specified) is to apply patterns to components only if their parent datasets were not "
+                   "matched by the expression. Fully-specified component datasets (`str` or `DatasetType` "
+                   "instances) are always included.")
 def query_dataset_types(*args, **kwargs):
     """Get the dataset types in a repository."""
     print(yaml.dump(cli_handle_exception(queryDatasetTypes, *args, **kwargs), sort_keys=False))
