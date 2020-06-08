@@ -1,6 +1,6 @@
 # This file gives the mapping between DatasetType and the
 # `lsst.daf.butler.Formatter` that handles it.
-writeRecipes: !include writeRecipes.yaml
+write_recipes: !include writeRecipes.yaml
 default:
   lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter:
     # default is the default recipe regardless but this demonstrates

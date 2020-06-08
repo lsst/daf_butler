@@ -360,6 +360,9 @@ class FormatterFactory:
     defaultKey = LookupKey("default")
     """Configuration key associated with default write parameter settings."""
 
+    writeRecipesKey = LookupKey("write_recipes")
+    """Configuration key associated with write recipes."""
+
     def __init__(self) -> None:
         self._mappingFactory = MappingFactory(Formatter)
 
@@ -443,13 +446,13 @@ class FormatterFactory:
         collections of write parameters that can be accessed through a
         simple label.  This allows common collections of options to be
         specified in one place in the configuration and reused later.
-        The ``writeRecipes`` section is indexed by Formatter class name
+        The ``write_recipes`` section is indexed by Formatter class name
         and each key is the label to associate with the parameters.
 
         .. code-block::
 
         formatters:
-          writeRecipes:
+          write_recipes:
             lsst.obs.base.fitsExposureFormatter.FixExposureFormatter:
               lossless:
                 ...
@@ -458,7 +461,7 @@ class FormatterFactory:
 
         By convention a formatter that uses write recipes will support a
         ``recipe`` write parameter that will refer to a recipe name in
-        the ``writeRecipes`` component.  The `Formatter` will be constructed
+        the ``write_recipes`` component.  The `Formatter` will be constructed
         in the `FormatterFactory` with all the relevant recipes and
         will not attempt to filter by looking at ``writeParameters`` in
         advance.  See the specific formatter documentation for details on
@@ -476,16 +479,16 @@ class FormatterFactory:
 
         # Extract any global write recipes -- these are indexed by
         # Formatter class name.
-        writeRecipes = contents.get(LookupKey("writeRecipes"), {})
+        writeRecipes = contents.get(self.writeRecipesKey, {})
         if isinstance(writeRecipes, str):
-            raise RuntimeError("The formatters.writeRecipes section must refer to a dict"
+            raise RuntimeError(f"The formatters.{self.writeRecipesKey} section must refer to a dict"
                                f" not '{writeRecipes}'")
 
         for key, f in contents.items():
             # default is handled in a special way
             if key == self.defaultKey:
                 continue
-            if key.name == "writeRecipes":
+            if key == self.writeRecipesKey:
                 continue
 
             # Can be a str or a dict.

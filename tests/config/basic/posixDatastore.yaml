@@ -19,7 +19,7 @@ datastore:
         min: 2
         comment: Default comment
         recipe: recipe1
-    writeRecipes:
+    write_recipes:
       lsst.daf.butler.tests.testFormatters.FormatterTest:
         recipe1:
           mode: red
