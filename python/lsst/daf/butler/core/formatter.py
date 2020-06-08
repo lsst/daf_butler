@@ -423,17 +423,17 @@ class FormatterFactory:
 
         .. code-block:: yaml
 
-        formatters:
-          default:
-            lsst.daf.butler.formatters.example.ExampleFormatter:
-              max: 10
-              min: 2
-              comment: Default comment
-          calexp: lsst.daf.butler.formatters.example.ExampleFormatter
-          coadd:
-            formatter: lsst.daf.butler.formatters.example.ExampleFormatter
-            parameters:
-              max: 5
+           formatters:
+             default:
+               lsst.daf.butler.formatters.example.ExampleFormatter:
+                 max: 10
+                 min: 2
+                 comment: Default comment
+             calexp: lsst.daf.butler.formatters.example.ExampleFormatter
+             coadd:
+               formatter: lsst.daf.butler.formatters.example.ExampleFormatter
+               parameters:
+                 max: 5
 
         Any time an ``ExampleFormatter`` is constructed it will use those
         parameters. If an explicit entry later in the configuration specifies
@@ -449,15 +449,15 @@ class FormatterFactory:
         The ``write_recipes`` section is indexed by Formatter class name
         and each key is the label to associate with the parameters.
 
-        .. code-block::
+        .. code-block:: yaml
 
-        formatters:
-          write_recipes:
-            lsst.obs.base.fitsExposureFormatter.FixExposureFormatter:
-              lossless:
-                ...
-              noCompression:
-                ...
+           formatters:
+             write_recipes:
+               lsst.obs.base.fitsExposureFormatter.FixExposureFormatter:
+                 lossless:
+                   ...
+                 noCompression:
+                   ...
 
         By convention a formatter that uses write recipes will support a
         ``recipe`` write parameter that will refer to a recipe name in
