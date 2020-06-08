@@ -519,9 +519,6 @@ class FormatterFactory:
             if formatter in writeRecipes:
                 kwargs["writeRecipes"] = writeRecipes[formatter]
 
-            if "FitsExposureFormatter" in formatter and "writeRecipes" not in kwargs:
-                raise RuntimeError(f"Should not be possible: {key}")
-
             self.registerFormatter(key, formatter, **kwargs)
 
     def getLookupKeys(self) -> Set[LookupKey]:
