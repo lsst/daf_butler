@@ -40,7 +40,7 @@ def command_test():
 
 
 @contextmanager
-def command_test_env(runner):
+def command_test_env(runner, commandName):
     """A context manager that creates (and then cleans up) an environment that
     provides a plugin command named 'command-test'.
 
@@ -51,7 +51,7 @@ def command_test_env(runner):
     """
     with runner.isolated_filesystem():
         with open("resources.yaml", "w") as f:
-            f.write(yaml.dump({"cmd": {"import": "test_cliPluginLoader", "commands": ["command-test"]}}))
+            f.write(yaml.dump({"cmd": {"import": "test_cliPluginLoader", "commands": [commandName]}}))
         with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": os.path.realpath(f.name)}):
             yield
 
@@ -74,12 +74,25 @@ def duplicate_command_test_env(runner):
             yield
 
 
+class FailedLoadTest(unittest.TestCase):
+
+    def test_unimportablePlugin(self):
+        runner = click.testing.CliRunner()
+        with command_test_env(runner, "non-existant-command-function"):
+            with self.assertLogs() as cm:
+                result = runner.invoke(butler.cli, "--help")
+            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            expectedErrMsg = "Could not import plugin from " \
+                             "test_cliPluginLoader.non_existant_command_function, skipping."
+            self.assertIn(expectedErrMsg, cm.output[0])
+
+
 class PluginLoaderTest(unittest.TestCase):
 
     def test_loadAndExecutePluginCommand(self):
         """Test that a plugin command can be loaded and executed."""
         runner = click.testing.CliRunner()
-        with command_test_env(runner):
+        with command_test_env(runner, "command-test"):
             result = runner.invoke(butler.cli, "command-test")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertEqual(result.stdout, "test command\n")
@@ -95,7 +108,7 @@ class PluginLoaderTest(unittest.TestCase):
     def test_loadTopHelp(self):
         """Test that an expected command is produced by 'butler --help'"""
         runner = click.testing.CliRunner()
-        with command_test_env(runner):
+        with command_test_env(runner, "command-test"):
             result = runner.invoke(butler.cli, "--help")
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             self.assertIn("command-test", result.stdout)

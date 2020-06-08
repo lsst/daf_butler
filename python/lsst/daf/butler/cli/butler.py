@@ -109,7 +109,7 @@ class LoaderCLI(click.MultiCommand):
         """
         try:
             return doImport(pluginName)
-        except (TypeError, ModuleNotFoundError, ImportError) as err:
+        except Exception as err:
             log.warning("Could not import plugin from %s, skipping.", pluginName)
             log.debug("Plugin import exception: %s", err)
             return None
@@ -250,7 +250,7 @@ class LoaderCLI(click.MultiCommand):
         self._raiseIfDuplicateCommands(commands)
         if commands[name][0] == localCmdPkg:
             return getattr(butlerCommands, cmdNameToFuncName(name))
-        return doImport(commands[name][0] + "." + cmdNameToFuncName(name))
+        return self._importPlugin(commands[name][0] + "." + cmdNameToFuncName(name))
 
 
 @click.command(cls=LoaderCLI, context_settings=dict(help_option_names=["-h", "--help"]))
