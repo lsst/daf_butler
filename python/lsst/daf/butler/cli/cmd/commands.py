@@ -64,7 +64,7 @@ def create(*args, **kwargs):
     cli_handle_exception(createRepo, *args, **kwargs)
 
 
-@click.command()
+@click.command(short_help="Dump butler config to stdout.")
 @repo_argument(required=True)
 @click.option("--subset", "-s", type=str,
               help="Subset of a configuration to report. This can be any key in the hierarchy such as "
@@ -80,7 +80,7 @@ def config_dump(*args, **kwargs):
     cli_handle_exception(configDump, *args, **kwargs)
 
 
-@click.command()
+@click.command(short_help="Validate the configuration files.")
 @repo_argument(required=True)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.")
@@ -92,7 +92,7 @@ def config_validate(*args, **kwargs):
     cli_handle_exception(configValidate, *args, **kwargs)
 
 
-@click.command()
+@click.command(short_help="Search for collections.")
 @repo_argument(required=True)
 @collection_type_option()
 @click.option("--flatten-chains/--no-flatten-chains",

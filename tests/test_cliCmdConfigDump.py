@@ -25,17 +25,26 @@
 
 import click
 import click.testing
-import os
 import unittest
 import yaml
 
 from lsst.daf.butler.cli import butler
+from lsst.daf.butler.cli.cmd import config_dump
+from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
 
 
-TESTDIR = os.path.abspath(os.path.dirname(__file__))
+class ConfigDumpTest(MockeredTestBase):
+
+    defaultExpected = dict()
+
+    command = config_dump
+
+    def test_help(self):
+        self.help_test()
 
 
-class Suite(unittest.TestCase):
+class ConfigDumpUseTest(unittest.TestCase):
+    """Test executing the command."""
 
     def test_stdout(self):
         """Test dumping the config to stdout."""

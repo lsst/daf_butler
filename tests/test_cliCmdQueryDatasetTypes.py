@@ -28,6 +28,7 @@ import yaml
 
 from lsst.daf.butler import Butler, DatasetType, StorageClass
 from lsst.daf.butler.cli.butler import cli
+from lsst.daf.butler.cli.cmd import query_dataset_types
 from lsst.daf.butler.cli.utils import clickResultMsg
 from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
 
@@ -38,6 +39,8 @@ class QueryDatasetTypesCmdTest(MockeredTestBase):
                            verbose=False,
                            glob=(),
                            components=None)
+
+    command = query_dataset_types
 
     def test_minimal(self):
         """Test only required parameters.
@@ -55,6 +58,9 @@ class QueryDatasetTypesCmdTest(MockeredTestBase):
                       self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=True))
         self.run_test(["query-dataset-types", "here", "--verbose", "foo*", "--no-components"],
                       self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=False))
+
+    def test_help(self):
+        self.help_test()
 
 
 class QueryDatasetTypesScriptTest(unittest.TestCase):

@@ -40,6 +40,13 @@ class MockeredTestBase(unittest.TestCase, abc.ABC):
     def defaultExpected(cls):
         pass
 
+    @classmethod
+    @property
+    @abc.abstractmethod
+    def command(cls):
+        """Get the click.Command being tested."""
+        pass
+
     def setUp(self):
         self.runner = click.testing.CliRunner(env=mockEnvVar)
 
@@ -102,3 +109,9 @@ class MockeredTestBase(unittest.TestCase, abc.ABC):
         result = self.run_command(inputs)
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(expectedMsg, result.stdout)
+
+    def help_test(self):
+        self.assertFalse(self.command.get_short_help_str().endswith("..."),
+                         msg="The command help message is being truncated to "
+                         f"\"{self.command.get_short_help_str()}\". It should be shortened, or define "
+                         "@command(short_help=\"something short and helpful\")")

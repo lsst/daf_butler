@@ -22,6 +22,7 @@
 import unittest
 
 from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.cli.cmd import create
 
 
 class CreateTest(MockeredTestBase):
@@ -31,6 +32,8 @@ class CreateTest(MockeredTestBase):
                            standalone=False,
                            override=False,
                            outfile=None)
+
+    command = create
 
     def test_minimal(self):
         """Test only required parameters.
@@ -54,6 +57,9 @@ class CreateTest(MockeredTestBase):
                                         standalone=True,
                                         override=True,
                                         outfile="bar"))
+
+    def test_help(self):
+        self.help_test()
 
 
 if __name__ == "__main__":

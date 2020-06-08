@@ -26,6 +26,7 @@ import unittest
 import unittest.mock
 
 from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.cli.cmd import butler_import
 from lsst.daf.butler.cli.utils import Mocker
 
 
@@ -36,6 +37,8 @@ class ImportTestCase(MockeredTestBase):
                            output_run=None,
                            directory=None,
                            export_file=None)
+
+    command = butler_import
 
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.
@@ -62,6 +65,9 @@ class ImportTestCase(MockeredTestBase):
         self.run_missing(["import", "foo", "--output-run", "out"],
                          'Error: Missing argument "DIRECTORY".')
 
+    def test_help(self):
+        self.help_test()
+
 
 class ExportFileCase(MockeredTestBase):
 
@@ -72,6 +78,8 @@ class ExportFileCase(MockeredTestBase):
                            output_run=None,
                            directory=None,
                            export_file=None)
+
+    command = butler_import
 
     def setUp(self):
         # add a side effect to Mocker so that it will call our method when it

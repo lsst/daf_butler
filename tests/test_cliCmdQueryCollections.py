@@ -28,6 +28,7 @@ import yaml
 
 from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli
+from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
 
 
@@ -37,6 +38,8 @@ class QueryCollectionsCmdTest(MockeredTestBase):
                            collection_type=None,
                            flatten_chains=False,
                            include_chains=None)
+
+    command = query_collections
 
     def test_minimal(self):
         """Test only the required parameters, and omit the optional parameters.
@@ -52,6 +55,9 @@ class QueryCollectionsCmdTest(MockeredTestBase):
                       self.makeExpected(repo="here",
                                         flatten_chains=True,
                                         include_chains=True))
+
+    def test_help(self):
+        self.help_test()
 
 
 class QueryCollectionsScriptTest(unittest.TestCase):
