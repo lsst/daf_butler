@@ -30,8 +30,8 @@ SkyMap: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 Background: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 Config: lsst.daf.butler.formatters.pexConfigFormatter.PexConfigFormatter
 Packages: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-PropertyList: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
-PropertySet: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
+PropertyList: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
+PropertySet: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
 NumpyArray: lsst.daf.butler.formatters.pickleFormatter.PickleFormatter
 Plot: lsst.daf.butler.formatters.matplotlibFormatter.MatplotlibFormatter
 MetricValue: lsst.daf.butler.formatters.yamlFormatter.YamlFormatter
