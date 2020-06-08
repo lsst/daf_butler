@@ -202,6 +202,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertEqual(f.writeParameters["recipe"], "recipe1")
 
         with self.assertRaises(ValueError):
+            # "new" is not allowed as a write parameter
             self.factory.getFormatter(refParam, self.fileDescriptor, writeParameters={"new": 1})
 
         with self.assertRaises(RuntimeError):
