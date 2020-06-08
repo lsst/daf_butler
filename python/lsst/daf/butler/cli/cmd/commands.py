@@ -51,7 +51,7 @@ def butler_import(*args, **kwargs):
 
 
 @click.command()
-@repo_argument(help=repo_argument.will_create_repo)
+@repo_argument(required=True, help=repo_argument.will_create_repo)
 @click.option("--seed-config", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
               "insulating the repo from changes in package defaults.")
