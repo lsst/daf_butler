@@ -227,7 +227,7 @@ class LoaderCLI(click.MultiCommand):
         commands = self._getCommands()
         self._raiseIfDuplicateCommands(commands)
         log.debug(commands.keys())
-        return commands.keys()
+        return sorted(commands)
 
     def get_command(self, context, name):
         """Used by Click to get a single command for execution.
