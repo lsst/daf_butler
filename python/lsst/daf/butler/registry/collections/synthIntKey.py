@@ -48,14 +48,14 @@ if TYPE_CHECKING:
 _TABLES_SPEC = CollectionTablesTuple(
     collection=ddl.TableSpec(
         fields=[
-            ddl.FieldSpec("collection_id", dtype=sqlalchemy.Integer, primaryKey=True, autoincrement=True),
+            ddl.FieldSpec("collection_id", dtype=sqlalchemy.BigInteger, primaryKey=True, autoincrement=True),
             ddl.FieldSpec("name", dtype=sqlalchemy.String, length=64, nullable=False),
             ddl.FieldSpec("type", dtype=sqlalchemy.SmallInteger, nullable=False),
         ],
         unique=[("name",)],
     ),
-    run=makeRunTableSpec("collection_id", sqlalchemy.Integer),
-    collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.Integer),
+    run=makeRunTableSpec("collection_id", sqlalchemy.BigInteger),
+    collection_chain=makeCollectionChainTableSpec("collection_id", sqlalchemy.BigInteger),
 )
 
 
