@@ -1,0 +1,44 @@
+lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter:
+  # No compression
+  noCompression: &noCompression
+    image: &noCompressionOptions
+      compression:
+        algorithm: NONE
+      scaling:
+        algorithm: NONE
+    mask:
+      <<: *noCompressionOptions
+    variance:
+      <<: *noCompressionOptions
+
+  # Lossless compression
+  lossless: &lossless
+    image: &losslessOptions
+      compression:
+        algorithm: GZIP_SHUFFLE
+      scaling:
+        algorithm: NONE
+    mask:
+      <<: *losslessOptions
+    variance:
+      <<: *losslessOptions
+
+  # Basic lossy (quantizing) compression
+  lossyBasic: &lossyBasic
+    image: &lossyBasicOptions
+      compression:
+        algorithm: RICE
+      scaling:
+        algorithm: STDEV_POSITIVE
+        maskPlanes: ["NO_DATA"]
+        bitpix: 32
+        quantizeLevel: 10.0
+        quantizePad: 10.0
+    mask:
+      <<: *losslessOptions
+    variance:
+      <<: *lossyBasicOptions
+
+  # Set the default
+  default:
+    <<: *lossless

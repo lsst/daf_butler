@@ -21,23 +21,44 @@
 
 from __future__ import annotations
 
-__all__ = ("FormatterTest", )
+__all__ = ("FormatterTest", "DoNothingFormatter")
 
 from typing import (
     Any,
+    Mapping,
     Optional,
 )
 
 from ..core import Formatter
 
 
-class FormatterTest(Formatter):
-    """A test formatter that does not need to format anything."""
-
-    supportedWriteParameters = frozenset({"min", "max", "median", "comment", "extra"})
+class DoNothingFormatter(Formatter):
+    """A test formatter that does not need to format anything and has
+    parameters."""
 
     def read(self, component: Optional[str] = None) -> Any:
         raise NotImplementedError("Type does not support reading")
 
     def write(self, inMemoryDataset: Any) -> str:
         raise NotImplementedError("Type does not support writing")
+
+
+class FormatterTest(Formatter):
+    """A test formatter that does not need to format anything."""
+
+    supportedWriteParameters = frozenset({"min", "max", "median", "comment", "extra", "recipe"})
+
+    def read(self, component: Optional[str] = None) -> Any:
+        raise NotImplementedError("Type does not support reading")
+
+    def write(self, inMemoryDataset: Any) -> str:
+        raise NotImplementedError("Type does not support writing")
+
+    @staticmethod
+    def validateWriteRecipes(recipes: Optional[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
+        if not recipes:
+            return recipes
+        for recipeName in recipes:
+            if "mode" not in recipes[recipeName]:
+                raise RuntimeError("'mode' is a required write recipe parameter")
+        return recipes

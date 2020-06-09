@@ -29,6 +29,7 @@ import unittest
 from lsst.daf.butler.tests import DatasetTestHelper
 from lsst.daf.butler import (Formatter, FormatterFactory, StorageClass, DatasetType, Config,
                              FileDescriptor, Location, DimensionUniverse, DimensionGraph)
+from lsst.daf.butler.tests.testFormatters import DoNothingFormatter
 
 TESTDIR = os.path.abspath(os.path.dirname(__file__))
 
@@ -53,6 +54,28 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
             self.assertTrue(issubclass(formatter, Formatter), f"Is {formatter} a Formatter")
         else:
             self.assertIsInstance(formatter, Formatter)
+
+    def testFormatter(self):
+        """Check basic parameter exceptions"""
+        f = DoNothingFormatter(self.fileDescriptor)
+        self.assertEqual(f.writeRecipes, {})
+        self.assertEqual(f.writeParameters, {})
+        self.assertIn("DoNothingFormatter", repr(f))
+
+        with self.assertRaises(TypeError):
+            DoNothingFormatter()
+
+        with self.assertRaises(ValueError):
+            DoNothingFormatter(self.fileDescriptor, writeParameters={"param1": 0})
+
+        with self.assertRaises(RuntimeError):
+            DoNothingFormatter(self.fileDescriptor, writeRecipes={"label": "value"})
+
+        with self.assertRaises(NotImplementedError):
+            f.makeUpdatedLocation(Location("a", "b"))
+
+        with self.assertRaises(NotImplementedError):
+            f.write("str")
 
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
@@ -163,7 +186,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
                                        conform=False)
         lookup, refParam_fmt, kwargs = self.factory.getFormatterClassWithMatch(refParam)
         self.assertIn("writeParameters", kwargs)
-        expected = {"max": 5, "min": 2, "comment": "Additional commentary"}
+        expected = {"max": 5, "min": 2, "comment": "Additional commentary", "recipe": "recipe1"}
         self.assertEqual(kwargs["writeParameters"], expected)
         self.assertIn("FormatterTest", refParam_fmt.name())
 
@@ -173,10 +196,18 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         f = self.factory.getFormatter(refParam, self.fileDescriptor, writeParameters={"min": 22,
                                                                                       "extra": 50})
         self.assertEqual(f.writeParameters, {"max": 5, "min": 22, "comment": "Additional commentary",
-                                             "extra": 50})
+                                             "extra": 50, "recipe": "recipe1"})
+
+        self.assertIn("recipe1", f.writeRecipes)
+        self.assertEqual(f.writeParameters["recipe"], "recipe1")
 
         with self.assertRaises(ValueError):
+            # "new" is not allowed as a write parameter
             self.factory.getFormatter(refParam, self.fileDescriptor, writeParameters={"new": 1})
+
+        with self.assertRaises(RuntimeError):
+            # "mode" is a required recipe parameter
+            self.factory.getFormatter(refParam, self.fileDescriptor, writeRecipes={"recipe3": {"notmode": 1}})
 
 
 if __name__ == "__main__":

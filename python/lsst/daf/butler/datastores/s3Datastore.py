@@ -175,7 +175,11 @@ class S3Datastore(FileLikeDatastore):
             result = formatter.fromBytes(serializedDataset,
                                          component=getInfo.component if isComponent else None)
         except NotImplementedError:
-            with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
+            # formatter might not always have an extension so mypy complains
+            # We can either ignore the complaint or use a temporary location
+            tmpLoc = Location(".", "temp")
+            tmpLoc = formatter.makeUpdatedLocation(tmpLoc)
+            with tempfile.NamedTemporaryFile(suffix=tmpLoc.getExtension()) as tmpFile:
                 tmpFile.write(serializedDataset)
                 # Flush the write. Do not close the file because that
                 # will delete it.
@@ -196,7 +200,6 @@ class S3Datastore(FileLikeDatastore):
         # `Keys` instead only look like directories, but are not. We check if
         # an *exact* full key already exists before writing instead. The insert
         # key operation is equivalent to creating the dir and the file.
-        location.updateExtension(formatter.extension)
         if s3CheckFileExists(location, client=self.client,)[0]:
             raise FileExistsError(f"Cannot write file for ref {ref} as "
                                   f"output file {location.uri} exists.")
@@ -209,7 +212,7 @@ class S3Datastore(FileLikeDatastore):
                                    Body=serializedDataset)
             log.debug("Wrote file directly to %s", location.uri)
         except NotImplementedError:
-            with tempfile.NamedTemporaryFile(suffix=formatter.extension) as tmpFile:
+            with tempfile.NamedTemporaryFile(suffix=location.getExtension()) as tmpFile:
                 formatter._fileDescriptor.location = Location(*os.path.split(tmpFile.name))
                 formatter.write(inMemoryDataset)
                 with open(tmpFile.name, 'rb') as f:

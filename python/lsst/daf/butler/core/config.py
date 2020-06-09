@@ -987,6 +987,27 @@ class Config(collections.abc.MutableMapping):
         else:
             config.update(localConfig)
 
+    def toDict(self):
+        """Convert a `Config` to a standalone hierarchical `dict`.
+
+        Returns
+        -------
+        d : `dict`
+            The standalone hierarchical `dict` with any `Config` classes
+            in the hierarchy converted to `dict`.
+
+        Notes
+        -----
+        This can be useful when passing a Config to some code that
+        expects native Python types.
+        """
+        output = copy.deepcopy(self._data)
+        for k, v in output.items():
+            if isinstance(v, Config):
+                v = v.toDict()
+            output[k] = v
+        return output
+
 
 class ConfigSubset(Config):
     """Config representing a subset of a more general configuration.

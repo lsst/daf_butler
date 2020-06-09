@@ -77,11 +77,9 @@ class Formatter(metaclass=ABCMeta):
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
-    extension: Optional[str] = None
-    """File extension default provided by this formatter."""
-
     def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None,
-                 writeParameters: Optional[Dict[str, Any]] = None):
+                 writeParameters: Optional[Dict[str, Any]] = None,
+                 writeRecipes: Optional[Dict[str, Any]] = None):
         if not isinstance(fileDescriptor, FileDescriptor):
             raise TypeError("File descriptor must be a FileDescriptor")
         self._fileDescriptor = fileDescriptor
@@ -101,6 +99,7 @@ class Formatter(metaclass=ABCMeta):
                     raise ValueError(f"This formatter does not accept parameter{s} {unknownStr}")
 
         self._writeParameters = writeParameters
+        self._writeRecipes = self.validateWriteRecipes(writeRecipes)
 
     def __str__(self) -> str:
         return f"{self.name()}@{self.fileDescriptor.location.path}"
@@ -120,10 +119,44 @@ class Formatter(metaclass=ABCMeta):
         return self._dataId
 
     @property
-    def writeParameters(self) -> Mapping:
+    def writeParameters(self) -> Mapping[str, Any]:
+        """Parameters to use when writing out datasets."""
         if self._writeParameters is not None:
             return self._writeParameters
         return {}
+
+    @property
+    def writeRecipes(self) -> Mapping[str, Any]:
+        """Detailed write Recipes indexed by recipe name."""
+        if self._writeRecipes is not None:
+            return self._writeRecipes
+        return {}
+
+    @classmethod
+    def validateWriteRecipes(cls, recipes: Optional[Mapping[str, Any]]) -> Optional[Mapping[str, Any]]:
+        """Validate supplied recipes for this formatter.
+
+        The recipes are supplemented with default values where appropriate.
+
+        Parameters
+        ----------
+        recipes : `dict`
+            Recipes to validate.
+
+        Returns
+        -------
+        validated : `dict`
+            Validated recipes.
+
+        Raises
+        ------
+        RuntimeError
+            Raised if validation fails.  The default implementation raises
+            if any recipes are given.
+        """
+        if recipes:
+            raise RuntimeError(f"This formatter does not understand these writeRecipes: {recipes}")
+        return recipes
 
     @classmethod
     def name(cls) -> str:
@@ -219,17 +252,28 @@ class Formatter(metaclass=ABCMeta):
         Returns
         -------
         updated : `Location`
-            The updated location with a new file extension applied.
+            A new `Location` with a new file extension applied.
 
         Raises
         ------
         NotImplementedError
             Raised if there is no ``extension`` attribute associated with
             this formatter.
+
+        Notes
+        -----
+        This method is available to all Formatters but might not be
+        implemented by all formatters. It requires that a formatter set
+        an ``extension`` attribute containing the file extension used when
+        writing files.  If ``extension`` is `None` the supplied file will
+        not be updated. Not all formatters write files so this is not
+        defined in the base class.
         """
         location = copy.deepcopy(location)
         try:
-            location.updateExtension(cls.extension)
+            # We are deliberately allowing extension to be undefined by
+            # default in the base class and mypy complains.
+            location.updateExtension(cls.extension)  # type:ignore
         except AttributeError:
             raise NotImplementedError("No file extension registered with this formatter") from None
         return location
@@ -316,6 +360,9 @@ class FormatterFactory:
     defaultKey = LookupKey("default")
     """Configuration key associated with default write parameter settings."""
 
+    writeRecipesKey = LookupKey("write_recipes")
+    """Configuration key associated with write recipes."""
+
     def __init__(self) -> None:
         self._mappingFactory = MappingFactory(Formatter)
 
@@ -376,17 +423,17 @@ class FormatterFactory:
 
         .. code-block:: yaml
 
-        formatters:
-          default:
-            lsst.daf.butler.formatters.example.ExampleFormatter:
-              max: 10
-              min: 2
-              comment: Default comment
-          calexp: lsst.daf.butler.formatters.example.ExampleFormatter
-          coadd:
-            formatter: lsst.daf.butler.formatters.example.ExampleFormatter
-            parameters:
-              max: 5
+           formatters:
+             default:
+               lsst.daf.butler.formatters.example.ExampleFormatter:
+                 max: 10
+                 min: 2
+                 comment: Default comment
+             calexp: lsst.daf.butler.formatters.example.ExampleFormatter
+             coadd:
+               formatter: lsst.daf.butler.formatters.example.ExampleFormatter
+               parameters:
+                 max: 5
 
         Any time an ``ExampleFormatter`` is constructed it will use those
         parameters. If an explicit entry later in the configuration specifies
@@ -394,6 +441,31 @@ class FormatterFactory:
         entry taking priority.  In the example above ``calexp`` will use
         the default parameters but ``coadd`` will override the value for
         ``max``.
+
+        Formatter configuration can also include a special section describing
+        collections of write parameters that can be accessed through a
+        simple label.  This allows common collections of options to be
+        specified in one place in the configuration and reused later.
+        The ``write_recipes`` section is indexed by Formatter class name
+        and each key is the label to associate with the parameters.
+
+        .. code-block:: yaml
+
+           formatters:
+             write_recipes:
+               lsst.obs.base.fitsExposureFormatter.FixExposureFormatter:
+                 lossless:
+                   ...
+                 noCompression:
+                   ...
+
+        By convention a formatter that uses write recipes will support a
+        ``recipe`` write parameter that will refer to a recipe name in
+        the ``write_recipes`` component.  The `Formatter` will be constructed
+        in the `FormatterFactory` with all the relevant recipes and
+        will not attempt to filter by looking at ``writeParameters`` in
+        advance.  See the specific formatter documentation for details on
+        acceptable recipe options.
         """
         allowed_keys = {"formatter", "parameters"}
 
@@ -405,9 +477,18 @@ class FormatterFactory:
             raise RuntimeError("Default formatter parameters in config can not be a single string"
                                f" (got: {type(defaultParameters)})")
 
+        # Extract any global write recipes -- these are indexed by
+        # Formatter class name.
+        writeRecipes = contents.get(self.writeRecipesKey, {})
+        if isinstance(writeRecipes, str):
+            raise RuntimeError(f"The formatters.{self.writeRecipesKey} section must refer to a dict"
+                               f" not '{writeRecipes}'")
+
         for key, f in contents.items():
             # default is handled in a special way
             if key == self.defaultKey:
+                continue
+            if key == self.writeRecipesKey:
                 continue
 
             # Can be a str or a dict.
@@ -428,13 +509,15 @@ class FormatterFactory:
                 raise ValueError(f"Formatter for key {key} has unexpected value: '{f}'")
 
             # Apply any default parameters for this formatter
-            writeParameters = defaultParameters.get(formatter, {})
+            writeParameters = copy.deepcopy(defaultParameters.get(formatter, {}))
             writeParameters.update(specificWriteParameters)
 
             kwargs: Dict[str, Any] = {}
             if writeParameters:
-                # Need to coerce Config to dict
-                kwargs["writeParameters"] = dict(writeParameters)
+                kwargs["writeParameters"] = writeParameters
+
+            if formatter in writeRecipes:
+                kwargs["writeRecipes"] = writeRecipes[formatter]
 
             self.registerFormatter(key, formatter, **kwargs)
 

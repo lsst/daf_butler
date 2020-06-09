@@ -1,5 +1,11 @@
 # This file gives the mapping between DatasetType and the
 # `lsst.daf.butler.Formatter` that handles it.
+write_recipes: !include writeRecipes.yaml
+default:
+  lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter:
+    # default is the default recipe regardless but this demonstrates
+    # how to specify a default write parameter
+    recipe: default
 TablePersistable: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 Wcs: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter
 Psf: lsst.obs.base.fitsGenericFormatter.FitsGenericFormatter

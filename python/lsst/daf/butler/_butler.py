@@ -1095,7 +1095,7 @@ class Butler:
             self.datastore.emptyTrash()
 
     @transactional
-    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = None, run: Optional[str] = None,
+    def ingest(self, *datasets: FileDataset, transfer: Optional[str] = "auto", run: Optional[str] = None,
                tags: Optional[Iterable[str]] = None,):
         """Store and register one or more datasets that already exist on disk.
 

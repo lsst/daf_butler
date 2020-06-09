@@ -541,7 +541,10 @@ class Location:
         if ext is None:
             return
 
-        path, _ = os.path.splitext(self.pathInStore)
+        if not self._datastoreRootUri.scheme:
+            path, _ = os.path.splitext(self.pathInStore)
+        else:
+            path, _ = posixpath.splitext(self.pathInStore)
 
         # Ensure that we have a leading "." on file extension (and we do not
         # try to modify the empty string)
@@ -549,6 +552,21 @@ class Location:
             ext = "." + ext
 
         self._path = path + ext
+
+    def getExtension(self) -> str:
+        """Return the file extension associated with this location.
+
+        Returns
+        -------
+        ext : `str`
+            The file extension (including the ``.``). Can be empty string
+            if there is no file extension.
+        """
+        if not self._datastoreRootUri.scheme:
+            _, ext = os.path.splitext(self.pathInStore)
+        else:
+            _, ext = posixpath.splitext(self.pathInStore)
+        return ext
 
 
 class LocationFactory:
