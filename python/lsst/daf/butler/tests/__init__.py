@@ -23,3 +23,4 @@ from ._datasetsHelper import *
 from ._dummyRegistry import *
 from ._examplePythonTypes import *
 from ._testRepo import *
+from .cliOptionTestBase import CliOptionTestBase
