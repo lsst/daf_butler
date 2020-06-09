@@ -279,7 +279,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_argument(self):
         """test argument"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT)
         def cli(glob):
             if glob is None:
                 glob = "None"
@@ -291,7 +291,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_argument_required(self):
         """test with argument required"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT, required=True)
         def cli(glob):
             print(glob)
 
@@ -313,7 +313,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_option_required(self):
         """test with argument required"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT, required=True)
         def cli(glob):
             print(glob)
 
@@ -323,7 +323,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_argument_multiple(self):
         """test with multiple argument values"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT, multiple=True)
         def cli(glob):
             print(glob)
 

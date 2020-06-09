@@ -24,7 +24,7 @@ import yaml
 
 from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_parameter,
                    repo_argument, run_option, transfer_option, verbose_option)
-from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
+from ..utils import split_commas, cli_handle_exception, ParameterType, typeStrAcceptsMultiple
 from ...script import (butlerImport, createRepo, configDump, configValidate, queryCollections,
                        queryDatasetTypes)
 
@@ -111,7 +111,7 @@ def query_collections(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+@glob_parameter(parameterType=ParameterType.ARGUMENT, multiple=True)
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @click.option("--components/--no-components",
               default=None,

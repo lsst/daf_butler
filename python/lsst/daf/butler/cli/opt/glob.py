@@ -28,9 +28,6 @@ class glob_parameter:  # noqa: N801
     """Decorator to add an glob option or argument to a click command.
     """
 
-    ARGUMENT = ParameterType.ARGUMENT
-    OPTION = ParameterType.OPTION
-
     defaultHelp = "GLOB is a string to apply to the search."
     defaultHelpMultiple = "GLOB is one or more strings to apply to the search."
 
