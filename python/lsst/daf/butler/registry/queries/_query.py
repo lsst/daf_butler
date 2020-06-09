@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 import itertools
-from typing import Optional, Tuple, Callable
+from typing import Iterable, Optional, Tuple, Callable
 
 from sqlalchemy.sql import FromClause
 from sqlalchemy.engine import RowProxy
@@ -34,6 +34,7 @@ from ...core import (
     DataCoordinate,
     DatasetRef,
     DatasetType,
+    Dimension,
     DimensionGraph,
 )
 from ..interfaces import CollectionManager
@@ -113,6 +114,23 @@ class Query:
 
         return closure
 
+    def extractDimensionsTuple(self, row: RowProxy, dimensions: Iterable[Dimension]) -> tuple:
+        """Extract a tuple of data ID values from a result row.
+
+        Parameters
+        ----------
+        row : `sqlalchemy.engine.RowProxy`
+            A result row from a SQLAlchemy SELECT query.
+        dimensions : `Iterable` [ `Dimension` ]
+            The dimensions to include in the returned tuple, in order.
+
+        Returns
+        -------
+        values : `tuple`
+            A tuple of dimension primary key values.
+        """
+        return tuple(row[self._columns.getKeyColumn(dimension)] for dimension in dimensions)
+
     def extractDataId(self, row: RowProxy, *, graph: Optional[DimensionGraph] = None) -> DataCoordinate:
         """Extract a data ID from a result row.
 
@@ -132,8 +150,7 @@ class Query:
         """
         if graph is None:
             graph = self.summary.requested
-        values = tuple(row[self._columns.getKeyColumn(dimension)] for dimension in graph.required)
-        return DataCoordinate(graph, values)
+        return DataCoordinate(graph, self.extractDimensionsTuple(row, graph.required))
 
     def extractDatasetRef(self, row: RowProxy, datasetType: DatasetType,
                           dataId: Optional[DataCoordinate] = None) -> Tuple[DatasetRef, Optional[int]]:
