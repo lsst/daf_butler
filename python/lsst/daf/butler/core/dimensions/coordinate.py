@@ -134,7 +134,7 @@ class DataCoordinate(IndexedTupleDict[Dimension, Any]):
                 if not kwargs:
                     # Already standardized to exactly what we want.
                     return mapping
-            elif mapping.graph.issuperset(graph):
+            elif mapping.graph.issuperset(graph) and kwargs.keys().isdisjoint(graph.names):
                 # Already standardized; just return the relevant subset.
                 return mapping.subset(graph)
             assert universe is None or universe == mapping.universe
