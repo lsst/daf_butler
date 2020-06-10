@@ -291,6 +291,21 @@ class ButlerURI:
         self.dirLike = False
         self._uri = self._uri._replace(path=newpath)
 
+    def getExtension(self) -> str:
+        """Return the file extension associated with this URI path.
+
+        Returns
+        -------
+        ext : `str`
+            The file extension (including the ``.``). Can be empty string
+            if there is no file extension.
+        """
+        if not self.scheme:
+            _, ext = os.path.splitext(self.path)
+        else:
+            _, ext = posixpath.splitext(self.path)
+        return ext
+
     def __str__(self) -> str:
         return self.geturl()
 
