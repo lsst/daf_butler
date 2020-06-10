@@ -738,6 +738,42 @@ class FileLikeDatastore(GenericBaseDatastore):
             refsAndInfos.extend([(ref, info) for ref in dataset.refs])
         self._register_datasets(refsAndInfos)
 
+    def _calculate_ingested_datastore_name(self, srcUri: ButlerURI, ref: DatasetRef,
+                                           formatter: Union[Formatter, Type[Formatter]]) -> Location:
+        """Given a source URI and a DatasetRef, determine the name the
+        dataset will have inside datastore.
+
+        Parameters
+        ----------
+        srcUri : `ButlerURI`
+            URI to the source dataset file.
+        ref : `DatasetRef`
+            Ref associated with the newly-ingested dataset artifact.  This
+            is used to determine the name within the datastore.
+        formatter : `Formatter` or Formatter class.
+            Formatter to use for validation. Can be a class or an instance.
+
+        Returns
+        -------
+        location : `Location`
+            Target location for the newly-ingested dataset.
+        """
+        # Ingesting a file from outside the datastore.
+        # This involves a new name.
+        template = self.templates.getTemplate(ref)
+        location = self.locationFactory.fromPath(template.format(ref))
+
+        # Get the extension
+        ext = srcUri.getExtension()
+
+        # Update the destination to include that extension
+        location.updateExtension(ext)
+
+        # Ask the formatter to validate this extension
+        formatter.validateExtension(location)
+
+        return location
+
     @abstractmethod
     def _write_in_memory_to_artifact(self, inMemoryDataset: Any, ref: DatasetRef) -> StoredFileInfo:
         """Write out in memory dataset to datastore.

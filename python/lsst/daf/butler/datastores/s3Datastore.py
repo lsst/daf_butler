@@ -278,12 +278,13 @@ class S3Datastore(FileLikeDatastore):
             tgtLocation = self.locationFactory.fromPath(pathInStore)
         else:
             assert transfer == "move" or transfer == "copy", "Should be guaranteed by _standardizeIngestPath"
+
+            # Work out the name we want this ingested file to have
+            # inside the datastore
+            tgtLocation = self._calculate_ingested_datastore_name(srcUri, ref, formatter)
+
             if srcUri.scheme == "file":
                 # source is on local disk.
-                template = self.templates.getTemplate(ref)
-                location = self.locationFactory.fromPath(template.format(ref))
-                tgtPathInStore = formatter.predictPathFromLocation(location)
-                tgtLocation = self.locationFactory.fromPath(tgtPathInStore)
                 with open(srcUri.ospath, 'rb') as f:
                     self.client.put_object(Bucket=tgtLocation.netloc,
                                            Key=tgtLocation.relativeToPathRoot, Body=f)
@@ -293,16 +294,14 @@ class S3Datastore(FileLikeDatastore):
                 # source is another S3 Bucket
                 relpath = srcUri.relativeToPathRoot
                 copySrc = {"Bucket": srcUri.netloc, "Key": relpath}
-                self.client.copy(copySrc, self.locationFactory.netloc, relpath)
+                self.client.copy(copySrc, self.locationFactory.netloc,
+                                 tgtLocation.relativeToPathRoot)
                 if transfer == "move":
                     # https://github.com/boto/boto3/issues/507 - there is no
                     # way of knowing if the file was actually deleted except
                     # for checking all the keys again, reponse is  HTTP 204 OK
                     # response all the time
                     self.client.delete(Bucket=srcUri.netloc, Key=relpath)
-                p = pathlib.PurePosixPath(srcUri.relativeToPathRoot)
-                relativeToDatastoreRoot = str(p.relative_to(rootUri.relativeToPathRoot))
-                tgtLocation = self.locationFactory.fromPath(relativeToDatastoreRoot)
 
         # the file should exist on the bucket by now
         exists, size = s3CheckFileExists(path=tgtLocation.relativeToPathRoot,

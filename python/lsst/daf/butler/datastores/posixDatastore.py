@@ -263,10 +263,12 @@ class PosixDatastore(FileLikeDatastore):
 
         fullPath = os.path.normpath(os.path.join(self.root, path))
         if transfer is not None:
-            template = self.templates.getTemplate(ref)
-            location = self.locationFactory.fromPath(template.format(ref))
-            newPath = formatter.predictPathFromLocation(location)
-            newFullPath = os.path.join(self.root, newPath)
+            # Work out the name we want this ingested file to have
+            # inside the datastore
+            location = self._calculate_ingested_datastore_name(ButlerURI(fullPath), ref, formatter)
+
+            newPath = location.pathInStore
+            newFullPath = location.path
             if os.path.exists(newFullPath):
                 raise FileExistsError(f"File '{newFullPath}' already exists.")
             storageDir = os.path.dirname(newFullPath)
