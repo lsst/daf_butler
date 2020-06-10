@@ -77,6 +77,12 @@ class Formatter(metaclass=ABCMeta):
     how a dataset is serialized. `None` indicates that no parameters are
     supported."""
 
+    supportedExtensions: ClassVar[AbstractSet[str]] = frozenset()
+    """Set of all extensions supported by this formatter.  Only expected
+    to be populated by Formatters that write files. Any extension assigned
+    to the ``extension`` property will be automatically included in the
+    list of supported extensions."""
+
     def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None,
                  writeParameters: Optional[Dict[str, Any]] = None,
                  writeRecipes: Optional[Dict[str, Any]] = None):
@@ -239,8 +245,7 @@ class Formatter(metaclass=ABCMeta):
         """
         raise NotImplementedError("Type does not support writing to bytes.")
 
-    @classmethod
-    def makeUpdatedLocation(cls, location: Location) -> Location:
+    def makeUpdatedLocation(self, location: Location) -> Location:
         """Return a new `Location` instance updated with this formatter's
         extension.
 
@@ -273,27 +278,53 @@ class Formatter(metaclass=ABCMeta):
         try:
             # We are deliberately allowing extension to be undefined by
             # default in the base class and mypy complains.
-            location.updateExtension(cls.extension)  # type:ignore
+            location.updateExtension(self.extension)  # type:ignore
         except AttributeError:
             raise NotImplementedError("No file extension registered with this formatter") from None
         return location
 
     @classmethod
-    def predictPathFromLocation(cls, location: Location) -> str:
-        """Return the path that would be returned by write, without actually
-        writing.
+    def validateExtension(cls, location: Location) -> None:
+        """Check that the provided location refers to a file extension that is
+        understood by this formatter.
 
         Parameters
         ----------
         location : `Location`
-            Location of file for which path prediction is required.
+            Location from which to extract a file extension.
 
-        Returns
-        -------
-        path : `str`
-            Path within datastore that would be associated with this location.
+        Raises
+        ------
+        NotImplementedError
+            Raised if file extensions are a concept not understood by this
+            formatter.
+        ValueError
+            Raised if the formatter does not understand this extension.
+
+        Notes
+        -----
+        This method is available to all Formatters but might not be
+        implemented by all formatters. It requires that a formatter set
+        an ``extension`` attribute containing the file extension used when
+        writing files.  If ``extension`` is `None` only the set of supported
+        extensions will be examined.
         """
-        return cls.makeUpdatedLocation(location).pathInStore
+        ext = location.getExtension()
+        supported = set(cls.supportedExtensions)
+
+        try:
+            # We are deliberately allowing extension to be undefined by
+            # default in the base class and mypy complains.
+            default = cls.extension  # type: ignore
+        except AttributeError:
+            raise NotImplementedError("No file extension registered with this formatter") from None
+
+        if default is not None:
+            supported.add(default)
+
+        if ext in supported:
+            return
+        raise ValueError(f"Extension '{ext}' is not supported by Formatter '{cls.__name__}'")
 
     def predictPath(self) -> str:
         """Return the path that would be returned by write, without actually
@@ -307,7 +338,8 @@ class Formatter(metaclass=ABCMeta):
             Path within datastore that would be associated with the location
             stored in this `Formatter`.
         """
-        return self.predictPathFromLocation(self.fileDescriptor.location)
+        updated = self.makeUpdatedLocation(self.fileDescriptor.location)
+        return updated.pathInStore
 
     def segregateParameters(self, parameters: Optional[Dict[str, Any]] = None) -> Tuple[Dict, Dict]:
         """Segregate the supplied parameters into those understood by the
