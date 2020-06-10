@@ -164,7 +164,7 @@ class AstropyTimeNsecTai(sqlalchemy.TypeDecorator):
 
 VALID_CONFIG_COLUMN_TYPES = {
     "string": sqlalchemy.String,
-    "int": sqlalchemy.Integer,
+    "int": sqlalchemy.BigInteger,
     "float": sqlalchemy.Float,
     "region": Base64Region,
     "bool": sqlalchemy.Boolean,

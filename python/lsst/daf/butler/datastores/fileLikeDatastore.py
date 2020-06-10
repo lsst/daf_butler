@@ -27,7 +27,7 @@ __all__ = ("FileLikeDatastore", )
 import logging
 from abc import abstractmethod
 
-from sqlalchemy import Integer, String
+from sqlalchemy import BigInteger, String
 
 from dataclasses import dataclass
 from typing import (
@@ -206,7 +206,7 @@ class FileLikeDatastore(GenericBaseDatastore):
     def makeTableSpec(cls) -> ddl.TableSpec:
         return ddl.TableSpec(
             fields=[
-                ddl.FieldSpec(name="dataset_id", dtype=Integer, primaryKey=True),
+                ddl.FieldSpec(name="dataset_id", dtype=BigInteger, primaryKey=True),
                 ddl.FieldSpec(name="path", dtype=String, length=256, nullable=False),
                 ddl.FieldSpec(name="formatter", dtype=String, length=128, nullable=False),
                 ddl.FieldSpec(name="storage_class", dtype=String, length=64, nullable=False),
@@ -214,7 +214,7 @@ class FileLikeDatastore(GenericBaseDatastore):
                 ddl.FieldSpec(name="component", dtype=String, length=32, primaryKey=True),
                 # TODO: should checksum be Base64Bytes instead?
                 ddl.FieldSpec(name="checksum", dtype=String, length=128, nullable=True),
-                ddl.FieldSpec(name="file_size", dtype=Integer, nullable=True),
+                ddl.FieldSpec(name="file_size", dtype=BigInteger, nullable=True),
             ],
             unique=frozenset(),
         )

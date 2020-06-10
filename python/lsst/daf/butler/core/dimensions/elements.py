@@ -34,7 +34,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
-from sqlalchemy import Integer
+from sqlalchemy import BigInteger
 
 from lsst.sphgeom import Pixelization
 from ..utils import immutable
@@ -506,7 +506,7 @@ class SkyPixDimension(Dimension):
 
     def __init__(self, name: str, pixelization: Pixelization):
         related = RelatedDimensions(required=set(), implied=set(), spatial=name)
-        uniqueKeys = [ddl.FieldSpec(name="id", dtype=Integer, primaryKey=True, nullable=False)]
+        uniqueKeys = [ddl.FieldSpec(name="id", dtype=BigInteger, primaryKey=True, nullable=False)]
         super().__init__(name, related=related, uniqueKeys=uniqueKeys)
         self.pixelization = pixelization
 
