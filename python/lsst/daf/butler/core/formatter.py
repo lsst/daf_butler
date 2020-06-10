@@ -78,12 +78,13 @@ class Formatter(metaclass=ABCMeta):
     supported."""
 
     supportedExtensions: ClassVar[AbstractSet[str]] = frozenset()
-    """Set of all extensions supported by this formatter.  Only expected
-    to be populated by Formatters that write files. Any extension assigned
-    to the ``extension`` property will be automatically included in the
-    list of supported extensions."""
+    """Set of all extensions supported by this formatter.
 
-    def __init__(self, fileDescriptor: FileDescriptor, dataId: DataCoordinate = None,
+    Only expected to be populated by Formatters that write files. Any extension
+    assigned to the ``extension`` property will be automatically included in
+    the list of supported extensions."""
+
+    def __init__(self, fileDescriptor: FileDescriptor, dataId: Optional[DataCoordinate] = None,
                  writeParameters: Optional[Dict[str, Any]] = None,
                  writeRecipes: Optional[Dict[str, Any]] = None):
         if not isinstance(fileDescriptor, FileDescriptor):
