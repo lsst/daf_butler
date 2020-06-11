@@ -91,6 +91,8 @@ storageClasses:
     pytype: lsst.meas.algorithms.Defects
   QECurve:
     pytype: lsst.meas.algorithms.Curve
+  CrosstalkCalib:
+    pytype: lsst.ip.isr.CrosstalkCalib
   Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.obs.base.exposureAssembler.ExposureAssembler
