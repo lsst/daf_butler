@@ -325,7 +325,7 @@ class Formatter(metaclass=ABCMeta):
 
         if ext in supported:
             return
-        raise ValueError(f"Extension '{ext}' is not supported by Formatter '{cls.__name__}'")
+        raise ValueError(f"Extension '{ext}' on '{location}' is not supported by Formatter '{cls.__name__}'")
 
     def predictPath(self) -> str:
         """Return the path that would be returned by write, without actually

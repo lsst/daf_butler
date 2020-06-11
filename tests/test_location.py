@@ -127,11 +127,15 @@ class LocationTestCase(unittest.TestCase):
         self.assertTrue(loc1.uri.startswith("file:///"))
         self.assertTrue(loc1.uri.endswith("file.ext"))
         loc1.updateExtension("fits")
-        self.assertTrue(loc1.uri.endswith("file.fits"))
+        self.assertTrue(loc1.uri.endswith("file.fits"), f"Checking 'fits' extension in {loc1.uri}")
+        loc1.updateExtension("fits.gz")
+        self.assertTrue(loc1.uri.endswith("file.fits.gz"), f"Checking 'fits.gz' extension in {loc1.uri}")
+        loc1.updateExtension(".jpeg")
+        self.assertTrue(loc1.uri.endswith("file.jpeg"), f"Checking 'jpeg' extension in {loc1.uri}")
         loc1.updateExtension(None)
-        self.assertTrue(loc1.uri.endswith("file.fits"))
+        self.assertTrue(loc1.uri.endswith("file.jpeg"), f"Checking unchanged extension in {loc1.uri}")
         loc1.updateExtension("")
-        self.assertTrue(loc1.uri.endswith("file"))
+        self.assertTrue(loc1.uri.endswith("file"), f"Checking no extension in {loc1.uri}")
 
     def testRelativeRoot(self):
         root = os.path.abspath(os.path.curdir)

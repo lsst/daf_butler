@@ -292,19 +292,21 @@ class ButlerURI:
         self._uri = self._uri._replace(path=newpath)
 
     def getExtension(self) -> str:
-        """Return the file extension associated with this URI path.
+        """Return the file extension(s) associated with this URI path.
 
         Returns
         -------
         ext : `str`
             The file extension (including the ``.``). Can be empty string
-            if there is no file extension.
+            if there is no file extension. Will return all file extensions
+            as a single extension such that ``file.fits.gz`` will return
+            a value of ``.fits.gz``.
         """
         if not self.scheme:
-            _, ext = os.path.splitext(self.path)
+            extensions = PurePath(self.path).suffixes
         else:
-            _, ext = posixpath.splitext(self.path)
-        return ext
+            extensions = PurePosixPath(self.path).suffixes
+        return "".join(extensions)
 
     def __str__(self) -> str:
         return self.geturl()
@@ -547,6 +549,8 @@ class Location:
     def updateExtension(self, ext: Optional[str]) -> None:
         """Update the file extension associated with this `Location`.
 
+        All file extensions are replaced.
+
         Parameters
         ----------
         ext : `str`
@@ -556,10 +560,12 @@ class Location:
         if ext is None:
             return
 
-        if not self._datastoreRootUri.scheme:
-            path, _ = os.path.splitext(self.pathInStore)
-        else:
-            path, _ = posixpath.splitext(self.pathInStore)
+        # Get the extension and remove it from the path if one is found
+        # .fits.gz counts as one extension do not use os.path.splitext
+        current = self.getExtension()
+        path = self.pathInStore
+        if current:
+            path = path[:-len(current)]
 
         # Ensure that we have a leading "." on file extension (and we do not
         # try to modify the empty string)
@@ -569,19 +575,21 @@ class Location:
         self._path = path + ext
 
     def getExtension(self) -> str:
-        """Return the file extension associated with this location.
+        """Return the file extension(s) associated with this location.
 
         Returns
         -------
         ext : `str`
             The file extension (including the ``.``). Can be empty string
-            if there is no file extension.
+            if there is no file extension. Will return all file extensions
+            as a single extension such that ``file.fits.gz`` will return
+            a value of ``.fits.gz``.
         """
         if not self._datastoreRootUri.scheme:
-            _, ext = os.path.splitext(self.pathInStore)
+            extensions = PurePath(self.path).suffixes
         else:
-            _, ext = posixpath.splitext(self.pathInStore)
-        return ext
+            extensions = PurePath(self.path).suffixes
+        return "".join(extensions)
 
 
 class LocationFactory:
