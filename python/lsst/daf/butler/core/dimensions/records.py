@@ -122,10 +122,17 @@ class DimensionRecord:
     def __init__(self, *args: Any):
         for attrName, value in zip(self.__slots__, args):
             object.__setattr__(self, attrName, value)
-        dataId = DataCoordinate(
-            self.definition.graph,
-            args[:len(self.definition.required.names)]
-        )
+        if self.definition.required.names == self.definition.graph.required.names:
+            dataId = DataCoordinate(
+                self.definition.graph,
+                args[:len(self.definition.required.names)]
+            )
+        else:
+            assert not isinstance(self.definition, Dimension)
+            dataId = DataCoordinate(
+                self.definition.graph,
+                tuple(getattr(self, name) for name in self.definition.required.names)
+            )
         object.__setattr__(self, "dataId", dataId)
 
     @classmethod
