@@ -90,6 +90,21 @@ class FailedLoadTest(unittest.TestCase):
                              "test_cliPluginLoader.non_existant_command_function, skipping."
             self.assertIn(expectedErrMsg, cm.output[0])
 
+    def test_unimportableLocalPackage(self):
+        class FailCLI(butler.LoaderCLI):
+            localCmdPkg = "lsst.daf.butler.cli.cmds"  # should not be an importable location
+
+        @click.command(cls=FailCLI)
+        def cli():
+            pass
+
+        runner = click.testing.CliRunner()
+        with self.assertLogs() as cm:
+            result = runner.invoke(cli)
+        self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+        expectedErrMsg = f"Could not import plugin from {FailCLI.localCmdPkg}, skipping."
+        self.assertIn(expectedErrMsg, cm.output[0])
+
 
 class PluginLoaderTest(unittest.TestCase):
 
@@ -119,12 +134,10 @@ class PluginLoaderTest(unittest.TestCase):
 
     def test_getLocalCommands(self):
         """Test getting the daf_butler CLI commands."""
-        localCommands = butler.LoaderCLI._getLocalCommands()
+        localCommands = butler.ButlerCLI().getLocalCommands()
         # the number of local commands should equal the number of functions
         # in cmd.__all__
         self.assertEqual(len(localCommands), len(cmd.__all__))
-        for command, pkg in localCommands.items():
-            self.assertEqual(pkg, ["lsst.daf.butler.cli.cmd"])
 
     def test_mergeCommandLists(self):
         """Verify dicts of command to list-of-source-package get merged

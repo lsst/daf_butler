@@ -19,13 +19,13 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import abc
 import click
 from collections import defaultdict
 import logging
 import os
 import yaml
 
-from . import cmd as butlerCommands
 from .utils import to_upper
 from lsst.utils import doImport
 
@@ -33,58 +33,129 @@ from lsst.utils import doImport
 log = logging.getLogger(__name__)
 
 
-class LoaderCLI(click.MultiCommand):
+class LoaderCLI(click.MultiCommand, abc.ABC):
+    """Extends `click.MultiCommand`, which dispatches to subcommands, to load
+    subcommands at runtime."""
 
-    # localCmdPkg identifies commands that are in this package, in the dict of
-    # commands used in this file. This string is used in error reporting.
-    localCmdPkg = "lsst.daf.butler.cli.cmd"
+    @property
+    @abc.abstractmethod
+    def localCmdPkg(self):
+        """localCmdPkg identifies the location of the commands that are in this
+        package. `getLocalCommands` assumes that the commands can be found in
+        `localCmdPkg.__all__`, if this is not the case then getLocalCommands
+        should be overrideen.
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @classmethod
-    def _funcNameToCmdName(cls, functionName):
-        """Convert function name to the butler command name: change underscores,
-        (used in functions) to dashes (used in commands), and change local-package
-        command names that conflict with python keywords to a leagal function name.
+        Returns
+        -------
+        package : `str`
+            The fully qualified location of this package.
         """
-        # The "import" command name and "butler_import" function name are
-        # defined in cli/cmd/commands.py, and if those names are changed they
-        # must be changed here as well.
-        # It is expected that there will be very few butler command names that
-        # need to be changed because of e.g. conflicts with python keywords (as
-        # is done here and in _cmdNameToFuncName for the 'import' command). If
-        # this becomes a common need then some way of doing this should be
-        # invented that is better than hard coding the function names into
-        # these conversion functions. An extension of the 'cli/resources.yaml'
-        # file (as is currently used in obs_base) might be a good way to do it.
-        if functionName == "butler_import":
-            functionName = "import"
-        return functionName.replace("_", "-")
+        pass
+
+    def getLocalCommands(self):
+        """Get the commands offered by the local package. This assumes that the
+        commands can be found in `localCmdPkg.__all__`, if this is not the case
+        then this function should be overrideen.
+
+        Returns
+        -------
+        commands : `defaultdict` [`str`, `list` [`str`]]
+            The key is the command name. The value is a list of package(s) that
+            contains the command.
+        """
+        commandsLocation = self._importPlugin(self.localCmdPkg)
+        if commandsLocation is None:
+            # _importPlugins logs an error, don't need to do it again here.
+            return {}
+        return defaultdict(list, {self._funcNameToCmdName(f):
+                                  [self.localCmdPkg] for f in commandsLocation.__all__})
+
+    def list_commands(self, ctx):
+        """Used by Click to get all the commands that can be called by the
+        butler command, it is used to generate the --help output.
+
+        Parameters
+        ----------
+        ctx : `click.Context`
+            The current Click context.
+
+        Returns
+        -------
+        commands : `list` [`str`]
+            The names of the commands that can be called by the butler command.
+        """
+        commands = self._getCommands()
+        self._raiseIfDuplicateCommands(commands)
+        return sorted(commands)
+
+    def get_command(self, context, name):
+        """Used by Click to get a single command for execution.
+
+        Parameters
+        ----------
+        ctx : `click.Context`
+            The current Click context.
+        name : `str`
+            The name of the command to return.
+
+        Returns
+        -------
+        command : `click.Command`
+            A Command that wraps a callable command function.
+        """
+        commands = self._getCommands()
+        if name not in commands:
+            return None
+        self._raiseIfDuplicateCommands(commands)
+        return self._importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
 
     @classmethod
-    def _cmdNameToFuncName(cls, commandName):
-        """Convert butler command name to function name: change dashes (used in
-        commands) to underscores (used in functions), and for local-package
-        commands names that conflict with python keywords, change the local, legal,
-        function name to the command name."""
-        if commandName == "import":
-            commandName = "butler_import"
-        return commandName.replace("-", "_")
+    def initLogging(cls, logLevel):
+        """Initialize the logging system.
+
+        Parameters
+        ----------
+        logLevel : `str`
+            The name of one of the python logging levels.
+
+        Raises
+        ------
+        click.ClickException
+            If the log level can not be processed.
+        """
+        numeric_level = getattr(logging, logLevel, None)
+        if not isinstance(numeric_level, int):
+            raise click.ClickException(f"Invalid log level: {logLevel}")
+        logging.basicConfig(level=numeric_level)
 
     @staticmethod
-    def _getPluginList():
-        """Get the list of importable yaml files that contain butler cli data.
+    def getPluginList():
+        """Get the list of importable yaml files that contain cli data for this
+        command.
 
         Returns
         -------
         `list` [`str`]
             The list of files that contain yaml data about a cli plugin.
         """
-        pluginModules = os.environ.get("DAF_BUTLER_PLUGINS")
-        if pluginModules:
-            return [p for p in pluginModules.split(":") if p != '']
         return []
+
+    @classmethod
+    def _funcNameToCmdName(cls, functionName):
+        """Convert function name to the butler command name: change
+        underscores, (used in functions) to dashes (used in commands), and
+        change local-package command names that conflict with python keywords
+        to a legal function name.
+        """
+        return functionName.replace("_", "-")
+
+    @classmethod
+    def _cmdNameToFuncName(cls, commandName):
+        """Convert butler command name to function name: change dashes (used in
+        commands) to underscores (used in functions), and for local-package
+        commands names that conflict with python keywords, change the local,
+        legal, function name to the command name."""
+        return commandName.replace("-", "_")
 
     @staticmethod
     def _importPlugin(pluginName):
@@ -92,7 +163,7 @@ class LoaderCLI(click.MultiCommand):
 
         Parameters
         ----------
-        pluginName : string
+        pluginName : `str`
             An importable module whose __all__ parameter contains the commands
             that can be called.
 
@@ -115,7 +186,7 @@ class LoaderCLI(click.MultiCommand):
 
         Parameters
         ----------
-        a : `defaultdict` [`str`: `list` [`str`]]
+        a : `defaultdict` [`str`, `list` [`str`]]
             The key is the command name. The value is a list of package(s) that
             contains the command.
         b : (same as a)
@@ -131,19 +202,6 @@ class LoaderCLI(click.MultiCommand):
         return a
 
     @classmethod
-    def _getLocalCommands(cls):
-        """Get the commands offered by daf_butler.
-
-        Returns
-        -------
-        commands : `defaultdict` [`str`, `list` [`str`]]
-            The key is the command name. The value is a list of package(s) that
-            contains the command.
-        """
-        return defaultdict(list, {cls._funcNameToCmdName(f):
-                                  [cls.localCmdPkg] for f in butlerCommands.__all__})
-
-    @classmethod
     def _getPluginCommands(cls):
         """Get the commands offered by plugin packages.
 
@@ -154,7 +212,7 @@ class LoaderCLI(click.MultiCommand):
             contains the command.
         """
         commands = defaultdict(list)
-        for pluginName in cls._getPluginList():
+        for pluginName in cls.getPluginList():
             try:
                 with open(pluginName, "r") as resourceFile:
                     resources = defaultdict(list, yaml.safe_load(resourceFile))
@@ -168,8 +226,7 @@ class LoaderCLI(click.MultiCommand):
             cls._mergeCommandLists(commands, defaultdict(list, pluginCommands))
         return commands
 
-    @classmethod
-    def _getCommands(cls):
+    def _getCommands(self):
         """Get the commands offered by daf_butler and plugin packages.
 
         Returns
@@ -178,7 +235,7 @@ class LoaderCLI(click.MultiCommand):
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
-        return cls._mergeCommandLists(cls._getLocalCommands(), cls._getPluginCommands())
+        return self._mergeCommandLists(self.getLocalCommands(), self._getPluginCommands())
 
     @staticmethod
     def _raiseIfDuplicateCommands(commands):
@@ -205,57 +262,46 @@ class LoaderCLI(click.MultiCommand):
         if msg:
             raise click.ClickException(msg + "Duplicate commands are not supported, aborting.")
 
-    def list_commands(self, ctx):
-        """Used by Click to get all the commands that can be called by the
-        butler command, it is used to generate the --help output.
 
-        Parameters
-        ----------
-        ctx : click.Context
-            The current Click context.
+class ButlerCLI(LoaderCLI):
 
-        Returns
-        -------
-        commands : `list` [`str`]
-            The names of the commands that can be called by the butler command.
-        """
-        commands = self._getCommands()
-        self._raiseIfDuplicateCommands(commands)
-        log.debug(commands.keys())
-        return sorted(commands)
-
-    def get_command(self, context, name):
-        """Used by Click to get a single command for execution.
-
-        Parameters
-        ----------
-        ctx : click.Context
-            The current Click context.
-        name : string
-            The name of the command to return.
-
-        Returns
-        -------
-        command : click.Command
-            A Command that wraps a callable command function.
-        """
-        commands = self._getCommands()
-        if name not in commands:
-            return None
-        self._raiseIfDuplicateCommands(commands)
-        if commands[name][0] == self.localCmdPkg:
-            return getattr(butlerCommands, self._cmdNameToFuncName(name))
-        return self._importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
+    localCmdPkg = "lsst.daf.butler.cli.cmd"
 
     @classmethod
-    def initLogging(cls, logLevel):
-        numeric_level = getattr(logging, logLevel, None)
-        if not isinstance(numeric_level, int):
-            raise click.ClickException(f"Invalid log level: {logLevel}")
-        logging.basicConfig(level=numeric_level)
+    def _funcNameToCmdName(cls, functionName):
+        # Docstring inherited from base class.
+
+        # The "import" command name and "butler_import" function name are
+        # defined in cli/cmd/commands.py, and if those names are changed they
+        # must be changed here as well.
+        # It is expected that there will be very few butler command names that
+        # need to be changed because of e.g. conflicts with python keywords (as
+        # is done here and in _cmdNameToFuncName for the 'import' command). If
+        # this becomes a common need then some way of doing this should be
+        # invented that is better than hard coding the function names into
+        # these conversion functions. An extension of the 'cli/resources.yaml'
+        # file (as is currently used in obs_base) might be a good way to do it.
+        if functionName == "butler_import":
+            return "import"
+        return super()._funcNameToCmdName(functionName)
+
+    @classmethod
+    def _cmdNameToFuncName(cls, commandName):
+        # Docstring inherited from base class.
+        if commandName == "import":
+            return "butler_import"
+        return super()._cmdNameToFuncName(commandName)
+
+    @staticmethod
+    def getPluginList():
+        # Docstring inherited from base class.
+        pluginModules = os.environ.get("DAF_BUTLER_PLUGINS")
+        if pluginModules:
+            return [p for p in pluginModules.split(":") if p != '']
+        return []
 
 
-@click.command(cls=LoaderCLI, context_settings=dict(help_option_names=["-h", "--help"]))
+@click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
 @click.option("--log-level",
               type=click.Choice(["critical", "error", "warning", "info", "debug",
                                  "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]),
@@ -263,7 +309,7 @@ class LoaderCLI(click.MultiCommand):
               help="The Python log level to use.",
               callback=to_upper)
 def cli(log_level):
-    LoaderCLI.initLogging(log_level)
+    ButlerCLI.initLogging(log_level)
 
 
 def main():
