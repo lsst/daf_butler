@@ -29,54 +29,48 @@ from . import cmd as butlerCommands
 from .utils import to_upper
 from lsst.utils import doImport
 
-# localCmdPkg identifies commands that are in this package, in the dict of
-# commands used in this file. This string is used in error reporting.
-localCmdPkg = "lsst.daf.butler.cli.cmd"
 
 log = logging.getLogger(__name__)
 
 
-def _initLogging(logLevel):
-    numeric_level = getattr(logging, logLevel, None)
-    if not isinstance(numeric_level, int):
-        raise click.ClickException(f"Invalid log level: {logLevel}")
-    logging.basicConfig(level=numeric_level)
-
-
-def funcNameToCmdName(functionName):
-    """Convert function name to the butler command name: change underscores,
-    (used in functions) to dashes (used in commands), and change local-package
-    command names that conflict with python keywords to a leagal function name.
-    """
-    # The "import" command name and "butler_import" function name are defined
-    # in cli/cmd/commands.py, and if those names are changed they must be
-    # changed here as well.
-    # It is expected that there will be very few butler command names that need
-    # to be changed because of e.g. conflicts with python keywords (as is done
-    # here and in cmdNameToFuncName for the 'import' command). If this becomes
-    # a common need then some way of doing this should be invented that is
-    # better than hard coding the function names into these conversion
-    # functions. An extension of the 'cli/resources.yaml' file (as is currently
-    # used in obs_base) might be a good way to do it.
-    if functionName == "butler_import":
-        functionName = "import"
-    return functionName.replace("_", "-")
-
-
-def cmdNameToFuncName(commandName):
-    """Convert butler command name to function name: change dashes (used in
-    commands) to underscores (used in functions), and for local-package
-    commands names that conflict with python keywords, change the local, legal,
-    function name to the command name."""
-    if commandName == "import":
-        commandName = "butler_import"
-    return commandName.replace("-", "_")
-
-
 class LoaderCLI(click.MultiCommand):
+
+    # localCmdPkg identifies commands that are in this package, in the dict of
+    # commands used in this file. This string is used in error reporting.
+    localCmdPkg = "lsst.daf.butler.cli.cmd"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    @classmethod
+    def _funcNameToCmdName(cls, functionName):
+        """Convert function name to the butler command name: change underscores,
+        (used in functions) to dashes (used in commands), and change local-package
+        command names that conflict with python keywords to a leagal function name.
+        """
+        # The "import" command name and "butler_import" function name are
+        # defined in cli/cmd/commands.py, and if those names are changed they
+        # must be changed here as well.
+        # It is expected that there will be very few butler command names that
+        # need to be changed because of e.g. conflicts with python keywords (as
+        # is done here and in _cmdNameToFuncName for the 'import' command). If
+        # this becomes a common need then some way of doing this should be
+        # invented that is better than hard coding the function names into
+        # these conversion functions. An extension of the 'cli/resources.yaml'
+        # file (as is currently used in obs_base) might be a good way to do it.
+        if functionName == "butler_import":
+            functionName = "import"
+        return functionName.replace("_", "-")
+
+    @classmethod
+    def _cmdNameToFuncName(cls, commandName):
+        """Convert butler command name to function name: change dashes (used in
+        commands) to underscores (used in functions), and for local-package
+        commands names that conflict with python keywords, change the local, legal,
+        function name to the command name."""
+        if commandName == "import":
+            commandName = "butler_import"
+        return commandName.replace("-", "_")
 
     @staticmethod
     def _getPluginList():
@@ -136,8 +130,8 @@ class LoaderCLI(click.MultiCommand):
             a[key].extend(val)
         return a
 
-    @staticmethod
-    def _getLocalCommands():
+    @classmethod
+    def _getLocalCommands(cls):
         """Get the commands offered by daf_butler.
 
         Returns
@@ -146,7 +140,8 @@ class LoaderCLI(click.MultiCommand):
             The key is the command name. The value is a list of package(s) that
             contains the command.
         """
-        return defaultdict(list, {funcNameToCmdName(f): [localCmdPkg] for f in butlerCommands.__all__})
+        return defaultdict(list, {cls._funcNameToCmdName(f):
+                                  [cls.localCmdPkg] for f in butlerCommands.__all__})
 
     @classmethod
     def _getPluginCommands(cls):
@@ -248,9 +243,16 @@ class LoaderCLI(click.MultiCommand):
         if name not in commands:
             return None
         self._raiseIfDuplicateCommands(commands)
-        if commands[name][0] == localCmdPkg:
-            return getattr(butlerCommands, cmdNameToFuncName(name))
-        return self._importPlugin(commands[name][0] + "." + cmdNameToFuncName(name))
+        if commands[name][0] == self.localCmdPkg:
+            return getattr(butlerCommands, self._cmdNameToFuncName(name))
+        return self._importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
+
+    @classmethod
+    def initLogging(cls, logLevel):
+        numeric_level = getattr(logging, logLevel, None)
+        if not isinstance(numeric_level, int):
+            raise click.ClickException(f"Invalid log level: {logLevel}")
+        logging.basicConfig(level=numeric_level)
 
 
 @click.command(cls=LoaderCLI, context_settings=dict(help_option_names=["-h", "--help"]))
@@ -261,7 +263,7 @@ class LoaderCLI(click.MultiCommand):
               help="The Python log level to use.",
               callback=to_upper)
 def cli(log_level):
-    _initLogging(log_level)
+    LoaderCLI.initLogging(log_level)
 
 
 def main():
