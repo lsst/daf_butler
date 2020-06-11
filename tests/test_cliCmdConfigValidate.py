@@ -29,10 +29,10 @@ import unittest
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_validate
-from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class ValidateTest(MockeredTestBase):
+class ValidateTest(CliCmdTestBase):
 
     defaultExpected = dict()
 

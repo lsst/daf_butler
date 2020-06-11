@@ -29,7 +29,7 @@ from ..cli.utils import clickResultMsg, mockEnvVar, Mocker
 from ..cli import butler
 
 
-class MockeredTestBase(unittest.TestCase, abc.ABC):
+class CliCmdTestBase(unittest.TestCase, abc.ABC):
     """A test case base that is used to verify click command functions import
     and call their respective script fucntions correctly.
     """

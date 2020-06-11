@@ -30,10 +30,10 @@ import yaml
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_dump
-from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class ConfigDumpTest(MockeredTestBase):
+class ConfigDumpTest(CliCmdTestBase):
 
     defaultExpected = dict()
 

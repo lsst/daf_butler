@@ -30,10 +30,10 @@ from lsst.daf.butler import Butler, DatasetType, StorageClass
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_dataset_types
 from lsst.daf.butler.cli.utils import clickResultMsg
-from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class QueryDatasetTypesCmdTest(MockeredTestBase):
+class QueryDatasetTypesCmdTest(CliCmdTestBase):
 
     defaultExpected = dict(repo=None,
                            verbose=False,

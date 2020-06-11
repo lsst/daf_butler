@@ -21,11 +21,11 @@
 
 import unittest
 
-from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.cli.cmd import create
 
 
-class CreateTest(MockeredTestBase):
+class CreateTest(CliCmdTestBase):
 
     defaultExpected = dict(repo=None,
                            seed_config=None,

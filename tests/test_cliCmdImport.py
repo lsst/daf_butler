@@ -25,12 +25,12 @@
 import unittest
 import unittest.mock
 
-from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.cli.cmd import butler_import
 from lsst.daf.butler.cli.utils import Mocker
 
 
-class ImportTestCase(MockeredTestBase):
+class ImportTestCase(CliCmdTestBase):
 
     defaultExpected = dict(repo=None,
                            transfer="auto",
@@ -69,7 +69,7 @@ class ImportTestCase(MockeredTestBase):
         self.help_test()
 
 
-class ExportFileCase(MockeredTestBase):
+class ExportFileCase(CliCmdTestBase):
 
     didRead = None
 

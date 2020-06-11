@@ -29,10 +29,10 @@ import yaml
 from lsst.daf.butler import Butler
 from lsst.daf.butler.cli.butler import cli
 from lsst.daf.butler.cli.cmd import query_collections
-from lsst.daf.butler.tests.mockeredTest import MockeredTestBase
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class QueryCollectionsCmdTest(MockeredTestBase):
+class QueryCollectionsCmdTest(CliCmdTestBase):
 
     defaultExpected = dict(repo=None,
                            collection_type=None,
