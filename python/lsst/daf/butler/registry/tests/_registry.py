@@ -48,7 +48,7 @@ from .._registry import (
     RegistryConfig,
 )
 from ..wildcards import DatasetTypeRestriction
-from ..interfaces import MissingCollectionError
+from ..interfaces import MissingCollectionError, ButlerAttributeExistsError
 
 
 class RegistryTests(ABC):
@@ -1103,3 +1103,52 @@ class RegistryTests(ABC):
             [DataCoordinate.standardize(abstract_filter="i", universe=registry.dimensions),
              DataCoordinate.standardize(abstract_filter="r", universe=registry.dimensions)]
         )
+
+    def testAttributeManager(self):
+        """Test basic functionality of attribute manager.
+        """
+        registry = self.makeRegistry()
+        attributes = registry._attributes
+
+        # check what get() returns for non-existing key
+        self.assertIsNone(attributes.get("attr"))
+        self.assertEqual(attributes.get("attr", ""), "")
+        self.assertEqual(attributes.get("attr", "Value"), "Value")
+        self.assertEqual(len(list(attributes.items())), 0)
+
+        # cannot store empty key or value
+        with self.assertRaises(Exception):
+            attributes.set("", "value")
+        with self.assertRaises(Exception):
+            attributes.set("attr", "")
+
+        # set value of non-existing key
+        attributes.set("attr", "value")
+        self.assertEqual(len(list(attributes.items())), 1)
+        self.assertEqual(attributes.get("attr"), "value")
+
+        # update value of existing key
+        with self.assertRaises(ButlerAttributeExistsError):
+            attributes.set("attr", "value2")
+
+        attributes.set("attr", "value2", force=True)
+        self.assertEqual(len(list(attributes.items())), 1)
+        self.assertEqual(attributes.get("attr"), "value2")
+
+        # delete existing key
+        self.assertTrue(attributes.delete("attr"))
+        self.assertEqual(len(list(attributes.items())), 0)
+
+        # delete non-existing key
+        self.assertFalse(attributes.delete("non-attr"))
+
+        # store bunch of keys and get the list back
+        data = [
+            ("version.core", "1.2.3"),
+            ("version.dimensions", "3.2.1"),
+            ("config.managers.opaque", "ByNameOpaqueTableStorageManager"),
+        ]
+        for key, value in data:
+            attributes.set(key, value)
+        items = list(attributes.items())
+        self.assertCountEqual(items, data)

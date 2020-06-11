@@ -1,0 +1,114 @@
+# This file is part of daf_butler.
+#
+# Developed for the LSST Data Management System.
+# This product includes software developed by the LSST Project
+# (http://www.lsst.org).
+# See the COPYRIGHT file at the top-level directory of this distribution
+# for details of code ownership.
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+from __future__ import annotations
+"""The default concrete implementation of the class that manages
+attributes for `Registry`.
+"""
+
+__all__ = ["DefaultButlerAttributeManager"]
+
+from typing import (
+    ClassVar,
+    Iterable,
+    Optional,
+    Tuple,
+)
+
+import sqlalchemy
+
+from ..core.ddl import TableSpec, FieldSpec
+from .interfaces import (
+    Database,
+    ButlerAttributeExistsError,
+    ButlerAttributeManager,
+    StaticTablesContext
+)
+
+
+class DefaultButlerAttributeManager(ButlerAttributeManager):
+    """An implementation of `ButlerAttributeManager` that stores attributes
+    in a database table.
+
+    Parameters
+    ----------
+    db : `Database`
+        Database engine interface for the namespace in which this table lives.
+    table : `sqlalchemy.schema.Table`
+        SQLAlchemy representation of the table that stores attributes.
+    """
+    def __init__(self, db: Database, table: sqlalchemy.schema.Table):
+        self._db = db
+        self._table = table
+
+    _TABLE_NAME: ClassVar[str] = "butler_attributes"
+
+    _TABLE_SPEC: ClassVar[TableSpec] = TableSpec(
+        fields=[
+            FieldSpec("name", dtype=sqlalchemy.String, length=1024, primaryKey=True),
+            FieldSpec("value", dtype=sqlalchemy.String, length=65535, nullable=False),
+        ],
+    )
+
+    @classmethod
+    def initialize(cls, db: Database, context: StaticTablesContext) -> ButlerAttributeManager:
+        # Docstring inherited from ButlerAttributeManager.
+        table = context.addTable(cls._TABLE_NAME, cls._TABLE_SPEC)
+        return cls(db=db, table=table)
+
+    def get(self, name: str, default: Optional[str] = None) -> Optional[str]:
+        # Docstring inherited from ButlerAttributeManager.
+        sql = sqlalchemy.sql.select([self._table.columns.value]).where(
+            self._table.columns.name == name
+        )
+        row = self._db.query(sql).fetchone()
+        if row is not None:
+            return row[0]
+        return default
+
+    def set(self, name: str, value: str, *, force: bool = False) -> None:
+        # Docstring inherited from ButlerAttributeManager.
+        if force:
+            self._db.replace(self._table, {
+                "name": name,
+                "value": value,
+            })
+        else:
+            try:
+                self._db.insert(self._table, {
+                    "name": name,
+                    "value": value,
+                })
+            except sqlalchemy.exc.IntegrityError as exc:
+                raise ButlerAttributeExistsError(f"attribute {name} already exists") from exc
+
+    def delete(self, name: str) -> bool:
+        # Docstring inherited from ButlerAttributeManager.
+        numRows = self._db.delete(self._table, ["name"], {"name": name})
+        return numRows > 0
+
+    def items(self) -> Iterable[Tuple[str, str]]:
+        # Docstring inherited from ButlerAttributeManager.
+        sql = sqlalchemy.sql.select([
+            self._table.columns.name,
+            self._table.columns.value,
+        ])
+        for row in self._db.query(sql):
+            yield row[0], row[1]

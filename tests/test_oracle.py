@@ -177,12 +177,14 @@ class OracleRegistryTests(RegistryTests):
         # we can try to pass a prefix through via "+" in a namespace.
         database = OracleDatabase.fromConnection(connection=self._connection, origin=0,
                                                  namespace=f"+{prefix}")
+        attributes = doImport(config["managers", "attributes"])
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
         return Registry(database=database,
+                        attributes=attributes,
                         opaque=opaque,
                         dimensions=dimensions,
                         collections=collections,
