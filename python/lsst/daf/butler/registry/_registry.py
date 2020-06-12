@@ -79,6 +79,7 @@ from .interfaces import ChainedCollectionRecord, RunRecord
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
     from .interfaces import (
+        ButlerAttributeManager,
         CollectionManager,
         Database,
         OpaqueTableStorageManager,
@@ -197,15 +198,18 @@ class Registry:
         database = DatabaseClass.fromUri(str(config.connectionString), origin=config.get("origin", 0),
                                          namespace=config.get("namespace"), writeable=writeable)
         universe = DimensionUniverse(config)
+        attributes = doImport(config["managers", "attributes"])
         opaque = doImport(config["managers", "opaque"])
         dimensions = doImport(config["managers", "dimensions"])
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
-        return cls(database, universe, dimensions=dimensions, opaque=opaque, collections=collections,
-                   datasets=datasets, datastoreBridges=datastoreBridges, create=create)
+        return cls(database, universe, dimensions=dimensions, attributes=attributes, opaque=opaque,
+                   collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
+                   create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
+                 attributes: Type[ButlerAttributeManager],
                  opaque: Type[OpaqueTableStorageManager],
                  dimensions: Type[DimensionRecordStorageManager],
                  collections: Type[CollectionManager],
@@ -215,6 +219,7 @@ class Registry:
         self._db = database
         self.storageClasses = StorageClassFactory()
         with self._db.declareStaticTables(create=create) as context:
+            self._attributes = attributes.initialize(self._db, context)
             self._dimensions = dimensions.initialize(self._db, context, universe=universe)
             self._collections = collections.initialize(self._db, context)
             self._datasets = datasets.initialize(self._db, context,
