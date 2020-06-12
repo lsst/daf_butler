@@ -22,7 +22,6 @@
 import abc
 import click
 import click.testing
-import unittest
 
 
 class CliOptionTestBase(unittest.TestCase, abc.ABC):
