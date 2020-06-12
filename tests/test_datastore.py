@@ -30,7 +30,7 @@ from lsst.utils import doImport
 
 from lsst.daf.butler import StorageClassFactory, StorageClass, DimensionUniverse, FileDataset
 from lsst.daf.butler import DatastoreConfig, DatasetTypeNotSupportedError, DatastoreValidationError
-from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
+from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 from lsst.daf.butler.tests import (DatasetTestHelper, DatastoreTestHelper, BadWriteFormatter,
                                    BadNoWriteFormatter, MetricsExample, DummyRegistry)

@@ -478,7 +478,7 @@ class ButlerTests(ButlerPutGetTests):
                                                      {"instrument": "DummyCamComp", "id": 424,
                                                       "name": "fourtwentyfour", "physical_filter": "d-r"})
 
-        formatter = doImport("lsst.daf.butler.formatters.yamlFormatter.YamlFormatter")
+        formatter = doImport("lsst.daf.butler.formatters.yaml.YamlFormatter")
         dataRoot = os.path.join(TESTDIR, "data", "basic")
         datasets = []
         for detector in (1, 2):

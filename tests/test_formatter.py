@@ -80,7 +80,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testRegistry(self):
         """Check that formatters can be stored in the registry.
         """
-        formatterTypeName = "lsst.daf.butler.formatters.pexConfigFormatter.PexConfigFormatter"
+        formatterTypeName = "lsst.daf.butler.formatters.pexConfig.PexConfigFormatter"
         storageClassName = "Image"
         self.factory.registerFormatter(storageClassName, formatterTypeName)
         f = self.factory.getFormatter(storageClassName, self.fileDescriptor)
@@ -93,7 +93,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIsFormatter(fcls)
         # Defer the import so that we ensure that the infrastructure loaded
         # it on demand previously
-        from lsst.daf.butler.formatters.pexConfigFormatter import PexConfigFormatter
+        from lsst.daf.butler.formatters.pexConfig import PexConfigFormatter
         self.assertEqual(type(f), PexConfigFormatter)
 
         with self.assertRaises(TypeError):
@@ -106,7 +106,7 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
     def testRegistryWithStorageClass(self):
         """Test that the registry can be given a StorageClass object.
         """
-        formatterTypeName = "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter"
+        formatterTypeName = "lsst.daf.butler.formatters.yaml.YamlFormatter"
         storageClassName = "TestClass"
         sc = StorageClass(storageClassName, dict, None)
 
@@ -131,13 +131,13 @@ class FormatterFactoryTestCase(unittest.TestCase, DatasetTestHelper):
         self.assertIsFormatter(f2cls)
 
         # This might defer the import, pytest may have already loaded it
-        from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
+        from lsst.daf.butler.formatters.yaml import YamlFormatter
         self.assertEqual(type(f), YamlFormatter)
 
         with self.assertRaises(KeyError):
             # Attempt to overwrite using a different value
             self.factory.registerFormatter(storageClassName,
-                                           "lsst.daf.butler.formatters.jsonFormatter.JsonFormatter")
+                                           "lsst.daf.butler.formatters.json.JsonFormatter")
 
     def testRegistryConfig(self):
         configFile = os.path.join(TESTDIR, "config", "basic", "posixDatastore.yaml")
