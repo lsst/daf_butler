@@ -52,7 +52,11 @@ def command_test_env(runner, commandName):
     with runner.isolated_filesystem():
         with open("resources.yaml", "w") as f:
             f.write(yaml.dump({"cmd": {"import": "test_cliPluginLoader", "commands": [commandName]}}))
-        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": os.path.realpath(f.name)}):
+        # Add a colon to the end of the path on the next line, this tests the
+        # case where the lookup in LoaderCLI._getPluginList generates an empty
+        # string in one of the list entries and verifies that the empty string
+        # is properly stripped out.
+        with patch.dict("os.environ", {"DAF_BUTLER_PLUGINS": f"{os.path.realpath(f.name)}:"}):
             yield
 
 

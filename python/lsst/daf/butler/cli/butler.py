@@ -89,7 +89,7 @@ class LoaderCLI(click.MultiCommand):
         """
         pluginModules = os.environ.get("DAF_BUTLER_PLUGINS")
         if pluginModules:
-            return pluginModules.split(":")
+            return [p for p in pluginModules.split(":") if p != '']
         return []
 
     @staticmethod
