@@ -453,7 +453,7 @@ class FormatterFactory:
 
            formatters:
              write_recipes:
-               lsst.obs.base.fitsExposureFormatter.FixExposureFormatter:
+               lsst.obs.base.formatters.fitsExposure.FixExposureFormatter:
                  lossless:
                    ...
                  noCompression:
