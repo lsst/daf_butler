@@ -32,14 +32,9 @@ from lsst.daf.butler.cli.cmd import config_validate
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class ValidateTest(CliCmdTestBase):
-
+class ValidateTest(CliCmdTestBase, unittest.TestCase):
     defaultExpected = dict()
-
     command = config_validate
-
-    def test_help(self):
-        self.help_test()
 
 
 class ConfigValidateUseTest(unittest.TestCase):

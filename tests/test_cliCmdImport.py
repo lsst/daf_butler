@@ -30,7 +30,7 @@ from lsst.daf.butler.cli.cmd import butler_import
 from lsst.daf.butler.cli.utils import Mocker
 
 
-class ImportTestCase(CliCmdTestBase):
+class ImportTestCase(CliCmdTestBase, unittest.TestCase):
 
     defaultExpected = dict(repo=None,
                            transfer="auto",
@@ -65,11 +65,8 @@ class ImportTestCase(CliCmdTestBase):
         self.run_missing(["import", "foo", "--output-run", "out"],
                          'Error: Missing argument "DIRECTORY".')
 
-    def test_help(self):
-        self.help_test()
 
-
-class ExportFileCase(CliCmdTestBase):
+class ExportFileCase(CliCmdTestBase, unittest.TestCase):
 
     didRead = None
 

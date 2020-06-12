@@ -33,7 +33,7 @@ from lsst.daf.butler.cli.utils import clickResultMsg
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class QueryDatasetTypesCmdTest(CliCmdTestBase):
+class QueryDatasetTypesCmdTest(CliCmdTestBase, unittest.TestCase):
 
     defaultExpected = dict(repo=None,
                            verbose=False,
@@ -58,9 +58,6 @@ class QueryDatasetTypesCmdTest(CliCmdTestBase):
                       self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=True))
         self.run_test(["query-dataset-types", "here", "--verbose", "foo*", "--no-components"],
                       self.makeExpected(repo="here", verbose=True, glob=("foo*", ), components=False))
-
-    def test_help(self):
-        self.help_test()
 
 
 class QueryDatasetTypesScriptTest(unittest.TestCase):

@@ -33,14 +33,9 @@ from lsst.daf.butler.cli.cmd import config_dump
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class ConfigDumpTest(CliCmdTestBase):
-
+class ConfigDumpTest(CliCmdTestBase, unittest.TestCase):
     defaultExpected = dict()
-
     command = config_dump
-
-    def test_help(self):
-        self.help_test()
 
 
 class ConfigDumpUseTest(unittest.TestCase):

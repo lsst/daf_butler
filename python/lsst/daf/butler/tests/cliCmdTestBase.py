@@ -23,13 +23,12 @@ import abc
 import click
 import click.testing
 import copy
-import unittest
 
 from ..cli.utils import clickResultMsg, mockEnvVar, Mocker
 from ..cli import butler
 
 
-class CliCmdTestBase(unittest.TestCase, abc.ABC):
+class CliCmdTestBase(abc.ABC):
     """A test case base that is used to verify click command functions import
     and call their respective script fucntions correctly.
     """
@@ -110,7 +109,7 @@ class CliCmdTestBase(unittest.TestCase, abc.ABC):
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(expectedMsg, result.stdout)
 
-    def help_test(self):
+    def test_help(self):
         self.assertFalse(self.command.get_short_help_str().endswith("..."),
                          msg="The command help message is being truncated to "
                          f"\"{self.command.get_short_help_str()}\". It should be shortened, or define "

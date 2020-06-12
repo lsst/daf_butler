@@ -25,7 +25,7 @@ from lsst.daf.butler.tests import CliCmdTestBase
 from lsst.daf.butler.cli.cmd import create
 
 
-class CreateTest(CliCmdTestBase):
+class CreateTest(CliCmdTestBase, unittest.TestCase):
 
     defaultExpected = dict(repo=None,
                            seed_config=None,
@@ -57,9 +57,6 @@ class CreateTest(CliCmdTestBase):
                                         standalone=True,
                                         override=True,
                                         outfile="bar"))
-
-    def test_help(self):
-        self.help_test()
 
 
 if __name__ == "__main__":

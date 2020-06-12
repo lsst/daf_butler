@@ -32,7 +32,7 @@ from lsst.daf.butler.cli.cmd import query_collections
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
-class QueryCollectionsCmdTest(CliCmdTestBase):
+class QueryCollectionsCmdTest(CliCmdTestBase, unittest.TestCase):
 
     defaultExpected = dict(repo=None,
                            collection_type=None,
@@ -55,9 +55,6 @@ class QueryCollectionsCmdTest(CliCmdTestBase):
                       self.makeExpected(repo="here",
                                         flatten_chains=True,
                                         include_chains=True))
-
-    def test_help(self):
-        self.help_test()
 
 
 class QueryCollectionsScriptTest(unittest.TestCase):
