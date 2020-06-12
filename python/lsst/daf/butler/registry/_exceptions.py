@@ -26,9 +26,6 @@ __all__ = ("InconsistentDataIdError", "ConflictingDefinitionError", "OrphanedRec
 class InconsistentDataIdError(ValueError):
     """Exception raised when a data ID contains contradictory key-value pairs,
     according to dimension relationships.
-
-    This can include the case where the data ID identifies multiple spatial
-    regions or timespans that are disjoint.
     """
 
 
