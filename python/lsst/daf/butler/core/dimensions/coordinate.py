@@ -26,7 +26,6 @@ __all__ = ("DataCoordinate", "ExpandedDataCoordinate", "DataId")
 import numbers
 from typing import (
     Any,
-    Callable,
     Mapping,
     Optional,
     Tuple,
@@ -195,25 +194,6 @@ class DataCoordinate(IndexedTupleDict[Dimension, Any]):
         # quote it's keys: that's both more compact and something that can't
         # be mistaken for an actual dict or something that could be exec'd.
         return "{{{}}}".format(', '.join(f"{k.name}: {v!r}" for k, v in self.items()))
-
-    def fingerprint(self, update: Callable[[bytes], None]) -> None:
-        """Update a secure hash function with the values in this data ID.
-
-        Parameters
-        ----------
-        update : `~collections.abc.Callable`
-            Callable that accepts a single `bytes` argument to update
-            the hash; usually the ``update`` method of an instance from
-            the ``hashlib`` module.
-        """
-        for k, v in self.items():
-            update(k.name.encode("utf8"))
-            if isinstance(v, numbers.Integral):
-                update(int(v).to_bytes(64, "big", signed=False))
-            elif isinstance(v, str):
-                update(v.encode("utf8"))
-            else:
-                raise TypeError(f"Only `int` and `str` are allowed as dimension keys, not {v} ({type(v)}).")
 
     def subset(self, graph: DimensionGraph) -> DataCoordinate:
         """Return a new `DataCoordinate` whose graph is a subset of

@@ -22,7 +22,6 @@ from __future__ import annotations
 
 __all__ = ["AmbiguousDatasetError", "DatasetRef"]
 
-import hashlib
 from typing import (
     Any,
     Dict,
@@ -63,10 +62,6 @@ class DatasetRef:
     run : `str`, optional
         The name of the run this dataset was associated with when it was
         created.  Must be provided if ``id`` is.
-    hash : `bytes`, optional
-        A hash of the dataset type and data ID.  Should only be provided if
-        copying from another `DatasetRef` with the same dataset type and data
-        ID.
     conform : `bool`, optional
         If `True` (default), call `DataCoordinate.standardize` to ensure that
         the data ID's dimensions are consistent with the dataset type's.
@@ -85,11 +80,11 @@ class DatasetRef:
         provided but ``run`` is not.
     """
 
-    __slots__ = ("id", "datasetType", "dataId", "run", "_hash", "hasParentId")
+    __slots__ = ("id", "datasetType", "dataId", "run", "hasParentId")
 
     def __new__(cls, datasetType: DatasetType, dataId: DataCoordinate, *,
                 id: Optional[int] = None,
-                run: Optional[str] = None, hash: Optional[bytes] = None,
+                run: Optional[str] = None,
                 hasParentId: bool = False,
                 conform: bool = True) -> DatasetRef:
         self = super().__new__(cls)
@@ -110,11 +105,6 @@ class DatasetRef:
             if run is not None:
                 raise ValueError("'run' cannot be provided unless 'id' is.")
             self.run = None
-        if hash is not None:
-            # We only set self._hash if we know it; this plays nicely with
-            # the @immutable decorator, which allows an attribute to be set
-            # only one time.
-            self._hash = hash
         return self
 
     def __eq__(self, other: Any) -> bool:
@@ -125,17 +115,6 @@ class DatasetRef:
 
     def __hash__(self) -> int:
         return hash((self.datasetType, self.dataId, self.id))
-
-    @property
-    def hash(self) -> bytes:
-        """Secure hash of the `DatasetType` name and data ID (`bytes`).
-        """
-        if not hasattr(self, "_hash"):
-            message = hashlib.blake2b(digest_size=32)
-            message.update(self.datasetType.name.encode("utf8"))
-            self.dataId.fingerprint(message.update)
-            self._hash = message.digest()
-        return self._hash
 
     @property
     def dimensions(self) -> DimensionGraph:
@@ -179,7 +158,7 @@ class DatasetRef:
             A new `DatasetRef`.
         """
         return DatasetRef(datasetType=self.datasetType, dataId=self.dataId,
-                          id=id, run=run, hash=self.hash, conform=False)
+                          id=id, run=run, conform=False)
 
     def unresolved(self) -> DatasetRef:
         """Return a new `DatasetRef` with the same data ID and dataset type,
@@ -199,7 +178,7 @@ class DatasetRef:
             if ref1.unresolved() == ref2.unresolved():
                 ...
         """
-        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, hash=self.hash, conform=False)
+        return DatasetRef(datasetType=self.datasetType, dataId=self.dataId, conform=False)
 
     def expanded(self, dataId: ExpandedDataCoordinate) -> DatasetRef:
         """Return a new `DatasetRef` with the given expanded data ID.
@@ -217,7 +196,7 @@ class DatasetRef:
         """
         assert dataId == self.dataId
         return DatasetRef(datasetType=self.datasetType, dataId=dataId,
-                          id=self.id, run=self.run, hash=self.hash,
+                          id=self.id, run=self.run,
                           conform=False)
 
     def isComponent(self) -> bool:
