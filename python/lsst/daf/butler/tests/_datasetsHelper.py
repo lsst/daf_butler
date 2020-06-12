@@ -24,7 +24,7 @@ __all__ = ("DatasetTestHelper", "DatastoreTestHelper",
 
 import os
 from lsst.daf.butler import DatasetType, DatasetRef
-from lsst.daf.butler.formatters.yamlFormatter import YamlFormatter
+from lsst.daf.butler.formatters.yaml import YamlFormatter
 
 
 class DatasetTestHelper:

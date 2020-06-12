@@ -32,7 +32,7 @@ from typing import (
 )
 
 from lsst.utils import doImport
-from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+from .file import FileFormatter
 
 
 class PexConfigFormatter(FileFormatter):

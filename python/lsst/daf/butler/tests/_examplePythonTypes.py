@@ -57,14 +57,14 @@ def registerMetricsExample(butler):
     yamlDict = _addFullStorageClass(
         butler,
         "StructuredDataDictYaml",
-        "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter",
+        "lsst.daf.butler.formatters.yaml.YamlFormatter",
         pytype=dict,
     )
 
     yamlList = _addFullStorageClass(
         butler,
         "StructuredDataListYaml",
-        "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter",
+        "lsst.daf.butler.formatters.yaml.YamlFormatter",
         pytype=list,
         parameters={"slice"},
         assembler="lsst.daf.butler.tests.ListAssembler"
@@ -73,7 +73,7 @@ def registerMetricsExample(butler):
     _addFullStorageClass(
         butler,
         "StructuredDataNoComponents",
-        "lsst.daf.butler.formatters.pickleFormatter.PickleFormatter",
+        "lsst.daf.butler.formatters.pickle.PickleFormatter",
         pytype=MetricsExample,
         parameters={"slice"},
         assembler="lsst.daf.butler.tests.MetricsAssembler"
@@ -82,7 +82,7 @@ def registerMetricsExample(butler):
     _addFullStorageClass(
         butler,
         "StructuredData",
-        "lsst.daf.butler.formatters.yamlFormatter.YamlFormatter",
+        "lsst.daf.butler.formatters.yaml.YamlFormatter",
         pytype=MetricsExample,
         components={"summary": yamlDict,
                     "output": yamlDict,

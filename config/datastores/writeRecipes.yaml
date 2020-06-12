@@ -1,4 +1,4 @@
-lsst.obs.base.fitsExposureFormatter.FitsExposureFormatter:
+lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter:
   # No compression
   noCompression: &noCompression
     image: &noCompressionOptions

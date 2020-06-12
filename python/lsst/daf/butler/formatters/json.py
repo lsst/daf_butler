@@ -33,7 +33,7 @@ from typing import (
     Type,
 )
 
-from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+from .file import FileFormatter
 
 if TYPE_CHECKING:
     from lsst.daf.butler import StorageClass

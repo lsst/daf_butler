@@ -33,7 +33,7 @@ from typing import (
     Type,
 )
 
-from lsst.daf.butler.formatters.fileFormatter import FileFormatter
+from .file import FileFormatter
 
 
 class PickleFormatter(FileFormatter):
