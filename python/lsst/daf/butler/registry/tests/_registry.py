@@ -1030,9 +1030,9 @@ class RegistryTests(ABC):
         self.assertEqual(len(list(attributes.items())), 0)
 
         # cannot store empty key or value
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             attributes.set("", "value")
-        with self.assertRaises(Exception):
+        with self.assertRaises(ValueError):
             attributes.set("attr", "")
 
         # set value of non-existing key

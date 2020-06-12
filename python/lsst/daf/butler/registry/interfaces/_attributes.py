@@ -125,6 +125,8 @@ class ButlerAttributeManager(ABC):
         ------
         ButlerAttributeExistsError
             Raised if attribute already exists but ``force`` option is false.
+        ValueError
+            Raised if name or value parameters are empty.
         """
         raise NotImplementedError()
 

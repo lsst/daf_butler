@@ -85,6 +85,8 @@ class DefaultButlerAttributeManager(ButlerAttributeManager):
 
     def set(self, name: str, value: str, *, force: bool = False) -> None:
         # Docstring inherited from ButlerAttributeManager.
+        if not name or not value:
+            raise ValueError("name and value cannot be empty")
         if force:
             self._db.replace(self._table, {
                 "name": name,
