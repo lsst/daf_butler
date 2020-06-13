@@ -93,16 +93,16 @@ Example datastores
 Example formatters
 ------------------
 
-.. automodapi:: lsst.daf.butler.formatters.fileFormatter
+.. automodapi:: lsst.daf.butler.formatters.file
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.jsonFormatter
+.. automodapi:: lsst.daf.butler.formatters.json
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.yamlFormatter
+.. automodapi:: lsst.daf.butler.formatters.yaml
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.pickleFormatter
+.. automodapi:: lsst.daf.butler.formatters.pickle
    :no-main-docstr:
    :headings: ^"
 
