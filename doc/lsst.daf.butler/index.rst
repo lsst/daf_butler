@@ -89,6 +89,9 @@ Example datastores
 .. automodapi:: lsst.daf.butler.datastores.chainedDatastore
    :no-main-docstr:
    :headings: ^"
+.. automodapi:: lsst.daf.butler.datastores.s3Datastore
+   :no-main-docstr:
+   :headings: ^"
 
 Example formatters
 ------------------
