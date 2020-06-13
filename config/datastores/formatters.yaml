@@ -36,7 +36,10 @@ ExposureI: lsst.obs.base.formatters.fitsExposure.FitsExposureFormatter
 SkyMap: lsst.daf.butler.formatters.pickle.PickleFormatter
 Background: lsst.obs.base.formatters.fitsGeneric.FitsGenericFormatter
 Config: lsst.daf.butler.formatters.pexConfig.PexConfigFormatter
-Packages: lsst.daf.butler.formatters.pickle.PickleFormatter
+Packages:
+  formatter: lsst.obs.base.formatters.packages.PackagesFormatter
+  parameters:
+    format: yaml
 PropertyList: lsst.daf.butler.formatters.yaml.YamlFormatter
 PropertySet: lsst.daf.butler.formatters.yaml.YamlFormatter
 NumpyArray: lsst.daf.butler.formatters.pickle.PickleFormatter

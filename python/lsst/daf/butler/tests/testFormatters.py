@@ -21,15 +21,20 @@
 
 from __future__ import annotations
 
-__all__ = ("FormatterTest", "DoNothingFormatter")
+__all__ = ("FormatterTest", "DoNothingFormatter", "LenientYamlFormatter")
 
 from typing import (
+    TYPE_CHECKING,
     Any,
     Mapping,
     Optional,
 )
 
 from ..core import Formatter
+from ..formatters.yaml import YamlFormatter
+
+if TYPE_CHECKING:
+    from ..core import Location
 
 
 class DoNothingFormatter(Formatter):
@@ -62,3 +67,13 @@ class FormatterTest(Formatter):
             if "mode" not in recipes[recipeName]:
                 raise RuntimeError("'mode' is a required write recipe parameter")
         return recipes
+
+
+class LenientYamlFormatter(YamlFormatter):
+    """A test formatter that allows any file extension but always reads and
+    writes YAML."""
+    extension = ".yaml"
+
+    @classmethod
+    def validateExtension(cls, location: Location) -> None:
+        return

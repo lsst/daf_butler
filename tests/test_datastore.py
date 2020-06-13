@@ -667,11 +667,15 @@ class DatastoreConstraintsTests(DatastoreTestsBase):
         dimensions = self.universe.extract(("visit", "physical_filter", "instrument"))
         dataId = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
 
-        # Write empty file suitable for ingest check
-        testfile = tempfile.NamedTemporaryFile()
+        # Write empty file suitable for ingest check (JSON and YAML variants)
+        testfile_y = tempfile.NamedTemporaryFile(suffix=".yaml")
+        testfile_j = tempfile.NamedTemporaryFile(suffix=".json")
         for datasetTypeName, sc, accepted in (("metric", sc1, True), ("metric2", sc1, False),
                                               ("metric33", sc1, True), ("metric2", sc2, True)):
-            with self.subTest(datasetTypeName=datasetTypeName):
+            # Choose different temp file depending on StorageClass
+            testfile = testfile_j if sc.name.endswith("Json") else testfile_y
+
+            with self.subTest(datasetTypeName=datasetTypeName, storageClass=sc.name, file=testfile.name):
                 ref = self.makeDatasetRef(datasetTypeName, dimensions, sc, dataId, conform=False)
                 if accepted:
                     datastore.put(metrics, ref)
@@ -751,14 +755,19 @@ class ChainedDatastorePerStoreConstraintsTests(DatastoreTestsBase, unittest.Test
         dataId1 = {"visit": 52, "physical_filter": "V", "instrument": "DummyCamComp"}
         dataId2 = {"visit": 52, "physical_filter": "V", "instrument": "HSC"}
 
-        # Write empty file suitable for ingest check
-        testfile = tempfile.NamedTemporaryFile()
+        # Write empty file suitable for ingest check (JSON and YAML variants)
+        testfile_y = tempfile.NamedTemporaryFile(suffix=".yaml")
+        testfile_j = tempfile.NamedTemporaryFile(suffix=".json")
 
         for typeName, dataId, sc, accept, ingest in (("metric", dataId1, sc1, (False, True, False), True),
                                                      ("metric2", dataId1, sc1, (False, False, False), False),
                                                      ("metric2", dataId2, sc1, (True, False, False), False),
                                                      ("metric33", dataId2, sc2, (True, True, False), True),
                                                      ("metric2", dataId1, sc2, (False, True, False), True)):
+
+            # Choose different temp file depending on StorageClass
+            testfile = testfile_j if sc.name.endswith("Json") else testfile_y
+
             with self.subTest(datasetTypeName=typeName, dataId=dataId, sc=sc.name):
                 ref = self.makeDatasetRef(typeName, dimensions, sc, dataId,
                                           conform=False)
