@@ -80,29 +80,41 @@ Python API reference
 Example datastores
 ------------------
 
-.. automodapi:: lsst.daf.butler.datastores.posixDatastore
+.. automodapi:: lsst.daf.butler.datastores.chainedDatastore
    :no-main-docstr:
    :headings: ^"
 .. automodapi:: lsst.daf.butler.datastores.inMemoryDatastore
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.datastores.chainedDatastore
+.. automodapi:: lsst.daf.butler.datastores.posixDatastore
+   :no-main-docstr:
+   :headings: ^"
+.. automodapi:: lsst.daf.butler.datastores.s3Datastore
    :no-main-docstr:
    :headings: ^"
 
 Example formatters
 ------------------
 
-.. automodapi:: lsst.daf.butler.formatters.fileFormatter
+.. automodapi:: lsst.daf.butler.formatters.file
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.jsonFormatter
+.. automodapi:: lsst.daf.butler.formatters.json
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.yamlFormatter
+.. automodapi:: lsst.daf.butler.formatters.matplotlib
    :no-main-docstr:
    :headings: ^"
-.. automodapi:: lsst.daf.butler.formatters.pickleFormatter
+.. automodapi:: lsst.daf.butler.formatters.parquet
+   :no-main-docstr:
+   :headings: ^"
+.. automodapi:: lsst.daf.butler.formatters.pexConfig
+   :no-main-docstr:
+   :headings: ^"
+.. automodapi:: lsst.daf.butler.formatters.pickle
+   :no-main-docstr:
+   :headings: ^"
+.. automodapi:: lsst.daf.butler.formatters.yaml
    :no-main-docstr:
    :headings: ^"
 
