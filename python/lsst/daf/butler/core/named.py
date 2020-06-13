@@ -86,7 +86,6 @@ class NamedKeyMapping(Mapping[K, V]):
         """
         raise NotImplementedError()
 
-    @abstractmethod
     def byName(self) -> Dict[str, V]:
         """Return a `Mapping` with names as keys and the same values as
         ``self``.
@@ -98,7 +97,7 @@ class NamedKeyMapping(Mapping[K, V]):
             ``self``, with `str` names as keys.  This is always a new object,
             not a view.
         """
-        raise NotImplementedError()
+        return dict(zip(self.names, self.values()))
 
     @abstractmethod
     def __getitem__(self, key: Union[str, K]) -> V:
