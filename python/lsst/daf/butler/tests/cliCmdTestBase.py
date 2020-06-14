@@ -23,13 +23,12 @@ import abc
 import click
 import click.testing
 import copy
-import unittest
 
 from ..cli.utils import clickResultMsg, mockEnvVar, Mocker
 from ..cli import butler
 
 
-class MockeredTestBase(unittest.TestCase, abc.ABC):
+class CliCmdTestBase(abc.ABC):
     """A test case base that is used to verify click command functions import
     and call their respective script fucntions correctly.
     """
@@ -38,6 +37,13 @@ class MockeredTestBase(unittest.TestCase, abc.ABC):
     @property
     @abc.abstractmethod
     def defaultExpected(cls):
+        pass
+
+    @classmethod
+    @property
+    @abc.abstractmethod
+    def command(cls):
+        """Get the click.Command being tested."""
         pass
 
     def setUp(self):
@@ -102,3 +108,9 @@ class MockeredTestBase(unittest.TestCase, abc.ABC):
         result = self.run_command(inputs)
         self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
         self.assertIn(expectedMsg, result.stdout)
+
+    def test_help(self):
+        self.assertFalse(self.command.get_short_help_str().endswith("..."),
+                         msg="The command help message is being truncated to "
+                         f"\"{self.command.get_short_help_str()}\". It should be shortened, or define "
+                         "@command(short_help=\"something short and helpful\")")

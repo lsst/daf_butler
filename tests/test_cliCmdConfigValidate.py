@@ -25,16 +25,20 @@
 
 import click
 import click.testing
-import os
 import unittest
 
 from lsst.daf.butler.cli import butler
+from lsst.daf.butler.cli.cmd import config_validate
+from lsst.daf.butler.tests import CliCmdTestBase
 
 
-TESTDIR = os.path.abspath(os.path.dirname(__file__))
+class ValidateTest(CliCmdTestBase, unittest.TestCase):
+    defaultExpected = dict()
+    command = config_validate
 
 
-class Suite(unittest.TestCase):
+class ConfigValidateUseTest(unittest.TestCase):
+    """Test executing the command."""
 
     def testConfigValidate(self):
         """Test validating a valid config."""

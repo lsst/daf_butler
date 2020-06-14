@@ -22,72 +22,19 @@
 """Unit tests for the daf_butler dataset-type CLI option.
 """
 
-import abc
 import click
 import click.testing
 import unittest
 import yaml
 
+from lsst.daf.butler.tests import CliOptionTestBase
 from lsst.daf.butler.registry import CollectionType
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
                                      dataset_type_option, directory_argument, glob_parameter, verbose_option)
-from lsst.daf.butler.cli.utils import clickResultMsg
+from lsst.daf.butler.cli.utils import clickResultMsg, ParameterType
 
 
-class OptionTestBase(unittest.TestCase, abc.ABC):
-
-    def setUp(self):
-        self.runner = click.testing.CliRunner()
-
-    def run_command(self, cmd, args):
-        """
-
-        Parameters
-        ----------
-        cmd : click.Command
-            The command function to call
-        args : [`str`]
-            The arguments to pass to the function call.
-
-        Returns
-        -------
-        [type]
-            [description]
-        """
-        return self.runner.invoke(cmd, args)
-
-    def run_test(self, cmd, cmdArgs, verifyFunc, verifyArgs=None):
-        result = self.run_command(cmd, cmdArgs)
-        verifyFunc(result, verifyArgs)
-
-    def run_help_test(self, cmd, expcectedHelpText):
-        result = self.runner.invoke(cmd, ["--help"])
-        # remove all whitespace to work around line-wrap differences.
-        self.assertIn("".join(expcectedHelpText.split()), "".join(result.output.split()))
-
-    @property
-    @abc.abstractmethod
-    def optionClass(self):
-        pass
-
-    def help_test(self):
-        @click.command()
-        @self.optionClass()
-        def cli():
-            pass
-
-        self.run_help_test(cli, self.optionClass.defaultHelp)
-
-    def custom_help_test(self):
-        @click.command()
-        @self.optionClass(help="foobarbaz")
-        def cli(collection_type):
-            pass
-
-        self.run_help_test(cli, "foobarbaz")
-
-
-class CollectionTypeTestCase(OptionTestBase):
+class CollectionTypeTestCase(CliOptionTestBase):
 
     optionClass = collection_type_option
 
@@ -130,7 +77,7 @@ class CollectionTypeTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class ConfigTestCase(OptionTestBase):
+class ConfigTestCase(CliOptionTestBase):
 
     optionClass = config_option
 
@@ -161,7 +108,7 @@ class ConfigTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class ConfigFileTestCase(OptionTestBase):
+class ConfigFileTestCase(CliOptionTestBase):
 
     optionClass = config_file_option
 
@@ -191,7 +138,7 @@ class ConfigFileTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class DatasetTypeTestCase(OptionTestBase):
+class DatasetTypeTestCase(CliOptionTestBase):
 
     optionClass = dataset_type_option
 
@@ -229,7 +176,7 @@ class DatasetTypeTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class DirectoryArgumentTestCase(OptionTestBase):
+class DirectoryArgumentTestCase(CliOptionTestBase):
 
     optionClass = directory_argument
 
@@ -264,7 +211,7 @@ class DirectoryArgumentTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class GlobTestCase(OptionTestBase):
+class GlobTestCase(CliOptionTestBase):
 
     optionClass = glob_parameter
 
@@ -279,7 +226,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_argument(self):
         """test argument"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT)
         def cli(glob):
             if glob is None:
                 glob = "None"
@@ -291,7 +238,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_argument_required(self):
         """test with argument required"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT, required=True)
         def cli(glob):
             print(glob)
 
@@ -313,7 +260,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_option_required(self):
         """test with argument required"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT, required=True)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT, required=True)
         def cli(glob):
             print(glob)
 
@@ -323,7 +270,7 @@ class GlobTestCase(OptionTestBase):
     def test_glob_argument_multiple(self):
         """test with multiple argument values"""
         @click.command()
-        @glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+        @glob_parameter(parameterType=ParameterType.ARGUMENT, multiple=True)
         def cli(glob):
             print(glob)
 
@@ -344,7 +291,7 @@ class GlobTestCase(OptionTestBase):
         self.custom_help_test()
 
 
-class VerboseTestCase(OptionTestBase):
+class VerboseTestCase(CliOptionTestBase):
 
     optionClass = verbose_option
 

@@ -24,7 +24,7 @@ import yaml
 
 from ..opt import (collection_type_option, dataset_type_option, directory_argument, glob_parameter,
                    repo_argument, run_option, transfer_option, verbose_option)
-from ..utils import split_commas, cli_handle_exception, typeStrAcceptsMultiple
+from ..utils import split_commas, cli_handle_exception, ParameterType, typeStrAcceptsMultiple
 from ...script import (butlerImport, createRepo, configDump, configValidate, queryCollections,
                        queryDatasetTypes)
 
@@ -51,7 +51,7 @@ def butler_import(*args, **kwargs):
 
 
 @click.command()
-@repo_argument(help=repo_argument.will_create_repo)
+@repo_argument(required=True, help=repo_argument.will_create_repo)
 @click.option("--seed-config", help="Path to an existing YAML config file to apply (on top of defaults).")
 @click.option("--standalone", is_flag=True, help="Include all defaults in the config file in the repo, "
               "insulating the repo from changes in package defaults.")
@@ -64,7 +64,7 @@ def create(*args, **kwargs):
     cli_handle_exception(createRepo, *args, **kwargs)
 
 
-@click.command()
+@click.command(short_help="Dump butler config to stdout.")
 @repo_argument(required=True)
 @click.option("--subset", "-s", type=str,
               help="Subset of a configuration to report. This can be any key in the hierarchy such as "
@@ -80,7 +80,7 @@ def config_dump(*args, **kwargs):
     cli_handle_exception(configDump, *args, **kwargs)
 
 
-@click.command()
+@click.command(short_help="Validate the configuration files.")
 @repo_argument(required=True)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
 @dataset_type_option(help="Specific DatasetType(s) to validate.")
@@ -92,7 +92,7 @@ def config_validate(*args, **kwargs):
     cli_handle_exception(configValidate, *args, **kwargs)
 
 
-@click.command()
+@click.command(short_help="Search for collections.")
 @repo_argument(required=True)
 @collection_type_option()
 @click.option("--flatten-chains/--no-flatten-chains",
@@ -111,7 +111,7 @@ def query_collections(*args, **kwargs):
 
 @click.command()
 @repo_argument(required=True)
-@glob_parameter(parameterType=glob_parameter.ARGUMENT, multiple=True)
+@glob_parameter(parameterType=ParameterType.ARGUMENT, multiple=True)
 @verbose_option(help="Include dataset type name, dimensions, and storage class in output.")
 @click.option("--components/--no-components",
               default=None,

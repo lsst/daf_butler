@@ -89,7 +89,7 @@ class LoaderCLI(click.MultiCommand):
         """
         pluginModules = os.environ.get("DAF_BUTLER_PLUGINS")
         if pluginModules:
-            return pluginModules.split(":")
+            return [p for p in pluginModules.split(":") if p != '']
         return []
 
     @staticmethod
@@ -109,7 +109,7 @@ class LoaderCLI(click.MultiCommand):
         """
         try:
             return doImport(pluginName)
-        except (TypeError, ModuleNotFoundError, ImportError) as err:
+        except Exception as err:
             log.warning("Could not import plugin from %s, skipping.", pluginName)
             log.debug("Plugin import exception: %s", err)
             return None
@@ -227,7 +227,7 @@ class LoaderCLI(click.MultiCommand):
         commands = self._getCommands()
         self._raiseIfDuplicateCommands(commands)
         log.debug(commands.keys())
-        return commands.keys()
+        return sorted(commands)
 
     def get_command(self, context, name):
         """Used by Click to get a single command for execution.
@@ -250,7 +250,7 @@ class LoaderCLI(click.MultiCommand):
         self._raiseIfDuplicateCommands(commands)
         if commands[name][0] == localCmdPkg:
             return getattr(butlerCommands, cmdNameToFuncName(name))
-        return doImport(commands[name][0] + "." + cmdNameToFuncName(name))
+        return self._importPlugin(commands[name][0] + "." + cmdNameToFuncName(name))
 
 
 @click.command(cls=LoaderCLI, context_settings=dict(help_option_names=["-h", "--help"]))
