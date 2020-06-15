@@ -25,7 +25,6 @@
 import click
 import click.testing
 import unittest
-import yaml
 
 from lsst.daf.butler.tests import CliOptionTestBase
 from lsst.daf.butler.registry import CollectionType
