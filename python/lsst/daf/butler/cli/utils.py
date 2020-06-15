@@ -102,7 +102,11 @@ def clickResultMsg(result):
     msg : `str`
         The message string.
     """
-    return f"output: {result.output} exception: {result.exception}"
+    msg = io.StringIO()
+    if result.exception:
+        traceback.print_tb(result.exception.__traceback__, file=msg)
+        msg.seek(0)
+    return f"\noutput: {result.output}\nexception: {result.exception}\ntraceback: {msg.read()}"
 
 
 def addArgumentHelp(doc, helpText):
