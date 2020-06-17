@@ -251,7 +251,7 @@ class DatasetType:
         KeyError
             Requested component is not supported by this `DatasetType`.
         """
-        if component in self.storageClass.components:
+        if component in self.storageClass.allComponents():
             return self.nameWithComponent(self.name, component)
         raise KeyError("Requested component ({}) not understood by this DatasetType".format(component))
 
@@ -269,8 +269,9 @@ class DatasetType:
         datasetType : `DatasetType`
             A new DatasetType instance.
         """
+        # The component could be a read/write or read component
         return DatasetType(self.componentTypeName(component), dimensions=self.dimensions,
-                           storageClass=self.storageClass.components[component])
+                           storageClass=self.storageClass.allComponents()[component])
 
     def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetType` refers to a

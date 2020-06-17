@@ -140,7 +140,7 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                                                  f"with database definition {storage.datasetType}.")
             inserted = False
         if inserted and datasetType.isComposite:
-            for component in datasetType.storageClass.components:
+            for component in datasetType.storageClass.allComponents():
                 self.register(datasetType.makeComponentDatasetType(component))
         return storage, inserted
 
