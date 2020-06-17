@@ -26,6 +26,7 @@ from __future__ import annotations
 __all__ = ("StorageClass", "StorageClassFactory", "StorageClassConfig")
 
 import builtins
+import copy
 import logging
 
 from typing import (
@@ -66,6 +67,8 @@ class StorageClass:
         Python type (or name of type) to associate with the `StorageClass`
     components : `dict`, optional
         `dict` mapping name of a component to another `StorageClass`.
+    readComponents : `dict`, optional
+        `dict` mapping name of a read-only component to another `StorageClass`.
     parameters : `~collections.abc.Sequence` or `~collections.abc.Set`
         Parameters understood by this `StorageClass` that can control
         reading of data from datastores.
@@ -75,6 +78,7 @@ class StorageClass:
     """
     _cls_name: str = "BaseStorageClass"
     _cls_components: Optional[Dict[str, StorageClass]] = None
+    _cls_readComponents: Optional[Dict[str, StorageClass]] = None
     _cls_parameters: Optional[Union[Set[str], Sequence[str]]] = None
     _cls_assembler: Optional[str] = None
     _cls_pytype: Optional[Union[Type, str]] = None
@@ -84,6 +88,7 @@ class StorageClass:
     def __init__(self, name: Optional[str] = None,
                  pytype: Optional[Union[Type, str]] = None,
                  components: Optional[Dict[str, StorageClass]] = None,
+                 readComponents: Optional[Dict[str, StorageClass]] = None,
                  parameters: Optional[Union[Sequence, Set]] = None,
                  assembler: Optional[str] = None):
         if name is None:
@@ -92,6 +97,8 @@ class StorageClass:
             pytype = self._cls_pytype
         if components is None:
             components = self._cls_components
+        if readComponents is None:
+            readComponents = self._cls_readComponents
         if parameters is None:
             parameters = self._cls_parameters
         if assembler is None:
@@ -112,6 +119,7 @@ class StorageClass:
             self._pytype = None
 
         self._components = components if components is not None else {}
+        self._readComponents = readComponents if readComponents is not None else {}
         self._parameters = frozenset(parameters) if parameters is not None else frozenset()
         # if the assembler is not None also set it and clear the default
         # assembler
@@ -135,6 +143,12 @@ class StorageClass:
         """Component names mapped to associated `StorageClass`
         """
         return self._components
+
+    @property
+    def readComponents(self) -> Dict[str, StorageClass]:
+        """Read-only component names mapped to associated `StorageClass`
+        """
+        return self._readComponents
 
     @property
     def parameters(self) -> Set[str]:
@@ -164,6 +178,19 @@ class StorageClass:
             return None
         self._assembler = doImport(self._assemblerClassName)
         return self._assembler
+
+    def allComponents(self) -> Dict[str, StorageClass]:
+        """Return a mapping of all the read and read/write components
+        to the corresponding storage class.
+
+        Returns
+        -------
+        comp : `dict` of [`str`, `StorageClass`]
+            The component name to storage class mapping.
+        """
+        components = copy.copy(self.components)
+        components.update(self.readComponents)
+        return components
 
     def assembler(self) -> CompositeAssembler:
         """Return an instance of an assembler.
@@ -474,19 +501,22 @@ StorageClasses
             # Always create the storage class so we can ensure that
             # we are not trying to overwrite with a different definition
             components = None
-            if "components" in info:
-                components = {}
-                for cname, ctype in info["components"].items():
-                    if ctype not in self:
-                        processStorageClass(ctype, sconfig)
-                    components[cname] = self.getStorageClass(ctype)
 
             # Extract scalar items from dict that are needed for
             # StorageClass Constructor
             storageClassKwargs = {k: info[k] for k in ("pytype", "assembler", "parameters") if k in info}
 
-            # Fill in other items
-            storageClassKwargs["components"] = components
+            for compName in ("components", "readComponents"):
+                if compName not in info:
+                    continue
+                components = {}
+                for cname, ctype in info[compName].items():
+                    if ctype not in self:
+                        processStorageClass(ctype, sconfig)
+                    components[cname] = self.getStorageClass(ctype)
+
+                # Fill in other items
+                storageClassKwargs[compName] = components
 
             # Create the new storage class and register it
             baseClass = None
@@ -537,7 +567,7 @@ StorageClasses
         # so that a child can inherit but override one bit.
         # lists (which you get from configs) are treated as sets for this to
         # work consistently.
-        for k in ("components", "parameters"):
+        for k in ("components", "parameters", "readComponents"):
             classKey = f"_cls_{k}"
             if classKey in clsargs:
                 baseValue = getattr(baseClass, classKey, None)
