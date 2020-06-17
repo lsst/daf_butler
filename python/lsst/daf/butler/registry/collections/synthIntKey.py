@@ -98,24 +98,30 @@ class SynthIntKeyCollectionManager(DefaultCollectionManager):
 
     @classmethod
     def addCollectionForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "collection",
-                                onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+                                onDelete: Optional[str] = None,
+                                constraint: bool = True,
+                                **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _TABLES_SPEC.collection.fields["collection_id"]
-        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwds)
+        copy = ddl.FieldSpec(cls.getCollectionForeignKeyName(prefix), dtype=original.dtype, **kwargs)
         tableSpec.fields.add(copy)
-        tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
-                                                        target=(original.name,), onDelete=onDelete))
+        if constraint:
+            tableSpec.foreignKeys.append(ddl.ForeignKeySpec("collection", source=(copy.name,),
+                                                            target=(original.name,), onDelete=onDelete))
         return copy
 
     @classmethod
     def addRunForeignKey(cls, tableSpec: ddl.TableSpec, *, prefix: str = "run",
-                         onDelete: Optional[str] = None, **kwds: Any) -> ddl.FieldSpec:
+                         onDelete: Optional[str] = None,
+                         constraint: bool = True,
+                         **kwargs: Any) -> ddl.FieldSpec:
         # Docstring inherited from CollectionManager.
         original = _TABLES_SPEC.run.fields["collection_id"]
-        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwds)
+        copy = ddl.FieldSpec(cls.getRunForeignKeyName(prefix), dtype=original.dtype, **kwargs)
         tableSpec.fields.add(copy)
-        tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
-                                                        target=(original.name,), onDelete=onDelete))
+        if constraint:
+            tableSpec.foreignKeys.append(ddl.ForeignKeySpec("run", source=(copy.name,),
+                                                            target=(original.name,), onDelete=onDelete))
         return copy
 
     def _setRecordCache(self, records: Iterable[CollectionRecord]) -> None:
