@@ -192,16 +192,44 @@ class DatabaseTests(ABC):
                 newDatabase.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
 
     def testTemporaryTables(self):
-        """Tests for `Database.makeTemporaryTable` and
-        `Database.dropTemporaryTable`.
+        """Tests for `Database.makeTemporaryTable`,
+        `Database.dropTemporaryTable`, and `Database.insert` with
+        the ``select`` argument.
         """
-        # Need to start with the static schema.
+        # Need to start with the static schema; also insert some test data.
         newDatabase = self.makeEmptyDatabase()
         with newDatabase.declareStaticTables(create=True) as context:
-            context.addTableTuple(STATIC_TABLE_SPECS)
+            static = context.addTableTuple(STATIC_TABLE_SPECS)
+        newDatabase.insert(static.a,
+                           {"name": "a1", "region": None},
+                           {"name": "a2", "region": None})
+        bIds = newDatabase.insert(static.b,
+                                  {"name": "b1", "value": 11},
+                                  {"name": "b2", "value": 12},
+                                  {"name": "b3", "value": 13},
+                                  returnIds=True)
         # Create the table.
         table1 = newDatabase.makeTemporaryTable(TEMPORARY_TABLE_SPEC, "e1")
         self.checkTable(TEMPORARY_TABLE_SPEC, table1)
+        # Insert via a INSERT INTO ... SELECT query.
+        newDatabase.insert(
+            table1,
+            select=sqlalchemy.sql.select(
+                [static.a.columns.name.label("a_name"), static.b.columns.id.label("b_id")]
+            ).select_from(
+                static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
+            ).where(
+                sqlalchemy.sql.and_(
+                    static.a.columns.name == "a1",
+                    static.b.columns.value <= 12,
+                )
+            )
+        )
+        # Check that the inserted rows are present.
+        self.assertCountEqual(
+            [{"a_name": "a1", "b_id": bId} for bId in bIds[:2]],
+            [dict(row) for row in newDatabase.query(table1.select())]
+        )
         # Create another one via a read-only connection to the database.
         # We _do_ allow temporary table modifications in read-only databases.
         with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
@@ -211,7 +239,35 @@ class DatabaseTests(ABC):
             self.checkTable(TEMPORARY_TABLE_SPEC, table2)
             # Those tables should not be the same, despite having the same ddl.
             self.assertIsNot(table1, table2)
+            # Do a slightly different insert into this table, to check that
+            # it works in a read-only database.  This time we pass column
+            # names as a kwarg to insert instead of by labeling the columns in
+            # the select.
+            existingReadOnlyDatabase.insert(
+                table2,
+                select=sqlalchemy.sql.select(
+                    [static.a.columns.name, static.b.columns.id]
+                ).select_from(
+                    static.a.join(static.b, onclause=sqlalchemy.sql.literal(True))
+                ).where(
+                    sqlalchemy.sql.and_(
+                        static.a.columns.name == "a2",
+                        static.b.columns.value >= 12,
+                    )
+                ),
+                names=["a_name", "b_id"],
+            )
+            # Check that the inserted rows are present.
+            self.assertCountEqual(
+                [{"a_name": "a2", "b_id": bId} for bId in bIds[1:]],
+                [dict(row) for row in existingReadOnlyDatabase.query(table2.select())]
+            )
+            # Drop the temporary table from the read-only DB.  It's unspecified
+            # whether attempting to use it after this point is an error or just
+            # never returns any results, so we can't test what it does, only
+            # that it's not an error.
             existingReadOnlyDatabase.dropTemporaryTable(table2)
+        # Drop the original temporary table.
         newDatabase.dropTemporaryTable(table1)
 
     def testSchemaSeparation(self):

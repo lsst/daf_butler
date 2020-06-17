@@ -991,6 +991,8 @@ class Database(ABC):
             return {k: v for k, v in zip(returning, result)}, inserted
 
     def insert(self, table: sqlalchemy.schema.Table, *rows: dict, returnIds: bool = False,
+               select: Optional[sqlalchemy.sql.Select] = None,
+               names: Optional[Iterable[str]] = None,
                ) -> Optional[List[int]]:
         """Insert one or more rows into a table, optionally returning
         autoincrement primary key values.
@@ -1002,6 +1004,14 @@ class Database(ABC):
         returnIds: `bool`
             If `True` (`False` is default), return the values of the table's
             autoincrement primary key field (which much exist).
+        select : `sqlalchemy.sql.Select`, optional
+            A SELECT query expression to insert rows from.  Cannot be provided
+            with either ``rows`` or ``returnIds=True``.
+        names : `Iterable` [ `str` ], optional
+            Names of columns in ``table`` to be populated, ordered to match the
+            columns returned by ``select``.  Ignored if ``select`` is `None`.
+            If not provided, the columns returned by ``select`` must be named
+            to match the desired columns of ``table``.
         *rows
             Positional arguments are the rows to be inserted, as dictionaries
             mapping column name to value.  The keys in all dictionaries must
@@ -1032,13 +1042,20 @@ class Database(ABC):
         """
         if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
-        if not rows:
+        if select is not None and (rows or returnIds):
+            raise TypeError("'select' is incompatible with passing value rows or returnIds=True.")
+        if not rows and select is None:
             if returnIds:
                 return []
             else:
                 return None
         if not returnIds:
-            self._connection.execute(table.insert(), *rows)
+            if select is not None:
+                if names is None:
+                    names = select.columns.keys()
+                self._connection.execute(table.insert().from_select(names, select))
+            else:
+                self._connection.execute(table.insert(), *rows)
             return None
         else:
             sql = table.insert()
