@@ -77,6 +77,13 @@ DYNAMIC_TABLE_SPEC = ddl.TableSpec(
     ]
 )
 
+TEMPORARY_TABLE_SPEC = ddl.TableSpec(
+    fields=[
+        ddl.FieldSpec("a_name", dtype=sqlalchemy.String, length=16, primaryKey=True),
+        ddl.FieldSpec("b_id", dtype=sqlalchemy.BigInteger, primaryKey=True),
+    ],
+)
+
 
 class DatabaseTests(ABC):
     """Generic tests for the `Database` interface that can be subclassed to
@@ -183,6 +190,29 @@ class DatabaseTests(ABC):
         with newDatabase.transaction():
             with self.assertRaises(AssertionError):
                 newDatabase.ensureTableExists("d", DYNAMIC_TABLE_SPEC)
+
+    def testTemporaryTables(self):
+        """Tests for `Database.makeTemporaryTable` and
+        `Database.dropTemporaryTable`.
+        """
+        # Need to start with the static schema.
+        newDatabase = self.makeEmptyDatabase()
+        with newDatabase.declareStaticTables(create=True) as context:
+            context.addTableTuple(STATIC_TABLE_SPECS)
+        # Create the table.
+        table1 = newDatabase.makeTemporaryTable(TEMPORARY_TABLE_SPEC, "e1")
+        self.checkTable(TEMPORARY_TABLE_SPEC, table1)
+        # Create another one via a read-only connection to the database.
+        # We _do_ allow temporary table modifications in read-only databases.
+        with self.asReadOnly(newDatabase) as existingReadOnlyDatabase:
+            with existingReadOnlyDatabase.declareStaticTables(create=False) as context:
+                context.addTableTuple(STATIC_TABLE_SPECS)
+            table2 = existingReadOnlyDatabase.makeTemporaryTable(TEMPORARY_TABLE_SPEC)
+            self.checkTable(TEMPORARY_TABLE_SPEC, table2)
+            # Those tables should not be the same, despite having the same ddl.
+            self.assertIsNot(table1, table2)
+            existingReadOnlyDatabase.dropTemporaryTable(table2)
+        newDatabase.dropTemporaryTable(table1)
 
     def testSchemaSeparation(self):
         """Test that creating two different `Database` instances allows us

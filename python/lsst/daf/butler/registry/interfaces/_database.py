@@ -41,6 +41,7 @@ from typing import (
     Set,
     Tuple,
 )
+import uuid
 import warnings
 
 import astropy.time
@@ -207,6 +208,7 @@ class Database(ABC):
         self.namespace = namespace
         self._connection = connection
         self._metadata: Optional[sqlalchemy.schema.MetaData] = None
+        self._tempTables: Set[str] = set()
 
     @classmethod
     def makeDefaultUri(cls, root: str) -> Optional[str]:
@@ -743,6 +745,69 @@ class Database(ABC):
                 return table
         return table
 
+    def makeTemporaryTable(self, spec: ddl.TableSpec, name: Optional[str] = None) -> sqlalchemy.schema.Table:
+        """Create a temporary table.
+
+        Parameters
+        ----------
+        spec : `TableSpec`
+            Specification for the table.
+        name : `str`, optional
+            A unique (within this session/connetion) name for the table.
+            Subclasses may override to modify the actual name used.  If not
+            provided, a unique name will be generated.
+
+        Returns
+        -------
+        table : `sqlalchemy.schema.Table`
+            SQLAlchemy representation of the table.
+
+        Notes
+        -----
+        Temporary tables may be created, dropped, and written to even in
+        read-only databases - at least according to the Python-level
+        protections in the `Database` classes.  Server permissions may say
+        otherwise, but in that case they probably need to be modified to
+        support the full range of expected read-only butler behavior.
+
+        Temporary table rows are guaranteed to be dropped when a connection is
+        closed.  `Database` implementations are permitted to allow the table to
+        remain as long as this is transparent to the user (i.e. "creating" the
+        temporary table in a new session should not be an error, even if it
+        does nothing).
+
+        It may not be possible to use temporary tables within transactions with
+        some database engines (or configurations thereof).
+        """
+        if name is None:
+            name = f"tmp_{uuid.uuid4().hex}"
+        table = self._convertTableSpec(name, spec, self._metadata, prefixes=['TEMPORARY'],
+                                       schema=sqlalchemy.schema.BLANK_SCHEMA)
+        if table.key in self._tempTables:
+            if table.key != name:
+                raise ValueError(f"A temporary table with name {name} (transformed to {table.key} by "
+                                 f"Database) already exists.")
+        for foreignKeySpec in spec.foreignKeys:
+            table.append_constraint(self._convertForeignKeySpec(name, foreignKeySpec, self._metadata))
+        table.create(self._connection)
+        self._tempTables.add(table.key)
+        return table
+
+    def dropTemporaryTable(self, table: sqlalchemy.schema.Table) -> None:
+        """Drop a temporary table.
+
+        Parameters
+        ----------
+        table : `sqlalchemy.schema.Table`
+            A SQLAlchemy object returned by a previous call to
+            `makeTemporaryTable`.
+        """
+        if table.key in self._tempTables:
+            table.drop(self._connection)
+            self._tempTables.remove(table.key)
+        else:
+            raise TypeError(f"Table {table.key} was not created by makeTemporaryTable.")
+
     def sync(self, table: sqlalchemy.schema.Table, *,
              keys: Dict[str, Any],
              compared: Optional[Dict[str, Any]] = None,
@@ -850,7 +915,7 @@ class Database(ABC):
                 toReturn = None
             return 1, inconsistencies, toReturn
 
-        if self.isWriteable():
+        if self.isWriteable() or table.key in self._tempTables:
             # Database is writeable.  Try an insert first, but allow it to fail
             # (in only specific ways).
             row = keys.copy()
@@ -965,7 +1030,7 @@ class Database(ABC):
         May be used inside transaction contexts, so implementations may not
         perform operations that interrupt transactions.
         """
-        if not self.isWriteable():
+        if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to insert into read-only database '{self}'.")
         if not rows:
             if returnIds:
@@ -1047,7 +1112,7 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
-        if not self.isWriteable():
+        if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to delete from read-only database '{self}'.")
         if columns and not rows:
             # If there are no columns, this operation is supposed to delete
@@ -1099,7 +1164,7 @@ class Database(ABC):
         The default implementation should be sufficient for most derived
         classes.
         """
-        if not self.isWriteable():
+        if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to update read-only database '{self}'.")
         if not rows:
             return 0

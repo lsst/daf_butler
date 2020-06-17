@@ -386,7 +386,7 @@ class SqliteDatabase(Database):
             return super().insert(table, *rows, returnIds=returnIds)
 
     def replace(self, table: sqlalchemy.schema.Table, *rows: dict) -> None:
-        if not self.isWriteable():
+        if not (self.isWriteable() or table.key in self._tempTables):
             raise ReadOnlyDatabaseError(f"Attempt to replace into read-only database '{self}'.")
         if not rows:
             return
