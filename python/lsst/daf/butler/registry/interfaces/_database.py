@@ -645,7 +645,7 @@ class Database(ABC):
         assert spec.doc is None or isinstance(spec.doc, str), f"Bad doc for {name}."
         return sqlalchemy.schema.Table(name, metadata, *args, comment=spec.doc, info=spec, **kwds)
 
-    def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.sql.FromClause:
+    def ensureTableExists(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
         """Ensure that a table with the given name and specification exists,
         creating it if necessary.
 
