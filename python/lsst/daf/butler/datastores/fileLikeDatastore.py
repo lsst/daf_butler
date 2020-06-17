@@ -887,11 +887,7 @@ class FileLikeDatastore(GenericBaseDatastore):
             if doDisassembly:
 
                 for component, componentStorage in ref.datasetType.storageClass.components.items():
-                    compTypeName = ref.datasetType.componentTypeName(component)
-                    compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
-                                           storageClass=componentStorage)
-                    compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
-
+                    compRef = ref.makeComponentRef(component)
                     compLocation = predictLocation(compRef)
 
                     # Add a URI fragment to indicate this is a guess
@@ -1076,15 +1072,12 @@ class FileLikeDatastore(GenericBaseDatastore):
         if doDisassembly:
             components = ref.datasetType.storageClass.assembler().disassemble(inMemoryDataset)
             for component, componentInfo in components.items():
-                compTypeName = ref.datasetType.componentTypeName(component)
                 # Don't recurse because we want to take advantage of
                 # bulk insert -- need a new DatasetRef that refers to the
                 # same dataset_id but has the component DatasetType
                 # DatasetType does not refer to the types of components
                 # So we construct one ourselves.
-                compType = DatasetType(compTypeName, dimensions=ref.datasetType.dimensions,
-                                       storageClass=componentInfo.storageClass)
-                compRef = DatasetRef(compType, ref.dataId, id=ref.id, run=ref.run, conform=False)
+                compRef = ref.makeComponentRef(component)
                 storedInfo = self._write_in_memory_to_artifact(componentInfo.component, compRef)
                 artifacts.append((compRef, storedInfo))
         else:
