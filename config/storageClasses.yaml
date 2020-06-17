@@ -67,6 +67,8 @@ storageClasses:
     pytype: lsst.afw.table.BaseCatalog
   PeakCatalog:
     pytype: lsst.afw.detection.PeakCatalog
+  Polygon:
+    pytype: lsst.afw.geom.Polygon
   SimpleCatalog:
     pytype: lsst.afw.table.SimpleCatalog
   SourceCatalog:
@@ -114,6 +116,8 @@ storageClasses:
       transmissionCurve: TransmissionCurve
       metadata: PropertyList
       filter: Filter
+      detector: Detector
+      validPolygon: Polygon
   ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
