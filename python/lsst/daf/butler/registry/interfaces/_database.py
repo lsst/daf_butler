@@ -207,11 +207,12 @@ class Database(ABC):
         self.origin = origin
         self.namespace = namespace
         self._setupConnection(connection)
+        self.__connection_setup = True
         self._metadata: Optional[sqlalchemy.schema.MetaData] = None
 
     def _setupConnection(self, connection: sqlalchemy.engine.Connection) -> None:
         # Ensure that this is only run once
-        if hasattr(self._setupConnection, "executed"):
+        if self.__connection_setup:
             return
         self._base_connection = connection
         self._threadlocal_connection = threading.local()
