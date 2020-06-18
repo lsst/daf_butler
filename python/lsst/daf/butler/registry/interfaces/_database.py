@@ -31,6 +31,7 @@ from abc import ABC, abstractmethod
 from contextlib import contextmanager
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -100,6 +101,7 @@ class StaticTablesContext:
         self._foreignKeys: List[Tuple[sqlalchemy.schema.Table, sqlalchemy.schema.ForeignKeyConstraint]] = []
         self._inspector = sqlalchemy.engine.reflection.Inspector(self._db._connection)
         self._tableNames = frozenset(self._inspector.get_table_names(schema=self._db.namespace))
+        self._initializers: List[Callable[[Database], None]] = []
 
     def addTable(self, name: str, spec: ddl.TableSpec) -> sqlalchemy.schema.Table:
         """Add a new table to the schema, returning its sqlalchemy
@@ -140,6 +142,20 @@ class StaticTablesContext:
         """
         return specs._make(self.addTable(name, spec)                     # type: ignore
                            for name, spec in zip(specs._fields, specs))  # type: ignore
+
+    def addInitializer(self, initializer: Callable[[Database], None]) -> None:
+        """Add a method that does one-time initialization of a database.
+
+        Initialization can mean anything that changes state of a database
+        and needs to be done exactly once after database schema was created.
+        An example for that could be population of schema attributes.
+
+        Parameters
+        ----------
+        initializer : callable
+            Method of a single argument which is a `Database` instance.
+        """
+        self._initializers.append(initializer)
 
 
 class Database(ABC):
@@ -387,7 +403,12 @@ class Database(ABC):
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore", category=sqlalchemy.exc.SADeprecationWarning)
                     self._metadata.create_all(self._connection)
+                # call all initializer methods sequentially
+                for init in context._initializers:
+                    init(self)
         except BaseException:
+            # TODO: this is potentially dangerous if we run it on
+            # pre-existing schema.
             self._metadata.drop_all(self._connection)
             self._metadata = None
             raise

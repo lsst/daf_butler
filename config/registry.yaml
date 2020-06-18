@@ -12,3 +12,13 @@ registry:
     collections: lsst.daf.butler.registry.collections.synthIntKey.SynthIntKeyCollectionManager
     datasets: lsst.daf.butler.registry.datasets.byDimensions.ByDimensionsDatasetRecordStorageManager
     datastores: lsst.daf.butler.registry.bridge.monolithic.MonolithicDatastoreRegistryBridgeManager
+  schema_versions:
+    core:
+      version: 0.0.1
+      digest: ""
+    dimensions:
+      version: 0.0.1
+      digest: ""
+    datastores:
+      version: 0.0.1
+      digest: ""

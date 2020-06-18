@@ -1020,6 +1020,9 @@ class RegistryTests(ABC):
     def testAttributeManager(self):
         """Test basic functionality of attribute manager.
         """
+        # number of attributes with schema versions in a fresh database
+        VERSION_COUNT = 3
+
         registry = self.makeRegistry()
         attributes = registry._attributes
 
@@ -1027,7 +1030,7 @@ class RegistryTests(ABC):
         self.assertIsNone(attributes.get("attr"))
         self.assertEqual(attributes.get("attr", ""), "")
         self.assertEqual(attributes.get("attr", "Value"), "Value")
-        self.assertEqual(len(list(attributes.items())), 0)
+        self.assertEqual(len(list(attributes.items())), VERSION_COUNT)
 
         # cannot store empty key or value
         with self.assertRaises(ValueError):
@@ -1037,7 +1040,7 @@ class RegistryTests(ABC):
 
         # set value of non-existing key
         attributes.set("attr", "value")
-        self.assertEqual(len(list(attributes.items())), 1)
+        self.assertEqual(len(list(attributes.items())), VERSION_COUNT + 1)
         self.assertEqual(attributes.get("attr"), "value")
 
         # update value of existing key
@@ -1045,12 +1048,12 @@ class RegistryTests(ABC):
             attributes.set("attr", "value2")
 
         attributes.set("attr", "value2", force=True)
-        self.assertEqual(len(list(attributes.items())), 1)
+        self.assertEqual(len(list(attributes.items())), VERSION_COUNT + 1)
         self.assertEqual(attributes.get("attr"), "value2")
 
         # delete existing key
         self.assertTrue(attributes.delete("attr"))
-        self.assertEqual(len(list(attributes.items())), 0)
+        self.assertEqual(len(list(attributes.items())), VERSION_COUNT)
 
         # delete non-existing key
         self.assertFalse(attributes.delete("non-attr"))
@@ -1063,5 +1066,6 @@ class RegistryTests(ABC):
         ]
         for key, value in data:
             attributes.set(key, value)
-        items = list(attributes.items())
-        self.assertCountEqual(items, data)
+        items = dict(attributes.items())
+        for key, value in data:
+            self.assertEqual(items[key], value)

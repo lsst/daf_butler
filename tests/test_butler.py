@@ -773,7 +773,9 @@ class ButlerTests(ButlerPutGetTests):
         # Remove the file created in setUp
         os.unlink(self.tmpConfigFile)
 
-        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile))
+        createRegistry = not self.useTempRoot
+        butlerConfig = Butler.makeRepo(self.root, config=Config(self.configFile),
+                                       createRegistry=createRegistry)
         limited = Config(self.configFile)
         butler1 = Butler(butlerConfig)
         butlerConfig = Butler.makeRepo(self.root, standalone=True, createRegistry=False,
