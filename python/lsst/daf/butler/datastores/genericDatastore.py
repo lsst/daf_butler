@@ -77,28 +77,6 @@ class GenericBaseDatastore(Datastore):
         raise NotImplementedError()
 
     @abstractmethod
-    def getStoredItemInfo(self, ref: DatasetRef) -> Any:
-        """Retrieve information associated with file stored in this
-        `Datastore`.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            The dataset that is to be queried.
-
-        Returns
-        -------
-        info : `StoredDatastoreItemInfo`
-            Stored information about this file and its formatter.
-
-        Raises
-        ------
-        KeyError
-            Dataset with that id can not be found.
-        """
-        raise NotImplementedError()
-
-    @abstractmethod
     def getStoredItemsInfo(self, ref: DatasetRef) -> Sequence[Any]:
         """Retrieve information associated with files stored in this
         `Datastore` associated with this dataset ref.

@@ -555,16 +555,16 @@ class PosixDatastoreNoChecksumsTestCase(PosixDatastoreTestCase):
 
         # Configuration should have disabled checksum calculation
         datastore.put(metrics, ref)
-        info = datastore.getStoredItemInfo(ref)
-        self.assertIsNone(info.checksum)
+        infos = datastore.getStoredItemsInfo(ref)
+        self.assertIsNone(infos[0].checksum)
 
         # Remove put back but with checksums enabled explicitly
         datastore.remove(ref)
         datastore.useChecksum = True
         datastore.put(metrics, ref)
 
-        info = datastore.getStoredItemInfo(ref)
-        self.assertIsNotNone(info.checksum)
+        infos = datastore.getStoredItemsInfo(ref)
+        self.assertIsNotNone(infos[0].checksum)
 
 
 class CleanupPosixDatastoreTestCase(DatastoreTestsBase, unittest.TestCase):
