@@ -71,7 +71,6 @@ from lsst.daf.butler import ddl
 from lsst.daf.butler.registry.interfaces import (
     ReadOnlyDatabaseError,
     DatastoreRegistryBridge,
-    FakeDatasetRef,
 )
 
 from lsst.daf.butler.core.repoRelocation import replaceRoot
@@ -326,69 +325,6 @@ class FileLikeDatastore(GenericBaseDatastore):
             )
         self._table.insert(*records)
 
-    def getStoredItemInfo(self, ref: DatasetIdRef) -> StoredFileInfo:
-        # Docstring inherited from GenericBaseDatastore
-
-        if ref.id is None:
-            raise RuntimeError("Unable to retrieve information for unresolved DatasetRef")
-
-        where: Dict[str, Union[int, str]] = {"dataset_id": ref.id}
-
-        # If we have no component we want the row from this table without
-        # a component. If we do have a component we either need the row
-        # with no component or the row with the component, depending on how
-        # this dataset was dissassembled.
-
-        # if we are emptying trash we won't have real refs so can't constrain
-        # by component. Will need to fix this to return multiple matches
-        # in future.
-        component = None
-        try:
-            component = ref.datasetType.component()
-        except AttributeError:
-            pass
-        else:
-            if component is None:
-                where["component"] = NULLSTR
-
-        # Look for the dataset_id -- there might be multiple matches
-        # if we have disassembled the dataset.
-        records = list(self._table.fetch(**where))
-        if len(records) == 0:
-            raise KeyError(f"Unable to retrieve location associated with dataset {ref}.")
-
-        # if we are not asking for a component
-        if not component and len(records) != 1:
-            raise RuntimeError(f"Got {len(records)} from location query of dataset {ref}")
-
-        # if we had a FakeDatasetRef we pick the first record regardless
-        if isinstance(ref, FakeDatasetRef):
-            record = records[0]
-        else:
-            records_by_component = {}
-            for r in records:
-                this_component = r["component"] if r["component"] and r["component"] != NULLSTR else None
-                records_by_component[this_component] = r
-
-            # Look for component by name else fall back to the parent
-            for lookup in (component, None):
-                if lookup in records_by_component:
-                    record = records_by_component[lookup]
-                    break
-            else:
-                raise KeyError(f"Unable to retrieve location for component {component} associated with "
-                               f"dataset {ref}.")
-
-        # Convert name of StorageClass to instance
-        storageClass = self.storageClassFactory.getStorageClass(record["storage_class"])
-
-        return StoredFileInfo(formatter=record["formatter"],
-                              path=record["path"],
-                              storageClass=storageClass,
-                              component=component,
-                              checksum=record["checksum"],
-                              file_size=record["file_size"])
-
     def getStoredItemsInfo(self, ref: DatasetIdRef) -> List[StoredFileInfo]:
         # Docstring inherited from GenericBaseDatastore
 
@@ -433,35 +369,6 @@ class FileLikeDatastore(GenericBaseDatastore):
     def removeStoredItemInfo(self, ref: DatasetIdRef) -> None:
         # Docstring inherited from GenericBaseDatastore
         self._table.delete(dataset_id=ref.id)
-
-    def _get_dataset_location_info(self,
-                                   ref: DatasetRef) -> Tuple[Optional[Location], Optional[StoredFileInfo]]:
-        """Find the `Location` of the requested dataset in the
-        `Datastore` and the associated stored file information.
-
-        Parameters
-        ----------
-        ref : `DatasetRef`
-            Reference to the required `Dataset`.
-
-        Returns
-        -------
-        location : `Location`
-            Location of the dataset within the datastore.
-            Returns `None` if the dataset can not be located.
-        info : `StoredFileInfo`
-            Stored information about this file and its formatter.
-        """
-        # Get the file information (this will fail if no file)
-        try:
-            storedFileInfo = self.getStoredItemInfo(ref)
-        except KeyError:
-            return None, None
-
-        # Use the path to determine the location
-        location = self.locationFactory.fromPath(storedFileInfo.path)
-
-        return location, storedFileInfo
 
     def _get_dataset_locations_info(self, ref: DatasetIdRef) -> List[Tuple[Location, StoredFileInfo]]:
         r"""Find all the `Location`\ s  of the requested dataset in the
