@@ -62,6 +62,11 @@ def textTypeStr(multiple):
     return typeStrAcceptsMultiple if multiple else typeStrAcceptsSingle
 
 
+# For parameters that support key-value inputs, this defines the separator
+# for those inputs.
+split_kv_separator = "="
+
+
 # The ParameterType enum is used to indicate a click Argument or Option (both
 # of which are subclasses of click.Parameter).
 class ParameterType(enum.Enum):
@@ -166,13 +171,15 @@ def split_commas(context, param, values):
         The passed in values separated by commas and combined into a single
         list.
     """
+    if values is None:
+        return values
     valueList = []
     for value in iterable(values):
         valueList.extend(value.split(","))
     return valueList
 
 
-def split_kv(context, param, values, separator="="):
+def split_kv(context, param, values, separator="=", multiple=True):
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -195,6 +202,8 @@ def split_kv(context, param, values, separator="="):
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
         for tuples; `type=(str, str)`). By default "=".
+    multiple : bool, optional
+        If true, the value may contain multiple comma-separated values.
 
     Returns
     -------
@@ -209,7 +218,9 @@ def split_kv(context, param, values, separator="="):
     """
     if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
-    vals = split_commas(context, param, values)
+    vals = values  # preserve the original argument for error reporting below.
+    if multiple:
+        vals = split_commas(context, param, vals)
     ret = {}
     for val in vals:
         try:

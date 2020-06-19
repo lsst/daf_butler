@@ -83,7 +83,7 @@ def config_dump(*args, **kwargs):
 @click.command(short_help="Validate the configuration files.")
 @repo_argument(required=True)
 @click.option("--quiet", "-q", is_flag=True, help="Do not report individual failures.")
-@dataset_type_option(help="Specific DatasetType(s) to validate.")
+@dataset_type_option(help="Specific DatasetType(s) to validate.", multiple=True)
 @click.option("--ignore", "-i", type=str, multiple=True, callback=split_commas,
               metavar=typeStrAcceptsMultiple,
               help="DatasetType(s) to ignore for validation.")

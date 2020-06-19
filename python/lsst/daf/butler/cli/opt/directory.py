@@ -37,12 +37,12 @@ class directory_argument:  # noqa: N801
         The help text for this argument to append to the command's help text.
         If None or '' then nothing will be appended to the help text (in which
         case the command should document this argument directly in its help
-        text). By default, the value of directory_argument.default_help
+        text). By default, the value of directory_argument.defaultHelp.
     """
 
-    default_help = "DIRECTORY is the folder containing dataset files."
+    defaultHelp = "DIRECTORY is the folder containing dataset files."
 
-    def __init__(self, required=False, help=default_help):
+    def __init__(self, required=False, help=defaultHelp):
         self.required = required
         self.helpText = help
 

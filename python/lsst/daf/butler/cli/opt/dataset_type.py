@@ -26,13 +26,18 @@ from ..utils import split_commas
 
 
 class dataset_type_option:  # noqa: N801
-    def __init__(self, help, required=False):
+
+    defaultHelp = "Dataset types(s)"
+
+    def __init__(self, help=defaultHelp, multiple=False, required=False):
+        self.callback = split_commas if multiple else None
         self.help = help
+        self.multiple = multiple
         self.required = required
 
     def __call__(self, f):
-        return click.option('--dataset-type', '-d',
-                            required=self.required,
+        return click.option("-d", "--dataset-type",
+                            callback=self.callback,
                             help=self.help,
-                            callback=split_commas,
-                            multiple=True)(f)
+                            multiple=self.multiple,
+                            required=self.required)(f)

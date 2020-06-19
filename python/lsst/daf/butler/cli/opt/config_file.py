@@ -22,18 +22,24 @@
 
 import click
 
+from ..utils import split_commas
+
 
 class config_file_option:  # noqa: N801
 
     defaultHelp = "Path to a pex config override to be included after the Instrument config overrides are " \
                   "applied."
 
-    def __init__(self, required=False, help=defaultHelp):
-        self.required = required
+    def __init__(self, multiple=False, help=defaultHelp, required=False):
+        self.callback = split_commas if multiple else None
         self.help = help
+        self.multiple = multiple
+        self.required = required
 
     def __call__(self, f):
         return click.option("-C", "--config-file",
+                            callback=self.callback,
+                            help=self.help,
+                            multiple=self.multiple,
                             required=self.required,
-                            type=click.STRING,
-                            help=self.help)(f)
+                            type=click.STRING)(f)
