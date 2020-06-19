@@ -25,6 +25,7 @@ from .config_file import config_file_option
 from .dataset_type import dataset_type_option
 from .directory import directory_argument
 from .glob import glob_parameter
+from .log_level import log_level_option
 from .repo import repo_argument
 from .run import run_option
 from .transfer import transfer_option

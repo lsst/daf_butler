@@ -34,7 +34,7 @@ from lsst.daf.butler.tests import (OptFlagTest,
                                    OptSplitKeyValueTest)
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
                                      dataset_type_option, directory_argument, glob_parameter,
-                                     verbose_option)
+                                     log_level_option, verbose_option)
 
 
 class CollectionTypeTestCase(OptHelpTest,
@@ -102,6 +102,17 @@ class GlobOptionTestCase(OptHelpTest,
     optionClass = glob_parameter
     optionName = "glob"
     isParameter = True
+
+
+class LogLevelTestCase(OptChoiceTest,
+                       OptHelpTest,
+                       OptCaseInsensitiveTest,
+                       OptRequiredTest,
+                       unittest.TestCase):
+
+    expectedValDefault = log_level_option.defaultValue
+    optionClass = log_level_option
+    optionName = "log-level"
 
 
 # Doesn't test for required; this is nonsensical for a flag (where
