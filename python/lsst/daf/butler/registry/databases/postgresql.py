@@ -74,7 +74,7 @@ class PostgresqlDatabase(Database):
 
     @classmethod
     def connect(cls, uri: str, *, writeable: bool = True) -> sqlalchemy.engine.Connection:
-        return sqlalchemy.engine.create_engine(uri, pool_size=1).connect()
+        return sqlalchemy.engine.create_engine(uri, poolclass=sqlalchemy.pool.NullPool).connect()
 
     @classmethod
     def fromConnection(cls, connection: sqlalchemy.engine.Connection, *, origin: int,
