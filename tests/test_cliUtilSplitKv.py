@@ -38,6 +38,10 @@ class Suite(unittest.TestCase):
     def test_multiple(self):
         self.assertEqual(split_kv("context", "param", "first=1,second=2"), {"first": "1", "second": "2"})
 
+    def test_notMultiple(self):
+        with self.assertRaisesRegex(click.ClickException, "Too many key-value separators in value"):
+            split_kv("context", "param", "first=1,second=2", multiple=False)
+
     def test_wrongSeparator(self):
         with self.assertRaises(click.ClickException):
             split_kv("context", "param", "first-1")

@@ -222,10 +222,12 @@ def split_kv(context, param, values, separator="=", multiple=True):
     if multiple:
         vals = split_commas(context, param, vals)
     ret = {}
-    for val in vals:
+    for val in iterable(vals):
         try:
             k, v = val.split(separator)
         except ValueError:
+            if val.count(separator) > 1:
+                raise click.ClickException(f"Too many key-value separators in value '{val}'")
             raise click.ClickException(f"Missing or invalid key-value separator in value '{val}'")
         if k in ret:
             raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")

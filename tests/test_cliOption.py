@@ -56,6 +56,8 @@ class ConfigTestCase(OptHelpTest,
     optionName = "config"
     shortOptionName = "c"
     optionClass = config_option
+    optionMultipleKeyValues = ["one=two,three=four", "five=six"]
+
 
 
 class ConfigFileTestCase(OptHelpTest,

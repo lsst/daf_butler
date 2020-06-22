@@ -24,7 +24,7 @@ import click
 import click.testing
 import copy
 import os
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from ..cli.utils import clickResultMsg, ParameterType
 from ..core.utils import iterable
@@ -352,6 +352,12 @@ class OptTestBase(abc.ABC):
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
         mockInfo.mock.assert_called_with(*mockInfo.expectedArgs, **mockInfo.expectedKwargs)
 
+    def verifyError(self, result, expectedMsg):
+        """Verify the command failed with a non-zero exit code and an expected
+        output message. """
+        self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+        self.assertIn(expectedMsg, result.stdout)
+
     def verifyMissing(self, result, verifyArgs):
         """Verify there was a missing argument; that the expected error message
         has been written to stdout, and that the command exit code is not 0.
@@ -471,6 +477,20 @@ class OptSplitKeyValueTest(OptTestBase):
                       self.makeInputs(self.optionFlag, self.optionMultipleKeyValues),
                       self.verifyCalledWith,
                       helper)
+
+    def test_forKeyValue_withoutMultiple(self):
+        """Test comma-separated key-value inputs with a parameter that accepts
+        only a single key-value pair."""
+
+        def verify(result, args):
+            self.assertNotEqual(result.exit_code, 0, clickResultMsg(result))
+
+        values = ",".join(self.optionMultipleKeyValues)
+
+        self.run_test(CliFactory.noOp(self, parameterKwargs=dict(split_kv=True)),
+                      self.makeInputs(self.optionFlag, values),
+                      self.verifyError,
+                      "Error: Too many key-value separators in value")
 
 
 class OptRequiredTest(OptTestBase):
