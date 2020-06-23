@@ -27,7 +27,7 @@ import click.testing
 import unittest
 
 from lsst.daf.butler.cli import butler
-from lsst.daf.butler.cli.utils import Mocker, mockEnvVar
+from lsst.daf.butler.cli.utils import Mocker, mockEnvVar, unwrap_string
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -71,6 +71,41 @@ Options:
   --help  Show this message and exit.
 """
         self.assertIn(expected, result.output)
+
+
+class UnwrapStringTestCase(unittest.TestCase):
+
+    def test_leadingNewline(self):
+        testStr = """
+            foo bar
+            baz """
+        self.assertEqual(unwrap_string(testStr), "foo bar baz")
+
+    def test_leadingContent(self):
+        testStr = """foo bar
+            baz """
+        self.assertEqual(unwrap_string(testStr), "foo bar baz")
+
+    def test_trailingNewline(self):
+        testStr = """
+            foo bar
+            baz
+            """
+        self.assertEqual(unwrap_string(testStr), "foo bar baz")
+
+    def test_oneLine(self):
+        testStr = """foo bar baz"""
+        self.assertEquals(unwrap_string(testStr), "foo bar baz")
+
+    def test_oneLineWithLeading(self):
+        testStr = """
+            foo bar baz"""
+        self.assertEquals(unwrap_string(testStr), "foo bar baz")
+
+    def test_oneLineWithTrailing(self):
+        testStr = """foo bar baz
+            """
+        self.assertEquals(unwrap_string(testStr), "foo bar baz")
 
 
 if __name__ == "__main__":

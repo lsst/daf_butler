@@ -23,6 +23,7 @@ import click
 import enum
 import io
 import os
+import textwrap
 import traceback
 from unittest.mock import MagicMock
 
@@ -251,6 +252,37 @@ def to_upper(context, param, value):
         A copy of the passed-in value, converted to upper case.
     """
     return value.upper()
+
+
+def unwrap(val):
+    """Remove newlines and leading whitespace from a multi-line string with
+    a consistent indentation level.
+
+    The first line of the string may be only a newline or may contain text
+    followed by a newline, either is ok. After the first line, each line must
+    begin with a consistant amount of whitespace. So, content of a
+    triple-quoted string may begin immediately after the quotes, or the string
+    may start with a newline. Each line after that must be the same amount of
+    indentation/whitespace followed by text and a newline. The last line may
+    end with a new line but is not required to do so.
+
+    Parameters
+    ----------
+    val : `str`
+        The string to change.
+
+    Returns
+    -------
+    strippedString : `str`
+        The string with newlines, indentation, and leading and trailing
+        whitespace removed.
+    """
+    if not val.startswith("\n"):
+        firstLine, _, val = val.partition("\n")
+        firstLine += " "
+    else:
+        firstLine = ""
+    return (firstLine + textwrap.dedent(val).replace("\n", " ")).strip()
 
 
 def cli_handle_exception(func, *args, **kwargs):
