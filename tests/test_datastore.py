@@ -205,7 +205,71 @@ class DatastoreTests(DatastoreTestsBase):
         with self.assertRaises(FileNotFoundError):
             datastore.getURI(ref)
 
-    def testCompositePutGet(self):
+    def testDisassembly(self):
+        """Test disassembly within datastore."""
+        metrics = makeExampleMetrics()
+        if self.isEphemeral:
+            # in-memory datastore does not disassemble
+            return
+
+        # Create multiple storage classes for testing different formulations
+        # of composites. One of these will not disassemble to provide
+        # a reference.
+        storageClasses = [self.storageClassFactory.getStorageClass(sc)
+                          for sc in ("StructuredComposite",
+                                     "StructuredCompositeTestA",
+                                     "StructuredCompositeTestB",
+                                     "StructuredCompositeReadComp",
+                                     "StructuredData",  # No disassembly
+                                     "StructuredCompositeReadCompNoDisassembly",
+                                     )]
+
+        # Create the test datastore
+        datastore = self.makeDatastore()
+
+        # Dummy dataId
+        dimensions = self.universe.extract(("visit", "physical_filter"))
+        dataId = {"instrument": "dummy", "visit": 428, "physical_filter": "R"}
+
+        for i, sc in enumerate(storageClasses):
+            with self.subTest(storageClass=sc.name):
+                # Create a different dataset type each time round
+                # so that a test failure in this subtest does not trigger
+                # a cascade of tests because of file clashes
+                ref = self.makeDatasetRef(f"metric_comp_{i}", dimensions, sc, dataId,
+                                          conform=False)
+
+                disassembled = sc.name not in {"StructuredData", "StructuredCompositeReadCompNoDisassembly"}
+
+                datastore.put(metrics, ref)
+
+                baseURI, compURIs = datastore.getURIs(ref)
+                if disassembled:
+                    self.assertIsNone(baseURI)
+                    self.assertEqual(set(compURIs), {"data", "output", "summary"})
+                else:
+                    self.assertIsNotNone(baseURI)
+                    self.assertEqual(compURIs, {})
+
+                metrics_get = datastore.get(ref)
+                self.assertEqual(metrics_get, metrics)
+
+                # Retrieve the composite with read parameter
+                stop = 4
+                metrics_get = datastore.get(ref, parameters={"slice": slice(stop)})
+                self.assertEqual(metrics_get.summary, metrics.summary)
+                self.assertEqual(metrics_get.output, metrics.output)
+                self.assertEqual(metrics_get.data, metrics.data[:stop])
+
+                # Retrieve a component
+                data = datastore.get(ref.makeComponentRef("data"))
+                self.assertEqual(data, metrics.data)
+
+                datastore.remove(ref)
+
+    def testRegistryCompositePutGet(self):
+        """Tests the case where registry disassembles and puts to datastore.
+        """
         metrics = makeExampleMetrics()
         datastore = self.makeDatastore()
 
@@ -214,7 +278,8 @@ class DatastoreTests(DatastoreTestsBase):
         storageClasses = [self.storageClassFactory.getStorageClass(sc)
                           for sc in ("StructuredComposite",
                                      "StructuredCompositeTestA",
-                                     "StructuredCompositeTestB")]
+                                     "StructuredCompositeTestB",
+                                     )]
 
         dimensions = self.universe.extract(("visit", "physical_filter"))
         dataId = {"instrument": "dummy", "visit": 428, "physical_filter": "R"}

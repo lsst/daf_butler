@@ -7,3 +7,5 @@ disassembled:
   StructuredCompositeTestB: true
   dummyTrue: true
   dummyFalse: false
+  StructuredCompositeReadComp: true
+  StructuredCompositeReadCompNoDisassembly: false

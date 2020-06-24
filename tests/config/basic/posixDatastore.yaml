@@ -48,4 +48,7 @@ datastore:
       StructuredData: lsst.daf.butler.formatters.pickle.PickleFormatter
       DummySC: lsst.daf.butler.formatters.yaml.YamlFormatter
       visit+physical_filter+instrument: lsst.daf.butler.formatters.pickle.PickleFormatter
+    StructuredCompositeReadComp: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
+    StructuredCompositeReadCompNoDisassembly: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
+    StructuredDataDataTest: lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter
   composites: !include composites.yaml

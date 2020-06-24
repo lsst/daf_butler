@@ -37,6 +37,8 @@ storageClasses:
     inheritsFrom: StructuredData
   StructuredComposite:
     inheritsFrom: StructuredData
+    parameters:
+      - slice
   StructuredCompositeTestA:
     inheritsFrom: StructuredComposite
     components:
@@ -58,3 +60,22 @@ storageClasses:
     inheritsFrom: ThingOne
     parameters:
       - param3
+  StructuredDataDataTest:
+    pytype: list
+    assembler: lsst.daf.butler.tests.ListAssembler
+    readComponents:
+      counter: Integer
+    parameters:
+      - slice
+  Integer:
+    pytype: int
+  StructuredCompositeReadComp:
+    inheritsFrom: StructuredComposite
+    components:
+      summary: StructuredDataDictYaml
+      output: StructuredDataDictYaml
+      data: StructuredDataDataTest
+    readComponents:
+      counter: Integer
+  StructuredCompositeReadCompNoDisassembly:
+    inheritsFrom: StructuredCompositeReadComp
