@@ -253,7 +253,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
             self.assertNotEqual(a, b)
 
         # This depends on current dimensions.yaml definitions
-        self.assertEqual(len(list(registry.queryDimensions(["patch", "htm7"]))), 0)
+        self.assertEqual(len(list(registry.queryDataIds(["patch", "htm7"]))), 0)
 
         # Add some dimension entries
         registry.insertDimensionData("instrument", {"name": "DummyCam"})
@@ -313,7 +313,7 @@ class SqliteMemoryRegistryTests(RegistryTests):
         # Check if we can get the region for a skypix
         self.assertIsInstance(getRegion({"htm9": 1000}), ConvexPolygon)
         # patch_htm7_overlap should not be empty
-        self.assertNotEqual(len(list(registry.queryDimensions(["patch", "htm7"]))), 0)
+        self.assertNotEqual(len(list(registry.queryDataIds(["patch", "htm7"]))), 0)
 
 
 class SqliteMemoryRegistryNameKeyCollMgrTestCase(unittest.TestCase, SqliteMemoryRegistryTests):

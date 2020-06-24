@@ -1027,7 +1027,7 @@ class Registry:
         interfaces.
 
         This is an advanced interface; downstream code should prefer
-        `Registry.queryDimensions` and `Registry.queryDatasets` whenever those
+        `Registry.queryDataIds` and `Registry.queryDatasets` whenever those
         are sufficient.
 
         Parameters
@@ -1236,7 +1236,7 @@ class Registry:
         type separately in turn, and no information about the relationships
         between datasets of different types is included.  In contexts where
         that kind of information is important, the recommended pattern is to
-        use `queryDimensions` to first obtain data IDs (possibly with the
+        use `queryDataIds` to first obtain data IDs (possibly with the
         desired dataset types and collections passed as constraints to the
         query), and then use multiple (generally much simpler) calls to
         `queryDatasets` with the returned data IDs passed as constraints.

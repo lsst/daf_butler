@@ -38,6 +38,7 @@ except ImportError:
 
 from ...core import (
     DataCoordinate,
+    DataCoordinateSet,
     DatasetRef,
     DatasetType,
     DimensionGraph,
@@ -420,19 +421,21 @@ class RegistryTests(ABC):
                                          dataId=parentRefResolved.dataId)
         self.assertEqual(childRef1, parentRefResolved.makeComponentRef("wcs"))
         # Search for detector data IDs constrained by component dataset
-        # existence with queryDimensions.
-        dataIds = set(registry.queryDimensions(
+        # existence with queryDataIds.
+        dataIds = registry.queryDataIds(
             ["detector"],
             datasets=["permabias.wcs"],
             collections=collection,
-            expand=False,
-        ))
+        ).toSet()
         self.assertEqual(
             dataIds,
-            {
-                DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
-                for d in (1, 2, 3)
-            }
+            DataCoordinateSet(
+                {
+                    DataCoordinate.standardize(instrument="Cam1", detector=d, graph=parentType.dimensions)
+                    for d in (1, 2, 3)
+                },
+                parentType.dimensions,
+            )
         )
         # Search for multiple datasets of a single type with queryDatasets.
         childRefs2 = set(registry.queryDatasets(
@@ -736,11 +739,11 @@ class RegistryTests(ABC):
             dimensions=(rawType.dimensions.required | calexpType.dimensions.required)
         )
         # Test that single dim string works as well as list of str
-        rows = list(registry.queryDimensions("visit", datasets=rawType, collections=run1, expand=True))
-        rowsI = list(registry.queryDimensions(["visit"], datasets=rawType, collections=run1, expand=True))
+        rows = registry.queryDataIds("visit", datasets=rawType, collections=run1).expanded().toSet()
+        rowsI = registry.queryDataIds(["visit"], datasets=rawType, collections=run1).expanded().toSet()
         self.assertEqual(rows, rowsI)
         # with empty expression
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1, expand=True))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1).expanded().toSet()
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
@@ -757,7 +760,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # second collection
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=tagged2))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=tagged2).toSet()
         self.assertEqual(len(rows), 4*3)   # 4 exposures times 3 detectors
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
@@ -767,7 +770,7 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # with two input datasets
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=[run1, tagged2]))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=[run1, tagged2]).toSet()
         self.assertEqual(len(set(rows)), 6*3)   # 6 exposures times 3 detectors; set needed to de-dupe
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("instrument", "detector", "exposure", "visit"))
@@ -777,30 +780,30 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3, 4, 5))
 
         # limit to single visit
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="visit = 10"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="visit = 10").toSet()
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (1, 2, 3))
 
         # more limiting expression, using link names instead of Table.column
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="visit = 10 and detector > 1"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="visit = 10 and detector > 1").toSet()
         self.assertEqual(len(rows), 2*2)   # 2 exposures times 2 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (100, 101))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (10,))
         self.assertCountEqual(set(dataId["detector"] for dataId in rows), (2, 3))
 
         # expression excludes everything
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="visit > 1000"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="visit > 1000").toSet()
         self.assertEqual(len(rows), 0)
 
         # Selecting by physical_filter, this is not in the dimensions, but it
         # is a part of the full expression so it should work too.
-        rows = list(registry.queryDimensions(dimensions, datasets=rawType, collections=run1,
-                                             where="physical_filter = 'dummy_r'"))
+        rows = registry.queryDataIds(dimensions, datasets=rawType, collections=run1,
+                                     where="physical_filter = 'dummy_r'").toSet()
         self.assertEqual(len(rows), 2*3)   # 2 exposures times 3 detectors
         self.assertCountEqual(set(dataId["exposure"] for dataId in rows), (110, 111))
         self.assertCountEqual(set(dataId["visit"] for dataId in rows), (11,))
@@ -870,8 +873,8 @@ class RegistryTests(ABC):
                     registry.insertDatasets(calexpType, dataIds=[dataId], run=run)
 
         # with empty expression
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run).toSet()
         self.assertEqual(len(rows), 3*4*2)   # 4 tracts x 4 patches x 2 filters
         for dataId in rows:
             self.assertCountEqual(dataId.keys(), ("skymap", "tract", "patch", "abstract_filter"))
@@ -880,18 +883,18 @@ class RegistryTests(ABC):
         self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
 
         # limit to 2 tracts and 2 patches
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run,
-                                             where="tract IN (1, 5) AND patch IN (2, 7)"))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run,
+                                     where="tract IN (1, 5) AND patch IN (2, 7)").toSet()
         self.assertEqual(len(rows), 2*2*2)   # 2 tracts x 2 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 7))
         self.assertCountEqual(set(dataId["abstract_filter"] for dataId in rows), ("i", "r"))
 
         # limit to single filter
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run,
-                                             where="abstract_filter = 'i'"))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run,
+                                     where="abstract_filter = 'i'").toSet()
         self.assertEqual(len(rows), 3*4*1)   # 4 tracts x 4 patches x 2 filters
         self.assertCountEqual(set(dataId["tract"] for dataId in rows), (1, 3, 5))
         self.assertCountEqual(set(dataId["patch"] for dataId in rows), (2, 4, 6, 7))
@@ -899,9 +902,9 @@ class RegistryTests(ABC):
 
         # expression excludes everything, specifying non-existing skymap is
         # not a fatal error, it's operator error
-        rows = list(registry.queryDimensions(dimensions,
-                                             datasets=[calexpType, mergeType], collections=run,
-                                             where="skymap = 'Mars'"))
+        rows = registry.queryDataIds(dimensions,
+                                     datasets=[calexpType, mergeType], collections=run,
+                                     where="skymap = 'Mars'").toSet()
         self.assertEqual(len(rows), 0)
 
     def testSpatialMatch(self):
@@ -938,7 +941,7 @@ class RegistryTests(ABC):
         )
 
         # without data this should run OK but return empty set
-        rows = list(registry.queryDimensions(dimensions, datasets=calexpType, collections=collection))
+        rows = registry.queryDataIds(dimensions, datasets=calexpType, collections=collection).toSet()
         self.assertEqual(len(rows), 0)
 
     def testCalibrationLabelIndirection(self):
@@ -1048,7 +1051,7 @@ class RegistryTests(ABC):
             dict(instrument="DummyCam", name="dummy_i2", abstract_filter="i"),
             dict(instrument="DummyCam", name="dummy_r", abstract_filter="r"),
         )
-        rows = list(registry.queryDimensions(["abstract_filter"]))
+        rows = registry.queryDataIds(["abstract_filter"]).toSet()
         self.assertCountEqual(
             rows,
             [DataCoordinate.standardize(abstract_filter="i", universe=registry.dimensions),

@@ -65,12 +65,7 @@ def loadDimensionData() -> DataCoordinateSequence:
     backend.register()
     backend.load(datastore=None)
     dimensions = DimensionGraph(registry.dimensions, names=["visit", "detector", "tract", "patch"])
-    return DataCoordinateSequence(
-        dataIds=tuple(registry.queryDimensions(dimensions, expand=True)),
-        graph=dimensions,
-        hasFull=True,
-        hasRecords=True,
-    )
+    return registry.queryDataIds(dimensions).expanded().toSequence()
 
 
 class DimensionTestCase(unittest.TestCase):
