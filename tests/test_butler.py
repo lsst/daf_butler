@@ -119,10 +119,10 @@ class ButlerPutGetTests:
         cls.storageClassFactory.addFromConfig(cls.configFile)
 
     def assertGetComponents(self, butler, datasetRef, components, reference):
-        datasetTypeName = datasetRef.datasetType.name
+        datasetType = datasetRef.datasetType
         dataId = datasetRef.dataId
         for component in components:
-            compTypeName = DatasetType.nameWithComponent(datasetTypeName, component)
+            compTypeName = datasetType.componentTypeName(component)
             result = butler.get(compTypeName, dataId)
             self.assertEqual(result, getattr(reference, component))
 
@@ -267,10 +267,10 @@ class ButlerPutGetTests:
 
         if storageClass.isComposite():
             # Check that components can be retrieved
-            # ref.compfonents will only be populated in certain cases
+            # ref.components will only be populated in certain cases
             metricOut = butler.get(ref.datasetType.name, dataId)
-            compNameS = DatasetType.nameWithComponent(datasetTypeName, "summary")
-            compNameD = DatasetType.nameWithComponent(datasetTypeName, "data")
+            compNameS = ref.datasetType.componentTypeName("summary")
+            compNameD = ref.datasetType.componentTypeName("data")
             summary = butler.get(compNameS, dataId)
             self.assertEqual(summary, metric.summary)
             data = butler.get(compNameD, dataId)
