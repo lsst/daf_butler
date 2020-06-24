@@ -1361,6 +1361,104 @@ class Registry:
                 dataId = self.expandDataId(dataId, records=standardizedDataId.records)
             yield query.extractDatasetRef(row, dataId)
 
+    def queryDataIds(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
+                     dataId: Optional[DataId] = None,
+                     datasets: Any = None,
+                     collections: Any = None,
+                     where: Optional[str] = None,
+                     components: Optional[bool] = None,
+                     **kwargs: Any) -> queries.DataCoordinateQueryResults:
+        """Query for data IDs matching user-provided criteria.
+
+        Parameters
+        ----------
+        dimensions : `Dimension` or `str`, or iterable thereof
+            The dimensions of the data IDs to yield, as either `Dimension`
+            instances or `str`.  Will be automatically expanded to a complete
+            `DimensionGraph`.
+        dataId : `dict` or `DataCoordinate`, optional
+            A data ID whose key-value pairs are used as equality constraints
+            in the query.
+        datasets : `Any`, optional
+            An expression that fully or partially identifies dataset types
+            that should constrain the yielded data IDs.  For example, including
+            "raw" here would constrain the yielded ``instrument``,
+            ``exposure``, ``detector``, and ``physical_filter`` values to only
+            those for which at least one "raw" dataset exists in
+            ``collections``.  Allowed types include `DatasetType`, `str`,
+            `re.Pattern`, and iterables thereof.  Unlike other dataset type
+            expressions, ``...`` is not permitted - it doesn't make sense to
+            constrain data IDs on the existence of *all* datasets.
+            See :ref:`daf_butler_dataset_type_expressions` for more
+            information.
+        collections: `Any`, optional
+            An expression that fully or partially identifies the collections
+            to search for datasets, such as a `str`, `re.Pattern`, or iterable
+            thereof.  `...` can be used to return all collections.  Must be
+            provided if ``datasets`` is, and is ignored if it is not.  See
+            :ref:`daf_butler_collection_expressions` for more information.
+        where : `str`, optional
+            A string expression similar to a SQL WHERE clause.  May involve
+            any column of a dimension table or (as a shortcut for the primary
+            key column of a dimension table) dimension name.  See
+            :ref:`daf_butler_dimension_expressions` for more information.
+        components : `bool`, optional
+            If `True`, apply all dataset expression patterns to component
+            dataset type names as well.  If `False`, never apply patterns to
+            components.  If `None` (default), apply patterns to components only
+            if their parent datasets were not matched by the expression.
+            Fully-specified component datasets (`str` or `DatasetType`
+            instances) are always included.
+        **kwargs
+            Additional keyword arguments are forwarded to
+            `DataCoordinate.standardize` when processing the ``dataId``
+            argument (and may be used to provide a constraining data ID even
+            when the ``dataId`` argument is `None`).
+
+        Returns
+        -------
+        dataIds : `DataCoordinateQueryResults`
+            Data IDs matching the given query parameters.  These are guaranteed
+            to identify all dimensions (`DataCoordinate.hasFull` returns
+            `True`), but will not contain `DimensionRecord` objects
+            (`DataCoordinate.hasRecords` returns `False`).  Call
+            `DataCoordinateQueryResults.expanded` on the returned object to
+            fetch those.
+        """
+        dimensions = iterable(dimensions)
+        standardizedDataId = self.expandDataId(dataId, **kwargs)
+        standardizedDatasetTypes = set()
+        requestedDimensions = self.dimensions.extract(dimensions)
+        queryDimensionNames = set(requestedDimensions.names)
+        if datasets is not None:
+            if collections is None:
+                raise TypeError("Cannot pass 'datasets' without 'collections'.")
+            for datasetType in self.queryDatasetTypes(datasets, components=components):
+                queryDimensionNames.update(datasetType.dimensions.names)
+                # If any matched dataset type is a component, just operate on
+                # its parent instead, because Registry doesn't know anything
+                # about what components exist, and here (unlike queryDatasets)
+                # we don't care about returning them.
+                parentDatasetTypeName, componentName = datasetType.nameAndComponent()
+                if componentName is not None:
+                    datasetType = self.getDatasetType(parentDatasetTypeName)
+                standardizedDatasetTypes.add(datasetType)
+            # Preprocess collections expression in case the original included
+            # single-pass iterators (we'll want to use it multiple times
+            # below).
+            collections = CollectionQuery.fromExpression(collections)
+
+        summary = queries.QuerySummary(
+            requested=DimensionGraph(self.dimensions, names=queryDimensionNames),
+            dataId=standardizedDataId,
+            expression=where,
+        )
+        builder = self.makeQueryBuilder(summary)
+        for datasetType in standardizedDatasetTypes:
+            builder.joinDataset(datasetType, collections, isResult=False)
+        query = builder.finish()
+        return queries.DataCoordinateQueryResults(self._db, query)
+
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
     """
