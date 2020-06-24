@@ -1021,7 +1021,7 @@ class RegistryTests(ABC):
         """Test basic functionality of attribute manager.
         """
         # number of attributes with schema versions in a fresh database
-        VERSION_COUNT = 3
+        VERSION_COUNT = 0
 
         registry = self.makeRegistry()
         attributes = registry._attributes

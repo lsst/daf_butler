@@ -139,7 +139,7 @@ class Registry:
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
-        versions = ButlerVersionsManager.fromConfig(config["schema_versions"])
+        versions = ButlerVersionsManager.fromConfig(config.get("schema_versions"))
 
         return cls(database, universe, dimensions=dimensions, attributes=attributes, opaque=opaque,
                    collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,

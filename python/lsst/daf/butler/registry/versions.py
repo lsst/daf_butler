@@ -148,12 +148,12 @@ class ButlerVersionsManager:
         self._tablesGroups: MutableMapping[str, List[sqlalchemy.schema.Table]] = {}
 
     @classmethod
-    def fromConfig(cls, schemaVersionConfig: Config) -> ButlerVersionsManager:
+    def fromConfig(cls, schemaVersionConfig: Optional[Config]) -> ButlerVersionsManager:
         """Make `ButlerVersionsManager` instance based on configuration.
 
         Parameters
         ----------
-        schemaVersionConfig : `Config`
+        schemaVersionConfig : `Config` or `None`
             Configuration object describing schema versions, typically
             "schema_versions" sub-object of registry configuration.
 
@@ -163,10 +163,11 @@ class ButlerVersionsManager:
             New instance of the versions manager.
         """
         versions = {}
-        for key, vdict in schemaVersionConfig.items():
-            version = VersionTuple.fromString(vdict["version"])
-            digest = vdict.get("digest")
-            versions[key] = VersionInfo(version, digest)
+        if schemaVersionConfig:
+            for key, vdict in schemaVersionConfig.items():
+                version = VersionTuple.fromString(vdict["version"])
+                digest = vdict.get("digest")
+                versions[key] = VersionInfo(version, digest)
         return cls(versions)
 
     @staticmethod
