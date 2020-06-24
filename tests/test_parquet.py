@@ -70,7 +70,7 @@ class ParquetFormatterTestCase(unittest.TestCase):
         df2 = self.butler.get(self.datasetType, dataId={})
         self.assertTrue(df1.equals(df2))
         # Read just the column descriptions.
-        columns2 = self.butler.get(f"{self.datasetType.name}.columns", dataId={})
+        columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertTrue(df1.columns.equals(columns2))
         # Read just some columns a few different ways.
         df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": ["a", "c"]})
@@ -99,7 +99,7 @@ class ParquetFormatterTestCase(unittest.TestCase):
         df2 = self.butler.get(self.datasetType, dataId={})
         self.assertTrue(df1.equals(df2))
         # Read just the column descriptions.
-        columns2 = self.butler.get(f"{self.datasetType.name}.columns", dataId={})
+        columns2 = self.butler.get(self.datasetType.componentTypeName("columns"), dataId={})
         self.assertTrue(df1.columns.equals(columns2))
         # Read just some columns a few different ways.
         df3 = self.butler.get(self.datasetType, dataId={}, parameters={"columns": {"filter": "g"}})
