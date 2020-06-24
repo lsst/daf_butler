@@ -28,6 +28,7 @@ from typing import (
     ClassVar,
     Dict,
     Mapping,
+    Tuple,
     TYPE_CHECKING,
     Type,
 )
@@ -68,9 +69,11 @@ def _subclassDimensionRecord(definition: DimensionElement) -> Type[DimensionReco
     For internal use by `DimensionRecord`.
     """
     from .schema import makeDimensionElementTableSpec
+    fields = tuple(makeDimensionElementTableSpec(definition).fields.names)
     d = {
         "definition": definition,
-        "__slots__": tuple(makeDimensionElementTableSpec(definition).fields.names)
+        "__slots__": fields,
+        "fields": fields,
     }
     if definition.temporal:
         d["timespan"] = property(_makeTimespanFromRecord)
@@ -168,6 +171,17 @@ class DimensionRecord:
         values = tuple(d.get(k) for k in cls.__slots__)
         return cls(*values)
 
+    def __str__(self) -> str:
+        lines = [f"{self.definition.name}:"]
+        lines.extend(f"  {field}: {getattr(self, field)!r}" for field in self.fields)
+        return "\n".join(lines)
+
+    def __repr__(self) -> str:
+        return "{}.RecordClass({})".format(
+            self.definition.name,
+            ", ".join(repr(getattr(self, field)) for field in self.fields)
+        )
+
     def __reduce__(self) -> tuple:
         args = tuple(getattr(self, name) for name in self.__slots__)
         return (_reconstructDimensionRecord, (self.definition,) + args)
@@ -186,3 +200,5 @@ class DimensionRecord:
     """
 
     definition: ClassVar[DimensionElement]
+
+    fields: ClassVar[Tuple[str, ...]]
