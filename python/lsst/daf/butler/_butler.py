@@ -1236,7 +1236,7 @@ class Butler:
 
         Examples
         --------
-        Typically the `Registry.queryDimensions` and `Registry.queryDatasets`
+        Typically the `Registry.queryDataIds` and `Registry.queryDatasets`
         methods are used to provide the iterables over data IDs and/or datasets
         to be exported::
 
@@ -1373,7 +1373,7 @@ class Butler:
 
         # Find all the registered instruments
         instruments = set(
-            dataId["instrument"] for dataId in self.registry.queryDimensions(["instrument"])
+            dataId["instrument"] for dataId in self.registry.queryDataIds(["instrument"])
         )
 
         # For each datasetType that has an instrument dimension, create

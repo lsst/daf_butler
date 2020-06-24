@@ -78,10 +78,7 @@ class ButlerUtilsTestSuite(unittest.TestCase):
             shutil.rmtree(temp, ignore_errors=True)
 
     def _checkButlerDimension(self, dimensions, query, expected):
-        result = [id for id in self.butler.registry.queryDimensions(
-            dimensions,
-            where=query,
-            expand=False)]
+        result = list(self.butler.registry.queryDataIds(dimensions, where=query))
         self.assertEqual(len(result), 1)
         self.assertIn(dict(result[0]), expected)
 
