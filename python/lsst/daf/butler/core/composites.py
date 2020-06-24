@@ -25,6 +25,7 @@ from __future__ import annotations
 
 __all__ = ("CompositesConfig", "CompositesMap")
 
+import yaml
 import logging
 
 from typing import (
@@ -129,3 +130,11 @@ class CompositesMap:
 
         log.debug("%s will%s be disassembled", matchName, "" if disassemble else " not")
         return disassemble
+
+    def __str__(self) -> str:
+        result = {}
+        result["default"] = self.config["default"]
+        result["disassembled"] = {}
+        for key in self._lut:
+            result["disassembled"][str(key)] = self._lut[key]
+        return yaml.dump(result)
