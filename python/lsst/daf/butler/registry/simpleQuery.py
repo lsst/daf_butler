@@ -131,6 +131,22 @@ class SimpleQuery:
         """
         return self._from
 
+    def copy(self) -> SimpleQuery:
+        """Return a copy of this object, with new lists for the `where` and
+        `columns` attributes that can be modified without changing the
+        original.
+
+        Returns
+        -------
+        copy : `SimpleQuery`
+            A copy of ``self``.
+        """
+        result = SimpleQuery()
+        result.columns = list(self.columns)
+        result.where = list(self.where)
+        result._from = self._from
+        return result
+
     columns: List[sqlalchemy.sql.ColumnElement]
     """The columns in the SELECT clause
     (`list` [ `sqlalchemy.sql.ColumnElement` ]).
