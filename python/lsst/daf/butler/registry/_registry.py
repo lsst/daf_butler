@@ -1356,6 +1356,54 @@ class Registry:
         query = builder.finish()
         return queries.DataCoordinateQueryResults(self._db, query)
 
+    def queryDimensionRecords(self, element: Union[DimensionElement, str], *,
+                              dataId: Optional[DataId] = None,
+                              datasets: Any = None,
+                              collections: Any = None,
+                              where: Optional[str] = None,
+                              components: Optional[bool] = None,
+                              **kwargs: Any) -> Iterator[DimensionRecord]:
+        """Query for dimension information matching user-provided criteria.
+
+        Parameters
+        ----------
+        element : `DimensionElement` or `str`
+            The dimension element to obtain r
+        dataId : `dict` or `DataCoordinate`, optional
+            A data ID whose key-value pairs are used as equality constraints
+            in the query.
+        datasets : `Any`, optional
+            An expression that fully or partially identifies dataset types
+            that should constrain the yielded records.  See `queryDataIds` and
+            :ref:`daf_butler_dataset_type_expressions` for more information.
+        collections: `Any`, optional
+            An expression that fully or partially identifies the collections
+            to search for datasets.  See `queryDataIds` and
+            :ref:`daf_butler_collection_expressions` for more information.
+        where : `str`, optional
+            A string expression similar to a SQL WHERE clause.  See
+            `queryDataIds` and :ref:`daf_butler_dimension_expressions` for more
+            information.
+        components : `bool`, optional
+            Whether to apply dataset expressions to components as well.
+            See `queryDataIds` for more information.
+        **kwargs
+            Additional keyword arguments are forwarded to
+            `DataCoordinate.standardize` when processing the ``dataId``
+            argument (and may be used to provide a constraining data ID even
+            when the ``dataId`` argument is `None`).
+
+        Returns
+        -------
+        dataIds : `DataCoordinateQueryResults`
+            Data IDs matching the given query parameters.
+        """
+        if not isinstance(element, DimensionElement):
+            element = self.dimensions[element]
+        dataIds = self.queryDataIds(element.graph, dataId=dataId, datasets=datasets, collections=collections,
+                                    where=where, components=components, **kwargs)
+        return iter(self._dimensions[element].fetch(dataIds))
+
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).
     """
