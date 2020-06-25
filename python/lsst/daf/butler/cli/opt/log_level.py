@@ -34,6 +34,8 @@ class log_level_option:  # noqa: N801
     # the allowed values
     choices = ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]
 
+    optionKey = "log_level"
+
     def __init__(self, help=defaultHelp, required=False, defaultValue=defaultValue):
         """A decorator to add a log_level option to a click.Command.
 
@@ -49,13 +51,15 @@ class log_level_option:  # noqa: N801
             `log_level_option.defaultValue`
         """
         self.help = help
+        self.isEager = True
         self.required = required
         self.default = None if required else defaultValue
 
     def __call__(self, f):
         return click.option("--log-level",
+                            callback=to_upper,
+                            default=self.default,
+                            is_eager=self.isEager,
                             help=self.help,
                             required=self.required,
-                            type=click.Choice(self.choices, case_sensitive=False),
-                            default=self.default,
-                            callback=to_upper)(f)
+                            type=click.Choice(self.choices, case_sensitive=False))(f)
