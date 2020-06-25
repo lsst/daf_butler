@@ -1381,7 +1381,7 @@ class Butler:
 
         # Find all the registered instruments
         instruments = set(
-            dataId["instrument"] for dataId in self.registry.queryDataIds(["instrument"])
+            record.name for record in self.registry.queryDimensionRecords("instrument")
         )
 
         # For each datasetType that has an instrument dimension, create
