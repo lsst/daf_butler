@@ -293,12 +293,27 @@ class InMemoryDatastore(GenericBaseDatastore):
         readStorageClass = ref.datasetType.storageClass
         writeStorageClass = storedItemInfo.storageClass
 
+        component = ref.datasetType.component()
+
         # Check that the supplied parameters are suitable for the type read
-        readStorageClass.validateParameters(parameters)
+        # If this is a read-only component we validate against the composite
+        isReadOnlyComponent = False
+        if component in writeStorageClass.readComponents:
+            writeStorageClass.validateParameters(parameters)
+            isReadOnlyComponent = True
+        else:
+            readStorageClass.validateParameters(parameters)
 
         inMemoryDataset = self.datasets[realID]
 
-        component = ref.datasetType.component()
+        # if this is a read only component we need to apply parameters
+        # before we retrieve the component. We assume that the parameters
+        # will affect the data globally, before the read-only component
+        # is selected.
+        if isReadOnlyComponent:
+            inMemoryDataset = writeStorageClass.assembler().handleParameters(inMemoryDataset, parameters)
+            # Then disable parameters for later
+            parameters = {}
 
         # Different storage classes implies a component request
         if readStorageClass != writeStorageClass:
