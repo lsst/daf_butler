@@ -30,11 +30,11 @@ from unittest.mock import MagicMock
 from ..core.utils import iterable
 
 
-# CLI_BUTLER_MOCK_ENV is set by some tests as an environment variable, it
+# CLI_MOCK_ENV is set by some tests as an environment variable, it
 # indicates to the cli_handle_exception function that instead of executing the
 # command implementation function it should use the Mocker class for unit test
 # verification.
-mockEnvVarKey = "CLI_BUTLER_MOCK_ENV"
+mockEnvVarKey = "CLI_MOCK_ENV"
 mockEnvVar = {mockEnvVarKey: "1"}
 
 # This is used as the metavar argument to Options that accept multiple string
