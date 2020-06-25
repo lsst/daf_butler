@@ -46,6 +46,12 @@ class CliCmdTestBase(abc.ABC):
         """Get the click.Command being tested."""
         pass
 
+    @property
+    def cli(self):
+        """Get the command line interface function under test, can be
+        overridden to test CLIs other than butler."""
+        return butler.cli
+
     def setUp(self):
         self.runner = click.testing.CliRunner(env=mockEnvVar)
 
@@ -70,7 +76,7 @@ class CliCmdTestBase(abc.ABC):
             The Result object contains the results from calling
             self.runner.invoke.
         """
-        return self.runner.invoke(butler.cli, inputs)
+        return self.runner.invoke(self.cli, inputs)
 
     def run_test(self, inputs, expectedKwargs):
         """Run the subcommand specified in inputs and verify a successful
