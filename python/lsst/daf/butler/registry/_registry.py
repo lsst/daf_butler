@@ -70,6 +70,7 @@ from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
 from .interfaces import ChainedCollectionRecord, RunRecord
+from .versions import ButlerVersionsManager
 
 if TYPE_CHECKING:
     from ..butlerConfig import ButlerConfig
@@ -138,9 +139,11 @@ class Registry:
         collections = doImport(config["managers", "collections"])
         datasets = doImport(config["managers", "datasets"])
         datastoreBridges = doImport(config["managers", "datastores"])
+        versions = ButlerVersionsManager.fromConfig(config.get("schema_versions"))
+
         return cls(database, universe, dimensions=dimensions, attributes=attributes, opaque=opaque,
                    collections=collections, datasets=datasets, datastoreBridges=datastoreBridges,
-                   create=create)
+                   versions=versions, writeable=writeable, create=create)
 
     def __init__(self, database: Database, universe: DimensionUniverse, *,
                  attributes: Type[ButlerAttributeManager],
@@ -149,6 +152,8 @@ class Registry:
                  collections: Type[CollectionManager],
                  datasets: Type[DatasetRecordStorageManager],
                  datastoreBridges: Type[DatastoreRegistryBridgeManager],
+                 versions: ButlerVersionsManager,
+                 writeable: bool = True,
                  create: bool = False):
         self._db = database
         self.storageClasses = StorageClassFactory()
@@ -164,6 +169,15 @@ class Registry:
                                                                  opaque=self._opaque,
                                                                  datasets=datasets,
                                                                  universe=self.dimensions)
+            context.addInitializer(lambda db: versions.storeVersions(self._attributes))
+
+        # This call does not do anything right now as we do not have a way to
+        # split tables between sub-schemas yet.
+        versions.checkVersionDigests()
+        if not create:
+            # verify that configured versions are compatible with schema
+            versions.checkStoredVersions(self._attributes, writeable)
+
         self._collections.refresh()
         self._datasets.refresh(universe=self._dimensions.universe)
 
