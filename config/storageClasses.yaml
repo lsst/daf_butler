@@ -93,6 +93,8 @@ storageClasses:
     pytype: lsst.meas.algorithms.Curve
   CrosstalkCalib:
     pytype: lsst.ip.isr.CrosstalkCalib
+  Filter:
+    pytype: lsst.afw.image.Filter
   Exposure:
     pytype: lsst.afw.image.Exposure
     assembler: lsst.obs.base.exposureAssembler.ExposureAssembler
@@ -111,6 +113,7 @@ storageClasses:
       coaddInputs: CoaddInputs
       transmissionCurve: TransmissionCurve
       metadata: PropertyList
+      filter: Filter
   ExposureF:
     inheritsFrom: Exposure
     pytype: lsst.afw.image.ExposureF
