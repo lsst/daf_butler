@@ -21,6 +21,7 @@
 
 
 import click
+from ..utils import MWOption
 
 allowed_types = ["auto", "link", "symlink", "hardlink", "copy", "move", "relsymlink"]
 
@@ -31,7 +32,7 @@ class transfer_option:  # noqa: N801
         self.help = "The external data transfer mode." if help is None else help
 
     def __call__(self, f):
-        return click.option("-t", "--transfer",
+        return click.option("-t", "--transfer", cls=MWOption,
                             default="auto",
                             type=click.Choice(allowed_types),
                             required=self.required,

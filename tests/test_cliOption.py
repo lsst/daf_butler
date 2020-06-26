@@ -53,11 +53,11 @@ class ConfigTestCase(OptHelpTest,
                      OptRequiredTest,
                      OptSplitKeyValueTest,
                      unittest.TestCase):
+    metavar = "test metavar"
     optionName = "config"
     shortOptionName = "c"
     optionClass = config_option
     optionMultipleKeyValues = ["one=two,three=four", "five=six"]
-
 
 
 class ConfigFileTestCase(OptHelpTest,

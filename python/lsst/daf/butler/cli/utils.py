@@ -227,9 +227,9 @@ def split_kv(context, param, values, separator="=", multiple=True):
         try:
             k, v = val.split(separator)
         except ValueError:
-            if val.count(separator) > 1:
-                raise click.ClickException(f"Too many key-value separators in value '{val}'")
-            raise click.ClickException(f"Missing or invalid key-value separator in value '{val}'")
+            raise click.ClickException(
+                f"Could not parse key-value pair '{val}' using separator '{separator}', "
+                f"with multiple values {'allowed' if multiple else 'not allowed'}.")
         if k in ret:
             raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
         ret[k] = v
@@ -319,3 +319,47 @@ def cli_handle_exception(func, *args, **kwargs):
         traceback.print_exc(file=msg)
         msg.seek(0)
         raise click.ClickException(msg.read())
+
+
+class MWOption(click.Option):
+    """Overrides click.Option with desired behaviors."""
+
+    def make_metavar(self):
+        """Overrides `click.Option.make_metavar`. Makes the metavar for the
+        help menu. Adds a space and an elipsis after the metavar name if
+        the option accepts multiple inputs, otherwise defers to the base
+        implementation.
+
+        By default click does not add an elipsis when multiple is True and
+        nargs is 1. And when nargs does not equal 1 click adds an elipsis
+        without a space between the metavar and the elipsis, but we prefer a
+        space between.
+        """
+        metavar = super().make_metavar()
+        if self.multiple and self.nargs == 1:
+            metavar += " ..."
+        elif self.nargs != 1:
+            metavar = f"{metavar[:-3]} ..."
+        return metavar
+
+
+class MWArgument(click.Argument):
+    """Overrides click.Argument with desired behaviors."""
+
+    def make_metavar(self):
+        """Overrides `click.Option.make_metavar`. Makes the metavar for the
+        help menu. Always adds a space and an elipsis (' ...') after the
+        metavar name if the option accepts multiple inputs.
+
+        By default click adds an elipsis without a space between the metavar
+        and the elipsis, but we prefer a space between.
+
+        Returns
+        -------
+        metavar : `str`
+            The metavar value.
+        """
+        metavar = super().make_metavar()
+        if self.nargs != 1:
+            metavar = f"{metavar[:-3]} ..."
+        return metavar

@@ -27,7 +27,7 @@ import click.testing
 import unittest
 
 from lsst.daf.butler.cli import butler
-from lsst.daf.butler.cli.utils import Mocker, mockEnvVar, unwrap_string
+from lsst.daf.butler.cli.utils import clickResultMsg, Mocker, mockEnvVar, MWArgument, MWOption, unwrap
 from lsst.daf.butler.cli.opt import directory_argument, repo_argument
 
 
@@ -79,33 +79,100 @@ class UnwrapStringTestCase(unittest.TestCase):
         testStr = """
             foo bar
             baz """
-        self.assertEqual(unwrap_string(testStr), "foo bar baz")
+        self.assertEqual(unwrap(testStr), "foo bar baz")
 
     def test_leadingContent(self):
         testStr = """foo bar
             baz """
-        self.assertEqual(unwrap_string(testStr), "foo bar baz")
+        self.assertEqual(unwrap(testStr), "foo bar baz")
 
     def test_trailingNewline(self):
         testStr = """
             foo bar
             baz
             """
-        self.assertEqual(unwrap_string(testStr), "foo bar baz")
+        self.assertEqual(unwrap(testStr), "foo bar baz")
 
     def test_oneLine(self):
         testStr = """foo bar baz"""
-        self.assertEquals(unwrap_string(testStr), "foo bar baz")
+        self.assertEqual(unwrap(testStr), "foo bar baz")
 
     def test_oneLineWithLeading(self):
         testStr = """
             foo bar baz"""
-        self.assertEquals(unwrap_string(testStr), "foo bar baz")
+        self.assertEqual(unwrap(testStr), "foo bar baz")
 
     def test_oneLineWithTrailing(self):
         testStr = """foo bar baz
             """
-        self.assertEquals(unwrap_string(testStr), "foo bar baz")
+        self.assertEqual(unwrap(testStr), "foo bar baz")
+
+
+class MWOptionTest(unittest.TestCase):
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
+    def test_addElipsisToMultiple(self):
+        """Verify that MWOption adds elipsis to the option metavar when
+        `multiple=True`
+
+        The default behavior of click is to not add elipsis to options that
+        have `multiple=True`."""
+        @click.command()
+        @click.option("--things", cls=MWOption, multiple=True)
+        def cmd(things):
+            pass
+        result = self.runner.invoke(cmd, ["--help"])
+        self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+        expectedOutut = """Options:
+  --things TEXT ..."""
+        self.assertIn(expectedOutut, result.output)
+
+    def test_addElipsisToNargs(self):
+        """Verify that MWOption adds " ..." after the option metavar when
+        `nargs` is set to more than 1 and less than 1.
+
+        The default behavior of click is to add elipsis when nargs does not
+        equal 1, but it does not put a space before the elipsis and we prefer
+        a space between the metavar and the elipsis."""
+        for numberOfArgs in (0, 1, 2):  # nargs must be >= 0 for an option
+            @click.command()
+            @click.option("--things", cls=MWOption, nargs=numberOfArgs)
+            def cmd(things):
+                pass
+            result = self.runner.invoke(cmd, ["--help"])
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+            expectedOutut = f"""Options:
+  --things TEXT{' ...' if numberOfArgs != 1 else ''}"""
+            self.assertIn(expectedOutut, result.output)
+
+
+class MWArgumentTest(unittest.TestCase):
+
+    def setUp(self):
+        self.runner = click.testing.CliRunner()
+
+    def test_addElipsisToNargs(self):
+        """Verify that MWOption adds " ..." after the option metavar when
+        `nargs` != 1.
+
+        The default behavior of click is to add elipsis when nargs does not
+        equal 1, but it does not put a space before the elipsis and we prefer
+        a space between the metavar and the elipsis."""
+        # nargs can be -1 for any number of args, or >= 1 for a specified
+        # number of arguments.
+        for numberOfArgs in (-1, 1, 2):
+            for required in (True, False):
+                @click.command()
+                @click.argument("things", cls=MWArgument, required=required, nargs=numberOfArgs)
+                def cmd(things):
+                    pass
+                result = self.runner.invoke(cmd, ["--help"])
+                self.assertEqual(result.exit_code, 0, clickResultMsg(result))
+                expectedOutut = (f"Usage: cmd [OPTIONS] {'THINGS' if required else '[THINGS]'}"
+                                 f"{' ...' if numberOfArgs != 1 else ''}")
+                self.assertIn(expectedOutut, result.output)
 
 
 if __name__ == "__main__":

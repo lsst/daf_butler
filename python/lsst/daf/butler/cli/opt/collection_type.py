@@ -22,6 +22,7 @@
 
 import click
 
+from lsst.daf.butler.cli.utils import MWOption
 from lsst.daf.butler.registry import CollectionType
 
 
@@ -51,7 +52,7 @@ class collection_type_option:  # noqa: N801
         self.help = help
 
     def __call__(self, f):
-        return click.option("--collection-type",
+        return click.option("--collection-type", cls=MWOption,
                             required=self.required,
                             type=click.Choice(self.choices, case_sensitive=False),
                             callback=self.makeCollectionType,

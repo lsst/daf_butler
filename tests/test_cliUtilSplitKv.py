@@ -39,7 +39,9 @@ class Suite(unittest.TestCase):
         self.assertEqual(split_kv("context", "param", "first=1,second=2"), {"first": "1", "second": "2"})
 
     def test_notMultiple(self):
-        with self.assertRaisesRegex(click.ClickException, "Too many key-value separators in value"):
+        with self.assertRaisesRegex(click.ClickException, "Could not parse key-value pair "
+                                    "'first=1,second=2' using separator '=', with multiple values not "
+                                    "allowed."):
             split_kv("context", "param", "first=1,second=2", multiple=False)
 
     def test_wrongSeparator(self):
@@ -80,7 +82,8 @@ class Suite(unittest.TestCase):
         result = runner.invoke(cli, ["--value", "first==1"])
         self.assertEqual(result.exit_code, 1)
         self.assertEqual(result.output,
-                         "Error: Missing or invalid key-value separator in value 'first==1'\n")
+                         "Error: Could not parse key-value pair 'first==1' using separator '=', with "
+                         "multiple values allowed.\n")
 
     def test_separatorDash(self):
         def split_kv_dash(context, param, values):

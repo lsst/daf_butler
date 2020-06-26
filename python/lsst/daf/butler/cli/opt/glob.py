@@ -21,7 +21,7 @@
 
 import click
 
-from ..utils import addArgumentHelp, split_commas, ParameterType, textTypeStr
+from ..utils import addArgumentHelp, MWOption, split_commas, ParameterType, textTypeStr
 
 
 class glob_parameter:  # noqa: N801
@@ -44,7 +44,7 @@ class glob_parameter:  # noqa: N801
 
     def __call__(self, f):
         if self.parameterType == ParameterType.OPTION:
-            return click.option("--glob",
+            return click.option("--glob", cls=MWOption,
                                 callback=self.callback,
                                 help=self.help,
                                 metavar=textTypeStr(self.multiple),

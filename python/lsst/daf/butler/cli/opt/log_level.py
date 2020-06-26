@@ -21,7 +21,7 @@
 
 import click
 
-from ..utils import to_upper
+from ..utils import MWOption, to_upper
 
 
 class log_level_option:  # noqa: N801
@@ -56,7 +56,7 @@ class log_level_option:  # noqa: N801
         self.default = None if required else defaultValue
 
     def __call__(self, f):
-        return click.option("--log-level",
+        return click.option("--log-level", cls=MWOption,
                             callback=to_upper,
                             default=self.default,
                             is_eager=self.isEager,

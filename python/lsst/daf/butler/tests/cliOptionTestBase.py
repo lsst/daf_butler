@@ -23,10 +23,11 @@ import abc
 import click
 import click.testing
 import copy
+import inspect
 import os
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-from ..cli.utils import clickResultMsg, ParameterType
+from ..cli.utils import clickResultMsg, ParameterType, split_kv_separator
 from ..core.utils import iterable
 
 
@@ -43,7 +44,7 @@ class MockCliTestHelper:
 class CliFactory:
 
     @staticmethod
-    def noOp(optTestBase, parameterKwargs=None):
+    def noOp(optTestBase, parameterKwargs=None, cmdInitKwArgs=None):
         """Produces a no-op cli function that supports the option class being
         tested, and initializes the option class with the expected and
         passed-in keyword arguments.
@@ -61,6 +62,8 @@ class CliFactory:
         parameterKwargs : `dict` [`str`: `Any`], optional
             A list of keyword arguments to pass to the parameter (Argument or
             Option) constructor.
+        cmdInitKwArgs : `dict` [`str`: `Any`], optional
+            A list of keyword arguments to pass to the command constructor.
 
         Returns
         -------
@@ -72,7 +75,10 @@ class CliFactory:
         if 'parameterType' not in cliArgs and optTestBase.isArgument and optTestBase.isParameter:
             cliArgs['parameterType'] = ParameterType.ARGUMENT
 
-        @click.command()
+        if cmdInitKwArgs is None:
+            cmdInitKwArgs = {}
+
+        @click.command(**cmdInitKwArgs)
         @optTestBase.optionClass(**cliArgs)
         def cli(*args, **kwargs):
             pass
@@ -266,15 +272,21 @@ class OptTestBase(abc.ABC):
         return self.choices
 
     @property
+    def metavar(self):
+        """Return the metavar expected to be printed in help text after the
+        option flag(s). If `None`, won't run a test for the metavar value."""
+        return None
+
+    @property
     def isArgument(self):
         """True if the Parameter under test is an Argument, False if it is an
-        Option """
+        Option."""
         return False
 
     @property
     def isParameter(self):
         """True if the Parameter under test can be set to an Option or an
-        Argument, False if it only supports one or the other. """
+        Argument, False if it only supports one or the other."""
         return False
 
     @property
@@ -490,7 +502,8 @@ class OptSplitKeyValueTest(OptTestBase):
         self.run_test(CliFactory.noOp(self, parameterKwargs=dict(split_kv=True)),
                       self.makeInputs(self.optionFlag, values),
                       self.verifyError,
-                      "Error: Too many key-value separators in value")
+                      f"Error: Could not parse key-value pair '{values}' using separator "
+                      f"'{split_kv_separator}', with multiple values not allowed.")
 
 
 class OptRequiredTest(OptTestBase):
@@ -568,7 +581,8 @@ class OptPathTypeTest(OptTestBase):
                 if testObj.valueType.dir_okay:
                     os.makedirs(testObj.optionValue)
                 elif testObj.valueType.file_okay:
-                    _ = open(testObj.optionValue)
+                    with open(testObj.optionValue, "w") as _:
+                        pass
                 else:
                     testObj.assertTrue(False,
                                        "Unexpected; at least one of file_okay or dir_okay should be True.")
@@ -591,20 +605,80 @@ class OptHelpTest(OptTestBase):
     """A mixin that tests that an option has a defaultHelp parameter, accepts
     a custom help paramater, and prints the help message correctly.
     """
+    # Specifying a very wide terminal prevents Click from wrapping text when
+    # rendering output, which causes issues trying to compare expected strings.
+    wideTerminal = dict(context_settings=dict(terminal_width=1000000))
 
     def _verify_forHelp(self, result, expectedHelpText):
         self.assertEqual(result.exit_code, 0, clickResultMsg(result))
-        self.assertIn("".join(expectedHelpText.split()), "".join(result.output.split()))
+        self.assertIn(expectedHelpText, result.output)
 
     def test_help_default(self):
-        self.run_test(CliFactory.noOp(self),
+        self.run_test(CliFactory.noOp(self, cmdInitKwArgs=self.wideTerminal),
                       ["--help"],
                       self._verify_forHelp,
                       self.optionClass.defaultHelp)
 
     def test_help_custom(self):
         helpText = "foobarbaz"
-        self.run_test(CliFactory.noOp(self, parameterKwargs=dict(help=helpText)),
+        self.run_test(CliFactory.noOp(self,
+                                      parameterKwargs=dict(help=helpText),
+                                      cmdInitKwArgs=self.wideTerminal),
                       ["--help"],
                       self._verify_forHelp,
                       helpText)
+
+    def test_help_optionMetavar(self):
+        """Test that a specified metavar prints correctly in the help output
+        for Options. """
+
+        # For now only run on test cases that define the metavar to test.
+        # This could be expanded to get the raw metavar out of the parameter
+        # and test for expected formatting of all shared option metavars.
+        if self.metavar is None:
+            return
+
+        def getMetavar(isRequired):
+            return self.metavar if isRequired else f"[{self.metavar}]"
+
+        parameters = inspect.signature(self.optionClass.__init__).parameters.values()
+        supportedInitArgs = [parameter.name for parameter in parameters]
+
+        def doTest(required, multiple):
+            """Test for the expected parameter flag(s), metavar, and muliptle
+            indicator in the --help output.
+
+            Parameters
+            ----------
+            required : `bool` or None
+                True if the parameter is required, False if it is not required,
+                or None if the parameter initializer does not take a required
+                argument, in which case it is treated as not required.
+            multiple : `bool` or None
+                True if the parameter accepts multiple inputs, False if it does
+                not, or None if the parameter initializer does not take a
+                multiple argument, in which case it is treated as not multiple.
+            """
+            if self.isArgument:
+                expected = f"{getMetavar(required)}{' ...' if multiple else ''}"
+            else:
+                if self.shortOptionFlag is not None and self.optionFlag is not None:
+                    expected = ", ".join([self.shortOptionFlag, self.optionFlag])
+                elif (self.shortOptionFlag is not None):
+                    expected = self.shortOptionFlag
+                else:
+                    expected = self.optionFlag
+                expected = f"{expected} {self.metavar}{' ...' if multiple else ''}"
+            parameterKwargs = parameterKwargs = dict(required=required)
+            if multiple is not None:
+                parameterKwargs['multiple'] = multiple
+            if 'metavar' in supportedInitArgs:
+                parameterKwargs['metavar'] = self.metavar
+            self.run_test(CliFactory.noOp(self, parameterKwargs=parameterKwargs),
+                          ["--help"],
+                          self._verify_forHelp,
+                          expected)
+
+        for required in (False, True) if 'required' in supportedInitArgs else (None,):
+            for multiple in (False, True) if 'multiple' in supportedInitArgs else (None,):
+                doTest(required, multiple)

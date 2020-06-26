@@ -22,7 +22,7 @@
 
 import click
 
-from ..utils import split_commas
+from ..utils import MWOption, split_commas
 
 
 class dataset_type_option:  # noqa: N801
@@ -36,7 +36,7 @@ class dataset_type_option:  # noqa: N801
         self.required = required
 
     def __call__(self, f):
-        return click.option("-d", "--dataset-type",
+        return click.option("-d", "--dataset-type", cls=MWOption,
                             callback=self.callback,
                             help=self.help,
                             multiple=self.multiple,
