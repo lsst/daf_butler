@@ -34,7 +34,7 @@ from lsst.daf.butler.tests import (OptFlagTest,
                                    OptSplitKeyValueTest)
 from lsst.daf.butler.cli.opt import (collection_type_option, config_file_option, config_option,
                                      dataset_type_option, directory_argument, glob_parameter,
-                                     log_level_option, verbose_option)
+                                     log_level_option, long_log_option, verbose_option)
 
 
 class CollectionTypeTestCase(OptHelpTest,
@@ -112,9 +112,18 @@ class LogLevelTestCase(OptChoiceTest,
                        OptRequiredTest,
                        unittest.TestCase):
 
-    expectedValDefault = log_level_option.defaultValue
+    expectedValDefault = {"": log_level_option.defaultValue}
     optionClass = log_level_option
     optionName = "log-level"
+    choices = ["DEBUG", "lsst.daf.butler=DEBUG"]
+    expectedChoiceValues = [{'': "DEBUG"}, {"lsst.daf.butler": "DEBUG"}]
+
+
+class LongLogOption(OptFlagTest,
+                    OptHelpTest,
+                    unittest.TestCase):
+    optionClass = long_log_option
+    optionName = "long-log"
 
 
 # Doesn't test for required; this is nonsensical for a flag (where

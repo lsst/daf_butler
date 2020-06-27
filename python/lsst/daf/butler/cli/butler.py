@@ -26,19 +26,23 @@ import logging
 import os
 import yaml
 
+from .log import Log
 from .opt import log_level_option
-from .utils import to_upper
 from lsst.utils import doImport
 
 
 log = logging.getLogger(__name__)
+
+LONG_LOG_FLAG = "--long-log"
 
 
 class LoaderCLI(click.MultiCommand, abc.ABC):
     """Extends `click.MultiCommand`, which dispatches to subcommands, to load
     subcommands at runtime."""
 
-    didInitLogging = False
+    def __init__(self, *args, **kwargs):
+        self.didInitLog = False
+        super().__init__(*args, **kwargs)
 
     @property
     @abc.abstractmethod
@@ -87,8 +91,7 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         commands : `list` [`str`]
             The names of the commands that can be called by the butler command.
         """
-        if log_level_option.optionKey in ctx.params:
-            self.initLogging(ctx.params[log_level_option.optionKey])
+        self._setupLogging(ctx)
         commands = self._getCommands()
         self._raiseIfDuplicateCommands(commands)
         return sorted(commands)
@@ -108,34 +111,23 @@ class LoaderCLI(click.MultiCommand, abc.ABC):
         command : `click.Command`
             A Command that wraps a callable command function.
         """
-        if log_level_option.optionKey in ctx.params:
-            self.initLogging(ctx.params[log_level_option.optionKey])
+        self._setupLogging(ctx)
         commands = self._getCommands()
         if name not in commands:
             return None
         self._raiseIfDuplicateCommands(commands)
         return self._importPlugin(commands[name][0] + "." + self._cmdNameToFuncName(name))
 
-    @classmethod
-    def initLogging(cls, logLevel):
-        """Initialize the logging system.
+    def _setupLogging(self, ctx):
+        """Init the logging system and config it for the command.
 
-        Parameters
-        ----------
-        logLevel : `str`
-            The name of one of the python logging levels.
-
-        Raises
-        ------
-        click.ClickException
-            If the log level can not be processed.
-        """
-        if not cls.didInitLogging:
-            numeric_level = getattr(logging, logLevel, None)
-            if not isinstance(numeric_level, int):
-                raise click.ClickException(f"Invalid log level: {logLevel}")
-            logging.basicConfig(level=numeric_level)
-            cls.didInitLogging = True
+        Subcommands may further configure the log settings."""
+        if not self.didInitLog:
+            # Initialize the logger. This should be called only once.
+            Log.initLog(longlog=LONG_LOG_FLAG in ctx.params)
+            self.didInitLog = True
+        if log_level_option.optionKey in ctx.params:
+            Log.setLogLevels(ctx.params[log_level_option.optionKey])
 
     @staticmethod
     def getPluginList():
@@ -311,12 +303,7 @@ class ButlerCLI(LoaderCLI):
 
 
 @click.command(cls=ButlerCLI, context_settings=dict(help_option_names=["-h", "--help"]))
-@click.option("--log-level",
-              type=click.Choice(["critical", "error", "warning", "info", "debug",
-                                 "CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]),
-              default="warning",
-              help="The Python log level to use.",
-              callback=to_upper)
+@log_level_option()
 def cli(log_level):
     # log_level is handled by get_command and list_commands, and is called in
     # one of those functions before this is called.

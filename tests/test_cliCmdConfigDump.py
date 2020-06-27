@@ -30,6 +30,7 @@ import yaml
 
 from lsst.daf.butler.cli import butler
 from lsst.daf.butler.cli.cmd import config_dump
+from lsst.daf.butler.cli.utils import clickResultMsg
 from lsst.daf.butler.tests import CliCmdTestBase
 
 
@@ -46,11 +47,11 @@ class ConfigDumpUseTest(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
 
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "here"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # check for some expected keywords:
             cfg = yaml.safe_load(result.stdout)
             self.assertIn("datastore", cfg)
@@ -62,9 +63,9 @@ class ConfigDumpUseTest(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             result = runner.invoke(butler.cli, ["config-dump", "here", "--file=there"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # check for some expected keywords:
             with open("there", "r") as f:
                 cfg = yaml.safe_load(f)
@@ -77,9 +78,9 @@ class ConfigDumpUseTest(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "datastore"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             cfg = yaml.safe_load(result.stdout)
             # count the keys in the datastore config
             self.assertIs(len(cfg), 7)
@@ -95,7 +96,7 @@ class ConfigDumpUseTest(unittest.TestCase):
         runner = click.testing.CliRunner()
         with runner.isolated_filesystem():
             result = runner.invoke(butler.cli, ["create", "here"])
-            self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
+            self.assertEqual(result.exit_code, 0, clickResultMsg(result))
             # test dumping to stdout:
             result = runner.invoke(butler.cli, ["config-dump", "here", "--subset", "foo"])
             self.assertEqual(result.exit_code, 1)

@@ -88,7 +88,7 @@ class FailedLoadTest(unittest.TestCase):
             self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
             expectedErrMsg = "Could not import plugin from " \
                              "test_cliPluginLoader.non_existant_command_function, skipping."
-            self.assertIn(expectedErrMsg, cm.output[0])
+            self.assertIn(expectedErrMsg, " ".join(cm.output))
 
     def test_unimportableLocalPackage(self):
         class FailCLI(butler.LoaderCLI):
@@ -103,7 +103,7 @@ class FailedLoadTest(unittest.TestCase):
             result = runner.invoke(cli)
         self.assertEqual(result.exit_code, 0, f"output: {result.output} exception: {result.exception}")
         expectedErrMsg = f"Could not import plugin from {FailCLI.localCmdPkg}, skipping."
-        self.assertIn(expectedErrMsg, cm.output[0])
+        self.assertIn(expectedErrMsg, " ".join(cm.output))
 
 
 class PluginLoaderTest(unittest.TestCase):

@@ -180,7 +180,8 @@ def split_commas(context, param, values):
     return valueList
 
 
-def split_kv(context, param, values, separator="=", multiple=True):
+def split_kv(context, param, values, choice=None, multiple=True, normalize=False, separator="=",
+             unseparated_okay=False):
     """Process a tuple of values that are key-value pairs separated by a given
     separator. Multiple pairs may be comma separated. Return a dictionary of
     all the passed-in values.
@@ -199,16 +200,26 @@ def split_kv(context, param, values, separator="=", multiple=True):
     values : [`str`]
         All the values passed for this option. Strings may contain commas,
         which will be treated as delimiters for separate values.
+    choice : `click.Choice`, optional
+        If provided, verify each value is a valid choice using the provided
+        `click.Choice` instance. If None, no verification will be done.
+    multiple : `bool`, optional
+        If true, the value may contain multiple comma-separated values.
+    normalize : `bool`, optional
+        If True and `choice.case_sensitive == False`, normalize the string the
+        user provided to match the choice's case.
     separator : str, optional
         The character that separates key-value pairs. May not be a comma or an
         empty space (for space separators use Click's default implementation
         for tuples; `type=(str, str)`). By default "=".
-    multiple : bool, optional
-        If true, the value may contain multiple comma-separated values.
+    unseparated_okay : `bool`, optional
+        If True, allow values that do not have a separator. They will be
+        returned in the values dict as a tuple of values in the key '', that
+        is: `values[''] = (unseparated_values, )`.
 
     Returns
     -------
-    `dict` : [`str`, `str`]
+    values : `dict` [`str`, `str`]
         The passed-in values in dict form.
 
     Raises
@@ -217,6 +228,22 @@ def split_kv(context, param, values, separator="=", multiple=True):
         Raised if the separator is not found in an entry, or if duplicate keys
         are encountered.
     """
+
+    def norm(val):
+        """If `normalize` is True and `choice` is not `None`, find the value
+        in the available choices and return the value as spelled in the
+        choices.
+
+        Assumes that val exists in choices; `split_kv` uses the `choice`
+        instance to verify val is a valid choice.
+        """
+        if normalize and choice is not None:
+            v = val.casefold()
+            for opt in choice.choices:
+                if opt.casefold() == v:
+                    return opt
+        return val
+
     if separator in (",", " "):
         raise RuntimeError(f"'{separator}' is not a supported separator for key-value pairs.")
     vals = values  # preserve the original argument for error reporting below.
@@ -224,15 +251,22 @@ def split_kv(context, param, values, separator="=", multiple=True):
         vals = split_commas(context, param, vals)
     ret = {}
     for val in iterable(vals):
-        try:
-            k, v = val.split(separator)
-        except ValueError:
-            raise click.ClickException(
-                f"Could not parse key-value pair '{val}' using separator '{separator}', "
-                f"with multiple values {'allowed' if multiple else 'not allowed'}.")
-        if k in ret:
-            raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
-        ret[k] = v
+        if unseparated_okay and separator not in val:
+            if choice is not None:
+                choice(val)  # will raise if val is an invalid choice
+            ret[""] = norm(val)
+        else:
+            try:
+                k, v = val.split(separator)
+                if choice is not None:
+                    choice(v)  # will raise if val is an invalid choice
+            except ValueError:
+                raise click.ClickException(
+                    f"Could not parse key-value pair '{val}' using separator '{separator}', "
+                    f"with multiple values {'allowed' if multiple else 'not allowed'}.")
+            if k in ret:
+                raise click.ClickException(f"Duplicate entries for '{k}' in '{values}'")
+            ret[k] = norm(v)
     return ret
 
 

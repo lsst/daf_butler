@@ -419,8 +419,8 @@ class OptChoiceTest(OptTestBase):
         """Verify that an invalid value fails with an expected error message.
         """
         cli = CliFactory.noOp(self)
-        choice = self.optionClass.choices[0]
-        while choice in self.optionClass.choices:
+        choice = self.choices[0]
+        while choice in self.choices:
             choice += "foo"
         self.run_test(cli, [self.optionFlag, choice], self.verifyMissing,
                       f'Invalid value for "{self.optionFlag}"')

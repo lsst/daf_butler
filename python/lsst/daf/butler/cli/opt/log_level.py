@@ -20,8 +20,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import click
+from functools import partial
 
-from ..utils import MWOption, to_upper
+from ..utils import MWOption, split_kv
+from ...core.utils import iterable
 
 
 class log_level_option:  # noqa: N801
@@ -52,14 +54,18 @@ class log_level_option:  # noqa: N801
         """
         self.help = help
         self.isEager = True
+        self.multiple = True
         self.required = required
         self.default = None if required else defaultValue
 
     def __call__(self, f):
         return click.option("--log-level", cls=MWOption,
-                            callback=to_upper,
-                            default=self.default,
+                            callback=partial(split_kv,
+                                             choice=click.Choice(self.choices, case_sensitive=False),
+                                             normalize=True,
+                                             unseparated_okay=True),
+                            default=iterable(self.default) if self.default is not None else None,
                             is_eager=self.isEager,
                             help=self.help,
-                            required=self.required,
-                            type=click.Choice(self.choices, case_sensitive=False))(f)
+                            multiple=self.multiple,
+                            required=self.required)(f)
