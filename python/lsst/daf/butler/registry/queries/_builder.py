@@ -109,7 +109,7 @@ class QueryBuilder:
         self._elements[element] = fromClause
 
     def joinDataset(self, datasetType: DatasetType, collections: Any, *,
-                    isResult: bool = True, addRank: bool = False) -> bool:
+                    isResult: bool = True, deduplicate: bool = False) -> bool:
         """Add a dataset search or constraint to the query.
 
         Unlike other `QueryBuilder` join methods, this *must* be called
@@ -133,12 +133,11 @@ class QueryBuilder:
             instances to be produced from the query results for this dataset
             type.  If `False`, the existence of datasets of this type is used
             only to constrain the data IDs returned by the query.
-        addRank : `bool`, optional
-            If `True` (`False` is default), also include a calculated column
-            that ranks the collection in which the dataset was found (lower
-            is better).  Requires that all entries in ``collections`` be
-            regular strings, so there is a clear search order.  Ignored if
-            ``isResult`` is `False`.
+        deduplicate : `bool`, optional
+            If `True` (`False` is default), only include the first match for
+            each data ID, searching the given collections in order.  Requires
+            that all entries in ``collections`` be regular strings, so there is
+            a clear search order.  Ignored if ``isResult`` is `False`.
 
         Returns
         -------
@@ -151,7 +150,7 @@ class QueryBuilder:
             return no results.
         """
         assert datasetType.dimensions.issubset(self.summary.requested)
-        if isResult and addRank:
+        if isResult and deduplicate:
             collections = CollectionSearch.fromExpression(collections)
         else:
             collections = CollectionQuery.fromExpression(collections)
@@ -162,6 +161,9 @@ class QueryBuilder:
             # which is expected by QuantumGraph generation code in pipe_base.
             return False
         subsubqueries = []
+        runKeyName = self._collections.getRunForeignKeyName()
+        baseColumnNames = {"id", runKeyName} if isResult else set()
+        baseColumnNames.update(datasetType.dimensions.required.names)
         for rank, collectionRecord in enumerate(collections.iter(self._collections, datasetType=datasetType)):
             ssq = datasetRecordStorage.select(collection=collectionRecord,
                                               dataId=SimpleQuery.Select,
@@ -169,19 +171,83 @@ class QueryBuilder:
                                               run=SimpleQuery.Select if isResult else None)
             if ssq is None:
                 continue
-            if addRank:
+            assert {c.name for c in ssq.columns} == baseColumnNames
+            if deduplicate:
                 ssq.columns.append(sqlalchemy.sql.literal(rank).label("rank"))
             subsubqueries.append(ssq.combine())
         if not subsubqueries:
             return False
-        subquery = sqlalchemy.sql.union_all(*subsubqueries).alias(datasetType.name)
-        self.joinTable(subquery, datasetType.dimensions.required)
+        subquery = sqlalchemy.sql.union_all(*subsubqueries)
         if isResult:
+            if deduplicate:
+                # Rewrite the subquery (currently a UNION ALL over
+                # per-collection subsubqueries) to select the rows with the
+                # lowest rank per data ID.  The block below will set subquery
+                # to something like this:
+                #
+                # WITH {dst}_search AS (
+                #     SELECT {data-id-cols}, id, run_id, 1 AS rank
+                #         FROM <collection1>
+                #     UNION ALL
+                #     SELECT {data-id-cols}, id, run_id, 2 AS rank
+                #         FROM <collection2>
+                #     UNION ALL
+                #     ...
+                # )
+                # SELECT
+                #     {dst}_window.{data-id-cols},
+                #     {dst}_window.id,
+                #     {dst}_window.run_id
+                # FROM (
+                #     SELECT
+                #         {dst}_search.{data-id-cols},
+                #         {dst}_search.id,
+                #         {dst}_search.run_id,
+                #         ROW_NUMBER() OVER (
+                #             PARTITION BY {dst_search}.{data-id-cols}
+                #             ORDER BY rank
+                #         ) AS rownum
+                #     ) {dst}_window
+                # WHERE
+                #     {dst}_window.rownum = 1;
+                #
+                search = subquery.cte(f"{datasetType.name}_search")
+                windowDataIdCols = [
+                    search.columns[name].label(name) for name in datasetType.dimensions.required.names
+                ]
+                windowSelectCols = [
+                    search.columns["id"].label("id"),
+                    search.columns[runKeyName].label(runKeyName)
+                ]
+                windowSelectCols += windowDataIdCols
+                assert {c.name for c in windowSelectCols} == baseColumnNames
+                windowSelectCols.append(
+                    sqlalchemy.sql.func.row_number().over(
+                        partition_by=windowDataIdCols,
+                        order_by=search.columns["rank"]
+                    ).label("rownum")
+                )
+                window = sqlalchemy.sql.select(
+                    windowSelectCols
+                ).select_from(search).alias(
+                    f"{datasetType.name}_window"
+                )
+                subquery = sqlalchemy.sql.select(
+                    [window.columns[name].label(name) for name in baseColumnNames]
+                ).select_from(
+                    window
+                ).where(
+                    window.columns["rownum"] == 1
+                ).alias(datasetType.name)
+            else:
+                subquery = subquery.alias(datasetType.name)
             self._columns.datasets[datasetType] = DatasetQueryColumns(
                 id=subquery.columns["id"],
-                runKey=subquery.columns[self._collections.getRunForeignKeyName()],
-                rank=subquery.columns["rank"] if addRank else None
+                runKey=subquery.columns[runKeyName],
             )
+        else:
+            subquery = subquery.alias(datasetType.name)
+        self.joinTable(subquery, datasetType.dimensions.required)
         return True
 
     def joinTable(self, table: FromClause, dimensions: NamedValueSet[Dimension]) -> None:

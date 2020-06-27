@@ -229,16 +229,9 @@ class DatasetQueryColumns:
     this dataset.
     """
 
-    rank: Optional[ColumnElement] = None
-    """Column containing the index into the ordered sequence of given
-    collections for the collection in which this dataset was found.
-    """
-
     def __iter__(self) -> Iterator[ColumnElement]:
         yield self.id
         yield self.runKey
-        if self.rank is not None:
-            yield self.rank
 
 
 @dataclass

@@ -1107,3 +1107,42 @@ class RegistryTests(ABC):
         items = dict(attributes.items())
         for key, value in data:
             self.assertEqual(items[key], value)
+
+    def testQueryDatasetsDeduplication(self):
+        """Test that the deduplicate option to queryDatasets selects datasets
+        from collections in the order given".
+        """
+        registry = self.makeRegistry()
+        self.loadData(registry, "base.yaml")
+        self.loadData(registry, "datasets.yaml")
+        self.assertCountEqual(
+            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"])),
+            [
+                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+            ]
+        )
+        self.assertCountEqual(
+            list(registry.queryDatasets("permabias", collections=["imported_g", "imported_r"],
+                                        deduplicate=True)),
+            [
+                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+            ]
+        )
+        self.assertCountEqual(
+            list(registry.queryDatasets("permabias", collections=["imported_r", "imported_g"],
+                                        deduplicate=True)),
+            [
+                registry.findDataset("permabias", instrument="Cam1", detector=1, collections="imported_g"),
+                registry.findDataset("permabias", instrument="Cam1", detector=2, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=3, collections="imported_r"),
+                registry.findDataset("permabias", instrument="Cam1", detector=4, collections="imported_r"),
+            ]
+        )
