@@ -28,7 +28,6 @@ __all__ = (
 from collections import defaultdict
 import contextlib
 import logging
-import sys
 from typing import (
     Any,
     Dict,
@@ -1187,10 +1186,7 @@ class Registry:
             if predicate(row):
                 result = query.extractDataId(row)
                 if expand:
-                    yield self.expandDataId(
-                        result,
-                        records=standardizedDataId.records,
-                    )
+                    yield self.expandDataId(result, records=standardizedDataId.records)
                 else:
                     yield result
 
@@ -1354,45 +1350,16 @@ class Registry:
         # need to deduplicate.  Note that if any of the collections are
         # actually wildcard expressions, and we've asked for deduplication,
         # this will raise TypeError for us.
-        if not builder.joinDataset(datasetType, collections, isResult=True, addRank=deduplicate):
+        if not builder.joinDataset(datasetType, collections, isResult=True, deduplicate=deduplicate):
             return
         query = builder.finish()
         predicate = query.predicate()
-        if not deduplicate:
-            # No need to de-duplicate across collections.
-            for row in self._db.query(query.sql):
-                if predicate(row):
-                    dataId = query.extractDataId(row, graph=datasetType.dimensions)
-                    if expand:
-                        dataId = self.expandDataId(
-                            dataId,
-                            records=standardizedDataId.records
-                        )
-                    yield query.extractDatasetRef(row, datasetType, dataId)[0]
-        else:
-            # For each data ID, yield only the DatasetRef with the lowest
-            # collection rank.
-            bestRefs = {}
-            bestRanks: Dict[DataCoordinate, int] = {}
-            for row in self._db.query(query.sql):
-                if predicate(row):
-                    ref, rank = query.extractDatasetRef(row, datasetType)
-                    bestRank = bestRanks.get(ref.dataId, sys.maxsize)
-                    assert rank is not None
-                    if rank < bestRank:
-                        bestRefs[ref.dataId] = ref
-                        bestRanks[ref.dataId] = rank
-            # If caller requested expanded data IDs, we defer that until here
-            # so we do as little expansion as possible.
-            if expand:
-                for ref in bestRefs.values():
-                    dataId = self.expandDataId(
-                        ref.dataId,
-                        records=standardizedDataId.records
-                    )
-                    yield ref.expanded(dataId)
-            else:
-                yield from bestRefs.values()
+        for row in self._db.query(query.sql):
+            if predicate(row):
+                dataId = query.extractDataId(row, graph=datasetType.dimensions)
+                if expand:
+                    dataId = self.expandDataId(dataId, records=standardizedDataId.records)
+                yield query.extractDatasetRef(row, datasetType, dataId)
 
     storageClasses: StorageClassFactory
     """All storage classes known to the registry (`StorageClassFactory`).

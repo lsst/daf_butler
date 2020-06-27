@@ -23,7 +23,7 @@ from __future__ import annotations
 __all__ = ("Query",)
 
 import itertools
-from typing import Iterable, Optional, Tuple, Callable
+from typing import Iterable, Optional, Callable
 
 from sqlalchemy.sql import FromClause
 from sqlalchemy.engine import RowProxy
@@ -156,7 +156,7 @@ class Query:
         )
 
     def extractDatasetRef(self, row: RowProxy, datasetType: DatasetType,
-                          dataId: Optional[DataCoordinate] = None) -> Tuple[DatasetRef, Optional[int]]:
+                          dataId: Optional[DataCoordinate] = None) -> DatasetRef:
         """Extract a `DatasetRef` from a result row.
 
         Parameters
@@ -177,15 +177,9 @@ class Query:
         ref : `DatasetRef`
             Reference to the dataset; guaranteed to have `DatasetRef.id` not
             `None`.
-        rank : `int` or `None`
-            Integer index of the collection in which this dataset was found,
-            within the sequence of collections passed when constructing the
-            query.  `None` if `QueryBuilder.joinDataset` was called with
-            ``addRank=False``.
         """
         if dataId is None:
             dataId = self.extractDataId(row, graph=datasetType.dimensions)
         datasetColumns = self._columns.datasets[datasetType]
         runRecord = self._collections[row[datasetColumns.runKey]]
-        return (DatasetRef(datasetType, dataId, id=row[datasetColumns.id], run=runRecord.name),
-                row[datasetColumns.rank] if datasetColumns.rank is not None else None)
+        return DatasetRef(datasetType, dataId, id=row[datasetColumns.id], run=runRecord.name)
