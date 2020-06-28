@@ -381,10 +381,10 @@ class QueryBuilder:
             else:
                 # Dimension is not fully identified, but it might be a skypix
                 # dimension that's constrained by a given region.
-                if self.summary.dataId.graph.spatial and isinstance(dimension, SkyPixDimension):
+                if self.summary.whereRegion is not None and isinstance(dimension, SkyPixDimension):
                     # We know the region now.
                     givenSkyPixIds: List[int] = []
-                    for begin, end in dimension.pixelization.envelope(self.summary.dataId.region):
+                    for begin, end in dimension.pixelization.envelope(self.summary.whereRegion):
                         givenSkyPixIds.extend(range(begin, end))
                     for columnInQuery in columnsInQuery:
                         whereTerms.append(columnInQuery.in_(givenSkyPixIds))

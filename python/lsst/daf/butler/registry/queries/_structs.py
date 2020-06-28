@@ -27,6 +27,7 @@ from typing import Iterator, List, Optional, Union
 
 from sqlalchemy.sql import ColumnElement
 
+from lsst.sphgeom import Region
 from ...core import (
     DataCoordinate,
     DatasetType,
@@ -107,14 +108,21 @@ class QuerySummary:
         must return `True`.
     expression : `str` or `QueryWhereExpression`, optional
         A user-provided string WHERE expression.
+    whereRegion : `lsst.sphgeom.Region`, optional
+        A spatial region that all rows must overlap.  If `None` and ``dataId``
+        is not `None`, ``dataId.region`` will be used.
     """
     def __init__(self, requested: DimensionGraph, *,
                  dataId: Optional[DataCoordinate] = None,
-                 expression: Optional[Union[str, QueryWhereExpression]] = None):
+                 expression: Optional[Union[str, QueryWhereExpression]] = None,
+                 whereRegion: Optional[Region] = None):
         self.requested = requested
         self.dataId = dataId if dataId is not None else DataCoordinate.makeEmpty(requested.universe)
         self.expression = (expression if isinstance(expression, QueryWhereExpression)
                            else QueryWhereExpression(requested.universe, expression))
+        if whereRegion is None and self.dataId is not None:
+            whereRegion = self.dataId.region
+        self.whereRegion = whereRegion
 
     requested: DimensionGraph
     """Dimensions whose primary keys should be included in the result rows of
@@ -126,6 +134,11 @@ class QuerySummary:
     (`DataCoordinate`).
 
     ``dataId.hasRecords()`` is guaranteed to return `True`.
+    """
+
+    whereRegion: Optional[Region]
+    """A spatial region that all result rows must overlap
+    (`lsst.sphgeom.Region` or `None`).
     """
 
     expression: QueryWhereExpression

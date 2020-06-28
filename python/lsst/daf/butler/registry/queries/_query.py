@@ -104,7 +104,7 @@ class Query:
             A callable that takes a single `sqlalchemy.engine.RowProxy`
             argmument and returns `bool`.
         """
-        whereRegion = region if region is not None else self.summary.dataId.region
+        whereRegion = region if region is not None else self.summary.whereRegion
 
         def closure(row: RowProxy) -> bool:
             rowRegions = [row[column] for column in self._columns.regions.values()]
