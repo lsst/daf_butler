@@ -62,12 +62,9 @@ from ..core import (
     NameLookupMapping,
     StorageClassFactory,
 )
+from . import queries
 from ..core.utils import doImport, iterable, transactional
 from ._config import RegistryConfig
-from .queries import (
-    QueryBuilder,
-    QuerySummary,
-)
 from ._collectionType import CollectionType
 from ._exceptions import ConflictingDefinitionError, InconsistentDataIdError, OrphanedRecordError
 from .wildcards import CategorizedWildcard, CollectionQuery, CollectionSearch, Ellipsis
@@ -1064,7 +1061,7 @@ class Registry:
                                  flattenChains=flattenChains, includeChains=includeChains):
             yield record.name
 
-    def makeQueryBuilder(self, summary: QuerySummary) -> QueryBuilder:
+    def makeQueryBuilder(self, summary: queries.QuerySummary) -> queries.QueryBuilder:
         """Return a `QueryBuilder` instance capable of constructing and
         managing more complex queries than those obtainable via `Registry`
         interfaces.
@@ -1075,19 +1072,19 @@ class Registry:
 
         Parameters
         ----------
-        summary : `QuerySummary`
+        summary : `queries.QuerySummary`
             Object describing and categorizing the full set of dimensions that
             will be included in the query.
 
         Returns
         -------
-        builder : `QueryBuilder`
+        builder : `queries.QueryBuilder`
             Object that can be used to construct and perform advanced queries.
         """
-        return QueryBuilder(summary=summary,
-                            collections=self._collections,
-                            dimensions=self._dimensions,
-                            datasets=self._datasets)
+        return queries.QueryBuilder(summary=summary,
+                                    collections=self._collections,
+                                    dimensions=self._dimensions,
+                                    datasets=self._datasets)
 
     def queryDimensions(self, dimensions: Union[Iterable[Union[Dimension, str]], Dimension, str], *,
                         dataId: Optional[DataId] = None,
@@ -1176,7 +1173,7 @@ class Registry:
             # below).
             collections = CollectionQuery.fromExpression(collections)
 
-        summary = QuerySummary(
+        summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
             dataId=standardizedDataId,
             expression=where,
@@ -1346,7 +1343,7 @@ class Registry:
         if dimensions is not None:
             requestedDimensionNames.update(self.dimensions.extract(dimensions).names)
         # Construct the summary structure needed to construct a QueryBuilder.
-        summary = QuerySummary(
+        summary = queries.QuerySummary(
             requested=DimensionGraph(self.dimensions, names=requestedDimensionNames),
             dataId=standardizedDataId,
             expression=where,
