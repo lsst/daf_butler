@@ -541,15 +541,6 @@ class Registry:
             if result is not None:
                 return result
 
-        # fallback to the parent if we got nothing and this was a component
-        if storage.datasetType.isComponent():
-            parentType, _ = storage.datasetType.nameAndComponent()
-            parentRef = self.findDataset(parentType, dataId, collections=collections, **kwargs)
-            if parentRef is not None:
-                # Should already conform and we know no components
-                return DatasetRef(storage.datasetType, parentRef.dataId, id=parentRef.id,
-                                  run=parentRef.run, conform=False, hasParentId=True)
-
         return None
 
     @transactional

@@ -277,7 +277,8 @@ class ButlerPutGetTests:
             self.assertEqual(data, metric.data)
 
             compRef = butler.registry.findDataset(compNameS, dataId, collections=butler.collections)
-            self.assertTrue(compRef.hasParentId)
+            summary = butler.getDirect(compRef)
+            self.assertEqual(summary, metric.summary)
 
         # Create a Dataset type that has the same name but is inconsistent.
         inconsistentDatasetType = DatasetType(datasetTypeName, dimensions,
@@ -684,21 +685,15 @@ class ButlerTests(ButlerPutGetTests):
         for args in dimensionEntries:
             butler.registry.insertDimensionData(*args)
 
-        # When a DatasetType is added to the registry entries are created
-        # for each component. Need entries for each component in the test
-        # configuration otherwise validation won't work. The ones that
-        # are deliberately broken will be ignored later.
+        # When a DatasetType is added to the registry entries are not created
+        # for components.
         datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
-        components = set()
         for datasetTypeName in datasetTypeNames:
             # Create and register a DatasetType
             self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
-            for componentName in storageClass.components:
-                components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
-
         fromRegistry = set(butler.registry.queryDatasetTypes(components=True))
-        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
+        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames)
 
         # Now that we have some dataset types registered, validate them
         butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",

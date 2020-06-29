@@ -11,6 +11,7 @@ from typing import (
     TYPE_CHECKING,
 )
 
+import copy
 import sqlalchemy
 
 from lsst.daf.butler import (
@@ -108,10 +109,20 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
 
     def find(self, name: str) -> Optional[DatasetRecordStorage]:
         # Docstring inherited from DatasetRecordStorageManager.
-        return self._byName.get(name)
+        compositeName, componentName = DatasetType.splitDatasetTypeName(name)
+        storage = self._byName.get(compositeName)
+        if storage is not None and componentName is not None:
+            componentStorage = copy.copy(storage)
+            componentStorage.datasetType = storage.datasetType.makeComponentDatasetType(componentName)
+            return componentStorage
+        else:
+            return storage
 
     def register(self, datasetType: DatasetType) -> Tuple[DatasetRecordStorage, bool]:
         # Docstring inherited from DatasetRecordStorageManager.
+        if datasetType.isComponent():
+            raise ValueError("Component dataset types can not be stored in registry."
+                             f" Rejecting {datasetType.name}")
         storage = self._byName.get(datasetType.name)
         if storage is None:
             row, inserted = self._db.sync(
@@ -139,9 +150,6 @@ class ByDimensionsDatasetRecordStorageManager(DatasetRecordStorageManager):
                 raise ConflictingDefinitionError(f"Given dataset type {datasetType} is inconsistent "
                                                  f"with database definition {storage.datasetType}.")
             inserted = False
-        if inserted and datasetType.isComposite:
-            for component in datasetType.storageClass.allComponents():
-                self.register(datasetType.makeComponentDatasetType(component))
         return storage, inserted
 
     def __iter__(self) -> Iterator[DatasetType]:
