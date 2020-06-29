@@ -899,7 +899,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         allGetInfo = self._prepare_for_get(ref, parameters)
         refComponent = ref.datasetType.component()
 
-        if len(allGetInfo) > 1 and not refComponent:
+        isDisassembled = len(allGetInfo) > 1
+
+        if isDisassembled and not refComponent:
             # This was a disassembled dataset spread over multiple files
             # and we need to put them all back together again.
             # Read into memory and then assemble
@@ -944,7 +946,12 @@ class FileLikeDatastore(GenericBaseDatastore):
                 raise FileNotFoundError(f"Component {refComponent} not found "
                                         f"for ref {ref} in datastore {self.name}")
 
-            return self._read_artifact_into_memory(getInfo, ref, isComponent=getInfo.component is not None)
+            # Do not need the component itself if already disassembled
+            if isDisassembled:
+                isComponent = False
+            else:
+                isComponent = getInfo.component is not None
+            return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent)
 
     @transactional
     def put(self, inMemoryDataset: Any, ref: DatasetRef) -> None:
