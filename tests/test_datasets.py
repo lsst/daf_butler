@@ -87,6 +87,7 @@ class DatasetTypeTestCase(unittest.TestCase):
                 full = DatasetType.nameWithComponent(name, suffix)
                 component = composite.makeComponentDatasetType(suffix)
                 self.assertEqual(component.name, full)
+                self.assertEqual(component.parentStorageClass.name, "test_StructuredData")
             for suffix in badNames:
                 full = DatasetType.nameWithComponent(name, suffix)
                 with self.subTest(full=full):

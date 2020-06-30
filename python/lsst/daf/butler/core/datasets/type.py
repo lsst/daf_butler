@@ -24,6 +24,7 @@ from __future__ import annotations
 __all__ = ["DatasetType"]
 
 from copy import deepcopy
+import logging
 import re
 
 from types import MappingProxyType
@@ -47,6 +48,8 @@ from ..configSupport import LookupKey
 
 if TYPE_CHECKING:
     from ..dimensions import Dimension, DimensionUniverse
+
+log = logging.getLogger(__name__)
 
 
 def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
@@ -81,12 +84,17 @@ class DatasetType:
     storageClass : `StorageClass` or `str`
         Instance of a `StorageClass` or name of `StorageClass` that defines
         how this `DatasetType` is persisted.
+    parentStorageClass : `StorageClass` or `str`
+        Instance of a `StorageClass` or name of `StorageClass` that defines
+        how the composite parent is persisted.  Should be `None` if this
+        is not a component.
     universe : `DimensionUniverse`, optional
         Set of all known dimensions, used to normalize ``dimensions`` if it
         is not already a `DimensionGraph`.
     """
 
-    __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName")
+    __slots__ = ("_name", "_dimensions", "_storageClass", "_storageClassName",
+                 "_parentStorageClass", "_parentStorageClassName")
 
     VALID_NAME_REGEX = re.compile("^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)*$")
 
@@ -112,7 +120,8 @@ class DatasetType:
 
     def __init__(self, name: str, dimensions: Union[DimensionGraph, Iterable[Dimension]],
                  storageClass: Union[StorageClass, str],
-                 *, universe: DimensionUniverse = None):
+                 *, parentStorageClass: Optional[Union[StorageClass, str]] = None,
+                 universe: Optional[DimensionUniverse] = None):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
         self._name = name
@@ -130,6 +139,28 @@ class DatasetType:
         else:
             self._storageClass = None
             self._storageClassName = storageClass
+
+        self._parentStorageClass: Optional[StorageClass] = None
+        self._parentStorageClassName: Optional[str] = None
+        if parentStorageClass is not None:
+            # Only allowed for a component dataset type
+            _, componentName = self.splitDatasetTypeName(self._name)
+            if componentName is None:
+                raise ValueError("Can not specify a parent storage class if this is not a component"
+                                 f" ({self._name})")
+            if isinstance(parentStorageClass, StorageClass):
+                self._parentStorageClass = parentStorageClass
+                self._parentStorageClassName = parentStorageClass.name
+            else:
+                self._parentStorageClassName = parentStorageClass
+
+        # Temporarily warn if this is a component but is missing the
+        # parent storage class. Usually implies some place not using the right
+        # API.
+        _, componentName = self.splitDatasetTypeName(self._name)
+        if parentStorageClass is None and componentName is not None:
+            log.warning("Component dataset type '%s' constructed without parent storage class",
+                        self._name)
 
     def __repr__(self) -> str:
         return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)
@@ -178,6 +209,20 @@ class DatasetType:
         if self._storageClass is None:
             self._storageClass = StorageClassFactory().getStorageClass(self._storageClassName)
         return self._storageClass
+
+    @property
+    def parentStorageClass(self) -> Optional[StorageClass]:
+        """`StorageClass` instance that defines how the composite associated
+        with this  `DatasetType` is persisted. Note that if DatasetType was
+        constructed with a name of a StorageClass then Butler has to be
+        initialized before using this property. Can be `None` if this is
+        not a component of a composite.
+        """
+        if self._parentStorageClass is None and self._parentStorageClassName is None:
+            return None
+        if self._parentStorageClass is None and self._parentStorageClassName is not None:
+            self._parentStorageClass = StorageClassFactory().getStorageClass(self._parentStorageClassName)
+        return self._parentStorageClass
 
     @staticmethod
     def splitDatasetTypeName(datasetTypeName: str) -> Tuple[str, Optional[str]]:
@@ -272,7 +317,8 @@ class DatasetType:
         """
         # The component could be a read/write or read component
         return DatasetType(self.componentTypeName(component), dimensions=self.dimensions,
-                           storageClass=self.storageClass.allComponents()[component])
+                           storageClass=self.storageClass.allComponents()[component],
+                           parentStorageClass=self.storageClass)
 
     def makeAllComponentDatasetTypes(self) -> List[DatasetType]:
         """Return all the component dataset types assocaited with this
