@@ -930,8 +930,12 @@ class Registry:
         wildcard = CategorizedWildcard.fromExpression(expression, coerceUnrecognized=lambda d: d.name)
         if wildcard is Ellipsis:
             for datasetType in self._datasets:
-                if components or not datasetType.isComponent():
-                    yield datasetType
+                # The dataset type can no longer be a component
+                yield datasetType
+                if components and datasetType.isComposite():
+                    # Automatically create the component dataset types
+                    for component in datasetType.makeAllComponentDatasetTypes():
+                        yield component
             return
         done: Set[str] = set()
         for name in wildcard.strings:
@@ -944,17 +948,21 @@ class Registry:
             # dataset that we might want to match, but only if their parents
             # didn't get included.
             componentsForLater = []
-            for datasetType in self._datasets:
-                if datasetType.name in done:
-                    continue
-                parentName, componentName = datasetType.nameAndComponent()
-                if componentName is not None and not components:
-                    if components is None and parentName not in done:
-                        componentsForLater.append(datasetType)
-                    continue
-                if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
-                    done.add(datasetType.name)
-                    yield datasetType
+            for registeredDatasetType in self._datasets:
+                # Components are not stored in registry so expand them here
+                allDatasetTypes = [registeredDatasetType] \
+                    + registeredDatasetType.makeAllComponentDatasetTypes()
+                for datasetType in allDatasetTypes:
+                    if datasetType.name in done:
+                        continue
+                    parentName, componentName = datasetType.nameAndComponent()
+                    if componentName is not None and not components:
+                        if components is None and parentName not in done:
+                            componentsForLater.append(datasetType)
+                        continue
+                    if any(p.fullmatch(datasetType.name) for p in wildcard.patterns):
+                        done.add(datasetType.name)
+                        yield datasetType
             # Go back and try to match saved components.
             for datasetType in componentsForLater:
                 parentName, _ = datasetType.nameAndComponent()
