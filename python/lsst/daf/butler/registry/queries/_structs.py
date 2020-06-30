@@ -39,7 +39,7 @@ from ...core import (
     SkyPixDimension,
     Timespan,
 )
-# We're not trying to add parsing to the lex/yacc parser code, so MyPy
+# We're not trying to add typing to the lex/yacc parser code, so MyPy
 # doesn't know about some of these imports.
 from .exprParser import Node, ParserYacc  # type: ignore
 
@@ -289,7 +289,7 @@ class QueryColumns:
     (`NamedKeyDict` [ `DatasetType`, `DatasetQueryColumns` ] ).
     """
 
-    def getKeyColumn(self, dimension: Dimension) -> ColumnElement:
+    def getKeyColumn(self, dimension: Union[Dimension, str]) -> ColumnElement:
         """ Return one of the columns in self.keys for the given dimension.
 
         The column selected is an implentation detail but is guaranteed to
@@ -297,8 +297,8 @@ class QueryColumns:
 
         Parameters
         ----------
-        dimension : `Dimension`
-            Element for which to obtain a key column.
+        dimension : `Dimension` or `str`
+            Dimension for which to obtain a key column.
 
         Returns
         -------
@@ -309,7 +309,7 @@ class QueryColumns:
         # query (e.g. developers debugging things); it makes it more likely a
         # dimension key will be provided by the dimension's own table, or
         # failing that, some closely related dimension, which might be less
-        # surprising to see than e.g.  some dataset subquery.  From the
-        # database's perspective this is entirely arbitrary, cause the query
+        # surprising to see than e.g. some dataset subquery.  From the
+        # database's perspective this is entirely arbitrary, because the query
         # guarantees they all have equal values.
         return self.keys[dimension][-1]
