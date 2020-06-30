@@ -39,13 +39,12 @@ from ...core import (
     DatasetType,
     ddl,
 )
-from ..simpleQuery import Select
+from ..simpleQuery import SimpleQuery
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse
     from ._database import Database, StaticTablesContext
     from ._collections import CollectionManager, CollectionRecord, RunRecord
-    from ..simpleQuery import SimpleQuery
 
 
 class DatasetRecordStorage(ABC):
@@ -170,16 +169,17 @@ class DatasetRecordStorage(ABC):
 
     @abstractmethod
     def select(self, collection: CollectionRecord,
-               dataId: Select.Or[DataCoordinate] = Select,
-               id: Select.Or[Optional[int]] = Select,
-               run: Select.Or[None] = Select,
+               dataId: SimpleQuery.Select.Or[DataCoordinate] = SimpleQuery.Select,
+               id: SimpleQuery.Select.Or[Optional[int]] = SimpleQuery.Select,
+               run: SimpleQuery.Select.Or[None] = SimpleQuery.Select,
                ) -> Optional[SimpleQuery]:
         """Return a SQLAlchemy object that represents a ``SELECT`` query for
         this `DatasetType`.
 
         All arguments can either be a value that constrains the query or
-        the `Select` tag object to indicate that the value should be returned
-        in the columns in the ``SELECT`` clause.  The default is `Select`.
+        the `SimpleQuery.Select` tag object to indicate that the value should
+        be returned in the columns in the ``SELECT`` clause.  The default is
+        `SimpleQuery.Select`.
 
         Parameters
         ----------

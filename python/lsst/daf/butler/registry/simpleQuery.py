@@ -21,7 +21,7 @@
 
 from __future__ import annotations
 
-__all__ = ("Select", "SimpleQuery")
+__all__ = ("SimpleQuery",)
 
 from typing import (
     Any,
@@ -39,20 +39,6 @@ import sqlalchemy
 T = TypeVar("T")
 
 
-class Select:
-    """Tag class used to indicate that a field should be returned in
-    a SELECT query.
-    """
-
-    Or: ClassVar
-
-
-Select.Or = Union[T, Type[Select]]
-"""A type annotation for arguments that can take the `Select` type or some
-other value.
-"""
-
-
 class SimpleQuery:
     """A struct that combines SQLAlchemy objects representing SELECT, FROM,
     and WHERE clauses.
@@ -62,6 +48,18 @@ class SimpleQuery:
         self.columns = []
         self.where = []
         self._from: Optional[sqlalchemy.sql.FromClause] = None
+
+    class Select:
+        """Tag class used to indicate that a field should be returned in
+        a SELECT query.
+        """
+
+        Or: ClassVar
+
+    Select.Or = Union[T, Type[Select]]
+    """A type annotation for arguments that can take the `Select` type or some
+    other value.
+    """
 
     def join(self, table: sqlalchemy.sql.FromClause, *,
              onclause: Optional[sqlalchemy.sql.ColumnElement] = None,
@@ -102,7 +100,7 @@ class SimpleQuery:
         else:
             self._from = self._from.join(table, onclause=onclause, isouter=isouter, full=full)
         for name, arg in kwargs.items():
-            if arg is Select:
+            if arg is self.Select:
                 self.columns.append(table.columns[name].label(name))
             elif arg is not None:
                 self.where.append(table.columns[name] == arg)

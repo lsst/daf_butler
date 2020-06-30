@@ -39,7 +39,7 @@ from ...core import (
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
 from .expressions import ClauseVisitor
 from ._query import Query
-from ..simpleQuery import Select
+from ..simpleQuery import SimpleQuery
 from ..wildcards import CollectionSearch, CollectionQuery
 
 if TYPE_CHECKING:
@@ -164,9 +164,9 @@ class QueryBuilder:
         subsubqueries = []
         for rank, collectionRecord in enumerate(collections.iter(self._collections, datasetType=datasetType)):
             ssq = datasetRecordStorage.select(collection=collectionRecord,
-                                              dataId=Select,
-                                              id=Select if isResult else None,
-                                              run=Select if isResult else None)
+                                              dataId=SimpleQuery.Select,
+                                              id=SimpleQuery.Select if isResult else None,
+                                              run=SimpleQuery.Select if isResult else None)
             if ssq is None:
                 continue
             if addRank:
