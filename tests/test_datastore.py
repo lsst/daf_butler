@@ -43,7 +43,7 @@ def makeExampleMetrics(use_none=False):
     if use_none:
         array = None
     else:
-        array = [563, 234, 456.7]
+        array = [563, 234, 456.7, 105, 2054, -1045]
     return MetricsExample({"AM1": 5.2, "AM2": 30.6},
                           {"a": [1, 2, 3],
                            "b": {"blue": 5, "red": "green"}},
@@ -264,6 +264,13 @@ class DatastoreTests(DatastoreTestsBase):
                 # Retrieve a component
                 data = datastore.get(ref.makeComponentRef("data"))
                 self.assertEqual(data, metrics.data)
+
+                # On supported storage classes attempt to access a read
+                # only component
+                if "ReadComp" in sc.name:
+                    cRef = ref.makeComponentRef("counter")
+                    counter = datastore.get(cRef)
+                    self.assertEqual(counter, len(metrics.data))
 
                 datastore.remove(ref)
 

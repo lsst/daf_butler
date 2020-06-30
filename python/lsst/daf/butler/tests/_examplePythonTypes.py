@@ -292,3 +292,18 @@ class MetricsAssembler(CompositeAssembler):
         if use:
             inMemoryDataset.data = inMemoryDataset.data[use["slice"]]
         return inMemoryDataset
+
+    def getComponent(self, composite, componentName: str):
+        if componentName == "counter":
+            return len(composite.data)
+        return super().getComponent(composite, componentName)
+
+    @classmethod
+    def selectResponsibleComponent(cls, readComponent: str, fromComponents) -> str:
+        forwarderMap = {
+            "counter": "data",
+        }
+        forwarder = forwarderMap.get(readComponent)
+        if forwarder is not None and forwarder in fromComponents:
+            return forwarder
+        raise ValueError(f"Can not calculate read component {readComponent} from {fromComponents}")
