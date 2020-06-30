@@ -272,6 +272,9 @@ class DatastoreTests(DatastoreTestsBase):
                     counter = datastore.get(cRef)
                     self.assertEqual(counter, len(metrics.data))
 
+                    counter = datastore.get(cRef, parameters={"slice": slice(stop)})
+                    self.assertEqual(counter, stop)
+
                 datastore.remove(ref)
 
     def testRegistryCompositePutGet(self):

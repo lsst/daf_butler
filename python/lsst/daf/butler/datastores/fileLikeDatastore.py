@@ -449,9 +449,6 @@ class FileLikeDatastore(GenericBaseDatastore):
         # The storage class we want to use eventually
         refStorageClass = ref.datasetType.storageClass
 
-        # Check that the supplied parameters are suitable for the type read
-        refStorageClass.validateParameters(parameters)
-
         if len(fileLocations) > 1:
             disassembled = True
         else:
@@ -899,6 +896,9 @@ class FileLikeDatastore(GenericBaseDatastore):
         allGetInfo = self._prepare_for_get(ref, parameters)
         refComponent = ref.datasetType.component()
 
+        # Supplied storage class for the component being read
+        refStorageClass = ref.datasetType.storageClass
+
         # Create mapping from component name to related info
         allComponents = {i.component: i for i in allGetInfo}
 
@@ -929,6 +929,10 @@ class FileLikeDatastore(GenericBaseDatastore):
             # This was a disassembled dataset spread over multiple files
             # and we need to put them all back together again.
             # Read into memory and then assemble
+
+            # Check that the supplied parameters are suitable for the type read
+            refStorageClass.validateParameters(parameters)
+
             usedParams = set()
             components: Dict[str, Any] = {}
             for getInfo in allGetInfo:
@@ -983,8 +987,10 @@ class FileLikeDatastore(GenericBaseDatastore):
             # Select the relevant component
             rwInfo = allComponents[forwardedComponent]
 
-            # Supplied storage class for the component being read
-            refStorageClass = ref.datasetType.storageClass
+            # For now assume that read parameters are validated against
+            # the real component and not the requested component
+            forwardedStorageClass = rwInfo.formatter.fileDescriptor.readStorageClass
+            forwardedStorageClass.validateParameters(parameters)
 
             # Unfortunately the FileDescriptor inside the formatter will have
             # the wrong write storage class so we need to create a new one
@@ -1029,6 +1035,18 @@ class FileLikeDatastore(GenericBaseDatastore):
                 isComponent = False
             else:
                 isComponent = getInfo.component is not None
+
+            # For a disassembled component we can validate parametersagainst
+            # the component storage class directly
+            if isDisassembled:
+                refStorageClass.validateParameters(parameters)
+            else:
+                # For an assembled composite this could be a read-only
+                # component derived from a real component. The validity
+                # of the parameters is not clear. For now validate against
+                # the composite storage class
+                getInfo.formatter.fileDescriptor.storageClass.validateParameters(parameters)
+
             return self._read_artifact_into_memory(getInfo, ref, isComponent=isComponent)
 
     @transactional
