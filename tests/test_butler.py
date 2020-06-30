@@ -686,14 +686,18 @@ class ButlerTests(ButlerPutGetTests):
             butler.registry.insertDimensionData(*args)
 
         # When a DatasetType is added to the registry entries are not created
-        # for components.
+        # for components but querying them can return the components.
         datasetTypeNames = {"metric", "metric2", "metric4", "metric33", "pvi", "paramtest"}
+        components = set()
         for datasetTypeName in datasetTypeNames:
             # Create and register a DatasetType
             self.addDatasetType(datasetTypeName, dimensions, storageClass, butler.registry)
 
+            for componentName in storageClass.components:
+                components.add(DatasetType.nameWithComponent(datasetTypeName, componentName))
+
         fromRegistry = set(butler.registry.queryDatasetTypes(components=True))
-        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames)
+        self.assertEqual({d.name for d in fromRegistry}, datasetTypeNames | components)
 
         # Now that we have some dataset types registered, validate them
         butler.validateConfiguration(ignore=["test_metric_comp", "metric3", "calexp", "DummySC",
