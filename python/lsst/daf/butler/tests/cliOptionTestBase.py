@@ -215,7 +215,7 @@ class OptTestBase(abc.ABC):
         """
         # This return value matches the value returned by
         # expectedMultipleValues.
-        return ["foo", "bar,baz"]
+        return ("foo", "bar,baz")
 
     @property
     def optionMultipleKeyValues(self):
@@ -250,7 +250,7 @@ class OptTestBase(abc.ABC):
             A list of expected values, e.g. ["foo", "bar", "baz"]
         """
         # This return value matches the value returned by optionMultipleValues.
-        return ["foo", "bar", "baz"]
+        return ("foo", "bar", "baz")
 
     @property
     def expectedMultipleKeyValues(self):

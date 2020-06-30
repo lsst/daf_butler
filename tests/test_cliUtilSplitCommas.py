@@ -25,55 +25,67 @@
 import click
 import click.testing
 import unittest
+from unittest.mock import MagicMock
 
-from lsst.daf.butler.cli.utils import split_commas
+from lsst.daf.butler.cli.utils import clickResultMsg, split_commas
+
+mock = MagicMock()
 
 
 @click.command()
 @click.option("--list-of-values", "-l", multiple=True, callback=split_commas)
 def cli(list_of_values):
-    click.echo(list_of_values)
+    mock(list_of_values)
 
 
-class Suite(unittest.TestCase):
+class SplitCommasTestCase(unittest.TestCase):
 
     def test_separate(self):
         """test the split_commas callback by itself"""
         ctx = "unused"
         param = "unused"
         self.assertEqual(split_commas(ctx, param, ("one,two", "three,four")), # noqa E231
-                         ["one", "two", "three", "four"])
+                         ("one", "two", "three", "four"))
+        self.assertEqual(split_commas(ctx, param, None), None)
 
     def test_single(self):
         """test the split_commas callback in an option with one value"""
         runner = click.testing.CliRunner()
         result = runner.invoke(cli, ["-l", "one"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one']\n")
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with(("one", ))
 
     def test_multiple(self):
         """test the split_commas callback in an option with two single
         values"""
         runner = click.testing.CliRunner()
         result = runner.invoke(cli, ["-l", "one", "-l", "two"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two']\n")
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with(("one", "two"))
 
     def test_singlePair(self):
         """test the split_commas callback in an option with one pair of
         values"""
         runner = click.testing.CliRunner()
         result = runner.invoke(cli, ["-l", "one,two"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two']\n")
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with(("one", "two"))
 
     def test_multiplePair(self):
         """test the split_commas callback in an option with two pairs of
         values"""
         runner = click.testing.CliRunner()
         result = runner.invoke(cli, ["-l", "one,two", "-l", "three,four"])
-        self.assertEqual(result.exit_code, 0)
-        self.assertEqual(result.stdout, "['one', 'two', 'three', 'four']\n")
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with(("one", "two", "three", "four"))
+
+    def test_none(self):
+        """test that passing None does not fail and returns None, producing an
+        empty tuple in the command function call."""
+        runner = click.testing.CliRunner()
+        result = runner.invoke(cli, [])
+        self.assertEqual(result.exit_code, 0, msg=clickResultMsg(result))
+        mock.assert_called_with(())
 
 
 if __name__ == "__main__":

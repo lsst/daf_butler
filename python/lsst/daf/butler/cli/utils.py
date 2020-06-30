@@ -177,7 +177,7 @@ def split_commas(context, param, values):
     valueList = []
     for value in iterable(values):
         valueList.extend(value.split(","))
-    return valueList
+    return tuple(valueList)
 
 
 def split_kv(context, param, values, choice=None, multiple=True, normalize=False, separator="=",
