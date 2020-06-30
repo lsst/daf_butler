@@ -32,6 +32,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Iterable,
+    List,
     Mapping,
     Optional,
     Tuple,
@@ -272,6 +273,21 @@ class DatasetType:
         # The component could be a read/write or read component
         return DatasetType(self.componentTypeName(component), dimensions=self.dimensions,
                            storageClass=self.storageClass.allComponents()[component])
+
+    def makeAllComponentDatasetTypes(self) -> List[DatasetType]:
+        """Return all the component dataset types assocaited with this
+        dataset type.
+
+        Returns
+        -------
+        all : `list` of `DatasetType`
+            All the component dataset types. If this is not a composite
+            then returns an empty list.
+        """
+        if not self.isComposite():
+            return []
+        return [self.makeComponentDatasetType(componentName)
+                for componentName in self.storageClass.allComponents()]
 
     def isComponent(self) -> bool:
         """Boolean indicating whether this `DatasetType` refers to a
