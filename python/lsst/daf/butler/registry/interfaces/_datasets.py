@@ -38,8 +38,8 @@ from ...core import (
     DatasetRef,
     DatasetType,
     ddl,
+    SimpleQuery,
 )
-from ..simpleQuery import SimpleQuery
 
 if TYPE_CHECKING:
     from ...core import DimensionUniverse

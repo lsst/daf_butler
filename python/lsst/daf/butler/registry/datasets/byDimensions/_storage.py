@@ -18,9 +18,9 @@ from lsst.daf.butler import (
     DataCoordinate,
     DatasetRef,
     DatasetType,
+    SimpleQuery,
 )
 from lsst.daf.butler.registry.interfaces import DatasetRecordStorage
-from lsst.daf.butler.registry.simpleQuery import SimpleQuery
 
 if TYPE_CHECKING:
     from ...interfaces import CollectionManager, CollectionRecord, Database, RunRecord

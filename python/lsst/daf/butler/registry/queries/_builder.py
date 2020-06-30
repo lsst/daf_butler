@@ -34,12 +34,12 @@ from ...core import (
     DatasetType,
     NamedKeyDict,
     NamedValueSet,
+    SimpleQuery,
 )
 
 from ._structs import QuerySummary, QueryColumns, DatasetQueryColumns
 from .expressions import ClauseVisitor
 from ._query import Query
-from ..simpleQuery import SimpleQuery
 from ..wildcards import CollectionSearch, CollectionQuery
 
 if TYPE_CHECKING:
