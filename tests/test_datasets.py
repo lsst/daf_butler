@@ -72,16 +72,23 @@ class DatasetTypeTestCase(unittest.TestCase):
         in certain positions.
         """
         dimensions = self.universe.extract(("instrument", "visit"))
-        storageClass = StorageClass("test_StructuredData")
         goodNames = ("a", "A", "z1", "Z1", "a_1B", "A_1b")
         badNames = ("1", "_", "a%b", "B+Z", "T[0]")
+
+        # Construct storage class with all the good names included as
+        # components so that we can test internal consistency
+        storageClass = StorageClass("test_StructuredData",
+                                    components={n: StorageClass("component") for n in goodNames})
+
         for name in goodNames:
-            self.assertEqual(DatasetType(name, dimensions, storageClass).name, name)
+            composite = DatasetType(name, dimensions, storageClass)
+            self.assertEqual(composite.name, name)
             for suffix in goodNames:
-                full = f"{name}.{suffix}"
-                self.assertEqual(DatasetType(full, dimensions, storageClass).name, full)
+                full = DatasetType.nameWithComponent(name, suffix)
+                component = composite.makeComponentDatasetType(suffix)
+                self.assertEqual(component.name, full)
             for suffix in badNames:
-                full = f"{name}.{suffix}"
+                full = DatasetType.nameWithComponent(name, suffix)
                 with self.subTest(full=full):
                     with self.assertRaises(ValueError):
                         DatasetType(full, dimensions, storageClass)
@@ -182,8 +189,8 @@ class DatasetTypeTestCase(unittest.TestCase):
         dimensions = self.universe.extract(("instrument", "visit"))
 
         datasetTypeComposite = DatasetType("composite", dimensions, storageClass)
-        datasetTypeComponentA = DatasetType("composite.compA", dimensions, storageClassA)
-        datasetTypeComponentB = DatasetType("composite.compB", dimensions, storageClassB)
+        datasetTypeComponentA = datasetTypeComposite.makeComponentDatasetType("compA")
+        datasetTypeComponentB = datasetTypeComposite.makeComponentDatasetType("compB")
 
         self.assertTrue(datasetTypeComposite.isComposite())
         self.assertFalse(datasetTypeComponentA.isComposite())
