@@ -1,0 +1,38 @@
+default:
+  lsst.daf.butler.tests.testFormatters.FormatterTest:
+    max: 10
+    min: 2
+    comment: Default comment
+    recipe: recipe1
+write_recipes:
+  lsst.daf.butler.tests.testFormatters.FormatterTest:
+    recipe1:
+      mode: red
+    recipe2:
+      mode: green
+StructuredDataDictYaml: lsst.daf.butler.formatters.yaml.YamlFormatter
+StructuredDataListYaml: lsst.daf.butler.formatters.yaml.YamlFormatter
+StructuredDataDictJson: lsst.daf.butler.formatters.json.JsonFormatter
+StructuredDataListJson: lsst.daf.butler.formatters.json.JsonFormatter
+StructuredDataDictPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
+StructuredDataListPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
+StructuredData: lsst.daf.butler.formatters.yaml.YamlFormatter
+StructuredDataNoComponents: lsst.daf.butler.formatters.pickle.PickleFormatter
+StructuredDataJson: lsst.daf.butler.formatters.json.JsonFormatter
+StructuredDataPickle: lsst.daf.butler.formatters.pickle.PickleFormatter
+ThingOne: lsst.daf.butler.formatters.yaml.YamlFormatter
+datasetType.component: lsst.daf.butler.formatters.yaml.YamlFormatter
+pvi: lsst.daf.butler.formatters.pickle.PickleFormatter
+paramtest:
+  formatter: lsst.daf.butler.tests.testFormatters.FormatterTest
+  parameters:
+    max: 5
+    comment: Additional commentary
+instrument<DummyHSC>:
+  pvi: lsst.daf.butler.formatters.json.JsonFormatter
+  StructuredData: lsst.daf.butler.formatters.pickle.PickleFormatter
+  DummySC: lsst.daf.butler.formatters.yaml.YamlFormatter
+  visit+physical_filter+instrument: lsst.daf.butler.formatters.pickle.PickleFormatter
+StructuredCompositeReadComp: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
+StructuredCompositeReadCompNoDisassembly: lsst.daf.butler.tests.testFormatters.MetricsExampleFormatter
+StructuredDataDataTest: lsst.daf.butler.tests.testFormatters.MetricsExampleDataFormatter
