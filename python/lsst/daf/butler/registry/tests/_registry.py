@@ -519,6 +519,16 @@ class RegistryTests(ABC):
         chain2 = "chain2"
         registry.registerCollection(chain2, type=CollectionType.CHAINED)
         registry.setCollectionChain(chain2, [(run2, "permabias"), chain1])
+        # Query for collections matching a regex.
+        self.assertCountEqual(
+            list(registry.queryCollections(re.compile("imported_."), flattenChains=False)),
+            ["imported_r", "imported_g"]
+        )
+        # Query for collections matching a regex or an explicit str.
+        self.assertCountEqual(
+            list(registry.queryCollections([re.compile("imported_."), "chain1"], flattenChains=False)),
+            ["imported_r", "imported_g", "chain1"]
+        )
         # Search for permabias with dataId1 should find it via tag1 in chain2,
         # recursing, because is not in run1.
         self.assertIsNone(registry.findDataset(datasetType, dataId1, collections=run2))

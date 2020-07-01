@@ -738,8 +738,9 @@ class CollectionQuery:
                                                       defaultItemValue=DatasetTypeRestriction.any)
         if wildcard is Ellipsis:
             return cls.any
-        assert not wildcard.strings
-        return cls(search=CollectionSearch.fromExpression(wildcard),
+        assert not wildcard.strings, \
+            "All bare strings should be transformed to (str, DatasetTypeRestriction) tuples."
+        return cls(search=CollectionSearch.fromExpression(wildcard.items),
                    patterns=tuple(wildcard.patterns))
 
     def iterPairs(
