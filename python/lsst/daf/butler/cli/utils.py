@@ -351,8 +351,7 @@ def cli_handle_exception(func, *args, **kwargs):
         msg = io.StringIO()
         msg.write("An error occurred during command execution:\n")
         traceback.print_exc(file=msg)
-        msg.seek(0)
-        raise click.ClickException(msg.read())
+        raise click.ClickException(msg.getvalue())
 
 
 class MWOption(click.Option):
