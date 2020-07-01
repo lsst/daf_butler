@@ -117,7 +117,7 @@ class DatasetType:
 
     def __init__(self, name: str, dimensions: Union[DimensionGraph, Iterable[Dimension]],
                  storageClass: Union[StorageClass, str],
-                 *, parentStorageClass: Optional[Union[StorageClass, str]] = None,
+                 parentStorageClass: Optional[Union[StorageClass, str]] = None, *,
                  universe: Optional[DimensionUniverse] = None):
         if self.VALID_NAME_REGEX.match(name) is None:
             raise ValueError(f"DatasetType name '{name}' is invalid.")
@@ -128,7 +128,9 @@ class DatasetType:
                                  "a universe must be provided.")
             dimensions = universe.extract(dimensions)
         self._dimensions = dimensions
-        assert isinstance(storageClass, (StorageClass, str))
+        if not isinstance(storageClass, (StorageClass, str)):
+            raise ValueError("StorageClass argument must be StorageClass or str. "
+                             f"Got {storageClass}")
         self._storageClass: Optional[StorageClass]
         if isinstance(storageClass, StorageClass):
             self._storageClass = storageClass
@@ -140,6 +142,10 @@ class DatasetType:
         self._parentStorageClass: Optional[StorageClass] = None
         self._parentStorageClassName: Optional[str] = None
         if parentStorageClass is not None:
+            if not isinstance(storageClass, (StorageClass, str)):
+                raise ValueError("Parent StorageClass argument must be StorageClass or str. "
+                                 f"Got {parentStorageClass}")
+
             # Only allowed for a component dataset type
             _, componentName = self.splitDatasetTypeName(self._name)
             if componentName is None:
@@ -155,13 +161,16 @@ class DatasetType:
         # a component and is not specified when we don't
         _, componentName = self.splitDatasetTypeName(self._name)
         if parentStorageClass is None and componentName is not None:
-            raise RuntimeError(f"Component dataset type '{self._name}' constructed without parent"
-                               " storage class")
+            raise ValueError(f"Component dataset type '{self._name}' constructed without parent"
+                             " storage class")
         if parentStorageClass is not None and componentName is None:
-            raise RuntimeError(f"Parent storage class specified by {self._name} is not a composite")
+            raise ValueError(f"Parent storage class specified by {self._name} is not a composite")
 
     def __repr__(self) -> str:
-        return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)
+        parent = ""
+        if self._parentStorageClassName:
+            parent = f", parentStorageClass={self._parentStorageClassName}"
+        return f"DatasetType({self.name}, {self.dimensions}, {self._storageClassName}{parent})"
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, type(self)):
@@ -171,9 +180,15 @@ class DatasetType:
         if self._dimensions != other._dimensions:
             return False
         if self._storageClass is not None and other._storageClass is not None:
-            return self._storageClass == other._storageClass
+            if self._storageClass != other._storageClass:
+                return False
         else:
-            return self._storageClassName == other._storageClassName
+            if self._storageClassName != other._storageClassName:
+                return False
+        if self._parentStorageClass is not None and other._parentStorageClass is not None:
+            return self._parentStorageClass == other._parentStorageClass
+        else:
+            return self._parentStorageClassName == other._parentStorageClassName
 
     def __hash__(self) -> int:
         """Hash DatasetType instance.
@@ -181,7 +196,8 @@ class DatasetType:
         This only uses StorageClass name which is it consistent with the
         implementation of StorageClass hash method.
         """
-        return hash((self._name, self._dimensions, self._storageClassName))
+        return hash((self._name, self._dimensions, self._storageClassName,
+                     self._parentStorageClassName))
 
     @property
     def name(self) -> str:
@@ -382,13 +398,14 @@ class DatasetType:
 
         return lookups + self.storageClass._lookupNames()
 
-    def __reduce__(self) -> Tuple[Type[DatasetType], Tuple[str, DimensionGraph, str]]:
+    def __reduce__(self) -> Tuple[Type[DatasetType], Tuple[str, DimensionGraph, str, Optional[str]]]:
         """Support pickling.
 
         StorageClass instances can not normally be pickled, so we pickle
         StorageClass name instead of instance.
         """
-        return (DatasetType, (self.name, self.dimensions, self._storageClassName))
+        return (DatasetType, (self.name, self.dimensions, self._storageClassName,
+                              self._parentStorageClassName))
 
     def __deepcopy__(self, memo: Any) -> DatasetType:
         """Support for deep copy method.
@@ -401,4 +418,6 @@ class DatasetType:
         """
         return DatasetType(name=deepcopy(self.name, memo),
                            dimensions=deepcopy(self.dimensions, memo),
-                           storageClass=deepcopy(self._storageClass or self._storageClassName, memo))
+                           storageClass=deepcopy(self._storageClass or self._storageClassName, memo),
+                           parentStorageClass=deepcopy(self._parentStorageClass
+                                                       or self._parentStorageClassName, memo))
