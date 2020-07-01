@@ -24,7 +24,6 @@ from __future__ import annotations
 __all__ = ["DatasetType"]
 
 from copy import deepcopy
-import logging
 import re
 
 from types import MappingProxyType
@@ -48,8 +47,6 @@ from ..configSupport import LookupKey
 
 if TYPE_CHECKING:
     from ..dimensions import Dimension, DimensionUniverse
-
-log = logging.getLogger(__name__)
 
 
 def _safeMakeMappingProxyType(data: Optional[Mapping]) -> Mapping:
@@ -154,13 +151,14 @@ class DatasetType:
             else:
                 self._parentStorageClassName = parentStorageClass
 
-        # Temporarily warn if this is a component but is missing the
-        # parent storage class. Usually implies some place not using the right
-        # API.
+        # Ensure that parent storage class is specified when we have
+        # a component and is not specified when we don't
         _, componentName = self.splitDatasetTypeName(self._name)
         if parentStorageClass is None and componentName is not None:
-            log.warning("Component dataset type '%s' constructed without parent storage class",
-                        self._name)
+            raise RuntimeError(f"Component dataset type '{self._name}' constructed without parent"
+                               " storage class")
+        if parentStorageClass is not None and componentName is None:
+            raise RuntimeError(f"Parent storage class specified by {self._name} is not a composite")
 
     def __repr__(self) -> str:
         return "DatasetType({}, {}, {})".format(self.name, self.dimensions, self._storageClassName)

@@ -39,8 +39,14 @@ class TestFileTemplates(unittest.TestCase):
         """Make a simple DatasetRef"""
         if dataId is None:
             dataId = self.dataId
+
+        # Pretend we have a parent if this looks like a composite
+        compositeName, componentName = DatasetType.splitDatasetTypeName(datasetTypeName)
+        parentStorageClass = StorageClass("component") if componentName else None
+
         datasetType = DatasetType(datasetTypeName, DimensionGraph(self.universe, names=dataId.keys()),
-                                  StorageClass(storageClassName))
+                                  StorageClass(storageClassName),
+                                  parentStorageClass=parentStorageClass)
         return DatasetRef(datasetType, dataId, id=1, run=run, conform=conform)
 
     def setUp(self):
